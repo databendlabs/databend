@@ -13,7 +13,8 @@
 // limitations under the License.
 
 pub struct TxnManager {
-    pub state: TxnState,
+    state: TxnState,
+    txn_buffer: TxnBuffer,
 }
 
 pub enum TxnState {
@@ -22,10 +23,47 @@ pub enum TxnState {
     Fail,
 }
 
+struct TxnBuffer {}
+
+impl TxnBuffer {
+    fn new() -> Self {
+        todo!()
+    }
+    fn refresh(&mut self) {
+        todo!()
+    }
+}
+
 impl TxnManager {
     pub fn init() -> Self {
         TxnManager {
             state: TxnState::AutoCommit,
+            txn_buffer: TxnBuffer::new(),
+        }
+    }
+
+    pub fn begin(&mut self) {
+        if let TxnState::AutoCommit = self.state {
+            self.state = TxnState::Active
+        }
+    }
+
+    pub fn commit(&mut self) {
+        self.state = TxnState::AutoCommit;
+        if let TxnState::Active = self.state {
+            todo!("commit")
+        }
+        self.txn_buffer.refresh();
+    }
+
+    pub fn abort(&mut self) {
+        self.state = TxnState::AutoCommit;
+        self.txn_buffer.refresh();
+    }
+
+    pub fn set_fail(&mut self) {
+        if let TxnState::Active = self.state {
+            self.state = TxnState::Fail;
         }
     }
 

@@ -422,6 +422,9 @@ impl InteractiveWorkerBase {
             ErrorCode::TokioError,
             || "Cannot join handle from context's runtime",
         )?;
+        if query_result.is_err() {
+            context.txn_manager().write().set_fail();
+        }
         let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
             as Box<dyn ProgressReporter + Send>;
         query_result.map(|data| (data, Some(reporter)))

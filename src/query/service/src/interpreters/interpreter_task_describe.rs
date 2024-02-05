@@ -57,6 +57,10 @@ impl Interpreter for DescribeTaskInterpreter {
         "DescribeTaskInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {

@@ -47,6 +47,10 @@ impl Interpreter for ShowCreateCatalogInterpreter {
         "ShowCreateTableInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;

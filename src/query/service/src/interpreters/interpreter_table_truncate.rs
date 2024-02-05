@@ -63,6 +63,10 @@ impl Interpreter for TruncateTableInterpreter {
         "TruncateTableInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn execute2(&self) -> Result<PipelineBuildResult> {

@@ -45,6 +45,10 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
         "ShowObjectGrantPrivilegesInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();

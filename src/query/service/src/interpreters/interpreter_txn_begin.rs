@@ -14,11 +14,9 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_txn::TxnManager;
-use databend_storages_common_txn::TxnState;
 use parking_lot::RwLock;
 
 use crate::interpreters::Interpreter;
@@ -42,17 +40,17 @@ impl Interpreter for BeginInterpreter {
         "BeginInterpreter"
     }
 
+    fn is_txn_command(&self) -> bool {
+        true
+    }
+
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let mut guard = self.txn_manager.write();
-        match guard.state {
-            TxnState::AutoCommit => {
-                guard.state = TxnState::Active;
-                Ok(PipelineBuildResult::create())
-            }
-            TxnState::Active | TxnState::Fail => Err(ErrorCode::DuplicateBeginTransaction(
-                "there is already a transaction in progress",
-            )),
-        }
+        self.txn_manager.write().begin();
+        Ok(PipelineBuildResult::create())
     }
 }

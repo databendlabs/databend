@@ -220,6 +220,10 @@ impl Interpreter for SelectInterpreter {
         "SelectInterpreterV2"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     #[minitrace::trace]

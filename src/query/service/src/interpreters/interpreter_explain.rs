@@ -61,6 +61,10 @@ impl Interpreter for ExplainInterpreter {
         "ExplainInterpreterV2"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let blocks = match &self.kind {

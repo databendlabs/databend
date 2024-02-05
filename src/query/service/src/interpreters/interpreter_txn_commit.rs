@@ -40,8 +40,17 @@ impl Interpreter for CommitInterpreter {
         "CommitInterpreter"
     }
 
+    fn is_txn_command(&self) -> bool {
+        true
+    }
+
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        todo!()
+        self.txn_manager.write().commit();
+        Ok(PipelineBuildResult::create())
     }
 }

@@ -47,6 +47,12 @@ pub trait Interpreter: Sync + Send {
     /// Return the name of Interpreter, such as "CreateDatabaseInterpreter"
     fn name(&self) -> &str;
 
+    fn is_txn_command(&self) -> bool {
+        false
+    }
+
+    fn is_ddl(&self) -> bool;
+
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
     #[async_backtrace::framed]
     #[minitrace::trace]
@@ -59,7 +65,10 @@ pub trait Interpreter: Sync + Send {
             log_query_finished(&ctx, Some(err.clone()), false);
             return Err(err);
         }
-        if ctx.txn_manager().read().is_fail() {
+        if self.is_ddl() {
+            ctx.txn_manager().write().commit();
+        }
+        if !self.is_txn_command() && ctx.txn_manager().read().is_fail() {
             let error = ErrorCode::CurrentTransactionIsAborted(
                 "current transaction is aborted, commands ignored until end of transaction block",
             );
