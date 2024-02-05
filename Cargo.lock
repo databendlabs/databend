@@ -2769,8 +2769,8 @@ dependencies = [
  "sha1",
  "sha2",
  "simdutf8",
+ "simple_hll",
  "siphasher",
- "streaming_algorithms",
  "strength_reduce",
  "stringslice",
  "twox-hash",
@@ -10646,7 +10646,6 @@ dependencies = [
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "rand_hc",
- "rand_pcg",
 ]
 
 [[package]]
@@ -10705,15 +10704,6 @@ name = "rand_hc"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
-dependencies = [
- "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_pcg"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
 dependencies = [
  "rand_core 0.5.1",
 ]
@@ -11920,6 +11910,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "simple_hll"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbdc537413bd6a291f57e2cc0a17579beb5ccaeea534e9c3001e39d9a07fa14f"
+dependencies = [
+ "ahash 0.8.3",
+ "borsh 1.2.1",
+ "serde",
+]
+
+[[package]]
 name = "simsearch"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12182,17 +12183,6 @@ name = "streaming-iterator"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
-
-[[package]]
-name = "streaming_algorithms"
-version = "0.3.0"
-source = "git+https://github.com/ariesdevil/streaming_algorithms?rev=2839d5d#2839d5d066c299bd37abd8679dfeb74f9bfb5093"
-dependencies = [
- "borsh 1.2.1",
- "rand 0.7.3",
- "serde",
- "twox-hash",
-]
 
 [[package]]
 name = "strength_reduce"
