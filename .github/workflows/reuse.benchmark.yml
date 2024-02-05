@@ -48,6 +48,7 @@ jobs:
     strategy:
       matrix:
         dataset:
+          - dummy
           - internal
           - hits
       fail-fast: true
@@ -85,7 +86,7 @@ jobs:
           databend-query --version
           databend-meta --version
       - uses: ./.github/actions/benchmark_local
-        if: inputs.target == 'local' || inputs.target == 'all'
+        if: (inputs.target == 'local' || inputs.target == 'all') && matrix.dataset != 'dummy'
         timeout-minutes: 30
         id: benchmark
         with:
@@ -116,7 +117,7 @@ jobs:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
-        if: inputs.target == 'cloud' || inputs.target == 'all'
+        if: (inputs.target == 'cloud' || inputs.target == 'all') && matrix.dataset != 'dummy'
         timeout-minutes: 20
         id: benchmark
         with:
