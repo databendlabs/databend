@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::is_builtin_function;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::principal::UdfName;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
@@ -96,7 +97,17 @@ impl UdfApi for UdfMgr {
 
         // TODO: remove get_udf(), check if the UDF exists after upsert_kv()
         // Check if UDF is defined
-        let _ = self.get_udf(info.name.as_str(), seq).await?;
+        let seqv = self.get_udf(info.name.as_str()).await?;
+
+        match seq.match_seq(&seqv) {
+            Ok(_) => {}
+            Err(_) => {
+                return Err(ErrorCode::UnknownUDF(format!(
+                    "UDF '{}' does not exist.",
+                    &info.name
+                )));
+            }
+        }
 
         let key = UdfName::new(&self.tenant, &info.name);
         // TODO: these logic are reppeated several times, consider to extract them.
@@ -116,25 +127,16 @@ impl UdfApi for UdfMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<SeqV<UserDefinedFunction>> {
-        // TODO: get() does not need seq
-        let key = UdfName::new(&self.tenant, udf_name);
-        let res = self.kv_api.get_kv(&key.to_string_key()).await?;
+    async fn get_udf(&self, udf_name: &str) -> Result<SeqV<UserDefinedFunction>> {
+        // TODO: do not return ErrorCode, return UDFError
 
-        let seq_value = res
+        let key = UdfName::new(&self.tenant, udf_name);
+        let res = self.kv_api.get_pb(&key).await?;
+
+        let seqv = res
             .ok_or_else(|| ErrorCode::UnknownUDF(format!("UDF '{}' does not exist.", udf_name)))?;
 
-        match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(SeqV::with_meta(
-                seq_value.seq,
-                seq_value.meta.clone(),
-                deserialize_struct(&seq_value.data, ErrorCode::IllegalUDFFormat, || "")?,
-            )),
-            Err(_) => Err(ErrorCode::UnknownUDF(format!(
-                "UDF '{}' does not exist.",
-                udf_name
-            ))),
-        }
+        Ok(seqv)
     }
 
     #[async_backtrace::framed]
