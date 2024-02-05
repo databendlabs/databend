@@ -49,8 +49,8 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_udf(&self, tenant: &str, udf_name: &str) -> Result<UserDefinedFunction> {
         let udf_api_client = self.get_udf_api_client(tenant)?;
-        let get_udf = udf_api_client.get_udf(udf_name, MatchSeq::GE(0));
-        Ok(get_udf.await?.data)
+        let seqv = udf_api_client.get_udf(udf_name).await?;
+        Ok(seqv.data)
     }
 
     #[async_backtrace::framed]
