@@ -102,6 +102,7 @@ fn test_statement() {
         r#"create table a (c decimal(38, 0))"#,
         r#"create table a (c decimal(38))"#,
         r#"create or replace table a (c decimal(38))"#,
+        r#"create or replace table a (c int(10) unsigned)"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
@@ -131,9 +132,11 @@ fn test_statement() {
         r#"alter view v as select number % 3 as a from numbers(1000);"#,
         r#"drop view v;"#,
         r#"create view v1(c1) as select number % 3 as a from numbers(1000);"#,
+        r#"create or replace view v1(c1) as select number % 3 as a from numbers(1000);"#,
         r#"alter view v1(c2) as select number % 3 as a from numbers(1000);"#,
         r#"create stream test2.s1 on table test.t append_only = false;"#,
         r#"create stream if not exists test2.s2 on table test.t at (stream => test1.s1) comment = 'this is a stream';"#,
+        r#"create or replace stream test2.s1 on table test.t append_only = false;"#,
         r#"show full streams from default.test2 like 's%';"#,
         r#"describe stream test2.s2;"#,
         r#"drop stream if exists test2.s2;"#,
@@ -536,6 +539,7 @@ fn test_statement() {
         r#"DESC TASK MyTask"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3'"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3' any_arg='any_value'"#,
+        r#"CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE='s3' any_arg='any_value'"#,
         r#"DROP CONNECTION IF EXISTS my_conn;"#,
         r#"DESC CONNECTION my_conn;"#,
         r#"SHOW CONNECTIONS;"#,
@@ -556,6 +560,12 @@ fn test_statement() {
         "GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';",
+        "CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));",
+        "CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';",
+        "CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
+        "CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
+        "DROP FUNCTION binary_reverse;",
+        "DROP FUNCTION isnotempty;",
     ];
 
     for case in cases {
@@ -651,6 +661,7 @@ fn test_statement_error() {
         "REVOKE OWNERSHIP ON d20_0014.* FROM USER A;",
         "REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;",
         "GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';",
+        "CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)",
     ];
 
     for case in cases {
@@ -803,6 +814,7 @@ fn test_expr() {
         r#"(arr[0]:a).b"#,
         r#"arr[4]["k"]"#,
         r#"a rlike '^11'"#,
+        r#"'中文'::text not in ('a', 'b')"#,
         r#"G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)"#,
         r#"sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END"#,
         r#"p_partkey = l_partkey

@@ -1735,11 +1735,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         table_id,
                         new_table: tb_id_seq == 0,
                         spec_vec: if let Some((spec_vec, mut_share_table_info)) = opt.0 {
-                            if spec_vec.is_empty() {
-                                None
-                            } else {
-                                Some((spec_vec, mut_share_table_info))
-                            }
+                            Some((spec_vec, mut_share_table_info))
                         } else {
                             None
                         },
@@ -2483,11 +2479,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             if succ {
                 return Ok(DropTableReply {
                     spec_vec: if let Some((spec_vec, mut_share_table_info)) = opt.0 {
-                        if spec_vec.is_empty() {
-                            None
-                        } else {
-                            Some((spec_vec, mut_share_table_info))
-                        }
+                        Some((spec_vec, mut_share_table_info))
                     } else {
                         None
                     },
@@ -3981,7 +3973,11 @@ async fn drop_table_by_id(
             ));
         }
     }
-    Ok((Some((spec_vec, mut_share_table_info)), tb_id_seq))
+    if spec_vec.is_empty() {
+        Ok((None, tb_id_seq))
+    } else {
+        Ok((Some((spec_vec, mut_share_table_info)), tb_id_seq))
+    }
 }
 
 async fn drop_database_meta(

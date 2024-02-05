@@ -15,6 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
@@ -27,20 +28,12 @@ impl UserApiProvider {
         &self,
         tenant: &str,
         connection: UserDefinedConnection,
-        if_not_exists: bool,
-    ) -> Result<u64> {
+        create_option: &CreateOption,
+    ) -> Result<()> {
         let connection_api_provider = self.get_connection_api_client(tenant)?;
-        let add_connection = connection_api_provider.add_connection(connection);
-        match add_connection.await {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                if if_not_exists && e.code() == ErrorCode::CONNECTION_ALREADY_EXISTS {
-                    Ok(u64::MIN)
-                } else {
-                    Err(e)
-                }
-            }
-        }
+        connection_api_provider
+            .add_connection(connection, create_option)
+            .await
     }
 
     // Get one connection from by tenant.

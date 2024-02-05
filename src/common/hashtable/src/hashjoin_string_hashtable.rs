@@ -138,20 +138,31 @@ where A: Allocator + Clone + 'static
         count
     }
 
-    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    fn early_filtering_probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize {
+    // Perform early filtering probe, store matched indexes in `matched_selection` and store unmatched indexes
+    // in `unmatched_selection`, return the number of matched and unmatched indexes.
+    fn early_filtering_probe(
+        &self,
+        hashes: &mut [u64],
+        bitmap: Option<Bitmap>,
+        matched_selection: &mut [u32],
+        unmatched_selection: &mut [u32],
+    ) -> (usize, usize) {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
             if bitmap.unset_bits() == bitmap.len() {
-                hashes.iter_mut().for_each(|hash| {
-                    *hash = 0;
-                });
-                return 0;
+                unmatched_selection
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(idx, val)| {
+                        *val = idx as u32;
+                    });
+                return (0, hashes.len());
             } else if bitmap.unset_bits() > 0 {
                 valids = Some(bitmap);
             }
         }
-        let mut count = 0;
+        let mut matched_idx = 0;
+        let mut unmatched_idx = 0;
         match valids {
             Some(valids) => {
                 hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
@@ -159,32 +170,45 @@ where A: Allocator + Clone + 'static
                         let header = self.pointers[(*hash >> self.hash_shift) as usize];
                         if header != 0 && early_filtering(header, *hash) {
                             *hash = remove_header_tag(header);
-                            count += 1;
+                            unsafe {
+                                *matched_selection.get_unchecked_mut(matched_idx) = idx as u32
+                            };
+                            matched_idx += 1;
                         } else {
-                            *hash = 0;
+                            unsafe {
+                                *unmatched_selection.get_unchecked_mut(unmatched_idx) = idx as u32
+                            };
+                            unmatched_idx += 1;
                         }
                     } else {
-                        *hash = 0;
-                    };
+                        unsafe {
+                            *unmatched_selection.get_unchecked_mut(unmatched_idx) = idx as u32
+                        };
+                        unmatched_idx += 1;
+                    }
                 });
             }
             None => {
-                hashes.iter_mut().for_each(|hash| {
+                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
                     let header = self.pointers[(*hash >> self.hash_shift) as usize];
                     if header != 0 && early_filtering(header, *hash) {
                         *hash = remove_header_tag(header);
-                        count += 1;
+                        unsafe { *matched_selection.get_unchecked_mut(matched_idx) = idx as u32 };
+                        matched_idx += 1;
                     } else {
-                        *hash = 0;
+                        unsafe {
+                            *unmatched_selection.get_unchecked_mut(unmatched_idx) = idx as u32
+                        };
+                        unmatched_idx += 1;
                     }
                 });
             }
         }
-        count
+        (matched_idx, unmatched_idx)
     }
 
-    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    fn early_filtering_probe_with_selection(
+    // Perform early filtering probe and store matched indexes in `selection`, return the number of matched indexes.
+    fn early_filtering_matched_probe(
         &self,
         hashes: &mut [u64],
         bitmap: Option<Bitmap>,

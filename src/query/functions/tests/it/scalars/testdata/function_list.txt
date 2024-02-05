@@ -28,6 +28,7 @@ remove_nullable -> assume_not_null
 rlike -> regexp
 sha1 -> sha
 siphash -> siphash64
+st_point -> st_makepoint
 str_to_date -> to_date
 str_to_timestamp -> to_timestamp
 substr_utf8 -> substr
@@ -1178,6 +1179,7 @@ Functions overloads:
 1 crc32(String NULL) :: UInt32 NULL
 0 degrees(Float64) :: Float64
 1 degrees(Float64 NULL) :: Float64 NULL
+0 delete_by_keypath FACTORY
 0 div(UInt8, UInt8) :: UInt8
 1 div(UInt8 NULL, UInt8 NULL) :: UInt8 NULL
 2 div(UInt8, UInt16) :: UInt16
@@ -3161,6 +3163,8 @@ Functions overloads:
 17 sqrt(Float32 NULL) :: Float64 NULL
 18 sqrt(Float64) :: Float64
 19 sqrt(Float64 NULL) :: Float64 NULL
+0 st_makepoint(Float64, Float64) :: Geometry
+1 st_makepoint(Float64 NULL, Float64 NULL) :: Geometry NULL
 0 strcmp(String, String) :: Int8
 1 strcmp(String NULL, String NULL) :: Int8 NULL
 0 string_to_h3(String) :: UInt64
@@ -3518,6 +3522,8 @@ Functions overloads:
 32 to_string(Binary NULL) :: String NULL
 33 to_string(Bitmap) :: String
 34 to_string(Bitmap NULL) :: String NULL
+35 to_string(Geometry) :: String
+36 to_string(Geometry NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp

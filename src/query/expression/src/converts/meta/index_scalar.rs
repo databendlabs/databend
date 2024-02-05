@@ -78,6 +78,7 @@ impl TryFrom<Scalar> for IndexScalar {
             | Scalar::Map(_)
             | Scalar::Bitmap(_)
             | Scalar::Variant(_)
+            | Scalar::Geometry(_)
             | Scalar::EmptyArray
             | Scalar::EmptyMap => return Err(()),
         })
