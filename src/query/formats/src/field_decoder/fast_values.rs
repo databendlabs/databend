@@ -490,7 +490,7 @@ impl FastFieldDecoderValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
-        let geom = parse_to_ewkb(&buf)?;
+        let geom = parse_to_ewkb(&buf, None)?;
         column.put_slice(geom.as_bytes());
         column.commit_row();
         Ok(())

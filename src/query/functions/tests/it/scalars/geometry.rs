@@ -15,6 +15,8 @@
 use std::io::Write;
 
 use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::StringType;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
 
@@ -27,21 +29,94 @@ fn test_geometry() {
 
     test_st_makepoint(file);
     test_to_string(file);
+    test_st_geometryfromwkt(file);
+    test_st_transform(file);
 }
 
 fn test_st_makepoint(file: &mut impl Write) {
-    run_ast(file, "st_makepoint(7.0, 8.0)", &[]);
-    run_ast(file, "st_makepoint(7.0, -8.0)", &[]);
-    run_ast(file, "st_makepoint(a, b)", &[
+    run_ast(file, "st_makegeompoint(7.0, 8.0)", &[]);
+    run_ast(file, "st_makegeompoint(7.0, -8.0)", &[]);
+    run_ast(file, "st_makegeompoint(a, b)", &[
         ("a", Float64Type::from_data(vec![1.0, 2.0, 3.0])),
         ("b", Float64Type::from_data(vec![1.0, 2.0, 3.0])),
     ]);
 }
 
 fn test_to_string(file: &mut impl Write) {
-    run_ast(file, "to_string(st_makepoint(7.0, -8.0))", &[]);
-    run_ast(file, "to_string(st_makepoint(a, b))", &[
+    run_ast(file, "to_string(st_makegeompoint(7.0, -8.0))", &[]);
+    run_ast(file, "to_string(st_makegeompoint(a, b))", &[
         ("a", Float64Type::from_data(vec![1.0, 2.0, 3.0])),
         ("b", Float64Type::from_data(vec![1.0, 2.0, 3.0])),
+    ]);
+}
+
+fn test_st_geometryfromwkt(file: &mut impl Write) {
+    // without srid
+    run_ast(
+        file,
+        "st_geometryfromwkt('POINT(389866.35 5819003.03)')",
+        &[],
+    );
+
+    run_ast(file, "st_geometryfromwkt(a)", &[(
+        "a",
+        StringType::from_data(vec![
+            "POINT(389866.35 5819003.03)",
+            "POINT(389866.35 5819003.03)",
+            "POINT(389866.35 5819003.03)",
+        ]),
+    )]);
+
+    // with srid
+    run_ast(
+        file,
+        "st_geometryfromwkt('POINT(389866.35 5819003.03)', 32633)",
+        &[],
+    );
+
+    run_ast(file, "st_geometryfromwkt(a, b)", &[
+        (
+            "a",
+            StringType::from_data(vec![
+                "POINT(389866.35 5819003.03)",
+                "POINT(389866.35 5819003.03)",
+                "POINT(389866.35 5819003.03)",
+            ]),
+        ),
+        ("b", Int32Type::from_data(vec![32633, 4326, 3857])),
+    ]);
+}
+
+fn test_st_transform(file: &mut impl Write) {
+    // just to_srid
+    run_ast(
+        file,
+        "st_transform(st_geomfromwkt('POINT(389866.35 5819003.03)', 32633), 3857)",
+        &[],
+    );
+
+    run_ast(file, "st_transform(st_geomfromwkt(a, b), c)", &[
+        (
+            "a",
+            StringType::from_data(vec!["POINT(389866.35 5819003.03)"]),
+        ),
+        ("b", Int32Type::from_data(vec![32633])),
+        ("c", Int32Type::from_data(vec![3857])),
+    ]);
+
+    // from_srid and to_srid
+    run_ast(
+        file,
+        "st_transform(st_geomfromwkt('POINT(4.500212 52.161170)'), 4326, 28992)",
+        &[],
+    );
+
+    run_ast(file, "st_transform(st_geomfromwkt(a), b, c)", &[
+        (
+            "a",
+            StringType::from_data(vec!["POINT(4.500212 52.161170)"]),
+        ),
+        ("b", Int32Type::from_data(vec![4326])),
+        ("c", Int32Type::from_data(vec![28992])),
     ]);
 }

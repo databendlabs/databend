@@ -686,6 +686,7 @@ fn convert_to_type_name(ty: &DataType) -> TypeName {
         DataType::Bitmap => TypeName::Bitmap,
         DataType::Variant => TypeName::Variant,
         DataType::Binary => TypeName::Binary,
+        DataType::Geometry => TypeName::Geometry,
         DataType::Nullable(box inner_ty) => {
             TypeName::Nullable(Box::new(convert_to_type_name(inner_ty)))
         }

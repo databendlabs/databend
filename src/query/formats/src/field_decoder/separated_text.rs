@@ -345,7 +345,7 @@ impl SeparatedTextDecoder {
     }
 
     fn read_geometry(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
-        let geom = parse_to_ewkb(data)?;
+        let geom = parse_to_ewkb(data, None)?;
         column.put_slice(geom.as_bytes());
         column.commit_row();
         Ok(())

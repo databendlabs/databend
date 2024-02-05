@@ -322,6 +322,7 @@ pub enum TypeName {
         fields_type: Vec<TypeName>,
     },
     Variant,
+    Geometry,
     Nullable(Box<TypeName>),
     NotNull(Box<TypeName>),
 }
@@ -898,6 +899,9 @@ impl Display for TypeName {
             }
             TypeName::Variant => {
                 write!(f, "VARIANT")?;
+            }
+            TypeName::Geometry => {
+                write!(f, "GEOMETRY")?;
             }
             TypeName::Nullable(ty) => {
                 write!(f, "{} NULL", ty)?;

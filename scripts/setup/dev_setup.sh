@@ -327,6 +327,62 @@ function install_mysql_client {
 	esac
 }
 
+function install_sqlite3 {
+	PACKAGE_MANAGER=$1
+
+	echo "==> installing sqlite3..."
+
+	case "$PACKAGE_MANAGER" in
+	apt-get)
+		install_pkg libsqlite3-dev "$PACKAGE_MANAGER"
+		;;
+	pacman)
+		install_pkg sqlite "$PACKAGE_MANAGER"
+		;;
+	apk)
+		install_pkg sqlite-dev "$PACKAGE_MANAGER"
+		;;
+	yum | dnf)
+		install_pkg sqlite-devel "$PACKAGE_MANAGER"
+		;;
+	brew)
+		install_pkg sqlite "$PACKAGE_MANAGER"
+		;;
+	*)
+		echo "Unable to install sqlite3 with package manager: $PACKAGE_MANAGER"
+		exit 1
+		;;
+	esac
+}
+
+function install_libtiff {
+	PACKAGE_MANAGER=$1
+
+	echo "==> installing libtiff..."
+
+	case "$PACKAGE_MANAGER" in
+	apt-get)
+		install_pkg libtiff-dev "$PACKAGE_MANAGER"
+		;;
+	pacman)
+		install_pkg libtiff "$PACKAGE_MANAGER"
+		;;
+	apk)
+		install_pkg tiff-dev "$PACKAGE_MANAGER"
+		;;
+	yum | dnf)
+		install_pkg libtiff-devel "$PACKAGE_MANAGER"
+		;;
+	brew)
+		install_pkg libtiff "$PACKAGE_MANAGER"
+		;;
+	*)
+		echo "Unable to install libtiff with package manager: $PACKAGE_MANAGER"
+		exit 1
+		;;
+	esac
+}
+
 function install_rustup {
 	RUST_TOOLCHAIN=$1
 
@@ -556,6 +612,8 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg llvm "$PACKAGE_MANAGER"
 	install_ziglang "$PACKAGE_MANAGER"
 	install_python3 "$PACKAGE_MANAGER"
+	install_sqlite3 "$PACKAGE_MANAGER"
+	install_libtiff "$PACKAGE_MANAGER"
 
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
