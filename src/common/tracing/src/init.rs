@@ -38,26 +38,12 @@ const HEADER_TRACE_PARENT: &str = "traceparent";
 #[allow(dyn_drop)]
 pub struct GlobalLogger {
     _guards: Vec<Box<dyn Drop + Send + Sync + 'static>>,
-    _finalizers: Vec<Box<dyn FnOnce() + Send + Sync + 'static>>,
 }
 
 impl GlobalLogger {
     pub fn init(name: &str, cfg: &Config, labels: BTreeMap<String, String>) {
-        let (_guards, _finalizers) = init_logging(name, cfg, labels);
-        GlobalInstance::set(Arc::new(Mutex::new(Self {
-            _guards,
-            _finalizers,
-        })));
-    }
-
-    pub fn instance() -> Arc<Mutex<GlobalLogger>> {
-        GlobalInstance::get()
-    }
-
-    pub fn shutdown(&mut self) {
-        while let Some(finalizer) = self._finalizers.pop() {
-            finalizer();
-        }
+        let _guards = init_logging(name, cfg, labels);
+        GlobalInstance::set(Arc::new(Mutex::new(Self { _guards })));
     }
 }
 
@@ -89,12 +75,8 @@ pub fn init_logging(
     name: &str,
     cfg: &Config,
     mut labels: BTreeMap<String, String>,
-) -> (
-    Vec<Box<dyn Drop + Send + Sync + 'static>>,
-    Vec<Box<dyn FnOnce() + Send + Sync + 'static>>,
-) {
+) -> Vec<Box<dyn Drop + Send + Sync + 'static>> {
     let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = Vec::new();
-    let mut finalizers: Vec<Box<dyn FnOnce() + Send + Sync + 'static>> = Vec::new();
     let log_name = name;
     let trace_name = match labels.get("node_id") {
         None => name.to_string(),
@@ -209,7 +191,6 @@ pub fn init_logging(
         labels.insert("category".to_string(), "system".to_string());
         labels.extend(cfg.otlp.labels.clone());
         let logger = OpenTelemetryLogger::new(log_name, &cfg.otlp.endpoint, labels);
-        finalizers.push(Box::new(logger.finalizer()));
         let dispatch = fern::Dispatch::new()
             .level(cfg.otlp.level.parse().unwrap_or(LevelFilter::Info))
             .format(formatter("json"))
@@ -245,7 +226,6 @@ pub fn init_logging(
             labels.insert("category".to_string(), "query".to_string());
             labels.extend(cfg.query.labels.clone());
             let logger = OpenTelemetryLogger::new(log_name, &cfg.query.otlp_endpoint, labels);
-            finalizers.push(Box::new(logger.finalizer()));
             query_logger = query_logger.chain(Box::new(logger) as Box<dyn Log>);
         }
     }
@@ -264,7 +244,6 @@ pub fn init_logging(
             labels.insert("category".to_string(), "profile".to_string());
             labels.extend(cfg.profile.labels.clone());
             let logger = OpenTelemetryLogger::new(log_name, &cfg.profile.otlp_endpoint, labels);
-            finalizers.push(Box::new(logger.finalizer()));
             profile_logger = profile_logger.chain(Box::new(logger) as Box<dyn Log>);
         }
     }
@@ -325,13 +304,13 @@ pub fn init_logging(
     // Set global logger
     if logger.apply().is_err() {
         eprintln!("logger has already been set");
-        return (Vec::new(), Vec::new());
+        return Vec::new();
     }
 
     #[cfg(feature = "console")]
     init_tokio_console();
 
-    (guards, finalizers)
+    guards
 }
 
 #[cfg(feature = "console")]

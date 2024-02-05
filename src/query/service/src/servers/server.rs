@@ -22,7 +22,6 @@ use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
 use databend_common_exception::Result;
-use databend_common_tracing::GlobalLogger;
 use futures::stream::Abortable;
 use futures::StreamExt;
 use log::error;
@@ -44,7 +43,6 @@ pub struct ShutdownHandle {
     shutdown: Arc<AtomicBool>,
     sessions: Arc<SessionManager>,
     services: Vec<(&'static str, Box<dyn Server>)>,
-    guards: Vec<Box<dyn FnOnce() + Send + 'static>>,
 }
 
 impl ShutdownHandle {
@@ -53,7 +51,6 @@ impl ShutdownHandle {
             sessions: SessionManager::instance(),
             services: vec![],
             shutdown: Arc::new(AtomicBool::new(false)),
-            guards: vec![],
         })
     }
     #[async_backtrace::framed]
@@ -77,8 +74,6 @@ impl ShutdownHandle {
             .await;
         self.sessions.graceful_shutdown(signal, 5).await;
         self.shutdown_services(false).await;
-        let logger = GlobalLogger::instance();
-        logger.lock().unwrap().shutdown();
     }
 
     #[async_backtrace::framed]
@@ -105,10 +100,6 @@ impl ShutdownHandle {
 
     pub fn add_service(&mut self, name: &'static str, service: Box<dyn Server>) {
         self.services.push((name, service));
-    }
-
-    pub fn add_guard(&mut self, guard: Box<dyn FnOnce() + Send + 'static>) {
-        self.guards.push(guard);
     }
 }
 

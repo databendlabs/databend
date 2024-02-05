@@ -110,6 +110,7 @@ impl OpenTelemetryLogger {
         let exporter = exporter_builder
             .build_log_exporter()
             .expect("build log exporter");
+
         let provider = opentelemetry_sdk::logs::LoggerProvider::builder()
             .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
             .with_config(
@@ -119,23 +120,6 @@ impl OpenTelemetryLogger {
             .build();
         let logger = provider.versioned_logger(name.to_string(), None, None, None);
         Self { logger, provider }
-    }
-
-    pub(crate) fn finalizer(&self) -> impl FnOnce() + Send + Sync + 'static {
-        let mut provider = self.provider.clone();
-        move || match provider.try_shutdown() {
-            Some(results) => {
-                for r in results {
-                    if let Err(e) = r {
-                        eprintln!("shutdown log provider {:?} failed: {}", provider, e);
-                    }
-                }
-            }
-            None => eprintln!(
-                "shutdown logger failed: logger provider {:?} is already shutdown",
-                provider
-            ),
-        }
     }
 }
 
