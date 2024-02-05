@@ -104,7 +104,7 @@ impl HashJoinProbeState {
                         None,
                         None,
                     )?;
-                    (matched_idx, incomplete_ptr) = self.continue_left_probe(
+                    (matched_idx, incomplete_ptr) = self.fill_left_outer_states(
                         hash_table,
                         key,
                         incomplete_ptr,
@@ -161,7 +161,7 @@ impl HashJoinProbeState {
                         None,
                         None,
                     )?;
-                    (matched_idx, incomplete_ptr) = self.continue_left_probe(
+                    (matched_idx, incomplete_ptr) = self.fill_left_outer_states(
                         hash_table,
                         key,
                         incomplete_ptr,
@@ -290,7 +290,7 @@ impl HashJoinProbeState {
                         Some(row_state),
                         Some(row_state_indexes),
                     )?;
-                    (matched_idx, incomplete_ptr) = self.continue_left_probe(
+                    (matched_idx, incomplete_ptr) = self.fill_left_outer_states(
                         hash_table,
                         key,
                         incomplete_ptr,
@@ -348,7 +348,7 @@ impl HashJoinProbeState {
                         Some(row_state),
                         Some(row_state_indexes),
                     )?;
-                    (matched_idx, incomplete_ptr) = self.continue_left_probe(
+                    (matched_idx, incomplete_ptr) = self.fill_left_outer_states(
                         hash_table,
                         key,
                         incomplete_ptr,
@@ -630,9 +630,9 @@ impl HashJoinProbeState {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
-    fn continue_left_probe<'a, H: HashJoinHashtableLike>(
+    #[allow(clippy::too_many_arguments)]
+    fn fill_left_outer_states<'a, H: HashJoinHashtableLike>(
         &self,
         hash_table: &H,
         key: &H::Key,
@@ -648,39 +648,34 @@ impl HashJoinProbeState {
     where
         H::Key: 'a,
     {
-        let mut matched_idx = 0;
-        let (match_count, ptr) = hash_table.next_probe(
-            key,
-            incomplete_ptr,
-            build_indexes_ptr,
-            matched_idx,
-            max_block_size,
-        );
-        if match_count > 0 {
-            if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle {
-                return Err(ErrorCode::Internal(
-                    "Scalar subquery can't return more than one row",
-                ));
-            }
+        let (match_count, ptr) =
+            hash_table.next_probe(key, incomplete_ptr, build_indexes_ptr, 0, max_block_size);
+        if match_count == 0 {
+            return Ok((0, 0));
+        }
 
-            if !with_conjunct {
-                for _ in 0..match_count {
-                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx };
-                    matched_idx += 1;
-                }
-            } else {
-                let row_state = row_state.unwrap();
-                let row_state_indexes = row_state_indexes.unwrap();
-                unsafe {
-                    *row_state.get_unchecked_mut(idx as usize) += match_count;
-                    for _ in 0..match_count {
-                        *row_state_indexes.get_unchecked_mut(matched_idx) = idx as usize;
-                        *probe_indexes.get_unchecked_mut(matched_idx) = idx;
-                        matched_idx += 1;
-                    }
+        if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle {
+            return Err(ErrorCode::Internal(
+                "Scalar subquery can't return more than one row",
+            ));
+        }
+
+        if !with_conjunct {
+            for i in 0..match_count {
+                unsafe { *probe_indexes.get_unchecked_mut(i) = idx };
+            }
+        } else {
+            let row_state = row_state.unwrap();
+            let row_state_indexes = row_state_indexes.unwrap();
+            unsafe {
+                *row_state.get_unchecked_mut(idx as usize) += match_count;
+                for i in 0..match_count {
+                    *row_state_indexes.get_unchecked_mut(i) = idx as usize;
+                    *probe_indexes.get_unchecked_mut(i) = idx;
                 }
             }
         }
-        Ok((matched_idx, ptr))
+
+        Ok((match_count, ptr))
     }
 }
