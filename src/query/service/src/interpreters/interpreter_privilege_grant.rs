@@ -24,7 +24,6 @@ use databend_common_meta_app::principal::UserPrivilegeType::Ownership;
 use databend_common_sql::plans::GrantPrivilegePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use log::debug;
 use log::error;
 use log::info;
