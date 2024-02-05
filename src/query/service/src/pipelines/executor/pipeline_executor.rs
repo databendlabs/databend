@@ -412,7 +412,7 @@ impl PipelineExecutor {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.
             while !self.global_tasks_queue.is_finished() && !context.has_task() {
                 self.global_tasks_queue
-                    .steal_task_to_context(&mut context, &self);
+                    .steal_task_to_context(&mut context, self);
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
@@ -422,7 +422,7 @@ impl PipelineExecutor {
                 if !self.global_tasks_queue.is_finished() {
                     // We immediately schedule the processor again.
                     let schedule_queue = graph.schedule_queue(executed_pid)?;
-                    schedule_queue.schedule(&self.global_tasks_queue, &mut context, &self);
+                    schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
                 }
             }
         }

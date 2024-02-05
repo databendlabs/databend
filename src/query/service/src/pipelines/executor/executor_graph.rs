@@ -365,12 +365,10 @@ impl ExecutingGraph {
                     expected_value = new_expected;
                     if epoch != global_epoch as u64 {
                         desired_value = new_expected;
+                    } else if remain_points >= 1 {
+                        desired_value = (remain_points - 1) << 32 | epoch;
                     } else {
-                        if remain_points >= 1 {
-                            desired_value = (remain_points - 1) << 32 | epoch;
-                        } else {
-                            desired_value = max_points << 32 | (epoch + 1);
-                        }
+                        desired_value = max_points << 32 | (epoch + 1);
                     }
                 }
             }
