@@ -77,7 +77,7 @@ impl DefaultDatabase {
             refreshed.push(
                 self.ctx
                     .storage_factory
-                    .refresh_table_info(table_info)
+                    .refresh_table_info(table_info.clone())
                     .await
                     .map_err(|err| {
                         err.add_message_back(format!(
