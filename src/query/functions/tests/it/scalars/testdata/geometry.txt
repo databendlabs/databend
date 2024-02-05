@@ -1,24 +1,24 @@
-ast            : st_makepoint(7.0, 8.0)
-raw expr       : st_makepoint(7.0, 8.0)
-checked expr   : st_makepoint<Float64, Float64>(to_float64<Decimal(2, 1)>(7.0_d128(2,1)), to_float64<Decimal(2, 1)>(8.0_d128(2,1)))
+ast            : st_makegeompoint(7.0, 8.0)
+raw expr       : st_makegeompoint(7.0, 8.0)
+checked expr   : st_makegeompoint<Float64, Float64>(to_float64<Decimal(2, 1)>(7.0_d128(2,1)), to_float64<Decimal(2, 1)>(8.0_d128(2,1)))
 optimized expr : "POINT(7 8)"
 output type    : Geometry
 output domain  : Undefined
 output         : '"POINT(7 8)"'
 
 
-ast            : st_makepoint(7.0, -8.0)
-raw expr       : st_makepoint(7.0, minus(8.0))
-checked expr   : st_makepoint<Float64, Float64>(to_float64<Decimal(2, 1)>(7.0_d128(2,1)), to_float64<Decimal(2, 1)>(minus<Decimal(2, 1)>(8.0_d128(2,1))))
+ast            : st_makegeompoint(7.0, -8.0)
+raw expr       : st_makegeompoint(7.0, minus(8.0))
+checked expr   : st_makegeompoint<Float64, Float64>(to_float64<Decimal(2, 1)>(7.0_d128(2,1)), to_float64<Decimal(2, 1)>(minus<Decimal(2, 1)>(8.0_d128(2,1))))
 optimized expr : "POINT(7 -8)"
 output type    : Geometry
 output domain  : Undefined
 output         : '"POINT(7 -8)"'
 
 
-ast            : st_makepoint(a, b)
-raw expr       : st_makepoint(a::Float64, b::Float64)
-checked expr   : st_makepoint<Float64, Float64>(a, b)
+ast            : st_makegeompoint(a, b)
+raw expr       : st_makegeompoint(a::Float64, b::Float64)
+checked expr   : st_makegeompoint<Float64, Float64>(a, b)
 evaluation:
 +--------+---------+---------+----------------+
 |        | a       | b       | Output         |
@@ -39,18 +39,18 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : to_string(st_makepoint(7.0, -8.0))
-raw expr       : to_string(st_makepoint(7.0, minus(8.0)))
-checked expr   : to_string<Geometry>(st_makepoint<Float64, Float64>(to_float64<Decimal(2, 1)>(7.0_d128(2,1)), to_float64<Decimal(2, 1)>(minus<Decimal(2, 1)>(8.0_d128(2,1)))))
+ast            : to_string(st_makegeompoint(7.0, -8.0))
+raw expr       : to_string(st_makegeompoint(7.0, minus(8.0)))
+checked expr   : to_string<Geometry>(st_makegeompoint<Float64, Float64>(to_float64<Decimal(2, 1)>(7.0_d128(2,1)), to_float64<Decimal(2, 1)>(minus<Decimal(2, 1)>(8.0_d128(2,1)))))
 optimized expr : "POINT(7 -8)"
 output type    : String
 output domain  : {"POINT(7 -8)"..="POINT(7 -8)"}
 output         : 'POINT(7 -8)'
 
 
-ast            : to_string(st_makepoint(a, b))
-raw expr       : to_string(st_makepoint(a::Float64, b::Float64))
-checked expr   : to_string<Geometry>(st_makepoint<Float64, Float64>(a, b))
+ast            : to_string(st_makegeompoint(a, b))
+raw expr       : to_string(st_makegeompoint(a::Float64, b::Float64))
+checked expr   : to_string<Geometry>(st_makegeompoint<Float64, Float64>(a, b))
 evaluation:
 +--------+---------+---------+--------------+
 |        | a       | b       | Output       |
@@ -69,5 +69,134 @@ evaluation (internal):
 | b      | Float64([1, 2, 3])                                                                                              |
 | Output | StringColumn { data: 0x504f494e542831203129504f494e542832203229504f494e542833203329, offsets: [0, 10, 20, 30] } |
 +--------+-----------------------------------------------------------------------------------------------------------------+
+
+
+ast            : st_geometryfromwkt('POINT(389866.35 5819003.03)')
+raw expr       : st_geometryfromwkt('POINT(389866.35 5819003.03)')
+checked expr   : st_geometryfromwkt<String>("POINT(389866.35 5819003.03)")
+optimized expr : "POINT(389866.35 5819003.03)"
+output type    : Geometry
+output domain  : Undefined
+output         : '"POINT(389866.35 5819003.03)"'
+
+
+ast            : st_geometryfromwkt(a)
+raw expr       : st_geometryfromwkt(a::String)
+checked expr   : st_geometryfromwkt<String>(a)
+optimized expr : "POINT(389866.35 5819003.03)"
+evaluation:
++--------+-----------------------------------------------------------------+---------------------------------+
+|        | a                                                               | Output                          |
++--------+-----------------------------------------------------------------+---------------------------------+
+| Type   | String                                                          | Geometry                        |
+| Domain | {"POINT(389866.35 5819003.03)"..="POINT(389866.35 5819003.03)"} | Undefined                       |
+| Row 0  | 'POINT(389866.35 5819003.03)'                                   | '"POINT(389866.35 5819003.03)"' |
+| Row 1  | 'POINT(389866.35 5819003.03)'                                   | '"POINT(389866.35 5819003.03)"' |
+| Row 2  | 'POINT(389866.35 5819003.03)'                                   | '"POINT(389866.35 5819003.03)"' |
++--------+-----------------------------------------------------------------+---------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x504f494e54283338393836362e333520353831393030332e303329504f494e54283338393836362e333520353831393030332e303329504f494e54283338393836362e333520353831393030332e303329, offsets: [0, 27, 54, 81] } |
+| Output | BinaryColumn { data: 0x010100000066666666a9cb17411f85ebc19e325641010100000066666666a9cb17411f85ebc19e325641010100000066666666a9cb17411f85ebc19e325641, offsets: [0, 21, 42, 63] }                                     |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : st_geometryfromwkt('POINT(389866.35 5819003.03)', 32633)
+raw expr       : st_geometryfromwkt('POINT(389866.35 5819003.03)', 32633)
+checked expr   : st_geometryfromwkt<String, Int32>("POINT(389866.35 5819003.03)", to_int32<UInt16>(32633_u16))
+optimized expr : "SRID=32633;POINT(389866.35 5819003.03)"
+output type    : Geometry
+output domain  : Undefined
+output         : '"SRID=32633;POINT(389866.35 5819003.03)"'
+
+
+ast            : st_geometryfromwkt(a, b)
+raw expr       : st_geometryfromwkt(a::String, b::Int32)
+checked expr   : st_geometryfromwkt<String, Int32>(a, b)
+optimized expr : st_geometryfromwkt<String, Int32>("POINT(389866.35 5819003.03)", b)
+evaluation:
++--------+-----------------------------------------------------------------+----------------+--------------------------------------------+
+|        | a                                                               | b              | Output                                     |
++--------+-----------------------------------------------------------------+----------------+--------------------------------------------+
+| Type   | String                                                          | Int32          | Geometry                                   |
+| Domain | {"POINT(389866.35 5819003.03)"..="POINT(389866.35 5819003.03)"} | {3857..=32633} | Unknown                                    |
+| Row 0  | 'POINT(389866.35 5819003.03)'                                   | 32633          | '"SRID=32633;POINT(389866.35 5819003.03)"' |
+| Row 1  | 'POINT(389866.35 5819003.03)'                                   | 4326           | '"SRID=4326;POINT(389866.35 5819003.03)"'  |
+| Row 2  | 'POINT(389866.35 5819003.03)'                                   | 3857           | '"SRID=3857;POINT(389866.35 5819003.03)"'  |
++--------+-----------------------------------------------------------------+----------------+--------------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x504f494e54283338393836362e333520353831393030332e303329504f494e54283338393836362e333520353831393030332e303329504f494e54283338393836362e333520353831393030332e303329, offsets: [0, 27, 54, 81] } |
+| b      | Int32([32633, 4326, 3857])                                                                                                                                                                                            |
+| Output | BinaryColumn { data: 0x0101000020797f000066666666a9cb17411f85ebc19e3256410101000020e610000066666666a9cb17411f85ebc19e3256410101000020110f000066666666a9cb17411f85ebc19e325641, offsets: [0, 25, 50, 75] }             |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : st_transform(st_geomfromwkt('POINT(389866.35 5819003.03)', 32633), 3857)
+raw expr       : st_transform(st_geomfromwkt('POINT(389866.35 5819003.03)', 32633), 3857)
+checked expr   : st_transform<Geometry, Int32>(st_geometryfromwkt<String, Int32>("POINT(389866.35 5819003.03)", to_int32<UInt16>(32633_u16)), to_int32<UInt16>(3857_u16))
+optimized expr : "SRID=3857;POINT(1489140.0937656453 6892872.198680114)"
+output type    : Geometry
+output domain  : Undefined
+output         : '"SRID=3857;POINT(1489140.0937656453 6892872.198680114)"'
+
+
+ast            : st_transform(st_geomfromwkt(a, b), c)
+raw expr       : st_transform(st_geomfromwkt(a::String, b::Int32), c::Int32)
+checked expr   : st_transform<Geometry, Int32>(st_geometryfromwkt<String, Int32>(a, b), c)
+optimized expr : "SRID=3857;POINT(1489140.0937656453 6892872.198680114)"
+evaluation:
++--------+-----------------------------------------------------------------+-----------------+---------------+-----------------------------------------------------------+
+|        | a                                                               | b               | c             | Output                                                    |
++--------+-----------------------------------------------------------------+-----------------+---------------+-----------------------------------------------------------+
+| Type   | String                                                          | Int32           | Int32         | Geometry                                                  |
+| Domain | {"POINT(389866.35 5819003.03)"..="POINT(389866.35 5819003.03)"} | {32633..=32633} | {3857..=3857} | Undefined                                                 |
+| Row 0  | 'POINT(389866.35 5819003.03)'                                   | 32633           | 3857          | '"SRID=3857;POINT(1489140.0937656453 6892872.198680114)"' |
++--------+-----------------------------------------------------------------+-----------------+---------------+-----------------------------------------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                              |
++--------+---------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x504f494e54283338393836362e333520353831393030332e303329, offsets: [0, 27] } |
+| b      | Int32([32633])                                                                                    |
+| c      | Int32([3857])                                                                                     |
+| Output | BinaryColumn { data: 0x0101000020110f00007c060118f4b83641cc2cb70c524b5a41, offsets: [0, 25] }     |
++--------+---------------------------------------------------------------------------------------------------+
+
+
+ast            : st_transform(st_geomfromwkt('POINT(4.500212 52.161170)'), 4326, 28992)
+raw expr       : st_transform(st_geomfromwkt('POINT(4.500212 52.161170)'), 4326, 28992)
+checked expr   : st_transform<Geometry, Int32, Int32>(st_geometryfromwkt<String>("POINT(4.500212 52.161170)"), to_int32<UInt16>(4326_u16), to_int32<UInt16>(28992_u16))
+optimized expr : "SRID=28992;POINT(94308.67050247335 464038.16865487053)"
+output type    : Geometry
+output domain  : Undefined
+output         : '"SRID=28992;POINT(94308.67050247335 464038.16865487053)"'
+
+
+ast            : st_transform(st_geomfromwkt(a), b, c)
+raw expr       : st_transform(st_geomfromwkt(a::String), b::Int32, c::Int32)
+checked expr   : st_transform<Geometry, Int32, Int32>(st_geometryfromwkt<String>(a), b, c)
+optimized expr : "SRID=28992;POINT(94308.67050247335 464038.16865487053)"
+evaluation:
++--------+-------------------------------------------------------------+---------------+-----------------+------------------------------------------------------------+
+|        | a                                                           | b             | c               | Output                                                     |
++--------+-------------------------------------------------------------+---------------+-----------------+------------------------------------------------------------+
+| Type   | String                                                      | Int32         | Int32           | Geometry                                                   |
+| Domain | {"POINT(4.500212 52.161170)"..="POINT(4.500212 52.161170)"} | {4326..=4326} | {28992..=28992} | Undefined                                                  |
+| Row 0  | 'POINT(4.500212 52.161170)'                                 | 4326          | 28992           | '"SRID=28992;POINT(94308.67050247335 464038.16865487053)"' |
++--------+-------------------------------------------------------------+---------------+-----------------+------------------------------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------+
+| Column | Data                                                                                          |
++--------+-----------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x504f494e5428342e3530303231322035322e31363131373029, offsets: [0, 25] } |
+| b      | Int32([4326])                                                                                 |
+| c      | Int32([28992])                                                                                |
+| Output | BinaryColumn { data: 0x0101000020407100002fcd60ba4a06f740c5dcb3ac98521c41, offsets: [0, 25] } |
++--------+-----------------------------------------------------------------------------------------------+
 
 

@@ -28,7 +28,12 @@ remove_nullable -> assume_not_null
 rlike -> regexp
 sha1 -> sha
 siphash -> siphash64
-st_point -> st_makepoint
+st_geom_point -> st_makegeompoint
+st_geometryfromewkt -> st_geometryfromwkt
+st_geometryfromtext -> st_geometryfromwkt
+st_geomfromewkt -> st_geometryfromwkt
+st_geomfromtext -> st_geometryfromwkt
+st_geomfromwkt -> st_geometryfromwkt
 str_to_date -> to_date
 str_to_timestamp -> to_timestamp
 substr_utf8 -> substr
@@ -3463,8 +3468,16 @@ Functions overloads:
 17 sqrt(Float32 NULL) :: Float64 NULL
 18 sqrt(Float64) :: Float64
 19 sqrt(Float64 NULL) :: Float64 NULL
-0 st_makepoint(Float64, Float64) :: Geometry
-1 st_makepoint(Float64 NULL, Float64 NULL) :: Geometry NULL
+0 st_geometryfromwkt(String) :: Geometry
+1 st_geometryfromwkt(String NULL) :: Geometry NULL
+2 st_geometryfromwkt(String, Int32) :: Geometry
+3 st_geometryfromwkt(String NULL, Int32 NULL) :: Geometry NULL
+0 st_makegeompoint(Float64, Float64) :: Geometry
+1 st_makegeompoint(Float64 NULL, Float64 NULL) :: Geometry NULL
+0 st_transform(Geometry, Int32) :: Geometry
+1 st_transform(Geometry NULL, Int32 NULL) :: Geometry NULL
+2 st_transform(Geometry, Int32, Int32) :: Geometry
+3 st_transform(Geometry NULL, Int32 NULL, Int32 NULL) :: Geometry NULL
 0 strcmp(String, String) :: Int8
 1 strcmp(String NULL, String NULL) :: Int8 NULL
 0 string_to_h3(String) :: UInt64
