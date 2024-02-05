@@ -97,7 +97,17 @@ impl UdfApi for UdfMgr {
 
         // TODO: remove get_udf(), check if the UDF exists after upsert_kv()
         // Check if UDF is defined
-        let _ = self.get_udf(info.name.as_str(), seq).await?;
+        let seqv = self.get_udf(info.name.as_str()).await?;
+
+        match seq.match_seq(&seqv) {
+            Ok(_) => {}
+            Err(_) => {
+                return Err(ErrorCode::UnknownUDF(format!(
+                    "UDF '{}' does not exist.",
+                    &info.name
+                )));
+            }
+        }
 
         let key = UdfName::new(&self.tenant, &info.name);
         // TODO: these logic are reppeated several times, consider to extract them.
@@ -117,9 +127,8 @@ impl UdfApi for UdfMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<SeqV<UserDefinedFunction>> {
+    async fn get_udf(&self, udf_name: &str) -> Result<SeqV<UserDefinedFunction>> {
         // TODO: do not return ErrorCode, return UDFError
-        // TODO: get() does not need seq
 
         let key = UdfName::new(&self.tenant, udf_name);
         let res = self.kv_api.get_pb(&key).await?;
@@ -127,13 +136,7 @@ impl UdfApi for UdfMgr {
         let seqv = res
             .ok_or_else(|| ErrorCode::UnknownUDF(format!("UDF '{}' does not exist.", udf_name)))?;
 
-        match seq.match_seq(&seqv) {
-            Ok(_) => Ok(seqv),
-            Err(_) => Err(ErrorCode::UnknownUDF(format!(
-                "UDF '{}' does not exist.",
-                udf_name
-            ))),
-        }
+        Ok(seqv)
     }
 
     #[async_backtrace::framed]
