@@ -18,14 +18,21 @@ use std::intrinsics::assume;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::TrackedFuture;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::Profile;
 use databend_common_pipeline_core::processors::ProfileStatisticsName;
+use minitrace::future::FutureExt;
+use minitrace::Span;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::executor_graph::ProcessorWrapper;
 use crate::pipelines::executor::CompletedAsyncTask;
+use crate::pipelines::executor::ExecutorTasksQueue;
+use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::ProcessorAsyncTask;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
 
@@ -74,15 +81,18 @@ impl ExecutorWorkerContext {
     }
 
     /// # Safety
-    pub unsafe fn execute_task(&mut self) -> Result<(NodeIndex, Arc<RunningGraph>)> {
+    pub unsafe fn execute_task(
+        &mut self,
+        executor: &Arc<PipelineExecutor>,
+    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
-            ExecutorTask::Async(_) => Err(ErrorCode::Internal(
-                "Execute async task at incorrect place.",
-            )),
+            ExecutorTask::Async(processor) => {
+                self.execute_async_task(processor, executor, executor.global_tasks_queue.clone())
+            }
             ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
             ExecutorTask::AsyncCompleted(task) => match task.res {
-                Ok(_) => Ok((task.id, task.graph)),
+                Ok(_) => Ok(Some((task.id, task.graph))),
                 Err(cause) => Err(cause),
             },
         }
@@ -92,7 +102,7 @@ impl ExecutorWorkerContext {
     unsafe fn execute_sync_task(
         &mut self,
         proc: ProcessorWrapper,
-    ) -> Result<(NodeIndex, Arc<RunningGraph>)> {
+    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
         Profile::track_profile(proc.graph.get_node_profile(proc.processor.id()));
 
         let instant = Instant::now();
@@ -102,7 +112,43 @@ impl ExecutorWorkerContext {
         let nanos = instant.elapsed().as_nanos();
         assume(nanos < 18446744073709551615_u128);
         Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
-        Ok((proc.processor.id(), proc.graph))
+        Ok(Some((proc.processor.id(), proc.graph)))
+    }
+
+    pub fn execute_async_task(
+        &mut self,
+        proc: ProcessorWrapper,
+        executor: &Arc<PipelineExecutor>,
+        global_queue: Arc<ExecutorTasksQueue>,
+    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
+        unsafe {
+            let workers_condvar = self.workers_condvar.clone();
+            workers_condvar.inc_active_async_worker();
+            let query_id = self.query_id.clone();
+            let wakeup_worker_id = self.worker_id;
+            let weak_executor = Arc::downgrade(executor);
+            let process_future = proc.processor.async_process();
+            let node_profile = executor.graph.get_node_profile(proc.processor.id()).clone();
+            let graph = proc.graph;
+            executor.async_runtime.spawn(
+                query_id.as_ref().clone(),
+                TrackedFuture::create(ProcessorAsyncTask::create(
+                    query_id,
+                    wakeup_worker_id,
+                    proc.processor.clone(),
+                    global_queue,
+                    workers_condvar,
+                    weak_executor,
+                    node_profile,
+                    graph,
+                    process_future,
+                ))
+                .in_span(Span::enter_with_local_parent(std::any::type_name::<
+                    ProcessorAsyncTask,
+                >())),
+            );
+        }
+        Ok(None)
     }
 
     pub fn get_workers_condvar(&self) -> &Arc<WorkersCondvar> {

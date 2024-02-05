@@ -298,14 +298,10 @@ impl PipelineExecutor {
 
             let mut wakeup_worker_id = 0;
             while let Some(proc) = init_schedule_queue.async_queue.pop_front() {
-                info!(
-                    "init schedule async, cannot perform: {:?}",
-                    proc.processor.id()
-                );
                 let mut tasks = VecDeque::with_capacity(1);
                 tasks.push_back(ExecutorTask::Async(proc));
                 self.global_tasks_queue
-                    .push_tasks_to_next_queue(wakeup_worker_id, tasks);
+                    .push_tasks(wakeup_worker_id, None, Some(tasks));
 
                 wakeup_worker_id += 1;
                 if wakeup_worker_id == self.threads_num {
@@ -416,13 +412,13 @@ impl PipelineExecutor {
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                let (executed_pid, graph) = context.execute_task()?;
-
-                // Not scheduled graph if pipeline is finished.
-                if !self.global_tasks_queue.is_finished() {
-                    // We immediately schedule the processor again.
-                    let schedule_queue = graph.schedule_queue(executed_pid)?;
-                    schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
+                if let Some((executed_pid, graph)) = context.execute_task(self)? {
+                    // Not scheduled graph if pipeline is finished.
+                    if !self.global_tasks_queue.is_finished() {
+                        // We immediately schedule the processor again.
+                        let schedule_queue = graph.schedule_queue(executed_pid)?;
+                        schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
+                    }
                 }
             }
         }

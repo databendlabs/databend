@@ -29,7 +29,6 @@ use databend_common_pipeline_core::processors::Profile;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanScope;
 use log::debug;
-use log::info;
 use log::trace;
 use minitrace::prelude::*;
 use petgraph::dot::Config;
@@ -418,20 +417,13 @@ impl ScheduleQueue {
                 .graph
                 .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
             {
-                info!("schedule tail, can perform: {:?}", unsafe {
-                    processor.processor.id()
-                });
                 current_tasks.push_back(ExecutorTask::Sync(processor));
             } else {
-                info!("schedule tail, cannot perform: {:?}", unsafe {
-                    processor.processor.id()
-                });
                 next_tasks.push_back(ExecutorTask::Sync(processor));
             }
         }
         let worker_id = ctx.get_worker_id();
-        global.push_tasks_to_current_queue(worker_id, current_tasks);
-        global.push_tasks_to_next_queue(worker_id, next_tasks);
+        global.push_tasks(worker_id, Some(current_tasks), Some(next_tasks));
     }
 
     pub fn schedule(
@@ -447,9 +439,6 @@ impl ScheduleQueue {
                 .graph
                 .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
             {
-                info!("schedule async tasks, can perform: {:?}", unsafe {
-                    processor.processor.id()
-                });
                 Self::schedule_async_task(
                     processor,
                     context.query_id.clone(),
@@ -459,12 +448,9 @@ impl ScheduleQueue {
                     global.clone(),
                 )
             } else {
-                info!("schedule async, cannot perform: {:?}", unsafe {
-                    processor.processor.id()
-                });
                 let mut tasks = VecDeque::with_capacity(1);
                 tasks.push_back(ExecutorTask::Async(processor));
-                global.push_tasks_to_next_queue(context.get_worker_id(), tasks);
+                global.push_tasks(context.get_worker_id(), None, Some(tasks));
             }
         }
 
@@ -522,18 +508,12 @@ impl ScheduleQueue {
                 .graph
                 .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
             {
-                info!("schedule sync, can perform: {:?}", unsafe {
-                    processor.processor.id()
-                });
                 ctx.set_task(ExecutorTask::Sync(processor));
                 break;
             } else {
-                info!("schedule sync, cannot perform: {:?}", unsafe {
-                    processor.processor.id()
-                });
                 let mut tasks = VecDeque::with_capacity(1);
                 tasks.push_back(ExecutorTask::Sync(processor));
-                global.push_tasks_to_next_queue(ctx.get_worker_id(), tasks);
+                global.push_tasks(ctx.get_worker_id(), None, Some(tasks));
             }
         }
     }

@@ -18,12 +18,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_base::runtime::TrackedFuture;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
-use log::info;
-use minitrace::future::FutureExt;
-use minitrace::Span;
 use parking_lot::Mutex;
 use petgraph::prelude::NodeIndex;
 
@@ -31,7 +26,6 @@ use crate::pipelines::executor::executor_graph::ProcessorWrapper;
 use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::executor::ProcessorAsyncTask;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
@@ -106,25 +100,10 @@ impl ExecutorTasksQueue {
     ) {
         let mut workers_tasks = self.workers_tasks.lock();
         if !workers_tasks.current_tasks.is_empty() {
-            while !workers_tasks.current_tasks.is_empty() {
-                let task = workers_tasks
-                    .current_tasks
-                    .pop_task(context.get_worker_id());
-                match task {
-                    ExecutorTask::Async(processor) => Self::handle_async_task(
-                        processor,
-                        context.query_id.clone(),
-                        executor,
-                        context.get_worker_id(),
-                        context.get_workers_condvar().clone(),
-                        self.clone(),
-                    ),
-                    other => {
-                        context.set_task(other);
-                        break;
-                    }
-                }
-            }
+            let task = workers_tasks
+                .current_tasks
+                .pop_task(context.get_worker_id());
+            context.set_task(task);
 
             let workers_condvar = context.get_workers_condvar();
             if !workers_tasks.current_tasks.is_empty()
@@ -153,10 +132,8 @@ impl ExecutorTasksQueue {
         }
 
         if workers_tasks.current_tasks.is_empty() && !workers_tasks.next_tasks.is_empty() {
-            info!("begin to switch queue");
             workers_tasks.swap_tasks();
             executor.increase_global_epoch();
-            info!("switch queue with true");
             return;
         }
 
@@ -175,48 +152,11 @@ impl ExecutorTasksQueue {
         workers_condvar.wait(worker_id, self.finished.clone());
     }
 
-    pub fn handle_async_task(
-        proc: ProcessorWrapper,
-        query_id: Arc<String>,
-        executor: &Arc<PipelineExecutor>,
-        wakeup_worker_id: usize,
-        workers_condvar: Arc<WorkersCondvar>,
-        global_queue: Arc<ExecutorTasksQueue>,
-    ) {
-        unsafe {
-            workers_condvar.inc_active_async_worker();
-            let weak_executor = Arc::downgrade(executor);
-            let process_future = proc.processor.async_process();
-            let node_profile = executor.graph.get_node_profile(proc.processor.id()).clone();
-            let graph = proc.graph;
-            executor.async_runtime.spawn(
-                query_id.as_ref().clone(),
-                TrackedFuture::create(ProcessorAsyncTask::create(
-                    query_id,
-                    wakeup_worker_id,
-                    proc.processor.clone(),
-                    global_queue,
-                    workers_condvar,
-                    weak_executor,
-                    node_profile,
-                    graph,
-                    process_future,
-                ))
-                .in_span(Span::enter_with_local_parent(std::any::type_name::<
-                    ProcessorAsyncTask,
-                >())),
-            );
-        }
-    }
-
     pub fn init_sync_tasks(&self, tasks: VecDeque<ProcessorWrapper>) {
         let mut workers_tasks = self.workers_tasks.lock();
 
         let mut worker_id = 0;
         for proc in tasks.into_iter() {
-            info!("init schedule sync, cannot perform: {:?}", unsafe {
-                proc.processor.id()
-            });
             workers_tasks
                 .next_tasks
                 .push_task(worker_id, ExecutorTask::Sync(proc));
@@ -229,9 +169,7 @@ impl ExecutorTasksQueue {
     }
 
     pub fn completed_async_task(&self, condvar: Arc<WorkersCondvar>, task: CompletedAsyncTask) {
-        info!("{:?} acquire lock", task.id);
         let mut workers_tasks = self.workers_tasks.lock();
-        info!("{:?} release lock", task.id);
         let mut worker_id = task.worker_id;
         workers_tasks.current_tasks.tasks_size += 1;
         workers_tasks.current_tasks.workers_completed_async_tasks[worker_id].push_back(task);
@@ -270,11 +208,23 @@ impl ExecutorTasksQueue {
         }
     }
 
-    pub fn push_tasks_to_current_queue(&self, worker_id: usize, mut tasks: VecDeque<ExecutorTask>) {
+    pub fn push_tasks(
+        &self,
+        worker_id: usize,
+        current_tasks: Option<VecDeque<ExecutorTask>>,
+        next_tasks: Option<VecDeque<ExecutorTask>>,
+    ) {
         let mut workers_tasks = self.workers_tasks.lock();
 
-        while let Some(task) = tasks.pop_front() {
-            workers_tasks.current_tasks.push_task(worker_id, task);
+        if let Some(mut tasks) = current_tasks {
+            while let Some(task) = tasks.pop_front() {
+                workers_tasks.current_tasks.push_task(worker_id, task);
+            }
+        }
+        if let Some(mut tasks) = next_tasks {
+            while let Some(task) = tasks.pop_front() {
+                workers_tasks.next_tasks.push_task(worker_id, task);
+            }
         }
     }
 }
