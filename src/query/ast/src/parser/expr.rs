@@ -1474,7 +1474,7 @@ pub fn at_string(i: Input) -> IResult<String> {
 pub fn nullable(i: Input) -> IResult<bool> {
     alt((
         value(true, rule! { NULL }),
-        value(false, rule! { NOT ~ ^NULL }),
+        value(false, rule! { NOT ~ NULL }),
     ))(i)
 }
 
