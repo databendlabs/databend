@@ -78,7 +78,13 @@ impl DefaultDatabase {
                 self.ctx
                     .storage_factory
                     .refresh_table_info(table_info)
-                    .await?,
+                    .await
+                    .map_err(|err| {
+                        err.add_message_back(format!(
+                            "(while refresh table info on {})",
+                            table_info.name
+                        ))
+                    })?,
             );
         }
         Ok(refreshed)
