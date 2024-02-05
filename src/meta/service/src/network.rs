@@ -470,7 +470,7 @@ fn new_net_err<D: Display>(
     NetworkError::new(&AnyError::new(e).add_context(msg))
 }
 
-/// Create a function record the time cost of snapshot sending.
+/// Create a function record the time cost of append sending.
 fn observe_append_send_spent(target: NodeId) -> impl Fn(Duration, Duration) {
     move |t, _b| {
         raft_metrics::network::observe_append_sendto_spent(&target, t.as_secs() as f64);

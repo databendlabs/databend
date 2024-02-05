@@ -452,4 +452,45 @@ statement ok
 drop table t6 all
 
 statement ok
+create table replace_t1(a int);
+
+statement ok
+alter table replace_t1 set options(change_tracking=true);
+
+statement ok
+create table replace_t2(a int);
+
+statement ok
+alter table replace_t2 set options(change_tracking=true);
+
+statement ok
+create stream replace_s on table replace_t1;
+
+statement ok
+insert into table replace_t1 values(1);
+
+statement error 1005
+create or replace stream if not exists replace_s on table replace_t2;
+
+statement ok
+create or replace stream replace_s on table replace_t2;
+
+statement ok
+insert into table replace_t2 values(2);
+
+query I
+select a from replace_s;
+----
+2
+
+statement ok
+drop table replace_t1;
+
+statement ok
+drop table replace_t2;
+
+statement ok
+drop stream replace_s;
+
+statement ok
 DROP DATABASE IF EXISTS test_stream

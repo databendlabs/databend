@@ -27,6 +27,10 @@ on:
         description: 'Self-hosted runner provider, aws or gcp'
         type: string
         required: true
+      target:
+        description: 'The target of benchmark, local or cloud or all'
+        type: string
+        required: true
 
 permissions:
   id-token: write
@@ -39,14 +43,13 @@ env:
 
 jobs:
   local:
-    if: inputs.source == 'release'
     timeout-minutes: 60
-    runs-on: [self-hosted, X64, Linux, 16c32g, aws]
+    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         dataset:
+          - internal
           - hits
-          # - tpch
       fail-fast: true
       max-parallel: 1
     steps:
@@ -82,6 +85,7 @@ jobs:
           databend-query --version
           databend-meta --version
       - uses: ./.github/actions/benchmark_local
+        if: inputs.target == 'local' || inputs.target == 'all'
         timeout-minutes: 30
         id: benchmark
         with:
@@ -96,6 +100,7 @@ jobs:
     strategy:
       matrix:
         include:
+          - { dataset: dummy, size: Small }
           - { dataset: hits, size: Small }
           - { dataset: hits, size: Large }
           - { dataset: tpch, size: Small }
@@ -111,6 +116,7 @@ jobs:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
+        if: inputs.target == 'cloud' || inputs.target == 'all'
         timeout-minutes: 20
         id: benchmark
         with:
@@ -126,7 +132,7 @@ jobs:
           cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
 
   comment:
-    needs: cloud
+    needs: [local, cloud]
     if: inputs.source == 'pr'
     runs-on: ubuntu-latest
     steps:
@@ -137,16 +143,17 @@ jobs:
           sudo apt-get install -yq python3-jinja2
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-hits
-          path: benchmark/clickbench/results/hits
-      - uses: actions/download-artifact@v3
-        with:
-          name: benchmark-tpch
-          path: benchmark/clickbench/results/tpch
+          name: benchmark
+          path: benchmark/clickbench/results
       - name: Get Report Prefix
         run: |
+          for result in benchmark/clickbench/results/hits/*.json; do
+            dataset=$(echo $result | sed -E 's/.*result-(.*)-.*\.json/\1/')
+            mv $result benchmark/clickbench/results/${dataset}/$(basename $result)
+          done
           echo "REPORT_S3_PREFIX=s3://benchmark/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}" >> $GITHUB_ENV
       - name: Upload PR clickbench result to R2
+        id: result
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -154,30 +161,25 @@ jobs:
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         working-directory: benchmark/clickbench
         run: |
-          aws s3 sync ./results/hits/ ${REPORT_S3_PREFIX}/ --include "*.json"
-          aws s3 sync ./results/tpch/ ${REPORT_S3_PREFIX}/ --include "*.json"
-
-          aws s3 sync "s3://benchmark/clickbench/release/hits/latest/" ./results/hits/
-          aws s3 sync "s3://benchmark/clickbench/release/tpch/latest/" ./results/tpch/
-
-          ./update_results.py --dataset hits --pr ${{ inputs.source_id }}
-          ./update_results.py --dataset tpch --pr ${{ inputs.source_id }}
-
-          aws s3 cp ./results/hits.html ${REPORT_S3_PREFIX}/hits.html
-          aws s3 cp ./results/tpch.html ${REPORT_S3_PREFIX}/tpch.html
+          body="## ClickBench Report\n"
+          for p in results/*; do
+            dataset=$(basename $p)
+            aws s3 sync results/$dataset/ ${REPORT_S3_PREFIX}/ --include "*.json"
+            aws s3 sync "s3://benchmark/clickbench/release/${dataset}/latest/" ./results/${dataset}/ --exclude "*" --include "*.json"
+            ./update_results.py --dataset $dataset --pr ${{ inputs.source_id }}
+            aws s3 cp ./results/${dataset}.html ${REPORT_S3_PREFIX}/${dataset}.html
+            body+="* **${dataset}**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/${dataset}.html\n"
+          done
+          echo "body=$body" >> $GITHUB_OUTPUT
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1
         with:
           number: ${{ inputs.source_id }}
           token: ${{ github.token }}
-          body: |
-            ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Small&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Large&color=blue&logo=icloud)
-            ## ClickBench Report
-            * **hits**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/hits.html
-            * **tpch**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/tpch.html
+          body: ${{ steps.result.outputs.body }}
 
   archive:
-    needs: cloud
+    needs: [local, cloud]
     if: inputs.source == 'release'
     runs-on: ubuntu-latest
     strategy:

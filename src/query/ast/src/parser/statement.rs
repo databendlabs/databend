@@ -889,16 +889,27 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let create_view = map(
+    let create_view = map_res(
         rule! {
-            CREATE ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
         },
-        |(_, _, opt_if_not_exists, (catalog, database, view), opt_columns, _, query)| {
-            Statement::CreateView(CreateViewStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            (catalog, database, view),
+            opt_columns,
+            _,
+            query,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateView(CreateViewStmt {
+                create_option,
                 catalog,
                 database,
                 view,
@@ -906,7 +917,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     .map(|(_, columns, _)| columns)
                     .unwrap_or_default(),
                 query: Box::new(query),
-            })
+            }))
         },
     );
     let drop_view = map(
@@ -2014,7 +2025,7 @@ AS
     )(i)
 }
 
-fn parse_create_option(
+pub fn parse_create_option(
     opt_or_replace: bool,
     opt_if_not_exists: bool,
 ) -> Result<CreateOption, nom::Err<ErrorKind>> {

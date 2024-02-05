@@ -129,7 +129,7 @@ impl Binder {
             .bind_udf_definition(&stmt.udf_name, &stmt.description, &stmt.definition)
             .await?;
         Ok(Plan::CreateUDF(Box::new(CreateUDFPlan {
-            create_option: stmt.create_option.clone(),
+            create_option: stmt.create_option,
             udf,
         })))
     }

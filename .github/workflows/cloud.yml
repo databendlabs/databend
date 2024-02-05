@@ -18,10 +18,11 @@ env:
 
 jobs:
   info:
-    if: contains(github.event.pull_request.labels.*.name, 'ci-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
+    if: contains(github.event.pull_request.labels.*.name, 'ci-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark-local')
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.sha.outputs.sha }}
+      target: ${{ steps.sha.outputs.target }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,6 +33,13 @@ jobs:
         id: sha
         run: |
           echo "sha=$(git rev-parse --verify HEAD)" > $GITHUB_OUTPUT
+          if ${{ contains(github.event.pull_request.labels.*.name, 'ci-benchmark') }}; then
+            echo "target=all" >> $GITHUB_OUTPUT
+          elif ${{ contains(github.event.pull_request.labels.*.name, 'ci-benchmark-cloud') }}; then
+            echo "target=cloud" >> $GITHUB_OUTPUT
+          elif ${{ contains(github.event.pull_request.labels.*.name, 'ci-benchmark-local') }}; then
+            echo "target=local" >> $GITHUB_OUTPUT
+          fi
 
   build:
     needs: info
@@ -110,7 +118,7 @@ jobs:
             > please check the [internal doc](https://datafuselabs.feishu.cn/wiki/Hk7iwYsnWi3wsXkpbW5c9apTn0b) for more details.
 
   benchmark:
-    if: contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
+    if: needs.info.outputs.target
     needs: [info, build, docker]
     uses: ./.github/workflows/reuse.benchmark.yml
     secrets: inherit
@@ -120,4 +128,5 @@ jobs:
       source: pr
       source_id: ${{ github.event.pull_request.number }}
       version: ${{ needs.docker.outputs.tag }}
-      runner_provider: github
+      runner_provider: gcp
+      target: ${{ needs.info.outputs.target }}
