@@ -93,6 +93,7 @@ use log::info;
 
 use crate::catalogs::default::ImmutableCatalog;
 use crate::catalogs::default::MutableCatalog;
+use crate::catalogs::default::TxnCatalog;
 use crate::storages::Table;
 use crate::table_functions::TableFunctionFactory;
 
@@ -133,10 +134,11 @@ impl DatabaseCatalog {
     pub async fn try_create_with_config(conf: InnerConfig) -> Result<DatabaseCatalog> {
         let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
         let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
+        let txn_catalog = TxnCatalog::create(mutable_catalog);
         let table_function_factory = TableFunctionFactory::create();
         let res = DatabaseCatalog::create(
             Arc::new(immutable_catalog),
-            Arc::new(mutable_catalog),
+            Arc::new(txn_catalog),
             Arc::new(table_function_factory),
         );
         Ok(res)

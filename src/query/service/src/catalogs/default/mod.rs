@@ -18,8 +18,9 @@ mod immutable_catalog;
 mod mutable_catalog;
 pub mod table_id_ranges;
 pub mod table_memory_meta;
+mod txn_catalog;
 
 pub use database_catalog::DatabaseCatalog;
-// for "unit" test
 pub use immutable_catalog::ImmutableCatalog;
 pub use mutable_catalog::MutableCatalog;
+pub use txn_catalog::TxnCatalog;
