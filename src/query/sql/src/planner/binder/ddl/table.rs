@@ -44,6 +44,7 @@ use databend_common_ast::ast::ShowTablesStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TruncateTableStmt;
+use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UndropTableStmt;
 use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::VacuumDropTableStmt;
@@ -466,6 +467,21 @@ impl Binder {
         // If table is TRANSIENT, set a flag in table option
         if *transient {
             options.insert("TRANSIENT".to_owned(), "T".to_owned());
+        }
+
+        // todo(geometry): remove this when geometry stable.
+        if let Some(CreateTableSource::Columns(cols)) = &source {
+            if cols
+                .iter()
+                .any(|col| matches!(col.data_type, TypeName::Geometry))
+                && !self.ctx.get_settings().get_enable_geo_create_table()?
+            {
+                return Err(ErrorCode::GeometryError(
+                    "Create table using the geometry type is an experimental feature. \
+                    You can `set enable_geo_create_table=1` to use this feature. \
+                    We do not guarantee its compatibility until we doc this feature.",
+                ));
+            }
         }
 
         // Build table schema

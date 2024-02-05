@@ -672,6 +672,13 @@ impl DefaultSettings {
                     desc: "Cost factor of transmit via network for a data row",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                // this setting will be removed when geometry type stable.
+                ("enable_geo_create_table", DefaultSettingValue{
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Create and alter table with geometry type",
+                    mode:SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1))
                 })
             ]);
 

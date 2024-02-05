@@ -1586,6 +1586,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
+    let ty_geometry = value(TypeName::Geometry, rule! { GEOMETRY });
     map_res(
         alt((
             rule! {
@@ -1614,6 +1615,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_binary
             | #ty_string
             | #ty_variant
+            | #ty_geometry
             | #ty_nullable
             ) ~ #nullable? : "type name" },
         )),
