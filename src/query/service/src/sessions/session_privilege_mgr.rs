@@ -275,11 +275,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
             Some(owner) => match user_mgr.get_role(&tenant, owner.role).await {
                 Ok(owner_role) => owner_role.name,
                 Err(e) => {
-                    if e.code() == ErrorCode::UNKNOWN_ROLE {
-                        BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()
-                    } else {
-                        return Err(e);
-                    }
+                    return Err(e);
                 }
             },
         };
