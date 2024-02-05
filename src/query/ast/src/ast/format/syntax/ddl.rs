@@ -243,12 +243,24 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
 }
 
 pub(crate) fn pretty_create_view(stmt: CreateViewStmt) -> RcDoc<'static> {
-    RcDoc::text("CREATE VIEW")
-        .append(if stmt.if_not_exists {
-            RcDoc::space().append(RcDoc::text("IF NOT EXISTS"))
+    RcDoc::text("CREATE")
+        .append(if let CreateOption::CreateOrReplace = stmt.create_option {
+            RcDoc::space().append(RcDoc::text("OR REPLACE"))
         } else {
             RcDoc::nil()
         })
+        .append(RcDoc::space().append(RcDoc::text("VIEW")))
+        .append(
+            if let CreateOption::CreateIfNotExists(if_not_exists) = stmt.create_option {
+                if if_not_exists {
+                    RcDoc::space().append(RcDoc::text("IF NOT EXISTS"))
+                } else {
+                    RcDoc::nil()
+                }
+            } else {
+                RcDoc::nil()
+            },
+        )
         .append(
             RcDoc::space()
                 .append(if let Some(catalog) = stmt.catalog {
