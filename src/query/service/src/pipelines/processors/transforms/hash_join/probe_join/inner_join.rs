@@ -89,7 +89,7 @@ impl HashJoinProbeState {
                     continue;
                 }
 
-                if FROM_LEFT_SINGLE && match_count > 0 {
+                if FROM_LEFT_SINGLE && match_count > 1 {
                     return Err(ErrorCode::Internal(
                         "Scalar subquery can't return more than one row",
                     ));
@@ -135,7 +135,7 @@ impl HashJoinProbeState {
                     continue;
                 }
 
-                if FROM_LEFT_SINGLE && match_count > 0 {
+                if FROM_LEFT_SINGLE && match_count > 1 {
                     return Err(ErrorCode::Internal(
                         "Scalar subquery can't return more than one row",
                     ));
