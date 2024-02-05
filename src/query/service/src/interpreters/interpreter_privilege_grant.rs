@@ -137,7 +137,7 @@ impl GrantPrivilegeInterpreter {
         // if the object's owner is None, it's considered as PUBLIC, everyone could access it
         let owner = user_mgr.get_ownership(tenant, owner_object).await?;
         if let Some(owner) = owner {
-            let can_grant_ownership = available_roles.iter().any(|r| r.name == role);
+            let can_grant_ownership = available_roles.iter().any(|r| r.name == owner.role);
             log_msg = format!(
                 "{}: grant ownership on {:?} from role {} to {}",
                 ctx.get_id(),
