@@ -168,10 +168,10 @@ impl UserApiProvider {
         if let Some(owenr) = ownership {
             // if object has ownership, but the owner role is not exists, set owner role to ACCOUNT_ADMIN,
             // only account_admin can access this object.
-            let role = if !self.exists_role(tenant, owner.role.clone()).await? {
+            if !self.exists_role(tenant, owner.role.clone()).await? {
                 Ok(Some(OwnershipInfo {
                     role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
-                    object,
+                    object: *object,
                 }))
             } else {
                 Ok(Some(owner))
