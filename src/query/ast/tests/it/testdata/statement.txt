@@ -2083,7 +2083,9 @@ CREATE VIEW v AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         view: Identifier {
@@ -2335,7 +2337,9 @@ CREATE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         view: Identifier {
@@ -2426,6 +2430,130 @@ CreateView(
                                 Literal {
                                     span: Some(
                                         58..62,
+                                    ),
+                                    lit: UInt64(
+                                        1000,
+                                    ),
+                                },
+                            ],
+                            named_params: [],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+create or replace view v1(c1) as select number % 3 as a from numbers(1000);
+---------- Output ---------
+CREATE OR REPLACE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
+---------- AST ------------
+CreateView(
+    CreateViewStmt {
+        create_option: CreateOrReplace,
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v1",
+            quote: None,
+            span: Some(
+                23..25,
+            ),
+        },
+        columns: [
+            Identifier {
+                name: "c1",
+                quote: None,
+                span: Some(
+                    26..28,
+                ),
+            },
+        ],
+        query: Query {
+            span: Some(
+                33..74,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        33..74,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: BinaryOp {
+                                span: Some(
+                                    47..48,
+                                ),
+                                op: Modulo,
+                                left: ColumnRef {
+                                    span: Some(
+                                        40..46,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            name: "number",
+                                            quote: None,
+                                            span: Some(
+                                                40..46,
+                                            ),
+                                        },
+                                    ),
+                                },
+                                right: Literal {
+                                    span: Some(
+                                        49..50,
+                                    ),
+                                    lit: UInt64(
+                                        3,
+                                    ),
+                                },
+                            },
+                            alias: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        54..55,
+                                    ),
+                                },
+                            ),
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            span: Some(
+                                61..74,
+                            ),
+                            lateral: false,
+                            name: Identifier {
+                                name: "numbers",
+                                quote: None,
+                                span: Some(
+                                    61..68,
+                                ),
+                            },
+                            params: [
+                                Literal {
+                                    span: Some(
+                                        69..73,
                                     ),
                                     lit: UInt64(
                                         1000,
