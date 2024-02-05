@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -41,8 +42,8 @@ use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
 use tokio::time;
 
-use crate::pipelines::executor::executor_graph::ScheduleQueue;
 use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorTasksQueue;
 use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::RunningGraph;
@@ -297,16 +298,16 @@ impl PipelineExecutor {
 
             let mut wakeup_worker_id = 0;
             while let Some(proc) = init_schedule_queue.async_queue.pop_front() {
-                ScheduleQueue::schedule_async_task(
-                    proc.clone(),
-                    self.settings.query_id.clone(),
-                    self,
-                    wakeup_worker_id,
-                    self.workers_condvar.clone(),
-                    self.global_tasks_queue.clone(),
+                info!(
+                    "init schedule async, cannot perform: {:?}",
+                    proc.processor.id()
                 );
-                wakeup_worker_id += 1;
+                let mut tasks = VecDeque::with_capacity(1);
+                tasks.push_back(ExecutorTask::Async(proc));
+                self.global_tasks_queue
+                    .push_tasks_to_next_queue(wakeup_worker_id, tasks);
 
+                wakeup_worker_id += 1;
                 if wakeup_worker_id == self.threads_num {
                     wakeup_worker_id = 0;
                 }
