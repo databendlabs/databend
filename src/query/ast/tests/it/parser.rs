@@ -497,6 +497,8 @@ fn test_statement() {
         r#"SELECT c1 FROM 's3://test/bucket' (PATTERN => '*.parquet', connection => (ENDPOINT_URL = 'xxx')) t;"#,
         r#"CREATE FILE FORMAT my_csv
             type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
+        r#"CREATE OR REPLACE FILE FORMAT my_csv
+            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
         r#"SHOW FILE FORMATS"#,
         r#"DROP FILE FORMAT my_csv"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, c, d)"#,
