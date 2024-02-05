@@ -27,6 +27,7 @@ mod data_mask_api_impl;
 mod data_mask_api_keys;
 mod id_generator;
 pub mod kv_app_error;
+pub mod kv_pb_api;
 pub mod reply;
 mod schema_api;
 mod schema_api_impl;
