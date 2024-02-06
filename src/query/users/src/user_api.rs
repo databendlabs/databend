@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
+use databend_common_management::errors::TenantError;
 use databend_common_management::ConnectionApi;
 use databend_common_management::ConnectionMgr;
 use databend_common_management::FileFormatApi;
@@ -143,7 +144,7 @@ impl UserApiProvider {
         )?))
     }
 
-    pub fn get_udf_api_client(&self, tenant: &str) -> Result<Arc<dyn UdfApi>> {
+    pub fn udf_api(&self, tenant: &str) -> std::result::Result<Arc<dyn UdfApi>, TenantError> {
         Ok(Arc::new(UdfMgr::create(self.client.clone(), tenant)?))
     }
 

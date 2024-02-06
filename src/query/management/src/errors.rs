@@ -12,9 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod udf_api;
-mod udf_mgr;
+use databend_common_exception::ErrorCode;
 
-pub use udf_api::UdfApi;
-pub use udf_api::UdfError;
-pub use udf_mgr::UdfMgr;
+/// Error related to tenant operation
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum TenantError {
+    #[error("tenant can not be empty string, while {context}")]
+    CanNotBeEmpty { context: String },
+}
+
+impl From<TenantError> for ErrorCode {
+    fn from(value: TenantError) -> Self {
+        let s = value.to_string();
+        match value {
+            TenantError::CanNotBeEmpty { .. } => ErrorCode::TenantIsEmpty(s),
+        }
+    }
+}

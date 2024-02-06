@@ -30,6 +30,7 @@ use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
 use futures::stream::TryStreamExt;
 
+use crate::errors::TenantError;
 use crate::udf::UdfApi;
 
 pub struct UdfMgr {
@@ -38,11 +39,14 @@ pub struct UdfMgr {
 }
 
 impl UdfMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &str) -> Result<Self> {
+    pub fn create(
+        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
+        tenant: &str,
+    ) -> std::result::Result<Self, TenantError> {
         if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while udf mgr create)",
-            ));
+            return Err(TenantError::CanNotBeEmpty {
+                context: "create UdfMgr".to_string(),
+            });
         }
 
         Ok(UdfMgr {
@@ -130,18 +134,19 @@ impl UdfApi for UdfMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn drop_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<()> {
+    async fn drop_udf(
+        &self,
+        udf_name: &str,
+        seq: MatchSeq,
+    ) -> std::result::Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
         let key = UdfName::new(&self.tenant, udf_name);
         let req = UpsertPB::delete(key).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
         if res.is_changed() {
-            Ok(())
+            Ok(res.prev)
         } else {
-            Err(ErrorCode::UnknownUDF(format!(
-                "UDF '{}' does not exist.",
-                udf_name
-            )))
+            Ok(None)
         }
     }
 }
