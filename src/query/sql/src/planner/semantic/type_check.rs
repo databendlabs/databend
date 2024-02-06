@@ -2349,15 +2349,6 @@ impl<'a> TypeChecker<'a> {
         let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
         let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery).await?;
 
-        if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
-            && output_context.columns.len() > 1
-        {
-            return Err(ErrorCode::SemanticError(format!(
-                "Subquery must return only one column, but got {} columns",
-                output_context.columns.len()
-            )));
-        }
-
         let mut data_type = output_context.columns[0].data_type.clone();
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
