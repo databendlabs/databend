@@ -2319,7 +2319,7 @@ impl<'a> TypeChecker<'a> {
         let mut contain_agg = None;
         if let SetExpr::Select(select_stmt) = &subquery.body {
             if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
-                && select_stmt.select_list.len() > 1
+                && (select_stmt.select_list.len() > 1 || select_stmt.select_list[0].is_star())
             {
                 return Err(ErrorCode::SemanticError(format!(
                     "Subquery must return only one column, but got {} columns",

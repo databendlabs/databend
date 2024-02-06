@@ -734,7 +734,7 @@ ORDER BY cnt NULLS FIRST,
          a.ca_state NULLS FIRST
 LIMIT 100;
 ----
-HashJoin: LEFT SINGLE
+HashJoin: LEFT OUTER
 ├── Build
 │   └── Scan: default.tpcds.item (#6) (read rows: 180)
 └── Probe
@@ -6715,7 +6715,7 @@ HashJoin: INNER
 
 
 # Q69
-query 
+query
 explain join
 SELECT cd_gender,
        cd_marital_status,
@@ -8146,7 +8146,7 @@ HashJoin: INNER
     └── Scan: default.tpcds.store_sales (#3) (read rows: 28810)
 
 # Q83
-query 
+query
 explain join
 WITH sr_items AS
   (SELECT i_item_id item_id,

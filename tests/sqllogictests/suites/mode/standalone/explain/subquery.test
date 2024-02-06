@@ -164,52 +164,52 @@ explain select t.number from numbers(1) as t where number = (select * from numbe
 HashJoin
 ├── output columns: [t.number (#0)]
 ├── join type: INNER
-├── build keys: [CAST(t.number (#0) AS UInt64 NULL)]
-├── probe keys: [_if_scalar_subquery (#4)]
+├── build keys: [_if_scalar_subquery (#4)]
+├── probe keys: [CAST(t.number (#0) AS UInt64 NULL)]
 ├── filters: []
 ├── estimated rows: 1.00
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── output columns: [number (#0)]
-│   ├── read rows: 1
-│   ├── read bytes: 8
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1.00
-└── EvalScalar(Probe)
-    ├── output columns: [_if_scalar_subquery (#4)]
-    ├── expressions: [if(CAST(_count_scalar_subquery (#2) = 0 AS Boolean NULL), NULL, _any_scalar_subquery (#3))]
-    ├── estimated rows: 1.00
-    └── Limit
-        ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
-        ├── limit: 1
-        ├── offset: 0
-        ├── estimated rows: 1.00
-        └── AggregateFinal
-            ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
-            ├── group by: []
-            ├── aggregate functions: [count(), any(number)]
-            ├── limit: 1
-            ├── estimated rows: 1.00
-            └── AggregatePartial
-                ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
-                ├── group by: []
-                ├── aggregate functions: [count(), any(number)]
-                ├── estimated rows: 1.00
-                └── Filter
-                    ├── output columns: [numbers.number (#1)]
-                    ├── filters: [numbers.number (#1) = 0]
-                    ├── estimated rows: 0.00
-                    └── TableScan
-                        ├── table: default.system.numbers
-                        ├── output columns: [number (#1)]
-                        ├── read rows: 1
-                        ├── read bytes: 8
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
-                        └── estimated rows: 1.00
+├── EvalScalar(Build)
+│   ├── output columns: [_if_scalar_subquery (#4)]
+│   ├── expressions: [if(CAST(_count_scalar_subquery (#2) = 0 AS Boolean NULL), NULL, _any_scalar_subquery (#3))]
+│   ├── estimated rows: 1.00
+│   └── Limit
+│       ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
+│       ├── limit: 1
+│       ├── offset: 0
+│       ├── estimated rows: 1.00
+│       └── AggregateFinal
+│           ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
+│           ├── group by: []
+│           ├── aggregate functions: [count(), any(number)]
+│           ├── limit: 1
+│           ├── estimated rows: 1.00
+│           └── AggregatePartial
+│               ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
+│               ├── group by: []
+│               ├── aggregate functions: [count(), any(number)]
+│               ├── estimated rows: 1.00
+│               └── Filter
+│                   ├── output columns: [numbers.number (#1)]
+│                   ├── filters: [numbers.number (#1) = 0]
+│                   ├── estimated rows: 0.00
+│                   └── TableScan
+│                       ├── table: default.system.numbers
+│                       ├── output columns: [number (#1)]
+│                       ├── read rows: 1
+│                       ├── read bytes: 8
+│                       ├── partitions total: 1
+│                       ├── partitions scanned: 1
+│                       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
+│                       └── estimated rows: 1.00
+└── TableScan(Probe)
+    ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 1.00
 
 query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number)

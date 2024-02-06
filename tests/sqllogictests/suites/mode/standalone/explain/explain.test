@@ -1169,49 +1169,49 @@ from numbers(10) where number > 5
 ) b on  a.number=b.number order by a.number) where pt = register_at;
 ----
 Sort
-├── output columns: [register_at (#3), numbers.number (#0), pt (#1)]
+├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
 ├── sort keys: [number ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── HashJoin
-    ├── output columns: [register_at (#3), numbers.number (#0), pt (#1)]
+    ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
     ├── join type: INNER
-    ├── build keys: [a.number (#0), a.pt (#1)]
-    ├── probe keys: [b.number (#2), b.register_at (#3)]
+    ├── build keys: [b.number (#2), b.register_at (#3)]
+    ├── probe keys: [a.number (#0), a.pt (#1)]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)
-    │   ├── output columns: [numbers.number (#0), pt (#1)]
-    │   ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#0))))]
+    │   ├── output columns: [numbers.number (#2), register_at (#3)]
+    │   ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#2))))]
     │   ├── estimated rows: 0.00
     │   └── Filter
-    │       ├── output columns: [numbers.number (#0)]
-    │       ├── filters: [numbers.number (#0) > 5]
+    │       ├── output columns: [numbers.number (#2)]
+    │       ├── filters: [numbers.number (#2) > 5]
     │       ├── estimated rows: 0.00
     │       └── TableScan
     │           ├── table: default.system.numbers
-    │           ├── output columns: [number (#0)]
+    │           ├── output columns: [number (#2)]
     │           ├── read rows: 10
     │           ├── read bytes: 80
     │           ├── partitions total: 1
     │           ├── partitions scanned: 1
-    │           ├── push downs: [filters: [numbers.number (#0) > 5], limit: NONE]
+    │           ├── push downs: [filters: [numbers.number (#2) > 5], limit: NONE]
     │           └── estimated rows: 10.00
     └── EvalScalar(Probe)
-        ├── output columns: [numbers.number (#2), register_at (#3)]
-        ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#2))))]
+        ├── output columns: [numbers.number (#0), pt (#1)]
+        ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#0))))]
         ├── estimated rows: 0.00
         └── Filter
-            ├── output columns: [numbers.number (#2)]
-            ├── filters: [numbers.number (#2) > 5]
+            ├── output columns: [numbers.number (#0)]
+            ├── filters: [numbers.number (#0) > 5]
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.system.numbers
-                ├── output columns: [number (#2)]
+                ├── output columns: [number (#0)]
                 ├── read rows: 10
                 ├── read bytes: 80
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── push downs: [filters: [numbers.number (#2) > 5], limit: NONE]
+                ├── push downs: [filters: [numbers.number (#0) > 5], limit: NONE]
                 └── estimated rows: 10.00
 
 
@@ -1485,7 +1485,7 @@ FROM numbers(500);
 query T
 explain join SELECT customer_name, segment, (SELECT SUM(net_paid) FROM sales WHERE customer_id IN (SELECT customer_id FROM customers WHERE segment = c.segment AND active = true)) FROM customers c WHERE c.customer_id IN (SELECT customer_id FROM sales WHERE net_paid > 100) LIMIT 10;
 ----
-HashJoin: LEFT SINGLE
+HashJoin: LEFT OUTER
 ├── Build
 │   └── HashJoin: RIGHT SEMI
 │       ├── Build
