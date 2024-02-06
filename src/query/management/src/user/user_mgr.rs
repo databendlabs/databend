@@ -92,10 +92,7 @@ impl UserApi for UserMgr {
         let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let kv_api = &self.kv_api;
-        let seq = match create_option {
-            CreateOption::CreateIfNotExists(_) => MatchSeq::Exact(0),
-            CreateOption::CreateOrReplace => MatchSeq::GE(0),
-        };
+        let seq = MatchSeq::from(*create_option);
         let res = kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Update(value), None))
             .await?;

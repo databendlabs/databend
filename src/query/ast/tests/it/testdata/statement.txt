@@ -13010,7 +13010,29 @@ CREATE FILE FORMAT my_csv
 CREATE FILE_FORMAT my_csv {"field_delimiter": ",", "record_delimiter": "\n", "skip_header": "1", "type": "CSV"}
 ---------- AST ------------
 CreateFileFormat {
-    if_not_exists: false,
+    create_option: CreateIfNotExists(
+        false,
+    ),
+    name: "my_csv",
+    file_format_options: FileFormatOptionsAst {
+        options: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+    },
+}
+
+
+---------- Input ----------
+CREATE OR REPLACE FILE FORMAT my_csv
+            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
+---------- Output ---------
+CREATE OR REPLACE FILE_FORMAT my_csv {"field_delimiter": ",", "record_delimiter": "\n", "skip_header": "1", "type": "CSV"}
+---------- AST ------------
+CreateFileFormat {
+    create_option: CreateOrReplace,
     name: "my_csv",
     file_format_options: FileFormatOptionsAst {
         options: {
