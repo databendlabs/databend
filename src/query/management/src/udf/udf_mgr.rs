@@ -144,8 +144,7 @@ impl UdfApi for UdfMgr {
     #[minitrace::trace]
     async fn get_udfs(&self) -> Result<Vec<UserDefinedFunction>> {
         let key = DirName::new(UdfName::new(&self.tenant, ""));
-        let strm = self.kv_api.list_pb(&key).await?;
-        let strm = strm.map_ok(|item| item.seqv.data);
+        let strm = self.kv_api.list_pb_values(&key).await?;
         let udfs = strm.try_collect().await?;
         Ok(udfs)
     }

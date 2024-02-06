@@ -29,6 +29,7 @@ use databend_common_meta_types::SeqV;
 use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
 use futures::future::FutureExt;
+use futures::future::TryFutureExt;
 use futures::stream::BoxStream;
 use futures::stream::StreamExt;
 use futures::TryStreamExt;
@@ -144,6 +145,22 @@ pub trait KVPbApi: KVApi {
             let v = raw_seqv.map(decode_seqv::<K::ValueType>).transpose()?;
             Ok(v)
         }
+    }
+
+    /// Same as `list_pb` but does not return key, only values.
+    fn list_pb_values<K>(
+        &self,
+        prefix: &DirName<K>,
+    ) -> impl Future<
+        Output = Result<BoxStream<'static, Result<K::ValueType, Self::Error>>, Self::Error>,
+    > + Send
+    where
+        K: kvapi::Key + 'static,
+        K::ValueType: FromToProto,
+        Self::Error: From<PbApiReadError<Self::Error>>,
+    {
+        self.list_pb(prefix)
+            .map_ok(|strm| strm.map_ok(|x| x.seqv.data).boxed())
     }
 
     /// List protobuf encoded values by prefix and returns a stream.
