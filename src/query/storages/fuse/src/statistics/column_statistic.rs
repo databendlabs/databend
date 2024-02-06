@@ -31,8 +31,8 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
 // Don't change this value
-// 0.01625f --> 12 buckets
-const DISTINCT_ERROR_RATE: f64 = 0.01625f64;
+// 0.065f64 -> buckets
+const DISTINCT_ERROR_RATE: f64 = 0.065f64;
 
 pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<ColumnStatHLL> {
     let distinct_values = eval_aggr(

@@ -26,8 +26,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use simple_hll::HyperLogLog;
 
-/// Takes at most `1<<12 = 4k`` spaces with error ratio of `0.01625`
-pub type ColumnStatHLL = HyperLogLog<12>;
+/// Takes at most `1<<8 = 256byte`` spaces with error ratio of `0.065`
+pub type ColumnStatHLL = HyperLogLog<8>;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
