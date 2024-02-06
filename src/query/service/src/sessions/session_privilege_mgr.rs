@@ -23,7 +23,6 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::RoleCacheManager;
-use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 
@@ -270,10 +269,10 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
     async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool> {
         let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
-        let owner_role_name = match role_mgr.find_object_owner(&tenant, object).await? {
-            Some(owner_role) => owner_role,
-            None => BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
-        };
+        let owner_role_name = role_mgr
+            .find_object_owner(&tenant, object)
+            .await?
+            .unwrap_or_else(|| BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
 
         let effective_roles = self.get_all_effective_roles().await?;
         let exists = effective_roles.iter().any(|r| r.name == owner_role_name);

@@ -168,6 +168,10 @@ impl UserApiProvider {
         if let Some(owner) = ownership {
             // if object has ownership, but the owner role is not exists, set owner role to ACCOUNT_ADMIN,
             // only account_admin can access this object.
+            // Note: get_ownerships no need to do this check.
+            // Because this can cause system.table queries to slow down
+            // The intention is that the account admin can grant ownership.
+            // So system.tables will display dropped role. It's by design.
             if !self.exists_role(tenant, owner.role.clone()).await? {
                 Ok(Some(OwnershipInfo {
                     role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
