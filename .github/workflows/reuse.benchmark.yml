@@ -147,7 +147,7 @@ jobs:
       - name: Get Report Prefix
         run: |
           for result in benchmark/clickbench/results/*.json; do
-            dataset=$(echo $result | sed -E 's/.*result-(.*)-.*\.json/\1/')
+            dataset=$(echo $result | sed -E 's/.*result-(\w+)-.*\.json/\1/')
             mv $result benchmark/clickbench/results/${dataset}/$(basename $result)
           done
           echo "REPORT_S3_PREFIX=s3://benchmark/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}" >> $GITHUB_ENV
