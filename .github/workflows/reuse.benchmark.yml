@@ -146,7 +146,7 @@ jobs:
           path: benchmark/clickbench/results
       - name: Get Report Prefix
         run: |
-          for result in benchmark/clickbench/results/hits/*.json; do
+          for result in benchmark/clickbench/results/*.json; do
             dataset=$(echo $result | sed -E 's/.*result-(.*)-.*\.json/\1/')
             mv $result benchmark/clickbench/results/${dataset}/$(basename $result)
           done
