@@ -111,7 +111,7 @@ impl fmt::Display for UpsertKV {
 
 impl UpsertKV {
     pub fn new(
-        key: &str,
+        key: impl ToString,
         seq: MatchSeq,
         value: Operation<Vec<u8>>,
         value_meta: Option<MetaSpec>,

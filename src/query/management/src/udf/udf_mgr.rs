@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::principal::UdfName;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
@@ -70,9 +71,8 @@ impl UdfApi for UdfMgr {
         let seq = MatchSeq::from(*create_option);
 
         let key = UdfName::new(&self.tenant, &info.name);
-        let value = serialize_struct(&info, ErrorCode::IllegalUDFFormat, || "")?;
-        let req = UpsertKV::insert(key.to_string_key(), &value).with(seq);
-        let res = self.kv_api.upsert_kv(req).await?;
+        let req = UpsertPB::insert(key, info).with(seq);
+        let res = self.kv_api.upsert_pb(req).await?;
 
         if let CreateOption::CreateIfNotExists(false) = create_option {
             if res.prev.is_some() {
