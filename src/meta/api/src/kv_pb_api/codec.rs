@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::NonEmptyItem;
+use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_proto_conv::FromToProto;
 
-use crate::kv_pb_api::PbDecodeError;
-use crate::kv_pb_api::PbEncodeError;
+use crate::kv_pb_api::errors::NoneValue;
+use crate::kv_pb_api::errors::PbApiReadError;
+use crate::kv_pb_api::errors::PbDecodeError;
+use crate::kv_pb_api::errors::PbEncodeError;
 
 /// Encode an upsert Operation of T into protobuf encoded value.
 pub fn encode_operation<T>(value: &Operation<T>) -> Result<Operation<Vec<u8>>, PbEncodeError>
@@ -55,4 +60,27 @@ where T: FromToProto {
     let v: T = FromToProto::from_pb(p)?;
 
     Ok(SeqV::with_meta(seqv.seq, seqv.meta, v))
+}
+
+/// Decode key and protobuf encoded value from `StreamItem`.
+///
+/// It requires K to be static because it is used in a static stream map()
+pub fn decode_non_empty_item<K, E>(
+    r: Result<StreamItem, E>,
+) -> Result<NonEmptyItem<K>, PbApiReadError<E>>
+where
+    K: kvapi::Key + 'static,
+    K::ValueType: FromToProto,
+{
+    match r {
+        Ok(item) => {
+            let k = K::from_str_key(&item.key)?;
+
+            let raw = item.value.ok_or_else(|| NoneValue::new(item.key))?;
+            let v = decode_seqv::<K::ValueType>(SeqV::from(raw))?;
+
+            Ok(NonEmptyItem::new(k, v))
+        }
+        Err(e) => Err(PbApiReadError::KvApiError(e)),
+    }
 }
