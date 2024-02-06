@@ -272,7 +272,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         let tenant = self.session_ctx.get_current_tenant();
         let owner_role_name = match role_mgr.find_object_owner(&tenant, object).await? {
             Some(owner_role) => owner_role,
-            None => BUILTIN_ROLE_ACCOUNT_ADMIN,
+            None => BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
         };
 
         let effective_roles = self.get_all_effective_roles().await?;
