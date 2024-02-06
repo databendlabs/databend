@@ -2877,6 +2877,7 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-common-storage",
  "enumflags2",
+ "futures",
  "log",
  "minitrace",
  "mockall",

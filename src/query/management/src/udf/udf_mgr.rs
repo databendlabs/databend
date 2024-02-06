@@ -22,6 +22,7 @@ use databend_common_meta_app::principal::UdfName;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
@@ -29,8 +30,8 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
+use futures::stream::TryStreamExt;
 
-use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
 use crate::udf::UdfApi;
 
@@ -142,20 +143,10 @@ impl UdfApi for UdfMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_udfs(&self) -> Result<Vec<UserDefinedFunction>> {
-        let key = UdfName::new(&self.tenant, "");
-        // TODO: use list_kv instead.
-        let values = self.kv_api.prefix_list_kv(&key.to_string_key()).await?;
-
-        let mut udfs = Vec::with_capacity(values.len());
-        for (name, value) in values {
-            let udf = deserialize_struct(&value.data, ErrorCode::IllegalUDFFormat, || {
-                format!(
-                    "Failed to deserialize UDF '{}': data format is corrupt or invalid.",
-                    name
-                )
-            })?;
-            udfs.push(udf);
-        }
+        let key = DirName::new(UdfName::new(&self.tenant, ""));
+        let strm = self.kv_api.list_pb(&key).await?;
+        let strm = strm.map_ok(|item| item.seqv.data);
+        let udfs = strm.try_collect().await?;
         Ok(udfs)
     }
 

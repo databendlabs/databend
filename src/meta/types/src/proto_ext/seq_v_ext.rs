@@ -65,6 +65,7 @@ impl From<SeqV> for pb::SeqV {
 }
 
 impl From<pb::SeqV> for SeqV {
+    /// Convert from protobuf SeqV to the native SeqV we defined.
     fn from(sv: pb::SeqV) -> Self {
         Self {
             seq: sv.seq,

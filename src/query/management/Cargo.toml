@@ -26,6 +26,7 @@ databend-common-proto-conv = { path = "../../meta/proto-conv" }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 enumflags2 = { workspace = true }
+futures = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
 prost = { workspace = true }
