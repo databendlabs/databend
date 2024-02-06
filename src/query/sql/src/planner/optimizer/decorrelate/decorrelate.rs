@@ -430,6 +430,7 @@ impl SubqueryRewriter {
                     Box::from(column_entry.data_type()),
                     Visibility::Visible,
                 )
+                .table_index(column_entry.table_index())
                 .build(),
             });
             let derive_column = self.derived_columns.get(correlated_column).unwrap();
@@ -442,6 +443,7 @@ impl SubqueryRewriter {
                     Box::from(column_entry.data_type()),
                     Visibility::Visible,
                 )
+                .table_index(column_entry.table_index())
                 .build(),
             });
             left_conditions.push(left_column);
