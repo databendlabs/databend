@@ -130,18 +130,19 @@ impl UdfApi for UdfMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn drop_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<()> {
+    async fn drop_udf(
+        &self,
+        udf_name: &str,
+        seq: MatchSeq,
+    ) -> std::result::Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
         let key = UdfName::new(&self.tenant, udf_name);
         let req = UpsertPB::delete(key).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
         if res.is_changed() {
-            Ok(())
+            Ok(res.prev)
         } else {
-            Err(ErrorCode::UnknownUDF(format!(
-                "UDF '{}' does not exist.",
-                udf_name
-            )))
+            Ok(None)
         }
     }
 }

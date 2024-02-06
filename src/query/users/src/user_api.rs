@@ -143,7 +143,7 @@ impl UserApiProvider {
         )?))
     }
 
-    pub fn get_udf_api_client(&self, tenant: &str) -> Result<Arc<dyn UdfApi>> {
+    pub fn udf_api(&self, tenant: &str) -> Result<Arc<dyn UdfApi>> {
         Ok(Arc::new(UdfMgr::create(self.client.clone(), tenant)?))
     }
 
