@@ -119,7 +119,7 @@ impl RoleCacheManager {
     ) -> Result<Option<String>> {
         match self.user_manager.get_ownership(tenant, object).await? {
             None => return Ok(None),
-            Some(owner) => Ok(owner.role),
+            Some(owner) => Ok(Some(owner.role)),
         }
     }
 
