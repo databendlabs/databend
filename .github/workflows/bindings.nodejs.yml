@@ -10,6 +10,7 @@ on:
     branches:
       - main
     paths:
+      - 'sql/**'
       - 'bindings/nodejs/**'
       - ".github/workflows/bindings.nodejs.yml"
 
