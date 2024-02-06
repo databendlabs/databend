@@ -18,9 +18,9 @@ use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::MetaError;
 use databend_common_proto_conv::Incompatible;
 
-use crate::kv_pb_api::PbApiReadError;
+use crate::kv_pb_api::PbDecodeError;
 
-/// An error occurred when encoding protobuf message.
+/// An error occurred when encoding with FromToProto.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[error("PbEncodeError: {0}")]
 pub enum PbEncodeError {
@@ -28,28 +28,32 @@ pub enum PbEncodeError {
     Incompatible(#[from] Incompatible),
 }
 
+impl From<PbEncodeError> for MetaError {
+    fn from(value: PbEncodeError) -> Self {
+        match value {
+            PbEncodeError::EncodeError(e) => MetaError::from(InvalidArgument::new(e, "")),
+            PbEncodeError::Incompatible(e) => MetaError::from(InvalidArgument::new(e, "")),
+        }
+    }
+}
+
 /// An error occurs when writing protobuf encoded value to kv store.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[error("PbApiWriteError: {0}")]
 pub enum PbApiWriteError<E> {
-    EncodeError(#[from] prost::EncodeError),
-    Incompatible(#[from] Incompatible),
+    PbEncodeError(#[from] PbEncodeError),
     /// upsert reads the state transition after the operation.
-    ReadError(#[from] PbApiReadError<E>),
+    PbDecodeError(#[from] PbDecodeError),
     /// Error returned from KVApi.
     KvApiError(E),
 }
 
 impl From<PbApiWriteError<MetaError>> for MetaError {
     /// For KVApi that returns MetaError, convert protobuf related error to MetaError directly.
-    ///
-    /// Because MetaError contains network protocol level error variant.
-    /// If there is a encoding error, consider it as network level error.
     fn from(value: PbApiWriteError<MetaError>) -> Self {
         match value {
-            PbApiWriteError::EncodeError(e) => MetaError::from(InvalidArgument::new(&e, "")),
-            PbApiWriteError::Incompatible(e) => MetaError::from(InvalidArgument::new(&e, "")),
-            PbApiWriteError::ReadError(e) => MetaError::from(e),
+            PbApiWriteError::PbEncodeError(e) => MetaError::from(e),
+            PbApiWriteError::PbDecodeError(e) => MetaError::from(e),
             PbApiWriteError::KvApiError(e) => e,
         }
     }

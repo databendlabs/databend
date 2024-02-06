@@ -21,8 +21,8 @@ use crate::kv_pb_api::PbDecodeError;
 use crate::kv_pb_api::PbEncodeError;
 
 /// Encode an upsert Operation of T into protobuf encoded value.
-pub fn encode_operation<T>(value: Operation<T>) -> Result<Operation<Vec<u8>>, PbEncodeError>
-where T: FromToProto + 'static {
+pub fn encode_operation<T>(value: &Operation<T>) -> Result<Operation<Vec<u8>>, PbEncodeError>
+where T: FromToProto {
     match value {
         Operation::Update(t) => {
             let p = t.to_pb()?;

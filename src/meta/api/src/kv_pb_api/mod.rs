@@ -27,13 +27,9 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::NonEmptyItem;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::Change;
-use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::InvalidReply;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
-use databend_common_meta_types::MetaSpec;
-use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_proto_conv::FromToProto;
@@ -60,6 +56,15 @@ pub use self::upsert_pb::UpsertPB;
 pub enum PbDecodeError {
     DecodeError(#[from] prost::DecodeError),
     Incompatible(#[from] Incompatible),
+}
+
+impl From<PbDecodeError> for MetaError {
+    fn from(value: PbDecodeError) -> Self {
+        match value {
+            PbDecodeError::DecodeError(e) => MetaError::from(InvalidReply::new("", &e)),
+            PbDecodeError::Incompatible(e) => MetaError::from(InvalidReply::new("", &e)),
+        }
+    }
 }
 
 /// An error occurs when found an unexpected None value.
@@ -139,7 +144,7 @@ pub trait KVPbApi: KVApi {
     /// The state before and after will be the same if the seq does not match.
     fn upsert_pb<K>(
         &self,
-        req: UpsertPB<K>,
+        req: &UpsertPB<K>,
     ) -> impl Future<Output = Result<Change<K::ValueType>, Self::Error>> + Send
     where
         K: kvapi::Key + Send,
@@ -152,15 +157,21 @@ pub trait KVPbApi: KVApi {
     /// Same as `upsert_pb` but returns [`PbApiWriteError`]. No require of `From<PbApiWriteError>` for `Self::Error`.
     fn upsert_pb_low<K>(
         &self,
-        req: UpsertPB<K>,
+        req: &UpsertPB<K>,
     ) -> impl Future<Output = Result<Change<K::ValueType>, PbApiWriteError<Self::Error>>> + Send
     where
-        K: kvapi::Key + Send,
+        K: kvapi::Key,
         K::ValueType: FromToProto,
     {
+        // leave it out of async move block to avoid requiring Send
+        let k = req.key.to_string_key();
+        let v = encode_operation(&req.value);
+        let seq = req.seq;
+        let value_meta = req.value_meta.clone();
+
         async move {
-            let v = encode_operation(req.value)?;
-            let req = UpsertKV::new(req.key.to_string_key(), req.seq, v, req.value_meta);
+            let v = v?;
+            let req = UpsertKV::new(k, seq, v, value_meta);
             let reply = self
                 .upsert_kv(req)
                 .await

@@ -19,7 +19,6 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::With;
-use futures::SinkExt;
 
 #[derive(Clone, Debug)]
 pub struct UpsertPB<K: kvapi::Key> {
