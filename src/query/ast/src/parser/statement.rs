@@ -1538,13 +1538,15 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_file_format = map_res(
         rule! {
-            CREATE ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #format_options
         },
-        |(_, _, _, opt_if_not_exists, name, options)| {
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, options)| {
             let file_format_options = FileFormatOptionsAst { options };
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             Ok(Statement::CreateFileFormat {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: name.to_string(),
                 file_format_options,
             })

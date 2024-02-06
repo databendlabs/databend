@@ -1,3 +1,2 @@
 -- test system table query speed
-select * from system.tables  where database='test' ignore_result;
-select * from system.columns  where database='test' ignore_result;
+select name from system.tables union all select name from system.columns union all select name from system.databases union all select name from system.functions ignore_result

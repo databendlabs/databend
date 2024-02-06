@@ -27,7 +27,7 @@ pub trait UdfApi: Sync + Send {
     async fn update_udf(&self, udf: UserDefinedFunction, seq: MatchSeq) -> Result<u64>;
 
     // Get UDF by name.
-    async fn get_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<SeqV<UserDefinedFunction>>;
+    async fn get_udf(&self, udf_name: &str) -> Result<SeqV<UserDefinedFunction>>;
 
     // Get all the UDFs for a tenant.
     async fn get_udfs(&self) -> Result<Vec<UserDefinedFunction>>;
