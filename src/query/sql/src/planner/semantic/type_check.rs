@@ -2316,24 +2316,6 @@ impl<'a> TypeChecker<'a> {
         child_expr: Option<Expr>,
         compare_op: Option<ComparisonOp>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let mut contain_agg = None;
-        if let SetExpr::Select(select_stmt) = &subquery.body {
-            if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
-                && (select_stmt.select_list.len() > 1 || select_stmt.select_list[0].is_star())
-            {
-                return Err(ErrorCode::SemanticError(format!(
-                    "Subquery must return only one column, but got {} columns",
-                    select_stmt.select_list.len()
-                )));
-            }
-            if typ == SubqueryType::Scalar {
-                let select = &select_stmt.select_list[0];
-                if let SelectTarget::AliasedExpr { expr, .. } = select {
-                    // Check if contain aggregation function
-                    contain_agg = Some(contain_agg_func(expr));
-                }
-            }
-        }
         let mut binder = Binder::new(
             self.ctx.clone(),
             CatalogManager::instance(),
@@ -2348,6 +2330,26 @@ impl<'a> TypeChecker<'a> {
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
         let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery).await?;
+
+        if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
+            && output_context.columns.len() > 1
+        {
+            return Err(ErrorCode::SemanticError(format!(
+                "Subquery must return only one column, but got {} columns",
+                output_context.columns.len()
+            )));
+        }
+
+        let mut contain_agg = None;
+        if let SetExpr::Select(select_stmt) = &subquery.body {
+            if typ == SubqueryType::Scalar {
+                let select = &select_stmt.select_list[0];
+                if let SelectTarget::AliasedExpr { expr, .. } = select {
+                    // Check if contain aggregation function
+                    contain_agg = Some(contain_agg_func(expr));
+                }
+            }
+        }
 
         let mut data_type = output_context.columns[0].data_type.clone();
 
