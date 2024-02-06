@@ -268,16 +268,11 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
 
     #[async_backtrace::framed]
     async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool> {
-        let user_mgr = UserApiProvider::instance();
+        let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
-        let owner_role_name = match user_mgr.get_ownership(&tenant, object).await? {
-            None => BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
-            Some(owner) => match user_mgr.get_role(&tenant, owner.role).await {
-                Ok(owner_role) => owner_role.name,
-                Err(e) => {
-                    return Err(e);
-                }
-            },
+        let owner_role_name = match role_mgr.find_object_owner(&tenant, object).await? {
+            Some(owner_role) => owner_role,
+            None => BUILTIN_ROLE_ACCOUNT_ADMIN,
         };
 
         let effective_roles = self.get_all_effective_roles().await?;

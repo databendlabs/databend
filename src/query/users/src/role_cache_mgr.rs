@@ -116,7 +116,7 @@ impl RoleCacheManager {
         &self,
         tenant: &str,
         object: &OwnershipObject,
-    ) -> Result<Option<RoleInfo>> {
+    ) -> Result<Option<String>> {
         let owner = match self.user_manager.get_ownership(tenant, object).await? {
             None => return Ok(None),
             Some(owner) => owner,
@@ -124,7 +124,7 @@ impl RoleCacheManager {
 
         // cache manager would not look into built-in roles.
         let role = self.user_manager.get_role(tenant, owner.role).await?;
-        Ok(Some(role))
+        Ok(Some(role.name))
     }
 
     // find_related_roles is called on validating an user's privileges.
