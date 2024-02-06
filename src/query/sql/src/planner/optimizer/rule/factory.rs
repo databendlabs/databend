@@ -52,6 +52,8 @@ use crate::MetadataRef;
 
 pub struct RuleFactory;
 
+pub const MAX_PUSH_DOWN_LIMIT: usize = 10000;
+
 impl RuleFactory {
     pub fn create_rule(
         id: RuleID,
@@ -73,8 +75,12 @@ impl RuleFactory {
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
             RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
             RuleID::PushDownLimitEvalScalar => Ok(Box::new(RulePushDownLimitEvalScalar::new())),
-            RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new())),
-            RuleID::PushDownLimitWindow => Ok(Box::new(RulePushDownLimitWindow::new())),
+            RuleID::PushDownLimitSort => {
+                Ok(Box::new(RulePushDownLimitSort::new(MAX_PUSH_DOWN_LIMIT)))
+            }
+            RuleID::PushDownLimitWindow => {
+                Ok(Box::new(RulePushDownLimitWindow::new(MAX_PUSH_DOWN_LIMIT)))
+            }
             RuleID::PushDownLimitAggregate => Ok(Box::new(RulePushDownLimitAggregate::new())),
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
