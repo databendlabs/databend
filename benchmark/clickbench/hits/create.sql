@@ -1,5 +1,4 @@
-CREATE TRANSIENT TABLE hits
-(
+CREATE TRANSIENT TABLE hits (
     WatchID BIGINT NOT NULL,
     JavaEnable SMALLINT NOT NULL,
     Title TEXT NOT NULL,
@@ -29,7 +28,7 @@ CREATE TRANSIENT TABLE hits
     NetMajor SMALLINT NOT NULL,
     NetMinor SMALLINT NOT NULL,
     UserAgentMajor SMALLINT NOT NULL,
-    UserAgentMinor VARCHAR(255) NOT NULL,
+    UserAgentMinor BINARY NOT NULL,
     CookieEnable SMALLINT NOT NULL,
     JavascriptEnable SMALLINT NOT NULL,
     IsMobile SMALLINT NOT NULL,
@@ -105,5 +104,4 @@ CREATE TRANSIENT TABLE hits
     RefererHash BIGINT NOT NULL,
     URLHash BIGINT NOT NULL,
     CLID INTEGER NOT NULL
-)
-CLUSTER BY (CounterID, EventDate, UserID, EventTime, WatchID);
+) CLUSTER BY (CounterID, EventDate, UserID, EventTime, WatchID);
