@@ -113,11 +113,13 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
     }
 }
 
+const MAX_INIT_HEAP_CAPACITY: usize = 10000;
+
 impl<R: Rows> TransformSortMergeLimit<R> {
     pub fn create(block_size: usize, limit: usize) -> Self {
         TransformSortMergeLimit {
-            heap: FixedHeap::new(limit),
-            buffer: HashMap::with_capacity(limit),
+            heap: FixedHeap::new(std::cmp::min(limit, MAX_INIT_HEAP_CAPACITY)),
+            buffer: HashMap::with_capacity(std::cmp::min(limit, MAX_INIT_HEAP_CAPACITY)),
             block_size,
             num_bytes: 0,
             num_rows: 0,

@@ -324,7 +324,7 @@ impl TransformSortMergeBuilder {
             !self.schema.has_field(ORDER_COL_NAME)
         });
 
-        if matches!(self.limit, Some(limit) if limit <= 10000) {
+        if self.limit.is_some() {
             self.build_sort_merge_limit()
         } else {
             self.build_sort_merge()
