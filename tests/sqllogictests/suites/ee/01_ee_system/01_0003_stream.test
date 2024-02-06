@@ -484,6 +484,9 @@ select a from replace_s;
 2
 
 statement ok
+set enable_experimental_merge_into = 0;
+
+statement ok
 drop table replace_t1;
 
 statement ok
