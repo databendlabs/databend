@@ -14,6 +14,10 @@
 
 //! Kv API with `kvapi::Key` type key and protobuf encoded value.
 
+mod codec;
+mod errors;
+mod upsert_pb;
+
 use std::future::Future;
 
 use databend_common_meta_kvapi::kvapi;
@@ -22,24 +26,45 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::NonEmptyItem;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::UpsertKV;
 use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
 use futures::future::FutureExt;
+use futures::future::TryFutureExt;
 use futures::stream::BoxStream;
 use futures::stream::StreamExt;
 use futures::TryStreamExt;
 use PbApiReadError::KvApiError;
 
-/// An error occurs when decoding protobuf encoded value.
+pub(crate) use self::codec::decode_seqv;
+pub(crate) use self::codec::decode_transition;
+pub(crate) use self::codec::encode_operation;
+pub use self::errors::PbApiWriteError;
+pub use self::errors::PbEncodeError;
+pub use self::upsert_pb::UpsertPB;
+
+// TODO: move error to separate file
+
+/// An error occurred when decoding protobuf encoded value.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[error("PbDecodeError: {0}")]
 pub enum PbDecodeError {
     DecodeError(#[from] prost::DecodeError),
     Incompatible(#[from] Incompatible),
+}
+
+impl From<PbDecodeError> for MetaError {
+    fn from(value: PbDecodeError) -> Self {
+        match value {
+            PbDecodeError::DecodeError(e) => MetaError::from(InvalidReply::new("", &e)),
+            PbDecodeError::Incompatible(e) => MetaError::from(InvalidReply::new("", &e)),
+        }
+    }
 }
 
 /// An error occurs when found an unexpected None value.
@@ -112,6 +137,50 @@ impl From<PbApiReadError<MetaError>> for MetaError {
 
 /// This trait provides a way to access a kv store with `kvapi::Key` type key and protobuf encoded value.
 pub trait KVPbApi: KVApi {
+    /// Update or insert a protobuf encoded value by kvapi::Key.
+    ///
+    /// The key will be converted to string and the value is encoded by `FromToProto`.
+    /// It returns the transition before and after executing the operation.
+    /// The state before and after will be the same if the seq does not match.
+    fn upsert_pb<K>(
+        &self,
+        req: &UpsertPB<K>,
+    ) -> impl Future<Output = Result<Change<K::ValueType>, Self::Error>> + Send
+    where
+        K: kvapi::Key + Send,
+        K::ValueType: FromToProto,
+        Self::Error: From<PbApiWriteError<Self::Error>>,
+    {
+        self.upsert_pb_low(req).map_err(Self::Error::from)
+    }
+
+    /// Same as `upsert_pb` but returns [`PbApiWriteError`]. No require of `From<PbApiWriteError>` for `Self::Error`.
+    fn upsert_pb_low<K>(
+        &self,
+        req: &UpsertPB<K>,
+    ) -> impl Future<Output = Result<Change<K::ValueType>, PbApiWriteError<Self::Error>>> + Send
+    where
+        K: kvapi::Key,
+        K::ValueType: FromToProto,
+    {
+        // leave it out of async move block to avoid requiring Send
+        let k = req.key.to_string_key();
+        let v = encode_operation(&req.value);
+        let seq = req.seq;
+        let value_meta = req.value_meta.clone();
+
+        async move {
+            let v = v?;
+            let req = UpsertKV::new(k, seq, v, value_meta);
+            let reply = self
+                .upsert_kv(req)
+                .await
+                .map_err(PbApiWriteError::KvApiError)?;
+            let transition = decode_transition(reply)?;
+            Ok(transition)
+        }
+    }
+
     /// Get protobuf encoded value by kvapi::Key.
     ///
     /// The key will be converted to string and the returned value is decoded by `FromToProto`.
@@ -144,6 +213,22 @@ pub trait KVPbApi: KVApi {
             let v = raw_seqv.map(decode_seqv::<K::ValueType>).transpose()?;
             Ok(v)
         }
+    }
+
+    /// Same as `list_pb` but does not return key, only values.
+    fn list_pb_values<K>(
+        &self,
+        prefix: &DirName<K>,
+    ) -> impl Future<
+        Output = Result<BoxStream<'static, Result<K::ValueType, Self::Error>>, Self::Error>,
+    > + Send
+    where
+        K: kvapi::Key + 'static,
+        K::ValueType: FromToProto,
+        Self::Error: From<PbApiReadError<Self::Error>>,
+    {
+        self.list_pb(prefix)
+            .map_ok(|strm| strm.map_ok(|x| x.seqv.data).boxed())
     }
 
     /// List protobuf encoded values by prefix and returns a stream.
@@ -214,16 +299,6 @@ where
         }
         Err(e) => Err(KvApiError(e)),
     }
-}
-
-/// Deserialize SeqV<Vec<u8>> into SeqV<T>, with FromToProto.
-fn decode_seqv<T>(seqv: SeqV) -> Result<SeqV<T>, PbDecodeError>
-where T: FromToProto {
-    let buf = &seqv.data;
-    let p: T::PB = prost::Message::decode(buf.as_ref())?;
-    let v: T = FromToProto::from_pb(p)?;
-
-    Ok(SeqV::with_meta(seqv.seq, seqv.meta, v))
 }
 
 #[cfg(test)]
