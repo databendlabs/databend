@@ -919,18 +919,35 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 "get_index_seq_id"
             );
 
-            if index_id_seq > 0 {
-                return if req.if_not_exists {
-                    Ok(CreateIndexReply { index_id })
+            let mut condition = vec![];
+            let mut if_then = vec![];
+
+            let (_, index_id_seq) = if index_id_seq > 0 {
+                if let CreateOption::CreateIfNotExists(if_not_exists) = req.create_option {
+                    return if if_not_exists {
+                        Ok(CreateIndexReply { index_id })
+                    } else {
+                        Err(KVAppError::AppError(AppError::IndexAlreadyExists(
+                            IndexAlreadyExists::new(
+                                &tenant_index.index_name,
+                                format!("create index with tenant: {}", tenant_index.tenant),
+                            ),
+                        )))
+                    };
                 } else {
-                    Err(KVAppError::AppError(AppError::IndexAlreadyExists(
-                        IndexAlreadyExists::new(
-                            &tenant_index.index_name,
-                            format!("create index with tenant: {}", tenant_index.tenant),
-                        ),
-                    )))
-                };
-            }
+                    construct_drop_index_txn_operations(
+                        self,
+                        tenant_index,
+                        false,
+                        false,
+                        &mut condition,
+                        &mut if_then,
+                    )
+                    .await?
+                }
+            } else {
+                (0, 0)
+            };
 
             // Create index by inserting these record:
             // (tenant, index_name) -> index_id
@@ -948,15 +965,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             {
-                let condition = vec![
-                    txn_cond_seq(tenant_index, Eq, 0),
+                condition.extend(vec![
+                    txn_cond_seq(tenant_index, Eq, index_id_seq),
                     txn_cond_seq(&id_to_name_key, Eq, 0),
-                ];
-                let if_then = vec![
+                ]);
+                if_then.extend(vec![
                     txn_op_put(tenant_index, serialize_u64(index_id)?), /* (tenant, index_name) -> index_id */
                     txn_op_put(&id_key, serialize_struct(&req.meta)?),  // (index_id) -> index_meta
                     txn_op_put(&id_to_name_key, serialize_struct(tenant_index)?), /* __fd_index_id_to_name/<index_id> -> (tenant,index_name) */
-                ];
+                ]);
 
                 let txn_req = TxnRequest {
                     condition,
@@ -991,47 +1008,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let res = get_index_or_err(self, tenant_index).await?;
+            let mut condition = vec![];
+            let mut if_then = vec![];
 
-            let (index_id_seq, index_id, index_meta_seq, index_meta) = res;
-
-            if index_id_seq == 0 {
-                return if req.if_exists {
-                    Ok(DropIndexReply {})
-                } else {
-                    return Err(KVAppError::AppError(AppError::UnknownIndex(
-                        UnknownIndex::new(&tenant_index.index_name, "drop_index"),
-                    )));
-                };
-            }
-
-            let index_id_key = IndexId { index_id };
-            // Safe unwrap(): index_meta_seq > 0 implies index_meta is not None.
-            let mut index_meta = index_meta.unwrap();
-
-            debug!(index_id = index_id, name_key = as_debug!(tenant_index); "drop_index");
-
-            // drop an index with drop time
-            if index_meta.dropped_on.is_some() {
-                return Err(KVAppError::AppError(AppError::DropIndexWithDropTime(
-                    DropIndexWithDropTime::new(&tenant_index.index_name),
-                )));
-            }
-            // update drop on time
-            index_meta.dropped_on = Some(Utc::now());
-
-            // Delete index by these operations:
-            // del (tenant, index_name) -> index_id
-            // set index_meta.drop_on = now and update (index_id) -> index_meta
-            let condition = vec![
-                txn_cond_seq(tenant_index, Eq, index_id_seq),
-                txn_cond_seq(&index_id_key, Eq, index_meta_seq),
-            ];
-
-            let if_then = vec![
-                txn_op_del(tenant_index), // (tenant, index_name) -> index_id
-                txn_op_put(&index_id_key, serialize_struct(&index_meta)?), /* (index_id) -> index_meta */
-            ];
+            let (index_id, _) = construct_drop_index_txn_operations(
+                self,
+                tenant_index,
+                req.if_exists,
+                true,
+                &mut condition,
+                &mut if_then,
+            )
+            .await?;
 
             let txn_req = TxnRequest {
                 condition,
@@ -3787,6 +3775,58 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     fn name(&self) -> String {
         "SchemaApiImpl".to_string()
     }
+}
+
+async fn construct_drop_index_txn_operations(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    tenant_index: &IndexNameIdent,
+    drop_if_exists: bool,
+    if_delete: bool,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<(u64, u64), KVAppError> {
+    let res = get_index_or_err(kv_api, tenant_index).await?;
+
+    let (index_id_seq, index_id, index_meta_seq, index_meta) = res;
+
+    if index_id_seq == 0 {
+        return if drop_if_exists {
+            Ok((index_id, index_id_seq))
+        } else {
+            return Err(KVAppError::AppError(AppError::UnknownIndex(
+                UnknownIndex::new(&tenant_index.index_name, "drop_index"),
+            )));
+        };
+    }
+
+    let index_id_key = IndexId { index_id };
+    // Safe unwrap(): index_meta_seq > 0 implies index_meta is not None.
+    let mut index_meta = index_meta.unwrap();
+
+    debug!(index_id = index_id, name_key = as_debug!(tenant_index); "drop_index");
+
+    // drop an index with drop time
+    if index_meta.dropped_on.is_some() {
+        return Err(KVAppError::AppError(AppError::DropIndexWithDropTime(
+            DropIndexWithDropTime::new(&tenant_index.index_name),
+        )));
+    }
+    // update drop on time
+    index_meta.dropped_on = Some(Utc::now());
+
+    // Delete index by these operations:
+    // del (tenant, index_name) -> index_id
+    // set index_meta.drop_on = now and update (index_id) -> index_meta
+    condition.push(txn_cond_seq(&index_id_key, Eq, index_meta_seq));
+    // (index_id) -> index_meta
+    if_then.push(txn_op_put(&index_id_key, serialize_struct(&index_meta)?));
+    if if_delete {
+        condition.push(txn_cond_seq(tenant_index, Eq, index_id_seq));
+        // (tenant, index_name) -> index_id
+        if_then.push(txn_op_del(tenant_index));
+    }
+
+    Ok((index_id, index_id_seq))
 }
 
 async fn drop_table_by_id(

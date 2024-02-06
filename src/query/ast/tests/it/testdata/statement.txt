@@ -690,6 +690,358 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
+CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
+---------- Output ---------
+CREATE SYNC Aggregating INDEX Identifier { name: "idx1", quote: None, span: Some(25..29) } AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
+---------- AST ------------
+CreateIndex(
+    CreateIndexStmt {
+        index_type: Aggregating,
+        create_option: CreateIfNotExists(
+            false,
+        ),
+        index_name: Identifier {
+            name: "idx1",
+            quote: None,
+            span: Some(
+                25..29,
+            ),
+        },
+        query: Query {
+            span: Some(
+                33..80,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        33..80,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: FunctionCall {
+                                span: Some(
+                                    40..46,
+                                ),
+                                distinct: false,
+                                name: Identifier {
+                                    name: "SUM",
+                                    quote: None,
+                                    span: Some(
+                                        40..43,
+                                    ),
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            44..45,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    44..45,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                ],
+                                params: [],
+                                window: None,
+                                lambda: None,
+                            },
+                            alias: None,
+                        },
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    48..49,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            48..49,
+                                        ),
+                                    },
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                55..57,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "t1",
+                                quote: None,
+                                span: Some(
+                                    55..57,
+                                ),
+                            },
+                            alias: None,
+                            travel_point: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: Some(
+                        BinaryOp {
+                            span: Some(
+                                66..67,
+                            ),
+                            op: Gt,
+                            left: ColumnRef {
+                                span: Some(
+                                    64..65,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            64..65,
+                                        ),
+                                    },
+                                ),
+                            },
+                            right: Literal {
+                                span: Some(
+                                    68..69,
+                                ),
+                                lit: UInt64(
+                                    3,
+                                ),
+                            },
+                        },
+                    ),
+                    group_by: Some(
+                        Normal(
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        79..80,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                            span: Some(
+                                                79..80,
+                                            ),
+                                        },
+                                    ),
+                                },
+                            ],
+                        ),
+                    ),
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+        sync_creation: true,
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
+---------- Output ---------
+CREATE OR REPLACE SYNC Aggregating INDEX Identifier { name: "idx1", quote: None, span: Some(36..40) } AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
+---------- AST ------------
+CreateIndex(
+    CreateIndexStmt {
+        index_type: Aggregating,
+        create_option: CreateOrReplace,
+        index_name: Identifier {
+            name: "idx1",
+            quote: None,
+            span: Some(
+                36..40,
+            ),
+        },
+        query: Query {
+            span: Some(
+                44..91,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        44..91,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: FunctionCall {
+                                span: Some(
+                                    51..57,
+                                ),
+                                distinct: false,
+                                name: Identifier {
+                                    name: "SUM",
+                                    quote: None,
+                                    span: Some(
+                                        51..54,
+                                    ),
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            55..56,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    55..56,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                ],
+                                params: [],
+                                window: None,
+                                lambda: None,
+                            },
+                            alias: None,
+                        },
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    59..60,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            59..60,
+                                        ),
+                                    },
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                66..68,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "t1",
+                                quote: None,
+                                span: Some(
+                                    66..68,
+                                ),
+                            },
+                            alias: None,
+                            travel_point: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: Some(
+                        BinaryOp {
+                            span: Some(
+                                77..78,
+                            ),
+                            op: Gt,
+                            left: ColumnRef {
+                                span: Some(
+                                    75..76,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            75..76,
+                                        ),
+                                    },
+                                ),
+                            },
+                            right: Literal {
+                                span: Some(
+                                    79..80,
+                                ),
+                                lit: UInt64(
+                                    3,
+                                ),
+                            },
+                        },
+                    ),
+                    group_by: Some(
+                        Normal(
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        90..91,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                            span: Some(
+                                                90..91,
+                                            ),
+                                        },
+                                    ),
+                                },
+                            ],
+                        ),
+                    ),
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+        sync_creation: true,
+    },
+)
+
+
+---------- Input ----------
 create table a (c decimal(38, 0))
 ---------- Output ---------
 CREATE TABLE a (c Decimal(38, 0))
