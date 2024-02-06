@@ -1491,17 +1491,17 @@ HashJoin: LEFT SINGLE
 │       ├── Build
 │       │   └── HashJoin: CROSS
 │       │       ├── Build
-│       │       │   └── Scan: default.default.customers(0) (read rows: 100)
+│       │       │   └── Scan: default.default.customers (#0) (read rows: 100)
 │       │       └── Probe
-│       │           └── Scan: default.default.sales(1) (read rows: 500)
+│       │           └── Scan: default.default.sales (#1) (read rows: 500)
 │       └── Probe
-│           └── Scan: default.default.customers(2) (read rows: 100)
+│           └── Scan: default.default.customers (#2) (read rows: 100)
 └── Probe
     └── HashJoin: LEFT SEMI
         ├── Build
-        │   └── Scan: default.default.sales(3) (read rows: 0)
+        │   └── Scan: default.default.sales (#3) (read rows: 0)
         └── Probe
-            └── Scan: default.default.customers(0) (read rows: 100)
+            └── Scan: default.default.customers (#0) (read rows: 100)
 
 
 query T
@@ -1513,17 +1513,17 @@ HashJoin: RIGHT MARK
 │       ├── Build
 │       │   └── HashJoin: CROSS
 │       │       ├── Build
-│       │       │   └── Scan: default.default.customers(0) (read rows: 100)
+│       │       │   └── Scan: default.default.customers (#0) (read rows: 100)
 │       │       └── Probe
-│       │           └── Scan: default.default.products(1) (read rows: 10)
+│       │           └── Scan: default.default.products (#1) (read rows: 10)
 │       └── Probe
 │           └── HashJoin: INNER
 │               ├── Build
-│               │   └── Scan: default.default.products(3) (read rows: 10)
+│               │   └── Scan: default.default.products (#3) (read rows: 10)
 │               └── Probe
-│                   └── Scan: default.default.sales(2) (read rows: 500)
+│                   └── Scan: default.default.sales (#2) (read rows: 500)
 └── Probe
-    └── Scan: default.default.customers(0) (read rows: 100)
+    └── Scan: default.default.customers (#0) (read rows: 100)
 
 statement ok
 drop table customers;

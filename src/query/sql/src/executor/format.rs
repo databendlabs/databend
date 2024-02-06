@@ -84,7 +84,7 @@ impl PhysicalPlan {
 
                 Ok(FormatTreeNode::with_children(
                     format!(
-                        "Scan: {}({}) (read rows: {})",
+                        "Scan: {} (#{}) (read rows: {})",
                         table_name, plan.table_index, plan.source.statistics.read_rows
                     ),
                     vec![],
