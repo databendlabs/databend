@@ -33,7 +33,7 @@ use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::sql::plans::JoinType;
 
 impl HashJoinProbeState {
-    pub(crate) fn left_join<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn left_join<'a, H: HashJoinHashtableLike, const LEFT_SINGLE: bool>(
         &self,
         input: &DataBlock,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
@@ -74,13 +74,12 @@ impl HashJoinProbeState {
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
 
                 if match_count > 0 {
-                    if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle
-                        && match_count > 1
-                    {
+                    if LEFT_SINGLE && match_count > 1 {
                         return Err(ErrorCode::Internal(
                             "Scalar subquery can't return more than one row",
                         ));
                     }
+
                     for _ in 0..match_count {
                         unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
                         matched_idx += 1;
@@ -104,7 +103,7 @@ impl HashJoinProbeState {
                         None,
                         None,
                     )?;
-                    (matched_idx, incomplete_ptr) = self.fill_left_outer_states(
+                    (matched_idx, incomplete_ptr) = self.fill_left_outer_states::<_, LEFT_SINGLE>(
                         hash_table,
                         key,
                         incomplete_ptr,
@@ -129,13 +128,12 @@ impl HashJoinProbeState {
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
 
                 if match_count > 0 {
-                    if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle
-                        && match_count > 1
-                    {
+                    if LEFT_SINGLE && match_count > 1 {
                         return Err(ErrorCode::Internal(
                             "Scalar subquery can't return more than one row",
                         ));
                     }
+
                     for _ in 0..match_count {
                         unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
                         matched_idx += 1;
@@ -161,7 +159,7 @@ impl HashJoinProbeState {
                         None,
                         None,
                     )?;
-                    (matched_idx, incomplete_ptr) = self.fill_left_outer_states(
+                    (matched_idx, incomplete_ptr) = self.fill_left_outer_states::<_, LEFT_SINGLE>(
                         hash_table,
                         key,
                         incomplete_ptr,
@@ -206,7 +204,7 @@ impl HashJoinProbeState {
         Ok(result_blocks)
     }
 
-    pub(crate) fn left_join_with_conjunct<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn left_join_with_conjunct<'a, H: HashJoinHashtableLike, const LEFT_SINGLE: bool>(
         &self,
         input: &DataBlock,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
@@ -256,11 +254,9 @@ impl HashJoinProbeState {
                 // Probe hash table and fill `build_indexes`.
                 let (match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
-                // `total_probe_matched` is used to record the matched rows count for current `idx` row from probe_block
+
                 if match_count > 0 {
-                    if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle
-                        && match_count > 1
-                    {
+                    if LEFT_SINGLE && match_count > 1 {
                         return Err(ErrorCode::Internal(
                             "Scalar subquery can't return more than one row",
                         ));
@@ -290,7 +286,7 @@ impl HashJoinProbeState {
                         Some(row_state),
                         Some(row_state_indexes),
                     )?;
-                    (matched_idx, incomplete_ptr) = self.fill_left_outer_states(
+                    (matched_idx, incomplete_ptr) = self.fill_left_outer_states::<_, LEFT_SINGLE>(
                         hash_table,
                         key,
                         incomplete_ptr,
@@ -312,13 +308,9 @@ impl HashJoinProbeState {
                 // Probe hash table and fill `build_indexes`.
                 let (match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
-                // `total_probe_matched` is used to record the matched rows count for current `idx` row from probe_block
-                let mut total_probe_matched = 0;
+
                 if match_count > 0 {
-                    total_probe_matched += match_count;
-                    if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle
-                        && total_probe_matched > 1
-                    {
+                    if LEFT_SINGLE && match_count > 1 {
                         return Err(ErrorCode::Internal(
                             "Scalar subquery can't return more than one row",
                         ));
@@ -348,7 +340,7 @@ impl HashJoinProbeState {
                         Some(row_state),
                         Some(row_state_indexes),
                     )?;
-                    (matched_idx, incomplete_ptr) = self.fill_left_outer_states(
+                    (matched_idx, incomplete_ptr) = self.fill_left_outer_states::<_, LEFT_SINGLE>(
                         hash_table,
                         key,
                         incomplete_ptr,
@@ -632,7 +624,7 @@ impl HashJoinProbeState {
 
     #[inline(always)]
     #[allow(clippy::too_many_arguments)]
-    fn fill_left_outer_states<'a, H: HashJoinHashtableLike>(
+    fn fill_left_outer_states<'a, H: HashJoinHashtableLike, const LEFT_SINGLE: bool>(
         &self,
         hash_table: &H,
         key: &H::Key,
@@ -654,7 +646,7 @@ impl HashJoinProbeState {
             return Ok((0, 0));
         }
 
-        if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftSingle {
+        if LEFT_SINGLE {
             return Err(ErrorCode::Internal(
                 "Scalar subquery can't return more than one row",
             ));
