@@ -267,11 +267,18 @@ impl SubqueryRewriter {
                     &mut right_conditions,
                     &mut left_conditions,
                 )?;
+
+                let join_type = if subquery.contain_agg.unwrap() {
+                    JoinType::Left
+                } else {
+                    JoinType::LeftSingle
+                };
+
                 let join_plan = Join {
                     left_conditions,
                     right_conditions,
                     non_equi_conditions: vec![],
-                    join_type: JoinType::LeftSingle,
+                    join_type,
                     marker_index: None,
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
