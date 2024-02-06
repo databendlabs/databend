@@ -12,13 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Defines errors used by protobuf based API.
-
 use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::MetaError;
 use databend_common_proto_conv::Incompatible;
-
-use crate::kv_pb_api::PbDecodeError;
 
 /// An error occurred when encoding with FromToProto.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -33,28 +29,6 @@ impl From<PbEncodeError> for MetaError {
         match value {
             PbEncodeError::EncodeError(e) => MetaError::from(InvalidArgument::new(e, "")),
             PbEncodeError::Incompatible(e) => MetaError::from(InvalidArgument::new(e, "")),
-        }
-    }
-}
-
-/// An error occurs when writing protobuf encoded value to kv store.
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
-#[error("PbApiWriteError: {0}")]
-pub enum PbApiWriteError<E> {
-    PbEncodeError(#[from] PbEncodeError),
-    /// upsert reads the state transition after the operation.
-    PbDecodeError(#[from] PbDecodeError),
-    /// Error returned from KVApi.
-    KvApiError(E),
-}
-
-impl From<PbApiWriteError<MetaError>> for MetaError {
-    /// For KVApi that returns MetaError, convert protobuf related error to MetaError directly.
-    fn from(value: PbApiWriteError<MetaError>) -> Self {
-        match value {
-            PbApiWriteError::PbEncodeError(e) => MetaError::from(e),
-            PbApiWriteError::PbDecodeError(e) => MetaError::from(e),
-            PbApiWriteError::KvApiError(e) => e,
         }
     }
 }
