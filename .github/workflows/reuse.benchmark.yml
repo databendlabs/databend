@@ -49,7 +49,7 @@ jobs:
       matrix:
         dataset:
           - internal
-          - hits
+          # - hits
       fail-fast: true
       max-parallel: 1
     steps:
