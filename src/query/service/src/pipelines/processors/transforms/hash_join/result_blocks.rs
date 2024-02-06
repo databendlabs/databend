@@ -61,7 +61,7 @@ impl HashJoinProbeState {
                     self.inner_join::<_, true, false>(input, keys, hash_table, probe_state)
                 }
                 Some(JoinType::RightSingle) => {
-                    self.inner_join::<_, false, false>(input, keys, hash_table, probe_state)
+                    self.inner_join::<_, false, true>(input, keys, hash_table, probe_state)
                 }
                 _ => self.inner_join::<_, false, false>(input, keys, hash_table, probe_state),
             },
