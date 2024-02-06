@@ -14,6 +14,7 @@
 
 mod api;
 mod helper;
+mod item;
 mod key;
 mod key_builder;
 mod key_parser;
@@ -25,6 +26,9 @@ pub use api::ApiBuilder;
 pub use api::AsKVApi;
 pub use api::KVApi;
 pub use api::KVStream;
+pub use item::Item;
+pub use item::NonEmptyItem;
+pub use key::DirName;
 pub use key::Key;
 pub use key::KeyError;
 pub use key_builder::KeyBuilder;
