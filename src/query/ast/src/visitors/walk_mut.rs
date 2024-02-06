@@ -479,10 +479,10 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         }
         Statement::DescribeStage { stage_name } => visitor.visit_describe_stage(stage_name),
         Statement::CreateFileFormat {
-            if_not_exists,
+            create_option,
             name,
             file_format_options,
-        } => visitor.visit_create_file_format(*if_not_exists, name, file_format_options),
+        } => visitor.visit_create_file_format(create_option, name, file_format_options),
         Statement::DropFileFormat { if_exists, name } => {
             visitor.visit_drop_file_format(*if_exists, name)
         }

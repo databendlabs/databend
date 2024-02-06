@@ -72,10 +72,7 @@ impl ConnectionApi for ConnectionMgr {
             || "",
         )?);
         let key = format!("{}/{}", self.connection_prefix, escape_for_key(&info.name)?);
-        let seq = match create_option {
-            CreateOption::CreateIfNotExists(_) => MatchSeq::Exact(0),
-            CreateOption::CreateOrReplace => MatchSeq::GE(0),
-        };
+        let seq = MatchSeq::from(*create_option);
 
         let res = self
             .kv_api

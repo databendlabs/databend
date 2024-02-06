@@ -14,13 +14,18 @@
 
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedFileFormat;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait FileFormatApi: Sync + Send {
     // Add a file_format info to /tenant/file_format-name.
-    async fn add_file_format(&self, file_format: UserDefinedFileFormat) -> Result<u64>;
+    async fn add_file_format(
+        &self,
+        file_format: UserDefinedFileFormat,
+        create_option: &CreateOption,
+    ) -> Result<()>;
 
     async fn get_file_format(
         &self,
