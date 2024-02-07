@@ -15,7 +15,6 @@
 use std::backtrace::Backtrace;
 use std::future::Future;
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -32,6 +31,8 @@ use tokio::task::JoinHandle;
 
 use crate::runtime::catch_unwind::CatchUnwindFuture;
 use crate::runtime::MemStat;
+use crate::runtime::Thread;
+use crate::runtime::ThreadJoinHandle;
 
 /// Methods to spawn tasks.
 pub trait TrySpawn {
@@ -101,7 +102,7 @@ impl Runtime {
         let handle = runtime.handle().clone();
 
         // Block the runtime to shutdown.
-        let join_handler = thread::spawn(move || {
+        let join_handler = Thread::spawn(move || {
             // We ignore channel is closed.
             let _ = runtime.block_on(recv_stop);
 
@@ -306,7 +307,7 @@ impl TrySpawn for Runtime {
 pub struct Dropper {
     name: Option<String>,
     close: Option<oneshot::Sender<()>>,
-    join_handler: Option<thread::JoinHandle<bool>>,
+    join_handler: Option<ThreadJoinHandle<bool>>,
 }
 
 impl Drop for Dropper {

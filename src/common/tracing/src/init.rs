@@ -19,6 +19,7 @@ use std::time::Duration;
 
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::Thread;
 use log::LevelFilter;
 use log::Log;
 use minitrace::prelude::*;
@@ -97,7 +98,7 @@ pub fn init_logging(
     if cfg.tracing.on {
         let otlp_endpoint = cfg.tracing.otlp_endpoint.clone();
 
-        let (reporter_rt, otlp_reporter) = std::thread::spawn(|| {
+        let (reporter_rt, otlp_reporter) = Thread::spawn(|| {
             // Init runtime with 2 threads.
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
@@ -141,7 +142,7 @@ pub fn init_logging(
 
         guards.push(Box::new(defer::defer(minitrace::flush)));
         guards.push(Box::new(defer::defer(|| {
-            std::thread::spawn(move || std::mem::drop(reporter_rt))
+            Thread::spawn(move || std::mem::drop(reporter_rt))
                 .join()
                 .unwrap()
         })));

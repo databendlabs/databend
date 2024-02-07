@@ -6,6 +6,7 @@ disallowed-methods = [
     { path = "num_traits::sign::Signed::signum", reason = "This returns 1.0 for 0.0 but 0 for 0." },
     { path = "tokio::spawn", reason = "Please use `databend_common_base::runtime::spawn` instead." },
     { path = "tokio::task::spawn", reason = "Please use `databend_common_base::runtime::spawn` instead." },
+    { path = "std::thread::spawn", reason = "Please use `databend_common_base::runtime::Thread::spawn` instead." },
 ]
 
 disallowed-types = [
