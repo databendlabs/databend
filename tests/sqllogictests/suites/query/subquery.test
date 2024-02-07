@@ -746,7 +746,7 @@ create table t1(a int);
 statement ok
 insert into t1 values(1), (2), (3);
 
-query error mysql client error: Server error: `ERROR HY000 \(1105\): Internal\. Code: 1001, Text = Scalar subquery can't return more than one row\.'
+query error 1001.*Scalar subquery can't return more than one row
 select (select sum(a) from t1 where t1.a >= t2.a group by t1.a) from t1 as t2;
 
 statement ok
