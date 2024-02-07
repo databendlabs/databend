@@ -205,6 +205,7 @@ impl Runtime {
     pub fn block_on<T, F>(&self, future: F) -> F::Output
     where F: Future<Output = Result<T>> + Send + 'static {
         let future = CatchUnwindFuture::create(future);
+        #[allow(clippy::disallowed_methods)]
         self.handle.block_on(future).flatten()
     }
 
@@ -443,7 +444,17 @@ where
 }
 
 #[track_caller]
-pub fn spawn_blocking<F, R>(f: F) -> Result<tokio::task::JoinHandle<R>, F>
+pub fn spawn_blocking<F, R>(f: F) -> tokio::task::JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    #[expect(clippy::disallowed_methods)]
+    tokio::runtime::Handle::current().spawn_blocking(f)
+}
+
+#[track_caller]
+pub fn checked_spawn_blocking<F, R>(f: F) -> Result<tokio::task::JoinHandle<R>, F>
 where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,
@@ -455,7 +466,17 @@ where
     }
 }
 
-// pub fn block_on() {
-//     // let handler = tokio::runtime::Handle::current();
-//     // handler.block_on()
-// }
+#[track_caller]
+pub fn block_on<F: Future>(future: F) -> F::Output {
+    #[expect(clippy::disallowed_methods)]
+    tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(future))
+}
+
+#[track_caller]
+pub fn checked_block_on<F: Future>(future: F) -> Result<F::Output, F> {
+    match tokio::runtime::Handle::try_current() {
+        #[expect(clippy::disallowed_methods)]
+        Ok(handler) => Ok(tokio::task::block_in_place(|| handler.block_on(future))),
+        Err(_) => Err(future),
+    }
+}

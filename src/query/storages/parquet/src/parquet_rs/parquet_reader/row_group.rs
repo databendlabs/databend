@@ -295,7 +295,7 @@ where
     F: FnOnce() -> Result<T> + Send + 'static,
     T: Send + 'static,
 {
-    match databend_common_base::runtime::spawn_blocking(f) {
+    match databend_common_base::runtime::checked_spawn_blocking(f) {
         Ok(handler) => handler.await.map_err(ErrorCode::from_std_error)?,
         Err(f) => f(),
     }
