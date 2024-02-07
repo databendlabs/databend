@@ -2283,7 +2283,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "async-backtrace",
  "chrono",
  "clap 4.4.2",
  "databend-common-base",

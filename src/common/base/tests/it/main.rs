@@ -25,7 +25,6 @@ mod runtime;
 mod runtime_tracker;
 mod stoppable;
 mod string;
-mod thread_pool;
 
 // runtime tests depends on the memory stat collector.
 #[global_allocator]
