@@ -14,6 +14,7 @@
 
 use std::backtrace::Backtrace;
 use std::future::Future;
+use std::panic::Location;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -202,11 +203,16 @@ impl Runtime {
         self.handle.clone()
     }
 
+    #[track_caller]
     pub fn block_on<T, F>(&self, future: F) -> F::Output
     where F: Future<Output = Result<T>> + Send + 'static {
         let future = CatchUnwindFuture::create(future);
         #[allow(clippy::disallowed_methods)]
-        self.handle.block_on(future).flatten()
+        tokio::task::block_in_place(|| {
+            self.handle
+                .block_on(location_future(future, std::panic::Location::caller()))
+                .flatten()
+        })
     }
 
     // For each future of `futures`, before being executed
@@ -395,25 +401,8 @@ where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
-    // NOTE:
-    // Frame name: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=689fbc84ab4be894c0cdd285bea24845
-    // Frame location: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=3ae3a2295607628ce95f0a34a566847b
-
-    let frame_name = std::any::type_name::<F>()
-        .trim_end_matches("::{{closure}}")
-        .to_string();
-    let frame_location = std::panic::Location::caller();
-
     #[expect(clippy::disallowed_methods)]
-    tokio::spawn(
-        async_backtrace::location!(
-            frame_name,
-            frame_location.file(),
-            frame_location.line(),
-            frame_location.column()
-        )
-        .frame(future),
-    )
+    tokio::spawn(location_future(future, std::panic::Location::caller()))
 }
 
 #[track_caller]
@@ -422,25 +411,8 @@ where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
-    // NOTE:
-    // Frame name: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=689fbc84ab4be894c0cdd285bea24845
-    // Frame location: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=3ae3a2295607628ce95f0a34a566847b
-
-    let frame_name = std::any::type_name::<F>()
-        .trim_end_matches("::{{closure}}")
-        .to_string();
-    let frame_location = std::panic::Location::caller();
-
     #[expect(clippy::disallowed_methods)]
-    tokio::task::spawn_local(
-        async_backtrace::location!(
-            frame_name,
-            frame_location.file(),
-            frame_location.line(),
-            frame_location.column()
-        )
-        .frame(future),
-    )
+    tokio::task::spawn_local(location_future(future, std::panic::Location::caller()))
 }
 
 #[track_caller]
@@ -460,23 +432,52 @@ where
     R: Send + 'static,
 {
     match tokio::runtime::Handle::try_current() {
+        Err(_) => Err(f),
         #[expect(clippy::disallowed_methods)]
         Ok(handler) => Ok(handler.spawn_blocking(f)),
-        Err(_) => Err(f),
     }
 }
 
 #[track_caller]
 pub fn block_on<F: Future>(future: F) -> F::Output {
     #[expect(clippy::disallowed_methods)]
-    tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(future))
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current()
+            .block_on(location_future(future, std::panic::Location::caller()))
+    })
 }
 
 #[track_caller]
 pub fn try_block_on<F: Future>(future: F) -> Result<F::Output, F> {
     match tokio::runtime::Handle::try_current() {
-        #[expect(clippy::disallowed_methods)]
-        Ok(handler) => Ok(tokio::task::block_in_place(|| handler.block_on(future))),
         Err(_) => Err(future),
+        #[expect(clippy::disallowed_methods)]
+        Ok(handler) => Ok(tokio::task::block_in_place(|| {
+            handler.block_on(location_future(future, std::panic::Location::caller()))
+        })),
     }
+}
+
+fn location_future<F: Future>(
+    future: F,
+    frame_location: &'static Location,
+) -> impl Future<Output = F::Output>
+where
+    F: Future,
+{
+    // NOTE:
+    // Frame name: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=689fbc84ab4be894c0cdd285bea24845
+    // Frame location: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=3ae3a2295607628ce95f0a34a566847b
+
+    let frame_name = std::any::type_name::<F>()
+        .trim_end_matches("::{{closure}}")
+        .to_string();
+
+    async_backtrace::location!(
+        frame_name,
+        frame_location.file(),
+        frame_location.line(),
+        frame_location.column()
+    )
+    .frame(future)
 }
