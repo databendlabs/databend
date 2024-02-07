@@ -163,10 +163,8 @@ async fn test_successfully_drop_udf() -> Result<()> {
 async fn test_unknown_udf_drop_udf() -> Result<()> {
     let (_, udf_api) = new_udf_api().await?;
 
-    match udf_api.drop_udf("UNKNOWN_NAME", MatchSeq::GE(1)).await {
-        Ok(_) => panic!("Unknown Function drop must be return Err."),
-        Err(cause) => assert_eq!(cause.code(), 2602),
-    }
+    let res = udf_api.drop_udf("UNKNOWN_NAME", MatchSeq::GE(1)).await;
+    assert_eq!(Ok(None), res);
 
     Ok(())
 }
