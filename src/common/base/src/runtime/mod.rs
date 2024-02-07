@@ -19,7 +19,6 @@ mod global_runtime;
 mod runtime;
 mod runtime_tracker;
 mod thread;
-mod thread_pool;
 
 pub use backtrace::dump_backtrace;
 pub use backtrace::get_all_tasks;
@@ -44,5 +43,3 @@ pub use runtime_tracker::UnlimitedFuture;
 pub use runtime_tracker::GLOBAL_MEM_STAT;
 pub use thread::Thread;
 pub use thread::ThreadJoinHandle;
-pub use thread_pool::TaskJoinHandler;
-pub use thread_pool::ThreadPool;

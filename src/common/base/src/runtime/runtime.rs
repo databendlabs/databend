@@ -261,6 +261,7 @@ impl Runtime {
             let permit = semaphore.acquire_owned().await.map_err(|e| {
                 ErrorCode::Internal(format!("semaphore closed, acquire permit failure. {}", e))
             })?;
+            #[expect(clippy::disallowed_methods)]
             let handler = self
                 .handle
                 .spawn(async_backtrace::location!().frame(async move {
@@ -299,6 +300,7 @@ impl TrySpawn for Runtime {
                 async_backtrace::location!(format!("Running query {} spawn task", id)).frame(task)
             }
         };
+        #[expect(clippy::disallowed_methods)]
         Ok(self.handle.spawn(task))
     }
 }
