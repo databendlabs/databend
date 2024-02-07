@@ -19,8 +19,6 @@ disallowed-methods = [
     { path = "tokio::runtime::Runtime::spawn_blocking", reason = "Please use `databend_common_base::runtime::Runtime::spawn_blocking` instead." },
 
     { path = "std::thread::spawn", reason = "Please use `databend_common_base::runtime::Thread::spawn` instead." },
-
-#    { path = "tokio::task::Builder::spawn", reason = "Disallowed methods, please remove it." },
 ]
 
 disallowed-types = [
