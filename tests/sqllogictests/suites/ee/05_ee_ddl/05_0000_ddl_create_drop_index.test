@@ -59,6 +59,18 @@ statement ok
 DROP AGGREGATING INDEX idx1
 
 statement ok
+CREATE AGGREGATING INDEX replace_idx AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
+
+statement error 1005
+CREATE OR REPLACE AGGREGATING INDEX IF NOT EXISTS replace_idx AS SELECT b, SUM(a) FROM t1 WHERE b > 3 GROUP BY b
+
+statement ok
+CREATE OR REPLACE AGGREGATING INDEX replace_idx AS SELECT b, SUM(a) FROM t1 WHERE b > 3 GROUP BY b
+
+statement ok
+DROP AGGREGATING INDEX replace_idx
+
+statement ok
 USE default
 
 statement ok
