@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+
 use databend_common_exception::ErrorCode;
 use databend_common_meta_types::MetaError;
 
@@ -20,8 +22,19 @@ use crate::errors::TenantError;
 /// UDF logic error, unrelated to the backend service providing UDF management, or dependent component.
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum UdfError {
-    #[error("UDF not found: '{tenant}/{name}'")]
-    NotFound { tenant: String, name: String },
+    #[error("UDF not found: '{tenant}/{name}'; {context}")]
+    NotFound {
+        tenant: String,
+        name: String,
+        context: String,
+    },
+
+    #[error("UDF already exists: '{tenant}/{name}'; {reason}")]
+    Exists {
+        tenant: String,
+        name: String,
+        reason: String,
+    },
 }
 
 impl From<UdfError> for ErrorCode {
@@ -29,6 +42,7 @@ impl From<UdfError> for ErrorCode {
         let s = value.to_string();
         match value {
             UdfError::NotFound { .. } => ErrorCode::UnknownUDF(s),
+            UdfError::Exists { .. } => ErrorCode::UdfAlreadyExists(s),
         }
     }
 }
@@ -39,15 +53,44 @@ pub enum UdfApiError {
     #[error("TenantError: '{0}'")]
     TenantError(#[from] TenantError),
 
-    #[error("MetaService error: {0}")]
-    MetaError(#[from] MetaError),
+    #[error("MetaService error: {meta_err}; {context}")]
+    MetaError {
+        meta_err: MetaError,
+        context: String,
+    },
+}
+
+impl From<MetaError> for UdfApiError {
+    fn from(meta_err: MetaError) -> Self {
+        UdfApiError::MetaError {
+            meta_err,
+            context: "".to_string(),
+        }
+    }
 }
 
 impl From<UdfApiError> for ErrorCode {
     fn from(value: UdfApiError) -> Self {
         match value {
             UdfApiError::TenantError(e) => ErrorCode::from(e),
-            UdfApiError::MetaError(meta_err) => ErrorCode::from(meta_err),
+            UdfApiError::MetaError { meta_err, context } => {
+                ErrorCode::from(meta_err).add_message_back(context)
+            }
+        }
+    }
+}
+
+impl UdfApiError {
+    pub fn append_context(self, context: impl Display) -> Self {
+        match self {
+            UdfApiError::TenantError(e) => UdfApiError::TenantError(e.append_context(context)),
+            UdfApiError::MetaError {
+                meta_err,
+                context: old,
+            } => UdfApiError::MetaError {
+                meta_err,
+                context: format!("{}; {}", old, context),
+            },
         }
     }
 }

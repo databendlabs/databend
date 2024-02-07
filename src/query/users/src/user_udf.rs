@@ -32,18 +32,20 @@ impl UserApiProvider {
         create_option: &CreateOption,
     ) -> Result<()> {
         let udf_api_client = self.udf_api(tenant)?;
-        udf_api_client.add_udf(info, create_option).await
+        udf_api_client.add_udf(info, create_option).await??;
+        Ok(())
     }
 
     // Update a UDF.
     #[async_backtrace::framed]
     pub async fn update_udf(&self, tenant: &str, info: UserDefinedFunction) -> Result<u64> {
-        let udf_api_client = self.udf_api(tenant)?;
-        let update_udf = udf_api_client.update_udf(info, MatchSeq::GE(1));
-        match update_udf.await {
-            Ok(res) => Ok(res),
-            Err(e) => Err(e.add_message_back("(while update UDF).")),
-        }
+        let res = self
+            .udf_api(tenant)?
+            .update_udf(info, MatchSeq::GE(1))
+            .await?;
+
+        let seq = res?;
+        Ok(seq)
     }
 
     // Get a UDF by name.
@@ -67,12 +69,12 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_udfs(&self, tenant: &str) -> Result<Vec<UserDefinedFunction>> {
         let udf_api_client = self.udf_api(tenant)?;
-        let get_udfs = udf_api_client.list_udf();
+        let udfs = udf_api_client
+            .list_udf()
+            .await
+            .map_err(|e| e.append_context("while get UDFs"))?;
 
-        match get_udfs.await {
-            Err(e) => Err(e.add_message_back("(while get UDFs).")),
-            Ok(seq_udfs_info) => Ok(seq_udfs_info),
-        }
+        Ok(udfs)
     }
 
     // Drop a UDF by name.
@@ -95,6 +97,7 @@ impl UserApiProvider {
                 Err(UdfError::NotFound {
                     tenant: tenant.to_string(),
                     name: udf_name.to_string(),
+                    context: "while drop_udf".to_string(),
                 })
             }
         } else {
