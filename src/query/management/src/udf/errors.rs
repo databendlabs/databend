@@ -13,11 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::ErrorCode;
-use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
 
 use crate::errors::TenantError;
 
@@ -42,30 +38,4 @@ impl From<UdfError> for ErrorCode {
             UdfError::MetaError(meta_err) => ErrorCode::from(meta_err),
         }
     }
-}
-
-#[async_trait::async_trait]
-pub trait UdfApi: Sync + Send {
-    // Add a UDF to /tenant/udf-name.
-    async fn add_udf(
-        &self,
-        udf: UserDefinedFunction,
-        create_option: &CreateOption,
-    ) -> Result<(), ErrorCode>;
-
-    // Update a UDF to /tenant/udf-name.
-    async fn update_udf(&self, udf: UserDefinedFunction, seq: MatchSeq) -> Result<u64, ErrorCode>;
-
-    // Get UDF by name.
-    async fn get_udf(&self, udf_name: &str) -> Result<SeqV<UserDefinedFunction>, ErrorCode>;
-
-    // Get all the UDFs for a tenant.
-    async fn get_udfs(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode>;
-
-    /// Drop the tenant's UDF by name, return the dropped one or None if nothing is dropped.
-    async fn drop_udf(
-        &self,
-        udf_name: &str,
-        seq: MatchSeq,
-    ) -> Result<Option<SeqV<UserDefinedFunction>>, MetaError>;
 }
