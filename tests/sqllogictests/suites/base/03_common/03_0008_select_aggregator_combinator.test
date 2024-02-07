@@ -19,7 +19,7 @@ select approx_count_distinct(0.01625)(number) from ( select number % 100 as numb
 ----
 98
 
-query ?
+query I
 select sum_distinct(number) /  count_distinct(number) = avg_distinct(number) from ( select number % 100 as number from numbers(100000))
 ----
 1
@@ -29,7 +29,7 @@ select sum_if(number, number >= 100000 - 1) from numbers(100000)
 ----
 99999
 
-query ?
+query I
 select sum_if(number, number > 100) /  count_if(number,  number > 100) = avg_if(number,  number > 100) from numbers(100000)
 ----
 1
@@ -46,7 +46,7 @@ select sum((number > 314)::uint32) from numbers(1000)
 ----
 685
 
-query ?
+query I
 select avg((number > 314)::uint32) from numbers(1000)
 ----
 0.685
