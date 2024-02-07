@@ -423,7 +423,7 @@ impl InteractiveWorkerBase {
             || "Cannot join handle from context's runtime",
         )?;
         if query_result.is_err() {
-            context.txn_manager().write().set_fail();
+            context.txn_mgr().lock().unwrap().set_fail();
         }
         let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
             as Box<dyn ProgressReporter + Send>;

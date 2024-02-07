@@ -396,7 +396,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn txn_manager(&self) -> Arc<RwLock<TxnManager>> {
+    fn txn_mgr(&self) -> Arc<RwLock<TxnManager>> {
         todo!()
     }
 

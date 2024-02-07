@@ -52,7 +52,7 @@ impl CatalogInfoProvider {
     ) -> databend_common_exception::Result<(Vec<String>, Vec<String>, Vec<String>, Vec<String>)>
     {
         let tenant = ctx.get_tenant();
-        let catalog_mgr = CatalogManager::instance();
+        let catalog_mgr = CatalogManager::instance(Some(ctx.txn_mgr()));
         let catalogs: Vec<(String, Arc<dyn Catalog>)> = if let Some(catalog_name) = catalog_name {
             vec![(
                 catalog_name.clone(),

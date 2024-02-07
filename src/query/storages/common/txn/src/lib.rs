@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+use std::sync::Mutex;
+
 pub struct TxnManager {
     state: TxnState,
     txn_buffer: TxnBuffer,
 }
+
+pub type TxnManagerRef = Arc<Mutex<TxnManager>>;
 
 pub enum TxnState {
     AutoCommit,

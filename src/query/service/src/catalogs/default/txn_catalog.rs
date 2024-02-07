@@ -13,12 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::cell::RefCell;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use databend_common_catalog::catalog::Catalog;
-use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -30,7 +31,6 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
@@ -94,6 +94,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
+use databend_storages_common_txn::TxnManagerRef;
 use log::info;
 
 use crate::catalogs::default::catalog_context::CatalogContext;
@@ -108,6 +109,7 @@ use crate::storages::Table;
 #[derive(Clone)]
 pub struct TxnCatalog {
     inner: MutableCatalog,
+    txn_mgr: Arc<Mutex<Option<TxnManagerRef>>>,
 }
 
 impl Debug for TxnCatalog {
@@ -118,7 +120,10 @@ impl Debug for TxnCatalog {
 
 impl TxnCatalog {
     pub fn create(inner: MutableCatalog) -> Self {
-        TxnCatalog { inner }
+        TxnCatalog {
+            inner,
+            txn_mgr: Arc::new(Mutex::new(None)),
+        }
     }
 }
 
@@ -362,5 +367,10 @@ impl Catalog for TxnCatalog {
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         todo!()
+    }
+
+    fn set_txn_manager(&self, txn_mgr: Option<TxnManagerRef>) {
+        let mut guard = self.txn_mgr.lock().unwrap();
+        *guard = txn_mgr;
     }
 }

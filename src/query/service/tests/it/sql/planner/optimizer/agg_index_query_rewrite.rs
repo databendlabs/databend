@@ -543,7 +543,7 @@ async fn plan_sql(
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let binder = Binder::new(
         ctx.clone(),
-        CatalogManager::instance(),
+        CatalogManager::instance(Some(ctx.txn_mgr())),
         name_resolution_ctx,
         metadata,
     );

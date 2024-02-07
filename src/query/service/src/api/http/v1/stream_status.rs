@@ -40,7 +40,7 @@ async fn check_stream_status(
     tenant: &str,
     params: Query<StreamStatusQuery>,
 ) -> Result<StreamStatusResponse> {
-    let catalog = CatalogManager::instance().get_default_catalog()?;
+    let catalog = CatalogManager::instance(None).get_default_catalog()?;
     let db_name = params.database.clone().unwrap_or("default".to_string());
     let tbl = catalog
         .get_table(tenant, &db_name, &params.stream_name)

@@ -82,6 +82,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::MetaId;
+use databend_storages_common_txn::TxnManagerRef;
 use dyn_clone::DynClone;
 
 use crate::database::Database;
@@ -308,6 +309,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
+        unimplemented!()
+    }
+
+    fn set_txn_manager(&self, _txn_manager: Option<TxnManagerRef>){
         unimplemented!()
     }
 }

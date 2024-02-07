@@ -104,7 +104,7 @@ where TablesTable<T>: HistoryAware
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let catalog_mgr = CatalogManager::instance();
+        let catalog_mgr = CatalogManager::instance(None);
         let catalogs = catalog_mgr.list_catalogs(&tenant).await?;
         let visibility_checker = ctx.get_visibility_checker().await?;
 

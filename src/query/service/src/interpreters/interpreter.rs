@@ -66,9 +66,9 @@ pub trait Interpreter: Sync + Send {
             return Err(err);
         }
         if self.is_ddl() {
-            ctx.txn_manager().write().commit();
+            ctx.txn_mgr().lock().unwrap().commit();
         }
-        if !self.is_txn_command() && ctx.txn_manager().read().is_fail() {
+        if !self.is_txn_command() && ctx.txn_mgr().lock().unwrap().is_fail() {
             let error = ErrorCode::CurrentTransactionIsAborted(
                 "current transaction is aborted, commands ignored until end of transaction block",
             );

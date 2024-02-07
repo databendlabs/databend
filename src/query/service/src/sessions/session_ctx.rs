@@ -17,6 +17,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::Weak;
 
 use databend_common_config::GlobalConfig;
@@ -64,7 +65,7 @@ pub struct SessionContext {
     // query result through previous query_id easily.
     query_ids_results: RwLock<Vec<(String, Option<String>)>>,
     typ: SessionType,
-    txn_manager: Arc<RwLock<TxnManager>>,
+    txn_mgr: Arc<Mutex<TxnManager>>,
 }
 
 impl SessionContext {
@@ -84,7 +85,7 @@ impl SessionContext {
             query_context_shared: Default::default(),
             query_ids_results: Default::default(),
             typ,
-            txn_manager: Arc::new(RwLock::new(TxnManager::init())),
+            txn_mgr: Arc::new(Mutex::new(TxnManager::init())),
         }))
     }
 
@@ -290,7 +291,7 @@ impl SessionContext {
         HashSet::from_iter(lock.iter().map(|result| result.clone().0))
     }
 
-    pub fn txn_manager(&self) -> Arc<RwLock<TxnManager>> {
-        self.txn_manager.clone()
+    pub fn txn_mgr(&self) -> Arc<Mutex<TxnManager>> {
+        self.txn_mgr.clone()
     }
 }

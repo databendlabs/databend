@@ -17,19 +17,20 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_txn::TxnManager;
+use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::RwLock;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 pub struct CommitInterpreter {
-    txn_manager: Arc<RwLock<TxnManager>>,
+    txn_manager: TxnManagerRef,
 }
 
 impl CommitInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
         Ok(Self {
-            txn_manager: ctx.txn_manager(),
+            txn_manager: ctx.txn_mgr(),
         })
     }
 }
@@ -50,7 +51,7 @@ impl Interpreter for CommitInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        self.txn_manager.write().commit();
+        self.txn_manager.lock().unwrap().commit();
         Ok(PipelineBuildResult::create())
     }
 }

@@ -92,6 +92,7 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_txn::TxnManager;
+use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
@@ -996,8 +997,8 @@ impl TableContext for QueryContext {
         false
     }
 
-    fn txn_manager(&self) -> Arc<RwLock<TxnManager>> {
-        self.shared.session.session_ctx.txn_manager()
+    fn txn_mgr(&self) -> TxnManagerRef {
+        self.shared.session.session_ctx.txn_mgr()
     }
 }
 
