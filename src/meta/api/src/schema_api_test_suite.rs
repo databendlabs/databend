@@ -64,6 +64,7 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
@@ -3639,7 +3640,7 @@ impl SchemaApiTestSuite {
         }
 
         let agg_index_create_req = CreateIndexReq {
-            if_not_exists: true,
+            create_option: CreateOption::CreateIfNotExists(true),
             name_ident: IndexNameIdent {
                 tenant: tenant.to_string(),
                 index_name: idx1_name.to_string(),
@@ -5704,7 +5705,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create index");
             let req = CreateIndexReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -5713,7 +5714,7 @@ impl SchemaApiTestSuite {
             index_id = res.index_id;
 
             let req = CreateIndexReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: name_ident_2.clone(),
                 meta: index_meta_2.clone(),
             };
@@ -5724,7 +5725,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create index again with if_not_exists = false");
             let req = CreateIndexReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -5739,7 +5740,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create index again with if_not_exists = true");
             let req = CreateIndexReq {
-                if_not_exists: true,
+                create_option: CreateOption::CreateIfNotExists(true),
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -5854,6 +5855,43 @@ impl SchemaApiTestSuite {
 
             let res = mt.drop_index(req).await;
             assert!(res.is_ok())
+        }
+
+        // create or replace index
+        {
+            info!("--- create or replace index");
+            let replace_index_name = "replace_idx";
+            let replace_name_ident = IndexNameIdent {
+                tenant: tenant.to_string(),
+                index_name: replace_index_name.to_string(),
+            };
+            let req = CreateIndexReq {
+                create_option: CreateOption::CreateIfNotExists(false),
+                name_ident: replace_name_ident.clone(),
+                meta: index_meta_1.clone(),
+            };
+
+            let get_req = GetIndexReq {
+                name_ident: replace_name_ident.clone(),
+            };
+
+            let _res = mt.create_index(req).await?;
+
+            let resp = mt.get_index(get_req.clone()).await?;
+
+            assert_eq!(resp.index_meta, index_meta_1);
+
+            let req = CreateIndexReq {
+                create_option: CreateOption::CreateOrReplace,
+                name_ident: replace_name_ident.clone(),
+                meta: index_meta_2.clone(),
+            };
+
+            let _res = mt.create_index(req).await?;
+
+            let resp = mt.get_index(get_req).await?;
+
+            assert_eq!(resp.index_meta, index_meta_2);
         }
 
         Ok(())
