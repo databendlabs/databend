@@ -2937,11 +2937,9 @@ impl<'a> TypeChecker<'a> {
 
         let udf = UserApiProvider::instance()
             .get_udf(self.ctx.get_tenant().as_str(), udf_name)
-            .await;
+            .await?;
 
-        let udf = if let Ok(udf) = udf {
-            udf
-        } else {
+        let Some(udf) = udf else {
             return Ok(None);
         };
 

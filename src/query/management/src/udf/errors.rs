@@ -17,25 +17,37 @@ use databend_common_meta_types::MetaError;
 
 use crate::errors::TenantError;
 
+/// UDF logic error, unrelated to the backend service providing UDF management, or dependent component.
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum UdfError {
-    #[error("TenantError: '{0}'")]
-    TenantError(#[from] TenantError),
-
     #[error("UDF not found: '{tenant}/{name}'")]
     NotFound { tenant: String, name: String },
-
-    #[error("MetaService error: {0}")]
-    MetaError(#[from] MetaError),
 }
 
 impl From<UdfError> for ErrorCode {
     fn from(value: UdfError) -> Self {
         let s = value.to_string();
         match value {
-            UdfError::TenantError(e) => ErrorCode::from(e),
             UdfError::NotFound { .. } => ErrorCode::UnknownUDF(s),
-            UdfError::MetaError(meta_err) => ErrorCode::from(meta_err),
+        }
+    }
+}
+
+/// The error occurred during accessing API providing UDF management.
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum UdfApiError {
+    #[error("TenantError: '{0}'")]
+    TenantError(#[from] TenantError),
+
+    #[error("MetaService error: {0}")]
+    MetaError(#[from] MetaError),
+}
+
+impl From<UdfApiError> for ErrorCode {
+    fn from(value: UdfApiError) -> Self {
+        match value {
+            UdfApiError::TenantError(e) => ErrorCode::from(e),
+            UdfApiError::MetaError(meta_err) => ErrorCode::from(meta_err),
         }
     }
 }
