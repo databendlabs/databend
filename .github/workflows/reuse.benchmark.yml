@@ -48,9 +48,8 @@ jobs:
     strategy:
       matrix:
         dataset:
-          - dummy
           - internal
-          - hits
+          # - hits
       fail-fast: true
       max-parallel: 1
     steps:
@@ -86,7 +85,7 @@ jobs:
           databend-query --version
           databend-meta --version
       - uses: ./.github/actions/benchmark_local
-        if: (inputs.target == 'local' || inputs.target == 'all') && matrix.dataset != 'dummy'
+        if: inputs.target == 'local' || inputs.target == 'all'
         timeout-minutes: 30
         id: benchmark
         with:
@@ -101,7 +100,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - { dataset: dummy, size: Small }
           - { dataset: hits, size: Small }
           - { dataset: hits, size: Large }
           - { dataset: tpch, size: Small }
@@ -117,7 +115,7 @@ jobs:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
-        if: (inputs.target == 'cloud' || inputs.target == 'all') && matrix.dataset != 'dummy'
+        if: inputs.target == 'cloud' || inputs.target == 'all'
         timeout-minutes: 20
         id: benchmark
         with:
@@ -148,8 +146,9 @@ jobs:
           path: benchmark/clickbench/results
       - name: Get Report Prefix
         run: |
-          for result in benchmark/clickbench/results/hits/*.json; do
-            dataset=$(echo $result | sed -E 's/.*result-(.*)-.*\.json/\1/')
+          for result in benchmark/clickbench/results/*.json; do
+            dataset=$(echo $result | sed -E 's/.*result-(\w+)-.*\.json/\1/')
+            mkdir -p benchmark/clickbench/results/${dataset}/
             mv $result benchmark/clickbench/results/${dataset}/$(basename $result)
           done
           echo "REPORT_S3_PREFIX=s3://benchmark/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}" >> $GITHUB_ENV
@@ -162,14 +161,15 @@ jobs:
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         working-directory: benchmark/clickbench
         run: |
-          body="## ClickBench Report\n"
+          body="## ClickBench Report"
           for p in results/*; do
             dataset=$(basename $p)
             aws s3 sync results/$dataset/ ${REPORT_S3_PREFIX}/ --include "*.json"
             aws s3 sync "s3://benchmark/clickbench/release/${dataset}/latest/" ./results/${dataset}/ --exclude "*" --include "*.json"
             ./update_results.py --dataset $dataset --pr ${{ inputs.source_id }}
             aws s3 cp ./results/${dataset}.html ${REPORT_S3_PREFIX}/${dataset}.html
-            body+="* **${dataset}**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/${dataset}.html\n"
+            body+="
+            * **${dataset}**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/${dataset}.html"
           done
           echo "body=$body" >> $GITHUB_OUTPUT
       - name: Comment on PR

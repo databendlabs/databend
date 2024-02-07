@@ -36,6 +36,17 @@
 
 **Databend** is an open-source, elastic, and workload-aware cloud data warehouse built in Rust, offering a cost-effective [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059). It's designed for complex analysis of the world's largest datasets.
 
+## ⚡ Performance
+
+<div align="center">
+  
+[TPC-H Benchmark: Databend Cloud vs. Snowflake](https://docs.databend.com/guides/benchmark/tpch)
+
+</div>
+
+![Databend vs. Snowflake](https://github.com/datafuselabs/wizard/assets/172204/d796acf0-0a66-4b1d-8754-cd2cd1de04c7)
+
+
 ## 🚀 Why Databend
 
 - **Cloud-Friendly**: Seamlessly integrates with various cloud storages like AWS S3, Azure Blob, Google Cloud, and more.

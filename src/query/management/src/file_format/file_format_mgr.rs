@@ -18,6 +18,7 @@ use databend_common_base::base::escape_for_key;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedFileFormat;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
@@ -60,8 +61,12 @@ impl FileFormatMgr {
 impl FileFormatApi for FileFormatMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_file_format(&self, info: UserDefinedFileFormat) -> Result<u64> {
-        let seq = MatchSeq::Exact(0);
+    async fn add_file_format(
+        &self,
+        info: UserDefinedFileFormat,
+        create_option: &CreateOption,
+    ) -> Result<()> {
+        let seq = MatchSeq::from(*create_option);
         let val = Operation::Update(serialize_struct(
             &info,
             ErrorCode::IllegalFileFormat,
@@ -72,18 +77,21 @@ impl FileFormatApi for FileFormatMgr {
             self.file_format_prefix,
             escape_for_key(&info.name)?
         );
-        let upsert_info = self
+        let res = self
             .kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
+            .upsert_kv(UpsertKVReq::new(&key, seq, val, None))
+            .await?;
 
-        let res_seq = upsert_info.await?.added_seq_or_else(|_v| {
-            ErrorCode::FileFormatAlreadyExists(format!(
-                "File format '{}' already exists.",
-                info.name
-            ))
-        })?;
+        if let CreateOption::CreateIfNotExists(false) = create_option {
+            if res.prev.is_some() {
+                return Err(ErrorCode::FileFormatAlreadyExists(format!(
+                    "File format '{}' already exists.",
+                    info.name
+                )));
+            }
+        }
 
-        Ok(res_seq)
+        Ok(())
     }
 
     #[async_backtrace::framed]

@@ -17,20 +17,19 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::is_builtin_function;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::principal::UdfName;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
+use futures::stream::TryStreamExt;
 
-use crate::serde::deserialize_struct;
-use crate::serde::serialize_struct;
 use crate::udf::UdfApi;
 
 pub struct UdfMgr {
@@ -68,9 +67,8 @@ impl UdfApi for UdfMgr {
         let seq = MatchSeq::from(*create_option);
 
         let key = UdfName::new(&self.tenant, &info.name);
-        let value = serialize_struct(&info, ErrorCode::IllegalUDFFormat, || "")?;
-        let req = UpsertKV::insert(key.to_string_key(), &value).with(seq);
-        let res = self.kv_api.upsert_kv(req).await?;
+        let req = UpsertPB::insert(key, info.clone()).with(seq);
+        let res = self.kv_api.upsert_pb(&req).await?;
 
         if let CreateOption::CreateIfNotExists(false) = create_option {
             if res.prev.is_some() {
@@ -87,6 +85,7 @@ impl UdfApi for UdfMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn update_udf(&self, info: UserDefinedFunction, seq: MatchSeq) -> Result<u64> {
+        // TODO: add ensure_not_builtin_function()
         if is_builtin_function(info.name.as_str()) {
             return Err(ErrorCode::UdfAlreadyExists(format!(
                 "Cannot add UDF '{}': name conflicts with a built-in function.",
@@ -94,66 +93,39 @@ impl UdfApi for UdfMgr {
             )));
         }
 
-        // TODO: remove get_udf(), check if the UDF exists after upsert_kv()
-        // Check if UDF is defined
-        let _ = self.get_udf(info.name.as_str(), seq).await?;
-
         let key = UdfName::new(&self.tenant, &info.name);
-        // TODO: these logic are reppeated several times, consider to extract them.
-        // TODO: add a new trait PBKVApi for the common logic that saves pb values in kvapi.
-        let value = serialize_struct(&info, ErrorCode::IllegalUDFFormat, || "")?;
-        let req = UpsertKV::update(key.to_string_key(), &value).with(seq);
-        let res = self.kv_api.upsert_kv(req).await?;
-
-        match res.result {
-            Some(SeqV { seq: s, .. }) => Ok(s),
-            None => Err(ErrorCode::UnknownUDF(format!(
+        let req = UpsertPB::update(key, info.clone()).with(seq);
+        let res = self.kv_api.upsert_pb(&req).await?;
+        if res.is_changed() {
+            Ok(res.result.unwrap().seq)
+        } else {
+            Err(ErrorCode::UnknownUDF(format!(
                 "UDF '{}' does not exist.",
-                info.name.clone()
-            ))),
+                info.name
+            )))
         }
     }
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<SeqV<UserDefinedFunction>> {
-        // TODO: get() does not need seq
-        let key = UdfName::new(&self.tenant, udf_name);
-        let res = self.kv_api.get_kv(&key.to_string_key()).await?;
+    async fn get_udf(&self, udf_name: &str) -> Result<SeqV<UserDefinedFunction>> {
+        // TODO: do not return ErrorCode, return UDFError
 
-        let seq_value = res
+        let key = UdfName::new(&self.tenant, udf_name);
+        let res = self.kv_api.get_pb(&key).await?;
+
+        let seqv = res
             .ok_or_else(|| ErrorCode::UnknownUDF(format!("UDF '{}' does not exist.", udf_name)))?;
 
-        match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(SeqV::with_meta(
-                seq_value.seq,
-                seq_value.meta.clone(),
-                deserialize_struct(&seq_value.data, ErrorCode::IllegalUDFFormat, || "")?,
-            )),
-            Err(_) => Err(ErrorCode::UnknownUDF(format!(
-                "UDF '{}' does not exist.",
-                udf_name
-            ))),
-        }
+        Ok(seqv)
     }
 
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_udfs(&self) -> Result<Vec<UserDefinedFunction>> {
-        let key = UdfName::new(&self.tenant, "");
-        // TODO: use list_kv instead.
-        let values = self.kv_api.prefix_list_kv(&key.to_string_key()).await?;
-
-        let mut udfs = Vec::with_capacity(values.len());
-        for (name, value) in values {
-            let udf = deserialize_struct(&value.data, ErrorCode::IllegalUDFFormat, || {
-                format!(
-                    "Failed to deserialize UDF '{}': data format is corrupt or invalid.",
-                    name
-                )
-            })?;
-            udfs.push(udf);
-        }
+        let key = DirName::new(UdfName::new(&self.tenant, ""));
+        let strm = self.kv_api.list_pb_values(&key).await?;
+        let udfs = strm.try_collect().await?;
         Ok(udfs)
     }
 
@@ -161,10 +133,10 @@ impl UdfApi for UdfMgr {
     #[minitrace::trace]
     async fn drop_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<()> {
         let key = UdfName::new(&self.tenant, udf_name);
-        let req = UpsertKV::delete(key.to_string_key()).with(seq);
-        let res = self.kv_api.upsert_kv(req).await?;
+        let req = UpsertPB::delete(key).with(seq);
+        let res = self.kv_api.upsert_pb(&req).await?;
 
-        if res.prev.is_some() && res.result.is_none() {
+        if res.is_changed() {
             Ok(())
         } else {
             Err(ErrorCode::UnknownUDF(format!(

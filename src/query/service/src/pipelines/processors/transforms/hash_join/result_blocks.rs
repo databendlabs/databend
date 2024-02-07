@@ -56,10 +56,26 @@ impl HashJoinProbeState {
             .other_predicate
             .is_none();
         match self.hash_join_state.hash_join_desc.join_type {
-            JoinType::Inner => self.inner_join(input, keys, hash_table, probe_state),
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full => match has_other_predicate {
-                true => self.left_join(input, keys, hash_table, probe_state),
-                false => self.left_join_with_conjunct(input, keys, hash_table, probe_state),
+            JoinType::Inner => match self.hash_join_state.hash_join_desc.original_join_type {
+                Some(JoinType::LeftSingle) => {
+                    self.inner_join::<_, true, false>(input, keys, hash_table, probe_state)
+                }
+                Some(JoinType::RightSingle) => {
+                    self.inner_join::<_, false, true>(input, keys, hash_table, probe_state)
+                }
+                _ => self.inner_join::<_, false, false>(input, keys, hash_table, probe_state),
+            },
+            JoinType::Left | JoinType::Full => match has_other_predicate {
+                true => self.left_join::<_, false>(input, keys, hash_table, probe_state),
+                false => {
+                    self.left_join_with_conjunct::<_, false>(input, keys, hash_table, probe_state)
+                }
+            },
+            JoinType::LeftSingle => match has_other_predicate {
+                true => self.left_join::<_, true>(input, keys, hash_table, probe_state),
+                false => {
+                    self.left_join_with_conjunct::<_, true>(input, keys, hash_table, probe_state)
+                }
             },
             JoinType::LeftSemi => match has_other_predicate {
                 true => self.left_semi_join(input, keys, hash_table, probe_state),
