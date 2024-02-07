@@ -67,7 +67,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_udfs(&self, tenant: &str) -> Result<Vec<UserDefinedFunction>> {
         let udf_api_client = self.udf_api(tenant)?;
-        let get_udfs = udf_api_client.get_udfs();
+        let get_udfs = udf_api_client.list_udf();
 
         match get_udfs.await {
             Err(e) => Err(e.add_message_back("(while get UDFs).")),

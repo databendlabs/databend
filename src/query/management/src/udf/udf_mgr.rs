@@ -116,7 +116,7 @@ impl UdfMgr {
     /// Get all the UDFs for a tenant.
     #[async_backtrace::framed]
     #[minitrace::trace]
-    pub async fn get_udfs(&self) -> Result<Vec<UserDefinedFunction>> {
+    pub async fn list_udf(&self) -> Result<Vec<UserDefinedFunction>> {
         let key = DirName::new(UdfName::new(&self.tenant, ""));
         let strm = self.kv_api.list_pb_values(&key).await?;
         let udfs = strm.try_collect().await?;
