@@ -180,7 +180,7 @@ impl PhysicalPlanBuilder {
             .collect::<Vec<_>>();
 
         Ok(PhysicalPlan::UnionAll(UnionAll {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             left: Box::new(left_plan),
             right: Box::new(right_plan),
             pairs,
