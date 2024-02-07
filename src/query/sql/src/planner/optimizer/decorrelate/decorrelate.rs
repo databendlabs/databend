@@ -36,6 +36,7 @@ use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
@@ -268,11 +269,13 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                 )?;
 
-                let join_type = if subquery.contain_agg.unwrap() {
-                    JoinType::Left
-                } else {
-                    JoinType::LeftSingle
-                };
+                let mut join_type = JoinType::LeftSingle;
+                if subquery.contain_agg.unwrap() {
+                    // Check if contains group by in subquery
+                    if !contain_group_by(&subquery.subquery) {
+                        join_type = JoinType::Left;
+                    }
+                }
 
                 let join_plan = Join {
                     left_conditions,
@@ -494,4 +497,19 @@ impl SubqueryRewriter {
             true
         }))
     }
+}
+
+// Check if contain group by in subquery
+fn contain_group_by(subquery: &SExpr) -> bool {
+    if let RelOperator::Aggregate(aggregate) = subquery.plan() {
+        if !aggregate.group_items.is_empty() {
+            return true;
+        }
+    }
+    for child in subquery.children() {
+        if contain_group_by(child) {
+            return true;
+        }
+    }
+    false
 }
