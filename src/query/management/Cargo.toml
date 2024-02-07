@@ -32,6 +32,7 @@ minitrace = { workspace = true }
 prost = { workspace = true }
 serde = "1.0.150"
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 databend-common-expression = { path = "../../query/expression" }

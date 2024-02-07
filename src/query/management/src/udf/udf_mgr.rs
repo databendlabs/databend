@@ -30,6 +30,7 @@ use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
 use futures::stream::TryStreamExt;
 
+use crate::errors::TenantError;
 use crate::udf::UdfApi;
 
 pub struct UdfMgr {
@@ -38,17 +39,30 @@ pub struct UdfMgr {
 }
 
 impl UdfMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &str) -> Result<Self> {
+    pub fn create(
+        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
+        tenant: &str,
+    ) -> std::result::Result<Self, TenantError> {
         if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while udf mgr create)",
-            ));
+            return Err(TenantError::CanNotBeEmpty {
+                context: "create UdfMgr".to_string(),
+            });
         }
 
         Ok(UdfMgr {
             kv_api,
             tenant: tenant.to_string(),
         })
+    }
+
+    pub fn ensure_non_builtin(name: &str) -> Result<(), ErrorCode> {
+        if is_builtin_function(name) {
+            return Err(ErrorCode::UdfAlreadyExists(format!(
+                "It's a builtin function: {}",
+                name
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -57,12 +71,7 @@ impl UdfApi for UdfMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn add_udf(&self, info: UserDefinedFunction, create_option: &CreateOption) -> Result<()> {
-        if is_builtin_function(info.name.as_str()) {
-            return Err(ErrorCode::UdfAlreadyExists(format!(
-                "It's a builtin function: {}",
-                info.name.as_str()
-            )));
-        }
+        Self::ensure_non_builtin(info.name.as_str())?;
 
         let seq = MatchSeq::from(*create_option);
 
@@ -85,13 +94,7 @@ impl UdfApi for UdfMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn update_udf(&self, info: UserDefinedFunction, seq: MatchSeq) -> Result<u64> {
-        // TODO: add ensure_not_builtin_function()
-        if is_builtin_function(info.name.as_str()) {
-            return Err(ErrorCode::UdfAlreadyExists(format!(
-                "Cannot add UDF '{}': name conflicts with a built-in function.",
-                info.name
-            )));
-        }
+        Self::ensure_non_builtin(info.name.as_str())?;
 
         let key = UdfName::new(&self.tenant, &info.name);
         let req = UpsertPB::update(key, info.clone()).with(seq);
@@ -131,18 +134,19 @@ impl UdfApi for UdfMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn drop_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<()> {
+    async fn drop_udf(
+        &self,
+        udf_name: &str,
+        seq: MatchSeq,
+    ) -> std::result::Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
         let key = UdfName::new(&self.tenant, udf_name);
         let req = UpsertPB::delete(key).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
         if res.is_changed() {
-            Ok(())
+            Ok(res.prev)
         } else {
-            Err(ErrorCode::UnknownUDF(format!(
-                "UDF '{}' does not exist.",
-                udf_name
-            )))
+            Ok(None)
         }
     }
 }

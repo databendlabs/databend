@@ -99,6 +99,8 @@ fn test_statement() {
         r#"explain pipeline select a from t1 ignore_result;"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
+        r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
+        r#"CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
         r#"create table a (c decimal(38, 0))"#,
         r#"create table a (c decimal(38))"#,
         r#"create or replace table a (c decimal(38))"#,
