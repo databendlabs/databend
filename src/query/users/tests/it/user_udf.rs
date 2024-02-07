@@ -70,25 +70,25 @@ async fn test_user_lambda_udf() -> Result<()> {
     // get.
     {
         let udf = user_mgr.get_udf(tenant, isempty).await?;
-        assert_eq!(udf, isempty_udf.clone());
+        assert_eq!(udf, Some(isempty_udf.clone()));
     }
 
     // drop.
     {
-        user_mgr.drop_udf(tenant, isnotempty, false).await?;
+        user_mgr.drop_udf(tenant, isnotempty, false).await??;
         let udfs = user_mgr.get_udfs(tenant).await?;
         assert_eq!(udfs, vec![isempty_udf]);
     }
 
     // repeat drop same one not with if exist.
     {
-        let res = user_mgr.drop_udf(tenant, isnotempty, false).await;
+        let res = user_mgr.drop_udf(tenant, isnotempty, false).await?;
         assert!(res.is_err());
     }
 
     // repeat drop same one with if exist.
     {
-        let res = user_mgr.drop_udf(tenant, isnotempty, true).await;
+        let res = user_mgr.drop_udf(tenant, isnotempty, true).await?;
         assert!(res.is_ok());
     }
 
@@ -153,25 +153,25 @@ async fn test_user_udf_server() -> Result<()> {
     // get.
     {
         let udf = user_mgr.get_udf(tenant, isempty).await?;
-        assert_eq!(udf, isempty_udf.clone());
+        assert_eq!(udf, Some(isempty_udf.clone()));
     }
 
     // drop.
     {
-        user_mgr.drop_udf(tenant, isnotempty, false).await?;
+        user_mgr.drop_udf(tenant, isnotempty, false).await??;
         let udfs = user_mgr.get_udfs(tenant).await?;
         assert_eq!(udfs, vec![isempty_udf]);
     }
 
     // repeat drop same one not with if exist.
     {
-        let res = user_mgr.drop_udf(tenant, isnotempty, false).await;
+        let res = user_mgr.drop_udf(tenant, isnotempty, false).await?;
         assert!(res.is_err());
     }
 
     // repeat drop same one with if exist.
     {
-        let res = user_mgr.drop_udf(tenant, isnotempty, true).await;
+        let res = user_mgr.drop_udf(tenant, isnotempty, true).await?;
         assert!(res.is_ok());
     }
 

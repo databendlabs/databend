@@ -14,7 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 
-/// Error related to tenant operation
+/// Error related to tenant, unrelated to the backend service providing tenant management.
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum TenantError {
     #[error("tenant can not be empty string, while {context}")]

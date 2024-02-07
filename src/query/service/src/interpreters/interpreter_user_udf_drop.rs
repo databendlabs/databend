@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_management::udf::UdfError;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropUDFPlan;
@@ -68,9 +69,11 @@ impl Interpreter for DropUserUDFInterpreter {
             RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
+        // TODO: if it is appropriate to return an ErrorCode that contains either meta-service error and UdfNotFound error?
+
         UserApiProvider::instance()
             .drop_udf(&tenant, plan.udf.as_str(), plan.if_exists)
-            .await?;
+            .await??;
 
         Ok(PipelineBuildResult::create())
     }

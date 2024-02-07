@@ -104,16 +104,13 @@ impl UdfMgr {
     /// Get UDF by name.
     #[async_backtrace::framed]
     #[minitrace::trace]
-    pub async fn get_udf(&self, udf_name: &str) -> Result<SeqV<UserDefinedFunction>> {
-        // TODO: do not return ErrorCode, return UDFError
-
+    pub async fn get_udf(
+        &self,
+        udf_name: &str,
+    ) -> std::result::Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
         let key = UdfName::new(&self.tenant, udf_name);
         let res = self.kv_api.get_pb(&key).await?;
-
-        let seqv = res
-            .ok_or_else(|| ErrorCode::UnknownUDF(format!("UDF '{}' does not exist.", udf_name)))?;
-
-        Ok(seqv)
+        Ok(res)
     }
 
     /// Get all the UDFs for a tenant.

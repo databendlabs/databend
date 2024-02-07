@@ -15,5 +15,6 @@
 mod errors;
 mod udf_mgr;
 
+pub use errors::UdfApiError;
 pub use errors::UdfError;
 pub use udf_mgr::UdfMgr;
