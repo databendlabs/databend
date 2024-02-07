@@ -161,23 +161,21 @@ jobs:
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         working-directory: benchmark/clickbench
         run: |
-          body="## ClickBench Report"
+          echo -e "## ClickBench Report\n" > /tmp/body
           for p in results/*; do
             dataset=$(basename $p)
             aws s3 sync results/$dataset/ ${REPORT_S3_PREFIX}/ --include "*.json"
             aws s3 sync "s3://benchmark/clickbench/release/${dataset}/latest/" ./results/${dataset}/ --exclude "*" --include "*.json"
             ./update_results.py --dataset $dataset --pr ${{ inputs.source_id }}
             aws s3 cp ./results/${dataset}.html ${REPORT_S3_PREFIX}/${dataset}.html
-            body+="
-            * **${dataset}**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/${dataset}.html"
+            echo "* **${dataset}**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/${dataset}.html" >> /tmp/body
           done
-          echo "body=$body" >> $GITHUB_OUTPUT
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1
         with:
-          number: ${{ inputs.source_id }}
           token: ${{ github.token }}
-          body: ${{ steps.result.outputs.body }}
+          files: /tmp/body
+          number: ${{ inputs.source_id }}
 
   archive:
     needs: [local, cloud]
