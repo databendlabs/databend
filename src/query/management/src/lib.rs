@@ -50,7 +50,6 @@ pub use setting::SettingApi;
 pub use setting::SettingMgr;
 pub use stage::StageApi;
 pub use stage::StageMgr;
-pub use udf::UdfApi;
 pub use udf::UdfError;
 pub use udf::UdfMgr;
 pub use user::UserApi;
