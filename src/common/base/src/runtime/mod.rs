@@ -30,6 +30,8 @@ pub use global_runtime::GlobalQueryRuntime;
 pub use runtime::execute_futures_in_parallel;
 pub use runtime::match_join_handle;
 pub use runtime::spawn;
+pub use runtime::spawn_blocking;
+pub use runtime::spawn_local;
 pub use runtime::Dropper;
 pub use runtime::Runtime;
 pub use runtime::TrySpawn;

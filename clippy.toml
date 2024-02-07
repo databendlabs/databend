@@ -7,11 +7,24 @@ disallowed-methods = [
     { path = "tokio::spawn", reason = "Please use `databend_common_base::runtime::spawn` instead." },
     { path = "tokio::task::spawn", reason = "Please use `databend_common_base::runtime::spawn` instead." },
     { path = "tokio::runtime::Handle::spawn", reason = "Please use `databend_common_base::runtime::spawn` instead." },
+    { path = "tokio::runtime::Runtime::spawn", reason = "Please use `databend_common_base::runtime::Runtime::spawn` instead." },
+
+    { path = "tokio::task::spawn_local", reason = "Please use `databend_common_base::runtime::spawn_local` instead." },
+
+    { path = "tokio::task::spawn_blocking", reason = "Please use `databend_common_base::runtime::spawn_blocking` instead." },
+    { path = "tokio::runtime::Handle::spawn_blocking", reason = "Please use `databend_common_base::runtime::spawn_blocking` instead." },
+    { path = "tokio::runtime::Runtime::spawn_blocking", reason = "Please use `databend_common_base::runtime::Runtime::spawn_blocking` instead." },
+
     { path = "std::thread::spawn", reason = "Please use `databend_common_base::runtime::Thread::spawn` instead." },
 ]
 
 disallowed-types = [
     { path = "once_cell::sync::Lazy", reason = "Please use `std::sync::LazyLock` instead." },
+
+    { path = "tokio::task::Builder", reason = "Disallowed types, please remove it." },
+    { path = "tokio::task::LocalSet", reason = "Disallowed types, please remove it." },
+    { path = "tokio::task::join_set::JoinSet", reason = "Disallowed types, please remove it." },
+    { path = "tokio::task::join_set::Builder", reason = "Disallowed types, please remove it." },
 ]
 
 disallowed-macros = [

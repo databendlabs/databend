@@ -282,6 +282,7 @@ impl Runtime {
         F: FnOnce() -> Result<R> + Send + 'static,
         R: Send + 'static,
     {
+        #[allow(clippy::disallowed_methods)]
         match_join_handle(self.handle.spawn_blocking(f)).await
     }
 }
@@ -413,3 +414,48 @@ where
         .frame(future),
     )
 }
+
+#[track_caller]
+pub fn spawn_local<F>(future: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    // NOTE:
+    // Frame name: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=689fbc84ab4be894c0cdd285bea24845
+    // Frame location: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=3ae3a2295607628ce95f0a34a566847b
+
+    let frame_name = std::any::type_name::<F>()
+        .trim_end_matches("::{{closure}}")
+        .to_string();
+    let frame_location = std::panic::Location::caller();
+
+    #[expect(clippy::disallowed_methods)]
+    tokio::task::spawn_local(
+        async_backtrace::location!(
+            frame_name,
+            frame_location.file(),
+            frame_location.line(),
+            frame_location.column()
+        )
+        .frame(future),
+    )
+}
+
+#[track_caller]
+pub fn spawn_blocking<F, R>(f: F) -> Result<tokio::task::JoinHandle<R>, F>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    match tokio::runtime::Handle::try_current() {
+        #[expect(clippy::disallowed_methods)]
+        Ok(handler) => Ok(handler.spawn_blocking(f)),
+        Err(_) => Err(f),
+    }
+}
+
+// pub fn block_on() {
+//     // let handler = tokio::runtime::Handle::current();
+//     // handler.block_on()
+// }
