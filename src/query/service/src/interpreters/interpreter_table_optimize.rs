@@ -68,7 +68,7 @@ impl Interpreter for OptimizeTableInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[async_backtrace::framed]

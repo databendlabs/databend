@@ -46,7 +46,7 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[async_backtrace::framed]

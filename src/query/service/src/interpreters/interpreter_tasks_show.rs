@@ -69,7 +69,7 @@ impl Interpreter for ShowTasksInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[minitrace::trace]

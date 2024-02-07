@@ -69,7 +69,7 @@ impl Interpreter for ReclusterTableInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[async_backtrace::framed]

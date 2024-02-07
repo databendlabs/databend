@@ -58,7 +58,7 @@ impl Interpreter for DescribeTaskInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[minitrace::trace]

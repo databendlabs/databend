@@ -55,7 +55,7 @@ impl Interpreter for DescPasswordPolicyInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[async_backtrace::framed]

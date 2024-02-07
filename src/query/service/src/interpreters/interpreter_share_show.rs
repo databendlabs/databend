@@ -45,7 +45,7 @@ impl Interpreter for ShowSharesInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[async_backtrace::framed]

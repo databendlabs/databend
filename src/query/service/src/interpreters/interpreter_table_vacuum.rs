@@ -49,7 +49,7 @@ impl Interpreter for VacuumTableInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[async_backtrace::framed]

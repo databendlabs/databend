@@ -50,7 +50,7 @@ impl Interpreter for DescribeTableInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[async_backtrace::framed]

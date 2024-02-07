@@ -43,7 +43,7 @@ impl Interpreter for ShowNetworkPoliciesInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[async_backtrace::framed]

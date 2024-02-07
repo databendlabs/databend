@@ -48,7 +48,7 @@ impl Interpreter for ShowCreateCatalogInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[async_backtrace::framed]

@@ -45,7 +45,7 @@ impl Interpreter for ShowRolesInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[minitrace::trace]

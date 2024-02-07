@@ -44,7 +44,7 @@ impl Interpreter for ShowFileFormatsInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        false
+        true
     }
 
     #[minitrace::trace]
