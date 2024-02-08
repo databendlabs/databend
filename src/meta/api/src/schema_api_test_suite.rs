@@ -4174,9 +4174,9 @@ impl SchemaApiTestSuite {
             assert_eq!(sort_drop_ids, drop_ids_1);
 
             let expected: BTreeSet<String> = [
-                "'tenant1'.'db1'.'tb1'".to_string(),
-                "'tenant1'.'db2'.'tb1'".to_string(),
-                "'tenant1'.'db3'.'tb1'".to_string(),
+                "'db1'.'tb1'".to_string(),
+                "'db2'.'tb1'".to_string(),
+                "'db3'.'tb1'".to_string(),
             ]
             .iter()
             .cloned()
@@ -4206,12 +4206,12 @@ impl SchemaApiTestSuite {
             assert_eq!(sort_drop_ids, drop_ids_2);
 
             let expected: BTreeSet<String> = [
-                "'tenant1'.'db1'.'tb1'".to_string(),
-                "'tenant1'.'db2'.'tb1'".to_string(),
-                "'tenant1'.'db2'.'tb2'".to_string(),
-                "'tenant1'.'db2'.'tb3'".to_string(),
-                "'tenant1'.'db3'.'tb1'".to_string(),
-                "'tenant1'.'db3'.'tb2'".to_string(),
+                "'db1'.'tb1'".to_string(),
+                "'db2'.'tb1'".to_string(),
+                "'db2'.'tb2'".to_string(),
+                "'db2'.'tb3'".to_string(),
+                "'db3'.'tb1'".to_string(),
+                "'db3'.'tb2'".to_string(),
             ]
             .iter()
             .cloned()
@@ -4519,7 +4519,7 @@ impl SchemaApiTestSuite {
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!("'{}'.'{}'", tbl_name_ident.db_name, tbl_name_ident.table_name),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
             }]);
@@ -4558,7 +4558,7 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!("'{}'.'{}'", tbl_name_ident.db_name, tbl_name_ident.table_name),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
             }]);
@@ -4583,7 +4583,7 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!("'{}'.'{}'", tbl_name_ident.db_name, tbl_name_ident.table_name),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
             }]);
@@ -4615,7 +4615,7 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!("'{}'.'{}'", tbl_name_ident.db_name, tbl_name_ident.table_name),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
             }]);
@@ -4645,7 +4645,7 @@ impl SchemaApiTestSuite {
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!("'{}'.'{}'", tbl_name_ident.db_name, tbl_name_ident.table_name),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 1,
             }]);
@@ -4675,7 +4675,7 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!("'{}'.'{}'", tbl_name_ident.db_name, tbl_name_ident.table_name),
                 drop_on_cnt: 2,
                 non_drop_on_cnt: 0,
             }]);
@@ -4700,7 +4700,7 @@ impl SchemaApiTestSuite {
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!("'{}'.'{}'", tbl_name_ident.db_name, tbl_name_ident.table_name),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 1,
             }]);
@@ -4742,13 +4742,13 @@ impl SchemaApiTestSuite {
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
                     name: tbl_name.to_string(),
-                    desc: tbl_name_ident.to_string(),
+                    desc: format!("'{}'.'{}'", tbl_name_ident.db_name, tbl_name_ident.table_name),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
                     name: new_tbl_name.to_string(),
-                    desc: new_tbl_name_ident.to_string(),
+                    desc: format!("'{}'.'{}'", new_tbl_name_ident.db_name, new_tbl_name_ident.table_name),
                     drop_on_cnt: 0,
                     non_drop_on_cnt: 1,
                 },
@@ -4782,13 +4782,13 @@ impl SchemaApiTestSuite {
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
                     name: tbl_name.to_string(),
-                    desc: tbl_name_ident.to_string(),
+                    desc: format!("'{}'.'{}'", tbl_name_ident.db_name, tbl_name_ident.table_name),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
                     name: new_tbl_name.to_string(),
-                    desc: new_tbl_name_ident.to_string(),
+                    desc: format!("'{}'.'{}'", new_tbl_name_ident.db_name, new_tbl_name_ident.table_name),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
                 },
@@ -4818,13 +4818,13 @@ impl SchemaApiTestSuite {
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
                     name: tbl_name.to_string(),
-                    desc: tbl_name_ident.to_string(),
+                    desc: format!("'{}'.'{}'", tbl_name_ident.db_name, tbl_name_ident.table_name),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
                 },
                 DroponInfo {
                     name: new_tbl_name.to_string(),
-                    desc: new_tbl_name_ident.to_string(),
+                    desc: format!("'{}'.'{}'", new_tbl_name_ident.db_name, new_tbl_name_ident.table_name),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
