@@ -1759,7 +1759,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -1788,7 +1788,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
             let want = TableInfo {
                 ident: tb_ident_2,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                desc: format!("'{}'.'{}'", db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -1825,7 +1825,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
             let want = TableInfo {
                 ident: tb_ident_2,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                desc: format!("'{}'.'{}'", db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -2247,7 +2247,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db1_name, tb3_name).into()).await?;
             let want = TableInfo {
                 ident: tb_ident,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db1_name, tb3_name),
+                desc: format!("'{}'.'{}'", db1_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -2383,7 +2383,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db2_name, tb3_name).into()).await?;
             let want = TableInfo {
                 ident: tb_ident2,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db2_name, tb3_name),
+                desc: format!("'{}'.'{}'", db2_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -2465,7 +2465,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -3054,7 +3054,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -4905,7 +4905,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),

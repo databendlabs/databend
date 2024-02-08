@@ -360,7 +360,11 @@ impl PhysicalPlan {
 
     pub fn get_desc(&self) -> Result<String> {
         Ok(match self {
-            PhysicalPlan::TableScan(v) => v.source.source_info.desc(),
+            PhysicalPlan::TableScan(v) => format!(
+                "{}.{}",
+                v.source.catalog_info.name_ident.catalog_name,
+                v.source.source_info.desc()
+            ),
             PhysicalPlan::Filter(v) => match v.predicates.is_empty() {
                 true => String::new(),
                 false => v.predicates[0].as_expr(&BUILTIN_FUNCTIONS).sql_display(),
@@ -526,7 +530,7 @@ impl PhysicalPlan {
                         v.output_schema()?.num_fields(),
                         std::cmp::max(
                             v.output_schema()?.num_fields(),
-                            v.source.source_info.schema().num_fields(),
+                            v.source.source_info.schema().num_fields()
                         )
                     ),
                     v.name_mapping.keys().cloned().collect(),
