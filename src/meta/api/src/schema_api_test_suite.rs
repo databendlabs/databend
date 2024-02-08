@@ -1759,7 +1759,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -1788,7 +1788,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
             let want = TableInfo {
                 ident: tb_ident_2,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                desc: format!("'{}'.'{}'", db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -1825,7 +1825,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
             let want = TableInfo {
                 ident: tb_ident_2,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                desc: format!("'{}'.'{}'", db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -2247,7 +2247,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db1_name, tb3_name).into()).await?;
             let want = TableInfo {
                 ident: tb_ident,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db1_name, tb3_name),
+                desc: format!("'{}'.'{}'", db1_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -2383,7 +2383,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db2_name, tb3_name).into()).await?;
             let want = TableInfo {
                 ident: tb_ident2,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db2_name, tb3_name),
+                desc: format!("'{}'.'{}'", db2_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -2465,7 +2465,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -3054,7 +3054,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -4174,9 +4174,9 @@ impl SchemaApiTestSuite {
             assert_eq!(sort_drop_ids, drop_ids_1);
 
             let expected: BTreeSet<String> = [
-                "'tenant1'.'db1'.'tb1'".to_string(),
-                "'tenant1'.'db2'.'tb1'".to_string(),
-                "'tenant1'.'db3'.'tb1'".to_string(),
+                "'db1'.'tb1'".to_string(),
+                "'db2'.'tb1'".to_string(),
+                "'db3'.'tb1'".to_string(),
             ]
             .iter()
             .cloned()
@@ -4206,12 +4206,12 @@ impl SchemaApiTestSuite {
             assert_eq!(sort_drop_ids, drop_ids_2);
 
             let expected: BTreeSet<String> = [
-                "'tenant1'.'db1'.'tb1'".to_string(),
-                "'tenant1'.'db2'.'tb1'".to_string(),
-                "'tenant1'.'db2'.'tb2'".to_string(),
-                "'tenant1'.'db2'.'tb3'".to_string(),
-                "'tenant1'.'db3'.'tb1'".to_string(),
-                "'tenant1'.'db3'.'tb2'".to_string(),
+                "'db1'.'tb1'".to_string(),
+                "'db2'.'tb1'".to_string(),
+                "'db2'.'tb2'".to_string(),
+                "'db2'.'tb3'".to_string(),
+                "'db3'.'tb1'".to_string(),
+                "'db3'.'tb2'".to_string(),
             ]
             .iter()
             .cloned()
@@ -4519,7 +4519,10 @@ impl SchemaApiTestSuite {
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
             }]);
@@ -4558,7 +4561,10 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
             }]);
@@ -4583,7 +4589,10 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
             }]);
@@ -4615,7 +4624,10 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
             }]);
@@ -4645,7 +4657,10 @@ impl SchemaApiTestSuite {
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 1,
             }]);
@@ -4675,7 +4690,10 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 2,
                 non_drop_on_cnt: 0,
             }]);
@@ -4700,7 +4718,10 @@ impl SchemaApiTestSuite {
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 1,
             }]);
@@ -4742,13 +4763,19 @@ impl SchemaApiTestSuite {
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
                     name: tbl_name.to_string(),
-                    desc: tbl_name_ident.to_string(),
+                    desc: format!(
+                        "'{}'.'{}'",
+                        tbl_name_ident.db_name, tbl_name_ident.table_name
+                    ),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
                     name: new_tbl_name.to_string(),
-                    desc: new_tbl_name_ident.to_string(),
+                    desc: format!(
+                        "'{}'.'{}'",
+                        new_tbl_name_ident.db_name, new_tbl_name_ident.table_name
+                    ),
                     drop_on_cnt: 0,
                     non_drop_on_cnt: 1,
                 },
@@ -4782,13 +4809,19 @@ impl SchemaApiTestSuite {
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
                     name: tbl_name.to_string(),
-                    desc: tbl_name_ident.to_string(),
+                    desc: format!(
+                        "'{}'.'{}'",
+                        tbl_name_ident.db_name, tbl_name_ident.table_name
+                    ),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
                     name: new_tbl_name.to_string(),
-                    desc: new_tbl_name_ident.to_string(),
+                    desc: format!(
+                        "'{}'.'{}'",
+                        new_tbl_name_ident.db_name, new_tbl_name_ident.table_name
+                    ),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
                 },
@@ -4818,13 +4851,19 @@ impl SchemaApiTestSuite {
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
                     name: tbl_name.to_string(),
-                    desc: tbl_name_ident.to_string(),
+                    desc: format!(
+                        "'{}'.'{}'",
+                        tbl_name_ident.db_name, tbl_name_ident.table_name
+                    ),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
                 },
                 DroponInfo {
                     name: new_tbl_name.to_string(),
-                    desc: new_tbl_name_ident.to_string(),
+                    desc: format!(
+                        "'{}'.'{}'",
+                        new_tbl_name_ident.db_name, new_tbl_name_ident.table_name
+                    ),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
@@ -4905,7 +4944,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),

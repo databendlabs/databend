@@ -2184,7 +2184,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 table_id: tbid.table_id,
                 seq: tb_meta_seq,
             },
-            desc: tenant_dbname_tbname.to_string(),
+            desc: format!(
+                "'{}'.'{}'",
+                tenant_dbname.db_name, tenant_dbname_tbname.table_name
+            ),
             name: tenant_dbname_tbname.table_name.clone(),
             // Safe unwrap() because: tb_meta_seq > 0
             meta: tb_meta.unwrap(),
@@ -2307,7 +2310,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                                 table_id,
                                 seq: tb_meta_seq,
                             },
-                            desc: tenant_dbname_tbname.to_string(),
+                            desc: format!(
+                                "'{}'.'{}'",
+                                tenant_dbname.db_name, tenant_dbname_tbname.table_name
+                            ),
                             name: table_id_list_key.table_name.clone(),
                             meta: tb_meta,
                             tenant: tenant_dbname.tenant.clone(),
@@ -4580,7 +4586,10 @@ async fn batch_filter_table_info(
                 table_id,
                 seq: *tb_meta_seq,
             },
-            desc: tenant_dbname_tbname.to_string(),
+            desc: format!(
+                "'{}'.'{}'",
+                tenant_dbname.db_name, tenant_dbname_tbname.table_name
+            ),
             name: table_name.clone(),
             meta: tb_meta,
             tenant: tenant_dbname.tenant.clone(),
