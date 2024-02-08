@@ -36,21 +36,32 @@
 
 **Databend** is an open-source, elastic, and workload-aware cloud data warehouse built in Rust, offering a cost-effective [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059). It's designed for complex analysis of the world's largest datasets.
 
+## ⚡ Performance
+
+<div align="center">
+  
+[TPC-H Benchmark: Databend Cloud vs. Snowflake](https://docs.databend.com/guides/benchmark/tpch)
+
+</div>
+
+![Databend vs. Snowflake](https://github.com/datafuselabs/wizard/assets/172204/d796acf0-0a66-4b1d-8754-cd2cd1de04c7)
+
+
 ## 🚀 Why Databend
 
 - **Cloud-Friendly**: Seamlessly integrates with various cloud storages like AWS S3, Azure Blob, Google Cloud, and more.
 
-- **High Performance**: Built in Rust, utilizing SIMD and vectorized processing for rapid analytics. [See ClickBench](https://databend.com/blog/clickbench-databend-top).
+- **High Performance**: Built in Rust, utilizing SIMD and vectorized processing for rapid analytics. See [ClickBench](https://databend.com/blog/clickbench-databend-top).
 
-- **Cost-Efficient Elasticity**: Innovative design for separate scaling of storage and computation, optimizing both costs and performance.
+- **Cost-Effective**: Innovative design for separate scaling of storage and computation, optimizing both costs and performance. See [TPC-H: Databend Cloud vs. Snowflake](https://docs.databend.com/guides/benchmark/tpch).
 
-- **Easy Data Management**: Integrated data preprocessing during ingestion eliminates the need for external ETL tools.
+- **Easy Data Management**: Integrated data preprocessing during ingestion eliminates the need for external ETL tools. Details at [Data Loading](https://docs.databend.com/guides/load-data/).
 
 - **Data Version Control**: Offers Git-like multi-version storage, enabling easy data querying, cloning, and reverting from any point in time.
 
 - **Rich Data Support**: Handles diverse data formats and types, including JSON, CSV, Parquet, ARRAY, TUPLE, MAP, and JSON.
 
-- **AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://docs.databend.com/sql/sql-functions/ai-functions/).
+- **AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://docs.databend.com/guides/ai-functions/).
 
 - **Community-Driven**: Benefit from a friendly, growing community that offers an easy-to-use platform for all your cloud analytics.
 

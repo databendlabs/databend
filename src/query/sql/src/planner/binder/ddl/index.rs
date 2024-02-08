@@ -148,7 +148,7 @@ impl Binder {
     ) -> Result<Plan> {
         let CreateIndexStmt {
             index_type,
-            if_not_exists,
+            create_option,
             index_name,
             query,
             sync_creation,
@@ -206,7 +206,7 @@ impl Binder {
         Self::rewrite_query_with_database(&mut query, table_entry.database());
 
         let plan = CreateIndexPlan {
-            if_not_exists: *if_not_exists,
+            create_option: *create_option,
             index_type: *index_type,
             index_name,
             original_query: original_query.to_string(),

@@ -579,6 +579,7 @@ jobs:
       source_id: ${{ needs.create_release.outputs.version }}
       version: ${{ needs.create_release.outputs.version }}
       runner_provider: github
+      target: all
 
   sqlsmith:
     needs: [create_release, linux]

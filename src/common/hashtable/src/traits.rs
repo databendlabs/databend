@@ -14,7 +14,6 @@
 
 // To avoid RUSTFLAGS="-C target-feature=+sse4.2" warning.
 
-use std::hash::BuildHasher;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
@@ -219,6 +218,8 @@ impl FastHash for u128 {
                 unsafe { _mm_crc32_u64(value, (*self >> 64) as u64) }
             } else {
                 use std::hash::Hasher;
+                use std::hash::BuildHasher;
+
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 hasher.write_u128(*self);
@@ -249,6 +250,8 @@ impl FastHash for i256 {
                 value
             } else {
                 use std::hash::Hasher;
+                use std::hash::BuildHasher;
+
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 for x in self.0 {
@@ -274,6 +277,8 @@ impl FastHash for U256 {
                 value
             } else {
                 use std::hash::Hasher;
+                use std::hash::BuildHasher;
+
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 for x in self.0 {
@@ -342,6 +347,8 @@ impl FastHash for [u8] {
                 value
             } else {
                 use std::hash::Hasher;
+                use std::hash::BuildHasher;
+
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 hasher.write(self);
@@ -373,6 +380,8 @@ impl<const N: usize> FastHash for ([u64; N], NonZeroU64) {
                 value
             } else {
                 use std::hash::Hasher;
+                use std::hash::BuildHasher;
+
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 for x in self.0 {
@@ -413,6 +422,8 @@ pub fn hash_join_fast_string_hash(key: &[u8]) -> u64 {
             }
         } else {
             use std::hash::Hasher;
+            use std::hash::BuildHasher;
+
             let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
             let mut hasher = state.build_hasher();
             hasher.write(key);

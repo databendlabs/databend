@@ -18,8 +18,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::base::tokio::runtime::Handle;
-use databend_common_base::base::tokio::task::block_in_place;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::block_id_from_location;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -396,13 +394,11 @@ impl Table for StreamTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
-        let table = block_in_place(|| {
-            Handle::current().block_on(ctx.get_table(
-                self.stream_info.catalog(),
-                &self.table_database,
-                &self.table_name,
-            ))
-        })?;
+        let table = databend_common_base::runtime::block_on(ctx.get_table(
+            self.stream_info.catalog(),
+            &self.table_database,
+            &self.table_name,
+        ))?;
         table.read_data(ctx, plan, pipeline, put_cache)
     }
 

@@ -99,6 +99,8 @@ fn test_statement() {
         r#"explain pipeline select a from t1 ignore_result;"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
+        r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
+        r#"CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
         r#"create table a (c decimal(38, 0))"#,
         r#"create table a (c decimal(38))"#,
         r#"create or replace table a (c decimal(38))"#,
@@ -497,6 +499,8 @@ fn test_statement() {
         r#"SELECT c1 FROM 's3://test/bucket' (PATTERN => '*.parquet', connection => (ENDPOINT_URL = 'xxx')) t;"#,
         r#"CREATE FILE FORMAT my_csv
             type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
+        r#"CREATE OR REPLACE FILE FORMAT my_csv
+            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
         r#"SHOW FILE FORMATS"#,
         r#"DROP FILE FORMAT my_csv"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, c, d)"#,
@@ -814,6 +818,7 @@ fn test_expr() {
         r#"(arr[0]:a).b"#,
         r#"arr[4]["k"]"#,
         r#"a rlike '^11'"#,
+        r#"'中文'::text not in ('a', 'b')"#,
         r#"G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)"#,
         r#"sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END"#,
         r#"p_partkey = l_partkey

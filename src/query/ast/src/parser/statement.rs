@@ -953,20 +953,22 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let create_index = map(
+    let create_index = map_res(
         rule! {
-            CREATE ~ ASYNC? ~ AGGREGATING ~ INDEX ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ ASYNC? ~ AGGREGATING ~ INDEX ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ AS ~ #query
         },
-        |(_, opt_async, _, _, opt_if_not_exists, index_name, _, query)| {
-            Statement::CreateIndex(CreateIndexStmt {
+        |(_, opt_or_replace, opt_async, _, _, opt_if_not_exists, index_name, _, query)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateIndex(CreateIndexStmt {
                 index_type: TableIndexType::Aggregating,
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 index_name,
                 query: Box::new(query),
                 sync_creation: opt_async.is_none(),
-            })
+            }))
         },
     );
 
@@ -1538,13 +1540,15 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_file_format = map_res(
         rule! {
-            CREATE ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #format_options
         },
-        |(_, _, _, opt_if_not_exists, name, options)| {
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, options)| {
             let file_format_options = FileFormatOptionsAst { options };
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             Ok(Statement::CreateFileFormat {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: name.to_string(),
                 file_format_options,
             })
@@ -1895,11 +1899,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         ),
         // view,stream,index
         rule!(
-            #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+            #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #stream_table
-            | #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
+            | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
             | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
         ),

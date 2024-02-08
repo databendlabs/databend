@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
@@ -30,8 +31,19 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
+// Don't change this value
+// 0.04f--> 10 buckets
+const DISTINCT_ERROR_RATE: f64 = 0.04;
+
 pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<u64> {
-    let distinct_values = eval_aggr("approx_count_distinct", vec![], &[column.clone()], rows)?;
+    let distinct_values = eval_aggr(
+        "approx_count_distinct",
+        vec![Scalar::Number(NumberScalar::Float64(
+            DISTINCT_ERROR_RATE.into(),
+        ))],
+        &[column.clone()],
+        rows,
+    )?;
     let col = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap();
     Ok(col[0])
 }

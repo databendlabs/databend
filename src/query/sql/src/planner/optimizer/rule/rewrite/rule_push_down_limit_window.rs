@@ -45,10 +45,11 @@ use crate::plans::WindowFuncType;
 pub struct RulePushDownLimitWindow {
     id: RuleID,
     matchers: Vec<Matcher>,
+    max_limit: usize,
 }
 
 impl RulePushDownLimitWindow {
-    pub fn new() -> Self {
+    pub fn new(max_limit: usize) -> Self {
         Self {
             id: RuleID::PushDownLimitSort,
             matchers: vec![Matcher::MatchOp {
@@ -58,6 +59,7 @@ impl RulePushDownLimitWindow {
                     children: vec![Matcher::Leaf],
                 }],
             }],
+            max_limit,
         }
     }
 }
@@ -74,15 +76,19 @@ impl Rule for RulePushDownLimitWindow {
             let window = s_expr.child(0)?;
             let mut window_limit: LogicalWindow = window.plan().clone().try_into()?;
             if should_apply(window.child(0)?, &window_limit)? {
-                window_limit.limit = Some(window_limit.limit.map_or(count, |c| cmp::max(c, count)));
-                let sort = SExpr::create_unary(
-                    Arc::new(RelOperator::Window(window_limit)),
-                    Arc::new(window.child(0)?.clone()),
-                );
+                let limit = window_limit.limit.map_or(count, |c| cmp::max(c, count));
 
-                let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
-                result.set_applied_rule(&self.id);
-                state.add_result(result);
+                if limit <= self.max_limit {
+                    window_limit.limit = Some(limit);
+                    let sort = SExpr::create_unary(
+                        Arc::new(RelOperator::Window(window_limit)),
+                        Arc::new(window.child(0)?.clone()),
+                    );
+
+                    let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
+                    result.set_applied_rule(&self.id);
+                    state.add_result(result);
+                }
             }
         }
         Ok(())
