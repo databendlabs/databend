@@ -20,6 +20,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_types::MetaId;
 
+use super::CreateOption;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct VirtualColumnNameIdent {
     pub tenant: String,
@@ -56,7 +58,7 @@ pub struct VirtualColumnMeta {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateVirtualColumnReq {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name_ident: VirtualColumnNameIdent,
     pub virtual_columns: Vec<String>,
 }
