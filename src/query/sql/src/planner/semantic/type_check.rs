@@ -2920,6 +2920,13 @@ impl<'a> TypeChecker<'a> {
             return Ok(None);
         }
 
+        if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
+            return Err(ErrorCode::SemanticError(
+                "User Defined functions can only be used in Select Clause".to_string(),
+            )
+            .set_span(span));
+        }
+
         let udf = UserApiProvider::instance()
             .get_udf(self.ctx.get_tenant().as_str(), udf_name)
             .await;

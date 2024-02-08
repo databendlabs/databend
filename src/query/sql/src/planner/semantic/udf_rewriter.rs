@@ -86,14 +86,6 @@ impl UdfRewriter {
                 let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
                 Ok(new_expr)
             }
-            RelOperator::Filter(mut plan) => {
-                for scalar in &mut plan.predicates {
-                    self.visit(scalar)?;
-                }
-                let child_expr = self.create_udf_expr(s_expr.children[0].clone());
-                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
-                Ok(new_expr)
-            }
             _ => Ok(s_expr),
         }
     }

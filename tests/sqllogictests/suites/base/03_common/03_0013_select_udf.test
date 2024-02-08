@@ -23,6 +23,9 @@ SELECT cal(1, 2, 3, 4, 6)
 ----
 6.0
 
+statement error 1065
+select 1 from system.one where cal(1,2,3,4,5)
+
 statement ok
 DROP FUNCTION cal
 
