@@ -1246,6 +1246,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<CreateVirtualColumnReply, KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
+        let ctx = func_name!();
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
@@ -1253,21 +1254,36 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (_, old_virtual_column_opt): (_, Option<VirtualColumnMeta>) =
                 get_pb_value(self, &req.name_ident).await?;
 
-            if old_virtual_column_opt.is_some() {
-                if req.if_not_exists {
-                    return Ok(CreateVirtualColumnReply {});
-                } else {
-                    return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
-                        VirtualColumnAlreadyExists::new(
-                            req.name_ident.table_id,
-                            format!(
-                                "create virtual column with tenant: {} table_id: {}",
-                                req.name_ident.tenant, req.name_ident.table_id
+            let mut if_then = vec![];
+            let seq = if old_virtual_column_opt.is_some() {
+                if let CreateOption::CreateIfNotExists(if_not_exists) = req.create_option {
+                    if if_not_exists {
+                        return Ok(CreateVirtualColumnReply {});
+                    } else {
+                        return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
+                            VirtualColumnAlreadyExists::new(
+                                req.name_ident.table_id,
+                                format!(
+                                    "create virtual column with tenant: {} table_id: {}",
+                                    req.name_ident.tenant, req.name_ident.table_id
+                                ),
                             ),
-                        ),
-                    )));
+                        )));
+                    }
+                } else {
+                    construct_drop_virtual_column_txn_operations(
+                        self,
+                        &req.name_ident,
+                        false,
+                        false,
+                        ctx,
+                        &mut if_then,
+                    )
+                    .await?
                 }
-            }
+            } else {
+                0
+            };
             let virtual_column_meta = VirtualColumnMeta {
                 table_id: req.name_ident.table_id,
                 virtual_columns: req.virtual_columns.clone(),
@@ -1278,11 +1294,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // Create virtual column by inserting this record:
             // (tenant, table_id) -> virtual_column_meta
             {
-                let condition = vec![txn_cond_seq(&req.name_ident, Eq, 0)];
-                let if_then = vec![txn_op_put(
+                let condition = vec![txn_cond_seq(&req.name_ident, Eq, seq)];
+                if_then.push(txn_op_put(
                     &req.name_ident,
                     serialize_struct(&virtual_column_meta)?,
-                )];
+                ));
 
                 let txn_req = TxnRequest {
                     condition,
@@ -1384,35 +1400,27 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            if let Err(err) = get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await {
-                if req.if_exists {
-                    return Ok(DropVirtualColumnReply {});
-                } else {
-                    return Err(err);
-                }
-            }
+            let mut if_then = vec![];
+            construct_drop_virtual_column_txn_operations(
+                self,
+                &req.name_ident,
+                req.if_exists,
+                true,
+                ctx,
+                &mut if_then,
+            )
+            .await?;
 
-            // Drop virtual column by deleting this record:
-            // (tenant, table_id) -> virtual_column_meta
-            {
-                let if_then = vec![txn_op_del(&req.name_ident)];
-                let txn_req = TxnRequest {
-                    condition: vec![],
-                    if_then,
-                    else_then: vec![],
-                };
+            let txn_req = TxnRequest {
+                condition: vec![],
+                if_then,
+                else_then: vec![],
+            };
 
-                let (succ, _responses) = send_txn(self, txn_req).await?;
+            let (succ, _responses) = send_txn(self, txn_req).await?;
 
-                debug!(
-                    "req.name_ident" = as_debug!(&req.name_ident),
-                    succ = succ;
-                    "drop_virtual_column"
-                );
-
-                if succ {
-                    break;
-                }
+            if succ {
+                break;
             }
         }
 
@@ -3775,6 +3783,39 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     fn name(&self) -> String {
         "SchemaApiImpl".to_string()
     }
+}
+async fn construct_drop_virtual_column_txn_operations(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    name_ident: &VirtualColumnNameIdent,
+    drop_if_exists: bool,
+    if_delete: bool,
+    ctx: &str,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<u64, KVAppError> {
+    let res = get_virtual_column_by_id_or_err(kv_api, name_ident, ctx).await;
+    let seq = if let Err(err) = res {
+        if drop_if_exists {
+            return Ok(0);
+        } else {
+            return Err(err);
+        }
+    } else {
+        res.unwrap().0
+    };
+
+    // Drop virtual column by deleting this record:
+    // (tenant, table_id) -> virtual_column_meta
+    if if_delete {
+        if_then.push(txn_op_del(name_ident));
+    }
+
+    debug!(
+        "name_ident" = as_debug!(&name_ident),
+        ctx = ctx;
+        "construct_drop_virtual_column_txn_operations"
+    );
+
+    Ok(seq)
 }
 
 async fn construct_drop_index_txn_operations(

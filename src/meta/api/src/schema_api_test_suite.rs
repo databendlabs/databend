@@ -5931,7 +5931,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create virtual column");
             let req = CreateVirtualColumnReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
@@ -5940,7 +5940,7 @@ impl SchemaApiTestSuite {
 
             info!("--- create virtual column again");
             let req = CreateVirtualColumnReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
@@ -6029,6 +6029,46 @@ impl SchemaApiTestSuite {
 
             let res = mt.update_virtual_column(req).await;
             assert!(res.is_err());
+        }
+
+        {
+            info!("--- create or replace virtual column");
+            let req = CreateVirtualColumnReq {
+                create_option: CreateOption::CreateIfNotExists(false),
+                name_ident: name_ident.clone(),
+                virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
+            };
+
+            let _res = mt.create_virtual_column(req.clone()).await?;
+
+            let req = ListVirtualColumnsReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+            };
+
+            let res = mt.list_virtual_columns(req).await?;
+            assert_eq!(1, res.len());
+            assert_eq!(res[0].virtual_columns, vec![
+                "variant:k1".to_string(),
+                "variant[1]".to_string(),
+            ]);
+
+            let req = CreateVirtualColumnReq {
+                create_option: CreateOption::CreateOrReplace,
+                name_ident: name_ident.clone(),
+                virtual_columns: vec!["variant:k2".to_string()],
+            };
+
+            let _res = mt.create_virtual_column(req.clone()).await?;
+
+            let req = ListVirtualColumnsReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+            };
+
+            let res = mt.list_virtual_columns(req).await?;
+            assert_eq!(1, res.len());
+            assert_eq!(res[0].virtual_columns, vec!["variant:k2".to_string(),]);
         }
 
         Ok(())

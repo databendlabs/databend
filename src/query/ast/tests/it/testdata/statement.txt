@@ -14355,7 +14355,9 @@ CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- AST ------------
 CreateVirtualColumn(
     CreateVirtualColumnStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         table: Identifier {
@@ -14451,6 +14453,121 @@ CreateVirtualColumn(
                     key: Literal {
                         span: Some(
                             43..44,
+                        ),
+                        lit: UInt64(
+                            1,
+                        ),
+                    },
+                },
+            },
+        ],
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
+---------- Output ---------
+CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
+---------- AST ------------
+CreateVirtualColumn(
+    CreateVirtualColumnStmt {
+        create_option: CreateOrReplace,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                62..63,
+            ),
+        },
+        virtual_columns: [
+            MapAccess {
+                span: Some(
+                    41..47,
+                ),
+                expr: MapAccess {
+                    span: Some(
+                        35..41,
+                    ),
+                    expr: ColumnRef {
+                        span: Some(
+                            34..35,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                name: "a",
+                                quote: None,
+                                span: Some(
+                                    34..35,
+                                ),
+                            },
+                        ),
+                    },
+                    accessor: Bracket {
+                        key: Literal {
+                            span: Some(
+                                36..40,
+                            ),
+                            lit: String(
+                                "k1",
+                            ),
+                        },
+                    },
+                },
+                accessor: Bracket {
+                    key: Literal {
+                        span: Some(
+                            42..46,
+                        ),
+                        lit: String(
+                            "k2",
+                        ),
+                    },
+                },
+            },
+            MapAccess {
+                span: Some(
+                    53..56,
+                ),
+                expr: MapAccess {
+                    span: Some(
+                        50..53,
+                    ),
+                    expr: ColumnRef {
+                        span: Some(
+                            49..50,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                name: "b",
+                                quote: None,
+                                span: Some(
+                                    49..50,
+                                ),
+                            },
+                        ),
+                    },
+                    accessor: Bracket {
+                        key: Literal {
+                            span: Some(
+                                51..52,
+                            ),
+                            lit: UInt64(
+                                0,
+                            ),
+                        },
+                    },
+                },
+                accessor: Bracket {
+                    key: Literal {
+                        span: Some(
+                            54..55,
                         ),
                         lit: UInt64(
                             1,

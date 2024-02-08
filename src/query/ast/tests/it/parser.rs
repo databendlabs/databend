@@ -513,6 +513,7 @@ fn test_statement() {
         r#"DESC MASKING POLICY email_mask"#,
         r#"DROP MASKING POLICY IF EXISTS email_mask"#,
         r#"CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t"#,
+        r#"CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t"#,
         r#"ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t"#,
         r#"DROP VIRTUAL COLUMN FOR t"#,
         r#"REFRESH VIRTUAL COLUMN FOR t"#,
