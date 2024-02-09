@@ -235,8 +235,8 @@ Databend thrives on community contributions! Whether it's through ideas, code, o
 
 Here are some resources to help you get started:
 
-- [Building Databend From Source](https://docs.databend.com/guides/overview/community/contributor/building-from-source)
-- [The First Good Pull Request](https://docs.databend.com/guides/overview/community/contributor/good-pr)
+- [Building Databend From Source](https://docs.databend.com/guides/community/contributor/building-from-source)
+- [The First Good Pull Request](https://docs.databend.com/guides/community/contributor/good-pr)
 
 
 ## 👥 Community
