@@ -108,27 +108,35 @@ docker run --net=host  datafuselabs/databend
 </details>
 
 <details>
-<summary>Loading Data into Databend</summary>
+<summary>Data Import and Export</summary></summary>
 
-- [Loading Semi-structured Data](https://docs.databend.com/guides/load-data/load-semistructured/)
-- [Transforming Data During a Load](https://docs.databend.com/guides/load-data/transform/data-load-transform)
-- [Continuous Data Pipelines](https://docs.databend.com/guides/load-data/continuous-data-pipelines/)
-- [How to Unload Data from Databend](https://docs.databend.com/guides/unload-data/)
+- [How to load Parquet file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-parquet)
+- [How to export a table to Parquet file](https://docs.databend.com/guides/unload-data/unload-parquet)
+- [How to load CSV file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-csv)
+- [How to export a table to CSV file](https://docs.databend.com/guides/unload-data/unload-csv)
+- [How to load TSV file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-tsv)
+- [How to export a table to TSV file](https://docs.databend.com/guides/unload-data/unload-tsv)
+- [How to load NDJSON file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-ndjson)
+- [How to export a table to NDJSON file](https://docs.databend.com/guides/unload-data/unload-ndjson)
 
 </details>
 
 <details>
-<summary>Loading Data Tools with Databend</summary>
+<summary>Loading Data From Other Databases</summary>
 
-- [Apache Kafka](https://docs.databend.com/guides/load-data/load-db/kafka)
-- [Airbyte](https://docs.databend.com/guides/load-data/load-db/airbyte)
-- [dbt](https://docs.databend.com/guides/load-data/load-db/dbt)
-- [Debezium](https://docs.databend.com/guides/load-data/load-db/debezium)
-- [Apache Flink CDC](https://docs.databend.com/guides/load-data/load-db/flink-cdc)
-- [DataDog Vector](https://docs.databend.com/guides/load-data/load-db/vector)
-- [Addax](https://docs.databend.com/guides/load-data/load-db/addax)
-- [DataX](https://docs.databend.com/guides/load-data/load-db/datax)
+- [How to Sync Full and Incremental MySQL Changes into Databend](https://docs.databend.com/guides/load-data/load-db/debezium)
+- [How to Sync Full and Incremental PostgreSQL Changes into Databend](https://docs.databend.com/guides/load-data/load-db/flink-cdc)
+- [How to Sync Full and Incremental Oracle Changes into Databend](https://docs.databend.com/guides/load-data/load-db/flink-cdc)
+ 
+</details>
 
+<details>
+<summary>Querying Semi-structured Data</summary>
+
+- [How to query directly on Parquet file](https://docs.databend.com/guides/load-data/transform/querying-parquet)
+- [How to query directly on CSV file](https://docs.databend.com/guides/load-data/transform/querying-csv)
+- [How to query directly on TSV file](https://docs.databend.com/guides/load-data/transform/querying-tsv)
+- [How to query directly on NDJSON file](https://docs.databend.com/guides/load-data/transform/querying-ndjson)
 </details>
 
 <details>
@@ -204,19 +212,21 @@ docker run --net=host  datafuselabs/databend
 </details>
 
 <details>
-<summary>Data Governance</summary>
+<summary>Data Management</summary>
 
-- [How to Create Data Masking Policy](https://docs.databend.com/sql/sql-commands/ddl/mask-policy/create-mask-policy)
-- [How to Drop Data Masking Policy](https://docs.databend.com/sql/sql-commands/ddl/mask-policy/drop-mask-policy)
+- [Data Lifecycle in Databend](https://docs.databend.com/guides/data-management/data-lifecycle)
+- [Data Recovery in Databend](https://docs.databend.com/guides/data-management/data-recovery)
+- [Data Protection in Databend](https://docs.databend.com/guides/data-management/data-protection)
 
 </details>
 
 <details>
-<summary>Securing Databend</summary>
+<summary>Security</summary>
 
-- [How to Create Network Policy](https://docs.databend.com/sql/sql-commands/ddl/network-policy/ddl-create-policy)
-- [How to Drop Network Policy](https://docs.databend.com/sql/sql-commands/ddl/network-policy/ddl-drop-policy)
-- [How to Alter Network Policy](https://docs.databend.com/sql/sql-commands/ddl/network-policy/ddl-alter-policy)
+- [Access Control](https://docs.databend.com/guides/security/access-control)
+- [Masking Policy](https://docs.databend.com/guides/security/masking-policy)
+- [Network Policy](https://docs.databend.com/guides/security/network-policy)
+- [Password Policy](https://docs.databend.com/guides/security/password-policy)
 
 </details>
 
@@ -227,7 +237,6 @@ docker run --net=host  datafuselabs/databend
 - [How to Benchmark Databend using TPC-H](https://databend.com/blog/2022/08/08/benchmark-tpc-h)
   
 </details>
-
 
 ## 🤝 Contributing
 
