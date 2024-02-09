@@ -51,15 +51,15 @@
 
 - **Cloud-Native**: Integrates with AWS S3, Azure Blob, Google Cloud, and more.
 
-- **High Performance**: Developed in Rust, employing SIMD and vectorized execution for fast analytics. 👉 [ClickBench](https://databend.com/blog/clickbench-databend-top).
+- **High Performance**: Rust-built, with cutting-edge, high-speed vectorized execution. 👉 [ClickBench](https://databend.com/blog/clickbench-databend-top).
 
 - **Cost-Effective**: Designed for scalable storage and computation, reducing costs while enhancing performance. 👉 [TPC-H](https://docs.databend.com/guides/benchmark/tpch).
 
-- **Data Simplification**: Preprocesses data on ingestion, no need for external ETL. 👉 [Data Loading](https://docs.databend.com/guides/load-data/).
+- **Data Simplification**: Streamlines data ingestion, no external ETL needed. 👉 [Data Loading](https://docs.databend.com/guides/load-data/).
 
 - **Version Control**: Provides Git-like version control for data, allowing querying, cloning, and reverting at any point.
 
-- **Format Flexibility**: Supports multiple data formats and types, including JSON, CSV, Parquet, and more.
+- **Format Flexibility**: Supports multiple data formats and types, including JSON, CSV, Parquet, GEO, and more.
 
 - **AI-Powered Analytics**: Enables advanced analytics with [AI Functions](https://docs.databend.com/guides/ai-functions/).
 
