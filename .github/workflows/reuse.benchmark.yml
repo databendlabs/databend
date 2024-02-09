@@ -194,8 +194,8 @@ jobs:
           sudo apt-get install -yq python3-jinja2
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-${{ matrix.dataset }}
-          path: benchmark/clickbench/results/${{ matrix.dataset }}
+          name: benchmark
+          path: benchmark/clickbench/results
       - name: Generate report and upload to R2
         working-directory: benchmark/clickbench
         env:
@@ -204,6 +204,12 @@ jobs:
           AWS_DEFAULT_REGION: auto
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         run: |
+          for result in results/*.json; do
+            dataset=$(echo $result | sed -E 's/.*result-(\w+)-.*\.json/\1/')
+            mkdir -p results/${dataset}/
+            mv $result results/${dataset}/$(basename $result)
+          done
+
           aws s3 sync s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date --date='-1 month' -u +%Y)/$(date --date='-1 month' -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
           aws s3 sync s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
           ./update_results.py --dataset ${{ matrix.dataset }} --release ${{ inputs.source_id }}
