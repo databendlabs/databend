@@ -1718,18 +1718,20 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         rule! { SHOW ~ NETWORK ~ ^POLICIES },
     );
 
-    let create_password_policy = map(
+    let create_password_policy = map_res(
         rule! {
-            CREATE ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+            CREATE ~ (OR ~ REPLACE)? ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
              ~ #password_set_options
         },
-        |(_, _, _, opt_if_not_exists, name, set_options)| {
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, set_options)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             let stmt = CreatePasswordPolicyStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: name.to_string(),
                 set_options,
             };
-            Statement::CreatePasswordPolicy(stmt)
+            Ok(Statement::CreatePasswordPolicy(stmt))
         },
     );
     let alter_password_policy = map(
