@@ -91,15 +91,6 @@ docker run --net=host  datafuselabs/databend
 ## 🚀 Getting Started
 
 <details>
-<summary>Deploying Databend</summary>
-
-- [Understanding Deployment Modes](https://docs.databend.com/guides/deploy/understanding-deployment-modes)
-- [Deploying a Standalone Databend](https://docs.databend.com/guides/deploy/deploying-databend)
-- [Expanding a Standalone Databend](https://docs.databend.com/guides/deploy/expanding-to-a-databend-cluster)
-- [Databend Cloud (Beta)](https://docs.databend.com/guides/cloud)
-</details>
-
-<details>
 <summary>Connecting to Databend</summary>
 
 - [Connecting to Databend with BendSQL](https://docs.databend.com/guides/sql-clients/bendsql)
