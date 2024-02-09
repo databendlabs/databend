@@ -1419,6 +1419,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
+            debug!(
+                "name_ident" = as_debug!(&req.name_ident),
+                succ = succ;
+                "drop_virtual_column"
+            );
+
             if succ {
                 break;
             }
@@ -3790,6 +3796,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         "SchemaApiImpl".to_string()
     }
 }
+
 async fn construct_drop_virtual_column_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_ident: &VirtualColumnNameIdent,

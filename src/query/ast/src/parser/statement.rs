@@ -1581,17 +1581,19 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let show_file_formats = value(Statement::ShowFileFormats, rule! { SHOW ~ FILE ~ FORMATS });
 
     // data mark policy
-    let create_data_mask_policy = map(
+    let create_data_mask_policy = map_res(
         rule! {
-            CREATE ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
+            CREATE ~ (OR ~ REPLACE)? ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
         },
-        |(_, _, _, opt_if_not_exists, name, policy)| {
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, policy)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             let stmt = CreateDatamaskPolicyStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: name.to_string(),
                 policy,
             };
-            Statement::CreateDatamaskPolicy(stmt)
+            Ok(Statement::CreateDatamaskPolicy(stmt))
         },
     );
     let drop_data_mask_policy = map(

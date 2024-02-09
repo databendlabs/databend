@@ -510,6 +510,7 @@ fn test_statement() {
         r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
         r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
         r#"CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
+        r#"CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
         r#"DESC MASKING POLICY email_mask"#,
         r#"DROP MASKING POLICY IF EXISTS email_mask"#,
         r#"CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t"#,

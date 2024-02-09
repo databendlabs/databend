@@ -14236,7 +14236,9 @@ CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN cur
 ---------- AST ------------
 CreateDatamaskPolicy(
     CreateDatamaskPolicyStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         name: "email_mask",
         policy: DataMaskPolicy {
             args: [
@@ -14308,6 +14310,100 @@ CreateDatamaskPolicy(
                     Literal {
                         span: Some(
                             121..132,
+                        ),
+                        lit: String(
+                            "*********",
+                        ),
+                    },
+                ),
+            },
+            comment: Some(
+                "this is a masking policy",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'
+---------- Output ---------
+CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END COMMENT = 'this is a masking policy'
+---------- AST ------------
+CreateDatamaskPolicy(
+    CreateDatamaskPolicyStmt {
+        create_option: CreateOrReplace,
+        name: "email_mask",
+        policy: DataMaskPolicy {
+            args: [
+                DataMaskArg {
+                    arg_name: "val",
+                    arg_type: String,
+                },
+            ],
+            return_type: String,
+            body: Case {
+                span: Some(
+                    78..146,
+                ),
+                operand: None,
+                conditions: [
+                    InList {
+                        span: Some(
+                            103..117,
+                        ),
+                        expr: FunctionCall {
+                            span: Some(
+                                88..102,
+                            ),
+                            distinct: false,
+                            name: Identifier {
+                                name: "current_role",
+                                quote: None,
+                                span: Some(
+                                    88..100,
+                                ),
+                            },
+                            args: [],
+                            params: [],
+                            window: None,
+                            lambda: None,
+                        },
+                        list: [
+                            Literal {
+                                span: Some(
+                                    107..116,
+                                ),
+                                lit: String(
+                                    "ANALYST",
+                                ),
+                            },
+                        ],
+                        not: false,
+                    },
+                ],
+                results: [
+                    ColumnRef {
+                        span: Some(
+                            123..126,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                name: "VAL",
+                                quote: None,
+                                span: Some(
+                                    123..126,
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                else_result: Some(
+                    Literal {
+                        span: Some(
+                            132..143,
                         ),
                         lit: String(
                             "*********",
