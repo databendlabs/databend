@@ -19,6 +19,8 @@ use std::fmt::Formatter;
 use chrono::DateTime;
 use chrono::Utc;
 
+use crate::schema::CreateOption;
+
 const PREFIX_DATAMASK: &str = "__fd_datamask";
 const PREFIX_DATAMASK_BY_ID: &str = "__fd_datamask_by_id";
 const PREFIX_DATAMASK_ID_LIST: &str = "__fd_datamask_id_list";
@@ -72,7 +74,7 @@ impl From<CreateDatamaskReq> for DatamaskMeta {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatamaskReq {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name: DatamaskNameIdent,
     pub args: Vec<(String, String)>,
     pub return_type: String,

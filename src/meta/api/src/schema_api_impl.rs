@@ -3790,6 +3790,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         "SchemaApiImpl".to_string()
     }
 }
+
 async fn construct_drop_virtual_column_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_ident: &VirtualColumnNameIdent,

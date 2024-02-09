@@ -28,6 +28,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
+use databend_common_meta_app::data_mask::DatamaskId;
+use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::DatamaskNameIdent;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
@@ -2732,7 +2734,7 @@ impl SchemaApiTestSuite {
         info!("--- create mask policy");
         {
             let req = CreateDatamaskReq {
-                if_not_exists: true,
+                create_option: CreateOption::CreateIfNotExists(true),
                 name: DatamaskNameIdent {
                     tenant: tenant.to_string(),
                     name: mask_name_1.to_string(),
@@ -2746,7 +2748,7 @@ impl SchemaApiTestSuite {
             mt.create_data_mask(req).await?;
 
             let req = CreateDatamaskReq {
-                if_not_exists: true,
+                create_option: CreateOption::CreateIfNotExists(true),
                 name: DatamaskNameIdent {
                     tenant: tenant.to_string(),
                     name: mask_name_2.to_string(),
@@ -2977,6 +2979,46 @@ impl SchemaApiTestSuite {
             let id_list: Result<MaskpolicyTableIdList, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_list_key).await;
             assert!(id_list.is_err())
+        }
+
+        info!("--- create or replace mask policy");
+        {
+            let mask_name = "replace_mask";
+            let name = DatamaskNameIdent {
+                tenant: tenant.to_string(),
+                name: mask_name.to_string(),
+            };
+            let req = CreateDatamaskReq {
+                create_option: CreateOption::CreateIfNotExists(true),
+                name: name.clone(),
+                args: vec![],
+                return_type: "".to_string(),
+                body: "".to_string(),
+                comment: Some("before".to_string()),
+                create_on: created_on,
+            };
+            mt.create_data_mask(req).await?;
+            let old_id: u64 = get_kv_u64_data(mt.as_kv_api(), &name).await?;
+            let id_key = DatamaskId { id: old_id };
+            let meta: DatamaskMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+            assert_eq!(meta.comment, Some("before".to_string()));
+
+            let req = CreateDatamaskReq {
+                create_option: CreateOption::CreateOrReplace,
+                name: name.clone(),
+                args: vec![],
+                return_type: "".to_string(),
+                body: "".to_string(),
+                comment: Some("after".to_string()),
+                create_on: created_on,
+            };
+            mt.create_data_mask(req).await?;
+
+            let id: u64 = get_kv_u64_data(mt.as_kv_api(), &name).await?;
+            assert_ne!(old_id, id);
+            let id_key = DatamaskId { id };
+            let meta: DatamaskMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+            assert_eq!(meta.comment, Some("after".to_string()));
         }
 
         Ok(())
