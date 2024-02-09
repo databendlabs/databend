@@ -32,14 +32,14 @@ impl Binder {
         stmt: &CreatePasswordPolicyStmt,
     ) -> Result<Plan> {
         let CreatePasswordPolicyStmt {
-            if_not_exists,
+            create_option,
             name,
             set_options,
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
         let plan = CreatePasswordPolicyPlan {
-            if_not_exists: *if_not_exists,
+            create_option: *create_option,
             tenant,
             name: name.to_string(),
             set_options: set_options.clone(),

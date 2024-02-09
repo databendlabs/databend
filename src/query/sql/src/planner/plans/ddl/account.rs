@@ -204,7 +204,7 @@ impl ShowNetworkPoliciesPlan {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreatePasswordPolicyPlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub tenant: String,
     pub name: String,
     pub set_options: PasswordSetOptions,
