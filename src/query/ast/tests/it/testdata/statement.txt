@@ -14839,7 +14839,33 @@ CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_
 ---------- AST ------------
 CreateNetworkPolicy(
     CreateNetworkPolicyStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
+        name: "mypolicy",
+        allowed_ip_list: [
+            "192.168.10.0/24",
+        ],
+        blocked_ip_list: Some(
+            [
+                "192.168.10.99",
+            ],
+        ),
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'
+---------- Output ---------
+CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'
+---------- AST ------------
+CreateNetworkPolicy(
+    CreateNetworkPolicyStmt {
+        create_option: CreateOrReplace,
         name: "mypolicy",
         allowed_ip_list: [
             "192.168.10.0/24",

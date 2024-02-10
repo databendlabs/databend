@@ -62,7 +62,7 @@ impl Interpreter for CreateNetworkPolicyInterpreter {
             update_on: None,
         };
         user_mgr
-            .add_network_policy(&tenant, network_policy, plan.if_not_exists)
+            .add_network_policy(&tenant, network_policy, &plan.create_option)
             .await?;
 
         Ok(PipelineBuildResult::create())

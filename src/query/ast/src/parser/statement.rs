@@ -1619,15 +1619,16 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let create_network_policy = map(
+    let create_network_policy = map_res(
         rule! {
-            CREATE ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+            CREATE ~  (OR ~ REPLACE)? ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
              ~ ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")"
              ~ ( BLOCKED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
              ~ ( COMMENT ~ ^Eq ~ ^#literal_string)?
         },
         |(
             _,
+            opt_or_replace,
             _,
             _,
             opt_if_not_exists,
@@ -1640,8 +1641,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             opt_blocked_ip_list,
             opt_comment,
         )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             let stmt = CreateNetworkPolicyStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: name.to_string(),
                 allowed_ip_list,
                 blocked_ip_list: match opt_blocked_ip_list {
@@ -1653,7 +1656,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     None => None,
                 },
             };
-            Statement::CreateNetworkPolicy(stmt)
+            Ok(Statement::CreateNetworkPolicy(stmt))
         },
     );
     let alter_network_policy = map(
