@@ -66,3 +66,15 @@ DROP NETWORK POLICY test_policy
 
 statement error 2207
 DESC NETWORK POLICY test_policy
+
+statement ok
+CREATE NETWORK POLICY replace_policy ALLOWED_IP_LIST=('192.168.1.0/24') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test comment'
+
+statement error 1005
+CREATE OR REPLACE NETWORK POLICY IF NOT EXISTS replace_policy ALLOWED_IP_LIST=('192.168.1.0/24') BLOCKED_IP_LIST=('192.168.1.89') COMMENT='another test comment'
+
+statement ok
+CREATE OR REPLACE NETWORK POLICY replace_policy ALLOWED_IP_LIST=('192.168.1.0/24') BLOCKED_IP_LIST=('192.168.1.89') COMMENT='another test comment'
+
+statement ok
+DROP NETWORK POLICY replace_policy
