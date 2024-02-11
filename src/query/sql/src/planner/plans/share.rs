@@ -20,6 +20,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::share::CreateShareEndpointReq;
 use databend_common_meta_app::share::CreateShareReq;
 use databend_common_meta_app::share::DropShareEndpointReq;
@@ -33,7 +34,7 @@ use databend_common_meta_app::share::ShareNameIdent;
 // Create Share endpoint Plan
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateShareEndpointPlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub endpoint: ShareEndpointIdent,
     pub url: String,
     pub tenant: String,
@@ -44,7 +45,7 @@ pub struct CreateShareEndpointPlan {
 impl From<CreateShareEndpointPlan> for CreateShareEndpointReq {
     fn from(p: CreateShareEndpointPlan) -> Self {
         CreateShareEndpointReq {
-            if_not_exists: p.if_not_exists,
+            create_option: p.create_option,
             endpoint: p.endpoint.clone(),
             url: p.url.clone(),
             tenant: p.tenant.clone(),
