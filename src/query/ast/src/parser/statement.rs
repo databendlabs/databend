@@ -1432,18 +1432,36 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
 
     // share statements
-    let create_share_endpoint = map(
+    let create_share_endpoint = map_res(
         rule! {
-            CREATE ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
              ~ #ident
              ~ URL ~ "=" ~ #share_endpoint_uri_location
              ~ TENANT ~ "=" ~ #ident
              ~ ( ARGS ~ ^"=" ~ ^#options)?
              ~ ( COMMENT ~ ^"=" ~ ^#literal_string)?
         },
-        |(_, _, _, opt_if_not_exists, endpoint, _, _, url, _, _, tenant, args_opt, comment_opt)| {
-            Statement::CreateShareEndpoint(CreateShareEndpointStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+        |(
+            _,
+            opt_or_replace,
+            _,
+            _,
+            opt_if_not_exists,
+            endpoint,
+            _,
+            _,
+            url,
+            _,
+            _,
+            tenant,
+            args_opt,
+            comment_opt,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+
+            Ok(Statement::CreateShareEndpoint(CreateShareEndpointStmt {
+                create_option,
                 endpoint,
                 url,
                 tenant,
@@ -1455,7 +1473,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     Some(opt) => Some(opt.2),
                     None => None,
                 },
-            })
+            }))
         },
     );
     let show_share_endpoints = map(

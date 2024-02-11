@@ -1011,7 +1011,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut condition = vec![];
             let mut if_then = vec![];
 
-            let (index_id, _) = construct_drop_index_txn_operations(
+            let (index_id, index_id_seq) = construct_drop_index_txn_operations(
                 self,
                 tenant_index,
                 req.if_exists,
@@ -1020,6 +1020,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 &mut if_then,
             )
             .await?;
+            if index_id_seq == 0 {
+                return Ok(DropIndexReply {});
+            }
 
             let txn_req = TxnRequest {
                 condition,
@@ -1401,7 +1404,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             trials.next().unwrap()?.await;
 
             let mut if_then = vec![];
-            construct_drop_virtual_column_txn_operations(
+            let seq = construct_drop_virtual_column_txn_operations(
                 self,
                 &req.name_ident,
                 req.if_exists,
@@ -1410,6 +1413,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 &mut if_then,
             )
             .await?;
+            if seq == 0 {
+                return Ok(DropVirtualColumnReply {});
+            }
 
             let txn_req = TxnRequest {
                 condition: vec![],
@@ -1627,7 +1633,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         };
                     } else {
                         // create or replace
-                        drop_table_by_id(
+                        construct_drop_table_txn_operations(
                             self,
                             req.name_ident.table_name.clone(),
                             req.name_ident.tenant.clone(),
@@ -2457,7 +2463,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut condition = vec![];
             let mut if_then = vec![];
 
-            let opt = drop_table_by_id(
+            let opt = construct_drop_table_txn_operations(
                 self,
                 req.table_name.clone(),
                 req.tenant.clone(),
@@ -2470,6 +2476,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 &mut if_then,
             )
             .await?;
+            // seq == 0 means that req.if_exists == true and cannot find table meta,
+            // in this case just return directly
+            if opt.1 == 0 {
+                return Ok(DropTableReply { spec_vec: None });
+            }
             let txn_req = TxnRequest {
                 condition,
                 if_then,
@@ -3883,7 +3894,7 @@ async fn construct_drop_index_txn_operations(
     Ok((index_id, index_id_seq))
 }
 
-async fn drop_table_by_id(
+async fn construct_drop_table_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_name: String,
     tenant: String,

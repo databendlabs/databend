@@ -3014,6 +3014,10 @@ impl SchemaApiTestSuite {
             };
             mt.create_data_mask(req).await?;
 
+            // assert old id key has been deleted
+            let meta: Result<DatamaskMeta, KVAppError> = get_kv_data(mt.as_kv_api(), &id_key).await;
+            assert!(meta.is_err());
+
             let id: u64 = get_kv_u64_data(mt.as_kv_api(), &name).await?;
             assert_ne!(old_id, id);
             let id_key = DatamaskId { id };
@@ -5956,7 +5960,13 @@ impl SchemaApiTestSuite {
                 name_ident: replace_name_ident.clone(),
             };
 
-            let _res = mt.create_index(req).await?;
+            let res = mt.create_index(req).await?;
+            let old_index_id = res.index_id;
+            let old_index_id_key = IndexId {
+                index_id: old_index_id,
+            };
+            let meta: IndexMeta = get_kv_data(mt.as_kv_api(), &old_index_id_key).await?;
+            assert_eq!(meta, index_meta_1);
 
             let resp = mt.get_index(get_req.clone()).await?;
 
@@ -5968,7 +5978,17 @@ impl SchemaApiTestSuite {
                 meta: index_meta_2.clone(),
             };
 
-            let _res = mt.create_index(req).await?;
+            let res = mt.create_index(req).await?;
+
+            // assert old index id key has been deleted
+            let meta: IndexMeta = get_kv_data(mt.as_kv_api(), &old_index_id_key).await?;
+            assert!(meta.dropped_on.is_some());
+
+            // assert new index id key has been created
+            let index_id = res.index_id;
+            let index_id_key = IndexId { index_id };
+            let meta: IndexMeta = get_kv_data(mt.as_kv_api(), &index_id_key).await?;
+            assert_eq!(meta, index_meta_2);
 
             let resp = mt.get_index(get_req).await?;
 
