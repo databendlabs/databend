@@ -28,6 +28,8 @@ use parquet2::page::Page;
 use parquet2::schema::Repetition;
 
 use super::super::Pages;
+use crate::arrow::array::MutableBinaryViewArray;
+use crate::arrow::array::ViewType;
 use crate::arrow::bitmap::utils::BitmapIter;
 use crate::arrow::bitmap::MutableBitmap;
 use crate::arrow::error::Error;
@@ -78,6 +80,45 @@ impl Pushable<bool> for MutableBitmap {
     #[inline]
     fn extend_constant(&mut self, additional: usize, value: bool) {
         self.extend_constant(additional, value)
+    }
+}
+
+impl<T: ViewType + ?Sized> Pushable<&T> for MutableBinaryViewArray<T> {
+    #[inline]
+    fn reserve(&mut self, additional: usize) {
+        MutableBinaryViewArray::reserve(self, additional)
+    }
+
+    #[inline]
+    fn push(&mut self, value: &T) {
+        MutableBinaryViewArray::push_value(self, value)
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        MutableBinaryViewArray::len(self)
+    }
+
+    fn push_null(&mut self) {
+        MutableBinaryViewArray::push_null(self)
+    }
+
+    fn extend_constant(&mut self, additional: usize, value: &T) {
+        // First push a value to get the View
+        MutableBinaryViewArray::push_value(self, value);
+
+        // And then use that new view to extend
+        let views = self.views_mut();
+        let view = *views.last().unwrap();
+
+        let remaining = additional - 1;
+        for _ in 0..remaining {
+            views.push(view);
+        }
+
+        if let Some(bitmap) = self.validity() {
+            bitmap.extend_constant(remaining, true)
+        }
     }
 }
 

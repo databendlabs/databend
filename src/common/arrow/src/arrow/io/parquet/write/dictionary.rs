@@ -24,6 +24,7 @@ use parquet2::write::DynIter;
 
 use super::binary::build_statistics as binary_build_statistics;
 use super::binary::encode_plain as binary_encode_plain;
+use super::binview;
 use super::fixed_len_bytes::build_statistics as fixed_binary_build_statistics;
 use super::fixed_len_bytes::encode_plain as fixed_binary_encode_plain;
 use super::nested;
@@ -36,6 +37,7 @@ use super::WriteOptions;
 use crate::arrow::array::Array;
 use crate::arrow::array::DictionaryArray;
 use crate::arrow::array::DictionaryKey;
+use crate::arrow::array::Utf8ViewArray;
 use crate::arrow::bitmap::Bitmap;
 use crate::arrow::bitmap::MutableBitmap;
 use crate::arrow::datatypes::DataType;
@@ -267,6 +269,23 @@ pub fn array_to_pages<K: DictionaryKey>(
                             None
                         };
                         (DictPage::new(buffer, values.len(), false), stats)
+                    }
+                    DataType::Utf8View => {
+                        let array = array
+                            .values()
+                            .as_any()
+                            .downcast_ref::<Utf8ViewArray>()
+                            .unwrap()
+                            .to_binview();
+                        let mut buffer = vec![];
+                        binview::encode_plain(&array, &mut buffer);
+
+                        let stats = if options.write_statistics {
+                            Some(binview::build_statistics(&array, type_.clone()))
+                        } else {
+                            None
+                        };
+                        (DictPage::new(buffer, array.len(), false), stats)
                     }
                     DataType::FixedSizeBinary(_) => {
                         let mut buffer = vec![];

@@ -19,9 +19,11 @@ use std::sync::Arc;
 use std::usize;
 
 use either::Either;
+use num_traits::Zero;
 
 use super::Bytes;
 use super::IntoIter;
+use crate::arrow::array::ArrayAccessor;
 
 /// [`Buffer`] is a contiguous memory region that can be shared across
 /// thread boundaries.
@@ -193,7 +195,7 @@ impl<T> Buffer<T> {
 
     /// Returns a pointer to the start of this buffer.
     #[inline]
-    pub(crate) fn as_ptr(&self) -> *const T {
+    pub(crate) fn data_ptr(&self) -> *const T {
         self.data.deref().as_ptr()
     }
 
@@ -288,6 +290,21 @@ impl<T> Buffer<T> {
     }
 }
 
+impl<T: Clone> Buffer<T> {
+    pub fn make_mut(self) -> Vec<T> {
+        match self.into_mut() {
+            Either::Right(v) => v,
+            Either::Left(same) => same.as_slice().to_vec(),
+        }
+    }
+}
+
+impl<T: Zero + Copy> Buffer<T> {
+    pub fn zeroed(len: usize) -> Self {
+        vec![T::zero(); len].into()
+    }
+}
+
 impl<T> From<Vec<T>> for Buffer<T> {
     #[inline]
     fn from(p: Vec<T>) -> Self {
@@ -340,5 +357,18 @@ impl<T: crate::arrow::types::NativeType> From<Buffer<T>> for arrow_buffer::Buffe
             value.offset * std::mem::size_of::<T>(),
             value.length * std::mem::size_of::<T>(),
         )
+    }
+}
+
+unsafe impl<'a, T: 'a> ArrayAccessor<'a> for Buffer<T> {
+    type Item = &'a T;
+
+    unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item {
+        debug_assert!(index < self.length);
+        unsafe { self.get_unchecked(self.offset + index) }
+    }
+
+    fn len(&self) -> usize {
+        Buffer::len(self)
     }
 }

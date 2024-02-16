@@ -441,6 +441,43 @@ pub(super) fn write_dictionary<K: DictionaryKey>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+pub(super) fn write_binview<T: ViewType + ?Sized>(
+    array: &BinaryViewArrayGeneric<T>,
+    buffers: &mut Vec<ipc::Buffer>,
+    arrow_data: &mut Vec<u8>,
+    offset: &mut i64,
+    is_little_endian: bool,
+    compression: Option<Compression>,
+) {
+    let array = if array.is_sliced() {
+        array.clone().maybe_gc()
+    } else {
+        array.clone()
+    };
+    write_bitmap(
+        array.validity(),
+        Array::len(&array),
+        buffers,
+        arrow_data,
+        offset,
+        compression,
+    );
+
+    write_buffer(
+        array.views(),
+        buffers,
+        arrow_data,
+        offset,
+        is_little_endian,
+        compression,
+    );
+
+    for data in array.data_buffers().as_ref() {
+        write_bytes(data, buffers, arrow_data, offset, compression);
+    }
+}
+
 /// Writes an [`Array`] to `arrow_data`
 pub fn write(
     array: &dyn Array,
@@ -580,6 +617,22 @@ pub fn write(
                 compression,
             );
         }
+        Utf8View => write_binview(
+            array.as_any().downcast_ref::<Utf8ViewArray>().unwrap(),
+            buffers,
+            arrow_data,
+            offset,
+            is_little_endian,
+            compression,
+        ),
+        BinaryView => write_binview(
+            array.as_any().downcast_ref::<BinaryViewArray>().unwrap(),
+            buffers,
+            arrow_data,
+            offset,
+            is_little_endian,
+            compression,
+        ),
     }
 }
 
