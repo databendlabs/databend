@@ -283,6 +283,8 @@ unsafe fn to_data_type(schema: &ArrowSchema) -> Result<DataType> {
         "tDn" => DataType::Duration(TimeUnit::Nanosecond),
         "tiM" => DataType::Interval(IntervalUnit::YearMonth),
         "tiD" => DataType::Interval(IntervalUnit::DayTime),
+        "vu" => DataType::Utf8View,
+        "vz" => DataType::BinaryView,
         "+l" => {
             let child = schema.child(0);
             DataType::List(Box::new(to_field(child)?))
@@ -461,6 +463,8 @@ fn to_format(data_type: &DataType) -> String {
                 tz.as_ref().map(|x| x.as_ref()).unwrap_or("")
             )
         }
+        DataType::Utf8View => "vu".to_string(),
+        DataType::BinaryView => "vz".to_string(),
         DataType::Decimal(precision, scale) => format!("d:{precision},{scale}"),
         DataType::Decimal256(precision, scale) => format!("d:{precision},{scale},256"),
         DataType::List(_) => "+l".to_string(),

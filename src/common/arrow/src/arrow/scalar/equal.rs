@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use super::*;
 use crate::arrow::datatypes::PhysicalType;
+use crate::arrow::scalar::binview::BinaryViewScalar;
 
 impl PartialEq for dyn Scalar + '_ {
     fn eq(&self, that: &dyn Scalar) -> bool {
@@ -70,5 +71,7 @@ fn equal(lhs: &dyn Scalar, rhs: &dyn Scalar) -> bool {
         FixedSizeList => dyn_eq!(FixedSizeListScalar, lhs, rhs),
         Union => dyn_eq!(UnionScalar, lhs, rhs),
         Map => dyn_eq!(MapScalar, lhs, rhs),
+        BinaryView => dyn_eq!(BinaryViewScalar<[u8]>, lhs, rhs),
+        Utf8View => dyn_eq!(BinaryViewScalar<str>, lhs, rhs),
     }
 }

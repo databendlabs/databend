@@ -23,6 +23,7 @@ use parquet2::types::int96_to_i64_ns;
 use super::super::ArrayIter;
 use super::super::Pages;
 use super::binary;
+use super::binview;
 use super::boolean;
 use super::fixed_size_binary;
 use super::null;
@@ -365,6 +366,9 @@ pub fn page_iter_to_arrays<'a, I: Pages + 'a>(
         (PhysicalType::ByteArray, LargeBinary | LargeUtf8) => Box::new(
             binary::Iter::<i64, _>::new(pages, data_type, chunk_size, num_rows),
         ),
+        (PhysicalType::ByteArray, BinaryView | Utf8View) => Box::new(
+            binview::BinaryViewArrayIter::new(pages, data_type, chunk_size, num_rows),
+        ),
 
         (_, Dictionary(key_type, _, _)) => {
             return match_integer_type!(key_type, |$K| {
@@ -667,6 +671,9 @@ fn dict_read<'a, K: DictionaryKey, I: Pages + 'a>(
         )),
         (PhysicalType::ByteArray, LargeUtf8 | LargeBinary) => dyn_iter(
             binary::DictIter::<K, i64, _>::new(iter, data_type, num_rows, chunk_size),
+        ),
+        (PhysicalType::ByteArray, Utf8View | BinaryView) => dyn_iter(
+            binview::DictIter::<K, _>::new(iter, data_type, num_rows, chunk_size),
         ),
         (PhysicalType::FixedLenByteArray(_), FixedSizeBinary(_)) => dyn_iter(
             fixed_size_binary::DictIter::<K, _>::new(iter, data_type, num_rows, chunk_size),
