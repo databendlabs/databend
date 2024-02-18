@@ -14,7 +14,6 @@
 
 // To avoid RUSTFLAGS="-C target-feature=+sse4.2" warning.
 
-use std::hash::BuildHasher;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
@@ -219,6 +218,8 @@ impl FastHash for u128 {
                 unsafe { _mm_crc32_u64(value, (*self >> 64) as u64) }
             } else {
                 use std::hash::Hasher;
+                use std::hash::BuildHasher;
+
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 hasher.write_u128(*self);
@@ -249,6 +250,8 @@ impl FastHash for i256 {
                 value
             } else {
                 use std::hash::Hasher;
+                use std::hash::BuildHasher;
+
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 for x in self.0 {
@@ -274,6 +277,8 @@ impl FastHash for U256 {
                 value
             } else {
                 use std::hash::Hasher;
+                use std::hash::BuildHasher;
+
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 for x in self.0 {
@@ -342,6 +347,8 @@ impl FastHash for [u8] {
                 value
             } else {
                 use std::hash::Hasher;
+                use std::hash::BuildHasher;
+
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 hasher.write(self);
@@ -373,6 +380,8 @@ impl<const N: usize> FastHash for ([u64; N], NonZeroU64) {
                 value
             } else {
                 use std::hash::Hasher;
+                use std::hash::BuildHasher;
+
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 for x in self.0 {
@@ -413,6 +422,8 @@ pub fn hash_join_fast_string_hash(key: &[u8]) -> u64 {
             }
         } else {
             use std::hash::Hasher;
+            use std::hash::BuildHasher;
+
             let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
             let mut hasher = state.build_hasher();
             hasher.write(key);
@@ -513,24 +524,21 @@ pub trait HashtableLike {
 pub trait HashJoinHashtableLike {
     type Key: ?Sized;
 
-    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    // same with `early_filtering_probe`, but we don't use early_filter
+    // Probe hash table, use `hashes` to probe hash table and convert it in-place to pointers for memory reuse.
     fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize;
 
-    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    // 1. same with `early_filtering_probe_with_selection`, but we don't use selection to preserve the
-    // unfiltered indexes, we just set the filtered hashes as zero.
-    // 2. return the unfiltered counts.
-    fn early_filtering_probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize;
+    // Perform early filtering probe, store matched indexes in `matched_selection` and store unmatched indexes
+    // in `unmatched_selection`, return the number of matched and unmatched indexes.
+    fn early_filtering_probe(
+        &self,
+        hashes: &mut [u64],
+        valids: Option<Bitmap>,
+        matched_selection: &mut [u32],
+        unmatched_selection: &mut [u32],
+    ) -> (usize, usize);
 
-    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    // we use `early_filtering_probe_with_selection` to do the first round probe.
-    // 1. `hashes` is the hash value of probe block's rows. we will use this one to
-    // do early filtering. if we can't early filter one row(at idx), we will assign pointer in
-    // the bucket to hashes[idx] to reuse the memory.
-    // 2. `selection` is used to preserved the indexes which can't be early_filtered.
-    // 3. return the count of preserved the indexes in `selection`
-    fn early_filtering_probe_with_selection(
+    // Perform early filtering probe and store matched indexes in `selection`, return the number of matched indexes.
+    fn early_filtering_matched_probe(
         &self,
         hashes: &mut [u64],
         valids: Option<Bitmap>,
@@ -541,7 +549,7 @@ pub trait HashJoinHashtableLike {
     // the ptr is the link header.
     fn next_contains(&self, key: &Self::Key, ptr: u64) -> bool;
 
-    /// 1. `key` is the serialize build key from one row
+    /// 1. `key` is the serialize probe key from one row
     /// 2. `ptr` pointers to the *RawEntry for of the bucket correlated to key.So before this method,
     /// we will do a round probe firstly. If the ptr is zero, it means there is no correlated bucket
     /// for key

@@ -20,6 +20,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_types::MetaId;
 
+use super::CreateOption;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct IndexNameIdent {
     pub tenant: String,
@@ -125,18 +127,26 @@ impl Default for IndexMeta {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateIndexReq {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name_ident: IndexNameIdent,
     pub meta: IndexMeta,
 }
 
 impl Display for CreateIndexReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "create_index(if_not_exists={}):{}={:?}",
-            self.if_not_exists, self.name_ident.tenant, self.meta
-        )
+        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
+            write!(
+                f,
+                "create_index(if_not_exists={}):{}={:?}",
+                if_not_exists, self.name_ident.tenant, self.meta
+            )
+        } else {
+            write!(
+                f,
+                "create_or_replace_index:{}={:?}",
+                self.name_ident.tenant, self.meta
+            )
+        }
     }
 }
 

@@ -32,6 +32,9 @@ use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
+use geozero::wkb::Ewkb;
+use geozero::CoordDimensions;
+use geozero::ToWkb;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
@@ -131,6 +134,7 @@ impl FieldEncoderValues {
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, in_nested),
             Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, in_nested),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, in_nested),
+            Column::Geometry(c) => self.write_geometry(c, row_index, out_buf, in_nested),
 
             Column::Array(box c) => self.write_array(c, row_index, out_buf),
             Column::Map(box c) => self.write_map(c, row_index, out_buf),
@@ -283,6 +287,19 @@ impl FieldEncoderValues {
         let v = unsafe { column.index_unchecked(row_index) };
         let s = jsonb::to_string(v);
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
+    }
+    fn write_geometry(
+        &self,
+        column: &BinaryColumn,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        in_nested: bool,
+    ) {
+        let v = unsafe { column.index_unchecked(row_index) };
+        let s = Ewkb(v.to_vec())
+            .to_ewkb(CoordDimensions::xy(), None)
+            .unwrap();
+        self.write_string_inner(&s, out_buf, in_nested);
     }
 
     fn write_array<T: ValueType>(

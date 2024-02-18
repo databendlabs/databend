@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
@@ -23,14 +24,13 @@ use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Operator;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 
 /// Rule to apply commutativity of join operator.
 /// In opposite to RuleCommuteJoin, this rule only applies to base tables.
 pub struct RuleCommuteJoinBaseTable {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
 }
 
 impl RuleCommuteJoinBaseTable {
@@ -41,16 +41,10 @@ impl RuleCommuteJoinBaseTable {
             // LogicalJoin
             // | \
             // *  *
-            patterns: vec![SExpr::create_binary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Join,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_pattern_leaf()),
-                Arc::new(SExpr::create_pattern_leaf()),
-            )],
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Join,
+                children: vec![Matcher::Leaf, Matcher::Leaf],
+            }],
         }
     }
 }
@@ -104,10 +98,9 @@ impl Rule for RuleCommuteJoinBaseTable {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
-
     fn transformation(&self) -> bool {
         false
     }

@@ -14,12 +14,17 @@
 
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordPolicy;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait PasswordPolicyApi: Sync + Send {
-    async fn add_password_policy(&self, password_policy: PasswordPolicy) -> Result<u64>;
+    async fn add_password_policy(
+        &self,
+        password_policy: PasswordPolicy,
+        create_option: &CreateOption,
+    ) -> Result<()>;
 
     async fn update_password_policy(
         &self,

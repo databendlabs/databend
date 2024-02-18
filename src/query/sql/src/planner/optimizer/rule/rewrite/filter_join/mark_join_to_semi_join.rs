@@ -22,14 +22,14 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::ScalarExpr;
 
-pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<SExpr> {
+pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
     let mut filter: Filter = s_expr.plan().clone().try_into()?;
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
     let has_disjunction = filter.predicates.iter().any(
         |predicate| matches!(predicate, ScalarExpr::FunctionCall(func) if func.func_name == "or"),
     );
     if !join.join_type.is_mark_join() || has_disjunction {
-        return Ok(s_expr.clone());
+        return Ok((s_expr.clone(), false));
     }
 
     let mark_index = join.marker_index.unwrap();
@@ -47,7 +47,7 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<SExpr> {
                 // Check if the argument is mark index, if so, we won't convert it to semi join
                 if let ScalarExpr::BoundColumnRef(col) = &func.arguments[0] {
                     if col.column.index == mark_index {
-                        return Ok(s_expr.clone());
+                        return Ok((s_expr.clone(), false));
                     }
                 }
             }
@@ -57,7 +57,7 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<SExpr> {
 
     if !find_mark_index {
         // To be conservative, we do not convert
-        return Ok(s_expr.clone());
+        return Ok((s_expr.clone(), false));
     }
 
     join.join_type = match join.join_type {
@@ -73,6 +73,8 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<SExpr> {
         Arc::new(s_join_expr.child(1)?.clone()),
     );
 
-    result = SExpr::create_unary(Arc::new(filter.into()), Arc::new(result));
-    Ok(result)
+    if !filter.predicates.is_empty() {
+        result = SExpr::create_unary(Arc::new(filter.into()), Arc::new(result));
+    }
+    Ok((result, true))
 }

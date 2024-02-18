@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
@@ -33,7 +34,12 @@ use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
 impl HashJoinProbeState {
-    pub(crate) fn inner_join<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn inner_join<
+        'a,
+        H: HashJoinHashtableLike,
+        const FROM_LEFT_SINGLE: bool,
+        const FROM_RIGHT_SINGLE: bool,
+    >(
         &self,
         input: &DataBlock,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
@@ -52,7 +58,18 @@ impl HashJoinProbeState {
         let pointers = probe_state.hashes.as_slice();
 
         // Build states.
-        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
+        let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+        let outer_scan_map = &mut build_state.outer_scan_map;
+        let mut right_single_scan_map = if FROM_RIGHT_SINGLE {
+            outer_scan_map
+                .iter_mut()
+                .map(|sp| unsafe {
+                    std::mem::transmute::<*mut bool, *mut AtomicBool>(sp.as_mut_ptr())
+                })
+                .collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
 
         // Results.
         let mut matched_idx = 0;
@@ -66,10 +83,16 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (mut match_count, mut incomplete_ptr) =
+                let (match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
+                }
+
+                if FROM_LEFT_SINGLE && match_count > 1 {
+                    return Err(ErrorCode::Internal(
+                        "Scalar subquery can't return more than one row",
+                    ));
                 }
 
                 // Fill `probe_indexes`.
@@ -79,26 +102,25 @@ impl HashJoinProbeState {
                 }
 
                 while matched_idx == max_block_size {
-                    result_blocks.push(self.process_inner_join_block(
+                    result_blocks.push(self.process_inner_join_block::<FROM_RIGHT_SINGLE>(
                         matched_idx,
                         input,
                         probe_indexes,
                         build_indexes,
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
+                        &mut right_single_scan_map,
                     )?);
-                    matched_idx = 0;
-                    (match_count, incomplete_ptr) = hash_table.next_probe(
-                        key,
-                        incomplete_ptr,
-                        build_indexes_ptr,
-                        matched_idx,
-                        max_block_size,
-                    );
-                    for _ in 0..match_count {
-                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
-                        matched_idx += 1;
-                    }
+                    (matched_idx, incomplete_ptr) = self
+                        .fill_probe_and_build_indexes::<_, FROM_LEFT_SINGLE>(
+                            hash_table,
+                            key,
+                            incomplete_ptr,
+                            *idx,
+                            probe_indexes,
+                            build_indexes_ptr,
+                            max_block_size,
+                        )?;
                 }
             }
         } else {
@@ -107,10 +129,16 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(idx) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (mut match_count, mut incomplete_ptr) =
+                let (match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
+                }
+
+                if FROM_LEFT_SINGLE && match_count > 1 {
+                    return Err(ErrorCode::Internal(
+                        "Scalar subquery can't return more than one row",
+                    ));
                 }
 
                 // Fill `probe_indexes`.
@@ -120,38 +148,38 @@ impl HashJoinProbeState {
                 }
 
                 while matched_idx == max_block_size {
-                    result_blocks.push(self.process_inner_join_block(
+                    result_blocks.push(self.process_inner_join_block::<FROM_RIGHT_SINGLE>(
                         matched_idx,
                         input,
                         probe_indexes,
                         build_indexes,
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
+                        &mut right_single_scan_map,
                     )?);
-                    matched_idx = 0;
-                    (match_count, incomplete_ptr) = hash_table.next_probe(
-                        key,
-                        incomplete_ptr,
-                        build_indexes_ptr,
-                        matched_idx,
-                        max_block_size,
-                    );
-                    for _ in 0..match_count {
-                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
-                        matched_idx += 1;
-                    }
+                    (matched_idx, incomplete_ptr) = self
+                        .fill_probe_and_build_indexes::<_, FROM_LEFT_SINGLE>(
+                            hash_table,
+                            key,
+                            incomplete_ptr,
+                            idx as u32,
+                            probe_indexes,
+                            build_indexes_ptr,
+                            max_block_size,
+                        )?;
                 }
             }
         }
 
         if matched_idx > 0 {
-            result_blocks.push(self.process_inner_join_block(
+            result_blocks.push(self.process_inner_join_block::<FROM_RIGHT_SINGLE>(
                 matched_idx,
                 input,
                 probe_indexes,
                 build_indexes,
                 &mut probe_state.generation_state,
                 &build_state.generation_state,
+                &mut right_single_scan_map,
             )?);
         }
 
@@ -188,7 +216,7 @@ impl HashJoinProbeState {
     }
 
     #[inline]
-    fn process_inner_join_block(
+    fn process_inner_join_block<const FROM_RIGHT_SINGLE: bool>(
         &self,
         matched_idx: usize,
         input: &DataBlock,
@@ -196,6 +224,7 @@ impl HashJoinProbeState {
         build_indexes: &[RowPtr],
         probe_state: &mut ProbeBlockGenerationState,
         build_state: &BuildBlockGenerationState,
+        right_single_scan_map: &mut [*mut AtomicBool],
     ) -> Result<DataBlock> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
@@ -242,6 +271,53 @@ impl HashJoinProbeState {
                 result_block.add_column(entry);
             }
         }
+
+        if FROM_RIGHT_SINGLE {
+            self.update_right_single_scan_map(
+                &build_indexes[0..matched_idx],
+                right_single_scan_map,
+                None,
+            )?;
+        }
+
         Ok(result_block)
+    }
+
+    #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn fill_probe_and_build_indexes<
+        'a,
+        H: HashJoinHashtableLike,
+        const FROM_LEFT_SINGLE: bool,
+    >(
+        &self,
+        hash_table: &H,
+        key: &H::Key,
+        incomplete_ptr: u64,
+        idx: u32,
+        probe_indexes: &mut [u32],
+        build_indexes_ptr: *mut RowPtr,
+        max_block_size: usize,
+    ) -> Result<(usize, u64)>
+    where
+        H::Key: 'a,
+    {
+        let (match_count, ptr) =
+            hash_table.next_probe(key, incomplete_ptr, build_indexes_ptr, 0, max_block_size);
+        if match_count == 0 {
+            return Ok((0, 0));
+        }
+
+        if FROM_LEFT_SINGLE {
+            return Err(ErrorCode::Internal(
+                "Scalar subquery can't return more than one row",
+            ));
+        }
+
+        for i in 0..match_count {
+            unsafe { *probe_indexes.get_unchecked_mut(i) = idx };
+        }
+
+        Ok((match_count, ptr))
     }
 }

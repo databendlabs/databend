@@ -21,7 +21,7 @@ checked expr   : parse_json<String>("null")
 optimized expr : 0x2000000000000000
 output type    : Variant
 output domain  : Undefined
-output         : null
+output         : 'null'
 
 
 error: 
@@ -38,7 +38,7 @@ checked expr   : parse_json<String>("true")
 optimized expr : 0x2000000040000000
 output type    : Variant
 output domain  : Undefined
-output         : true
+output         : 'true'
 
 
 ast            : parse_json('false')
@@ -47,7 +47,7 @@ checked expr   : parse_json<String>("false")
 optimized expr : 0x2000000030000000
 output type    : Variant
 output domain  : Undefined
-output         : false
+output         : 'false'
 
 
 ast            : parse_json('"测试"')
@@ -56,7 +56,7 @@ checked expr   : parse_json<String>("\"测试\"")
 optimized expr : 0x2000000010000006e6b58be8af95
 output type    : Variant
 output domain  : Undefined
-output         : "测试"
+output         : '"测试"'
 
 
 ast            : parse_json('1234')
@@ -65,7 +65,7 @@ checked expr   : parse_json<String>("1234")
 optimized expr : 0x20000000200000035004d2
 output type    : Variant
 output domain  : Undefined
-output         : 1234
+output         : '1234'
 
 
 ast            : parse_json('[1,2,3,4]')
@@ -74,7 +74,7 @@ checked expr   : parse_json<String>("[1,2,3,4]")
 optimized expr : 0x80000004200000022000000220000002200000025001500250035004
 output type    : Variant
 output domain  : Undefined
-output         : [1,2,3,4]
+output         : '[1,2,3,4]'
 
 
 ast            : parse_json('{"a":"b","c":"d"}')
@@ -83,29 +83,29 @@ checked expr   : parse_json<String>("{\"a\":\"b\",\"c\":\"d\"}")
 optimized expr : 0x400000021000000110000001100000011000000161636264
 output type    : Variant
 output domain  : Undefined
-output         : {"a":"b","c":"d"}
+output         : '{"a":"b","c":"d"}'
 
 
 ast            : parse_json(s)
 raw expr       : parse_json(s::String)
 checked expr   : parse_json<String>(s)
 evaluation:
-+--------+-----------------------------------------------------------+-----------------------+
-|        | s                                                         | Output                |
-+--------+-----------------------------------------------------------+-----------------------+
-| Type   | String                                                    | Variant               |
-| Domain | {"\"\\\\\\\"abc\\\\\\\"\""..="{\"k\":\"v\",\"a\":\"b\"}"} | Unknown               |
-| Row 0  | 'null'                                                    | null                  |
-| Row 1  | 'true'                                                    | true                  |
-| Row 2  | '9223372036854775807'                                     | 9223372036854775807   |
-| Row 3  | '-32768'                                                  | -32768                |
-| Row 4  | '1234.5678'                                               | 1234.5678             |
-| Row 5  | '1.912e2'                                                 | 191.2                 |
-| Row 6  | '"\\\"abc\\\""'                                           | "\\\"abc\\\""         |
-| Row 7  | '"databend"'                                              | "databend"            |
-| Row 8  | '{"k":"v","a":"b"}'                                       | {"a":"b","k":"v"}     |
-| Row 9  | '[1,2,3,["a","b","c"]]'                                   | [1,2,3,["a","b","c"]] |
-+--------+-----------------------------------------------------------+-----------------------+
++--------+-----------------------------------------------------------+-------------------------+
+|        | s                                                         | Output                  |
++--------+-----------------------------------------------------------+-------------------------+
+| Type   | String                                                    | Variant                 |
+| Domain | {"\"\\\\\\\"abc\\\\\\\"\""..="{\"k\":\"v\",\"a\":\"b\"}"} | Unknown                 |
+| Row 0  | 'null'                                                    | 'null'                  |
+| Row 1  | 'true'                                                    | 'true'                  |
+| Row 2  | '9223372036854775807'                                     | '9223372036854775807'   |
+| Row 3  | '-32768'                                                  | '-32768'                |
+| Row 4  | '1234.5678'                                               | '1234.5678'             |
+| Row 5  | '1.912e2'                                                 | '191.2'                 |
+| Row 6  | '"\\\"abc\\\""'                                           | '"\\\"abc\\\""'         |
+| Row 7  | '"databend"'                                              | '"databend"'            |
+| Row 8  | '{"k":"v","a":"b"}'                                       | '{"a":"b","k":"v"}'     |
+| Row 9  | '[1,2,3,["a","b","c"]]'                                   | '[1,2,3,["a","b","c"]]' |
++--------+-----------------------------------------------------------+-------------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -124,10 +124,10 @@ evaluation:
 +--------+------------------------+--------------+
 | Type   | String NULL            | Variant NULL |
 | Domain | {""..="true"} ∪ {NULL} | Unknown      |
-| Row 0  | 'true'                 | true         |
-| Row 1  | 'false'                | false        |
+| Row 0  | 'true'                 | 'true'       |
+| Row 1  | 'false'                | 'false'      |
 | Row 2  | NULL                   | NULL         |
-| Row 3  | '1234'                 | 1234         |
+| Row 3  | '1234'                 | '1234'       |
 +--------+------------------------+--------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -162,7 +162,7 @@ checked expr   : try_parse_json<String>("null")
 optimized expr : 0x2000000000000000
 output type    : Variant NULL
 output domain  : Undefined
-output         : null
+output         : 'null'
 
 
 ast            : try_parse_json('true')
@@ -171,7 +171,7 @@ checked expr   : try_parse_json<String>("true")
 optimized expr : 0x2000000040000000
 output type    : Variant NULL
 output domain  : Undefined
-output         : true
+output         : 'true'
 
 
 ast            : try_parse_json('false')
@@ -180,7 +180,7 @@ checked expr   : try_parse_json<String>("false")
 optimized expr : 0x2000000030000000
 output type    : Variant NULL
 output domain  : Undefined
-output         : false
+output         : 'false'
 
 
 ast            : try_parse_json('"测试"')
@@ -189,7 +189,7 @@ checked expr   : try_parse_json<String>("\"测试\"")
 optimized expr : 0x2000000010000006e6b58be8af95
 output type    : Variant NULL
 output domain  : Undefined
-output         : "测试"
+output         : '"测试"'
 
 
 ast            : try_parse_json('1234')
@@ -198,7 +198,7 @@ checked expr   : try_parse_json<String>("1234")
 optimized expr : 0x20000000200000035004d2
 output type    : Variant NULL
 output domain  : Undefined
-output         : 1234
+output         : '1234'
 
 
 ast            : try_parse_json('[1,2,3,4]')
@@ -207,7 +207,7 @@ checked expr   : try_parse_json<String>("[1,2,3,4]")
 optimized expr : 0x80000004200000022000000220000002200000025001500250035004
 output type    : Variant NULL
 output domain  : Undefined
-output         : [1,2,3,4]
+output         : '[1,2,3,4]'
 
 
 ast            : try_parse_json('{"a":"b","c":"d"}')
@@ -216,29 +216,29 @@ checked expr   : try_parse_json<String>("{\"a\":\"b\",\"c\":\"d\"}")
 optimized expr : 0x400000021000000110000001100000011000000161636264
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"a":"b","c":"d"}
+output         : '{"a":"b","c":"d"}'
 
 
 ast            : try_parse_json(s)
 raw expr       : try_parse_json(s::String)
 checked expr   : try_parse_json<String>(s)
 evaluation:
-+--------+-----------------------------------------------------------+-----------------------+
-|        | s                                                         | Output                |
-+--------+-----------------------------------------------------------+-----------------------+
-| Type   | String                                                    | Variant NULL          |
-| Domain | {"\"\\\\\\\"abc\\\\\\\"\""..="{\"k\":\"v\",\"a\":\"b\"}"} | Undefined ∪ {NULL}    |
-| Row 0  | 'null'                                                    | null                  |
-| Row 1  | 'true'                                                    | true                  |
-| Row 2  | '9223372036854775807'                                     | 9223372036854775807   |
-| Row 3  | '-32768'                                                  | -32768                |
-| Row 4  | '1234.5678'                                               | 1234.5678             |
-| Row 5  | '1.912e2'                                                 | 191.2                 |
-| Row 6  | '"\\\"abc\\\""'                                           | "\\\"abc\\\""         |
-| Row 7  | '"databend"'                                              | "databend"            |
-| Row 8  | '{"k":"v","a":"b"}'                                       | {"a":"b","k":"v"}     |
-| Row 9  | '[1,2,3,["a","b","c"]]'                                   | [1,2,3,["a","b","c"]] |
-+--------+-----------------------------------------------------------+-----------------------+
++--------+-----------------------------------------------------------+-------------------------+
+|        | s                                                         | Output                  |
++--------+-----------------------------------------------------------+-------------------------+
+| Type   | String                                                    | Variant NULL            |
+| Domain | {"\"\\\\\\\"abc\\\\\\\"\""..="{\"k\":\"v\",\"a\":\"b\"}"} | Undefined ∪ {NULL}      |
+| Row 0  | 'null'                                                    | 'null'                  |
+| Row 1  | 'true'                                                    | 'true'                  |
+| Row 2  | '9223372036854775807'                                     | '9223372036854775807'   |
+| Row 3  | '-32768'                                                  | '-32768'                |
+| Row 4  | '1234.5678'                                               | '1234.5678'             |
+| Row 5  | '1.912e2'                                                 | '191.2'                 |
+| Row 6  | '"\\\"abc\\\""'                                           | '"\\\"abc\\\""'         |
+| Row 7  | '"databend"'                                              | '"databend"'            |
+| Row 8  | '{"k":"v","a":"b"}'                                       | '{"a":"b","k":"v"}'     |
+| Row 9  | '[1,2,3,["a","b","c"]]'                                   | '[1,2,3,["a","b","c"]]' |
++--------+-----------------------------------------------------------+-------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -257,10 +257,10 @@ evaluation:
 +--------+-----------------------+--------------------+
 | Type   | String NULL           | Variant NULL       |
 | Domain | {""..="ttt"} ∪ {NULL} | Undefined ∪ {NULL} |
-| Row 0  | 'true'                | true               |
+| Row 0  | 'true'                | 'true'             |
 | Row 1  | 'ttt'                 | NULL               |
 | Row 2  | NULL                  | NULL               |
-| Row 3  | '1234'                | 1234               |
+| Row 3  | '1234'                | '1234'             |
 +--------+-----------------------+--------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
@@ -430,22 +430,22 @@ checked expr   : json_object_keys<Variant NULL>(CAST(parse_json<String>("{\"k1\"
 optimized expr : 0x8000000210000002100000026b316b32
 output type    : Variant NULL
 output domain  : Undefined
-output         : ["k1","k2"]
+output         : '["k1","k2"]'
 
 
 ast            : json_object_keys(parse_json(s))
 raw expr       : json_object_keys(parse_json(s::String))
 checked expr   : json_object_keys<Variant NULL>(CAST(parse_json<String>(s) AS Variant NULL))
 evaluation:
-+--------+-------------------------------------------------+--------------+
-|        | s                                               | Output       |
-+--------+-------------------------------------------------+--------------+
-| Type   | String                                          | Variant NULL |
-| Domain | {"[1,2,3,4]"..="{\"k1\":\"v1\",\"k2\":\"v2\"}"} | Unknown      |
-| Row 0  | '[1,2,3,4]'                                     | NULL         |
-| Row 1  | '{"a":"b","c":"d"}'                             | ["a","c"]    |
-| Row 2  | '{"k1":"v1","k2":"v2"}'                         | ["k1","k2"]  |
-+--------+-------------------------------------------------+--------------+
++--------+-------------------------------------------------+---------------+
+|        | s                                               | Output        |
++--------+-------------------------------------------------+---------------+
+| Type   | String                                          | Variant NULL  |
+| Domain | {"[1,2,3,4]"..="{\"k1\":\"v1\",\"k2\":\"v2\"}"} | Unknown       |
+| Row 0  | '[1,2,3,4]'                                     | NULL          |
+| Row 1  | '{"a":"b","c":"d"}'                             | '["a","c"]'   |
+| Row 2  | '{"k1":"v1","k2":"v2"}'                         | '["k1","k2"]' |
++--------+-------------------------------------------------+---------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                              |
@@ -459,16 +459,16 @@ ast            : json_object_keys(parse_json(s))
 raw expr       : json_object_keys(parse_json(s::String NULL))
 checked expr   : json_object_keys<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+-------------------------------------------------+--------------+
-|        | s                                               | Output       |
-+--------+-------------------------------------------------+--------------+
-| Type   | String NULL                                     | Variant NULL |
-| Domain | {""..="{\"k1\":\"v1\",\"k2\":\"v2\"}"} ∪ {NULL} | Unknown      |
-| Row 0  | '[1,2,3,4]'                                     | NULL         |
-| Row 1  | '{"a":"b","c":"d"}'                             | ["a","c"]    |
-| Row 2  | NULL                                            | NULL         |
-| Row 3  | '{"k1":"v1","k2":"v2"}'                         | ["k1","k2"]  |
-+--------+-------------------------------------------------+--------------+
++--------+-------------------------------------------------+---------------+
+|        | s                                               | Output        |
++--------+-------------------------------------------------+---------------+
+| Type   | String NULL                                     | Variant NULL  |
+| Domain | {""..="{\"k1\":\"v1\",\"k2\":\"v2\"}"} ∪ {NULL} | Unknown       |
+| Row 0  | '[1,2,3,4]'                                     | NULL          |
+| Row 1  | '{"a":"b","c":"d"}'                             | '["a","c"]'   |
+| Row 2  | NULL                                            | NULL          |
+| Row 3  | '{"k1":"v1","k2":"v2"}'                         | '["k1","k2"]' |
++--------+-------------------------------------------------+---------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                    |
@@ -502,7 +502,7 @@ checked expr   : get<Variant, Int64>(parse_json<String>("[1,2,3,4]"), to_int64<U
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Undefined
-output         : 2
+output         : '2'
 
 
 ast            : parse_json('[1,2,3,4]')[2+3]
@@ -520,7 +520,7 @@ checked expr   : get<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "k")
 optimized expr : 0x200000001000000176
 output type    : Variant NULL
 output domain  : Undefined
-output         : "v"
+output         : '"v"'
 
 
 ast            : parse_json('{"k":"v"}')['x']
@@ -538,7 +538,7 @@ checked expr   : get<Variant, String>(to_variant<T0=Tuple(String, String)><T0>(t
 optimized expr : 0x200000001000000162
 output type    : Variant NULL
 output domain  : Undefined
-output         : "b"
+output         : '"b"'
 
 
 ast            : parse_json(s)[i]
@@ -551,8 +551,8 @@ evaluation:
 | Type   | String                           | UInt64  | Variant NULL |
 | Domain | {"[\"a\",\"b\",\"c\"]"..="true"} | {0..=1} | Unknown      |
 | Row 0  | 'true'                           | 0       | NULL         |
-| Row 1  | '[1,2,3,4]'                      | 0       | 1            |
-| Row 2  | '["a","b","c"]'                  | 1       | "b"          |
+| Row 1  | '[1,2,3,4]'                      | 0       | '1'          |
+| Row 2  | '["a","b","c"]'                  | 1       | '"b"'        |
 +--------+----------------------------------+---------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------+
@@ -574,9 +574,9 @@ evaluation:
 | Type   | String NULL            | UInt64 NULL      | Variant NULL |
 | Domain | {""..="true"} ∪ {NULL} | {0..=2} ∪ {NULL} | Unknown      |
 | Row 0  | 'true'                 | NULL             | NULL         |
-| Row 1  | '[1,2,3,4]'            | 2                | 3            |
+| Row 1  | '[1,2,3,4]'            | 2                | '3'          |
 | Row 2  | NULL                   | NULL             | NULL         |
-| Row 3  | '["a","b","c"]'        | 1                | "b"          |
+| Row 3  | '["a","b","c"]'        | 1                | '"b"'        |
 +--------+------------------------+------------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -598,7 +598,7 @@ evaluation:
 | Type   | String                 | String      | Variant NULL |
 | Domain | {"true"..="{\"k\":1}"} | {"k"..="x"} | Unknown      |
 | Row 0  | 'true'                 | 'k'         | NULL         |
-| Row 1  | '{"k":1}'              | 'k'         | 1            |
+| Row 1  | '{"k":1}'              | 'k'         | '1'          |
 | Row 2  | '{"a":"b"}'            | 'x'         | NULL         |
 +--------+------------------------+-------------+--------------+
 evaluation (internal):
@@ -621,9 +621,9 @@ evaluation:
 | Type   | String NULL                 | String     | Variant NULL |
 | Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="k"} | Unknown      |
 | Row 0  | 'true'                      | ''         | NULL         |
-| Row 1  | '{"k":1}'                   | 'k'        | 1            |
+| Row 1  | '{"k":1}'                   | 'k'        | '1'          |
 | Row 2  | NULL                        | ''         | NULL         |
-| Row 3  | '{"a":"b"}'                 | 'a'        | "b"          |
+| Row 3  | '{"a":"b"}'                 | 'a'        | '"b"'        |
 +--------+-----------------------------+------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -641,7 +641,7 @@ checked expr   : get_ignore_case<Variant, String>(parse_json<String>("{\"Aa\":1,
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Undefined
-output         : 1
+output         : '1'
 
 
 ast            : get_ignore_case(parse_json('{"Aa":1, "aA":2, "aa":3}'), 'aa')
@@ -650,7 +650,7 @@ checked expr   : get_ignore_case<Variant, String>(parse_json<String>("{\"Aa\":1,
 optimized expr : 0x20000000200000025003
 output type    : Variant NULL
 output domain  : Undefined
-output         : 3
+output         : '3'
 
 
 ast            : get_ignore_case(parse_json('{"Aa":1, "aA":2, "aa":3}'), 'bb')
@@ -672,8 +672,8 @@ evaluation:
 | Type   | String                 | String      | Variant NULL |
 | Domain | {"true"..="{\"k\":1}"} | {"A"..="k"} | Unknown      |
 | Row 0  | 'true'                 | 'k'         | NULL         |
-| Row 1  | '{"k":1}'              | 'K'         | 1            |
-| Row 2  | '{"a":"b"}'            | 'A'         | "b"          |
+| Row 1  | '{"k":1}'              | 'K'         | '1'          |
+| Row 2  | '{"a":"b"}'            | 'A'         | '"b"'        |
 +--------+------------------------+-------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------+
@@ -695,9 +695,9 @@ evaluation:
 | Type   | String NULL                 | String     | Variant NULL |
 | Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="K"} | Unknown      |
 | Row 0  | 'true'                      | ''         | NULL         |
-| Row 1  | '{"k":1}'                   | 'K'        | 1            |
+| Row 1  | '{"k":1}'                   | 'K'        | '1'          |
 | Row 2  | NULL                        | ''         | NULL         |
-| Row 3  | '{"a":"b"}'                 | 'A'        | "b"          |
+| Row 3  | '{"a":"b"}'                 | 'A'        | '"b"'        |
 +--------+-----------------------------+------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -715,7 +715,7 @@ checked expr   : get_path<Variant, String>(parse_json<String>("[[1,2],3]"), "[0]
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant NULL
 output domain  : Undefined
-output         : [1,2]
+output         : '[1,2]'
 
 
 ast            : get_path(parse_json('[[1,2],3]'), '[0][1]')
@@ -724,7 +724,7 @@ checked expr   : get_path<Variant, String>(parse_json<String>("[[1,2],3]"), "[0]
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Undefined
-output         : 2
+output         : '2'
 
 
 ast            : get_path(parse_json('[1,2,3]'), '[0]')
@@ -733,7 +733,7 @@ checked expr   : get_path<Variant, String>(parse_json<String>("[1,2,3]"), "[0]")
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Undefined
-output         : 1
+output         : '1'
 
 
 ast            : get_path(parse_json('[1,2,3]'), 'k2:k3')
@@ -751,7 +751,7 @@ checked expr   : get_path<Variant, String>(parse_json<String>("{\"a\":{\"b\":2}}
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Undefined
-output         : 2
+output         : '2'
 
 
 ast            : get_path(parse_json('{"a":{"b":2}}'), 'a:b')
@@ -760,7 +760,7 @@ checked expr   : get_path<Variant, String>(parse_json<String>("{\"a\":{\"b\":2}}
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Undefined
-output         : 2
+output         : '2'
 
 
 ast            : get_path(parse_json('{"a":{"b":2}}'), '["a"]')
@@ -769,7 +769,7 @@ checked expr   : get_path<Variant, String>(parse_json<String>("{\"a\":{\"b\":2}}
 optimized expr : 0x400000011000000120000002625002
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"b":2}
+output         : '{"b":2}'
 
 
 ast            : get_path(parse_json('{"a":{"b":2}}'), 'a')
@@ -778,7 +778,7 @@ checked expr   : get_path<Variant, String>(parse_json<String>("{\"a\":{\"b\":2}}
 optimized expr : 0x400000011000000120000002625002
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"b":2}
+output         : '{"b":2}'
 
 
 ast            : get_path(parse_json(s), k)
@@ -791,7 +791,7 @@ evaluation:
 | Type   | String                          | String            | Variant NULL |
 | Domain | {"[\"a\",\"b\"]"..="{\"k\":1}"} | {"[\"a\"]"..="k"} | Unknown      |
 | Row 0  | 'true'                          | 'k'               | NULL         |
-| Row 1  | '{"k":1}'                       | '["k"]'           | 1            |
+| Row 1  | '{"k":1}'                       | '["k"]'           | '1'          |
 | Row 2  | '["a","b"]'                     | '["a"]'           | NULL         |
 +--------+---------------------------------+-------------------+--------------+
 evaluation (internal):
@@ -814,9 +814,9 @@ evaluation:
 | Type   | String NULL                 | String       | Variant NULL |
 | Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="[0]"} | Unknown      |
 | Row 0  | 'true'                      | '[0]'        | NULL         |
-| Row 1  | '{"k":1}'                   | '["k"]'      | 1            |
+| Row 1  | '{"k":1}'                   | '["k"]'      | '1'          |
 | Row 2  | NULL                        | ''           | NULL         |
-| Row 3  | '["a","b"]'                 | '[0]'        | "a"          |
+| Row 3  | '["a","b"]'                 | '[0]'        | '"a"'        |
 +--------+-----------------------------+--------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -1025,7 +1025,7 @@ checked expr   : as_array<Variant>(parse_json<String>("[1,2,3]"))
 optimized expr : 0x80000003200000022000000220000002500150025003
 output type    : Variant NULL
 output domain  : Undefined
-output         : [1,2,3]
+output         : '[1,2,3]'
 
 
 ast            : as_array(parse_json('{"a":"b"}'))
@@ -1052,7 +1052,7 @@ checked expr   : as_object<Variant>(parse_json<String>("{\"a\":\"b\"}"))
 optimized expr : 0x4000000110000001100000016162
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"a":"b"}
+output         : '{"a":"b"}'
 
 
 ast            : as_boolean(parse_json(s))
@@ -1268,7 +1268,7 @@ evaluation:
 | Row 1  | '123'                        | NULL         |
 | Row 2  | '12.34'                      | NULL         |
 | Row 3  | '"ab"'                       | NULL         |
-| Row 4  | '[1,2,3]'                    | [1,2,3]      |
+| Row 4  | '[1,2,3]'                    | '[1,2,3]'    |
 | Row 5  | '{"a":"b"}'                  | NULL         |
 +--------+------------------------------+--------------+
 evaluation (internal):
@@ -1293,7 +1293,7 @@ evaluation:
 | Row 1  | '123'                        | NULL               |
 | Row 2  | '12.34'                      | NULL               |
 | Row 3  | '"ab"'                       | NULL               |
-| Row 4  | '[1,2,3]'                    | [1,2,3]            |
+| Row 4  | '[1,2,3]'                    | '[1,2,3]'          |
 | Row 5  | '{"a":"b"}'                  | NULL               |
 +--------+------------------------------+--------------------+
 evaluation (internal):
@@ -1319,7 +1319,7 @@ evaluation:
 | Row 2  | '12.34'                      | NULL         |
 | Row 3  | '"ab"'                       | NULL         |
 | Row 4  | '[1,2,3]'                    | NULL         |
-| Row 5  | '{"a":"b"}'                  | {"a":"b"}    |
+| Row 5  | '{"a":"b"}'                  | '{"a":"b"}'  |
 +--------+------------------------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------+
@@ -1344,7 +1344,7 @@ evaluation:
 | Row 2  | '12.34'                      | NULL               |
 | Row 3  | '"ab"'                       | NULL               |
 | Row 4  | '[1,2,3]'                    | NULL               |
-| Row 5  | '{"a":"b"}'                  | {"a":"b"}          |
+| Row 5  | '{"a":"b"}'                  | '{"a":"b"}'        |
 +--------+------------------------------+--------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------+
@@ -1368,7 +1368,7 @@ error:
   --> SQL:1:1
   |
 1 | to_boolean(parse_json('123'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean(123)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('123')`
 
 
 
@@ -1376,7 +1376,7 @@ error:
   --> SQL:1:1
   |
 1 | to_boolean(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean("abc")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('"abc"')`
 
 
 
@@ -1393,7 +1393,7 @@ error:
   --> SQL:1:1
   |
 1 | to_uint64(parse_json('-123'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64(-123)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('-123')`
 
 
 
@@ -1401,7 +1401,7 @@ error:
   --> SQL:1:1
   |
 1 | to_uint64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64("abc")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('"abc"')`
 
 
 
@@ -1427,7 +1427,7 @@ error:
   --> SQL:1:1
   |
 1 | to_int64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64("abc")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64('"abc"')`
 
 
 
@@ -1444,7 +1444,7 @@ error:
   --> SQL:1:1
   |
 1 | to_float64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64("abc")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64('"abc"')`
 
 
 
@@ -1461,7 +1461,7 @@ error:
   --> SQL:1:1
   |
 1 | to_date(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` while evaluating function `to_date("abc")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` while evaluating function `to_date('"abc"')`
 
 
 
@@ -1478,7 +1478,7 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` while evaluating function `to_timestamp("abc")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` while evaluating function `to_timestamp('"abc"')`
 
 
 
@@ -2002,7 +2002,7 @@ checked expr   : json_object<>()
 optimized expr : 0x40000000
 output type    : Variant
 output domain  : Undefined
-output         : {}
+output         : '{}'
 
 
 ast            : json_object('a', true, 'b', 1, 'c', 'str', 'd', [1,2], 'e', {'k':'v'})
@@ -2011,7 +2011,7 @@ checked expr   : json_object<T0=String, T1=Boolean, T2=String, T3=UInt8, T4=Stri
 optimized expr : 0x400000051000000110000001100000011000000110000001400000002000000210000003500000105000000e61626364655001737472800000022000000220000002500150024000000110000001100000016b76
 output type    : Variant
 output domain  : Undefined
-output         : {"a":true,"b":1,"c":"str","d":[1,2],"e":{"k":"v"}}
+output         : '{"a":true,"b":1,"c":"str","d":[1,2],"e":{"k":"v"}}'
 
 
 ast            : json_object('k1', 1, 'k2', null, 'k3', 2, null, 3)
@@ -2020,7 +2020,7 @@ checked expr   : json_object<T0=String, T1=UInt8, T2=String, T3=NULL, T4=String,
 optimized expr : 0x40000002100000021000000220000002200000026b316b3350015002
 output type    : Variant
 output domain  : Undefined
-output         : {"k1":1,"k3":2}
+output         : '{"k1":1,"k3":2}'
 
 
 error: 
@@ -2051,16 +2051,16 @@ ast            : json_object(k1, v1, k2, v2)
 raw expr       : json_object(k1::String NULL, v1::String NULL, k2::String NULL, v2::String NULL)
 checked expr   : json_object<T0=String NULL, T1=String NULL, T2=String NULL, T3=String NULL><T0, T1, T2, T3>(k1, v1, k2, v2)
 evaluation:
-+--------+----------------------+----------------------+----------------------+---------------+-----------------------+
-|        | k1                   | v1                   | k2                   | v2            | Output                |
-+--------+----------------------+----------------------+----------------------+---------------+-----------------------+
-| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant               |
-| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Unknown               |
-| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | 'j2'          | {"a1":"j1","a2":"j2"} |
-| Row 1  | 'b1'                 | 'k1'                 | NULL                 | 'k2'          | {"b1":"k1"}           |
-| Row 2  | NULL                 | 'l1'                 | 'c2'                 | 'l2'          | {"c2":"l2"}           |
-| Row 3  | 'd1'                 | NULL                 | 'd2'                 | 'm2'          | {"d2":"m2"}           |
-+--------+----------------------+----------------------+----------------------+---------------+-----------------------+
++--------+----------------------+----------------------+----------------------+---------------+-------------------------+
+|        | k1                   | v1                   | k2                   | v2            | Output                  |
++--------+----------------------+----------------------+----------------------+---------------+-------------------------+
+| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant                 |
+| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Unknown                 |
+| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | 'j2'          | '{"a1":"j1","a2":"j2"}' |
+| Row 1  | 'b1'                 | 'k1'                 | NULL                 | 'k2'          | '{"b1":"k1"}'           |
+| Row 2  | NULL                 | 'l1'                 | 'c2'                 | 'l2'          | '{"c2":"l2"}'           |
+| Row 3  | 'd1'                 | NULL                 | 'd2'                 | 'm2'          | '{"d2":"m2"}'           |
++--------+----------------------+----------------------+----------------------+---------------+-------------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                            |
@@ -2079,7 +2079,7 @@ checked expr   : try_json_object<>()
 optimized expr : 0x40000000
 output type    : Variant NULL
 output domain  : Undefined
-output         : {}
+output         : '{}'
 
 
 ast            : try_json_object('a', true, 'b', 1, 'c', 'str', 'd', [1,2], 'e', {'k':'v'})
@@ -2088,7 +2088,7 @@ checked expr   : try_json_object<T0=String, T1=Boolean, T2=String, T3=UInt8, T4=
 optimized expr : 0x400000051000000110000001100000011000000110000001400000002000000210000003500000105000000e61626364655001737472800000022000000220000002500150024000000110000001100000016b76
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"a":true,"b":1,"c":"str","d":[1,2],"e":{"k":"v"}}
+output         : '{"a":true,"b":1,"c":"str","d":[1,2],"e":{"k":"v"}}'
 
 
 ast            : try_json_object('k1', 1, 'k2', null, 'k3', 2, null, 3)
@@ -2097,7 +2097,7 @@ checked expr   : try_json_object<T0=String, T1=UInt8, T2=String, T3=NULL, T4=Str
 optimized expr : 0x40000002100000021000000220000002200000026b316b3350015002
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"k1":1,"k3":2}
+output         : '{"k1":1,"k3":2}'
 
 
 ast            : try_json_object('k1', 1, 'k1')
@@ -2131,16 +2131,16 @@ ast            : try_json_object(k1, v1, k2, v2)
 raw expr       : try_json_object(k1::String NULL, v1::String NULL, k2::String NULL, v2::String NULL)
 checked expr   : try_json_object<T0=String NULL, T1=String NULL, T2=String NULL, T3=String NULL><T0, T1, T2, T3>(k1, v1, k2, v2)
 evaluation:
-+--------+----------------------+----------------------+----------------------+---------------+-----------------------+
-|        | k1                   | v1                   | k2                   | v2            | Output                |
-+--------+----------------------+----------------------+----------------------+---------------+-----------------------+
-| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant NULL          |
-| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Undefined ∪ {NULL}    |
-| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | 'j2'          | {"a1":"j1","a2":"j2"} |
-| Row 1  | 'b1'                 | 'k1'                 | NULL                 | 'k2'          | {"b1":"k1"}           |
-| Row 2  | NULL                 | 'l1'                 | 'c2'                 | 'l2'          | {"c2":"l2"}           |
-| Row 3  | 'd1'                 | NULL                 | 'd2'                 | 'm2'          | {"d2":"m2"}           |
-+--------+----------------------+----------------------+----------------------+---------------+-----------------------+
++--------+----------------------+----------------------+----------------------+---------------+-------------------------+
+|        | k1                   | v1                   | k2                   | v2            | Output                  |
++--------+----------------------+----------------------+----------------------+---------------+-------------------------+
+| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant NULL            |
+| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Undefined ∪ {NULL}      |
+| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | 'j2'          | '{"a1":"j1","a2":"j2"}' |
+| Row 1  | 'b1'                 | 'k1'                 | NULL                 | 'k2'          | '{"b1":"k1"}'           |
+| Row 2  | NULL                 | 'l1'                 | 'c2'                 | 'l2'          | '{"c2":"l2"}'           |
+| Row 3  | 'd1'                 | NULL                 | 'd2'                 | 'm2'          | '{"d2":"m2"}'           |
++--------+----------------------+----------------------+----------------------+---------------+-------------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                               |
@@ -2159,7 +2159,7 @@ checked expr   : json_object_keep_null<>()
 optimized expr : 0x40000000
 output type    : Variant
 output domain  : Undefined
-output         : {}
+output         : '{}'
 
 
 ast            : json_object_keep_null('a', true, 'b', 1, 'c', 'str', 'd', [1,2], 'e', {'k':'v'})
@@ -2168,7 +2168,7 @@ checked expr   : json_object_keep_null<T0=String, T1=Boolean, T2=String, T3=UInt
 optimized expr : 0x400000051000000110000001100000011000000110000001400000002000000210000003500000105000000e61626364655001737472800000022000000220000002500150024000000110000001100000016b76
 output type    : Variant
 output domain  : Undefined
-output         : {"a":true,"b":1,"c":"str","d":[1,2],"e":{"k":"v"}}
+output         : '{"a":true,"b":1,"c":"str","d":[1,2],"e":{"k":"v"}}'
 
 
 ast            : json_object_keep_null('k1', 1, 'k2', null, 'k3', 2, null, 3)
@@ -2177,7 +2177,7 @@ checked expr   : json_object_keep_null<T0=String, T1=UInt8, T2=String, T3=NULL, 
 optimized expr : 0x400000031000000210000002100000022000000200000000200000026b316b326b3350015002
 output type    : Variant
 output domain  : Undefined
-output         : {"k1":1,"k2":null,"k3":2}
+output         : '{"k1":1,"k2":null,"k3":2}'
 
 
 error: 
@@ -2208,16 +2208,16 @@ ast            : json_object_keep_null(k1, v1, k2, v2)
 raw expr       : json_object_keep_null(k1::String NULL, v1::String NULL, k2::String NULL, v2::String NULL)
 checked expr   : json_object_keep_null<T0=String NULL, T1=String NULL, T2=String NULL, T3=String NULL><T0, T1, T2, T3>(k1, v1, k2, v2)
 evaluation:
-+--------+----------------------+----------------------+----------------------+---------------+-----------------------+
-|        | k1                   | v1                   | k2                   | v2            | Output                |
-+--------+----------------------+----------------------+----------------------+---------------+-----------------------+
-| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant               |
-| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Unknown               |
-| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | 'j2'          | {"a1":"j1","a2":"j2"} |
-| Row 1  | 'b1'                 | 'k1'                 | NULL                 | 'k2'          | {"b1":"k1"}           |
-| Row 2  | NULL                 | 'l1'                 | 'c2'                 | 'l2'          | {"c2":"l2"}           |
-| Row 3  | 'd1'                 | NULL                 | 'd2'                 | 'm2'          | {"d1":null,"d2":"m2"} |
-+--------+----------------------+----------------------+----------------------+---------------+-----------------------+
++--------+----------------------+----------------------+----------------------+---------------+-------------------------+
+|        | k1                   | v1                   | k2                   | v2            | Output                  |
++--------+----------------------+----------------------+----------------------+---------------+-------------------------+
+| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant                 |
+| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Unknown                 |
+| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | 'j2'          | '{"a1":"j1","a2":"j2"}' |
+| Row 1  | 'b1'                 | 'k1'                 | NULL                 | 'k2'          | '{"b1":"k1"}'           |
+| Row 2  | NULL                 | 'l1'                 | 'c2'                 | 'l2'          | '{"c2":"l2"}'           |
+| Row 3  | 'd1'                 | NULL                 | 'd2'                 | 'm2'          | '{"d1":null,"d2":"m2"}' |
++--------+----------------------+----------------------+----------------------+---------------+-------------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                |
@@ -2236,7 +2236,7 @@ checked expr   : try_json_object_keep_null<>()
 optimized expr : 0x40000000
 output type    : Variant NULL
 output domain  : Undefined
-output         : {}
+output         : '{}'
 
 
 ast            : try_json_object_keep_null('a', true, 'b', 1, 'c', 'str', 'd', [1,2], 'e', {'k':'v'})
@@ -2245,7 +2245,7 @@ checked expr   : try_json_object_keep_null<T0=String, T1=Boolean, T2=String, T3=
 optimized expr : 0x400000051000000110000001100000011000000110000001400000002000000210000003500000105000000e61626364655001737472800000022000000220000002500150024000000110000001100000016b76
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"a":true,"b":1,"c":"str","d":[1,2],"e":{"k":"v"}}
+output         : '{"a":true,"b":1,"c":"str","d":[1,2],"e":{"k":"v"}}'
 
 
 ast            : try_json_object_keep_null('k1', 1, 'k2', null, 'k3', 2, null, 3)
@@ -2254,7 +2254,7 @@ checked expr   : try_json_object_keep_null<T0=String, T1=UInt8, T2=String, T3=NU
 optimized expr : 0x400000031000000210000002100000022000000200000000200000026b316b326b3350015002
 output type    : Variant NULL
 output domain  : Undefined
-output         : {"k1":1,"k2":null,"k3":2}
+output         : '{"k1":1,"k2":null,"k3":2}'
 
 
 ast            : try_json_object_keep_null('k1', 1, 'k1')
@@ -2288,16 +2288,16 @@ ast            : try_json_object_keep_null(k1, v1, k2, v2)
 raw expr       : try_json_object_keep_null(k1::String NULL, v1::String NULL, k2::String NULL, v2::String NULL)
 checked expr   : try_json_object_keep_null<T0=String NULL, T1=String NULL, T2=String NULL, T3=String NULL><T0, T1, T2, T3>(k1, v1, k2, v2)
 evaluation:
-+--------+----------------------+----------------------+----------------------+---------------+-----------------------+
-|        | k1                   | v1                   | k2                   | v2            | Output                |
-+--------+----------------------+----------------------+----------------------+---------------+-----------------------+
-| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant NULL          |
-| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Undefined ∪ {NULL}    |
-| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | 'j2'          | {"a1":"j1","a2":"j2"} |
-| Row 1  | 'b1'                 | 'k1'                 | NULL                 | 'k2'          | {"b1":"k1"}           |
-| Row 2  | NULL                 | 'l1'                 | 'c2'                 | 'l2'          | {"c2":"l2"}           |
-| Row 3  | 'd1'                 | NULL                 | 'd2'                 | 'm2'          | {"d1":null,"d2":"m2"} |
-+--------+----------------------+----------------------+----------------------+---------------+-----------------------+
++--------+----------------------+----------------------+----------------------+---------------+-------------------------+
+|        | k1                   | v1                   | k2                   | v2            | Output                  |
++--------+----------------------+----------------------+----------------------+---------------+-------------------------+
+| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant NULL            |
+| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Undefined ∪ {NULL}      |
+| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | 'j2'          | '{"a1":"j1","a2":"j2"}' |
+| Row 1  | 'b1'                 | 'k1'                 | NULL                 | 'k2'          | '{"b1":"k1"}'           |
+| Row 2  | NULL                 | 'l1'                 | 'c2'                 | 'l2'          | '{"c2":"l2"}'           |
+| Row 3  | 'd1'                 | NULL                 | 'd2'                 | 'm2'          | '{"d1":null,"d2":"m2"}' |
++--------+----------------------+----------------------+----------------------+---------------+-------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                   |
@@ -2316,7 +2316,7 @@ checked expr   : json_path_query_array<Variant, String>(parse_json<String>("[1, 
 optimized expr : 0x80000006200000022000000220000002200000022000000220000002500150035004500550065005
 output type    : Variant NULL
 output domain  : Undefined
-output         : [1,3,4,5,6,5]
+output         : '[1,3,4,5,6,5]'
 
 
 ast            : json_path_query_array(parse_json('[1, 2, 3, 4, 5, 6]'), '$[100]')
@@ -2325,7 +2325,7 @@ checked expr   : json_path_query_array<Variant, String>(parse_json<String>("[1, 
 optimized expr : 0x80000000
 output type    : Variant NULL
 output domain  : Undefined
-output         : []
+output         : '[]'
 
 
 ast            : json_path_query_array(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a')
@@ -2334,7 +2334,7 @@ checked expr   : json_path_query_array<Variant, String>(parse_json<String>("[{\"
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant NULL
 output domain  : Undefined
-output         : [1,2]
+output         : '[1,2]'
 
 
 ast            : json_path_query_array(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a ? (@ == 1)')
@@ -2343,7 +2343,7 @@ checked expr   : json_path_query_array<Variant, String>(parse_json<String>("[{\"
 optimized expr : 0x80000001200000025001
 output type    : Variant NULL
 output domain  : Undefined
-output         : [1]
+output         : '[1]'
 
 
 ast            : json_path_query_array(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a ? (@ > 10)')
@@ -2352,7 +2352,7 @@ checked expr   : json_path_query_array<Variant, String>(parse_json<String>("[{\"
 optimized expr : 0x80000000
 output type    : Variant NULL
 output domain  : Undefined
-output         : []
+output         : '[]'
 
 
 ast            : json_path_query_array(parse_json('[{"a": {"b":10}}, {"a": 2}]'), '$[*].a.b')
@@ -2361,7 +2361,7 @@ checked expr   : json_path_query_array<Variant, String>(parse_json<String>("[{\"
 optimized expr : 0x8000000120000002500a
 output type    : Variant NULL
 output domain  : Undefined
-output         : [10]
+output         : '[10]'
 
 
 ast            : json_path_query_array(parse_json(s), p)
@@ -2373,10 +2373,10 @@ evaluation:
 +--------+------------------------+------------------+--------------+
 | Type   | String NULL            | String           | Variant NULL |
 | Domain | {""..="true"} ∪ {NULL} | {"$.a"..="$[0]"} | Unknown      |
-| Row 0  | 'true'                 | '$[0]'           | []           |
-| Row 1  | '[{"k":1},{"k":2}]'    | '$[*].k'         | [1,2]        |
+| Row 0  | 'true'                 | '$[0]'           | '[]'         |
+| Row 1  | '[{"k":1},{"k":2}]'    | '$[*].k'         | '[1,2]'      |
 | Row 2  | NULL                   | '$.a'            | NULL         |
-| Row 3  | '[1,2,3,4]'            | '$[0,2]'         | [1,3]        |
+| Row 3  | '[1,2,3,4]'            | '$[0,2]'         | '[1,3]'      |
 +--------+------------------------+------------------+--------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -2394,7 +2394,7 @@ checked expr   : json_path_query_first<Variant, String>(parse_json<String>("[1, 
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Undefined
-output         : 1
+output         : '1'
 
 
 ast            : json_path_query_first(parse_json('[1, 2, 3, 4, 5, 6]'), '$[100]')
@@ -2412,7 +2412,7 @@ checked expr   : json_path_query_first<Variant, String>(parse_json<String>("[{\"
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Undefined
-output         : 1
+output         : '1'
 
 
 ast            : json_path_query_first(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a ? (@ == 1)')
@@ -2421,7 +2421,7 @@ checked expr   : json_path_query_first<Variant, String>(parse_json<String>("[{\"
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Undefined
-output         : 1
+output         : '1'
 
 
 ast            : json_path_query_first(parse_json('[{"a": 1}, {"a": 2}]'), '$[*].a ? (@ > 10)')
@@ -2439,7 +2439,7 @@ checked expr   : json_path_query_first<Variant, String>(parse_json<String>("[{\"
 optimized expr : 0x2000000020000002500a
 output type    : Variant NULL
 output domain  : Undefined
-output         : 10
+output         : '10'
 
 
 ast            : json_path_query_first(parse_json(s), p)
@@ -2452,9 +2452,9 @@ evaluation:
 | Type   | String NULL            | String           | Variant NULL |
 | Domain | {""..="true"} ∪ {NULL} | {"$.a"..="$[0]"} | Unknown      |
 | Row 0  | 'true'                 | '$[0]'           | NULL         |
-| Row 1  | '[{"k":1},{"k":2}]'    | '$[*].k'         | 1            |
+| Row 1  | '[{"k":1},{"k":2}]'    | '$[*].k'         | '1'          |
 | Row 2  | NULL                   | '$.a'            | NULL         |
-| Row 3  | '[1,2,3,4]'            | '$[0,2]'         | 1            |
+| Row 3  | '[1,2,3,4]'            | '$[0,2]'         | '1'          |
 +--------+------------------------+------------------+--------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -2601,7 +2601,7 @@ checked expr   : json_strip_nulls<Variant>(parse_json<String>("true"))
 optimized expr : 0x2000000040000000
 output type    : Variant
 output domain  : Undefined
-output         : true
+output         : 'true'
 
 
 ast            : json_strip_nulls(parse_json('null'))
@@ -2610,7 +2610,7 @@ checked expr   : json_strip_nulls<Variant>(parse_json<String>("null"))
 optimized expr : 0x2000000000000000
 output type    : Variant
 output domain  : Undefined
-output         : null
+output         : 'null'
 
 
 ast            : json_strip_nulls(parse_json('[1, 2, 3, null]'))
@@ -2619,7 +2619,7 @@ checked expr   : json_strip_nulls<Variant>(parse_json<String>("[1, 2, 3, null]")
 optimized expr : 0x8000000420000002200000022000000200000000500150025003
 output type    : Variant
 output domain  : Undefined
-output         : [1,2,3,null]
+output         : '[1,2,3,null]'
 
 
 ast            : json_strip_nulls(parse_json('{"a":null, "b": {"c": 1, "d": null}, "c": [{"a": 1, "b": null}]}'))
@@ -2628,7 +2628,7 @@ checked expr   : json_strip_nulls<Variant>(parse_json<String>("{\"a\":null, \"b\
 optimized expr : 0x4000000210000001100000015000000f500000176263400000011000000120000002635001800000015000000f400000011000000120000002615001
 output type    : Variant
 output domain  : Undefined
-output         : {"b":{"c":1},"c":[{"a":1}]}
+output         : '{"b":{"c":1},"c":[{"a":1}]}'
 
 
 ast            : json_typeof(NULL)
@@ -2700,7 +2700,7 @@ checked expr   : json_array<>()
 optimized expr : 0x80000000
 output type    : Variant
 output domain  : Undefined
-output         : []
+output         : '[]'
 
 
 ast            : json_array(true, 1, 'str', [1,2], {'k':'v'}, null)
@@ -2709,23 +2709,23 @@ checked expr   : json_array<T0=Boolean, T1=UInt8, T2=String, T3=Array(UInt8), T4
 optimized expr : 0x80000006400000002000000210000003500000105000000e000000005001737472800000022000000220000002500150024000000110000001100000016b76
 output type    : Variant
 output domain  : Undefined
-output         : [true,1,"str",[1,2],{"k":"v"},null]
+output         : '[true,1,"str",[1,2],{"k":"v"},null]'
 
 
 ast            : json_array(v1, v2, v3)
 raw expr       : json_array(v1::String NULL, v2::String NULL, v3::String NULL)
 checked expr   : json_array<T0=String NULL, T1=String NULL, T2=String NULL><T0, T1, T2>(v1, v2, v3)
 evaluation:
-+--------+----------------------+----------------------+----------------------+------------------+
-|        | v1                   | v2                   | v3                   | Output           |
-+--------+----------------------+----------------------+----------------------+------------------+
-| Type   | String NULL          | String NULL          | String NULL          | Variant          |
-| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | Unknown          |
-| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | ["a1","j1","a2"] |
-| Row 1  | 'b1'                 | 'k1'                 | NULL                 | ["b1","k1",null] |
-| Row 2  | NULL                 | 'l1'                 | 'c2'                 | [null,"l1","c2"] |
-| Row 3  | 'd1'                 | NULL                 | 'd2'                 | ["d1",null,"d2"] |
-+--------+----------------------+----------------------+----------------------+------------------+
++--------+----------------------+----------------------+----------------------+--------------------+
+|        | v1                   | v2                   | v3                   | Output             |
++--------+----------------------+----------------------+----------------------+--------------------+
+| Type   | String NULL          | String NULL          | String NULL          | Variant            |
+| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | Unknown            |
+| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | '["a1","j1","a2"]' |
+| Row 1  | 'b1'                 | 'k1'                 | NULL                 | '["b1","k1",null]' |
+| Row 2  | NULL                 | 'l1'                 | 'c2'                 | '[null,"l1","c2"]' |
+| Row 3  | 'd1'                 | NULL                 | 'd2'                 | '["d1",null,"d2"]' |
++--------+----------------------+----------------------+----------------------+--------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                        |
@@ -2842,7 +2842,7 @@ checked expr   : get<Variant, Int64>(parse_json<String>("[1,2,3,4]"), to_int64<U
 optimized expr : 0x20000000200000025002
 output type    : Variant NULL
 output domain  : Undefined
-output         : 2
+output         : '2'
 
 
 ast            : parse_json('[1,2,3,4]')->(2+3)
@@ -2860,7 +2860,7 @@ checked expr   : get<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "k")
 optimized expr : 0x200000001000000176
 output type    : Variant NULL
 output domain  : Undefined
-output         : "v"
+output         : '"v"'
 
 
 ast            : parse_json('{"k":"v"}')->'x'
@@ -2878,7 +2878,7 @@ checked expr   : get<Variant, String>(to_variant<T0=Tuple(String, String)><T0>(t
 optimized expr : 0x200000001000000162
 output type    : Variant NULL
 output domain  : Undefined
-output         : "b"
+output         : '"b"'
 
 
 ast            : parse_json(s)->i
@@ -2891,8 +2891,8 @@ evaluation:
 | Type   | String                           | UInt64  | Variant NULL |
 | Domain | {"[\"a\",\"b\",\"c\"]"..="true"} | {0..=1} | Unknown      |
 | Row 0  | 'true'                           | 0       | NULL         |
-| Row 1  | '[1,2,3,4]'                      | 0       | 1            |
-| Row 2  | '["a","b","c"]'                  | 1       | "b"          |
+| Row 1  | '[1,2,3,4]'                      | 0       | '1'          |
+| Row 2  | '["a","b","c"]'                  | 1       | '"b"'        |
 +--------+----------------------------------+---------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------+
@@ -2914,9 +2914,9 @@ evaluation:
 | Type   | String NULL            | UInt64 NULL      | Variant NULL |
 | Domain | {""..="true"} ∪ {NULL} | {0..=2} ∪ {NULL} | Unknown      |
 | Row 0  | 'true'                 | NULL             | NULL         |
-| Row 1  | '[1,2,3,4]'            | 2                | 3            |
+| Row 1  | '[1,2,3,4]'            | 2                | '3'          |
 | Row 2  | NULL                   | NULL             | NULL         |
-| Row 3  | '["a","b","c"]'        | 1                | "b"          |
+| Row 3  | '["a","b","c"]'        | 1                | '"b"'        |
 +--------+------------------------+------------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -2938,7 +2938,7 @@ evaluation:
 | Type   | String                 | String      | Variant NULL |
 | Domain | {"true"..="{\"k\":1}"} | {"k"..="x"} | Unknown      |
 | Row 0  | 'true'                 | 'k'         | NULL         |
-| Row 1  | '{"k":1}'              | 'k'         | 1            |
+| Row 1  | '{"k":1}'              | 'k'         | '1'          |
 | Row 2  | '{"a":"b"}'            | 'x'         | NULL         |
 +--------+------------------------+-------------+--------------+
 evaluation (internal):
@@ -2961,9 +2961,9 @@ evaluation:
 | Type   | String NULL                 | String     | Variant NULL |
 | Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="k"} | Unknown      |
 | Row 0  | 'true'                      | ''         | NULL         |
-| Row 1  | '{"k":1}'                   | 'k'        | 1            |
+| Row 1  | '{"k":1}'                   | 'k'        | '1'          |
 | Row 2  | NULL                        | ''         | NULL         |
-| Row 3  | '{"a":"b"}'                 | 'a'        | "b"          |
+| Row 3  | '{"a":"b"}'                 | 'a'        | '"b"'        |
 +--------+-----------------------------+------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -3136,7 +3136,7 @@ error:
   --> SQL:1:28
   |
 1 | parse_json('[10, 20, 30]') #> '1'
-  |                            ^^ InvalidKeyPath while evaluating function `get_by_keypath([10,20,30], '1')`
+  |                            ^^ InvalidKeyPath while evaluating function `get_by_keypath('[10,20,30]', '1')`
 
 
 
@@ -3182,7 +3182,7 @@ checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, 20, 30
 optimized expr : 0x20000000200000025014
 output type    : Variant NULL
 output domain  : Undefined
-output         : 20
+output         : '20'
 
 
 ast            : parse_json('[10, 20, 30]') #> '{3}'
@@ -3209,7 +3209,7 @@ checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, {\"a\"
 optimized expr : 0x80000003200000022000000220000002500150025003
 output type    : Variant NULL
 output domain  : Undefined
-output         : [1,2,3]
+output         : '[1,2,3]'
 
 
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #> '{1, a, k1, 0}'
@@ -3218,7 +3218,7 @@ checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, {\"a\"
 optimized expr : 0x20000000200000025001
 output type    : Variant NULL
 output domain  : Undefined
-output         : 1
+output         : '1'
 
 
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #> '{1, a, k1, 0, 10}'
@@ -3239,7 +3239,7 @@ evaluation:
 +--------+-----------------------------+--------------+
 | Type   | String NULL                 | Variant NULL |
 | Domain | {""..="{\"k\":1}"} ∪ {NULL} | Unknown      |
-| Row 0  | '[1,2,3]'                   | 1            |
+| Row 0  | '[1,2,3]'                   | '1'          |
 | Row 1  | '{"k":1}'                   | NULL         |
 | Row 2  | NULL                        | NULL         |
 | Row 3  | '{"a":"b"}'                 | NULL         |
@@ -3263,9 +3263,9 @@ evaluation:
 | Type   | String NULL                 | String NULL           | Variant NULL |
 | Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="{k}"} ∪ {NULL} | Unknown      |
 | Row 0  | 'true'                      | '{1}'                 | NULL         |
-| Row 1  | '{"k":1}'                   | '{k}'                 | 1            |
+| Row 1  | '{"k":1}'                   | '{k}'                 | '1'          |
 | Row 2  | NULL                        | NULL                  | NULL         |
-| Row 3  | '{"a":"b"}'                 | '{a}'                 | "b"          |
+| Row 3  | '{"a":"b"}'                 | '{a}'                 | '"b"'        |
 +--------+-----------------------------+-----------------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -4305,7 +4305,7 @@ checked expr   : concat<Variant, Variant>(parse_json<String>("[1,2,3]"), parse_j
 optimized expr : 0x8000000420000002200000022000000220000002500150025003500a
 output type    : Variant
 output domain  : Undefined
-output         : [1,2,3,10]
+output         : '[1,2,3,10]'
 
 
 ast            : parse_json('"asd"') || parse_json('[1,2,3]')
@@ -4314,7 +4314,7 @@ checked expr   : concat<Variant, Variant>(parse_json<String>("\"asd\""), parse_j
 optimized expr : 0x8000000410000003200000022000000220000002617364500150025003
 output type    : Variant
 output domain  : Undefined
-output         : ["asd",1,2,3]
+output         : '["asd",1,2,3]'
 
 
 ast            : parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('"asd"')
@@ -4323,7 +4323,7 @@ checked expr   : concat<Variant, Variant>(parse_json<String>("[1,{\"a\":1,\"b\":
 optimized expr : 0x800000042000000250000039200000021000000350014000000310000001100000011000000120000002200000025000001661626350015002800000032000000220000002200000025001500250035003617364
 output type    : Variant
 output domain  : Undefined
-output         : [1,{"a":1,"b":2,"c":[1,2,3]},3,"asd"]
+output         : '[1,{"a":1,"b":2,"c":[1,2,3]},3,"asd"]'
 
 
 ast            : parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('[10,20,30]')
@@ -4332,7 +4332,7 @@ checked expr   : concat<Variant, Variant>(parse_json<String>("[1,{\"a\":1,\"b\":
 optimized expr : 0x8000000620000002500000392000000220000002200000022000000250014000000310000001100000011000000120000002200000025000001661626350015002800000032000000220000002200000025001500250035003500a5014501e
 output type    : Variant
 output domain  : Undefined
-output         : [1,{"a":1,"b":2,"c":[1,2,3]},3,10,20,30]
+output         : '[1,{"a":1,"b":2,"c":[1,2,3]},3,10,20,30]'
 
 
 ast            : parse_json('[1,[1,2,3],3]') || parse_json('[[10,20,30]]')
@@ -4341,7 +4341,7 @@ checked expr   : concat<Variant, Variant>(parse_json<String>("[1,[1,2,3],3]"), p
 optimized expr : 0x8000000420000002500000162000000250000016500180000003200000022000000220000002500150025003500380000003200000022000000220000002500a5014501e
 output type    : Variant
 output domain  : Undefined
-output         : [1,[1,2,3],3,[10,20,30]]
+output         : '[1,[1,2,3],3,[10,20,30]]'
 
 
 ast            : parse_json('{"a":1,"b":2}') || parse_json('true')
@@ -4350,7 +4350,7 @@ checked expr   : concat<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"
 optimized expr : 0x800000025000001a400000004000000210000001100000012000000220000002616250015002
 output type    : Variant
 output domain  : Undefined
-output         : [{"a":1,"b":2},true]
+output         : '[{"a":1,"b":2},true]'
 
 
 ast            : parse_json('[1,2,3]') || parse_json('{"a":1,"b":2}')
@@ -4359,7 +4359,7 @@ checked expr   : concat<Variant, Variant>(parse_json<String>("[1,2,3]"), parse_j
 optimized expr : 0x800000042000000220000002200000025000001a5001500250034000000210000001100000012000000220000002616250015002
 output type    : Variant
 output domain  : Undefined
-output         : [1,2,3,{"a":1,"b":2}]
+output         : '[1,2,3,{"a":1,"b":2}]'
 
 
 ast            : parse_json('{"a":1,"b":2}') || parse_json('[1,2,3]')
@@ -4368,7 +4368,7 @@ checked expr   : concat<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"
 optimized expr : 0x800000045000001a2000000220000002200000024000000210000001100000012000000220000002616250015002500150025003
 output type    : Variant
 output domain  : Undefined
-output         : [{"a":1,"b":2},1,2,3]
+output         : '[{"a":1,"b":2},1,2,3]'
 
 
 ast            : parse_json('{"a":1,"b":2}') || parse_json('{"c":3,"d":4}')
@@ -4377,7 +4377,7 @@ checked expr   : concat<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2}"
 optimized expr : 0x400000041000000110000001100000011000000120000002200000022000000220000002616263645001500250035004
 output type    : Variant
 output domain  : Undefined
-output         : {"a":1,"b":2,"c":3,"d":4}
+output         : '{"a":1,"b":2,"c":3,"d":4}'
 
 
 ast            : parse_json('{"a":1,"b":2,"d":10}') || parse_json('{"a":3,"b":4}')
@@ -4386,14 +4386,14 @@ checked expr   : concat<Variant, Variant>(parse_json<String>("{\"a\":1,\"b\":2,\
 optimized expr : 0x4000000310000001100000011000000120000002200000022000000261626450035004500a
 output type    : Variant
 output domain  : Undefined
-output         : {"a":3,"b":4,"d":10}
+output         : '{"a":3,"b":4,"d":10}'
 
 
 error: 
   --> SQL:1:20
   |
 1 | parse_json('true') - '1'
-  |                    ^ InvalidJsonType while evaluating function `minus(true, '1')`
+  |                    ^ InvalidJsonType while evaluating function `minus('true', '1')`
 
 
 
@@ -4403,7 +4403,7 @@ checked expr   : minus<Variant, String>(parse_json<String>("[1,2,3]"), "1")
 optimized expr : 0x80000003200000022000000220000002500150025003
 output type    : Variant
 output domain  : Undefined
-output         : [1,2,3]
+output         : '[1,2,3]'
 
 
 ast            : parse_json('["1","2","3"]') - '0'
@@ -4412,7 +4412,7 @@ checked expr   : minus<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"
 optimized expr : 0x80000003100000011000000110000001313233
 output type    : Variant
 output domain  : Undefined
-output         : ["1","2","3"]
+output         : '["1","2","3"]'
 
 
 ast            : parse_json('["1","2","3"]') - '1'
@@ -4421,7 +4421,7 @@ checked expr   : minus<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\"]"
 optimized expr : 0x8000000210000001100000013233
 output type    : Variant
 output domain  : Undefined
-output         : ["2","3"]
+output         : '["2","3"]'
 
 
 ast            : parse_json('["1","2","3",{"a":1,"b":2}]') - '1'
@@ -4430,7 +4430,7 @@ checked expr   : minus<Variant, String>(parse_json<String>("[\"1\",\"2\",\"3\",{
 optimized expr : 0x8000000310000001100000015000001a32334000000210000001100000012000000220000002616250015002
 output type    : Variant
 output domain  : Undefined
-output         : ["2","3",{"a":1,"b":2}]
+output         : '["2","3",{"a":1,"b":2}]'
 
 
 ast            : parse_json('{"a":1,"b":2}') - 'c'
@@ -4439,7 +4439,7 @@ checked expr   : minus<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"),
 optimized expr : 0x4000000210000001100000012000000220000002616250015002
 output type    : Variant
 output domain  : Undefined
-output         : {"a":1,"b":2}
+output         : '{"a":1,"b":2}'
 
 
 ast            : parse_json('{"a":1,"b":2}') - 'a'
@@ -4448,7 +4448,7 @@ checked expr   : minus<Variant, String>(parse_json<String>("{\"a\":1,\"b\":2}"),
 optimized expr : 0x400000011000000120000002625002
 output type    : Variant
 output domain  : Undefined
-output         : {"b":2}
+output         : '{"b":2}'
 
 
 ast            : parse_json('{"b":2}') - 'b'
@@ -4457,14 +4457,14 @@ checked expr   : minus<Variant, String>(parse_json<String>("{\"b\":2}"), "b")
 optimized expr : 0x40000000
 output type    : Variant
 output domain  : Undefined
-output         : {}
+output         : '{}'
 
 
 error: 
   --> SQL:1:20
   |
 1 | parse_json('true') - 1
-  |                    ^ InvalidJsonType while evaluating function `minus(true, 1)`
+  |                    ^ InvalidJsonType while evaluating function `minus('true', 1)`
 
 
 
@@ -4474,7 +4474,7 @@ checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<U
 optimized expr : 0x80000002200000022000000250025003
 output type    : Variant
 output domain  : Undefined
-output         : [2,3]
+output         : '[2,3]'
 
 
 ast            : parse_json('[1,2,3]') - 1
@@ -4483,7 +4483,7 @@ checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<U
 optimized expr : 0x80000002200000022000000250015003
 output type    : Variant
 output domain  : Undefined
-output         : [1,3]
+output         : '[1,3]'
 
 
 ast            : parse_json('[1,2,3]') - 2
@@ -4492,7 +4492,7 @@ checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<U
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant
 output domain  : Undefined
-output         : [1,2]
+output         : '[1,2]'
 
 
 ast            : parse_json('[1,2,3]') - -1
@@ -4501,7 +4501,7 @@ checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<I
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant
 output domain  : Undefined
-output         : [1,2]
+output         : '[1,2]'
 
 
 ast            : parse_json('[1,2,3]') - -2
@@ -4510,7 +4510,7 @@ checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<I
 optimized expr : 0x80000002200000022000000250015003
 output type    : Variant
 output domain  : Undefined
-output         : [1,3]
+output         : '[1,3]'
 
 
 ast            : parse_json('[1,2,3]') - -3
@@ -4519,7 +4519,7 @@ checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<I
 optimized expr : 0x80000002200000022000000250025003
 output type    : Variant
 output domain  : Undefined
-output         : [2,3]
+output         : '[2,3]'
 
 
 ast            : parse_json('[1,2,3]') - -4
@@ -4528,7 +4528,7 @@ checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,3]"), to_int32<I
 optimized expr : 0x80000003200000022000000220000002500150025003
 output type    : Variant
 output domain  : Undefined
-output         : [1,2,3]
+output         : '[1,2,3]'
 
 
 ast            : parse_json('[1,2,{"a":[1,2,3],"b":[40,50,60]}]') - 2
@@ -4537,6 +4537,161 @@ checked expr   : minus<Variant, Int32>(parse_json<String>("[1,2,{\"a\":[1,2,3],\
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant
 output domain  : Undefined
-output         : [1,2]
+output         : '[1,2]'
+
+
+ast            : parse_json('[1,2,3]') #- NULL
+raw expr       : delete_by_keypath(parse_json('[1,2,3]'), NULL)
+checked expr   : delete_by_keypath<Variant, NULL>(parse_json<String>("[1,2,3]"), NULL)
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[1,2,3]') #- '{}'
+raw expr       : delete_by_keypath(parse_json('[1,2,3]'), '{}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("[1,2,3]"), "{}")
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '[1,2,3]'
+
+
+ast            : parse_json('[1,2,3]') #- '{0}'
+raw expr       : delete_by_keypath(parse_json('[1,2,3]'), '{0}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("[1,2,3]"), "{0}")
+optimized expr : 0x80000002200000022000000250025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '[2,3]'
+
+
+ast            : parse_json('[1,2,3]') #- '{-1}'
+raw expr       : delete_by_keypath(parse_json('[1,2,3]'), '{-1}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("[1,2,3]"), "{-1}")
+optimized expr : 0x80000002200000022000000250015002
+output type    : Variant NULL
+output domain  : Undefined
+output         : '[1,2]'
+
+
+ast            : parse_json('[1,2,3]') #- '{3}'
+raw expr       : delete_by_keypath(parse_json('[1,2,3]'), '{3}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("[1,2,3]"), "{3}")
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '[1,2,3]'
+
+
+ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b}")
+optimized expr : 0x400000011000000120000002615001
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1}'
+
+
+ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{c}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{c}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{c}")
+optimized expr : 0x40000002100000011000000120000002500000166162500180000003200000022000000220000002500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1,"b":[1,2,3]}'
+
+
+ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b,2}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b,2}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b,2}")
+optimized expr : 0x40000002100000011000000120000002500000106162500180000002200000022000000250015002
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1,"b":[1,2]}'
+
+
+ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b,-2}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b,-2}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b,-2}")
+optimized expr : 0x40000002100000011000000120000002500000106162500180000002200000022000000250015003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1,"b":[1,3]}'
+
+
+ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b,20}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b,20}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b,20}")
+optimized expr : 0x40000002100000011000000120000002500000166162500180000003200000022000000220000002500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1,"b":[1,2,3]}'
+
+
+ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b,20,c,e}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b,20,c,e}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b,20,c,e}")
+optimized expr : 0x40000002100000011000000120000002500000166162500180000003200000022000000220000002500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1,"b":[1,2,3]}'
+
+
+ast            : parse_json('{"a":1,"b":[{"c":1,"d":10},2,3]}') #- '{b,0,d}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[{"c":1,"d":10},2,3]}'), '{b,0,d}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[{\"c\":1,\"d\":10},2,3]}"), "{b,0,d}")
+optimized expr : 0x400000021000000110000001200000025000002361625001800000035000000f200000022000000240000001100000012000000263500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1,"b":[{"c":1},2,3]}'
+
+
+ast            : parse_json(s) #- '{0,a}'
+raw expr       : delete_by_keypath(parse_json(s::String NULL), '{0,a}')
+checked expr   : delete_by_keypath<Variant NULL, String>(parse_json<String NULL>(s), "{0,a}")
+evaluation:
++--------+---------------------------------+--------------+
+|        | s                               | Output       |
++--------+---------------------------------+--------------+
+| Type   | String NULL                     | Variant NULL |
+| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown      |
+| Row 0  | '[{"a":1},2,3]'                 | '[{},2,3]'   |
+| Row 1  | '[1,2,3]'                       | '[1,2,3]'    |
+| Row 2  | NULL                            | NULL         |
+| Row 3  | '{"a":"b"}'                     | '{"a":"b"}'  |
++--------+---------------------------------+--------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                               |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x5b7b2261223a317d2c322c335d5b312c322c335d7b2261223a2262227d, offsets: [0, 13, 20, 20, 29] }, validity: [0b____1011] }                                                               |
+| Output | NullableColumn { column: BinaryColumn { data: 0x800000035000000420000002200000024000000050025003800000032000000220000002200000025001500250034000000110000001100000016162, offsets: [0, 24, 46, 46, 60] }, validity: [0b____1011] } |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json(s) #- k
+raw expr       : delete_by_keypath(parse_json(s::String NULL), k::String NULL)
+checked expr   : delete_by_keypath<Variant NULL, String NULL>(parse_json<String NULL>(s), k)
+evaluation:
++--------+-----------------------------------+----------------------------+---------------+
+|        | s                                 | k                          | Output        |
++--------+-----------------------------------+----------------------------+---------------+
+| Type   | String NULL                       | String NULL                | Variant NULL  |
+| Domain | {""..="{\"k\":[1,2,3]}"} ∪ {NULL} | {"{1,a}"..="{k}"} ∪ {NULL} | Unknown       |
+| Row 0  | '[1,{"a":2},3]'                   | '{1,a}'                    | '[1,{},3]'    |
+| Row 1  | '{"k":[1,2,3]}'                   | '{k,-1}'                   | '{"k":[1,2]}' |
+| Row 2  | NULL                              | NULL                       | NULL          |
+| Row 3  | '{"a":"b"}'                       | '{c}'                      | '{"a":"b"}'   |
++--------+-----------------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                             |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x5b312c7b2261223a327d2c335d7b226b223a5b312c322c335d7d7b2261223a2262227d, offsets: [0, 13, 26, 26, 35] }, validity: [0b____1011] }                                                                 |
+| k      | NullableColumn { column: StringColumn { data: 0x7b312c617d7b6b2c2d317d7b6b7d7b637d, offsets: [0, 5, 11, 14, 17] }, validity: [0b____1011] }                                                                                                      |
+| Output | NullableColumn { column: BinaryColumn { data: 0x8000000320000002500000042000000250014000000050034000000110000001500000106b800000022000000220000002500150024000000110000001100000016162, offsets: [0, 24, 53, 53, 67] }, validity: [0b____1011] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 

@@ -153,8 +153,8 @@ fn test_format() {
                 marker_index: None,
                 from_correlated_subquery: false,
                 need_hold_hash_table: false,
-                broadcast: false,
                 is_lateral: false,
+                original_join_type: None,
             }
             .into(),
         ),

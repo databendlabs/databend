@@ -39,15 +39,17 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
 use parking_lot::RwLock;
 
-use super::wrap_cast_scalar;
+use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::MatchedEvaluator;
+use crate::plans::MaterializedCte;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
+use crate::plans::RelOperator;
 use crate::plans::UnmatchedEvaluator;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -217,9 +219,24 @@ impl Binder {
         let source_data = source.transform_table_reference();
 
         // bind source data
-        let (source_expr, mut source_context) =
+        let (mut source_expr, mut source_context) =
             self.bind_single_table(bind_context, &source_data).await?;
-
+        // Wrap `LogicalMaterializedCte` to `source_expr`
+        for (_, cte_info) in self.ctes_map.iter().rev() {
+            if !cte_info.materialized || cte_info.used_count == 0 {
+                continue;
+            }
+            let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
+            let left_output_columns = cte_info.columns.clone();
+            source_expr = SExpr::create_binary(
+                Arc::new(RelOperator::MaterializedCte(MaterializedCte {
+                    left_output_columns,
+                    cte_idx: cte_info.cte_idx,
+                })),
+                Arc::new(cte_s_expr.clone()),
+                Arc::new(source_expr),
+            );
+        }
         if !self.check_sexpr_top(&source_expr)? {
             return Err(ErrorCode::SemanticError(
                 "replace source can't contain udf functions".to_string(),
@@ -575,11 +592,10 @@ impl Binder {
             for idx in 0..default_schema.num_fields() {
                 let scalar = update_columns_star.get(&idx).unwrap().clone();
                 // cast expr
-                values.push(wrap_cast_scalar(
+                values.push(wrap_cast(
                     &scalar,
-                    &scalar.data_type()?,
                     &DataType::from(default_schema.field(idx).data_type()),
-                )?);
+                ));
             }
 
             Ok(UnmatchedEvaluator {
@@ -616,11 +632,10 @@ impl Binder {
                     .set_span(scalar_expr.span()));
                 }
                 // type cast
-                scalar_expr = wrap_cast_scalar(
+                scalar_expr = wrap_cast(
                     &scalar_expr,
-                    &scalar_expr.data_type()?,
                     &DataType::from(source_schema.field(idx).data_type()),
-                )?;
+                );
 
                 values.push(scalar_expr.clone());
                 for idx in scalar_expr.used_columns() {

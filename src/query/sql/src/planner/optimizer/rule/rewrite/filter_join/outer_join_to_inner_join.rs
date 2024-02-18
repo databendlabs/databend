@@ -25,11 +25,16 @@ use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
 
-pub fn outer_to_inner(s_expr: &SExpr) -> Result<SExpr> {
+pub fn outer_to_inner(after_join_reorder: bool, s_expr: &SExpr) -> Result<(SExpr, bool)> {
     let join: Join = s_expr.child(0)?.plan().clone().try_into()?;
     let origin_join_type = join.join_type.clone();
     if !origin_join_type.is_outer_join() {
-        return Ok(s_expr.clone());
+        return Ok((s_expr.clone(), false));
+    }
+
+    let (s_expr, res) = outer_to_inner_impl(after_join_reorder, s_expr)?;
+    if res {
+        return Ok((s_expr, true));
     }
 
     #[cfg(feature = "z3-prove")]
@@ -55,24 +60,34 @@ pub fn outer_to_inner(s_expr: &SExpr) -> Result<SExpr> {
             .iter()
             .any(|col| constraint_set.is_null_reject(col));
 
-        if !eliminate_left_null && !eliminate_right_null {
-            // Fall back to the original implementation.
-            return outer_to_inner_impl(s_expr);
-        }
-
+        let old_join_type = join.join_type.clone();
         let new_join_type = match join.join_type {
             JoinType::Left => {
                 if eliminate_right_null {
                     JoinType::Inner
                 } else {
-                    JoinType::Left
+                    join.join_type
+                }
+            }
+            JoinType::LeftSingle => {
+                if eliminate_right_null && after_join_reorder {
+                    JoinType::Inner
+                } else {
+                    join.join_type
                 }
             }
             JoinType::Right => {
                 if eliminate_left_null {
                     JoinType::Inner
                 } else {
-                    JoinType::Right
+                    join.join_type
+                }
+            }
+            JoinType::RightSingle => {
+                if eliminate_left_null && after_join_reorder {
+                    JoinType::Inner
+                } else {
+                    join.join_type
                 }
             }
             JoinType::Full => {
@@ -89,22 +104,38 @@ pub fn outer_to_inner(s_expr: &SExpr) -> Result<SExpr> {
             _ => unreachable!(),
         };
 
+        if new_join_type != old_join_type {
+            if origin_join_type == JoinType::LeftSingle {
+                join.original_join_type = Some(JoinType::LeftSingle);
+            } else if origin_join_type == JoinType::RightSingle {
+                join.original_join_type = Some(JoinType::RightSingle);
+            }
+        } else {
+            return Ok((s_expr.clone(), false));
+        }
+
         join.join_type = new_join_type;
-        Ok(SExpr::create_unary(
-            Arc::new(filter.into()),
-            Arc::new(SExpr::create_binary(
-                Arc::new(join.into()),
-                Arc::new(s_expr.child(0)?.child(0)?.clone()),
-                Arc::new(s_expr.child(0)?.child(1)?.clone()),
-            )),
+        Ok((
+            SExpr::create_unary(
+                Arc::new(filter.into()),
+                Arc::new(SExpr::create_binary(
+                    Arc::new(join.into()),
+                    Arc::new(s_expr.child(0)?.child(0)?.clone()),
+                    Arc::new(s_expr.child(0)?.child(1)?.clone()),
+                )),
+            ),
+            true,
         ))
     }
 
     #[cfg(not(feature = "z3-prove"))]
-    outer_to_inner_impl(s_expr)
+    {
+        let (s_expr, res) = outer_to_inner_impl(after_join_reorder, &s_expr)?;
+        Ok((s_expr, res))
+    }
 }
 
-fn outer_to_inner_impl(s_expr: &SExpr) -> Result<SExpr> {
+fn outer_to_inner_impl(after_join_reorder: bool, s_expr: &SExpr) -> Result<(SExpr, bool)> {
     let filter: Filter = s_expr.plan().clone().try_into()?;
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
     let origin_join_type = join.join_type.clone();
@@ -129,10 +160,7 @@ fn outer_to_inner_impl(s_expr: &SExpr) -> Result<SExpr> {
         )?;
     }
 
-    if join.join_type == JoinType::Left
-        || join.join_type == JoinType::Right
-        || join.join_type == JoinType::Full
-    {
+    if join.join_type.is_outer_join() {
         let mut left_join = false;
         let mut right_join = false;
         for col in nullable_columns.iter() {
@@ -150,8 +178,18 @@ fn outer_to_inner_impl(s_expr: &SExpr) -> Result<SExpr> {
                     join.join_type = JoinType::Inner
                 }
             }
+            JoinType::LeftSingle => {
+                if left_join && after_join_reorder {
+                    join.join_type = JoinType::Inner
+                }
+            }
             JoinType::Right => {
                 if right_join {
+                    join.join_type = JoinType::Inner
+                }
+            }
+            JoinType::RightSingle => {
+                if right_join && after_join_reorder {
                     join.join_type = JoinType::Inner
                 }
             }
@@ -170,8 +208,15 @@ fn outer_to_inner_impl(s_expr: &SExpr) -> Result<SExpr> {
 
     let changed_join_type = join.join_type.clone();
     if origin_join_type == changed_join_type {
-        return Ok(s_expr.clone());
+        return Ok((s_expr.clone(), false));
     }
+
+    if origin_join_type == JoinType::LeftSingle {
+        join.original_join_type = Some(JoinType::LeftSingle);
+    } else if origin_join_type == JoinType::RightSingle {
+        join.original_join_type = Some(JoinType::RightSingle);
+    }
+
     let mut result = SExpr::create_binary(
         Arc::new(join.into()),
         Arc::new(s_join_expr.child(0)?.clone()),
@@ -179,7 +224,7 @@ fn outer_to_inner_impl(s_expr: &SExpr) -> Result<SExpr> {
     );
     // wrap filter s_expr
     result = SExpr::create_unary(Arc::new(filter.into()), Arc::new(result));
-    Ok(result)
+    Ok((result, true))
 }
 #[allow(clippy::only_used_in_recursion)]
 fn find_nullable_columns(

@@ -17,15 +17,13 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Limit;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::RelOp::Pattern;
-use crate::plans::RelOp::Window;
 use crate::plans::RelOperator;
 use crate::plans::Window as LogicalWindow;
 use crate::plans::WindowFuncFrame;
@@ -46,27 +44,22 @@ use crate::plans::WindowFuncType;
 ///               *
 pub struct RulePushDownLimitWindow {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
+    max_limit: usize,
 }
 
 impl RulePushDownLimitWindow {
-    pub fn new() -> Self {
+    pub fn new(max_limit: usize) -> Self {
         Self {
             id: RuleID::PushDownLimitSort,
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Limit,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(PatternPlan { plan_type: Window }.into()),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan { plan_type: Pattern }.into(),
-                    ))),
-                )),
-            )],
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Limit,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Window,
+                    children: vec![Matcher::Leaf],
+                }],
+            }],
+            max_limit,
         }
     }
 }
@@ -83,22 +76,26 @@ impl Rule for RulePushDownLimitWindow {
             let window = s_expr.child(0)?;
             let mut window_limit: LogicalWindow = window.plan().clone().try_into()?;
             if should_apply(window.child(0)?, &window_limit)? {
-                window_limit.limit = Some(window_limit.limit.map_or(count, |c| cmp::max(c, count)));
-                let sort = SExpr::create_unary(
-                    Arc::new(RelOperator::Window(window_limit)),
-                    Arc::new(window.child(0)?.clone()),
-                );
+                let limit = window_limit.limit.map_or(count, |c| cmp::max(c, count));
 
-                let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
-                result.set_applied_rule(&self.id);
-                state.add_result(result);
+                if limit <= self.max_limit {
+                    window_limit.limit = Some(limit);
+                    let sort = SExpr::create_unary(
+                        Arc::new(RelOperator::Window(window_limit)),
+                        Arc::new(window.child(0)?.clone()),
+                    );
+
+                    let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
+                    result.set_applied_rule(&self.id);
+                    state.add_result(result);
+                }
             }
         }
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }
 

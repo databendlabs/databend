@@ -60,7 +60,6 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
                 Exchange::MergeSort => "MergeSort".to_string(),
             })
         }
-        RelOperator::Pattern(_) => "Pattern".to_string(),
         RelOperator::DummyTableScan(_) => "DummyTableScan".to_string(),
         RelOperator::ProjectSet(_) => "ProjectSet".to_string(),
         RelOperator::Window(_) => "WindowFunc".to_string(),

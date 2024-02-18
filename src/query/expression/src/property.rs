@@ -192,7 +192,9 @@ impl Domain {
             DataType::Array(ty) => Domain::Array(Some(Box::new(Domain::full(ty)))),
             DataType::EmptyMap => Domain::Map(None),
             DataType::Map(ty) => Domain::Map(Some(Box::new(Domain::full(ty)))),
-            DataType::Binary | DataType::Bitmap | DataType::Variant => Domain::Undefined,
+            DataType::Binary | DataType::Bitmap | DataType::Variant | DataType::Geometry => {
+                Domain::Undefined
+            }
             DataType::Generic(_) => unreachable!(),
         }
     }

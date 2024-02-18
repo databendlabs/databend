@@ -32,7 +32,7 @@ create table t_insert_default(a int null, b int not null default 2, c float not 
 
 
 statement ok
-create table t_insert_default(a int null, b int not null default 2, c float not null, d varchar not null default 'd', e smallint null default -872582066);
+create table t_insert_default(a int null, b int not null default 2, c float not null, d varchar not null default 'd', e smallint null default -100);
 
 statement ok
 insert into t_insert_default(a, c) values (default, default), (1, 1.0)
@@ -40,8 +40,8 @@ insert into t_insert_default(a, c) values (default, default), (1, 1.0)
 query TIFS
 select * from t_insert_default
 ----
-NULL 2 0.0 d NULL
-1 2 1.0 d NULL
+NULL 2 0.0 d -100
+1 2 1.0 d -100
 
 statement error 1303
 insert into t_insert_default values (default)

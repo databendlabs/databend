@@ -25,9 +25,6 @@ use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::StatInfo;
 use crate::plans::Exchange;
-use crate::plans::Operator;
-use crate::plans::PatternPlan;
-use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::SubqueryExpr;
@@ -98,21 +95,6 @@ impl SExpr {
         Self::create(plan, vec![], None, None, None)
     }
 
-    pub fn create_pattern_leaf() -> Self {
-        Self::create(
-            Arc::new(
-                PatternPlan {
-                    plan_type: RelOp::Pattern,
-                }
-                .into(),
-            ),
-            vec![],
-            None,
-            None,
-            None,
-        )
-    }
-
     pub fn plan(&self) -> &RelOperator {
         &self.plan
     }
@@ -132,35 +114,8 @@ impl SExpr {
         self.children.len()
     }
 
-    pub fn is_pattern(&self) -> bool {
-        matches!(self.plan.rel_op(), RelOp::Pattern)
-    }
-
     pub fn original_group(&self) -> Option<IndexType> {
         self.original_group
-    }
-
-    pub fn match_pattern(&self, pattern: &SExpr) -> bool {
-        if pattern.plan.rel_op() != RelOp::Pattern {
-            // Pattern is plan
-            if self.plan.rel_op() != pattern.plan.rel_op() {
-                return false;
-            }
-
-            if self.arity() != pattern.arity() {
-                // Check if current expression has same arity with current pattern
-                return false;
-            }
-
-            for (e, p) in self.children.iter().zip(pattern.children.iter()) {
-                // Check children
-                if !e.match_pattern(p) {
-                    return false;
-                }
-            }
-        };
-
-        true
     }
 
     /// Replace children with given new `children`.
@@ -362,7 +317,6 @@ impl SExpr {
             | RelOperator::DummyTableScan(_)
             | RelOperator::CteScan(_)
             | RelOperator::AddRowNumber(_)
-            | RelOperator::Pattern(_)
             | RelOperator::MaterializedCte(_)
             | RelOperator::ConstantTableScan(_) => {}
         };
@@ -416,6 +370,21 @@ impl SExpr {
 
         add_internal_column_index_into_child(expr, column_index, table_index)
     }
+
+    // The method will clear the applied rules of current SExpr and its children.
+    pub fn clear_applied_rules(&mut self) {
+        self.applied_rules.clear();
+        let children = self
+            .children()
+            .iter()
+            .map(|child| {
+                let mut child = (**child).clone();
+                child.clear_applied_rules();
+                Arc::new(child)
+            })
+            .collect::<Vec<_>>();
+        self.children = children;
+    }
 }
 
 fn find_subquery(rel_op: &RelOperator) -> bool {
@@ -428,7 +397,6 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::DummyTableScan(_)
         | RelOperator::CteScan(_)
         | RelOperator::AddRowNumber(_)
-        | RelOperator::Pattern(_)
         | RelOperator::MaterializedCte(_)
         | RelOperator::ConstantTableScan(_) => false,
         RelOperator::Join(op) => {

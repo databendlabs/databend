@@ -26,6 +26,7 @@ use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::cost::Cost;
 use crate::optimizer::cost::CostContext;
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::Distribution;
 use crate::optimizer::DistributionEnforcer;
 use crate::optimizer::Enforcer;
@@ -33,8 +34,6 @@ use crate::optimizer::PatternExtractor;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
-use crate::plans::PatternPlan;
-use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::IndexType;
 
@@ -401,19 +400,10 @@ impl OptimizeExprTask {
             return Ok(OptimizeExprEvent::OptimizingSelf);
         }
 
-        let mut extractor = PatternExtractor::create();
+        let mut extractor = PatternExtractor::new();
         let enforcer_child = Arc::new(
             extractor
-                .extract(
-                    &optimizer.memo,
-                    m_expr,
-                    &SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    )),
-                )?
+                .extract(&optimizer.memo, m_expr, &Matcher::Leaf)?
                 .pop()
                 .ok_or_else(|| {
                     ErrorCode::Internal(format!("Cannot find child of m_expr: {:?}", m_expr.plan))

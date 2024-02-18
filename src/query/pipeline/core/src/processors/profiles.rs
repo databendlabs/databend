@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::time::Duration;
 
+use databend_common_base::base::convert_byte_size;
+use databend_common_base::base::convert_number_size;
 use once_cell::sync::OnceCell;
 
-#[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize, Debug)]
 pub enum ProfileStatisticsName {
     /// The time spent to process in nanoseconds
     CpuTime,
@@ -39,6 +42,7 @@ pub enum ProfileStatisticsName {
     SpillReadCount,
     SpillReadBytes,
     SpillReadTime,
+    RuntimeFilterPruneParts,
 }
 
 #[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
@@ -73,14 +77,26 @@ impl From<usize> for ProfileStatisticsName {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProfileDesc {
-    desc: &'static str,
-    display_name: &'static str,
-    index: usize,
-    unit: StatisticsUnit,
-    plain_statistics: bool,
+    pub desc: &'static str,
+    pub display_name: &'static str,
+    pub index: usize,
+    pub unit: StatisticsUnit,
+    pub plain_statistics: bool,
 }
 
-pub static PROFILES_DESC: OnceCell<Arc<HashMap<ProfileStatisticsName, ProfileDesc>>> =
+impl ProfileDesc {
+    pub fn human_format(&self, value: usize) -> String {
+        match self.unit {
+            StatisticsUnit::Rows => convert_number_size(value as f64),
+            StatisticsUnit::Bytes => convert_byte_size(value as f64),
+            StatisticsUnit::NanoSeconds => format!("{:?}", Duration::from_nanos(value as u64)),
+            StatisticsUnit::MillisSeconds => format!("{:?}", Duration::from_millis(value as u64)),
+            StatisticsUnit::Count => format!("{}", value),
+        }
+    }
+}
+
+pub static PROFILES_DESC: OnceCell<Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>> =
     OnceCell::new();
 
 pub static PROFILES_INDEX: OnceCell<
@@ -103,22 +119,22 @@ fn get_statistics_name_index()
         .clone()
 }
 
-pub fn get_statistics_desc() -> Arc<HashMap<ProfileStatisticsName, ProfileDesc>> {
+pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>> {
     PROFILES_DESC.get_or_init(|| {
-        Arc::new(HashMap::from([
+        Arc::new(BTreeMap::from([
             (ProfileStatisticsName::CpuTime, ProfileDesc {
                 display_name: "cpu time",
                 desc: "The time spent to process in nanoseconds",
                 index: ProfileStatisticsName::CpuTime as usize,
                 unit: StatisticsUnit::NanoSeconds,
-                plain_statistics: true,
+                plain_statistics: false,
             }),
             (ProfileStatisticsName::WaitTime, ProfileDesc {
                 display_name: "wait time",
                 desc: "The time spent to wait in nanoseconds, usually used to measure the time spent on waiting for I/O",
                 index: ProfileStatisticsName::WaitTime as usize,
                 unit: StatisticsUnit::NanoSeconds,
-                plain_statistics: true,
+                plain_statistics: false,
             }),
             (ProfileStatisticsName::ExchangeRows, ProfileDesc {
                 display_name: "exchange rows",
@@ -211,6 +227,13 @@ pub fn get_statistics_desc() -> Arc<HashMap<ProfileStatisticsName, ProfileDesc>>
                 unit: StatisticsUnit::MillisSeconds,
                 plain_statistics: true,
             }),
+            (ProfileStatisticsName::RuntimeFilterPruneParts, ProfileDesc {
+                display_name: "parts pruned by runtime filter",
+                desc: "The partitions pruned by runtime filter",
+                index: ProfileStatisticsName::RuntimeFilterPruneParts as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            })
         ]))
     }).clone()
 }

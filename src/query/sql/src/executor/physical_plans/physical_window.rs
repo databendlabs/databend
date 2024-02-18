@@ -273,6 +273,7 @@ impl PhysicalPlanBuilder {
                 asc: v.asc.unwrap_or(true),
                 nulls_first: v.nulls_first.unwrap_or(false),
                 order_by: v.order_by_item.index,
+                display_name: self.metadata.read().column(v.order_by_item.index).name(),
             })
             .collect::<Vec<_>>();
         let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
@@ -302,6 +303,9 @@ impl PhysicalPlanBuilder {
                         }
                     })
                     .collect::<Result<_>>()?,
+                display: ScalarExpr::AggregateFunction(agg.clone())
+                    .as_expr()?
+                    .sql_display(),
             }),
             WindowFuncType::LagLead(lag_lead) => {
                 let new_default = match &lag_lead.default {
@@ -351,7 +355,7 @@ impl PhysicalPlanBuilder {
         };
 
         Ok(PhysicalPlan::Window(Window {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             index: w.index,
             input: Box::new(input),
             func,

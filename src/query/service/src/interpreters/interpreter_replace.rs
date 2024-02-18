@@ -291,7 +291,7 @@ impl ReplaceInterpreter {
                 table_info: table_info.clone(),
                 catalog_info: catalog.info(),
                 select_ctx,
-                table_schema: plan.schema.clone(),
+                target_schema: plan.schema.clone(),
                 table_level_range_index,
                 need_insert: true,
                 delete_when,

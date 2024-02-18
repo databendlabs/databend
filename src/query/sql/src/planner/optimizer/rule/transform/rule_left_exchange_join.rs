@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 
 use super::util::get_join_predicates;
 use crate::binder::JoinPredicate;
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
@@ -27,7 +28,6 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 
 /// Rule to apply swap on a left-deep join.
@@ -47,7 +47,7 @@ use crate::plans::RelOp;
 ///  t1  t3
 pub struct RuleLeftExchangeJoin {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
 }
 
 impl RuleLeftExchangeJoin {
@@ -62,25 +62,16 @@ impl RuleLeftExchangeJoin {
             // | \
             // |  *
             // *
-            patterns: vec![SExpr::create_binary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Join,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_binary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Join,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_pattern_leaf()),
-                    Arc::new(SExpr::create_pattern_leaf()),
-                )),
-                Arc::new(SExpr::create_pattern_leaf()),
-            )],
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Join,
+                children: vec![
+                    Matcher::MatchOp {
+                        op_type: RelOp::Join,
+                        children: vec![Matcher::Leaf, Matcher::Leaf],
+                    },
+                    Matcher::Leaf,
+                ],
+            }],
         }
     }
 }
@@ -236,8 +227,8 @@ impl Rule for RuleLeftExchangeJoin {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 
     fn transformation(&self) -> bool {

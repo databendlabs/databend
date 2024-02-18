@@ -15,7 +15,29 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_expression::types::DataType;
+use databend_common_meta_kvapi::kvapi::Key;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UdfName {
+    pub tenant: String,
+    pub name: String,
+}
+
+impl UdfName {
+    pub fn new(tenant: impl ToString, name: impl ToString) -> Self {
+        Self {
+            tenant: tenant.to_string(),
+            name: name.to_string(),
+        }
+    }
+
+    pub fn tenant_prefix(&self) -> String {
+        Self::new(&self.tenant, "").to_string_key()
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LambdaUDF {
@@ -43,6 +65,7 @@ pub struct UserDefinedFunction {
     pub name: String,
     pub description: String,
     pub definition: UDFDefinition,
+    pub created_on: DateTime<Utc>,
 }
 
 impl UserDefinedFunction {
@@ -59,6 +82,7 @@ impl UserDefinedFunction {
                 parameters,
                 definition: definition.to_string(),
             }),
+            created_on: Utc::now(),
         }
     }
 
@@ -81,6 +105,7 @@ impl UserDefinedFunction {
                 arg_types,
                 return_type,
             }),
+            created_on: Utc::now(),
         }
     }
 }
@@ -121,5 +146,35 @@ impl Display for UDFDefinition {
             }
         }
         Ok(())
+    }
+}
+
+mod kv_api_impl {
+    use databend_common_meta_kvapi::kvapi;
+
+    use super::UdfName;
+    use crate::principal::UserDefinedFunction;
+
+    impl kvapi::Key for UdfName {
+        const PREFIX: &'static str = "__fd_udfs";
+
+        type ValueType = UserDefinedFunction;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_str(&self.tenant)
+                .push_str(&self.name)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let tenant = p.next_str()?;
+            let name = p.next_str()?;
+            p.done()?;
+
+            Ok(UdfName { tenant, name })
+        }
     }
 }

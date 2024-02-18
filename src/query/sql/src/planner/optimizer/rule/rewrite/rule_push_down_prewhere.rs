@@ -18,12 +18,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Filter;
-use crate::plans::PatternPlan;
 use crate::plans::Prewhere;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -34,7 +34,7 @@ use crate::Visibility;
 
 pub struct RulePushDownPrewhere {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
     metadata: MetadataRef,
 }
 
@@ -42,20 +42,13 @@ impl RulePushDownPrewhere {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::PushDownPrewhere,
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Filter,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_leaf(Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Scan,
-                    }
-                    .into(),
-                ))),
-            )],
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Filter,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Scan,
+                    children: vec![],
+                }],
+            }],
             metadata,
         }
     }
@@ -164,10 +157,6 @@ impl Rule for RulePushDownPrewhere {
         self.id
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
-    }
-
     fn apply(
         &self,
         s_expr: &SExpr,
@@ -177,5 +166,9 @@ impl Rule for RulePushDownPrewhere {
         result.set_applied_rule(&self.id);
         state.add_result(result);
         Ok(())
+    }
+
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }

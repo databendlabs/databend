@@ -99,7 +99,7 @@ NULL
 1.0
 
 query T
-select if(number = 4, 3::VARIANT, number = 5, null, number = 6, 'a'::VARIANT, null) from numbers(10)
+select if(number = 4, 3::VARIANT, number = 5, null, number = 6, '"a"'::VARIANT, null) from numbers(10)
 ----
 NULL
 NULL

@@ -121,7 +121,7 @@ impl PhysicalPlanBuilder {
 
         // 2. Build physical plan.
         Ok(PhysicalPlan::Sort(Sort {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             input: Box::new(self.build(s_expr.child(0)?, required).await?),
             order_by: sort
                 .items
@@ -130,6 +130,7 @@ impl PhysicalPlanBuilder {
                     asc: v.asc,
                     nulls_first: v.nulls_first,
                     order_by: v.index,
+                    display_name: self.metadata.read().column(v.index).name(),
                 })
                 .collect(),
             limit: sort.limit,

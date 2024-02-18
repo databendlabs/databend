@@ -37,7 +37,7 @@ fn main() {
             std::process::exit(cause.code() as i32);
         }
         Ok(rt) => {
-            if let Err(cause) = rt.block_on(async_backtrace::location!().frame(main_entrypoint())) {
+            if let Err(cause) = rt.block_on(main_entrypoint()) {
                 eprintln!("Databend Query start failure, cause: {:?}", cause);
                 std::process::exit(cause.code() as i32);
             }

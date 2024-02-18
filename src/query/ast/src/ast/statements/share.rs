@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use itertools::Itertools;
@@ -25,7 +26,7 @@ use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateShareEndpointStmt {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub endpoint: Identifier,
     pub url: UriLocation,
     pub tenant: Identifier,
@@ -35,9 +36,15 @@ pub struct CreateShareEndpointStmt {
 
 impl Display for CreateShareEndpointStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE SHARE ENDPOINT ")?;
-        if self.if_not_exists {
-            write!(f, "IF NOT EXISTS ")?;
+        write!(f, "CREATE ")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, "OR REPLACE ")?;
+        }
+        write!(f, "SHARE ENDPOINT ")?;
+        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
+            if if_not_exists {
+                write!(f, "IF NOT EXISTS ")?;
+            }
         }
         write!(f, "{}", self.endpoint)?;
         write!(f, " URL={}", self.url)?;

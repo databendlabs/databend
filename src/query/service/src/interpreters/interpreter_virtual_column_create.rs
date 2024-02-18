@@ -68,7 +68,7 @@ impl Interpreter for CreateVirtualColumnInterpreter {
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
 
         let create_virtual_column_req = CreateVirtualColumnReq {
-            if_not_exists: self.plan.if_not_exists,
+            create_option: self.plan.create_option,
             name_ident: VirtualColumnNameIdent { tenant, table_id },
             virtual_columns: self.plan.virtual_columns.clone(),
         };

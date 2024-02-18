@@ -55,7 +55,7 @@ impl Binder {
         stmt: &CreateStageStmt,
     ) -> Result<Plan> {
         let CreateStageStmt {
-            if_not_exists,
+            create_option,
             stage_name,
             location,
             file_format_options,
@@ -116,7 +116,7 @@ impl Binder {
         }
 
         Ok(Plan::CreateStage(Box::new(CreateStagePlan {
-            if_not_exists: *if_not_exists,
+            create_option: *create_option,
             tenant: self.ctx.get_tenant(),
             stage_info,
         })))

@@ -211,7 +211,7 @@ impl ShareApiTestSuite {
         let create_on = Utc::now();
         {
             let req = CreateShareEndpointReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 endpoint: ShareEndpointIdent {
                     tenant: tenant.to_string(),
                     endpoint: endpoint1.to_string(),
@@ -228,7 +228,7 @@ impl ShareApiTestSuite {
             assert!(res.is_ok());
 
             let req = CreateShareEndpointReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 endpoint: ShareEndpointIdent {
                     tenant: tenant.to_string(),
                     endpoint: endpoint1.to_string(),
@@ -250,7 +250,7 @@ impl ShareApiTestSuite {
             );
 
             let req = CreateShareEndpointReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 endpoint: ShareEndpointIdent {
                     tenant: tenant.to_string(),
                     endpoint: endpoint2.to_string(),
@@ -382,6 +382,90 @@ impl ShareApiTestSuite {
             let res = mt.get_share_endpoint(req).await;
             assert!(res.is_ok());
             assert_eq!(res.unwrap().share_endpoint_meta_vec.len(), 0);
+        }
+
+        {
+            info!("--- create or replace share endpoints");
+            let endpoint_name = "replace_endpoint";
+            let endpoint = ShareEndpointIdent {
+                tenant: tenant.to_string(),
+                endpoint: endpoint_name.to_string(),
+            };
+            let url = "http://127.0.0.1:22222".to_string();
+            let req = CreateShareEndpointReq {
+                create_option: CreateOption::CreateIfNotExists(false),
+                endpoint: endpoint.clone(),
+                url: url.clone(),
+                tenant: tenant2.to_string(),
+                comment: None,
+                create_on,
+                args: BTreeMap::new(),
+            };
+
+            let res = mt.create_share_endpoint(req).await?;
+
+            let old_share_endpoint_id = res.share_endpoint_id;
+            let old_id_key = ShareEndpointId {
+                share_endpoint_id: old_share_endpoint_id,
+            };
+            let oldid_to_name_key = ShareEndpointIdToName {
+                share_endpoint_id: old_share_endpoint_id,
+            };
+            let meta: ShareEndpointMeta = get_kv_data(mt.as_kv_api(), &old_id_key).await?;
+            assert_eq!(meta.url, url);
+            let name_key: ShareEndpointIdent =
+                get_kv_data(mt.as_kv_api(), &oldid_to_name_key).await?;
+            assert_eq!(name_key, endpoint);
+
+            let req = GetShareEndpointReq {
+                tenant: tenant.to_string(),
+                endpoint: Some(endpoint_name.to_string()),
+                to_tenant: None,
+            };
+
+            let res = mt.get_share_endpoint(req).await?;
+            assert_eq!(res.share_endpoint_meta_vec.len(), 1);
+            assert_eq!(res.share_endpoint_meta_vec[0].1.url, url);
+
+            let url = "http://192.168.0.1".to_string();
+            let req = CreateShareEndpointReq {
+                create_option: CreateOption::CreateOrReplace,
+                endpoint: endpoint.clone(),
+                url: url.clone(),
+                tenant: tenant2.to_string(),
+                comment: None,
+                create_on,
+                args: BTreeMap::new(),
+            };
+
+            let res = mt.create_share_endpoint(req).await?;
+            let share_endpoint_id = res.share_endpoint_id;
+
+            let req = GetShareEndpointReq {
+                tenant: tenant.to_string(),
+                endpoint: Some(endpoint_name.to_string()),
+                to_tenant: None,
+            };
+
+            let res = mt.get_share_endpoint(req).await?;
+            assert_eq!(res.share_endpoint_meta_vec.len(), 1);
+            assert_eq!(res.share_endpoint_meta_vec[0].1.url, url);
+
+            // assert old id key has been deleted
+            let meta: Result<ShareEndpointMeta, KVAppError> =
+                get_kv_data(mt.as_kv_api(), &old_id_key).await;
+            assert!(meta.is_err());
+            let name_key: Result<ShareEndpointIdent, KVAppError> =
+                get_kv_data(mt.as_kv_api(), &oldid_to_name_key).await;
+            assert!(name_key.is_err());
+
+            // assert new id key has been created
+            let id_key = ShareEndpointId { share_endpoint_id };
+            let id_to_name_key = ShareEndpointIdToName { share_endpoint_id };
+            let meta: ShareEndpointMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+            assert_eq!(meta.url, url);
+            let name_key: ShareEndpointIdent = get_kv_data(mt.as_kv_api(), &id_to_name_key).await?;
+            assert_eq!(name_key, endpoint);
         }
         Ok(())
     }

@@ -109,7 +109,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Magic happens here. We will add a layer upon original
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
-        .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
+        .layer(RuntimeLayer::new(GlobalIORuntime::instance()))
         .layer({
             let retry_timeout = env::var("_DATABEND_INTERNAL_RETRY_TIMEOUT")
                 .ok()

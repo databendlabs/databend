@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 
@@ -34,7 +33,6 @@ pub struct PhysicalPlanBuilder {
     pub(crate) metadata: MetadataRef,
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) func_ctx: FunctionContext,
-    pub(crate) next_plan_id: u32,
     pub(crate) dry_run: bool,
     // Record cte_idx and the cte's output columns
     pub(crate) cte_output_columns: HashMap<IndexType, Vec<ColumnBinding>>,
@@ -46,17 +44,10 @@ impl PhysicalPlanBuilder {
         Self {
             metadata,
             ctx,
-            next_plan_id: 0,
             func_ctx,
             dry_run,
             cte_output_columns: Default::default(),
         }
-    }
-
-    pub(crate) fn next_plan_id(&mut self) -> u32 {
-        let id = self.next_plan_id;
-        self.next_plan_id += 1;
-        id
     }
 
     pub(crate) fn build_plan_stat_info(&self, s_expr: &SExpr) -> Result<PlanStatsInfo> {
@@ -68,9 +59,20 @@ impl PhysicalPlanBuilder {
         })
     }
 
+    pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<PhysicalPlan> {
+        let mut plan = self.build_physical_plan(s_expr, required).await?;
+        adjust_plan_id(&mut plan, &mut 0);
+
+        Ok(plan)
+    }
+
     #[async_recursion::async_recursion]
     #[async_backtrace::framed]
-    pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<PhysicalPlan> {
+    pub async fn build_physical_plan(
+        &mut self,
+        s_expr: &SExpr,
+        required: ColumnSet,
+    ) -> Result<PhysicalPlan> {
         // Build stat info.
         let stat_info = self.build_plan_stat_info(s_expr)?;
         match s_expr.plan() {
@@ -112,10 +114,131 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::AddRowNumber(_) => self.build_add_row_number(s_expr, required).await,
             RelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
-            _ => Err(ErrorCode::Internal(format!(
-                "Unsupported physical plan: {:?}",
-                s_expr.plan()
-            ))),
         }
+    }
+}
+
+/// Adjust the plan_id of the physical plan.
+/// This function will assign a unique plan_id to each physical plan node in a top-down manner.
+/// Which means the plan_id of a node is always greater than the plan_id of its parent node.
+fn adjust_plan_id(plan: &mut PhysicalPlan, next_id: &mut u32) {
+    match plan {
+        PhysicalPlan::TableScan(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+        }
+        PhysicalPlan::Filter(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::Project(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::EvalScalar(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::ProjectSet(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::AggregateExpand(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::AggregatePartial(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::AggregateFinal(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::Window(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::Sort(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::Limit(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::RowFetch(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::HashJoin(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.probe, next_id);
+            adjust_plan_id(&mut plan.build, next_id);
+        }
+        PhysicalPlan::RangeJoin(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.left, next_id);
+            adjust_plan_id(&mut plan.right, next_id);
+        }
+        PhysicalPlan::Exchange(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::UnionAll(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.left, next_id);
+            adjust_plan_id(&mut plan.right, next_id);
+        }
+        PhysicalPlan::CteScan(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+        }
+        PhysicalPlan::MaterializedCte(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+        }
+        PhysicalPlan::ConstantTableScan(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+        }
+        PhysicalPlan::Udf(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::DistributedInsertSelect(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::ExchangeSource(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+        }
+        PhysicalPlan::ExchangeSink(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+        }
+        PhysicalPlan::CopyIntoTable(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+        }
+        _ => {}
     }
 }

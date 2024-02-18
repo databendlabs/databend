@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::TransformResult;
@@ -28,14 +29,13 @@ use crate::plans::AggregateMode;
 use crate::plans::ConstantExpr;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
 /// Fold simple `COUNT(*)` aggregate with statistics information.
 pub struct RuleFoldCountAggregate {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
 }
 
 impl RuleFoldCountAggregate {
@@ -45,20 +45,10 @@ impl RuleFoldCountAggregate {
             //  Aggregate
             //  \
             //   *
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Aggregate,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_leaf(Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Pattern,
-                    }
-                    .into(),
-                ))),
-            )],
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Aggregate,
+                children: vec![Matcher::Leaf],
+            }],
         }
     }
 }
@@ -127,7 +117,7 @@ impl Rule for RuleFoldCountAggregate {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }

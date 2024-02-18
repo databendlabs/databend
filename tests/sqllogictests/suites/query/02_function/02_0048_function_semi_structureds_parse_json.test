@@ -1,7 +1,7 @@
 query T
 select to_variant(null)
 ----
-null
+NULL
 
 query T
 select to_variant(true)
@@ -91,7 +91,7 @@ select '==try_parse_json=='
 query T
 select try_to_variant(null)
 ----
-null
+NULL
 
 query T
 select try_to_variant(true)

@@ -19,10 +19,9 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::get_statistics_desc;
 use databend_common_pipeline_core::processors::profile::PlanProfile;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use itertools::Itertools;
-use time::Duration;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
@@ -85,8 +84,8 @@ impl PhysicalPlan {
 
                 Ok(FormatTreeNode::with_children(
                     format!(
-                        "Scan: {} (read rows: {})",
-                        table_name, plan.source.statistics.read_rows
+                        "Scan: {} (#{}) (read rows: {})",
+                        table_name, plan.table_index, plan.source.statistics.read_rows
                     ),
                     vec![],
                 ))
@@ -246,26 +245,15 @@ fn append_profile_info(
     plan_id: u32,
 ) {
     if let Some(prof) = profs.get(&plan_id) {
-        children.push(FormatTreeNode::new(format!(
-            "output rows: {}",
-            prof.statistics[ProfileStatisticsName::OutputRows as usize],
-        )));
-        children.push(FormatTreeNode::new(format!(
-            "output bytes: {}",
-            prof.statistics[ProfileStatisticsName::OutputBytes as usize],
-        )));
-        children.push(FormatTreeNode::new(format!(
-            "total cpu time: {:.3}ms",
-            Duration::nanoseconds(prof.statistics[ProfileStatisticsName::CpuTime as usize] as i64)
-                .as_seconds_f64()
-                * 1000.0,
-        )));
-        children.push(FormatTreeNode::new(format!(
-            "total wait time: {:.3}ms",
-            Duration::nanoseconds(prof.statistics[ProfileStatisticsName::WaitTime as usize] as i64)
-                .as_seconds_f64()
-                * 1000.0,
-        )));
+        for (_, desc) in get_statistics_desc().iter() {
+            if prof.statistics[desc.index] != 0 {
+                children.push(FormatTreeNode::new(format!(
+                    "{}: {}",
+                    desc.display_name.to_lowercase(),
+                    desc.human_format(prof.statistics[desc.index])
+                )));
+            }
+        }
     }
 }
 
@@ -679,11 +667,8 @@ fn window_to_format_tree(
     let order_by = plan
         .order_by
         .iter()
-        .map(|v| {
-            let name = metadata.column(v.order_by).name();
-            Ok(name)
-        })
-        .collect::<Result<Vec<_>>>()?
+        .map(|v| v.display_name.clone())
+        .collect::<Vec<_>>()
         .join(", ");
 
     let frame = plan.window_frame.to_string();
@@ -727,10 +712,9 @@ fn sort_to_format_tree(
         .order_by
         .iter()
         .map(|sort_key| {
-            let index = sort_key.order_by;
             Ok(format!(
                 "{} {} {}",
-                metadata.column(index).name(),
+                sort_key.display_name,
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {
                     "NULLS FIRST"

@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::table_context::TableContext;
@@ -261,7 +260,7 @@ impl Processor for ReadParquetDataSource<false> {
                 let virtual_reader = self.virtual_reader.clone();
 
                 chunks.push(async move {
-                    tokio::spawn(async_backtrace::location!().frame(async move {
+                    databend_common_base::runtime::spawn(async move {
                         let part = FusePartInfo::from_part(&part)?;
 
                         if let Some(index_reader) = index_reader.as_ref() {
@@ -308,7 +307,7 @@ impl Processor for ReadParquetDataSource<false> {
                             .await?;
 
                         Ok(ParquetDataSource::Normal((source, virtual_source)))
-                    }))
+                    })
                     .await
                     .unwrap()
                 });

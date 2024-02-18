@@ -14,8 +14,8 @@
 
 use std::backtrace::Backtrace;
 use std::future::Future;
+use std::panic::Location;
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -32,6 +32,8 @@ use tokio::task::JoinHandle;
 
 use crate::runtime::catch_unwind::CatchUnwindFuture;
 use crate::runtime::MemStat;
+use crate::runtime::Thread;
+use crate::runtime::ThreadJoinHandle;
 
 /// Methods to spawn tasks.
 pub trait TrySpawn {
@@ -101,7 +103,7 @@ impl Runtime {
         let handle = runtime.handle().clone();
 
         // Block the runtime to shutdown.
-        let join_handler = thread::spawn(move || {
+        let join_handler = Thread::spawn(move || {
             // We ignore channel is closed.
             let _ = runtime.block_on(recv_stop);
 
@@ -201,10 +203,16 @@ impl Runtime {
         self.handle.clone()
     }
 
+    #[track_caller]
     pub fn block_on<T, F>(&self, future: F) -> F::Output
     where F: Future<Output = Result<T>> + Send + 'static {
         let future = CatchUnwindFuture::create(future);
-        self.handle.block_on(future).flatten()
+        #[allow(clippy::disallowed_methods)]
+        tokio::task::block_in_place(|| {
+            self.handle
+                .block_on(location_future(future, std::panic::Location::caller()))
+                .flatten()
+        })
     }
 
     // For each future of `futures`, before being executed
@@ -260,6 +268,7 @@ impl Runtime {
             let permit = semaphore.acquire_owned().await.map_err(|e| {
                 ErrorCode::Internal(format!("semaphore closed, acquire permit failure. {}", e))
             })?;
+            #[expect(clippy::disallowed_methods)]
             let handler = self
                 .handle
                 .spawn(async_backtrace::location!().frame(async move {
@@ -280,6 +289,7 @@ impl Runtime {
         F: FnOnce() -> Result<R> + Send + 'static,
         R: Send + 'static,
     {
+        #[allow(clippy::disallowed_methods)]
         match_join_handle(self.handle.spawn_blocking(f)).await
     }
 }
@@ -298,6 +308,7 @@ impl TrySpawn for Runtime {
                 async_backtrace::location!(format!("Running query {} spawn task", id)).frame(task)
             }
         };
+        #[expect(clippy::disallowed_methods)]
         Ok(self.handle.spawn(task))
     }
 }
@@ -306,7 +317,7 @@ impl TrySpawn for Runtime {
 pub struct Dropper {
     name: Option<String>,
     close: Option<oneshot::Sender<()>>,
-    join_handler: Option<thread::JoinHandle<bool>>,
+    join_handler: Option<ThreadJoinHandle<bool>>,
 }
 
 impl Drop for Dropper {
@@ -383,3 +394,90 @@ where
 
 pub const GLOBAL_TASK: &str = "Zxv39PlwG1ahbF0APRUf03";
 pub const GLOBAL_TASK_DESC: &str = "Global spawn task";
+
+#[track_caller]
+pub fn spawn<F>(future: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    #[expect(clippy::disallowed_methods)]
+    tokio::spawn(location_future(future, std::panic::Location::caller()))
+}
+
+#[track_caller]
+pub fn spawn_local<F>(future: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    #[expect(clippy::disallowed_methods)]
+    tokio::task::spawn_local(location_future(future, std::panic::Location::caller()))
+}
+
+#[track_caller]
+pub fn spawn_blocking<F, R>(f: F) -> tokio::task::JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    #[expect(clippy::disallowed_methods)]
+    tokio::runtime::Handle::current().spawn_blocking(f)
+}
+
+#[track_caller]
+pub fn try_spawn_blocking<F, R>(f: F) -> Result<tokio::task::JoinHandle<R>, F>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    match tokio::runtime::Handle::try_current() {
+        Err(_) => Err(f),
+        #[expect(clippy::disallowed_methods)]
+        Ok(handler) => Ok(handler.spawn_blocking(f)),
+    }
+}
+
+#[track_caller]
+pub fn block_on<F: Future>(future: F) -> F::Output {
+    #[expect(clippy::disallowed_methods)]
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current()
+            .block_on(location_future(future, std::panic::Location::caller()))
+    })
+}
+
+#[track_caller]
+pub fn try_block_on<F: Future>(future: F) -> Result<F::Output, F> {
+    match tokio::runtime::Handle::try_current() {
+        Err(_) => Err(future),
+        #[expect(clippy::disallowed_methods)]
+        Ok(handler) => Ok(tokio::task::block_in_place(|| {
+            handler.block_on(location_future(future, std::panic::Location::caller()))
+        })),
+    }
+}
+
+fn location_future<F: Future>(
+    future: F,
+    frame_location: &'static Location,
+) -> impl Future<Output = F::Output>
+where
+    F: Future,
+{
+    // NOTE:
+    // Frame name: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=689fbc84ab4be894c0cdd285bea24845
+    // Frame location: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=3ae3a2295607628ce95f0a34a566847b
+
+    let frame_name = std::any::type_name::<F>()
+        .trim_end_matches("::{{closure}}")
+        .to_string();
+
+    async_backtrace::location!(
+        frame_name,
+        frame_location.file(),
+        frame_location.line(),
+        frame_location.column()
+    )
+    .frame(future)
+}

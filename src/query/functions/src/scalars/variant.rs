@@ -51,6 +51,7 @@ use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
@@ -71,6 +72,7 @@ use jsonb::build_object;
 use jsonb::concat;
 use jsonb::contains;
 use jsonb::delete_by_index;
+use jsonb::delete_by_keypath;
 use jsonb::delete_by_name;
 use jsonb::exists_all_keys;
 use jsonb::exists_any_keys;
@@ -714,40 +716,94 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
-        "to_variant",
-        |_, _| FunctionDomain::Full,
-        |val, ctx| match val {
-            ValueRef::Scalar(scalar) => {
-                let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
-                Value::Scalar(buf)
-            }
-            ValueRef::Column(col) => {
-                let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
-                Value::Column(new_col)
-            }
-        },
-    );
+    registry.register_function_factory("to_variant", |_, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+        let return_type = if args_type[0].is_nullable_or_null() {
+            DataType::Nullable(Box::new(DataType::Variant))
+        } else {
+            DataType::Variant
+        };
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "to_variant".to_string(),
+                args_type: vec![DataType::Generic(0)],
+                return_type,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, args_domain| match &args_domain[0] {
+                    Domain::Nullable(nullable_domain) => {
+                        FunctionDomain::Domain(Domain::Nullable(NullableDomain {
+                            has_null: nullable_domain.has_null,
+                            value: Some(Box::new(Domain::Undefined)),
+                        }))
+                    }
+                    _ => FunctionDomain::Domain(Domain::Undefined),
+                }),
+                eval: Box::new(|args, ctx| match &args[0] {
+                    ValueRef::Scalar(scalar) => match scalar {
+                        ScalarRef::Null => Value::Scalar(Scalar::Null),
+                        _ => {
+                            let mut buf = Vec::new();
+                            cast_scalar_to_variant(scalar.clone(), ctx.func_ctx.tz, &mut buf);
+                            Value::Scalar(Scalar::Variant(buf))
+                        }
+                    },
+                    ValueRef::Column(col) => {
+                        let validity = match col {
+                            Column::Null { len } => Some(Bitmap::new_constant(false, *len)),
+                            Column::Nullable(box ref nullable_column) => {
+                                Some(nullable_column.validity.clone())
+                            }
+                            _ => None,
+                        };
+                        let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
+                        if let Some(validity) = validity {
+                            Value::Column(Column::Nullable(Box::new(NullableColumn {
+                                validity,
+                                column: Column::Variant(new_col),
+                            })))
+                        } else {
+                            Value::Column(Column::Variant(new_col))
+                        }
+                    }
+                }),
+            },
+        }))
+    });
 
     registry.register_combine_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
         "try_to_variant",
-        |_, _| {
+        |_, domain| {
+            let has_null = match domain {
+                Domain::Nullable(nullable_domain) => nullable_domain.has_null,
+                _ => false,
+            };
             FunctionDomain::Domain(NullableDomain {
-                has_null: false,
+                has_null,
                 value: Some(Box::new(())),
             })
         },
         |val, ctx| match val {
-            ValueRef::Scalar(scalar) => {
-                let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
-                Value::Scalar(Some(buf))
-            }
+            ValueRef::Scalar(scalar) => match scalar {
+                ScalarRef::Null => Value::Scalar(None),
+                _ => {
+                    let mut buf = Vec::new();
+                    cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
+                    Value::Scalar(Some(buf))
+                }
+            },
             ValueRef::Column(col) => {
+                let validity = match col {
+                    Column::Null { len } => Bitmap::new_constant(false, len),
+                    Column::Nullable(box ref nullable_column) => nullable_column.validity.clone(),
+                    _ => Bitmap::new_constant(true, col.len()),
+                };
                 let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
                 Value::Column(NullableColumn {
-                    validity: Bitmap::new_constant(true, new_col.len()),
+                    validity,
                     column: new_col,
                 })
             }
@@ -1096,6 +1152,29 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    registry.register_function_factory("delete_by_keypath", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+            || (args_type[1].remove_nullable() != DataType::String
+                && args_type[1] != DataType::Null)
+        {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "delete_by_keypath".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: DataType::Nullable(Box::new(DataType::Variant)),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(delete_by_keypath_fn),
+            },
+        }))
+    });
+
     registry.register_passthrough_nullable_1_arg(
         "json_typeof",
         |_, _| FunctionDomain::MayThrow,
@@ -1391,6 +1470,76 @@ fn prepare_args_columns(
         columns.push(column);
     }
     (columns, len_opt)
+}
+
+fn delete_by_keypath_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let scalar_keypath = match &args[1] {
+        ValueRef::Scalar(ScalarRef::String(v)) => Some(parse_key_paths(v.as_bytes())),
+        _ => None,
+    };
+    let len_opt = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let len = len_opt.unwrap_or(1);
+
+    let mut builder = BinaryColumnBuilder::with_capacity(len, len * 50);
+    let mut validity = MutableBitmap::with_capacity(len);
+
+    for idx in 0..len {
+        let keypath = match &args[1] {
+            ValueRef::Scalar(_) => Cow::Borrowed(&scalar_keypath),
+            ValueRef::Column(col) => {
+                let scalar = unsafe { col.index_unchecked(idx) };
+                let path = match scalar {
+                    ScalarRef::String(buf) => Some(parse_key_paths(buf.as_bytes())),
+                    _ => None,
+                };
+                Cow::Owned(path)
+            }
+        };
+        match keypath.as_ref() {
+            Some(result) => match result {
+                Ok(path) => {
+                    let json_row = match &args[0] {
+                        ValueRef::Scalar(scalar) => scalar.clone(),
+                        ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+                    };
+                    match json_row {
+                        ScalarRef::Variant(json) => {
+                            match delete_by_keypath(json, path.paths.iter(), &mut builder.data) {
+                                Ok(_) => validity.push(true),
+                                Err(err) => {
+                                    ctx.set_error(builder.len(), err.to_string());
+                                    validity.push(false);
+                                }
+                            }
+                        }
+                        _ => validity.push(false),
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    validity.push(false);
+                }
+            },
+            None => validity.push(false),
+        }
+        builder.commit_row();
+    }
+
+    let validity: Bitmap = validity.into();
+
+    match len_opt {
+        Some(_) => Value::Column(Column::Variant(builder.build())).wrap_nullable(Some(validity)),
+        None => {
+            if !validity.get_bit(0) {
+                Value::Scalar(Scalar::Null)
+            } else {
+                Value::Scalar(Scalar::Variant(builder.build_scalar()))
+            }
+        }
+    }
 }
 
 fn get_by_keypath_fn(

@@ -30,7 +30,7 @@ use databend_common_expression::Value;
 use databend_common_pipeline_transforms::processors::Transform;
 use indexmap::IndexMap;
 
-use crate::binder::wrap_cast_scalar;
+use crate::binder::wrap_cast;
 use crate::evaluator::BlockOperator;
 use crate::evaluator::CompoundBlockOperator;
 use crate::BindContext;
@@ -76,9 +76,11 @@ impl BindContext {
                 }
             }
 
-            let (scalar, data_type) = scalar_binder.bind(expr).await?;
+            let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
             let target_type = schema.field(i).data_type();
-            let scalar = wrap_cast_scalar(&scalar, &data_type, target_type)?;
+            if data_type != *target_type {
+                scalar = wrap_cast(&scalar, target_type);
+            }
             let expr = scalar
                 .as_expr()?
                 .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());

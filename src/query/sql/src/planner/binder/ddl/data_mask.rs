@@ -29,7 +29,7 @@ impl Binder {
         stmt: &CreateDatamaskPolicyStmt,
     ) -> Result<Plan> {
         let CreateDatamaskPolicyStmt {
-            if_not_exists,
+            create_option,
             name,
             policy,
         } = stmt;
@@ -46,7 +46,7 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
         let plan = CreateDatamaskPolicyPlan {
-            if_not_exists: *if_not_exists,
+            create_option: *create_option,
             tenant,
             name: name.to_string(),
             policy: policy.clone(),

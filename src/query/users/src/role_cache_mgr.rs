@@ -70,31 +70,29 @@ impl RoleCacheManager {
         let cache = self.cache.clone();
         let polling_interval = self.polling_interval;
         let user_manager = self.user_manager.clone();
-        self.polling_join_handle = Some(tokio::spawn(async_backtrace::location!().frame(
-            async move {
-                loop {
-                    let tenants: Vec<String> = {
-                        let cached = cache.read();
-                        cached.keys().cloned().collect()
-                    };
-                    for tenant in tenants {
-                        match load_roles_data(&user_manager, &tenant).await {
-                            Err(err) => {
-                                warn!(
-                                    "role_cache_mgr load roles data of tenant {} failed: {}",
-                                    tenant, err,
-                                )
-                            }
-                            Ok(data) => {
-                                let mut cached = cache.write();
-                                cached.insert(tenant.to_string(), data);
-                            }
+        self.polling_join_handle = Some(databend_common_base::runtime::spawn(async move {
+            loop {
+                let tenants: Vec<String> = {
+                    let cached = cache.read();
+                    cached.keys().cloned().collect()
+                };
+                for tenant in tenants {
+                    match load_roles_data(&user_manager, &tenant).await {
+                        Err(err) => {
+                            warn!(
+                                "role_cache_mgr load roles data of tenant {} failed: {}",
+                                tenant, err,
+                            )
+                        }
+                        Ok(data) => {
+                            let mut cached = cache.write();
+                            cached.insert(tenant.to_string(), data);
                         }
                     }
-                    tokio::time::sleep(polling_interval).await
                 }
-            },
-        )));
+                tokio::time::sleep(polling_interval).await
+            }
+        }));
     }
 
     pub fn invalidate_cache(&self, tenant: &str) {

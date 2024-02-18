@@ -23,6 +23,7 @@ use std::time::Instant;
 use chrono::Utc;
 use clap::Parser;
 use databend_common_base::base::tokio;
+use databend_common_base::runtime;
 use databend_common_meta_api::serialize_struct;
 use databend_common_meta_api::txn_op_put;
 use databend_common_meta_api::SchemaApi;
@@ -121,7 +122,7 @@ async fn main() {
         let cmd = cmd_and_param[0].to_string();
         let param = cmd_and_param.get(1).unwrap_or(&"").to_string();
 
-        let handle = tokio::spawn(async move {
+        let handle = runtime::spawn(async move {
             let client =
                 MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None);
 

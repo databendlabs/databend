@@ -1990,6 +1990,52 @@ BinaryOp {
 
 
 ---------- Input ----------
+'中文'::text not in ('a', 'b')
+---------- Output ---------
+'中文'::STRING NOT IN('a', 'b')
+---------- AST ------------
+InList {
+    span: Some(
+        15..32,
+    ),
+    expr: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            lit: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    list: [
+        Literal {
+            span: Some(
+                23..26,
+            ),
+            lit: String(
+                "a",
+            ),
+        },
+        Literal {
+            span: Some(
+                28..31,
+            ),
+            lit: String(
+                "b",
+            ),
+        },
+    ],
+    not: true,
+}
+
+
+---------- Input ----------
 G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)
 ---------- Output ---------
 (G.E.B IS NOT NULL AND col1 NOT BETWEEN col2 AND ((1 + col3) DIV sum(col4)))
