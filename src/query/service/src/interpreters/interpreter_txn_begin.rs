@@ -16,8 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_storages_fuse::TableContext;
-use databend_storages_common_txn::{TxnManager, TxnManagerRef};
-use parking_lot::RwLock;
+use databend_storages_common_txn::TxnManagerRef;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

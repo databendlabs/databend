@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+
 pub struct TxnManager {
     state: TxnState,
     txn_buffer: TxnBuffer,
@@ -31,17 +33,17 @@ pub enum TxnState {
 }
 
 struct TxnBuffer {
-    pub updated_table_metas: HashMap<u64, ()>,
+    table_metas: HashMap<u64, UpdateTableMetaReq>,
 }
 
 impl TxnBuffer {
     fn new() -> Self {
         Self {
-            updated_table_metas: HashMap::new(),
+            table_metas: HashMap::new(),
         }
     }
     fn refresh(&mut self) {
-        self.updated_table_metas.clear();
+        self.table_metas.clear();
     }
 }
 
@@ -84,5 +86,11 @@ impl TxnManager {
 
     pub fn state(&self) -> TxnState {
         self.state.clone()
+    }
+
+    pub fn add_table_meta(&mut self, table_meta: UpdateTableMetaReq) {
+        self.txn_buffer
+            .table_metas
+            .insert(table_meta.table_id, table_meta);
     }
 }

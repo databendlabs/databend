@@ -7,3 +7,4 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+databend-common-meta-app = { path = "../../../../meta/app" }

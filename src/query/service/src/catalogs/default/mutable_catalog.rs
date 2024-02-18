@@ -95,6 +95,7 @@ use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use databend_common_storages_fuse::TableContext;
+use databend_storages_common_txn::TxnState;
 use log::info;
 
 use crate::catalogs::default::catalog_context::CatalogContext;
@@ -478,21 +479,32 @@ impl Catalog for MutableCatalog {
         req: UpdateTableMetaReq,
         ctx: &dyn TableContext,
     ) -> Result<UpdateTableMetaReply> {
-        match table_info.db_type.clone() {
-            DatabaseType::NormalDB => {
-                info!(
-                    "updating table meta. table desc: [{}], has copied files: [{}]?",
-                    table_info.desc,
-                    req.copied_files.is_some()
-                );
-                Ok(self.ctx.meta.update_table_meta(req).await?)
+        let txn_mgr = ctx.txn_mgr();
+        let txn_state = txn_mgr.lock().unwrap().state();
+        match txn_state {
+            TxnState::AutoCommit => match table_info.db_type.clone() {
+                DatabaseType::NormalDB => {
+                    info!(
+                        "updating table meta. table desc: [{}], has copied files: [{}]?",
+                        table_info.desc,
+                        req.copied_files.is_some()
+                    );
+                    Ok(self.ctx.meta.update_table_meta(req).await?)
+                }
+                DatabaseType::ShareDB(share_ident) => {
+                    let db = self
+                        .get_database(&share_ident.tenant, &share_ident.share_name)
+                        .await?;
+                    db.update_table_meta(req).await
+                }
+            },
+            TxnState::Active => {
+                txn_mgr.lock().unwrap().add_table_meta(req);
+                Ok(UpdateTableMetaReply {
+                    share_table_info: None,
+                })
             }
-            DatabaseType::ShareDB(share_ident) => {
-                let db = self
-                    .get_database(&share_ident.tenant, &share_ident.share_name)
-                    .await?;
-                db.update_table_meta(req).await
-            }
+            TxnState::Fail => unreachable!(),
         }
     }
 

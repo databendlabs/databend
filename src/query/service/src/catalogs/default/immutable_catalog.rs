@@ -323,7 +323,7 @@ impl Catalog for ImmutableCatalog {
         &self,
         _table_info: &TableInfo,
         req: UpdateTableMetaReq,
-        ctx: &dyn TableContext,
+        _ctx: &dyn TableContext,
     ) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::Unimplemented(format!(
             "update table meta not allowed for system database {:?}",

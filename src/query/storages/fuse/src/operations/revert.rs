@@ -57,7 +57,7 @@ impl FuseTable {
         };
 
         // 4. let's roll
-        let reply = catalog.update_table_meta(&self.table_info, req,ctx).await;
+        let reply = catalog.update_table_meta(&self.table_info, req, ctx).await;
         if reply.is_ok() {
             // try keep the snapshot hit
             let snapshot_location = table_reverting_to.snapshot_loc().await?.ok_or_else(|| {

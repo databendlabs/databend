@@ -4513,6 +4513,9 @@ dependencies = [
 [[package]]
 name = "databend-storages-common-txn"
 version = "0.1.0"
+dependencies = [
+ "databend-common-meta-app",
+]
 
 [[package]]
 name = "deadpool"

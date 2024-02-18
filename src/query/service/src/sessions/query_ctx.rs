@@ -91,7 +91,6 @@ use databend_common_storages_stage::StageTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_txn::TxnManager;
 use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;

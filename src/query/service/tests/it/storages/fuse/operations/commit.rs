@@ -126,7 +126,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_txn::TxnManager;
+use databend_storages_common_txn::TxnManagerRef;
 use futures::TryStreamExt;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -371,7 +371,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn txn_mgr(&self) -> Arc<RwLock<TxnManager>> {
+    fn txn_mgr(&self) -> TxnManagerRef {
         todo!()
     }
 
@@ -852,7 +852,7 @@ impl Catalog for FakedCatalog {
         if let Some(e) = &self.error_injection {
             Err(e.clone())
         } else {
-            self.cat.update_table_meta(table_info, req,ctx).await
+            self.cat.update_table_meta(table_info, req, ctx).await
         }
     }
 
