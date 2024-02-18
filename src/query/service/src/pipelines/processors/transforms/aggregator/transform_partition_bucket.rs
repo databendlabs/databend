@@ -220,7 +220,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             {
                 self.partition_payloads.push(p);
             }
-            return SINGLE_LEVEL_BUCKET_NUM;
+            return 0;
         }
 
         self.unsplitted_blocks.push(data_block);
