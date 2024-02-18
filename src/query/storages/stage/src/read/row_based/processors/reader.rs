@@ -87,14 +87,16 @@ impl BytesReader {
             }
             Ok(DataBlock::empty_with_meta(batch))
         } else {
-            unreachable!("file state is none")
+            Err(ErrorCode::Internal(
+                "Bug: BytesReader::read_batch() should not be called with file_state = None.",
+            ))
         }
     }
 }
 
 #[async_trait::async_trait]
 impl AsyncSource for BytesReader {
-    const NAME: &'static str = "TextFileReader";
+    const NAME: &'static str = "BytesReader";
 
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
