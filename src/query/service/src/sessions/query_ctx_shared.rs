@@ -128,7 +128,7 @@ impl QueryContextShared {
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
-            catalog_manager: CatalogManager::instance(Some(session.session_ctx.txn_mgr())),
+            catalog_manager: CatalogManager::instance(),
             session,
             cluster_cache,
             data_operator: DataOperator::instance(),

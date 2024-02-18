@@ -50,7 +50,7 @@ impl AsyncSystemTable for CatalogsTable {
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        let mgr = CatalogManager::instance(None);
+        let mgr = CatalogManager::instance();
 
         let catalog_names = mgr
             .list_catalogs(&ctx.get_tenant())

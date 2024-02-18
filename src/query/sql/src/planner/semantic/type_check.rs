@@ -2315,7 +2315,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut binder = Binder::new(
             self.ctx.clone(),
-            CatalogManager::instance(Some(self.ctx.txn_mgr())),
+            CatalogManager::instance(),
             self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );

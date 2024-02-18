@@ -205,7 +205,7 @@ async fn build_refresh_index_plan(
 
     let mut binder = Binder::new(
         ctx.clone(),
-        CatalogManager::instance(Some(ctx.txn_mgr())),
+        CatalogManager::instance(),
         name_resolution_ctx,
         metadata.clone(),
     );

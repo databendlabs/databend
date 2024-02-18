@@ -65,7 +65,7 @@ impl AsyncSystemTable for StreamsTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let catalog_mgr = CatalogManager::instance(None);
+        let catalog_mgr = CatalogManager::instance();
         let ctls: Vec<(String, Arc<dyn Catalog>)> = catalog_mgr
             .list_catalogs(&tenant)
             .await?

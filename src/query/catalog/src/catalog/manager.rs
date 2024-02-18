@@ -35,7 +35,6 @@ use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_storages_common_txn::TxnManagerRef;
 
 use super::Catalog;
 use super::CatalogCreator;
@@ -56,9 +55,8 @@ pub struct CatalogManager {
 
 impl CatalogManager {
     /// Fetch catalog manager from global instance.
-    pub fn instance(txn_mgr: Option<TxnManagerRef>) -> Arc<CatalogManager> {
+    pub fn instance() -> Arc<CatalogManager> {
         let global_instance: Arc<CatalogManager> = GlobalInstance::get();
-        global_instance.default_catalog.set_txn_manager(txn_mgr);
         global_instance
     }
 

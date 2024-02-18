@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -22,20 +23,25 @@ pub struct TxnManager {
 
 pub type TxnManagerRef = Arc<Mutex<TxnManager>>;
 
+#[derive(Clone)]
 pub enum TxnState {
     AutoCommit,
     Active,
     Fail,
 }
 
-struct TxnBuffer {}
+struct TxnBuffer {
+    pub updated_table_metas: HashMap<u64, ()>,
+}
 
 impl TxnBuffer {
     fn new() -> Self {
-        todo!()
+        Self {
+            updated_table_metas: HashMap::new(),
+        }
     }
     fn refresh(&mut self) {
-        todo!()
+        self.updated_table_metas.clear();
     }
 }
 
@@ -74,5 +80,9 @@ impl TxnManager {
 
     pub fn is_fail(&self) -> bool {
         matches!(self.state, TxnState::Fail)
+    }
+
+    pub fn state(&self) -> TxnState {
+        self.state.clone()
     }
 }

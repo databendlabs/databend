@@ -56,7 +56,7 @@ impl AsyncSystemTable for DatabasesTable {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let catalogs = CatalogManager::instance(None);
+        let catalogs = CatalogManager::instance();
         let catalogs: Vec<(String, Arc<dyn Catalog>)> = catalogs
             .list_catalogs(&tenant)
             .await?

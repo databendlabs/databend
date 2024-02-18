@@ -51,7 +51,7 @@ impl Interpreter for DropCatalogInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_catalog_execute");
 
-        let mgr = CatalogManager::instance(Some(self.ctx.txn_mgr()));
+        let mgr = CatalogManager::instance();
         mgr.drop_catalog(self.plan.clone().into()).await?;
 
         Ok(PipelineBuildResult::create())

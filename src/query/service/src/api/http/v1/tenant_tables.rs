@@ -46,7 +46,7 @@ pub struct TenantTableInfo {
 }
 
 async fn load_tenant_tables(tenant: &str) -> Result<TenantTablesResponse> {
-    let catalog = CatalogManager::instance(None).get_default_catalog()?;
+    let catalog = CatalogManager::instance().get_default_catalog()?;
     let databases = catalog.list_databases(tenant).await?;
 
     let mut table_infos: Vec<TenantTableInfo> = vec![];

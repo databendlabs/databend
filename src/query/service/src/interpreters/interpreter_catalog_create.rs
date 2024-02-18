@@ -66,7 +66,7 @@ impl Interpreter for CreateCatalogInterpreter {
             }
         }
 
-        let catalog_manager = CatalogManager::instance(Some(self.ctx.txn_mgr()));
+        let catalog_manager = CatalogManager::instance();
 
         // Build and check if catalog is valid.
         let ctl = catalog_manager

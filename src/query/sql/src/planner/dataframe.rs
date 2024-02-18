@@ -73,7 +73,7 @@ impl Dataframe {
 
         let mut binder = Binder::new(
             query_ctx.clone(),
-            CatalogManager::instance(Some(query_ctx.txn_mgr())),
+            CatalogManager::instance(),
             name_resolution_ctx,
             metadata.clone(),
         );
