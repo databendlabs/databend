@@ -15,14 +15,14 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::io::BufWriter;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
 use fern::FormatCallback;
 use opentelemetry::logs::AnyValue;
-use opentelemetry::logs::Logger;
-use opentelemetry::logs::LoggerProvider;
 use opentelemetry::logs::Severity;
+use opentelemetry::InstrumentationLibrary;
 use opentelemetry_otlp::WithExportConfig;
 use serde_json::Map;
 use tracing_appender::non_blocking::NonBlocking;
@@ -81,9 +81,9 @@ impl log::Log for MinitraceLogger {
     fn flush(&self) {}
 }
 
+#[derive(Debug)]
 pub(crate) struct OpenTelemetryLogger {
-    logger: opentelemetry_sdk::logs::Logger,
-    // keep provider alive
+    library: Arc<InstrumentationLibrary>,
     provider: opentelemetry_sdk::logs::LoggerProvider,
 }
 
@@ -111,14 +111,23 @@ impl OpenTelemetryLogger {
             .build_log_exporter()
             .expect("build log exporter");
         let provider = opentelemetry_sdk::logs::LoggerProvider::builder()
-            .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+            .with_simple_exporter(exporter)
             .with_config(
                 opentelemetry_sdk::logs::Config::default()
                     .with_resource(opentelemetry_sdk::Resource::new(kvs)),
             )
             .build();
-        let logger = provider.versioned_logger(name.to_string(), None, None, None);
-        Self { logger, provider }
+        let library = Arc::new(InstrumentationLibrary::new(
+            name.to_string(),
+            None::<&str>,
+            None::<&str>,
+            None,
+        ));
+        Self { library, provider }
+    }
+
+    pub fn instrumentation_library(&self) -> &InstrumentationLibrary {
+        &self.library
     }
 }
 
@@ -128,13 +137,24 @@ impl log::Log for OpenTelemetryLogger {
         true
     }
 
-    fn log(&self, record: &log::Record<'_>) {
+    fn log(&self, log_record: &log::Record<'_>) {
+        let provider = self.provider.clone();
+        let config = provider.config();
         let builder = opentelemetry::logs::LogRecord::builder()
             .with_observed_timestamp(SystemTime::now())
-            .with_severity_number(map_severity_to_otel_severity(record.level()))
-            .with_severity_text(record.level().as_str())
-            .with_body(AnyValue::from(record.args().to_string()));
-        self.logger.emit(builder.build())
+            .with_severity_number(map_severity_to_otel_severity(log_record.level()))
+            .with_severity_text(log_record.level().as_str())
+            .with_body(AnyValue::from(log_record.args().to_string()));
+        let record = builder.build();
+        for processor in provider.log_processors() {
+            let record = record.clone();
+            let data = opentelemetry_sdk::export::logs::LogData {
+                record,
+                resource: config.resource.clone(),
+                instrumentation: self.instrumentation_library().clone(),
+            };
+            processor.emit(data);
+        }
     }
 
     fn flush(&self) {
