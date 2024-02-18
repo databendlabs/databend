@@ -335,15 +335,18 @@ function install_sqlite3 {
 	case "$PACKAGE_MANAGER" in
 	apt-get)
 		install_pkg libsqlite3-dev "$PACKAGE_MANAGER"
+		install_pkg sqlite3 "$PACKAGE_MANAGER"
 		;;
 	pacman)
 		install_pkg sqlite "$PACKAGE_MANAGER"
 		;;
 	apk)
 		install_pkg sqlite-dev "$PACKAGE_MANAGER"
+		install_pkg sqlite "$PACKAGE_MANAGER"
 		;;
 	yum | dnf)
 		install_pkg sqlite-devel "$PACKAGE_MANAGER"
+		install_pkg sqlite "$PACKAGE_MANAGER"
 		;;
 	brew)
 		install_pkg sqlite "$PACKAGE_MANAGER"
