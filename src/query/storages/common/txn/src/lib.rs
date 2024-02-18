@@ -62,10 +62,10 @@ impl TxnManager {
     }
 
     pub fn commit(&mut self) {
-        self.state = TxnState::AutoCommit;
         if let TxnState::Active = self.state {
             todo!("commit")
         }
+        self.state = TxnState::AutoCommit;
         self.txn_buffer.refresh();
     }
 
