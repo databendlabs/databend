@@ -94,6 +94,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
+use databend_common_storages_fuse::TableContext;
 use log::info;
 
 use crate::catalogs::default::catalog_context::CatalogContext;
@@ -475,6 +476,7 @@ impl Catalog for MutableCatalog {
         &self,
         table_info: &TableInfo,
         req: UpdateTableMetaReq,
+        ctx: &dyn TableContext,
     ) -> Result<UpdateTableMetaReply> {
         match table_info.db_type.clone() {
             DatabaseType::NormalDB => {

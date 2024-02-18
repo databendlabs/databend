@@ -87,6 +87,7 @@ use dyn_clone::DynClone;
 use crate::database::Database;
 use crate::table::Table;
 use crate::table_args::TableArgs;
+use crate::table_context::TableContext;
 use crate::table_function::TableFunction;
 
 #[derive(Default, Clone)]
@@ -250,6 +251,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         table_info: &TableInfo,
         req: UpdateTableMetaReq,
+        ctx: &dyn TableContext,
     ) -> Result<UpdateTableMetaReply>;
 
     async fn set_table_column_mask_policy(

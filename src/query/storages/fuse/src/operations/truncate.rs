@@ -73,14 +73,18 @@ impl FuseTable {
             // `truncate_table` is not supposed to be retry-able, thus we use
             // `update_data_table_meta` directly.
             catalog
-                .update_table_meta(&self.table_info, UpdateTableMetaReq {
-                    table_id,
-                    seq: MatchSeq::Exact(table_version),
-                    new_table_meta,
-                    copied_files: None,
-                    deduplicated_label: None,
-                    update_stream_meta: vec![],
-                })
+                .update_table_meta(
+                    &self.table_info,
+                    UpdateTableMetaReq {
+                        table_id,
+                        seq: MatchSeq::Exact(table_version),
+                        new_table_meta,
+                        copied_files: None,
+                        deduplicated_label: None,
+                        update_stream_meta: vec![],
+                    },
+                    ctx.as_ref(),
+                )
                 .await?;
 
             catalog

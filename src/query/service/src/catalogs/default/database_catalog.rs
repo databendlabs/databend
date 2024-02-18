@@ -21,6 +21,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -89,7 +90,6 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::MetaId;
-use databend_storages_common_txn::TxnManagerRef;
 use log::info;
 
 use crate::catalogs::default::ImmutableCatalog;
@@ -529,9 +529,10 @@ impl Catalog for DatabaseCatalog {
         &self,
         table_info: &TableInfo,
         req: UpdateTableMetaReq,
+        ctx: &dyn TableContext,
     ) -> Result<UpdateTableMetaReply> {
         self.mutable_catalog
-            .update_table_meta(table_info, req)
+            .update_table_meta(table_info, req, ctx)
             .await
     }
 
