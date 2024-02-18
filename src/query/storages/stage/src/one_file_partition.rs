@@ -52,7 +52,7 @@ impl OneFilePartition {
         info.as_any()
             .downcast_ref::<OneFilePartition>()
             .ok_or_else(|| {
-                ErrorCode::Internal("Cannot downcast from PartInfo to TextFilePartition.")
+                ErrorCode::Internal("Cannot downcast from PartInfo to OneFilePartition.")
             })
     }
 }
