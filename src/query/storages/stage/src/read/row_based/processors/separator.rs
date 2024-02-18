@@ -52,55 +52,46 @@ impl AccumulatingTransform for Separator {
             .and_then(BytesBatch::downcast_from)
             .unwrap();
 
-        if self.state.is_none() {
-            self.state = Some(
-                self.format
-                    .try_create_separator(self.ctx.clone(), &batch.path)?,
-            );
-        }
+        let state = self.state.get_or_insert_with(|| {
+            self.format
+                .try_create_separator(self.ctx.clone(), &batch.path)
+                .unwrap()
+        });
+        let mut process_values = ProgressValues { rows: 0, bytes: 0 };
 
-        if let Some(state) = &mut self.state {
-            let mut process_values = ProgressValues { rows: 0, bytes: 0 };
-
-            process_values.bytes += batch.data.len();
-            let batch_meta = batch.meta();
-            let (row_batches, file_status) = state.append(batch)?;
-            let row_batches = row_batches
-                .into_iter()
-                .filter(|b| b.rows() > 0 || b.size() > 0)
-                .collect::<Vec<_>>();
-            if batch_meta.is_eof {
-                if file_status.error.is_some() {
-                    self.ctx
-                        .table_context
-                        .get_copy_status()
-                        .add_chunk(&batch_meta.path, file_status);
-                }
-                self.state = None;
-            }
-            if row_batches.is_empty() {
-                Ok(vec![])
-            } else {
-                for b in row_batches.iter() {
-                    process_values.rows += b.rows();
-                }
-                Profile::record_usize_profile(
-                    ProfileStatisticsName::ScanBytes,
-                    process_values.bytes,
-                );
+        process_values.bytes += batch.data.len();
+        let batch_meta = batch.meta();
+        let (row_batches, file_status) = state.append(batch)?;
+        let row_batches = row_batches
+            .into_iter()
+            .filter(|b| b.rows() > 0 || b.size() > 0)
+            .collect::<Vec<_>>();
+        if batch_meta.is_eof {
+            if file_status.error.is_some() {
                 self.ctx
                     .table_context
-                    .get_scan_progress()
-                    .incr(&process_values);
-
-                let blocks = row_batches
-                    .into_iter()
-                    .map(|b| DataBlock::empty_with_meta(Box::new(b)))
-                    .collect::<Vec<_>>();
-                Ok(blocks)
+                    .get_copy_status()
+                    .add_chunk(&batch_meta.path, file_status);
             }
+            self.state = None;
+        }
+        if row_batches.is_empty() {
+            Ok(vec![])
         } else {
-            unreachable!("state should be Some")
+            for b in row_batches.iter() {
+                process_values.rows += b.rows();
+            }
+            Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, process_values.bytes);
+            self.ctx
+                .table_context
+                .get_scan_progress()
+                .incr(&process_values);
+
+            let blocks = row_batches
+                .into_iter()
+                .map(|b| DataBlock::empty_with_meta(Box::new(b)))
+                .collect::<Vec<_>>();
+            Ok(blocks)
         }
     }
 }
