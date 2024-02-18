@@ -28,7 +28,6 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::Sink;
 use databend_common_pipeline_sinks::Sinker;
-use log::warn;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use parking_lot::Condvar;
