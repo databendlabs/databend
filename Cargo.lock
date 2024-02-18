@@ -752,13 +752,13 @@ dependencies = [
 
 [[package]]
 name = "async-trait-fn"
-version = "0.1.66"
+version = "0.1.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e50b5d93114c4fe54a90adba208ea9fc5e4e6a26d7048b4df11ddaaec3635b31"
+checksum = "ef97d6b362bc7a2e21e1f049d3da2d67cf501cf04086bc2d85adf5892c7a3d6e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.46",
 ]
 
 [[package]]
