@@ -62,6 +62,14 @@ impl RowBasedReadPipelineBuilder<'_> {
         )?;
         Ok(())
     }
+
+    // processors:
+    // 1. BytesReader
+    // 2. (optional) Decompressor
+    // 3. Separator: cut file into RowBatches(bytes with row/field ends)
+    // 4. (resize to threads): so row batches can be processed in parallel, regardless of the file it from.
+    // 5. BlockBuilder: the slow part most of the time
+    // make sure data from the same file is process in the same pipe in seq in step 1,2,3
     pub fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -69,9 +77,11 @@ impl RowBasedReadPipelineBuilder<'_> {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         if plan.parts.is_empty() {
+            // no file match
             pipeline.add_source(EmptySource::create, 1)?;
             return Ok(());
         };
+
         let pos_projection = if let Some(PushDownInfo {
             projection: Some(Projection::Columns(columns)),
             ..
@@ -83,6 +93,7 @@ impl RowBasedReadPipelineBuilder<'_> {
         };
         let settings = ctx.get_settings();
         ctx.set_partitions(plan.parts.clone())?;
+
         let threads = std::cmp::min(settings.get_max_threads()? as usize, plan.parts.len());
         self.build_read_stage_source(ctx.clone(), pipeline, &settings, threads)?;
 
@@ -125,6 +136,7 @@ impl RowBasedReadPipelineBuilder<'_> {
             )))
         })?;
 
+        // todo(youngsofun): no need to resize if it is unlikely to be unbalanced
         pipeline.try_resize(threads)?;
 
         pipeline.add_transform(|input, output| {
