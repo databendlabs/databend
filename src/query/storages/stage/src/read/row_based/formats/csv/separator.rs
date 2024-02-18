@@ -41,17 +41,17 @@ pub struct CsvReader {
     num_fields: usize,
 
     reader: csv_core::Reader,
-    pos: Position,
-    rows_to_skip: usize,
-
     // remain from last read batch
-    out: Vec<u8>,
+    last_partial_row: Vec<u8>,
 
     // field_end[..n_end] store the output of each call to reader.read_record()
     // it may belong to part of a row.
     // flush to RowBatch when a complete row is read
     field_ends: Vec<usize>,
     n_end: usize,
+
+    pos: Position,
+    rows_to_skip: usize,
 }
 
 impl SeparatorState for CsvReader {
@@ -106,7 +106,7 @@ impl CsvReader {
             },
             rows_to_skip: format.params.headers as usize,
             field_ends: vec![0; max_fields],
-            out: vec![],
+            last_partial_row: vec![],
             n_end: 0,
         })
     }
@@ -198,11 +198,16 @@ impl CsvReader {
     }
 
     fn separate(&mut self, batch: BytesBatch) -> Result<(Vec<RowBatch>, FileStatus)> {
+        // prepare for reading header and data
+
         let need_flush = batch.is_eof;
         let mut buf_in = &batch.data[..];
         let size_in = buf_in.len();
         let mut file_status = FileStatus::default();
+        // the output of reader is always shorter than input
         let mut buf_out = vec![0u8; buf_in.len()];
+
+        // skip headers
         while self.rows_to_skip > 0 {
             let (res, n_in) = self.read_record(buf_in, &mut buf_out, &mut file_status)?;
             buf_in = &buf_in[n_in..];
@@ -211,13 +216,21 @@ impl CsvReader {
             }
         }
 
+        // prepare for reading data
+
         let mut buf_out_pos = 0usize;
         let mut buf_out_row_end: usize = 0;
-
-        let last_batch_remain_len = self.out.len();
-
+        let last_batch_remain_len = self.last_partial_row.len();
         let mut row_batch = RowBatch::new(&batch, self.pos.rows);
 
+        // read data
+
+        // The state of last partial row from last BytesBatch is recorded in
+        //    reader: state of the CSV decoder StateMachine
+        //    out: the decoded data
+        //    field_ends, n_end: the end of the last partial row, relative to `out`
+        // We continue to feed the new BytesBatch to the reader until input is empty.
+        // One additional call with empty input to flush the state of reader when meet eof.
         while !buf_in.is_empty() || need_flush {
             let (res, n_in) =
                 self.read_record(buf_in, &mut buf_out[buf_out_pos..], &mut file_status)?;
@@ -237,32 +250,35 @@ impl CsvReader {
                 _ => {}
             }
             if buf_in.is_empty() {
+                // state already flushed
                 break;
             } else {
                 buf_in = &buf_in[n_in..];
             }
         }
 
-        buf_out.truncate(buf_out_pos);
+        // try move data from (self.last_partial_row, buf_out) to (row_batch.data, self.last_partial_row)
 
+        buf_out.truncate(buf_out_pos);
         if row_batch.row_ends.is_empty() {
             debug!(
                 "csv aligner: {} + {} bytes => 0 rows",
-                self.out.len(),
+                self.last_partial_row.len(),
                 size_in,
             );
-            self.out.extend_from_slice(&buf_out);
+            self.last_partial_row.extend_from_slice(&buf_out);
             Ok((vec![], file_status))
         } else {
-            let last_remain = mem::take(&mut self.out);
+            let last_remain = mem::take(&mut self.last_partial_row);
 
-            self.out.extend_from_slice(&buf_out[buf_out_row_end..]);
+            self.last_partial_row
+                .extend_from_slice(&buf_out[buf_out_row_end..]);
             debug!(
                 "csv aligner: {} + {} bytes => {} rows + {} bytes remain",
                 last_remain.len(),
                 size_in,
                 row_batch.row_ends.len(),
-                self.out.len()
+                self.last_partial_row.len()
             );
 
             buf_out.truncate(buf_out_row_end);
