@@ -337,8 +337,10 @@ impl MatchedAggregator {
         let log_entries = futures::future::try_join_all(mutation_log_handlers)
             .await
             .map_err(|e| {
-                ErrorCode::Internal("unexpected, failed to join apply-deletion tasks.")
-                    .add_message_back(e.to_string())
+                ErrorCode::Internal(
+                    "unexpected, failed to join apply update and delete tasks for merge into.",
+                )
+                .add_message_back(e.to_string())
             })?;
         let mut mutation_logs = Vec::new();
         for maybe_log_entry in log_entries {
@@ -377,6 +379,7 @@ impl AggregationContext {
             &self.block_reader,
             block_meta,
             &self.read_settings,
+            self.ctx.get_id(),
         )
         .await?;
         let origin_num_rows = origin_data_block.num_rows();
@@ -407,8 +410,9 @@ impl AggregationContext {
         // and wait (asyncly, which will NOT block the executor thread)
         let block_builder = self.block_builder.clone();
         let origin_stats = block_meta.cluster_stats.clone();
+
         let serialized = GlobalIORuntime::instance()
-            .spawn_blocking(move || {
+            .spawn(self.ctx.get_id(), async move {
                 block_builder.build(res_block, |block, generator| {
                     let cluster_stats =
                         generator.gen_with_origin_stats(&block, origin_stats.clone())?;
@@ -419,7 +423,13 @@ impl AggregationContext {
                     Ok((cluster_stats, block))
                 })
             })
-            .await?;
+            .await
+            .map_err(|e| {
+                ErrorCode::Internal(
+                    "unexpected, failed to serialize block when apply update and delete to data block for merge into",
+                )
+                .add_message_back(e.to_string())
+            })??;
 
         // persistent data
         let new_block_meta = serialized.block_meta;

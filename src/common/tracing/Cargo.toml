@@ -19,7 +19,7 @@ databend-common-base = { path = "../base" }
 
 # Crates.io dependencies
 console-subscriber = { version = "0.2.0", optional = true }
-defer = "0.1"
+defer = "0.2"
 fern = "0.6.2"
 humantime = "2.1.0"
 itertools = { workspace = true }

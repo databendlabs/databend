@@ -22,6 +22,7 @@ use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
 use databend_common_base::base::tokio::sync::OwnedSemaphorePermit;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -199,6 +200,7 @@ pub async fn read_block(
     reader: &BlockReader,
     block_meta: &BlockMeta,
     read_settings: &ReadSettings,
+    query_id: String,
 ) -> Result<DataBlock> {
     let merged_io_read_result = reader
         .read_columns_data_by_merge_io(
@@ -211,11 +213,11 @@ pub async fn read_block(
 
     // deserialize block data
     // cpu intensive task, send them to dedicated thread pool
-
     let block_meta_ptr = block_meta.clone();
     let reader = reader.clone();
+
     GlobalIORuntime::instance()
-        .spawn_blocking(move || {
+        .spawn(query_id, async move {
             let column_chunks = merged_io_read_result.columns_chunks()?;
             reader.deserialize_chunks(
                 block_meta_ptr.location.0.as_str(),
@@ -227,4 +229,8 @@ pub async fn read_block(
             )
         })
         .await
+        .map_err(|e| {
+            ErrorCode::Internal("unexpected, failed to read block for merge into")
+                .add_message_back(e.to_string())
+        })?
 }
