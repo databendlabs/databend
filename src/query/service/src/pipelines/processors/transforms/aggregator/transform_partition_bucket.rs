@@ -194,11 +194,11 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         self.max_partition_count =
                             self.max_partition_count.max(p.partition_count());
 
-                        (SINGLE_LEVEL_BUCKET_NUM, SINGLE_LEVEL_BUCKET_NUM)
+                        (0, 0)
                     }
                 };
 
-                if bucket > SINGLE_LEVEL_BUCKET_NUM {
+                if bucket > SINGLE_LEVEL_BUCKET_NUM && self.max_partition_count == 0 {
                     match self.buckets_blocks.entry(bucket) {
                         Entry::Vacant(v) => {
                             v.insert(vec![data_block]);
