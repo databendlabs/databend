@@ -103,9 +103,9 @@ impl Pipeline {
         }
     }
 
-    pub fn reset_scopes(&mut self, scopes: Vec<PlanScope>) {
-        self.scope_size = Arc::new(AtomicUsize::new(scopes.len()));
-        self.plans_scope = scopes;
+    pub fn reset_scopes(&mut self, other: &Self) {
+        self.scope_size = other.scope_size.clone();
+        self.plans_scope = other.plans_scope.clone();
     }
 
     pub fn is_empty(&self) -> bool {
