@@ -101,9 +101,11 @@ impl StageTable {
             StageTable::list_files(stage_table_info, None).await?
         };
         let size = files.iter().map(|f| f.size as usize).sum();
+        // assuming all fields are empty
+        let max_rows = std::cmp::max(size / (stage_table_info.schema.fields.len() + 1), 1);
         let statistics = PartStatistics {
             snapshot: None,
-            read_rows: size,
+            read_rows: max_rows,
             read_bytes: size,
             partitions_scanned: files.len(),
             partitions_total: files.len(),
