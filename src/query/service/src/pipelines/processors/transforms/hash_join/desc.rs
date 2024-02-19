@@ -47,6 +47,8 @@ pub struct HashJoinDesc {
     pub(crate) probe_keys_rt: Vec<Option<(Expr<String>, IndexType)>>,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
+    // If enable bloom runtime filter
+    pub enable_bloom_runtime_filter: bool,
 }
 
 impl HashJoinDesc {
@@ -87,6 +89,7 @@ impl HashJoinDesc {
             probe_keys_rt,
             broadcast: join.broadcast,
             original_join_type: join.original_join_type.clone(),
+            enable_bloom_runtime_filter: join.enable_bloom_runtime_filter,
         })
     }
 
