@@ -400,7 +400,7 @@ dependencies = [
 [[package]]
 name = "arrow-format"
 version = "0.8.1"
-source = "git+https://github.com/everpcpc/arrow-format?rev=588d371#588d371c1ac41964eda2b43b8fc990bc9b63c37b"
+source = "git+https://github.com/everpcpc/arrow-format?rev=ad8f2dd#ad8f2ddc105e4d32c76cea1e71c7ff78c18076ca"
 dependencies = [
  "planus",
  "prost 0.12.1",
