@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use bytes::Buf;
 use bytes::Bytes;
-use databend_common_base::base::tokio;
 use databend_common_base::rangemap::RangeMerger;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -296,12 +295,9 @@ where
     F: FnOnce() -> Result<T> + Send + 'static,
     T: Send + 'static,
 {
-    match tokio::runtime::Handle::try_current() {
-        Ok(runtime) => runtime
-            .spawn_blocking(f)
-            .await
-            .map_err(ErrorCode::from_std_error)?,
-        Err(_) => f(),
+    match databend_common_base::runtime::try_spawn_blocking(f) {
+        Ok(handler) => handler.await.map_err(ErrorCode::from_std_error)?,
+        Err(f) => f(),
     }
 }
 

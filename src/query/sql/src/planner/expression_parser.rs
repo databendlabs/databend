@@ -18,8 +18,6 @@ use databend_common_ast::ast::Expr as AExpr;
 use databend_common_ast::parser::parse_comma_separated_exprs;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::walk_expr_mut;
-use databend_common_base::base::tokio::runtime::Handle;
-use databend_common_base::base::tokio::task::block_in_place;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table::Table;
@@ -134,8 +132,7 @@ pub fn parse_exprs(
     let exprs = ast_exprs
         .iter()
         .map(|ast| {
-            let (scalar, _) =
-                *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))?;
+            let (scalar, _) = *databend_common_base::runtime::block_on(type_checker.resolve(ast))?;
             let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
             Ok(expr)
         })
@@ -232,7 +229,7 @@ pub fn parse_computed_expr(
         )));
     }
     let ast = asts.remove(0);
-    let (scalar, _) = *block_in_place(|| Handle::current().block_on(type_checker.resolve(&ast)))?;
+    let (scalar, _) = *databend_common_base::runtime::block_on(type_checker.resolve(&ast))?;
     let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
     Ok(expr)
 }
@@ -258,7 +255,7 @@ pub fn parse_default_expr_to_string(
     )?;
 
     let (mut scalar, data_type) =
-        *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))?;
+        *databend_common_base::runtime::block_on(type_checker.resolve(ast))?;
     let schema_data_type = DataType::from(field.data_type());
     if data_type != schema_data_type {
         scalar = wrap_cast(&scalar, &schema_data_type);
@@ -323,8 +320,7 @@ pub fn parse_computed_expr_to_string(
         false,
     )?;
 
-    let (scalar, data_type) =
-        *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))?;
+    let (scalar, data_type) = *databend_common_base::runtime::block_on(type_checker.resolve(ast))?;
     if data_type != DataType::from(field.data_type()) {
         return Err(ErrorCode::SemanticError(format!(
             "expected computed column expression have type {}, but `{}` has type {}.",
@@ -386,7 +382,7 @@ pub fn parse_lambda_expr(
         false,
     )?;
 
-    block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))
+    databend_common_base::runtime::block_on(type_checker.resolve(ast))
 }
 
 #[derive(Default)]

@@ -65,11 +65,10 @@ impl PhysicalPlanBuilder {
 
         // 2. Build physical plan.
         let input_plan = self.build(s_expr.child(0)?, required).await?;
-        let next_plan_id = self.next_plan_id();
         let metadata = self.metadata.read().clone();
         if limit.before_exchange || metadata.lazy_columns().is_empty() {
             return Ok(PhysicalPlan::Limit(Limit {
-                plan_id: next_plan_id,
+                plan_id: 0,
                 input: Box::new(input_plan),
                 limit: limit.limit,
                 offset: limit.offset,
@@ -103,7 +102,7 @@ impl PhysicalPlanBuilder {
         if limit.before_exchange || lazy_columns.is_empty() {
             // If there is no lazy column, we don't need to build a `RowFetch` plan.
             return Ok(PhysicalPlan::Limit(Limit {
-                plan_id: next_plan_id,
+                plan_id: 0,
                 input: Box::new(input_plan),
                 limit: limit.limit,
                 offset: limit.offset,
@@ -140,9 +139,9 @@ impl PhysicalPlanBuilder {
         );
 
         Ok(PhysicalPlan::RowFetch(RowFetch {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             input: Box::new(PhysicalPlan::Limit(Limit {
-                plan_id: next_plan_id,
+                plan_id: 0,
                 input: Box::new(input_plan),
                 limit: limit.limit,
                 offset: limit.offset,

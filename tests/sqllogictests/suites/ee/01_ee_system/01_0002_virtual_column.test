@@ -230,5 +230,13 @@ SELECT r.id, r.val['a'], r.nval:a FROM ( SELECT r.id, r.val, r.val as nval FROM 
 6 NULL NULL
 
 statement ok
+create or replace virtual column (val['a']) for t1;
+
+query TT
+show virtual columns from t1
+----
+test_virtual_column t1 val['a']
+
+statement ok
 DROP DATABASE test_virtual_column
 

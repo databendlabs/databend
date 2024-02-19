@@ -996,18 +996,31 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let create_virtual_column = map(
+    let create_virtual_column = map_res(
         rule! {
-            CREATE ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
+            CREATE ~ (OR ~ REPLACE)? ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, _, opt_if_not_exists, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+        |(
+            _,
+            opt_or_replace,
+            _,
+            _,
+            opt_if_not_exists,
+            _,
+            virtual_columns,
+            _,
+            _,
+            (catalog, database, table),
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
+                create_option,
                 catalog,
                 database,
                 table,
                 virtual_columns,
-            })
+            }))
         },
     );
 
@@ -1419,18 +1432,36 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
 
     // share statements
-    let create_share_endpoint = map(
+    let create_share_endpoint = map_res(
         rule! {
-            CREATE ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
              ~ #ident
              ~ URL ~ "=" ~ #share_endpoint_uri_location
              ~ TENANT ~ "=" ~ #ident
              ~ ( ARGS ~ ^"=" ~ ^#options)?
              ~ ( COMMENT ~ ^"=" ~ ^#literal_string)?
         },
-        |(_, _, _, opt_if_not_exists, endpoint, _, _, url, _, _, tenant, args_opt, comment_opt)| {
-            Statement::CreateShareEndpoint(CreateShareEndpointStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+        |(
+            _,
+            opt_or_replace,
+            _,
+            _,
+            opt_if_not_exists,
+            endpoint,
+            _,
+            _,
+            url,
+            _,
+            _,
+            tenant,
+            args_opt,
+            comment_opt,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+
+            Ok(Statement::CreateShareEndpoint(CreateShareEndpointStmt {
+                create_option,
                 endpoint,
                 url,
                 tenant,
@@ -1442,7 +1473,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     Some(opt) => Some(opt.2),
                     None => None,
                 },
-            })
+            }))
         },
     );
     let show_share_endpoints = map(
@@ -1568,17 +1599,19 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let show_file_formats = value(Statement::ShowFileFormats, rule! { SHOW ~ FILE ~ FORMATS });
 
     // data mark policy
-    let create_data_mask_policy = map(
+    let create_data_mask_policy = map_res(
         rule! {
-            CREATE ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
+            CREATE ~ (OR ~ REPLACE)? ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
         },
-        |(_, _, _, opt_if_not_exists, name, policy)| {
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, policy)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             let stmt = CreateDatamaskPolicyStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: name.to_string(),
                 policy,
             };
-            Statement::CreateDatamaskPolicy(stmt)
+            Ok(Statement::CreateDatamaskPolicy(stmt))
         },
     );
     let drop_data_mask_policy = map(
@@ -1604,15 +1637,16 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let create_network_policy = map(
+    let create_network_policy = map_res(
         rule! {
-            CREATE ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+            CREATE ~  (OR ~ REPLACE)? ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
              ~ ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")"
              ~ ( BLOCKED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
              ~ ( COMMENT ~ ^Eq ~ ^#literal_string)?
         },
         |(
             _,
+            opt_or_replace,
             _,
             _,
             opt_if_not_exists,
@@ -1625,8 +1659,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             opt_blocked_ip_list,
             opt_comment,
         )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             let stmt = CreateNetworkPolicyStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: name.to_string(),
                 allowed_ip_list,
                 blocked_ip_list: match opt_blocked_ip_list {
@@ -1638,7 +1674,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     None => None,
                 },
             };
-            Statement::CreateNetworkPolicy(stmt)
+            Ok(Statement::CreateNetworkPolicy(stmt))
         },
     );
     let alter_network_policy = map(
@@ -1705,18 +1741,20 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         rule! { SHOW ~ NETWORK ~ ^POLICIES },
     );
 
-    let create_password_policy = map(
+    let create_password_policy = map_res(
         rule! {
-            CREATE ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+            CREATE ~ (OR ~ REPLACE)? ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
              ~ #password_set_options
         },
-        |(_, _, _, opt_if_not_exists, name, set_options)| {
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, set_options)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             let stmt = CreatePasswordPolicyStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: name.to_string(),
                 set_options,
             };
-            Statement::CreatePasswordPolicy(stmt)
+            Ok(Statement::CreatePasswordPolicy(stmt))
         },
     );
     let alter_password_policy = map(

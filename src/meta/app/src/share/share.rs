@@ -25,6 +25,7 @@ use enumflags2::BitFlags;
 
 use crate::app_error::AppError;
 use crate::app_error::WrongShareObject;
+use crate::schema::CreateOption;
 use crate::schema::DatabaseMeta;
 use crate::schema::TableInfo;
 use crate::schema::TableMeta;
@@ -267,7 +268,7 @@ pub struct GetObjectGrantPrivilegesReply {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateShareEndpointReq {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub endpoint: ShareEndpointIdent,
     pub url: String,
     pub tenant: String,

@@ -50,7 +50,11 @@ async fn test_network_policy() -> Result<()> {
         update_on: None,
     };
     user_mgr
-        .add_network_policy(tenant, network_policy, false)
+        .add_network_policy(
+            tenant,
+            network_policy,
+            &CreateOption::CreateIfNotExists(false),
+        )
         .await?;
 
     // add user

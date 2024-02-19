@@ -40,7 +40,7 @@ impl Binder {
         stmt: &CreateShareEndpointStmt,
     ) -> Result<Plan> {
         let CreateShareEndpointStmt {
-            if_not_exists,
+            create_option,
             endpoint,
             url,
             tenant,
@@ -51,7 +51,7 @@ impl Binder {
         let endpoint = normalize_identifier(endpoint, &self.name_resolution_ctx).name;
 
         let plan = CreateShareEndpointPlan {
-            if_not_exists: *if_not_exists,
+            create_option: *create_option,
             endpoint: ShareEndpointIdent {
                 tenant: self.ctx.get_tenant(),
                 endpoint,

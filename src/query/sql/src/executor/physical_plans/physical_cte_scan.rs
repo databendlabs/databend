@@ -70,7 +70,7 @@ impl PhysicalPlanBuilder {
 
         // 2. Build physical plan.
         Ok(PhysicalPlan::CteScan(CteScan {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             cte_idx: cte_scan.cte_idx,
             output_schema: DataSchemaRefExt::create(pruned_fields),
             offsets: pruned_offsets,

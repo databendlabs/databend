@@ -49,7 +49,7 @@ impl Binder {
         stmt: &CreateVirtualColumnStmt,
     ) -> Result<Plan> {
         let CreateVirtualColumnStmt {
-            if_not_exists,
+            create_option,
             catalog,
             database,
             table,
@@ -73,7 +73,7 @@ impl Binder {
 
         Ok(Plan::CreateVirtualColumn(Box::new(
             CreateVirtualColumnPlan {
-                if_not_exists: *if_not_exists,
+                create_option: *create_option,
                 catalog,
                 database,
                 table,

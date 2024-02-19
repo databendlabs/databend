@@ -35,7 +35,6 @@ use databend_common_management::SettingApi;
 use databend_common_management::SettingMgr;
 use databend_common_management::StageApi;
 use databend_common_management::StageMgr;
-use databend_common_management::UdfApi;
 use databend_common_management::UdfMgr;
 use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
@@ -144,8 +143,8 @@ impl UserApiProvider {
         )?))
     }
 
-    pub fn udf_api(&self, tenant: &str) -> std::result::Result<Arc<dyn UdfApi>, TenantError> {
-        Ok(Arc::new(UdfMgr::create(self.client.clone(), tenant)?))
+    pub fn udf_api(&self, tenant: &str) -> std::result::Result<UdfMgr, TenantError> {
+        UdfMgr::create(self.client.clone(), tenant)
     }
 
     pub fn get_tenant_quota_api_client(&self, tenant: &str) -> Result<Arc<dyn QuotaApi>> {
