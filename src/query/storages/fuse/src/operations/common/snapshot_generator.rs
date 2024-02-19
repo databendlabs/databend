@@ -30,7 +30,7 @@ use databend_common_metrics::storage::*;
 use databend_common_sql::field_default_value;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
-use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentDescriptor;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
@@ -63,8 +63,8 @@ pub trait SnapshotGenerator {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Default)]
 pub struct SnapshotChanges {
-    pub appended_segments: Vec<Location>,
-    pub replaced_segments: HashMap<usize, Location>,
+    pub appended_segments: Vec<SegmentDescriptor>,
+    pub replaced_segments: HashMap<usize, SegmentDescriptor>,
     pub removed_segment_indexes: Vec<usize>,
 
     pub merged_statistics: Statistics,
@@ -73,7 +73,20 @@ pub struct SnapshotChanges {
 
 impl SnapshotChanges {
     pub fn check_intersect(&self, other: &SnapshotChanges) -> bool {
-        if Self::is_slice_intersect(&self.appended_segments, &other.appended_segments) {
+        // TODO optimized
+        let left = self
+            .appended_segments
+            .iter()
+            .map(|i| i.location.clone())
+            .collect::<Vec<_>>();
+        let right = other
+            .appended_segments
+            .iter()
+            .map(|i| i.location.clone())
+            .collect::<Vec<_>>();
+
+        // if Self::is_slice_intersect(&self.appended_segments, &other.appended_segments) {
+        if Self::is_slice_intersect(&left, &right) {
             return true;
         }
         for o in &other.replaced_segments {
@@ -104,7 +117,7 @@ impl SnapshotChanges {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 pub struct SnapshotMerged {
-    pub merged_segments: Vec<Location>,
+    pub merged_segments: Vec<SegmentDescriptor>,
     pub merged_statistics: Statistics,
 }
 
@@ -139,19 +152,19 @@ impl ConflictResolveContext {
     pub fn is_modified_segments_exists_in_latest(
         base: &TableSnapshot,
         latest: &TableSnapshot,
-        replaced_segments: &HashMap<usize, Location>,
+        replaced_segments: &HashMap<usize, SegmentDescriptor>,
         removed_segments: &[usize],
-    ) -> Option<(Vec<usize>, HashMap<usize, Location>)> {
+    ) -> Option<(Vec<usize>, HashMap<usize, SegmentDescriptor>)> {
         let latest_segments = latest
             .segments
             .iter()
             .enumerate()
-            .map(|(i, x)| (x, i))
+            .map(|(i, x)| (&x.location, i))
             .collect::<HashMap<_, usize>>();
         let mut removed = Vec::with_capacity(removed_segments.len());
         for removed_segment in removed_segments {
             let removed_segment = &base.segments[*removed_segment];
-            if let Some(position) = latest_segments.get(removed_segment) {
+            if let Some(position) = latest_segments.get(&removed_segment.location) {
                 removed.push(*position);
             } else {
                 return None;
@@ -161,7 +174,7 @@ impl ConflictResolveContext {
         let mut replaced = HashMap::with_capacity(replaced_segments.len());
         for (position, location) in replaced_segments {
             let origin_segment = &base.segments[*position];
-            if let Some(position) = latest_segments.get(origin_segment) {
+            if let Some(position) = latest_segments.get(&origin_segment.location) {
                 replaced.insert(*position, location.clone());
             } else {
                 return None;
@@ -171,11 +184,11 @@ impl ConflictResolveContext {
     }
 
     pub fn merge_segments(
-        mut base_segments: Vec<Location>,
-        appended_segments: Vec<Location>,
-        replaced_segments: HashMap<usize, Location>,
+        mut base_segments: Vec<SegmentDescriptor>,
+        appended_segments: Vec<SegmentDescriptor>,
+        replaced_segments: HashMap<usize, SegmentDescriptor>,
         removed_segment_indexes: Vec<usize>,
-    ) -> Vec<Location> {
+    ) -> Vec<SegmentDescriptor> {
         replaced_segments
             .into_iter()
             .for_each(|(k, v)| base_segments[k] = v);

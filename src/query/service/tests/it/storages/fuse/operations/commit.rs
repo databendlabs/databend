@@ -251,7 +251,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
             let table = fixture.latest_default_table().await?;
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-            let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION)];
+            let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION).into()];
             let new_snapshot = TableSnapshot::new(
                 Uuid::new_v4(),
                 &None,

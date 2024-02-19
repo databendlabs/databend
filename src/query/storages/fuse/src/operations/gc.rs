@@ -293,14 +293,20 @@ impl FuseTable {
         };
 
         // root snapshot cannot ignore storage not find error.
+        // TODO
+        let locations = root_snapshot
+            .segments
+            .iter()
+            .map(|v| v.location.clone())
+            .collect::<Vec<_>>();
         let referenced_locations = self
-            .get_block_locations(ctx.clone(), &root_snapshot.segments, put_cache, false)
+            .get_block_locations(ctx.clone(), &locations, put_cache, false)
             .await?;
         let snapshot_lite = Arc::new(SnapshotLiteExtended {
             format_version: ver,
             snapshot_id: root_snapshot.snapshot_id,
             timestamp: root_snapshot.timestamp,
-            segments: HashSet::from_iter(root_snapshot.segments.clone()),
+            segments: HashSet::from_iter(root_snapshot.segments.iter().map(|v| v.location.clone())),
             table_statistics_location: root_snapshot.table_statistics_location.clone(),
         });
         Ok(Some(RootSnapshotInfo {

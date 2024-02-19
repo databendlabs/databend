@@ -18,8 +18,9 @@ use std::time::Instant;
 use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
-use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentDescriptor;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentSummary;
 use databend_storages_common_table_meta::meta::Statistics;
 use log::info;
 use metrics::gauge;
@@ -38,7 +39,7 @@ use crate::TableContext;
 #[derive(Default)]
 pub struct SegmentCompactionState {
     // locations of all the segments(compacted, and unchanged)
-    pub segments_locations: Vec<Location>,
+    pub segments_locations: Vec<SegmentDescriptor>,
     // paths of all the newly created segments (which are compacted), need this to rollback the compaction
     pub new_segment_paths: Vec<String>,
     // number of fragmented segments compacted
@@ -177,7 +178,7 @@ pub struct SegmentCompactor<'a> {
     threshold: u64,
     default_cluster_key_id: Option<u32>,
     // fragmented segment collected so far, it will be reset to empty if compaction occurs
-    fragmented_segments: Vec<(SegmentInfo, Location)>,
+    fragmented_segments: Vec<(SegmentInfo, SegmentDescriptor)>,
     // state which keep the number of blocks of all the fragmented segment collected so far,
     // it will be reset to 0 if compaction occurs
     accumulated_num_blocks: u64,
@@ -211,7 +212,7 @@ impl<'a> SegmentCompactor<'a> {
     #[async_backtrace::framed]
     pub async fn compact<T>(
         mut self,
-        reverse_locations: Vec<Location>,
+        reverse_locations: Vec<SegmentDescriptor>,
         limit: usize,
         status_callback: T,
     ) -> Result<SegmentCompactionState>
@@ -226,8 +227,9 @@ impl<'a> SegmentCompactor<'a> {
         let mut checked_end_at = 0;
         let mut is_end = false;
         for chunk in reverse_locations.chunks(chunk_size) {
+            let locations = chunk.iter().map(|v| v.location.clone()).collect::<Vec<_>>();
             let mut segment_infos = segments_io
-                .read_segments::<SegmentInfo>(chunk, false)
+                .read_segments::<SegmentInfo>(&locations, false)
                 .await?
                 .into_iter()
                 .zip(chunk.iter())
@@ -301,7 +303,11 @@ impl<'a> SegmentCompactor<'a> {
 
     // accumulate one segment
     #[async_backtrace::framed]
-    pub async fn add(&mut self, segment_info: SegmentInfo, location: Location) -> Result<()> {
+    pub async fn add(
+        &mut self,
+        segment_info: SegmentInfo,
+        location: SegmentDescriptor,
+    ) -> Result<()> {
         let num_blocks_current_segment = segment_info.blocks.len() as u64;
 
         if num_blocks_current_segment == 0 {
@@ -325,6 +331,14 @@ impl<'a> SegmentCompactor<'a> {
             // lesser than threshold. this happens if the size of segment BEFORE compaction
             // is already larger than threshold.
             self.compact_fragments().await?;
+
+            // let desc = SegmentDescriptor {
+            //    location: location.location,
+            //    summary: Some(SegmentSummary {
+            //        block_count: segment_info.summary.block_count,
+            //        row_count: segment_info.summary.row_count,
+            //    }),
+            //};
             self.compacted_state.segments_locations.push(location);
         }
 
@@ -367,11 +381,21 @@ impl<'a> SegmentCompactor<'a> {
 
         // 2.2 write down new segment
         let new_segment = SegmentInfo::new(blocks, new_statistics);
+        let seg_summary = SegmentSummary {
+            row_count: new_segment.summary.row_count,
+            block_count: new_segment.summary.block_count,
+        };
+
         let location = self.segment_writer.write_segment(new_segment).await?;
         self.compacted_state
             .new_segment_paths
             .push(location.0.clone());
-        self.compacted_state.segments_locations.push(location);
+        self.compacted_state
+            .segments_locations
+            .push(SegmentDescriptor {
+                location,
+                summary: Some(seg_summary),
+            });
         Ok(())
     }
 

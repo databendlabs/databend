@@ -20,7 +20,9 @@ pub use v2::ColumnMeta;
 pub use v2::ColumnStatistics;
 pub use v2::Statistics;
 pub use v4::CompactSegmentInfo;
+pub use v4::SegmentDescriptor;
 pub use v4::SegmentInfo;
+pub use v4::SegmentSummary;
 pub use v4::TableSnapshot;
 pub use v4::TableSnapshotLite;
 

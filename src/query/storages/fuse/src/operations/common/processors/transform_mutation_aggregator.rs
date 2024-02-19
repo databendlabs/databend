@@ -29,8 +29,9 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentDescriptor;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentSummary;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use itertools::Itertools;
@@ -62,10 +63,10 @@ pub struct TableMutationAggregator {
     location_gen: TableMetaLocationGenerator,
     thresholds: BlockThresholds,
     default_cluster_key_id: Option<u32>,
-    base_segments: Vec<Location>,
+    base_segments: Vec<SegmentDescriptor>,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
-    appended_segments: Vec<Location>,
+    appended_segments: Vec<SegmentDescriptor>,
     appended_statistics: Statistics,
     removed_segment_indexes: Vec<SegmentIndex>,
     removed_statistics: Statistics,
@@ -105,7 +106,7 @@ impl TableMutationAggregator {
     pub fn new(
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
-        base_segments: Vec<Location>,
+        base_segments: Vec<SegmentDescriptor>,
         kind: MutationKind,
     ) -> Self {
         TableMutationAggregator {
@@ -184,8 +185,16 @@ impl TableMutationAggregator {
                     self.default_cluster_key_id,
                 );
 
+                let desc = SegmentDescriptor {
+                    location: (segment_location, format_version),
+                    summary: Some(SegmentSummary {
+                        row_count: summary.row_count,
+                        block_count: summary.block_count,
+                    }),
+                };
                 self.appended_segments
-                    .push((segment_location, format_version))
+                    //.push((segment_location, format_version))
+                    .push(desc)
             }
             MutationLogEntry::CompactExtras { extras } => {
                 match self.mutations.entry(extras.segment_index) {
@@ -241,8 +250,14 @@ impl TableMutationAggregator {
                                 &summary,
                                 self.default_cluster_key_id,
                             );
-                            replaced_segments
-                                .insert(result.index, (location, SegmentInfo::VERSION));
+                            let desc = SegmentDescriptor {
+                                location: (location, SegmentInfo::VERSION),
+                                summary: Some(SegmentSummary {
+                                    row_count: summary.row_count,
+                                    block_count: summary.block_count,
+                                }),
+                            };
+                            replaced_segments.insert(result.index, desc);
                         } else {
                             self.removed_segment_indexes.push(result.index);
                         }
@@ -311,7 +326,7 @@ impl TableMutationAggregator {
                 let (new_blocks, origin_summary) = if let Some(loc) = location {
                     // read the old segment
                     let compact_segment_info =
-                        SegmentsIO::read_compact_segment(op.clone(), loc, schema, false).await?;
+                        SegmentsIO::read_compact_segment(op.clone(), loc.location, schema, false).await?;
                     let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
                     // take away the blocks, they are being mutated

@@ -28,7 +28,9 @@ use databend_common_expression::DataBlock;
 use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::SegmentDescriptor;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentSummary;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use itertools::Itertools;
@@ -107,7 +109,15 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
             let appended = new_segments.split_off(removed_segments_len);
             for (location, stats) in appended.into_iter().rev() {
                 self.abort_operation.add_segment(location.clone());
-                appended_segments.push((location, SegmentInfo::VERSION));
+                let desc = SegmentDescriptor {
+                    location: (location, SegmentInfo::VERSION),
+                    summary: Some(SegmentSummary {
+                        block_count: stats.block_count,
+                        row_count: stats.row_count,
+                    }),
+                };
+
+                appended_segments.push(desc);
                 merge_statistics_mut(&mut merged_statistics, &stats, default_cluster_key);
             }
         }
@@ -115,9 +125,17 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
         for (i, (location, stats)) in new_segments.into_iter().enumerate() {
             // The old segments will be replaced with the news.
             self.abort_operation.add_segment(location.clone());
+            let desc = SegmentDescriptor {
+                location: (location, SegmentInfo::VERSION),
+                summary: Some(SegmentSummary {
+                    block_count: stats.block_count,
+                    row_count: stats.row_count,
+                }),
+            };
             replaced_segments.insert(
                 self.removed_segment_indexes[i],
-                (location, SegmentInfo::VERSION),
+                //(location, SegmentInfo::VERSION),
+                desc,
             );
             merge_statistics_mut(&mut merged_statistics, &stats, default_cluster_key);
         }

@@ -98,9 +98,9 @@ async fn check_segment_column_ids(
             fuse_table.get_operator(),
             TestFixture::default_table_schema(),
         );
-        for (seg_loc, _) in &snapshot.segments {
+        for seg in &snapshot.segments {
             let params = LoadParams {
-                location: seg_loc.clone(),
+                location: seg.location.0.clone(),
                 len_hint: None,
                 ver: SegmentInfo::VERSION,
                 put_cache: false,

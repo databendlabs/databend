@@ -235,6 +235,7 @@ async fn test_safety_for_recluster() -> Result<()> {
         }
 
         let ctx: Arc<dyn TableContext> = ctx.clone();
+        let locations = locations.into_iter().map(|v| v.location).collect();
         let segment_locations = create_segment_location_vector(locations, None);
         let compact_segments = FuseTable::segment_pruning(
             &ctx,

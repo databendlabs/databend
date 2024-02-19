@@ -78,11 +78,32 @@ pub struct TableSnapshot {
     ///
     /// We rely on background merge tasks to keep merging segments, so that
     /// this the size of this vector could be kept reasonable
-    pub segments: Vec<Location>,
+    pub segments: Vec<SegmentDescriptor>,
 
     // The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
+}
+
+// TODO remove PartialEq
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct SegmentSummary {
+    pub row_count: u64,
+    pub block_count: u64,
+}
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct SegmentDescriptor {
+    pub location: Location,
+    pub summary: Option<SegmentSummary>,
+}
+
+impl From<Location> for SegmentDescriptor {
+    fn from(location: Location) -> Self {
+        SegmentDescriptor {
+            location,
+            summary: None,
+        }
+    }
 }
 
 impl TableSnapshot {
@@ -92,7 +113,7 @@ impl TableSnapshot {
         prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
         schema: TableSchema,
         summary: Statistics,
-        segments: Vec<Location>,
+        segments: Vec<SegmentDescriptor>,
         cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
     ) -> Self {
@@ -218,7 +239,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             prev_snapshot_id: s.prev_snapshot_id,
             schema: s.schema,
             summary: s.summary,
-            segments: s.segments,
+            segments: s.segments.into_iter().map(|v| v.into()).collect(),
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
         }
@@ -239,7 +260,7 @@ where T: Into<v3::TableSnapshot>
             prev_snapshot_id: s.prev_snapshot_id,
             schema: s.schema.into(),
             summary: s.summary.into(),
-            segments: s.segments,
+            segments: s.segments.into_iter().map(|v| v.into()).collect(),
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
         }

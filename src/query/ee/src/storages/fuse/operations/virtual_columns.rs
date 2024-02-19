@@ -99,7 +99,11 @@ pub async fn do_refresh_virtual_column(
     let segment_locs = if let Some(segment_locs) = segment_locs {
         segment_locs
     } else {
-        snapshot.segments.clone()
+        snapshot
+            .segments
+            .iter()
+            .map(|v| v.location.clone())
+            .collect()
     };
 
     // Read source variant columns and extract inner fields as virtual columns.

@@ -97,7 +97,7 @@ pub async fn get_snapshot_referenced_files(
         format_version: ver,
         snapshot_id: root_snapshot.snapshot_id,
         timestamp: root_snapshot.timestamp,
-        segments: HashSet::from_iter(root_snapshot.segments.clone()),
+        segments: HashSet::from_iter(root_snapshot.segments.iter().map(|v| v.location.clone())),
         table_statistics_location: root_snapshot.table_statistics_location.clone(),
     });
     drop(root_snapshot);

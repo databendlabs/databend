@@ -108,8 +108,10 @@ impl<'a> ClusteringInformation<'a> {
         let total_block_count = snapshot.summary.block_count;
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in snapshot.segments.chunks(chunk_size) {
+            // TODO
+            let locations = chunk.iter().map(|v| v.location.clone()).collect::<Vec<_>>();
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(&locations, true)
                 .await?;
 
             for segment in segments.into_iter().flatten() {

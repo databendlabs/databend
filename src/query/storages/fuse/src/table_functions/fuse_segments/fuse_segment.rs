@@ -25,7 +25,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
-use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentDescriptor;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use futures_util::TryStreamExt;
 
@@ -92,7 +92,7 @@ impl<'a> FuseSegment<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn to_block(&self, segment_locations: &[Location]) -> Result<DataBlock> {
+    async fn to_block(&self, segment_locations: &[SegmentDescriptor]) -> Result<DataBlock> {
         let limit = self.limit.unwrap_or(usize::MAX);
         let len = std::cmp::min(segment_locations.len(), limit);
 
@@ -114,18 +114,20 @@ impl<'a> FuseSegment<'a> {
         let chunk_size =
             std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
         for chunk in segment_locations.chunks(chunk_size) {
+            // TODO
+            let locations = chunk.iter().map(|v| v.location.clone()).collect::<Vec<_>>();
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(&locations, true)
                 .await?;
 
             for (idx, segment) in segments.into_iter().enumerate() {
                 let segment = segment?;
-                format_versions.push(segment_locations[idx].1);
+                format_versions.push(segment_locations[idx].location.1);
                 block_count.push(segment.summary.block_count);
                 row_count.push(segment.summary.row_count);
                 compressed.push(segment.summary.compressed_byte_size);
                 uncompressed.push(segment.summary.uncompressed_byte_size);
-                file_location.push(segment_locations[idx].0.clone());
+                file_location.push(segment_locations[idx].location.0.clone());
 
                 row_num += 1;
                 if row_num >= limit {

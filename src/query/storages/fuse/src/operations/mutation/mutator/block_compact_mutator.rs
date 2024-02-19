@@ -109,6 +109,7 @@ impl BlockCompactMutator {
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
+            let chunk = &chunk.iter().map(|v| v.location.clone()).collect::<Vec<_>>();
             let mut segment_infos = segments_io
                 .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
                 .await?

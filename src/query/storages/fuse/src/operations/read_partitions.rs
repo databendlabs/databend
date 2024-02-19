@@ -79,7 +79,10 @@ impl FuseTable {
                 if (!dry_run && snapshot.segments.len() > nodes_num) || is_lazy {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                        segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
+                        segments.push(FuseLazyPartInfo::create(
+                            idx,
+                            segment_location.location.clone(),
+                        ))
                     }
 
                     return Ok((
@@ -101,7 +104,7 @@ impl FuseTable {
                 for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                     segments_location.push(SegmentLocation {
                         segment_idx: idx,
-                        location: segment_location.clone(),
+                        location: segment_location.location.clone(),
                         snapshot_loc: snapshot_loc.clone(),
                     });
                 }

@@ -441,6 +441,7 @@ impl MergeIntoInterpreter {
             .segments
             .clone()
             .into_iter()
+            .map(|v| v.location)
             .enumerate()
             .collect();
 

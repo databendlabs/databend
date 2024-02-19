@@ -192,7 +192,8 @@ impl StreamTable {
     ) -> Result<(Vec<Arc<BlockMeta>>, Vec<Arc<BlockMeta>>)> {
         let operator = fuse_table.get_operator();
         let latest_segments = if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
-            HashSet::from_iter(snapshot.segments.clone())
+            // TODO
+            HashSet::from_iter(snapshot.segments.iter().map(|v| v.location.clone()))
         } else {
             HashSet::new()
         };
@@ -200,7 +201,8 @@ impl StreamTable {
         let base_segments = if let Some(snapshot_location) = &self.snapshot_location {
             let (base_snapshot, _) =
                 SnapshotsIO::read_snapshot(snapshot_location.clone(), operator.clone()).await?;
-            HashSet::from_iter(base_snapshot.segments.clone())
+            // TODO
+            HashSet::from_iter(base_snapshot.segments.iter().map(|v| v.location.clone()))
         } else {
             HashSet::new()
         };
