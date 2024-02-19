@@ -178,6 +178,12 @@ impl DPhpy {
                 }
                 // Add join conditions
                 for condition_pair in op.left_conditions.iter().zip(op.right_conditions.iter()) {
+                    let left_used_tables = condition_pair.0.used_tables()?;
+                    let right_used_tables = condition_pair.1.used_tables()?;
+                    if left_used_tables.is_empty() || right_used_tables.is_empty() {
+                        is_inner_join = false;
+                        break;
+                    }
                     join_conditions.push((condition_pair.0.clone(), condition_pair.1.clone()));
                 }
                 if !op.non_equi_conditions.is_empty() {
