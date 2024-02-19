@@ -266,7 +266,7 @@ impl DefaultSettings {
                     range: None,
                 }),
                 ("enable_runtime_filter", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables runtime filter optimization for JOIN.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

@@ -152,7 +152,9 @@ impl HashJoinBuildState {
             if !is_cluster || is_broadcast_join {
                 enable_inlist_runtime_filter = true;
                 enable_min_max_runtime_filter = true;
-                if ctx.get_settings().get_runtime_filter()? {
+                if ctx.get_settings().get_runtime_filter()?
+                    && hash_join_state.hash_join_desc.enable_bloom_runtime_filter
+                {
                     enable_bloom_runtime_filter = true;
                 }
             }
