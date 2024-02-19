@@ -67,7 +67,7 @@ impl AsyncSystemTable for StreamsTable {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
         let ctls: Vec<(String, Arc<dyn Catalog>)> = catalog_mgr
-            .list_catalogs(&tenant)
+            .list_catalogs(&tenant, ctx.txn_mgr())
             .await?
             .iter()
             .map(|e| (e.name(), e.clone()))

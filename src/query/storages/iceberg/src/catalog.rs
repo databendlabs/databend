@@ -22,7 +22,6 @@ use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -344,7 +343,6 @@ impl Catalog for IcebergCatalog {
         &self,
         _table_info: &TableInfo,
         _req: UpdateTableMetaReq,
-        _ctx: &dyn TableContext,
     ) -> Result<UpdateTableMetaReply> {
         unimplemented!()
     }

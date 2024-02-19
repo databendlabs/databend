@@ -803,7 +803,7 @@ impl Binder {
             // Other table functions always reside is default catalog
             let table_meta: Arc<dyn TableFunction> = self
                 .catalogs
-                .get_default_catalog()?
+                .get_default_catalog(self.ctx.txn_mgr())?
                 .get_table_function(&func_name.name, table_args)?;
             let table = table_meta.as_table();
             let table_alias_name = if let Some(table_alias) = alias {
@@ -1505,7 +1505,10 @@ impl Binder {
         catalog_name: &str,
         table_id: MetaId,
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        let catalog = self.catalogs.get_catalog(tenant, catalog_name).await?;
+        let catalog = self
+            .catalogs
+            .get_catalog(tenant, catalog_name, self.ctx.txn_mgr())
+            .await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
             .await?;

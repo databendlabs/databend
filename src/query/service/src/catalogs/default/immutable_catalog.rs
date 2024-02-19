@@ -81,7 +81,6 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::MetaId;
-use databend_common_storages_fuse::TableContext;
 
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::SYS_DB_ID_BEGIN;
@@ -323,7 +322,6 @@ impl Catalog for ImmutableCatalog {
         &self,
         _table_info: &TableInfo,
         req: UpdateTableMetaReq,
-        _ctx: &dyn TableContext,
     ) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::Unimplemented(format!(
             "update table meta not allowed for system database {:?}",

@@ -18,6 +18,7 @@ use std::sync::Mutex;
 
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 
+#[derive(Debug, Clone)]
 pub struct TxnManager {
     state: TxnState,
     txn_buffer: TxnBuffer,
@@ -25,13 +26,14 @@ pub struct TxnManager {
 
 pub type TxnManagerRef = Arc<Mutex<TxnManager>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TxnState {
     AutoCommit,
     Active,
     Fail,
 }
 
+#[derive(Debug, Clone)]
 struct TxnBuffer {
     table_metas: HashMap<u64, UpdateTableMetaReq>,
 }

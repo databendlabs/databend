@@ -847,12 +847,11 @@ impl Catalog for FakedCatalog {
         &self,
         table_info: &TableInfo,
         req: UpdateTableMetaReq,
-        ctx: &dyn TableContext,
     ) -> Result<UpdateTableMetaReply> {
         if let Some(e) = &self.error_injection {
             Err(e.clone())
         } else {
-            self.cat.update_table_meta(table_info, req, ctx).await
+            self.cat.update_table_meta(table_info, req).await
         }
     }
 

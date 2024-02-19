@@ -21,7 +21,6 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -529,10 +528,9 @@ impl Catalog for DatabaseCatalog {
         &self,
         table_info: &TableInfo,
         req: UpdateTableMetaReq,
-        ctx: &dyn TableContext,
     ) -> Result<UpdateTableMetaReply> {
         self.mutable_catalog
-            .update_table_meta(table_info, req, ctx)
+            .update_table_meta(table_info, req)
             .await
     }
 

@@ -224,7 +224,7 @@ impl FuseTable {
         };
 
         // 3. let's roll
-        let reply = catalog.update_table_meta(table_info, req, ctx).await;
+        let reply = catalog.update_table_meta(table_info, req).await;
         match reply {
             Ok(_) => {
                 TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));

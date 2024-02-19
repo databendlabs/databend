@@ -58,7 +58,7 @@ impl AsyncSystemTable for DatabasesTable {
         let tenant = ctx.get_tenant();
         let catalogs = CatalogManager::instance();
         let catalogs: Vec<(String, Arc<dyn Catalog>)> = catalogs
-            .list_catalogs(&tenant)
+            .list_catalogs(&tenant,ctx.txn_mgr())
             .await?
             .iter()
             .map(|e| (e.name(), e.clone()))
