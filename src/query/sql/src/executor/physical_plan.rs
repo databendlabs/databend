@@ -148,20 +148,20 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(v) => v.plan_id,
             PhysicalPlan::ConstantTableScan(v) => v.plan_id,
             PhysicalPlan::Udf(v) => v.plan_id,
-            PhysicalPlan::DeleteSource(_)
-            | PhysicalPlan::MergeInto(_)
-            | PhysicalPlan::MergeIntoAddRowNumber(_)
-            | PhysicalPlan::MergeIntoSource(_)
-            | PhysicalPlan::MergeIntoAppendNotMatched(_)
-            | PhysicalPlan::CommitSink(_)
-            | PhysicalPlan::CopyIntoTable(_)
-            | PhysicalPlan::ReplaceAsyncSourcer(_)
-            | PhysicalPlan::ReplaceDeduplicate(_)
-            | PhysicalPlan::ReplaceInto(_)
-            | PhysicalPlan::CompactSource(_)
-            | PhysicalPlan::ReclusterSource(_)
-            | PhysicalPlan::ReclusterSink(_)
-            | PhysicalPlan::UpdateSource(_) => u32::MAX,
+            PhysicalPlan::DeleteSource(v) => v.plan_id,
+            PhysicalPlan::MergeInto(v) => v.plan_id,
+            PhysicalPlan::MergeIntoAddRowNumber(v) => v.plan_id,
+            PhysicalPlan::MergeIntoSource(v) => v.plan_id,
+            PhysicalPlan::MergeIntoAppendNotMatched(v) => v.plan_id,
+            PhysicalPlan::CommitSink(v) => v.plan_id,
+            PhysicalPlan::CopyIntoTable(v) => v.plan_id,
+            PhysicalPlan::ReplaceAsyncSourcer(v) => v.plan_id,
+            PhysicalPlan::ReplaceDeduplicate(v) => v.plan_id,
+            PhysicalPlan::ReplaceInto(v) => v.plan_id,
+            PhysicalPlan::CompactSource(v) => v.plan_id,
+            PhysicalPlan::ReclusterSource(v) => v.plan_id,
+            PhysicalPlan::ReclusterSink(v) => v.plan_id,
+            PhysicalPlan::UpdateSource(v) => v.plan_id,
         }
     }
 

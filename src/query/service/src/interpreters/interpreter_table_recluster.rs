@@ -233,6 +233,7 @@ pub fn build_recluster_physical_plan(
         tasks,
         table_info: table_info.clone(),
         catalog_info: catalog_info.clone(),
+        plan_id: u32::MAX,
     }));
 
     if is_distributed {
@@ -254,5 +255,6 @@ pub fn build_recluster_physical_plan(
         remained_blocks,
         removed_segment_indexes,
         removed_segment_summary,
+        plan_id: u32::MAX,
     })))
 }

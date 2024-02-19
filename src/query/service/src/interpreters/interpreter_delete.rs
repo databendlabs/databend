@@ -260,6 +260,7 @@ impl DeleteInterpreter {
             col_indices,
             query_row_id_col,
             snapshot: snapshot.clone(),
+            plan_id: u32::MAX,
         }));
 
         if is_distributed {
@@ -283,6 +284,7 @@ impl DeleteInterpreter {
             merge_meta,
             need_lock: false,
             deduplicated_label: None,
+            plan_id: u32::MAX,
         })))
     }
 }

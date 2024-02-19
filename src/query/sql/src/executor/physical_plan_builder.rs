@@ -239,6 +239,65 @@ fn adjust_plan_id(plan: &mut PhysicalPlan, next_id: &mut u32) {
             plan.plan_id = *next_id;
             *next_id += 1;
         }
-        _ => {}
+        PhysicalPlan::DeleteSource(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+        }
+        PhysicalPlan::ReplaceInto(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::MergeInto(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::MergeIntoAddRowNumber(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::MergeIntoSource(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::CommitSink(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::ReplaceAsyncSourcer(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+        }
+        PhysicalPlan::ReplaceDeduplicate(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::CompactSource(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+        }
+        PhysicalPlan::ReclusterSource(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+        }
+        PhysicalPlan::ReclusterSink(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+            adjust_plan_id(&mut plan.input, next_id);
+        }
+        PhysicalPlan::UpdateSource(plan) => {
+            plan.plan_id = *next_id;
+            *next_id += 1;
+        }
     }
 }

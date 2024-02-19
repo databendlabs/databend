@@ -303,6 +303,7 @@ impl UpdateInterpreter {
             query_row_id_col,
             update_list,
             computed_list,
+            plan_id: u32::MAX,
         }));
 
         if is_distributed {
@@ -326,6 +327,7 @@ impl UpdateInterpreter {
             merge_meta,
             need_lock: false,
             deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
+            plan_id: u32::MAX,
         })))
     }
 }
