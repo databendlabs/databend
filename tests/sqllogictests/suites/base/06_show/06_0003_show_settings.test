@@ -31,12 +31,12 @@ SHOW SETTINGS LIKE 'enable%'
 query TT
 SHOW SETTINGS LIKE 'max%' LIMIT 1
 ----
-max_block_size 65536 65536 None DEFAULT Sets the maximum byte size of a single data block that can be read. UInt64
+max_block_size 65536 65536 [1, 18446744073709551615] DEFAULT Sets the maximum byte size of a single data block that can be read. UInt64
 
 query TT
 SHOW SETTINGS WHERE name='max_block_size' LIMIT 1
 ----
-max_block_size 65536 65536 None DEFAULT Sets the maximum byte size of a single data block that can be read. UInt64
+max_block_size 65536 65536 [1, 18446744073709551615] DEFAULT Sets the maximum byte size of a single data block that can be read. UInt64
 
 statement error
 SHOW SETTINGS ilike 'ff%' LIMIT 1
