@@ -154,3 +154,16 @@ echo "show grants for role drop_role1" | $BENDSQL_CLIENT_CONNECT
 echo "drop role drop_role1" | $BENDSQL_CLIENT_CONNECT
 echo "drop user u1" | $BENDSQL_CLIENT_CONNECT
 echo "drop database a" | $BENDSQL_CLIENT_CONNECT
+
+echo "== test create database privilege and drop ==="
+echo "create role role1;" | $BENDSQL_CLIENT_CONNECT
+echo "grant create database on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
+echo "create user a identified by '123' with DEFAULT_ROLE='role1'" | $BENDSQL_CLIENT_CONNECT
+echo "grant role role1 to a;" | $BENDSQL_CLIENT_CONNECT
+
+echo "drop database if exists c" | $BENDSQL_CLIENT_CONNECT
+echo "create database c" | $USER_A_CONNECT
+echo "drop database c" | $USER_A_CONNECT
+echo "show tables from c" | $USER_A_CONNECT
+echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT

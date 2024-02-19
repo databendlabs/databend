@@ -565,8 +565,10 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::CreateDatabase])
                     .await?;
             }
-            Plan::DropDatabase(_)
-            | Plan::UndropDatabase(_)
+            Plan::DropDatabase(plan) => {
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop]).await?;
+            }
+            Plan::UndropDatabase(plan)
             | Plan::DropUDF(_)
             | Plan::DropIndex(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Drop])

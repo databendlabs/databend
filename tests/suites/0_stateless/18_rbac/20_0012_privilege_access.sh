@@ -231,11 +231,13 @@ echo "insert into d.t1 values(3)" | $USER_B_CONNECT
 echo "select * from d.t1 order by id" | $USER_B_CONNECT
 
 ## Drop user
+echo "drop database if exists no_grant" | $BENDSQL_CLIENT_CONNECT
+echo "grant drop on d.* to b" | $BENDSQL_CLIENT_CONNECT
+echo "grant drop on *.* to a" | $BENDSQL_CLIENT_CONNECT
+echo "drop database grant_db" | $USER_A_CONNECT
+echo "drop database d" | $USER_B_CONNECT
 echo "drop user a" | $BENDSQL_CLIENT_CONNECT
 echo "drop user b" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists no_grant" | $BENDSQL_CLIENT_CONNECT
-echo "drop database grant_db" | $BENDSQL_CLIENT_CONNECT
-echo "drop database d" | $BENDSQL_CLIENT_CONNECT
 
 echo "drop table if exists t" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t1" | $BENDSQL_CLIENT_CONNECT

@@ -47,3 +47,5 @@ a	drop_role1
 t	drop_role1
 GRANT OWNERSHIP ON 'default'.'a'.* TO ROLE `drop_role1`
 GRANT OWNERSHIP ON 'default'.'a'.'t' TO ROLE `drop_role1`
+== test create database privilege and drop ===
+Error: APIError: ResponseError with 1003: Unknown database 'c'
