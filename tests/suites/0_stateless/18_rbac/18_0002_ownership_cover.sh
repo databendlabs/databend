@@ -155,7 +155,8 @@ echo "drop role drop_role1" | $BENDSQL_CLIENT_CONNECT
 echo "drop user u1" | $BENDSQL_CLIENT_CONNECT
 echo "drop database a" | $BENDSQL_CLIENT_CONNECT
 
-echo "== test create database privilege and drop ==="
+
+echo "== test create database privilege and drop object ==="
 echo "create role role1;" | $BENDSQL_CLIENT_CONNECT
 echo "grant create database on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
 echo "create user a identified by '123' with DEFAULT_ROLE='role1'" | $BENDSQL_CLIENT_CONNECT
@@ -163,6 +164,15 @@ echo "grant role role1 to a;" | $BENDSQL_CLIENT_CONNECT
 
 echo "drop database if exists c" | $BENDSQL_CLIENT_CONNECT
 echo "create database c" | $USER_A_CONNECT
+echo "create table c.t(id int)" | $USER_A_CONNECT
+
+echo "drop user if exists test" | $BENDSQL_CLIENT_CONNECT
+echo "create user test identified by '123'" | $BENDSQL_CLIENT_CONNECT
+echo "grant drop on c.t to test" | $BENDSQL_CLIENT_CONNECT
+export USER_TEST_CONNECT="bendsql --user=test --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+echo "drop table if exists c.t" | $USER_TEST_CONNECT
+echo "show tables from c" | $USER_A_CONNECT
+
 echo "drop database c" | $USER_A_CONNECT
 echo "show tables from c" | $USER_A_CONNECT
 echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
