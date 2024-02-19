@@ -160,11 +160,11 @@ impl Payload {
                     self.flush_type_column::<NumberType<NUM_TYPE>>(col_offset, state),
             }),
             DataType::Decimal(v) => match v {
-                crate::types::DecimalDataType::Decimal128(_) => {
-                    self.flush_type_column::<DecimalType<i128>>(col_offset, state)
+                crate::types::DecimalDataType::Decimal128(s) => {
+                    self.flush_decimal_column::<i128>(col_offset, state, s)
                 }
-                crate::types::DecimalDataType::Decimal256(_) => {
-                    self.flush_type_column::<DecimalType<i256>>(col_offset, state)
+                crate::types::DecimalDataType::Decimal256(s) => {
+                    self.flush_decimal_column::<i256>(col_offset, state, s)
                 }
             },
             DataType::Timestamp => self.flush_type_column::<TimestampType>(col_offset, state),
@@ -206,6 +206,22 @@ impl Payload {
         });
         let col = T::column_from_iter(iter, &[]);
         T::upcast_column(col)
+    }
+
+    fn flush_decimal_column<Num: Decimal>(
+        &self,
+        col_offset: usize,
+        state: &mut PayloadFlushState,
+        decimal_size: DecimalSize,
+    ) -> Column {
+        let len = state.probe_state.row_count;
+        let iter = (0..len).map(|idx| unsafe {
+            core::ptr::read::<<DecimalType<Num> as ValueType>::Scalar>(
+                state.addresses[idx].add(col_offset) as _,
+            )
+        });
+        let col = DecimalType::<Num>::column_from_iter(iter, &[]);
+        Num::upcast_column(col, decimal_size)
     }
 
     fn flush_binary_column(
