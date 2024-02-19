@@ -30,6 +30,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::ColumnBindingBuilder;
+use databend_common_sql::executor::adjust_plan_id;
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::DeleteSource;
 use databend_common_sql::executor::physical_plans::Exchange;
@@ -273,8 +274,7 @@ impl DeleteInterpreter {
                 ignore_exchange: false,
             });
         }
-
-        Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
+        let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             snapshot,
             table_info,
@@ -285,7 +285,9 @@ impl DeleteInterpreter {
             need_lock: false,
             deduplicated_label: None,
             plan_id: u32::MAX,
-        })))
+        }));
+        adjust_plan_id(&mut plan, &mut 0);
+        Ok(plan)
     }
 }
 

@@ -25,6 +25,7 @@ use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_sql::executor::adjust_plan_id;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::ReclusterSink;
@@ -246,8 +247,7 @@ pub fn build_recluster_physical_plan(
             ignore_exchange: false,
         });
     }
-
-    Ok(PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
+    let mut plan = PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
         input: Box::new(root),
         table_info,
         catalog_info,
@@ -256,5 +256,7 @@ pub fn build_recluster_physical_plan(
         removed_segment_indexes,
         removed_segment_summary,
         plan_id: u32::MAX,
-    })))
+    }));
+    adjust_plan_id(&mut plan, &mut 0);
+    Ok(plan)
 }
