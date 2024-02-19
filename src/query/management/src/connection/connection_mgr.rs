@@ -18,6 +18,7 @@ use databend_common_base::base::escape_for_key;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
@@ -60,26 +61,34 @@ impl ConnectionMgr {
 impl ConnectionApi for ConnectionMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_connection(&self, info: UserDefinedConnection) -> Result<u64> {
-        let seq = MatchSeq::Exact(0);
+    async fn add_connection(
+        &self,
+        info: UserDefinedConnection,
+        create_option: &CreateOption,
+    ) -> Result<()> {
         let val = Operation::Update(serialize_struct(
             &info,
             ErrorCode::IllegalConnection,
             || "",
         )?);
         let key = format!("{}/{}", self.connection_prefix, escape_for_key(&info.name)?);
-        let upsert_info = self
+        let seq = MatchSeq::from(*create_option);
+
+        let res = self
             .kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
+            .upsert_kv(UpsertKVReq::new(&key, seq, val, None))
+            .await?;
 
-        let res_seq = upsert_info.await?.added_seq_or_else(|_v| {
-            ErrorCode::ConnectionAlreadyExists(format!(
-                "Connection '{}' already exists.",
-                info.name
-            ))
-        })?;
+        if let CreateOption::CreateIfNotExists(false) = create_option {
+            if res.prev.is_some() {
+                return Err(ErrorCode::ConnectionAlreadyExists(format!(
+                    "Connection '{}' already exists.",
+                    info.name
+                )));
+            }
+        }
 
-        Ok(res_seq)
+        Ok(())
     }
 
     #[async_backtrace::framed]

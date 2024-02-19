@@ -355,7 +355,7 @@ impl PhysicalPlanBuilder {
         };
 
         Ok(PhysicalPlan::Window(Window {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             index: w.index,
             input: Box::new(input),
             func,

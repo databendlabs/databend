@@ -36,23 +36,34 @@
 
 **Databend** is an open-source, elastic, and workload-aware cloud data warehouse built in Rust, offering a cost-effective [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059). It's designed for complex analysis of the world's largest datasets.
 
+## ⚡ Performance
+
+<div align="center">
+  
+[TPC-H Benchmark: Databend Cloud vs. Snowflake](https://docs.databend.com/guides/benchmark/tpch)
+
+</div>
+
+![Databend vs. Snowflake](https://github.com/datafuselabs/wizard/assets/172204/d796acf0-0a66-4b1d-8754-cd2cd1de04c7)
+
+
 ## 🚀 Why Databend
 
-- **Cloud-Friendly**: Seamlessly integrates with various cloud storages like AWS S3, Azure Blob, Google Cloud, and more.
+- **Cloud-Native**: Integrates with AWS S3, Azure Blob, Google Cloud, and more.
 
-- **High Performance**: Built in Rust, utilizing SIMD and vectorized processing for rapid analytics. [See ClickBench](https://databend.com/blog/clickbench-databend-top).
+- **High Performance**: Rust-built, with cutting-edge, high-speed vectorized execution. 👉 [ClickBench](https://databend.com/blog/clickbench-databend-top).
 
-- **Cost-Efficient Elasticity**: Innovative design for separate scaling of storage and computation, optimizing both costs and performance.
+- **Cost-Effective**: Designed for scalable storage and computation, reducing costs while enhancing performance. 👉 [TPC-H](https://docs.databend.com/guides/benchmark/tpch).
 
-- **Easy Data Management**: Integrated data preprocessing during ingestion eliminates the need for external ETL tools.
+- **Data Simplification**: Streamlines data ingestion, no external ETL needed. 👉 [Data Loading](https://docs.databend.com/guides/load-data/).
 
-- **Data Version Control**: Offers Git-like multi-version storage, enabling easy data querying, cloning, and reverting from any point in time.
+- **Version Control**: Provides Git-like version control for data, allowing querying, cloning, and reverting at any point.
 
-- **Rich Data Support**: Handles diverse data formats and types, including JSON, CSV, Parquet, ARRAY, TUPLE, MAP, and JSON.
+- **Format Flexibility**: Supports multiple data formats and types, including JSON, CSV, Parquet, GEO, and more.
 
-- **AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://docs.databend.com/sql/sql-functions/ai-functions/).
+- **AI-Powered Analytics**: Enables advanced analytics with [AI Functions](https://docs.databend.com/guides/ai-functions/).
 
-- **Community-Driven**: Benefit from a friendly, growing community that offers an easy-to-use platform for all your cloud analytics.
+- **Community-Driven**: Join a welcoming community for a user-friendly cloud analytics experience.
 
 ## 📐 Architecture
 
@@ -80,15 +91,6 @@ docker run --net=host  datafuselabs/databend
 ## 🚀 Getting Started
 
 <details>
-<summary>Deploying Databend</summary>
-
-- [Understanding Deployment Modes](https://docs.databend.com/guides/deploy/understanding-deployment-modes)
-- [Deploying a Standalone Databend](https://docs.databend.com/guides/deploy/deploying-databend)
-- [Expanding a Standalone Databend](https://docs.databend.com/guides/deploy/expanding-to-a-databend-cluster)
-- [Databend Cloud (Beta)](https://docs.databend.com/guides/cloud)
-</details>
-
-<details>
 <summary>Connecting to Databend</summary>
 
 - [Connecting to Databend with BendSQL](https://docs.databend.com/guides/sql-clients/bendsql)
@@ -97,27 +99,35 @@ docker run --net=host  datafuselabs/databend
 </details>
 
 <details>
-<summary>Loading Data into Databend</summary>
+<summary>Data Import and Export</summary></summary>
 
-- [Loading Semi-structured Data](https://docs.databend.com/guides/load-data/load-semistructured/)
-- [Transforming Data During a Load](https://docs.databend.com/guides/load-data/transform/data-load-transform)
-- [Continuous Data Pipelines](https://docs.databend.com/guides/load-data/continuous-data-pipelines/)
-- [How to Unload Data from Databend](https://docs.databend.com/guides/unload-data/)
+- [How to load Parquet file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-parquet)
+- [How to export a table to Parquet file](https://docs.databend.com/guides/unload-data/unload-parquet)
+- [How to load CSV file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-csv)
+- [How to export a table to CSV file](https://docs.databend.com/guides/unload-data/unload-csv)
+- [How to load TSV file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-tsv)
+- [How to export a table to TSV file](https://docs.databend.com/guides/unload-data/unload-tsv)
+- [How to load NDJSON file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-ndjson)
+- [How to export a table to NDJSON file](https://docs.databend.com/guides/unload-data/unload-ndjson)
 
 </details>
 
 <details>
-<summary>Loading Data Tools with Databend</summary>
+<summary>Loading Data From Other Databases</summary>
 
-- [Apache Kafka](https://docs.databend.com/guides/load-data/load-db/kafka)
-- [Airbyte](https://docs.databend.com/guides/load-data/load-db/airbyte)
-- [dbt](https://docs.databend.com/guides/load-data/load-db/dbt)
-- [Debezium](https://docs.databend.com/guides/load-data/load-db/debezium)
-- [Apache Flink CDC](https://docs.databend.com/guides/load-data/load-db/flink-cdc)
-- [DataDog Vector](https://docs.databend.com/guides/load-data/load-db/vector)
-- [Addax](https://docs.databend.com/guides/load-data/load-db/addax)
-- [DataX](https://docs.databend.com/guides/load-data/load-db/datax)
+- [How to Sync Full and Incremental MySQL Changes into Databend](https://docs.databend.com/guides/load-data/load-db/debezium)
+- [How to Sync Full and Incremental PostgreSQL Changes into Databend](https://docs.databend.com/guides/load-data/load-db/flink-cdc)
+- [How to Sync Full and Incremental Oracle Changes into Databend](https://docs.databend.com/guides/load-data/load-db/flink-cdc)
+ 
+</details>
 
+<details>
+<summary>Querying Semi-structured Data</summary>
+
+- [How to query directly on Parquet file](https://docs.databend.com/guides/load-data/transform/querying-parquet)
+- [How to query directly on CSV file](https://docs.databend.com/guides/load-data/transform/querying-csv)
+- [How to query directly on TSV file](https://docs.databend.com/guides/load-data/transform/querying-tsv)
+- [How to query directly on NDJSON file](https://docs.databend.com/guides/load-data/transform/querying-ndjson)
 </details>
 
 <details>
@@ -193,19 +203,21 @@ docker run --net=host  datafuselabs/databend
 </details>
 
 <details>
-<summary>Data Governance</summary>
+<summary>Data Management</summary>
 
-- [How to Create Data Masking Policy](https://docs.databend.com/sql/sql-commands/ddl/mask-policy/create-mask-policy)
-- [How to Drop Data Masking Policy](https://docs.databend.com/sql/sql-commands/ddl/mask-policy/drop-mask-policy)
+- [Data Lifecycle in Databend](https://docs.databend.com/guides/data-management/data-lifecycle)
+- [Data Recovery in Databend](https://docs.databend.com/guides/data-management/data-recovery)
+- [Data Protection in Databend](https://docs.databend.com/guides/data-management/data-protection)
 
 </details>
 
 <details>
-<summary>Securing Databend</summary>
+<summary>Security</summary>
 
-- [How to Create Network Policy](https://docs.databend.com/sql/sql-commands/ddl/network-policy/ddl-create-policy)
-- [How to Drop Network Policy](https://docs.databend.com/sql/sql-commands/ddl/network-policy/ddl-drop-policy)
-- [How to Alter Network Policy](https://docs.databend.com/sql/sql-commands/ddl/network-policy/ddl-alter-policy)
+- [Access Control](https://docs.databend.com/guides/security/access-control)
+- [Masking Policy](https://docs.databend.com/guides/security/masking-policy)
+- [Network Policy](https://docs.databend.com/guides/security/network-policy)
+- [Password Policy](https://docs.databend.com/guides/security/password-policy)
 
 </details>
 
@@ -217,15 +229,14 @@ docker run --net=host  datafuselabs/databend
   
 </details>
 
-
 ## 🤝 Contributing
 
 Databend thrives on community contributions! Whether it's through ideas, code, or documentation, every effort helps in enhancing our project. As a token of our appreciation, once your code is merged, your name will be eternally preserved in the **system.contributors** table.
 
 Here are some resources to help you get started:
 
-- [Building Databend From Source](https://docs.databend.com/guides/overview/community/contributor/building-from-source)
-- [The First Good Pull Request](https://docs.databend.com/guides/overview/community/contributor/good-pr)
+- [Building Databend From Source](https://docs.databend.com/guides/community/contributor/building-from-source)
+- [The First Good Pull Request](https://docs.databend.com/guides/community/contributor/good-pr)
 
 
 ## 👥 Community

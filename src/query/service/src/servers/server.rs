@@ -58,7 +58,7 @@ impl ShutdownHandle {
         let mut shutdown_jobs = vec![];
         for (name, service) in &mut self.services {
             shutdown_jobs.push(async move {
-                info!("Stop {} service", name);
+                info!("Stopping {} service", name);
                 service.shutdown(graceful).await;
                 info!("Stopped {} service", name);
             });

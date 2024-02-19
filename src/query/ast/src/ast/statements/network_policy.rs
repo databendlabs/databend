@@ -15,9 +15,11 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_meta_app::schema::CreateOption;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateNetworkPolicyStmt {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name: String,
     pub allowed_ip_list: Vec<String>,
     pub blocked_ip_list: Option<Vec<String>>,
@@ -26,9 +28,15 @@ pub struct CreateNetworkPolicyStmt {
 
 impl Display for CreateNetworkPolicyStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE NETWORK POLICY ")?;
-        if self.if_not_exists {
-            write!(f, "IF NOT EXISTS ")?;
+        write!(f, "CREATE ")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, "OR REPLACE ")?;
+        }
+        write!(f, "NETWORK POLICY ")?;
+        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
+            if if_not_exists {
+                write!(f, "IF NOT EXISTS ")?;
+            }
         }
         write!(f, "{}", self.name)?;
         write!(f, " ALLOWED_IP_LIST = (")?;

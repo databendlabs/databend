@@ -81,10 +81,7 @@ impl StageApi for StageMgr {
             || "",
         )?);
 
-        let seq = match create_option {
-            CreateOption::CreateIfNotExists(_) => MatchSeq::Exact(0),
-            CreateOption::CreateOrReplace => MatchSeq::GE(0),
-        };
+        let seq = MatchSeq::from(*create_option);
 
         let res = self
             .kv_api

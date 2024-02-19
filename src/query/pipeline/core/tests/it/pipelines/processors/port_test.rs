@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::sync::Barrier;
 
+use databend_common_base::runtime::Thread;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
@@ -115,8 +116,8 @@ async fn test_input_and_output_port() -> Result<()> {
         let barrier = Arc::new(Barrier::new(2));
 
         connect(&input, &output);
-        let thread_1 = std::thread::spawn(input_port(input, barrier.clone()));
-        let thread_2 = std::thread::spawn(output_port(output, barrier));
+        let thread_1 = Thread::spawn(input_port(input, barrier.clone()));
+        let thread_2 = Thread::spawn(output_port(output, barrier));
 
         thread_1.join().unwrap();
         thread_2.join().unwrap();

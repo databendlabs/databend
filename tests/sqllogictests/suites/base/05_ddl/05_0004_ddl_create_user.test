@@ -69,3 +69,18 @@ DROP USER IF EXISTS 'test-e'
 
 statement ok
 DROP USER IF EXISTS 'test-f'
+
+statement ok
+DROP USER IF EXISTS 'test-replace'
+
+statement error 1005
+CREATE OR REPLACE USER IF NOT EXISTS 'test-replace' IDENTIFIED BY 'password';
+
+statement ok
+CREATE OR REPLACE USER 'test-replace' IDENTIFIED BY 'password';
+
+statement ok
+CREATE OR REPLACE USER 'test-replace' IDENTIFIED BY '123' WITH DEFAULT_ROLE = role1;
+
+statement ok
+DROP USER IF EXISTS 'test-replace'

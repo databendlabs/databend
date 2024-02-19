@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::schema::CreateOption;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum StreamNavigation {
     AtStream { database: String, name: String },
@@ -19,7 +21,7 @@ pub enum StreamNavigation {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateStreamPlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub tenant: String,
     pub catalog: String,
     pub database: String,

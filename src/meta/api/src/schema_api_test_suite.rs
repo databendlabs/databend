@@ -28,6 +28,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
+use databend_common_meta_app::data_mask::DatamaskId;
+use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::DatamaskNameIdent;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
@@ -64,6 +66,7 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
@@ -1758,7 +1761,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -1787,7 +1790,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
             let want = TableInfo {
                 ident: tb_ident_2,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                desc: format!("'{}'.'{}'", db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -1824,7 +1827,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
             let want = TableInfo {
                 ident: tb_ident_2,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                desc: format!("'{}'.'{}'", db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -2246,7 +2249,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db1_name, tb3_name).into()).await?;
             let want = TableInfo {
                 ident: tb_ident,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db1_name, tb3_name),
+                desc: format!("'{}'.'{}'", db1_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -2382,7 +2385,7 @@ impl SchemaApiTestSuite {
             let got = mt.get_table((tenant, db2_name, tb3_name).into()).await?;
             let want = TableInfo {
                 ident: tb_ident2,
-                desc: format!("'{}'.'{}'.'{}'", tenant, db2_name, tb3_name),
+                desc: format!("'{}'.'{}'", db2_name, tb3_name),
                 name: tb3_name.into(),
                 meta: table_meta(created_on),
                 tenant: tenant.to_string(),
@@ -2464,7 +2467,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -2731,7 +2734,7 @@ impl SchemaApiTestSuite {
         info!("--- create mask policy");
         {
             let req = CreateDatamaskReq {
-                if_not_exists: true,
+                create_option: CreateOption::CreateIfNotExists(true),
                 name: DatamaskNameIdent {
                     tenant: tenant.to_string(),
                     name: mask_name_1.to_string(),
@@ -2745,7 +2748,7 @@ impl SchemaApiTestSuite {
             mt.create_data_mask(req).await?;
 
             let req = CreateDatamaskReq {
-                if_not_exists: true,
+                create_option: CreateOption::CreateIfNotExists(true),
                 name: DatamaskNameIdent {
                     tenant: tenant.to_string(),
                     name: mask_name_2.to_string(),
@@ -2978,6 +2981,50 @@ impl SchemaApiTestSuite {
             assert!(id_list.is_err())
         }
 
+        info!("--- create or replace mask policy");
+        {
+            let mask_name = "replace_mask";
+            let name = DatamaskNameIdent {
+                tenant: tenant.to_string(),
+                name: mask_name.to_string(),
+            };
+            let req = CreateDatamaskReq {
+                create_option: CreateOption::CreateIfNotExists(true),
+                name: name.clone(),
+                args: vec![],
+                return_type: "".to_string(),
+                body: "".to_string(),
+                comment: Some("before".to_string()),
+                create_on: created_on,
+            };
+            mt.create_data_mask(req).await?;
+            let old_id: u64 = get_kv_u64_data(mt.as_kv_api(), &name).await?;
+            let id_key = DatamaskId { id: old_id };
+            let meta: DatamaskMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+            assert_eq!(meta.comment, Some("before".to_string()));
+
+            let req = CreateDatamaskReq {
+                create_option: CreateOption::CreateOrReplace,
+                name: name.clone(),
+                args: vec![],
+                return_type: "".to_string(),
+                body: "".to_string(),
+                comment: Some("after".to_string()),
+                create_on: created_on,
+            };
+            mt.create_data_mask(req).await?;
+
+            // assert old id key has been deleted
+            let meta: Result<DatamaskMeta, KVAppError> = get_kv_data(mt.as_kv_api(), &id_key).await;
+            assert!(meta.is_err());
+
+            let id: u64 = get_kv_u64_data(mt.as_kv_api(), &name).await?;
+            assert_ne!(old_id, id);
+            let id_key = DatamaskId { id };
+            let meta: DatamaskMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+            assert_eq!(meta.comment, Some("after".to_string()));
+        }
+
         Ok(())
     }
 
@@ -3053,7 +3100,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -3639,7 +3686,7 @@ impl SchemaApiTestSuite {
         }
 
         let agg_index_create_req = CreateIndexReq {
-            if_not_exists: true,
+            create_option: CreateOption::CreateIfNotExists(true),
             name_ident: IndexNameIdent {
                 tenant: tenant.to_string(),
                 index_name: idx1_name.to_string(),
@@ -4173,9 +4220,9 @@ impl SchemaApiTestSuite {
             assert_eq!(sort_drop_ids, drop_ids_1);
 
             let expected: BTreeSet<String> = [
-                "'tenant1'.'db1'.'tb1'".to_string(),
-                "'tenant1'.'db2'.'tb1'".to_string(),
-                "'tenant1'.'db3'.'tb1'".to_string(),
+                "'db1'.'tb1'".to_string(),
+                "'db2'.'tb1'".to_string(),
+                "'db3'.'tb1'".to_string(),
             ]
             .iter()
             .cloned()
@@ -4205,12 +4252,12 @@ impl SchemaApiTestSuite {
             assert_eq!(sort_drop_ids, drop_ids_2);
 
             let expected: BTreeSet<String> = [
-                "'tenant1'.'db1'.'tb1'".to_string(),
-                "'tenant1'.'db2'.'tb1'".to_string(),
-                "'tenant1'.'db2'.'tb2'".to_string(),
-                "'tenant1'.'db2'.'tb3'".to_string(),
-                "'tenant1'.'db3'.'tb1'".to_string(),
-                "'tenant1'.'db3'.'tb2'".to_string(),
+                "'db1'.'tb1'".to_string(),
+                "'db2'.'tb1'".to_string(),
+                "'db2'.'tb2'".to_string(),
+                "'db2'.'tb3'".to_string(),
+                "'db3'.'tb1'".to_string(),
+                "'db3'.'tb2'".to_string(),
             ]
             .iter()
             .cloned()
@@ -4518,7 +4565,10 @@ impl SchemaApiTestSuite {
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
             }]);
@@ -4557,7 +4607,10 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
             }]);
@@ -4582,7 +4635,10 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
             }]);
@@ -4614,7 +4670,10 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
             }]);
@@ -4644,7 +4703,10 @@ impl SchemaApiTestSuite {
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 1,
             }]);
@@ -4674,7 +4736,10 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 2,
                 non_drop_on_cnt: 0,
             }]);
@@ -4699,7 +4764,10 @@ impl SchemaApiTestSuite {
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: tbl_name.to_string(),
-                desc: tbl_name_ident.to_string(),
+                desc: format!(
+                    "'{}'.'{}'",
+                    tbl_name_ident.db_name, tbl_name_ident.table_name
+                ),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 1,
             }]);
@@ -4741,13 +4809,19 @@ impl SchemaApiTestSuite {
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
                     name: tbl_name.to_string(),
-                    desc: tbl_name_ident.to_string(),
+                    desc: format!(
+                        "'{}'.'{}'",
+                        tbl_name_ident.db_name, tbl_name_ident.table_name
+                    ),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
                     name: new_tbl_name.to_string(),
-                    desc: new_tbl_name_ident.to_string(),
+                    desc: format!(
+                        "'{}'.'{}'",
+                        new_tbl_name_ident.db_name, new_tbl_name_ident.table_name
+                    ),
                     drop_on_cnt: 0,
                     non_drop_on_cnt: 1,
                 },
@@ -4781,13 +4855,19 @@ impl SchemaApiTestSuite {
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
                     name: tbl_name.to_string(),
-                    desc: tbl_name_ident.to_string(),
+                    desc: format!(
+                        "'{}'.'{}'",
+                        tbl_name_ident.db_name, tbl_name_ident.table_name
+                    ),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
                     name: new_tbl_name.to_string(),
-                    desc: new_tbl_name_ident.to_string(),
+                    desc: format!(
+                        "'{}'.'{}'",
+                        new_tbl_name_ident.db_name, new_tbl_name_ident.table_name
+                    ),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
                 },
@@ -4817,13 +4897,19 @@ impl SchemaApiTestSuite {
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
                     name: tbl_name.to_string(),
-                    desc: tbl_name_ident.to_string(),
+                    desc: format!(
+                        "'{}'.'{}'",
+                        tbl_name_ident.db_name, tbl_name_ident.table_name
+                    ),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
                 },
                 DroponInfo {
                     name: new_tbl_name.to_string(),
-                    desc: new_tbl_name_ident.to_string(),
+                    desc: format!(
+                        "'{}'.'{}'",
+                        new_tbl_name_ident.db_name, new_tbl_name_ident.table_name
+                    ),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
@@ -4904,7 +4990,7 @@ impl SchemaApiTestSuite {
 
                 let want = TableInfo {
                     ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                     tenant: tenant.to_string(),
@@ -5704,7 +5790,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create index");
             let req = CreateIndexReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -5713,7 +5799,7 @@ impl SchemaApiTestSuite {
             index_id = res.index_id;
 
             let req = CreateIndexReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: name_ident_2.clone(),
                 meta: index_meta_2.clone(),
             };
@@ -5724,7 +5810,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create index again with if_not_exists = false");
             let req = CreateIndexReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -5739,7 +5825,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create index again with if_not_exists = true");
             let req = CreateIndexReq {
-                if_not_exists: true,
+                create_option: CreateOption::CreateIfNotExists(true),
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -5856,6 +5942,59 @@ impl SchemaApiTestSuite {
             assert!(res.is_ok())
         }
 
+        // create or replace index
+        {
+            info!("--- create or replace index");
+            let replace_index_name = "replace_idx";
+            let replace_name_ident = IndexNameIdent {
+                tenant: tenant.to_string(),
+                index_name: replace_index_name.to_string(),
+            };
+            let req = CreateIndexReq {
+                create_option: CreateOption::CreateIfNotExists(false),
+                name_ident: replace_name_ident.clone(),
+                meta: index_meta_1.clone(),
+            };
+
+            let get_req = GetIndexReq {
+                name_ident: replace_name_ident.clone(),
+            };
+
+            let res = mt.create_index(req).await?;
+            let old_index_id = res.index_id;
+            let old_index_id_key = IndexId {
+                index_id: old_index_id,
+            };
+            let meta: IndexMeta = get_kv_data(mt.as_kv_api(), &old_index_id_key).await?;
+            assert_eq!(meta, index_meta_1);
+
+            let resp = mt.get_index(get_req.clone()).await?;
+
+            assert_eq!(resp.index_meta, index_meta_1);
+
+            let req = CreateIndexReq {
+                create_option: CreateOption::CreateOrReplace,
+                name_ident: replace_name_ident.clone(),
+                meta: index_meta_2.clone(),
+            };
+
+            let res = mt.create_index(req).await?;
+
+            // assert old index id key has been deleted
+            let meta: IndexMeta = get_kv_data(mt.as_kv_api(), &old_index_id_key).await?;
+            assert!(meta.dropped_on.is_some());
+
+            // assert new index id key has been created
+            let index_id = res.index_id;
+            let index_id_key = IndexId { index_id };
+            let meta: IndexMeta = get_kv_data(mt.as_kv_api(), &index_id_key).await?;
+            assert_eq!(meta, index_meta_2);
+
+            let resp = mt.get_index(get_req).await?;
+
+            assert_eq!(resp.index_meta, index_meta_2);
+        }
+
         Ok(())
     }
 
@@ -5893,7 +6032,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create virtual column");
             let req = CreateVirtualColumnReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
@@ -5902,7 +6041,7 @@ impl SchemaApiTestSuite {
 
             info!("--- create virtual column again");
             let req = CreateVirtualColumnReq {
-                if_not_exists: false,
+                create_option: CreateOption::CreateIfNotExists(false),
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
@@ -5991,6 +6130,46 @@ impl SchemaApiTestSuite {
 
             let res = mt.update_virtual_column(req).await;
             assert!(res.is_err());
+        }
+
+        {
+            info!("--- create or replace virtual column");
+            let req = CreateVirtualColumnReq {
+                create_option: CreateOption::CreateIfNotExists(false),
+                name_ident: name_ident.clone(),
+                virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
+            };
+
+            let _res = mt.create_virtual_column(req.clone()).await?;
+
+            let req = ListVirtualColumnsReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+            };
+
+            let res = mt.list_virtual_columns(req).await?;
+            assert_eq!(1, res.len());
+            assert_eq!(res[0].virtual_columns, vec![
+                "variant:k1".to_string(),
+                "variant[1]".to_string(),
+            ]);
+
+            let req = CreateVirtualColumnReq {
+                create_option: CreateOption::CreateOrReplace,
+                name_ident: name_ident.clone(),
+                virtual_columns: vec!["variant:k2".to_string()],
+            };
+
+            let _res = mt.create_virtual_column(req.clone()).await?;
+
+            let req = ListVirtualColumnsReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+            };
+
+            let res = mt.list_virtual_columns(req).await?;
+            assert_eq!(1, res.len());
+            assert_eq!(res[0].virtual_columns, vec!["variant:k2".to_string(),]);
         }
 
         Ok(())

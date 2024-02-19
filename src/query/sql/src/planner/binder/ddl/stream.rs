@@ -40,7 +40,7 @@ impl Binder {
         stmt: &CreateStreamStmt,
     ) -> Result<Plan> {
         let CreateStreamStmt {
-            if_not_exists,
+            create_option,
             catalog,
             database,
             stream,
@@ -73,7 +73,7 @@ impl Binder {
         });
 
         let plan = CreateStreamPlan {
-            if_not_exists: *if_not_exists,
+            create_option: *create_option,
             tenant,
             catalog,
             database,

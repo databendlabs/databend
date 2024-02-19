@@ -58,7 +58,6 @@ databend-storages-common-table-meta = { path = "../query/storages/common/table_m
 # Crates.io dependencies
 anyerror = { workspace = true }
 anyhow = { workspace = true }
-async-backtrace = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 futures = { workspace = true }

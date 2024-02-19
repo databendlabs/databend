@@ -28,10 +28,7 @@ impl PipelineBuilder {
         )?;
 
         // add profile
-        let scopes = self.main_pipeline.get_scopes();
-        build_res
-            .main_pipeline
-            .reset_scopes(scopes[..scopes.len() - 1].to_vec());
+        build_res.main_pipeline.reset_scopes(&self.main_pipeline);
         // add sharing data
         self.join_state = build_res.builder_data.input_join_state;
         self.merge_into_probe_data_fields = build_res.builder_data.input_probe_schema;

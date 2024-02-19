@@ -33,7 +33,7 @@ impl Binder {
         stmt: &CreateViewStmt,
     ) -> Result<Plan> {
         let CreateViewStmt {
-            if_not_exists,
+            create_option,
             catalog,
             database,
             view,
@@ -55,7 +55,7 @@ impl Binder {
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
-            if_not_exists: *if_not_exists,
+            create_option: *create_option,
             tenant,
             catalog,
             database,

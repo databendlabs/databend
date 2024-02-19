@@ -203,5 +203,34 @@ WITH tq9v2(cHAx0) AS materialized (SELECT a AS cHAx0 FROM test) SELECT b from te
 a
 b
 
+# merge into use materialized cte.
+statement ok
+set enable_experimental_merge_into = 1;
+
+statement ok
+create table target_table(a int, b string);
+
+statement ok
+insert into target_table values(1, 's');
+
+query TT
+merge into target_table using(with t1 AS materialized (SELECT a, b from test), t2 as materialized (select number, 'a' from numbers(2)) 
+select * from t1 union select * from t2) as source_table on target_table.a = source_table.a when matched then update * when not matched then insert *;
+----
+2 1
+
+query IT
+select a, b from target_table order by a;
+----
+0 a
+1 a
+2 b
+
+statement ok
+drop table target_table all;
+
+statement ok
+set enable_experimental_merge_into = 0;
+
 statement ok
 drop table test

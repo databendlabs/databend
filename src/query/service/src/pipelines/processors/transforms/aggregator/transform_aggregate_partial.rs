@@ -369,9 +369,12 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
         Ok(vec![])
     }
 
-    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
+    fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
         Ok(match std::mem::take(&mut self.hash_table) {
-            HashTable::MovedOut => unreachable!(),
+            HashTable::MovedOut => match !output && std::thread::panicking() {
+                true => vec![],
+                false => unreachable!(),
+            },
             HashTable::HashTable(v) => match v.hashtable.len() == 0 {
                 true => vec![],
                 false => vec![DataBlock::empty_with_meta(

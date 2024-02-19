@@ -919,18 +919,35 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 "get_index_seq_id"
             );
 
-            if index_id_seq > 0 {
-                return if req.if_not_exists {
-                    Ok(CreateIndexReply { index_id })
+            let mut condition = vec![];
+            let mut if_then = vec![];
+
+            let (_, index_id_seq) = if index_id_seq > 0 {
+                if let CreateOption::CreateIfNotExists(if_not_exists) = req.create_option {
+                    return if if_not_exists {
+                        Ok(CreateIndexReply { index_id })
+                    } else {
+                        Err(KVAppError::AppError(AppError::IndexAlreadyExists(
+                            IndexAlreadyExists::new(
+                                &tenant_index.index_name,
+                                format!("create index with tenant: {}", tenant_index.tenant),
+                            ),
+                        )))
+                    };
                 } else {
-                    Err(KVAppError::AppError(AppError::IndexAlreadyExists(
-                        IndexAlreadyExists::new(
-                            &tenant_index.index_name,
-                            format!("create index with tenant: {}", tenant_index.tenant),
-                        ),
-                    )))
-                };
-            }
+                    construct_drop_index_txn_operations(
+                        self,
+                        tenant_index,
+                        false,
+                        false,
+                        &mut condition,
+                        &mut if_then,
+                    )
+                    .await?
+                }
+            } else {
+                (0, 0)
+            };
 
             // Create index by inserting these record:
             // (tenant, index_name) -> index_id
@@ -948,15 +965,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             {
-                let condition = vec![
-                    txn_cond_seq(tenant_index, Eq, 0),
+                condition.extend(vec![
+                    txn_cond_seq(tenant_index, Eq, index_id_seq),
                     txn_cond_seq(&id_to_name_key, Eq, 0),
-                ];
-                let if_then = vec![
+                ]);
+                if_then.extend(vec![
                     txn_op_put(tenant_index, serialize_u64(index_id)?), /* (tenant, index_name) -> index_id */
                     txn_op_put(&id_key, serialize_struct(&req.meta)?),  // (index_id) -> index_meta
                     txn_op_put(&id_to_name_key, serialize_struct(tenant_index)?), /* __fd_index_id_to_name/<index_id> -> (tenant,index_name) */
-                ];
+                ]);
 
                 let txn_req = TxnRequest {
                     condition,
@@ -991,47 +1008,21 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let res = get_index_or_err(self, tenant_index).await?;
+            let mut condition = vec![];
+            let mut if_then = vec![];
 
-            let (index_id_seq, index_id, index_meta_seq, index_meta) = res;
-
+            let (index_id, index_id_seq) = construct_drop_index_txn_operations(
+                self,
+                tenant_index,
+                req.if_exists,
+                true,
+                &mut condition,
+                &mut if_then,
+            )
+            .await?;
             if index_id_seq == 0 {
-                return if req.if_exists {
-                    Ok(DropIndexReply {})
-                } else {
-                    return Err(KVAppError::AppError(AppError::UnknownIndex(
-                        UnknownIndex::new(&tenant_index.index_name, "drop_index"),
-                    )));
-                };
+                return Ok(DropIndexReply {});
             }
-
-            let index_id_key = IndexId { index_id };
-            // Safe unwrap(): index_meta_seq > 0 implies index_meta is not None.
-            let mut index_meta = index_meta.unwrap();
-
-            debug!(index_id = index_id, name_key = as_debug!(tenant_index); "drop_index");
-
-            // drop an index with drop time
-            if index_meta.dropped_on.is_some() {
-                return Err(KVAppError::AppError(AppError::DropIndexWithDropTime(
-                    DropIndexWithDropTime::new(&tenant_index.index_name),
-                )));
-            }
-            // update drop on time
-            index_meta.dropped_on = Some(Utc::now());
-
-            // Delete index by these operations:
-            // del (tenant, index_name) -> index_id
-            // set index_meta.drop_on = now and update (index_id) -> index_meta
-            let condition = vec![
-                txn_cond_seq(tenant_index, Eq, index_id_seq),
-                txn_cond_seq(&index_id_key, Eq, index_meta_seq),
-            ];
-
-            let if_then = vec![
-                txn_op_del(tenant_index), // (tenant, index_name) -> index_id
-                txn_op_put(&index_id_key, serialize_struct(&index_meta)?), /* (index_id) -> index_meta */
-            ];
 
             let txn_req = TxnRequest {
                 condition,
@@ -1258,6 +1249,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<CreateVirtualColumnReply, KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
+        let ctx = func_name!();
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
@@ -1265,21 +1257,36 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (_, old_virtual_column_opt): (_, Option<VirtualColumnMeta>) =
                 get_pb_value(self, &req.name_ident).await?;
 
-            if old_virtual_column_opt.is_some() {
-                if req.if_not_exists {
-                    return Ok(CreateVirtualColumnReply {});
-                } else {
-                    return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
-                        VirtualColumnAlreadyExists::new(
-                            req.name_ident.table_id,
-                            format!(
-                                "create virtual column with tenant: {} table_id: {}",
-                                req.name_ident.tenant, req.name_ident.table_id
+            let mut if_then = vec![];
+            let seq = if old_virtual_column_opt.is_some() {
+                if let CreateOption::CreateIfNotExists(if_not_exists) = req.create_option {
+                    if if_not_exists {
+                        return Ok(CreateVirtualColumnReply {});
+                    } else {
+                        return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
+                            VirtualColumnAlreadyExists::new(
+                                req.name_ident.table_id,
+                                format!(
+                                    "create virtual column with tenant: {} table_id: {}",
+                                    req.name_ident.tenant, req.name_ident.table_id
+                                ),
                             ),
-                        ),
-                    )));
+                        )));
+                    }
+                } else {
+                    construct_drop_virtual_column_txn_operations(
+                        self,
+                        &req.name_ident,
+                        false,
+                        false,
+                        ctx,
+                        &mut if_then,
+                    )
+                    .await?
                 }
-            }
+            } else {
+                0
+            };
             let virtual_column_meta = VirtualColumnMeta {
                 table_id: req.name_ident.table_id,
                 virtual_columns: req.virtual_columns.clone(),
@@ -1290,11 +1297,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // Create virtual column by inserting this record:
             // (tenant, table_id) -> virtual_column_meta
             {
-                let condition = vec![txn_cond_seq(&req.name_ident, Eq, 0)];
-                let if_then = vec![txn_op_put(
+                let condition = vec![txn_cond_seq(&req.name_ident, Eq, seq)];
+                if_then.push(txn_op_put(
                     &req.name_ident,
                     serialize_struct(&virtual_column_meta)?,
-                )];
+                ));
 
                 let txn_req = TxnRequest {
                     condition,
@@ -1396,35 +1403,36 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            if let Err(err) = get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await {
-                if req.if_exists {
-                    return Ok(DropVirtualColumnReply {});
-                } else {
-                    return Err(err);
-                }
+            let mut if_then = vec![];
+            let seq = construct_drop_virtual_column_txn_operations(
+                self,
+                &req.name_ident,
+                req.if_exists,
+                true,
+                ctx,
+                &mut if_then,
+            )
+            .await?;
+            if seq == 0 {
+                return Ok(DropVirtualColumnReply {});
             }
 
-            // Drop virtual column by deleting this record:
-            // (tenant, table_id) -> virtual_column_meta
-            {
-                let if_then = vec![txn_op_del(&req.name_ident)];
-                let txn_req = TxnRequest {
-                    condition: vec![],
-                    if_then,
-                    else_then: vec![],
-                };
+            let txn_req = TxnRequest {
+                condition: vec![],
+                if_then,
+                else_then: vec![],
+            };
 
-                let (succ, _responses) = send_txn(self, txn_req).await?;
+            let (succ, _responses) = send_txn(self, txn_req).await?;
 
-                debug!(
-                    "req.name_ident" = as_debug!(&req.name_ident),
-                    succ = succ;
-                    "drop_virtual_column"
-                );
+            debug!(
+                "name_ident" = as_debug!(&req.name_ident),
+                succ = succ;
+                "drop_virtual_column"
+            );
 
-                if succ {
-                    break;
-                }
+            if succ {
+                break;
             }
         }
 
@@ -1625,7 +1633,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         };
                     } else {
                         // create or replace
-                        drop_table_by_id(
+                        construct_drop_table_txn_operations(
                             self,
                             req.name_ident.table_name.clone(),
                             req.name_ident.tenant.clone(),
@@ -1735,11 +1743,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         table_id,
                         new_table: tb_id_seq == 0,
                         spec_vec: if let Some((spec_vec, mut_share_table_info)) = opt.0 {
-                            if spec_vec.is_empty() {
-                                None
-                            } else {
-                                Some((spec_vec, mut_share_table_info))
-                            }
+                            Some((spec_vec, mut_share_table_info))
                         } else {
                             None
                         },
@@ -2200,7 +2204,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 table_id: tbid.table_id,
                 seq: tb_meta_seq,
             },
-            desc: tenant_dbname_tbname.to_string(),
+            desc: format!(
+                "'{}'.'{}'",
+                tenant_dbname.db_name, tenant_dbname_tbname.table_name
+            ),
             name: tenant_dbname_tbname.table_name.clone(),
             // Safe unwrap() because: tb_meta_seq > 0
             meta: tb_meta.unwrap(),
@@ -2323,7 +2330,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                                 table_id,
                                 seq: tb_meta_seq,
                             },
-                            desc: tenant_dbname_tbname.to_string(),
+                            desc: format!(
+                                "'{}'.'{}'",
+                                tenant_dbname.db_name, tenant_dbname_tbname.table_name
+                            ),
                             name: table_id_list_key.table_name.clone(),
                             meta: tb_meta,
                             tenant: tenant_dbname.tenant.clone(),
@@ -2453,7 +2463,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut condition = vec![];
             let mut if_then = vec![];
 
-            let opt = drop_table_by_id(
+            let opt = construct_drop_table_txn_operations(
                 self,
                 req.table_name.clone(),
                 req.tenant.clone(),
@@ -2466,6 +2476,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 &mut if_then,
             )
             .await?;
+            // seq == 0 means that req.if_exists == true and cannot find table meta,
+            // in this case just return directly
+            if opt.1 == 0 {
+                return Ok(DropTableReply { spec_vec: None });
+            }
             let txn_req = TxnRequest {
                 condition,
                 if_then,
@@ -2483,11 +2498,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             if succ {
                 return Ok(DropTableReply {
                     spec_vec: if let Some((spec_vec, mut_share_table_info)) = opt.0 {
-                        if spec_vec.is_empty() {
-                            None
-                        } else {
-                            Some((spec_vec, mut_share_table_info))
-                        }
+                        Some((spec_vec, mut_share_table_info))
                     } else {
                         None
                     },
@@ -3797,7 +3808,93 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     }
 }
 
-async fn drop_table_by_id(
+async fn construct_drop_virtual_column_txn_operations(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    name_ident: &VirtualColumnNameIdent,
+    drop_if_exists: bool,
+    if_delete: bool,
+    ctx: &str,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<u64, KVAppError> {
+    let res = get_virtual_column_by_id_or_err(kv_api, name_ident, ctx).await;
+    let seq = if let Err(err) = res {
+        if drop_if_exists {
+            return Ok(0);
+        } else {
+            return Err(err);
+        }
+    } else {
+        res.unwrap().0
+    };
+
+    // Drop virtual column by deleting this record:
+    // (tenant, table_id) -> virtual_column_meta
+    if if_delete {
+        if_then.push(txn_op_del(name_ident));
+    }
+
+    debug!(
+        "name_ident" = as_debug!(&name_ident),
+        ctx = ctx;
+        "construct_drop_virtual_column_txn_operations"
+    );
+
+    Ok(seq)
+}
+
+async fn construct_drop_index_txn_operations(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    tenant_index: &IndexNameIdent,
+    drop_if_exists: bool,
+    if_delete: bool,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<(u64, u64), KVAppError> {
+    let res = get_index_or_err(kv_api, tenant_index).await?;
+
+    let (index_id_seq, index_id, index_meta_seq, index_meta) = res;
+
+    if index_id_seq == 0 {
+        return if drop_if_exists {
+            Ok((index_id, index_id_seq))
+        } else {
+            return Err(KVAppError::AppError(AppError::UnknownIndex(
+                UnknownIndex::new(&tenant_index.index_name, "drop_index"),
+            )));
+        };
+    }
+
+    let index_id_key = IndexId { index_id };
+    // Safe unwrap(): index_meta_seq > 0 implies index_meta is not None.
+    let mut index_meta = index_meta.unwrap();
+
+    debug!(index_id = index_id, name_key = as_debug!(tenant_index); "drop_index");
+
+    // drop an index with drop time
+    if index_meta.dropped_on.is_some() {
+        return Err(KVAppError::AppError(AppError::DropIndexWithDropTime(
+            DropIndexWithDropTime::new(&tenant_index.index_name),
+        )));
+    }
+    // update drop on time
+    index_meta.dropped_on = Some(Utc::now());
+
+    // Delete index by these operations:
+    // del (tenant, index_name) -> index_id
+    // set index_meta.drop_on = now and update (index_id) -> index_meta
+    condition.push(txn_cond_seq(&index_id_key, Eq, index_meta_seq));
+    // (index_id) -> index_meta
+    if_then.push(txn_op_put(&index_id_key, serialize_struct(&index_meta)?));
+    if if_delete {
+        condition.push(txn_cond_seq(tenant_index, Eq, index_id_seq));
+        // (tenant, index_name) -> index_id
+        if_then.push(txn_op_del(tenant_index));
+    }
+
+    Ok((index_id, index_id_seq))
+}
+
+async fn construct_drop_table_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_name: String,
     tenant: String,
@@ -3981,7 +4078,11 @@ async fn drop_table_by_id(
             ));
         }
     }
-    Ok((Some((spec_vec, mut_share_table_info)), tb_id_seq))
+    if spec_vec.is_empty() {
+        Ok((None, tb_id_seq))
+    } else {
+        Ok((Some((spec_vec, mut_share_table_info)), tb_id_seq))
+    }
 }
 
 async fn drop_database_meta(
@@ -4544,7 +4645,10 @@ async fn batch_filter_table_info(
                 table_id,
                 seq: *tb_meta_seq,
             },
-            desc: tenant_dbname_tbname.to_string(),
+            desc: format!(
+                "'{}'.'{}'",
+                tenant_dbname.db_name, tenant_dbname_tbname.table_name
+            ),
             name: table_name.clone(),
             meta: tb_meta,
             tenant: tenant_dbname.tenant.clone(),

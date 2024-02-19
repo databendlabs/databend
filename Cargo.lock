@@ -752,13 +752,13 @@ dependencies = [
 
 [[package]]
 name = "async-trait-fn"
-version = "0.1.66"
+version = "0.1.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e50b5d93114c4fe54a90adba208ea9fc5e4e6a26d7048b4df11ddaaec3635b31"
+checksum = "ef97d6b362bc7a2e21e1f049d3da2d67cf501cf04086bc2d85adf5892c7a3d6e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.46",
 ]
 
 [[package]]
@@ -2283,7 +2283,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "async-backtrace",
  "chrono",
  "clap 4.4.2",
  "databend-common-base",
@@ -2769,8 +2768,8 @@ dependencies = [
  "sha1",
  "sha2",
  "simdutf8",
+ "simple_hll",
  "siphasher",
- "streaming_algorithms",
  "strength_reduce",
  "stringslice",
  "twox-hash",
@@ -2877,12 +2876,14 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-common-storage",
  "enumflags2",
+ "futures",
  "log",
  "minitrace",
  "mockall",
  "prost 0.12.1",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -3178,6 +3179,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
  "futures",
@@ -4546,9 +4548,9 @@ dependencies = [
 
 [[package]]
 name = "defer"
-version = "0.1.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "647605a6345d5e89c3950a36a638c56478af9b414c55c6f2477c73b115f9acde"
+checksum = "930c7171c8df9fb1782bdf9b918ed9ed2d33d1d22300abb754f9085bc48bf8e8"
 
 [[package]]
 name = "deflate64"
@@ -9197,8 +9199,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.44.2"
-source = "git+https://github.com/apache/opendal?rev=e94f068#e94f068a9977fcd20c9bb3626aaaa8be833209a8"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3350be0d4ba326017ce22c98a9e94d21b069160fcd95bbe6c2555dac4e93c47a"
 dependencies = [
  "anyhow",
  "async-backtrace",
@@ -10645,7 +10648,6 @@ dependencies = [
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "rand_hc",
- "rand_pcg",
 ]
 
 [[package]]
@@ -10704,15 +10706,6 @@ name = "rand_hc"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
-dependencies = [
- "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_pcg"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
 dependencies = [
  "rand_core 0.5.1",
 ]
@@ -11441,9 +11434,9 @@ checksum = "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294"
 
 [[package]]
 name = "scopeguard"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "scratch"
@@ -11919,6 +11912,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "simple_hll"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbdc537413bd6a291f57e2cc0a17579beb5ccaeea534e9c3001e39d9a07fa14f"
+dependencies = [
+ "ahash 0.8.3",
+ "borsh 1.2.1",
+ "serde",
+]
+
+[[package]]
 name = "simsearch"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12181,17 +12185,6 @@ name = "streaming-iterator"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
-
-[[package]]
-name = "streaming_algorithms"
-version = "0.3.0"
-source = "git+https://github.com/ariesdevil/streaming_algorithms?rev=2839d5d#2839d5d066c299bd37abd8679dfeb74f9bfb5093"
-dependencies = [
- "borsh 1.2.1",
- "rand 0.7.3",
- "serde",
- "twox-hash",
-]
 
 [[package]]
 name = "strength_reduce"

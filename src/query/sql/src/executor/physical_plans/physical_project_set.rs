@@ -97,7 +97,7 @@ impl PhysicalPlanBuilder {
         }
 
         Ok(PhysicalPlan::ProjectSet(ProjectSet {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             input: Box::new(input),
             srf_exprs,
             projections,

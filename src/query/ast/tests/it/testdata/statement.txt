@@ -690,6 +690,358 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
+CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
+---------- Output ---------
+CREATE SYNC Aggregating INDEX Identifier { name: "idx1", quote: None, span: Some(25..29) } AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
+---------- AST ------------
+CreateIndex(
+    CreateIndexStmt {
+        index_type: Aggregating,
+        create_option: CreateIfNotExists(
+            false,
+        ),
+        index_name: Identifier {
+            name: "idx1",
+            quote: None,
+            span: Some(
+                25..29,
+            ),
+        },
+        query: Query {
+            span: Some(
+                33..80,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        33..80,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: FunctionCall {
+                                span: Some(
+                                    40..46,
+                                ),
+                                distinct: false,
+                                name: Identifier {
+                                    name: "SUM",
+                                    quote: None,
+                                    span: Some(
+                                        40..43,
+                                    ),
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            44..45,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    44..45,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                ],
+                                params: [],
+                                window: None,
+                                lambda: None,
+                            },
+                            alias: None,
+                        },
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    48..49,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            48..49,
+                                        ),
+                                    },
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                55..57,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "t1",
+                                quote: None,
+                                span: Some(
+                                    55..57,
+                                ),
+                            },
+                            alias: None,
+                            travel_point: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: Some(
+                        BinaryOp {
+                            span: Some(
+                                66..67,
+                            ),
+                            op: Gt,
+                            left: ColumnRef {
+                                span: Some(
+                                    64..65,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            64..65,
+                                        ),
+                                    },
+                                ),
+                            },
+                            right: Literal {
+                                span: Some(
+                                    68..69,
+                                ),
+                                lit: UInt64(
+                                    3,
+                                ),
+                            },
+                        },
+                    ),
+                    group_by: Some(
+                        Normal(
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        79..80,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                            span: Some(
+                                                79..80,
+                                            ),
+                                        },
+                                    ),
+                                },
+                            ],
+                        ),
+                    ),
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+        sync_creation: true,
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
+---------- Output ---------
+CREATE OR REPLACE SYNC Aggregating INDEX Identifier { name: "idx1", quote: None, span: Some(36..40) } AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
+---------- AST ------------
+CreateIndex(
+    CreateIndexStmt {
+        index_type: Aggregating,
+        create_option: CreateOrReplace,
+        index_name: Identifier {
+            name: "idx1",
+            quote: None,
+            span: Some(
+                36..40,
+            ),
+        },
+        query: Query {
+            span: Some(
+                44..91,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        44..91,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: FunctionCall {
+                                span: Some(
+                                    51..57,
+                                ),
+                                distinct: false,
+                                name: Identifier {
+                                    name: "SUM",
+                                    quote: None,
+                                    span: Some(
+                                        51..54,
+                                    ),
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            55..56,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    55..56,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                ],
+                                params: [],
+                                window: None,
+                                lambda: None,
+                            },
+                            alias: None,
+                        },
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    59..60,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            59..60,
+                                        ),
+                                    },
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                66..68,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "t1",
+                                quote: None,
+                                span: Some(
+                                    66..68,
+                                ),
+                            },
+                            alias: None,
+                            travel_point: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: Some(
+                        BinaryOp {
+                            span: Some(
+                                77..78,
+                            ),
+                            op: Gt,
+                            left: ColumnRef {
+                                span: Some(
+                                    75..76,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            75..76,
+                                        ),
+                                    },
+                                ),
+                            },
+                            right: Literal {
+                                span: Some(
+                                    79..80,
+                                ),
+                                lit: UInt64(
+                                    3,
+                                ),
+                            },
+                        },
+                    ),
+                    group_by: Some(
+                        Normal(
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        90..91,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                            span: Some(
+                                                90..91,
+                                            ),
+                                        },
+                                    ),
+                                },
+                            ],
+                        ),
+                    ),
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+        sync_creation: true,
+    },
+)
+
+
+---------- Input ----------
 create table a (c decimal(38, 0))
 ---------- Output ---------
 CREATE TABLE a (c Decimal(38, 0))
@@ -821,6 +1173,51 @@ CreateTable(
                             precision: 38,
                             scale: 0,
                         },
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create or replace table a (c int(10) unsigned)
+---------- Output ---------
+CREATE OR REPLACE TABLE a (c UInt32)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: CreateOrReplace,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Some(
+                24..25,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Some(
+                                27..28,
+                            ),
+                        },
+                        data_type: UInt32,
                         expr: None,
                         comment: None,
                     },
@@ -2038,7 +2435,9 @@ CREATE VIEW v AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         view: Identifier {
@@ -2290,7 +2689,9 @@ CREATE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         view: Identifier {
@@ -2381,6 +2782,130 @@ CreateView(
                                 Literal {
                                     span: Some(
                                         58..62,
+                                    ),
+                                    lit: UInt64(
+                                        1000,
+                                    ),
+                                },
+                            ],
+                            named_params: [],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+create or replace view v1(c1) as select number % 3 as a from numbers(1000);
+---------- Output ---------
+CREATE OR REPLACE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
+---------- AST ------------
+CreateView(
+    CreateViewStmt {
+        create_option: CreateOrReplace,
+        catalog: None,
+        database: None,
+        view: Identifier {
+            name: "v1",
+            quote: None,
+            span: Some(
+                23..25,
+            ),
+        },
+        columns: [
+            Identifier {
+                name: "c1",
+                quote: None,
+                span: Some(
+                    26..28,
+                ),
+            },
+        ],
+        query: Query {
+            span: Some(
+                33..74,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        33..74,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: BinaryOp {
+                                span: Some(
+                                    47..48,
+                                ),
+                                op: Modulo,
+                                left: ColumnRef {
+                                    span: Some(
+                                        40..46,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            name: "number",
+                                            quote: None,
+                                            span: Some(
+                                                40..46,
+                                            ),
+                                        },
+                                    ),
+                                },
+                                right: Literal {
+                                    span: Some(
+                                        49..50,
+                                    ),
+                                    lit: UInt64(
+                                        3,
+                                    ),
+                                },
+                            },
+                            alias: Some(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        54..55,
+                                    ),
+                                },
+                            ),
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            span: Some(
+                                61..74,
+                            ),
+                            lateral: false,
+                            name: Identifier {
+                                name: "numbers",
+                                quote: None,
+                                span: Some(
+                                    61..68,
+                                ),
+                            },
+                            params: [
+                                Literal {
+                                    span: Some(
+                                        69..73,
                                     ),
                                     lit: UInt64(
                                         1000,
@@ -2537,7 +3062,9 @@ CREATE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
 ---------- AST ------------
 CreateStream(
     CreateStreamStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: Some(
             Identifier {
@@ -2585,7 +3112,9 @@ CREATE STREAM IF NOT EXISTS test2.s2 ON TABLE test.t AT (STREAM => test1.s1) COM
 ---------- AST ------------
 CreateStream(
     CreateStreamStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         catalog: None,
         database: Some(
             Identifier {
@@ -2643,6 +3172,54 @@ CreateStream(
         comment: Some(
             "this is a stream",
         ),
+    },
+)
+
+
+---------- Input ----------
+create or replace stream test2.s1 on table test.t append_only = false;
+---------- Output ---------
+CREATE OR REPLACE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
+---------- AST ------------
+CreateStream(
+    CreateStreamStmt {
+        create_option: CreateOrReplace,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "test2",
+                quote: None,
+                span: Some(
+                    25..30,
+                ),
+            },
+        ),
+        stream: Identifier {
+            name: "s1",
+            quote: None,
+            span: Some(
+                31..33,
+            ),
+        },
+        table_database: Some(
+            Identifier {
+                name: "test",
+                quote: None,
+                span: Some(
+                    43..47,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                48..49,
+            ),
+        },
+        stream_point: None,
+        append_only: false,
+        comment: None,
     },
 )
 
@@ -3370,7 +3947,9 @@ CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANT
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         user: UserIdentity {
             username: "u1",
             hostname: "%",
@@ -3400,7 +3979,9 @@ CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET NETWORK POLICY = 'policy1'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         user: UserIdentity {
             username: "u1",
             hostname: "%",
@@ -7719,7 +8300,9 @@ CREATE USER 'test-e'@'%' IDENTIFIED BY 'password'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         user: UserIdentity {
             username: "test-e",
             hostname: "%",
@@ -11516,7 +12099,9 @@ CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' TENANT=x ARGS=(jwk
 ---------- AST ------------
 CreateShareEndpoint(
     CreateShareEndpointStmt {
-        if_not_exists: true,
+        create_option: CreateIfNotExists(
+            true,
+        ),
         endpoint: Identifier {
             name: "t",
             quote: None,
@@ -11539,6 +12124,49 @@ CreateShareEndpoint(
             quote: None,
             span: Some(
                 68..69,
+            ),
+        },
+        args: {
+            "jwks_key_file": "https://eks.public/keys",
+            "ssl_cert": "cert.pem",
+        },
+        comment: Some(
+            "share endpoint comment",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
+---------- Output ---------
+CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file=https://eks.public/keys,ssl_cert=cert.pem,) COMMENT = 'share endpoint comment'
+---------- AST ------------
+CreateShareEndpoint(
+    CreateShareEndpointStmt {
+        create_option: CreateOrReplace,
+        endpoint: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                33..34,
+            ),
+        },
+        url: UriLocation {
+            protocol: "http",
+            name: "127.0.0.1",
+            path: "/",
+            part_prefix: "",
+            connection: Connection {
+                visited_keys: {},
+                conns: {},
+            },
+        },
+        tenant: Identifier {
+            name: "x",
+            quote: None,
+            span: Some(
+                65..66,
             ),
         },
         args: {
@@ -12779,7 +13407,29 @@ CREATE FILE FORMAT my_csv
 CREATE FILE_FORMAT my_csv {"field_delimiter": ",", "record_delimiter": "\n", "skip_header": "1", "type": "CSV"}
 ---------- AST ------------
 CreateFileFormat {
-    if_not_exists: false,
+    create_option: CreateIfNotExists(
+        false,
+    ),
+    name: "my_csv",
+    file_format_options: FileFormatOptionsAst {
+        options: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+    },
+}
+
+
+---------- Input ----------
+CREATE OR REPLACE FILE FORMAT my_csv
+            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
+---------- Output ---------
+CREATE OR REPLACE FILE_FORMAT my_csv {"field_delimiter": ",", "record_delimiter": "\n", "skip_header": "1", "type": "CSV"}
+---------- AST ------------
+CreateFileFormat {
+    create_option: CreateOrReplace,
     name: "my_csv",
     file_format_options: FileFormatOptionsAst {
         options: {
@@ -13631,7 +14281,9 @@ CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN cur
 ---------- AST ------------
 CreateDatamaskPolicy(
     CreateDatamaskPolicyStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         name: "email_mask",
         policy: DataMaskPolicy {
             args: [
@@ -13719,6 +14371,100 @@ CreateDatamaskPolicy(
 
 
 ---------- Input ----------
+CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'
+---------- Output ---------
+CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END COMMENT = 'this is a masking policy'
+---------- AST ------------
+CreateDatamaskPolicy(
+    CreateDatamaskPolicyStmt {
+        create_option: CreateOrReplace,
+        name: "email_mask",
+        policy: DataMaskPolicy {
+            args: [
+                DataMaskArg {
+                    arg_name: "val",
+                    arg_type: String,
+                },
+            ],
+            return_type: String,
+            body: Case {
+                span: Some(
+                    78..146,
+                ),
+                operand: None,
+                conditions: [
+                    InList {
+                        span: Some(
+                            103..117,
+                        ),
+                        expr: FunctionCall {
+                            span: Some(
+                                88..102,
+                            ),
+                            distinct: false,
+                            name: Identifier {
+                                name: "current_role",
+                                quote: None,
+                                span: Some(
+                                    88..100,
+                                ),
+                            },
+                            args: [],
+                            params: [],
+                            window: None,
+                            lambda: None,
+                        },
+                        list: [
+                            Literal {
+                                span: Some(
+                                    107..116,
+                                ),
+                                lit: String(
+                                    "ANALYST",
+                                ),
+                            },
+                        ],
+                        not: false,
+                    },
+                ],
+                results: [
+                    ColumnRef {
+                        span: Some(
+                            123..126,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                name: "VAL",
+                                quote: None,
+                                span: Some(
+                                    123..126,
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                else_result: Some(
+                    Literal {
+                        span: Some(
+                            132..143,
+                        ),
+                        lit: String(
+                            "*********",
+                        ),
+                    },
+                ),
+            },
+            comment: Some(
+                "this is a masking policy",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 DESC MASKING POLICY email_mask
 ---------- Output ---------
 DESCRIBE MASKING POLICY email_mask
@@ -13750,7 +14496,9 @@ CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- AST ------------
 CreateVirtualColumn(
     CreateVirtualColumnStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
         catalog: None,
         database: None,
         table: Identifier {
@@ -13846,6 +14594,121 @@ CreateVirtualColumn(
                     key: Literal {
                         span: Some(
                             43..44,
+                        ),
+                        lit: UInt64(
+                            1,
+                        ),
+                    },
+                },
+            },
+        ],
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
+---------- Output ---------
+CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
+---------- AST ------------
+CreateVirtualColumn(
+    CreateVirtualColumnStmt {
+        create_option: CreateOrReplace,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                62..63,
+            ),
+        },
+        virtual_columns: [
+            MapAccess {
+                span: Some(
+                    41..47,
+                ),
+                expr: MapAccess {
+                    span: Some(
+                        35..41,
+                    ),
+                    expr: ColumnRef {
+                        span: Some(
+                            34..35,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                name: "a",
+                                quote: None,
+                                span: Some(
+                                    34..35,
+                                ),
+                            },
+                        ),
+                    },
+                    accessor: Bracket {
+                        key: Literal {
+                            span: Some(
+                                36..40,
+                            ),
+                            lit: String(
+                                "k1",
+                            ),
+                        },
+                    },
+                },
+                accessor: Bracket {
+                    key: Literal {
+                        span: Some(
+                            42..46,
+                        ),
+                        lit: String(
+                            "k2",
+                        ),
+                    },
+                },
+            },
+            MapAccess {
+                span: Some(
+                    53..56,
+                ),
+                expr: MapAccess {
+                    span: Some(
+                        50..53,
+                    ),
+                    expr: ColumnRef {
+                        span: Some(
+                            49..50,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                name: "b",
+                                quote: None,
+                                span: Some(
+                                    49..50,
+                                ),
+                            },
+                        ),
+                    },
+                    accessor: Bracket {
+                        key: Literal {
+                            span: Some(
+                                51..52,
+                            ),
+                            lit: UInt64(
+                                0,
+                            ),
+                        },
+                    },
+                },
+                accessor: Bracket {
+                    key: Literal {
+                        span: Some(
+                            54..55,
                         ),
                         lit: UInt64(
                             1,
@@ -14021,7 +14884,33 @@ CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_
 ---------- AST ------------
 CreateNetworkPolicy(
     CreateNetworkPolicyStmt {
-        if_not_exists: false,
+        create_option: CreateIfNotExists(
+            false,
+        ),
+        name: "mypolicy",
+        allowed_ip_list: [
+            "192.168.10.0/24",
+        ],
+        blocked_ip_list: Some(
+            [
+                "192.168.10.99",
+            ],
+        ),
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'
+---------- Output ---------
+CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'
+---------- AST ------------
+CreateNetworkPolicy(
+    CreateNetworkPolicyStmt {
+        create_option: CreateOrReplace,
         name: "mypolicy",
         allowed_ip_list: [
             "192.168.10.0/24",
@@ -14570,7 +15459,6 @@ CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3
 ---------- AST ------------
 CreateConnection(
     CreateConnectionStmt {
-        if_not_exists: true,
         name: Identifier {
             name: "my_conn",
             quote: None,
@@ -14580,6 +15468,9 @@ CreateConnection(
         },
         storage_type: "s3",
         storage_params: {},
+        create_option: CreateIfNotExists(
+            true,
+        ),
     },
 )
 
@@ -14591,7 +15482,6 @@ CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 any_arg = ******lue
 ---------- AST ------------
 CreateConnection(
     CreateConnectionStmt {
-        if_not_exists: true,
         name: Identifier {
             name: "my_conn",
             quote: None,
@@ -14603,6 +15493,32 @@ CreateConnection(
         storage_params: {
             "any_arg": "any_value",
         },
+        create_option: CreateIfNotExists(
+            true,
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE='s3' any_arg='any_value'
+---------- Output ---------
+CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE = s3 any_arg = ******lue
+---------- AST ------------
+CreateConnection(
+    CreateConnectionStmt {
+        name: Identifier {
+            name: "my_conn",
+            quote: None,
+            span: Some(
+                29..36,
+            ),
+        },
+        storage_type: "s3",
+        storage_params: {
+            "any_arg": "any_value",
+        },
+        create_option: CreateOrReplace,
     },
 )
 
@@ -15107,5 +16023,253 @@ Grant(
         ),
     },
 )
+
+
+---------- Input ----------
+CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));
+---------- Output ---------
+CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> (NOT is_null(p))
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists(
+            true,
+        ),
+        udf_name: Identifier {
+            name: "isnotempty",
+            quote: None,
+            span: Some(
+                30..40,
+            ),
+        },
+        description: None,
+        definition: LambdaUDF {
+            parameters: [
+                Identifier {
+                    name: "p",
+                    quote: None,
+                    span: Some(
+                        44..45,
+                    ),
+                },
+            ],
+            definition: UnaryOp {
+                span: Some(
+                    50..53,
+                ),
+                op: Not,
+                expr: FunctionCall {
+                    span: Some(
+                        54..64,
+                    ),
+                    distinct: false,
+                    name: Identifier {
+                        name: "is_null",
+                        quote: None,
+                        span: Some(
+                            54..61,
+                        ),
+                    },
+                    args: [
+                        ColumnRef {
+                            span: Some(
+                                62..63,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "p",
+                                    quote: None,
+                                    span: Some(
+                                        62..63,
+                                    ),
+                                },
+                            ),
+                        },
+                    ],
+                    params: [],
+                    window: None,
+                    lambda: None,
+                },
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';
+---------- Output ---------
+CREATE OR REPLACE FUNCTION isnotempty_test_replace AS (p) -> (NOT is_null(p)) DESC = 'This is a description'
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateOrReplace,
+        udf_name: Identifier {
+            name: "isnotempty_test_replace",
+            quote: None,
+            span: Some(
+                27..50,
+            ),
+        },
+        description: Some(
+            "This is a description",
+        ),
+        definition: LambdaUDF {
+            parameters: [
+                Identifier {
+                    name: "p",
+                    quote: None,
+                    span: Some(
+                        54..55,
+                    ),
+                },
+            ],
+            definition: UnaryOp {
+                span: Some(
+                    60..63,
+                ),
+                op: Not,
+                expr: FunctionCall {
+                    span: Some(
+                        64..74,
+                    ),
+                    distinct: false,
+                    name: Identifier {
+                        name: "is_null",
+                        quote: None,
+                        span: Some(
+                            64..71,
+                        ),
+                    },
+                    args: [
+                        ColumnRef {
+                            span: Some(
+                                72..73,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    name: "p",
+                                    quote: None,
+                                    span: Some(
+                                        72..73,
+                                    ),
+                                },
+                            ),
+                        },
+                    ],
+                    params: [],
+                    window: None,
+                    lambda: None,
+                },
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+CREATE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = binary_reverse ADDRESS = http://0.0.0.0:8815
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists(
+            false,
+        ),
+        udf_name: Identifier {
+            name: "binary_reverse",
+            quote: None,
+            span: Some(
+                16..30,
+            ),
+        },
+        description: None,
+        definition: UDFServer {
+            arg_types: [
+                Nullable(
+                    Binary,
+                ),
+            ],
+            return_type: Nullable(
+                Binary,
+            ),
+            address: "http://0.0.0.0:8815",
+            handler: "binary_reverse",
+            language: "python",
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+CREATE OR REPLACE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = binary_reverse ADDRESS = http://0.0.0.0:8815
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateOrReplace,
+        udf_name: Identifier {
+            name: "binary_reverse",
+            quote: None,
+            span: Some(
+                27..41,
+            ),
+        },
+        description: None,
+        definition: UDFServer {
+            arg_types: [
+                Nullable(
+                    Binary,
+                ),
+            ],
+            return_type: Nullable(
+                Binary,
+            ),
+            address: "http://0.0.0.0:8815",
+            handler: "binary_reverse",
+            language: "python",
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP FUNCTION binary_reverse;
+---------- Output ---------
+DROP FUNCTION binary_reverse
+---------- AST ------------
+DropUDF {
+    if_exists: false,
+    udf_name: Identifier {
+        name: "binary_reverse",
+        quote: None,
+        span: Some(
+            14..28,
+        ),
+    },
+}
+
+
+---------- Input ----------
+DROP FUNCTION isnotempty;
+---------- Output ---------
+DROP FUNCTION isnotempty
+---------- AST ------------
+DropUDF {
+    if_exists: false,
+    udf_name: Identifier {
+        name: "isnotempty",
+        quote: None,
+        span: Some(
+            14..24,
+        ),
+    },
+}
 
 

@@ -1179,6 +1179,7 @@ Functions overloads:
 1 crc32(String NULL) :: UInt32 NULL
 0 degrees(Float64) :: Float64
 1 degrees(Float64 NULL) :: Float64 NULL
+0 delete_by_keypath FACTORY
 0 div(UInt8, UInt8) :: UInt8
 1 div(UInt8 NULL, UInt8 NULL) :: UInt8 NULL
 2 div(UInt8, UInt16) :: UInt16

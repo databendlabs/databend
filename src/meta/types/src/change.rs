@@ -29,9 +29,7 @@ use crate::SeqValue;
 /// the `result` could also be possible to be None.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, derive_more::From)]
 pub struct Change<T, ID = u64>
-where
-    ID: Clone + PartialEq,
-    T: Clone + PartialEq,
+where ID: Clone + PartialEq
 {
     /// identity of the resource that is changed.
     pub ident: Option<ID>,
@@ -42,7 +40,7 @@ where
 impl<T, ID> Change<T, ID>
 where
     ID: Clone + PartialEq + Debug,
-    T: Clone + PartialEq + Debug,
+    T: PartialEq + Debug,
 {
     pub fn new(prev: Option<SeqV<T>>, result: Option<SeqV<T>>) -> Self {
         Change {

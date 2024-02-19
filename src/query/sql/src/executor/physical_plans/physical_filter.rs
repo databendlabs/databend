@@ -78,7 +78,7 @@ impl PhysicalPlanBuilder {
         }
 
         Ok(PhysicalPlan::Filter(Filter {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             projections,
             input,
             predicates: filter

@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::schema::CreateOption;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateViewPlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub tenant: String,
     pub catalog: String,
     pub database: String,

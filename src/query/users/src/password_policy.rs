@@ -25,6 +25,7 @@ use databend_common_meta_app::principal::PasswordPolicy;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
 use log::info;
 use passwords::analyzer;
@@ -65,30 +66,14 @@ impl UserApiProvider {
         &self,
         tenant: &str,
         password_policy: PasswordPolicy,
-        if_not_exists: bool,
-    ) -> Result<u64> {
+        create_option: &CreateOption,
+    ) -> Result<()> {
         check_password_policy(&password_policy)?;
 
-        if if_not_exists
-            && self
-                .exists_password_policy(tenant, password_policy.name.as_str())
-                .await?
-        {
-            return Ok(0);
-        }
-
         let client = self.get_password_policy_api_client(tenant)?;
-        let add_password_policy = client.add_password_policy(password_policy);
-        match add_password_policy.await {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                if if_not_exists && e.code() == ErrorCode::PASSWORD_POLICY_ALREADY_EXISTS {
-                    Ok(0)
-                } else {
-                    Err(e.add_message_back("(while add password policy)"))
-                }
-            }
-        }
+        client
+            .add_password_policy(password_policy, create_option)
+            .await
     }
 
     // Update password policy.
