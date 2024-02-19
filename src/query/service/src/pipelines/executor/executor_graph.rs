@@ -228,7 +228,7 @@ impl ExecutingGraph {
     pub unsafe fn init_schedule_queue(
         locker: &StateLockGuard,
         capacity: usize,
-        graph: &Arc<RunningGraph>
+        graph: &Arc<RunningGraph>,
     ) -> Result<ScheduleQueue> {
         let mut schedule_queue = ScheduleQueue::with_capacity(capacity);
         for sink_index in locker.graph.externals(Direction::Outgoing) {
@@ -306,16 +306,16 @@ impl ExecutingGraph {
                     }
                     Event::NeedData | Event::NeedConsume => State::Idle,
                     Event::Sync => {
-                        schedule_queue.push_sync(ProcessorWrapper{
+                        schedule_queue.push_sync(ProcessorWrapper {
                             processor: node.processor.clone(),
                             graph: graph.clone(),
                         });
                         State::Processing
                     }
                     Event::Async => {
-                        schedule_queue.push_async(ProcessorWrapper{
+                        schedule_queue.push_async(ProcessorWrapper {
                             processor: node.processor.clone(),
-                            graph: graph.clone()
+                            graph: graph.clone(),
                         });
                         State::Processing
                     }
@@ -333,7 +333,7 @@ impl ExecutingGraph {
 #[derive(Clone)]
 pub struct ProcessorWrapper {
     pub processor: ProcessorPtr,
-    pub graph: Arc<RunningGraph>
+    pub graph: Arc<RunningGraph>,
 }
 
 pub struct ScheduleQueue {

@@ -400,7 +400,7 @@ impl PipelineExecutor {
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                if let Some((executed_pid, graph)) = context.execute_task(self)?{
+                if let Some((executed_pid, graph)) = context.execute_task(self)? {
                     // Not scheduled graph if pipeline is finished.
                     if !self.global_tasks_queue.is_finished() {
                         // We immediately schedule the processor again.
@@ -408,7 +408,6 @@ impl PipelineExecutor {
                         schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
                     }
                 }
-
             }
         }
 

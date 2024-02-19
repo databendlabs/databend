@@ -24,11 +24,11 @@ use databend_common_pipeline_core::processors::Profile;
 use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::{CompletedAsyncTask, PipelineExecutor};
 use crate::pipelines::executor::executor_graph::ProcessorWrapper;
+use crate::pipelines::executor::CompletedAsyncTask;
+use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
-use crate::pipelines::processors::ProcessorPtr;
 
 pub enum ExecutorTask {
     None,
@@ -74,7 +74,10 @@ impl ExecutorWorkerContext {
     }
 
     /// # Safety
-    pub unsafe fn execute_task(&mut self, executor: &Arc<PipelineExecutor>) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
+    pub unsafe fn execute_task(
+        &mut self,
+        _: &Arc<PipelineExecutor>,
+    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
             ExecutorTask::Sync(processor) => self.execute_sync_task(processor),

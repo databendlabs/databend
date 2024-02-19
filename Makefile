@@ -80,7 +80,7 @@ stateless-test: build
 
 sqllogic-test: build
 	rm -rf ./_meta*/
-	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-sqllogic-tests.sh
+	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-sqllogic-tests.sh base
 
 stateless-cluster-test: build
 	rm -rf ./_meta*/

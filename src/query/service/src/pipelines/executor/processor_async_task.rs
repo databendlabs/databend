@@ -36,9 +36,10 @@ use log::error;
 use log::warn;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::{CompletedAsyncTask, RunningGraph};
+use crate::pipelines::executor::CompletedAsyncTask;
 use crate::pipelines::executor::ExecutorTasksQueue;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
 
 pub struct ProcessorAsyncTask {
@@ -175,14 +176,24 @@ impl Future for ProcessorAsyncTask {
             Ok(Poll::Ready(res)) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, res, self.graph.clone()),
+                    CompletedAsyncTask::create(
+                        self.processor_id,
+                        self.worker_id,
+                        res,
+                        self.graph.clone(),
+                    ),
                 );
                 Poll::Ready(())
             }
             Err(cause) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause), self.graph.clone()),
+                    CompletedAsyncTask::create(
+                        self.processor_id,
+                        self.worker_id,
+                        Err(cause),
+                        self.graph.clone(),
+                    ),
                 );
 
                 Poll::Ready(())

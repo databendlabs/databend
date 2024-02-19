@@ -20,14 +20,14 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use parking_lot::Mutex;
 use petgraph::prelude::NodeIndex;
-use crate::pipelines::executor::executor_graph::ProcessorWrapper;
 
-use crate::pipelines::executor::{ExecutorTask, RunningGraph};
+use crate::pipelines::executor::executor_graph::ProcessorWrapper;
+use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
+use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::WorkersWaitingStatus;
-use crate::pipelines::processors::ProcessorPtr;
 
 pub struct ExecutorTasksQueue {
     finished: Arc<AtomicBool>,
@@ -202,8 +202,18 @@ pub struct CompletedAsyncTask {
 }
 
 impl CompletedAsyncTask {
-    pub fn create(id: NodeIndex, worker_id: usize, res: Result<()>, graph: Arc<RunningGraph>) -> Self {
-        CompletedAsyncTask { id, worker_id, res, graph }
+    pub fn create(
+        id: NodeIndex,
+        worker_id: usize,
+        res: Result<()>,
+        graph: Arc<RunningGraph>,
+    ) -> Self {
+        CompletedAsyncTask {
+            id,
+            worker_id,
+            res,
+            graph,
+        }
     }
 }
 
