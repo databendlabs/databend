@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_io::prelude::bincode_deserialize_from_slice;
 use ethnum::i256;
 
 use super::partitioned_payload::PartitionedPayload;
@@ -34,6 +35,8 @@ use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::ColumnBuilder;
+use crate::Scalar;
 use crate::StateAddr;
 use crate::BATCH_SIZE;
 
@@ -178,10 +181,7 @@ impl Payload {
             DataType::Variant => Column::Variant(self.flush_binary_column(col_offset, state)),
             DataType::Geometry => Column::Geometry(self.flush_binary_column(col_offset, state)),
             DataType::Nullable(_) => unreachable!(),
-            DataType::Array(_) => todo!(),
-            DataType::Map(_) => todo!(),
-            DataType::Tuple(_) => todo!(),
-            DataType::Generic(_) => unreachable!(),
+            other => self.flush_generic_column(&other, col_offset, state),
         };
 
         let validity_offset = self.validity_offsets[col_index];
@@ -258,5 +258,31 @@ impl Payload {
         state: &mut PayloadFlushState,
     ) -> StringColumn {
         unsafe { StringColumn::from_binary_unchecked(self.flush_binary_column(col_offset, state)) }
+    }
+
+    fn flush_generic_column(
+        &self,
+        data_type: &DataType,
+        col_offset: usize,
+        state: &mut PayloadFlushState,
+    ) -> Column {
+        let len = state.probe_state.row_count;
+        let mut builder = ColumnBuilder::with_capacity(data_type, len);
+
+        unsafe {
+            for idx in 0..len {
+                let str_len =
+                    core::ptr::read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
+                let data_address =
+                    core::ptr::read::<u64>(state.addresses[idx].add(col_offset + 4) as _) as usize
+                        as *const u8;
+
+                let scalar = std::slice::from_raw_parts(data_address, str_len);
+                let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
+
+                builder.push(scalar.as_ref());
+            }
+        }
+        builder.build()
     }
 }

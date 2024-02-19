@@ -237,7 +237,7 @@ impl Payload {
                     for idx in select_vector.iter().take(new_group_rows).copied() {
                         unsafe {
                             let dst = address[idx].add(write_offset);
-                            store(bitmap.get_bit(idx), dst as *mut u8);
+                            store(bitmap.get_bit(idx) as u8, dst as *mut u8);
                         }
                     }
                 }
