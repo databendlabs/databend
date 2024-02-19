@@ -323,14 +323,16 @@ impl PhysicalPlanBuilder {
 
         let mut enable_bloom_runtime_filter = false;
         // Get how many rows in probe table
-        let table = self.metadata.read().table(table_index.unwrap()).table();
-        if let Some(stats) = table.table_statistics(self.ctx.clone()).await? {
-            if let Some(num_rows) = stats.num_rows {
-                let join_cardinality = RelExpr::with_s_expr(s_expr)
-                    .derive_cardinality()?
-                    .cardinality;
-                // If the filtered data reduces to less than 1/1000 of the original dataset, we will open bloom runtime filter.
-                enable_bloom_runtime_filter = join_cardinality <= (num_rows / 1000) as f64
+        if let Some(table_index) = table_index {
+            let table = self.metadata.read().table(table_index).table();
+            if let Some(stats) = table.table_statistics(self.ctx.clone()).await? {
+                if let Some(num_rows) = stats.num_rows {
+                    let join_cardinality = RelExpr::with_s_expr(s_expr)
+                        .derive_cardinality()?
+                        .cardinality;
+                    // If the filtered data reduces to less than 1/1000 of the original dataset, we will open bloom runtime filter.
+                    enable_bloom_runtime_filter = join_cardinality <= (num_rows / 1000) as f64
+                }
             }
         }
 
