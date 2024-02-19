@@ -53,7 +53,7 @@ pub type FinishedCallback =
 
 pub struct PipelineExecutor {
     threads_num: usize,
-    pub(crate) graph: RunningGraph,
+    pub(crate) graph: Arc<RunningGraph>,
     workers_condvar: Arc<WorkersCondvar>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
@@ -173,7 +173,7 @@ impl PipelineExecutor {
     }
 
     fn try_create(
-        graph: RunningGraph,
+        graph: Arc<RunningGraph>,
         threads_num: usize,
         on_init_callback: Mutex<Option<InitCallback>>,
         on_finished_callback: Mutex<Option<FinishedCallback>>,
@@ -228,7 +228,7 @@ impl PipelineExecutor {
 
     #[minitrace::trace]
     pub fn execute(self: &Arc<Self>) -> Result<()> {
-        self.init()?;
+        self.init(self.graph.clone())?;
 
         self.start_executor_daemon()?;
 
@@ -265,7 +265,7 @@ impl PipelineExecutor {
         Ok(())
     }
 
-    fn init(self: &Arc<Self>) -> Result<()> {
+    fn init(self: &Arc<Self>, graph: Arc<RunningGraph>) -> Result<()> {
         unsafe {
             // TODO: the on init callback cannot be killed.
             {
@@ -285,7 +285,7 @@ impl PipelineExecutor {
                 );
             }
 
-            let mut init_schedule_queue = self.graph.init_schedule_queue(self.threads_num)?;
+            let mut init_schedule_queue = graph.init_schedule_queue(self.threads_num)?;
 
             let mut wakeup_worker_id = 0;
             while let Some(proc) = init_schedule_queue.async_queue.pop_front() {
@@ -400,14 +400,15 @@ impl PipelineExecutor {
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                let executed_pid = context.execute_task(&self.graph)?;
-
-                // Not scheduled graph if pipeline is finished.
-                if !self.global_tasks_queue.is_finished() {
-                    // We immediately schedule the processor again.
-                    let schedule_queue = self.graph.schedule_queue(executed_pid)?;
-                    schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
+                if let Some((executed_pid, graph)) = context.execute_task(self)?{
+                    // Not scheduled graph if pipeline is finished.
+                    if !self.global_tasks_queue.is_finished() {
+                        // We immediately schedule the processor again.
+                        let schedule_queue = graph.schedule_queue(executed_pid)?;
+                        schedule_queue.schedule(&self.global_tasks_queue, &mut context, self);
+                    }
                 }
+
             }
         }
 

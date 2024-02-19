@@ -20,8 +20,9 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use parking_lot::Mutex;
 use petgraph::prelude::NodeIndex;
+use crate::pipelines::executor::executor_graph::ProcessorWrapper;
 
-use crate::pipelines::executor::ExecutorTask;
+use crate::pipelines::executor::{ExecutorTask, RunningGraph};
 use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
@@ -117,7 +118,7 @@ impl ExecutorTasksQueue {
         workers_condvar.wait(worker_id, self.finished.clone());
     }
 
-    pub fn init_sync_tasks(&self, tasks: VecDeque<ProcessorPtr>) {
+    pub fn init_sync_tasks(&self, tasks: VecDeque<ProcessorWrapper>) {
         let mut workers_tasks = self.workers_tasks.lock();
 
         let mut worker_id = 0;
@@ -197,18 +198,19 @@ pub struct CompletedAsyncTask {
     pub id: NodeIndex,
     pub worker_id: usize,
     pub res: Result<()>,
+    pub graph: Arc<RunningGraph>,
 }
 
 impl CompletedAsyncTask {
-    pub fn create(id: NodeIndex, worker_id: usize, res: Result<()>) -> Self {
-        CompletedAsyncTask { id, worker_id, res }
+    pub fn create(id: NodeIndex, worker_id: usize, res: Result<()>, graph: Arc<RunningGraph>) -> Self {
+        CompletedAsyncTask { id, worker_id, res, graph }
     }
 }
 
 struct ExecutorTasks {
     tasks_size: usize,
     workers_waiting_status: WorkersWaitingStatus,
-    workers_sync_tasks: Vec<VecDeque<ProcessorPtr>>,
+    workers_sync_tasks: Vec<VecDeque<ProcessorWrapper>>,
     workers_completed_async_tasks: Vec<VecDeque<CompletedAsyncTask>>,
 }
 

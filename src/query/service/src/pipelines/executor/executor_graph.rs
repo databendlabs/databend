@@ -228,10 +228,11 @@ impl ExecutingGraph {
     pub unsafe fn init_schedule_queue(
         locker: &StateLockGuard,
         capacity: usize,
+        graph: &Arc<RunningGraph>
     ) -> Result<ScheduleQueue> {
         let mut schedule_queue = ScheduleQueue::with_capacity(capacity);
         for sink_index in locker.graph.externals(Direction::Outgoing) {
-            ExecutingGraph::schedule_queue(locker, sink_index, &mut schedule_queue)?;
+            ExecutingGraph::schedule_queue(locker, sink_index, &mut schedule_queue, graph)?;
         }
 
         Ok(schedule_queue)
@@ -244,6 +245,7 @@ impl ExecutingGraph {
         locker: &StateLockGuard,
         index: NodeIndex,
         schedule_queue: &mut ScheduleQueue,
+        graph: &Arc<RunningGraph>,
     ) -> Result<()> {
         let mut need_schedule_nodes = VecDeque::new();
         let mut need_schedule_edges = VecDeque::new();
@@ -304,11 +306,17 @@ impl ExecutingGraph {
                     }
                     Event::NeedData | Event::NeedConsume => State::Idle,
                     Event::Sync => {
-                        schedule_queue.push_sync(node.processor.clone());
+                        schedule_queue.push_sync(ProcessorWrapper{
+                            processor: node.processor.clone(),
+                            graph: graph.clone(),
+                        });
                         State::Processing
                     }
                     Event::Async => {
-                        schedule_queue.push_async(node.processor.clone());
+                        schedule_queue.push_async(ProcessorWrapper{
+                            processor: node.processor.clone(),
+                            graph: graph.clone()
+                        });
                         State::Processing
                     }
                 };
@@ -322,9 +330,15 @@ impl ExecutingGraph {
     }
 }
 
+#[derive(Clone)]
+pub struct ProcessorWrapper {
+    pub processor: ProcessorPtr,
+    pub graph: Arc<RunningGraph>
+}
+
 pub struct ScheduleQueue {
-    pub sync_queue: VecDeque<ProcessorPtr>,
-    pub async_queue: VecDeque<ProcessorPtr>,
+    pub sync_queue: VecDeque<ProcessorWrapper>,
+    pub async_queue: VecDeque<ProcessorWrapper>,
 }
 
 impl ScheduleQueue {
@@ -336,23 +350,13 @@ impl ScheduleQueue {
     }
 
     #[inline]
-    pub fn push_sync(&mut self, processor: ProcessorPtr) {
+    pub fn push_sync(&mut self, processor: ProcessorWrapper) {
         self.sync_queue.push_back(processor);
     }
 
     #[inline]
-    pub fn push_async(&mut self, processor: ProcessorPtr) {
+    pub fn push_async(&mut self, processor: ProcessorWrapper) {
         self.async_queue.push_back(processor);
-    }
-
-    pub fn schedule_tail(mut self, global: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
-        let mut tasks = VecDeque::with_capacity(self.sync_queue.len());
-
-        while let Some(processor) = self.sync_queue.pop_front() {
-            tasks.push_back(ExecutorTask::Sync(processor));
-        }
-
-        global.push_tasks(ctx, tasks)
     }
 
     pub fn schedule(
@@ -384,7 +388,7 @@ impl ScheduleQueue {
     }
 
     pub fn schedule_async_task(
-        proc: ProcessorPtr,
+        proc: ProcessorWrapper,
         query_id: Arc<String>,
         executor: &Arc<PipelineExecutor>,
         wakeup_worker_id: usize,
@@ -394,18 +398,20 @@ impl ScheduleQueue {
         unsafe {
             workers_condvar.inc_active_async_worker();
             let weak_executor = Arc::downgrade(executor);
-            let node_profile = executor.graph.get_node_profile(proc.id()).clone();
-            let process_future = proc.async_process();
+            let graph = proc.graph;
+            let node_profile = executor.graph.get_node_profile(proc.processor.id()).clone();
+            let process_future = proc.processor.async_process();
             executor.async_runtime.spawn(
                 query_id.as_ref().clone(),
                 TrackedFuture::create(ProcessorAsyncTask::create(
                     query_id,
                     wakeup_worker_id,
-                    proc.clone(),
+                    proc.processor.clone(),
                     global_queue,
                     workers_condvar,
                     weak_executor,
                     node_profile,
+                    graph,
                     process_future,
                 ))
                 .in_span(Span::enter_with_local_parent(std::any::type_name::<
@@ -420,36 +426,46 @@ impl ScheduleQueue {
             ctx.set_task(ExecutorTask::Sync(processor));
         }
     }
+
+    pub fn schedule_tail(mut self, global: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
+        let mut tasks = VecDeque::with_capacity(self.sync_queue.len());
+
+        while let Some(processor) = self.sync_queue.pop_front() {
+            tasks.push_back(ExecutorTask::Sync(processor));
+        }
+
+        global.push_tasks(ctx, tasks)
+    }
 }
 
 pub struct RunningGraph(ExecutingGraph);
 
 impl RunningGraph {
-    pub fn create(pipeline: Pipeline) -> Result<RunningGraph> {
+    pub fn create(pipeline: Pipeline) -> Result<Arc<RunningGraph>> {
         let graph_state = ExecutingGraph::create(pipeline)?;
         debug!("Create running graph:{:?}", graph_state);
-        Ok(RunningGraph(graph_state))
+        Ok(Arc::new(RunningGraph(graph_state)))
     }
 
-    pub fn from_pipelines(pipelines: Vec<Pipeline>) -> Result<RunningGraph> {
+    pub fn from_pipelines(pipelines: Vec<Pipeline>) -> Result<Arc<RunningGraph>> {
         let graph_state = ExecutingGraph::from_pipelines(pipelines)?;
         debug!("Create running graph:{:?}", graph_state);
-        Ok(RunningGraph(graph_state))
+        Ok(Arc::new(RunningGraph(graph_state)))
     }
 
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn init_schedule_queue(&self, capacity: usize) -> Result<ScheduleQueue> {
-        ExecutingGraph::init_schedule_queue(&self.0, capacity)
+    pub unsafe fn init_schedule_queue(self: Arc<Self>, capacity: usize) -> Result<ScheduleQueue> {
+        ExecutingGraph::init_schedule_queue(&self.0, capacity, &self)
     }
 
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn schedule_queue(&self, node_index: NodeIndex) -> Result<ScheduleQueue> {
+    pub unsafe fn schedule_queue(self: Arc<Self>, node_index: NodeIndex) -> Result<ScheduleQueue> {
         let mut schedule_queue = ScheduleQueue::with_capacity(0);
-        ExecutingGraph::schedule_queue(&self.0, node_index, &mut schedule_queue)?;
+        ExecutingGraph::schedule_queue(&self.0, node_index, &mut schedule_queue, &self)?;
         Ok(schedule_queue)
     }
 
@@ -627,15 +643,15 @@ impl Debug for ScheduleQueue {
 
             for item in &self.sync_queue {
                 sync_queue.push(QueueItem {
-                    id: item.id().index(),
-                    name: item.name().to_string(),
+                    id: item.processor.id().index(),
+                    name: item.processor.name().to_string(),
                 })
             }
 
             for item in &self.async_queue {
                 async_queue.push(QueueItem {
-                    id: item.id().index(),
-                    name: item.name().to_string(),
+                    id: item.processor.id().index(),
+                    name: item.processor.name().to_string(),
                 })
             }
 
