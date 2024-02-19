@@ -131,13 +131,13 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the maximum byte size of a single data block that can be read.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("parquet_max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8192),
                     desc: "Max block size for parquet reader",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("max_threads", DefaultSettingValue {
                     value: UserSettingValue::UInt64(num_cpus),
@@ -265,8 +265,8 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("enable_runtime_filter", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                ("enable_bloom_runtime_filter", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables runtime filter optimization for JOIN.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

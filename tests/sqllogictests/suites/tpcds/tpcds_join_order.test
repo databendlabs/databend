@@ -2,9 +2,6 @@ statement ok
 set sandbox_tenant = 'test_tenant';
 
 statement ok
-set enable_runtime_filter = 1;
-
-statement ok
 use tpcds;
 
 # Q1
@@ -6715,7 +6712,7 @@ HashJoin: INNER
 
 
 # Q69
-query 
+query
 explain join
 SELECT cd_gender,
        cd_marital_status,
@@ -8146,7 +8143,7 @@ HashJoin: INNER
     └── Scan: default.tpcds.store_sales (#3) (read rows: 28810)
 
 # Q83
-query 
+query
 explain join
 WITH sr_items AS
   (SELECT i_item_id item_id,
@@ -9322,6 +9319,3 @@ HashJoin: INNER
         └── Probe
             └── Scan: default.tpcds.ship_mode (#2) (read rows: 20)
 
-
-statement ok
-set enable_runtime_filter = 0;
