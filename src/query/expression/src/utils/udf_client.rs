@@ -35,7 +35,7 @@ use crate::DataSchema;
 const UDF_TCP_KEEP_ALIVE_SEC: u64 = 30;
 const UDF_HTTP2_KEEP_ALIVE_INTERVAL_SEC: u64 = 60;
 const UDF_KEEP_ALIVE_TIMEOUT_SEC: u64 = 20;
-const MAX_DECODING_MESSAGE_SIZE: u64 = 16 * 1024 * 1024 * 1024;
+const MAX_DECODING_MESSAGE_SIZE: usize = 16 * 1024 * 1024 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct UDFFlightClient {
