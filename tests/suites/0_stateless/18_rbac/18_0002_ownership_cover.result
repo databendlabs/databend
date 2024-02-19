@@ -37,3 +37,12 @@ t1
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'db_a'
 t
 t1
+=== fix_issue_14572: test drop role; grant ownership ===
+a	drop_role
+t	drop_role
+a	account_admin
+t	drop_role
+a	drop_role1
+t	drop_role1
+GRANT OWNERSHIP ON 'default'.'a'.* TO ROLE `drop_role1`
+GRANT OWNERSHIP ON 'default'.'a'.'t' TO ROLE `drop_role1`

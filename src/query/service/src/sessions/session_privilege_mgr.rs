@@ -269,13 +269,10 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
     async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool> {
         let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
-
-        // if the object is not owned by any role, then considered as ACCOUNT_ADMIN, the normal users
-        // can not access it unless ACCOUNT_ADMIN grant relevant privileges to them.
-        let owner_role_name = match role_mgr.find_object_owner(&tenant, object).await? {
-            Some(owner_role) => owner_role.name,
-            None => BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
-        };
+        let owner_role_name = role_mgr
+            .find_object_owner(&tenant, object)
+            .await?
+            .unwrap_or_else(|| BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
 
         let effective_roles = self.get_all_effective_roles().await?;
         let exists = effective_roles.iter().any(|r| r.name == owner_role_name);
