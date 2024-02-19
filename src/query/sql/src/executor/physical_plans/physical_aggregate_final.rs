@@ -181,14 +181,14 @@ impl PhysicalPlanBuilder {
                     {
                         let aggregate_partial = if let Some(grouping_sets) = agg.grouping_sets {
                             let expand = AggregateExpand {
-                                plan_id: self.next_plan_id(),
+                                plan_id: 0,
                                 input,
                                 group_bys: group_items.clone(),
                                 grouping_sets,
                                 stat_info: Some(stat_info.clone()),
                             };
                             AggregatePartial {
-                                plan_id: self.next_plan_id(),
+                                plan_id: 0,
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 agg_funcs,
                                 group_by_display,
@@ -197,7 +197,7 @@ impl PhysicalPlanBuilder {
                             }
                         } else {
                             AggregatePartial {
-                                plan_id: self.next_plan_id(),
+                                plan_id: 0,
                                 input,
                                 agg_funcs,
                                 group_by_display,
@@ -221,7 +221,7 @@ impl PhysicalPlanBuilder {
                         .data_type();
 
                         PhysicalPlan::Exchange(Exchange {
-                            plan_id: self.next_plan_id(),
+                            plan_id: 0,
                             kind,
                             allow_adjust_parallelism: true,
                             ignore_exchange: false,
@@ -237,14 +237,14 @@ impl PhysicalPlanBuilder {
                     _ => {
                         if let Some(grouping_sets) = agg.grouping_sets {
                             let expand = AggregateExpand {
-                                plan_id: self.next_plan_id(),
+                                plan_id: 0,
                                 input: Box::new(input),
                                 group_bys: group_items.clone(),
                                 grouping_sets,
                                 stat_info: Some(stat_info.clone()),
                             };
                             PhysicalPlan::AggregatePartial(AggregatePartial {
-                                plan_id: self.next_plan_id(),
+                                plan_id: 0,
                                 agg_funcs,
                                 group_by_display,
                                 group_by: group_items,
@@ -253,7 +253,7 @@ impl PhysicalPlanBuilder {
                             })
                         } else {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
-                                plan_id: self.next_plan_id(),
+                                plan_id: 0,
                                 agg_funcs,
                                 group_by_display,
                                 group_by: group_items,
@@ -334,7 +334,7 @@ impl PhysicalPlanBuilder {
                         let before_group_by_schema = partial.input.output_schema()?;
                         let limit = agg.limit;
                         PhysicalPlan::AggregateFinal(AggregateFinal {
-                            plan_id: self.next_plan_id(),
+                            plan_id: 0,
                             group_by_display: partial.group_by_display.clone(),
                             input: Box::new(input),
                             group_by: group_items,
@@ -354,7 +354,7 @@ impl PhysicalPlanBuilder {
                         let limit = agg.limit;
 
                         PhysicalPlan::AggregateFinal(AggregateFinal {
-                            plan_id: self.next_plan_id(),
+                            plan_id: 0,
                             group_by_display: partial.group_by_display.clone(),
                             input: Box::new(input),
                             group_by: group_items,

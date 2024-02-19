@@ -28,7 +28,6 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::Sink;
 use databend_common_pipeline_sinks::Sinker;
-use log::warn;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use parking_lot::Condvar;
@@ -215,8 +214,6 @@ impl PipelinePullingExecutor {
                     continue;
                 }
                 Err(RecvTimeoutError::Disconnected) => {
-                    warn!("receiver has been disconnected, finish executor now");
-
                     if !self.executor.is_finished() {
                         self.executor.finish(None);
                     }

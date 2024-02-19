@@ -31,7 +31,6 @@ use databend_common_meta_types::With;
 use futures::stream::TryStreamExt;
 
 use crate::errors::TenantError;
-use crate::udf::UdfApi;
 
 pub struct UdfMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
@@ -55,22 +54,14 @@ impl UdfMgr {
         })
     }
 
-    pub fn ensure_non_builtin(name: &str) -> Result<(), ErrorCode> {
-        if is_builtin_function(name) {
-            return Err(ErrorCode::UdfAlreadyExists(format!(
-                "It's a builtin function: {}",
-                name
-            )));
-        }
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl UdfApi for UdfMgr {
+    /// Add a UDF to /tenant/udf-name.
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_udf(&self, info: UserDefinedFunction, create_option: &CreateOption) -> Result<()> {
+    pub async fn add_udf(
+        &self,
+        info: UserDefinedFunction,
+        create_option: &CreateOption,
+    ) -> Result<()> {
         Self::ensure_non_builtin(info.name.as_str())?;
 
         let seq = MatchSeq::from(*create_option);
@@ -91,9 +82,10 @@ impl UdfApi for UdfMgr {
         Ok(())
     }
 
+    /// Update a UDF to /tenant/udf-name.
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn update_udf(&self, info: UserDefinedFunction, seq: MatchSeq) -> Result<u64> {
+    pub async fn update_udf(&self, info: UserDefinedFunction, seq: MatchSeq) -> Result<u64> {
         Self::ensure_non_builtin(info.name.as_str())?;
 
         let key = UdfName::new(&self.tenant, &info.name);
@@ -109,9 +101,10 @@ impl UdfApi for UdfMgr {
         }
     }
 
+    /// Get UDF by name.
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_udf(&self, udf_name: &str) -> Result<SeqV<UserDefinedFunction>> {
+    pub async fn get_udf(&self, udf_name: &str) -> Result<SeqV<UserDefinedFunction>> {
         // TODO: do not return ErrorCode, return UDFError
 
         let key = UdfName::new(&self.tenant, udf_name);
@@ -123,18 +116,20 @@ impl UdfApi for UdfMgr {
         Ok(seqv)
     }
 
+    /// Get all the UDFs for a tenant.
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_udfs(&self) -> Result<Vec<UserDefinedFunction>> {
+    pub async fn get_udfs(&self) -> Result<Vec<UserDefinedFunction>> {
         let key = DirName::new(UdfName::new(&self.tenant, ""));
         let strm = self.kv_api.list_pb_values(&key).await?;
         let udfs = strm.try_collect().await?;
         Ok(udfs)
     }
 
+    /// Drop the tenant's UDF by name, return the dropped one or None if nothing is dropped.
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn drop_udf(
+    pub async fn drop_udf(
         &self,
         udf_name: &str,
         seq: MatchSeq,
@@ -148,5 +143,15 @@ impl UdfApi for UdfMgr {
         } else {
             Ok(None)
         }
+    }
+
+    fn ensure_non_builtin(name: &str) -> Result<(), ErrorCode> {
+        if is_builtin_function(name) {
+            return Err(ErrorCode::UdfAlreadyExists(format!(
+                "It's a builtin function: {}",
+                name
+            )));
+        }
+        Ok(())
     }
 }

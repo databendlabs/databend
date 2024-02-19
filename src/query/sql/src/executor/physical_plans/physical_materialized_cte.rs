@@ -74,7 +74,7 @@ impl PhysicalPlanBuilder {
 
         // 2. Build physical plan.
         Ok(PhysicalPlan::MaterializedCte(MaterializedCte {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             left: Box::new(self.build(s_expr.child(0)?, left_required).await?),
             right: Box::new(self.build(s_expr.child(1)?, required).await?),
             cte_idx: cte.cte_idx,
