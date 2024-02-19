@@ -55,7 +55,13 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
     let write_settings = fuse_table.get_write_settings();
     let storage_format = write_settings.storage_format;
 
-    let segment_locs = Some(snapshot.segments.iter().map(|v| v.location.clone()).collect());
+    let segment_locs = Some(
+        snapshot
+            .segments
+            .iter()
+            .map(|v| v.location.clone())
+            .collect(),
+    );
     do_refresh_virtual_column(fuse_table, table_ctx, virtual_columns, segment_locs).await?;
 
     let segment_reader =
