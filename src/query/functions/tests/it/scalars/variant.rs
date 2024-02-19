@@ -1171,6 +1171,8 @@ fn test_get_by_keypath_op(file: &mut impl Write) {
     run_ast(file, r#"parse_json('[10, 20, 30]') #> '{1}'"#, &[]);
     run_ast(file, r#"parse_json('[10, 20, 30]') #> '{3}'"#, &[]);
     run_ast(file, r#"parse_json('[10, 20, 30]') #> '{a}'"#, &[]);
+    run_ast(file, r#"parse_json('{"k": null}') #> '{k}'"#, &[]);
+    run_ast(file, r#"parse_json('[10, 20, null]') #> '{2}'"#, &[]);
     run_ast(
         file,
         r#"parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #> '{1, a, k1}'"#,
@@ -1217,6 +1219,8 @@ fn test_get_by_keypath_string_op(file: &mut impl Write) {
     run_ast(file, r#"parse_json('[10, 20, 30]') #>> '{1}'"#, &[]);
     run_ast(file, r#"parse_json('[10, 20, 30]') #>> '{3}'"#, &[]);
     run_ast(file, r#"parse_json('[10, 20, 30]') #>> '{a}'"#, &[]);
+    run_ast(file, r#"parse_json('{"k": null}') #>> '{k}'"#, &[]);
+    run_ast(file, r#"parse_json('[10, 20, null]') #>> '{2}'"#, &[]);
     run_ast(
         file,
         r#"parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #>> '{1, a, k1}'"#,

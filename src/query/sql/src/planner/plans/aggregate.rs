@@ -268,12 +268,13 @@ impl Operator for Aggregate {
             f64::min(res, cardinality)
         };
 
-        let precise_cardinality =
-            if self.group_items.is_empty() && self.mode == AggregateMode::Final {
-                Some(1)
-            } else {
-                None
-            };
+        let precise_cardinality = if self.group_items.is_empty()
+            && matches!(self.mode, AggregateMode::Final | AggregateMode::Initial)
+        {
+            Some(1)
+        } else {
+            None
+        };
         Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {

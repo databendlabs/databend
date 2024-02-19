@@ -130,6 +130,7 @@ impl Binder {
                         projection_index: Some(column_binding.index),
                         data_type,
                         outer_columns,
+                        contain_agg: None,
                     })
                 } else {
                     item.scalar.clone()
