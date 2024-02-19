@@ -150,7 +150,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         if block.is_empty() {
-            return Ok(vec![])
+            return Ok(vec![]);
         }
 
         let block = block.convert_to_full();

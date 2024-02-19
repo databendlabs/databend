@@ -67,9 +67,6 @@ impl TransformMergeBlock {
     }
 
     fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
-        if block.is_empty() {
-            return Ok(DataBlock::new(vec![], 0));
-        }
         let num_rows = block.num_rows();
         let columns = self
             .pairs

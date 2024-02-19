@@ -460,10 +460,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
 
                 partition_payload.arenas.extend_from_slice(&arenas);
 
-                self.buckets_blocks
-                    .insert(bucket as isize, vec![DataBlock::empty_with_meta(
-                        AggregateMeta::<Method, V>::create_agg_hashtable(partition_payload),
-                    )]);
+                if partition_payload.len() != 0 {
+                    self.buckets_blocks
+                        .insert(bucket as isize, vec![DataBlock::empty_with_meta(
+                            AggregateMeta::<Method, V>::create_agg_hashtable(partition_payload),
+                        )]);
+                }
             }
             return Ok(());
         }

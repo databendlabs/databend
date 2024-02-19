@@ -231,7 +231,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
 
     fn execute_one_block(&mut self, block: DataBlock) -> Result<()> {
         if block.is_empty() {
-           return Ok(());
+            return Ok(());
         }
         let is_agg_index_block = block
             .get_meta()

@@ -124,10 +124,8 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
-            if !data_block.is_empty() {
-                self.output_data.extend(self.inner.transform(data_block)?);
-                return Ok(());
-            }
+            self.output_data.extend(self.inner.transform(data_block)?);
+            return Ok(());
         }
 
         if !self.called_on_finish {
