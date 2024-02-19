@@ -224,21 +224,20 @@ impl Payload {
         for col in group_columns {
             if let Column::Nullable(c) = col {
                 let bitmap = &c.validity;
-                if bitmap.unset_bits() == 0 {
+                if bitmap.unset_bits() == 0 || bitmap.unset_bits() == bitmap.len() {
+                    let val: u8 = if bitmap.unset_bits() == 0 { 1 } else { 0 };
                     // faster path
                     for idx in select_vector.iter().take(new_group_rows).copied() {
                         unsafe {
                             let dst = address[idx].add(write_offset);
-                            store(1, dst as *mut u8);
+                            store(val, dst as *mut u8);
                         }
                     }
-                } else if bitmap.unset_bits() != bitmap.len() {
+                } else {
                     for idx in select_vector.iter().take(new_group_rows).copied() {
-                        if bitmap.get_bit(idx) {
-                            unsafe {
-                                let dst = address[idx].add(write_offset);
-                                store(1, dst as *mut u8);
-                            }
+                        unsafe {
+                            let dst = address[idx].add(write_offset);
+                            store(bitmap.get_bit(idx), dst as *mut u8);
                         }
                     }
                 }

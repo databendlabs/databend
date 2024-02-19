@@ -88,12 +88,13 @@ pub unsafe fn serialize_column_to_rowformat(
             })
         }
         Column::Boolean(v) => {
-            if v.unset_bits() == 0 {
+            if v.unset_bits() == 0 || v.unset_bits() == v.len() {
+                let val: u8 = if v.unset_bits() == 0 { 1 } else { 0 };
                 // faster path
                 for index in select_vector.iter().take(rows).copied() {
-                    store(1, address[index].add(offset) as *mut u8);
+                    store(val, address[index].add(offset) as *mut u8);
                 }
-            } else if v.unset_bits() != v.len() {
+            } else {
                 for index in select_vector.iter().take(rows).copied() {
                     if v.get_bit(index) {
                         store(1, address[index].add(offset) as *mut u8);

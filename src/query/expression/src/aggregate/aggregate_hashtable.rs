@@ -87,10 +87,11 @@ impl AggregateHashTable {
         state: &mut ProbeState,
         group_columns: &[Column],
         params: &[Vec<Column>],
+        agg_states: &[Column],
         row_count: usize,
     ) -> Result<usize> {
         if row_count <= BATCH_ADD_SIZE {
-            self.add_groups_inner(state, group_columns, params, row_count)
+            self.add_groups_inner(state, group_columns, params, agg_states, row_count)
         } else {
             let mut new_count = 0;
             for start in (0..row_count).step_by(BATCH_ADD_SIZE) {
@@ -104,9 +105,18 @@ impl AggregateHashTable {
                     .iter()
                     .map(|c| c.iter().map(|x| x.slice(start..end)).collect())
                     .collect::<Vec<_>>();
+                let agg_states = agg_states
+                    .iter()
+                    .map(|c| c.slice(start..end))
+                    .collect::<Vec<_>>();
 
-                new_count +=
-                    self.add_groups_inner(state, &step_group_columns, &step_params, end - start)?;
+                new_count += self.add_groups_inner(
+                    state,
+                    &step_group_columns,
+                    &step_params,
+                    &agg_states,
+                    end - start,
+                )?;
             }
             Ok(new_count)
         }
@@ -118,6 +128,7 @@ impl AggregateHashTable {
         state: &mut ProbeState,
         group_columns: &[Column],
         params: &[Vec<Column>],
+        agg_states: &[Column],
         row_count: usize,
     ) -> Result<usize> {
         state.row_count = row_count;
@@ -136,14 +147,26 @@ impl AggregateHashTable {
 
             let state_places = &state.state_places.as_slice()[0..row_count];
 
-            for ((aggr, params), addr_offset) in self
-                .payload
-                .aggrs
-                .iter()
-                .zip(params.iter())
-                .zip(self.payload.state_addr_offsets.iter())
-            {
-                aggr.accumulate_keys(state_places, *addr_offset, params, row_count)?;
+            if agg_states.is_empty() {
+                for ((aggr, params), addr_offset) in self
+                    .payload
+                    .aggrs
+                    .iter()
+                    .zip(params.iter())
+                    .zip(self.payload.state_addr_offsets.iter())
+                {
+                    aggr.accumulate_keys(state_places, *addr_offset, params, row_count)?;
+                }
+            } else {
+                for ((aggr, agg_state), addr_offset) in self
+                    .payload
+                    .aggrs
+                    .iter()
+                    .zip(agg_states.iter())
+                    .zip(self.payload.state_addr_offsets.iter())
+                {
+                    aggr.batch_merge(state_places, *addr_offset, agg_state)?;
+                }
             }
         }
 
