@@ -14,14 +14,12 @@
 
 use std::sync::Arc;
 
+use opendal::Operator;
+
 use databend_common_ast::ast::Engine;
 use databend_common_base::base::tokio;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
-use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::number::UInt64Type;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
@@ -29,20 +27,24 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::parse_to_filters;
 use databend_common_sql::plans::CreateTablePlan;
-use databend_common_sql::BloomIndexColumns;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::pruning::FusePruner;
-use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -50,7 +52,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use opendal::Operator;
 
 async fn apply_block_pruning(
     table_snapshot: Arc<TableSnapshot>,
@@ -61,10 +62,10 @@ async fn apply_block_pruning(
     bloom_index_cols: BloomIndexColumns,
 ) -> Result<Vec<Arc<BlockMeta>>> {
     let ctx: Arc<dyn TableContext> = ctx;
-    let segment_locs = table_snapshot.segments.iter().map(|v| v.location.clone()).collect();
-    let segment_locs = create_segment_location_vector(segment_locs, None);
+    let locations = table_snapshot.segments.iter().map(|v| v.location.clone()).collect();
+    let indexed_segment_locations = create_segment_location_vector(locations, None);
     FusePruner::create(&ctx, op, schema, push_down, bloom_index_cols)?
-        .read_pruning(segment_locs)
+        .read_pruning(indexed_segment_locations)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }
@@ -104,7 +105,7 @@ async fn test_block_pruner() -> Result<()> {
             (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
             (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
         ]
-        .into(),
+            .into(),
         field_comments: vec![],
         as_select: None,
         cluster_key: None,
@@ -249,7 +250,7 @@ async fn test_block_pruner() -> Result<()> {
             fuse_table.get_operator(),
             fuse_table.bloom_index_cols(),
         )
-        .await?;
+            .await?;
 
         let rows = blocks.iter().map(|b| b.row_count as usize).sum::<usize>();
         assert_eq!(expected_rows, rows);

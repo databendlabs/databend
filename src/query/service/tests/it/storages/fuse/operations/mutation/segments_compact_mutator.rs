@@ -16,40 +16,44 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
+use futures_util::TryStreamExt;
+use rand::Rng;
+use rand::thread_rng;
+
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::number::NumberColumn;
-use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::types::number::NumberColumn;
+use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::Value;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::io::serialize_block;
+use databend_common_storages_fuse::FuseStorageFormat;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::CompactSegmentInfoReader;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
-use databend_common_storages_fuse::io::SegmentWriter;
 use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::io::SegmentWriter;
+use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::operations::CompactOptions;
-use databend_common_storages_fuse::operations::SegmentCompactMutator;
 use databend_common_storages_fuse::operations::SegmentCompactionState;
+use databend_common_storages_fuse::operations::SegmentCompactMutator;
 use databend_common_storages_fuse::operations::SegmentCompactor;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::sort_by_cluster_stats;
 use databend_common_storages_fuse::statistics::StatisticsAccumulator;
-use databend_common_storages_fuse::FuseStorageFormat;
-use databend_common_storages_fuse::FuseTable;
 use databend_query::locks::LockManager;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
@@ -59,14 +63,11 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentDescriptor;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentSummary;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::meta::SegmentDescriptor;
-use databend_storages_common_table_meta::meta::SegmentSummary;
-use futures_util::TryStreamExt;
-use rand::thread_rng;
-use rand::Rng;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> Result<()> {
@@ -692,7 +693,7 @@ impl CompactSegmentTestFixture {
             cluster_key_id,
             block_per_seg as usize,
         )
-        .await?;
+            .await?;
         let mut summary = Statistics::default();
         for segment in segments {
             merge_statistics_mut(&mut summary, &segment.summary, cluster_key_id);
@@ -796,13 +797,12 @@ impl CompactSegmentTestFixture {
                 segment_info.write_meta(&data_accessor, &path).await?;
 
                 let segment_descr = SegmentDescriptor {
-                        location: (path, SegmentInfo::VERSION),
-                        summary: Some(SegmentSummary {
-                            row_count: segment_info.summary.row_count,
-                            block_count:segment_info.summary.block_count,
-                        })
-                    };
-                //Ok::<_, ErrorCode>(((path, SegmentInfo::VERSION), collected_blocks, segment_info))
+                    location: (path, SegmentInfo::VERSION),
+                    summary: Some(SegmentSummary {
+                        row_count: segment_info.summary.row_count,
+                        block_count: segment_info.summary.block_count,
+                    }),
+                };
                 Ok::<_, ErrorCode>((segment_descr, collected_blocks, segment_info))
             });
         }
@@ -813,9 +813,9 @@ impl CompactSegmentTestFixture {
             threads_nums * 2,
             "fuse-write-segments-worker".to_owned(),
         )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<_>>>()?;
+            .await?
+            .into_iter()
+            .collect::<Result<Vec<_>>>()?;
 
         let mut locations = vec![];
         let mut collected_blocks = vec![];
@@ -909,7 +909,7 @@ impl CompactCase {
             &self.expected_block_number_of_new_segments,
             &compact_segment_reader,
         )
-        .await?;
+            .await?;
 
         // invariants 4 - 6 are general rules, for all the cases.
         let mut idx = 0;
@@ -1031,7 +1031,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
             Some(cluster_key_id),
             block_per_seg as usize,
         )
-        .await?;
+            .await?;
         let mut summary = Statistics::default();
         for segment in &segments {
             merge_statistics_mut(&mut summary, &segment.summary, Some(cluster_key_id));
