@@ -496,9 +496,7 @@ impl ModifyTableColumnInterpreter {
             update_stream_meta: vec![],
         };
 
-        let res = catalog
-            .update_table_meta(table_info, req)
-            .await?;
+        let res = catalog.update_table_meta(table_info, req).await?;
 
         if let Some(share_table_info) = res.share_table_info {
             save_share_table_info(

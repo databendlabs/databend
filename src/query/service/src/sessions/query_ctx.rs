@@ -509,12 +509,14 @@ impl TableContext for QueryContext {
     async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_catalog(&self.get_tenant(), catalog_name.as_ref(),self.txn_mgr())
+            .get_catalog(&self.get_tenant(), catalog_name.as_ref(), self.txn_mgr())
             .await
     }
 
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
-        self.shared.catalog_manager.get_default_catalog(self.txn_mgr())
+        self.shared
+            .catalog_manager
+            .get_default_catalog(self.txn_mgr())
     }
 
     fn get_id(&self) -> String {

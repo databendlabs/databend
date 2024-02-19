@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 
 #[derive(Debug, Clone)]
@@ -35,17 +37,17 @@ pub enum TxnState {
 
 #[derive(Debug, Clone)]
 struct TxnBuffer {
-    table_metas: HashMap<u64, UpdateTableMetaReq>,
+    mutated_tables: HashMap<String, (UpdateTableMetaReq, TableInfo)>,
 }
 
 impl TxnBuffer {
     fn new() -> Self {
         Self {
-            table_metas: HashMap::new(),
+            mutated_tables: HashMap::new(),
         }
     }
     fn refresh(&mut self) {
-        self.table_metas.clear();
+        self.mutated_tables.clear();
     }
 }
 
@@ -90,9 +92,25 @@ impl TxnManager {
         self.state.clone()
     }
 
-    pub fn add_table_meta(&mut self, table_meta: UpdateTableMetaReq) {
+    pub fn add_mutated_table(&mut self, req: UpdateTableMetaReq, table_info: &TableInfo) {
         self.txn_buffer
-            .table_metas
-            .insert(table_meta.table_id, table_meta);
+            .mutated_tables
+            .insert(table_info.desc.clone(), (req, table_info.clone()));
+    }
+
+    pub fn get_mutated_table(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Option<TableInfo> {
+        let tenant_dbname_tbname = TableNameIdent::new(tenant, db_name, table_name).to_string();
+        self.txn_buffer
+            .mutated_tables
+            .get(&tenant_dbname_tbname)
+            .map(|(req, table_info)| TableInfo {
+                meta: req.new_table_meta.clone(),
+                ..table_info.clone()
+            })
     }
 }

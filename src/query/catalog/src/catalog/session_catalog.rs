@@ -246,7 +246,23 @@ impl Catalog for SessionCatalog {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        todo!()
+        let state = self.txn_mgr.lock().unwrap().state();
+        match state {
+            TxnState::Active => {
+                let mutated_table = self
+                    .txn_mgr
+                    .lock()
+                    .unwrap()
+                    .get_mutated_table(tenant, db_name, table_name)
+                    .map(|table_info| self.get_table_by_info(&table_info));
+                if let Some(t) = mutated_table {
+                    t
+                } else {
+                    self.inner.get_table(tenant, db_name, table_name).await
+                }
+            }
+            _ => self.inner.get_table(tenant, db_name, table_name).await,
+        }
     }
 
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
@@ -301,7 +317,20 @@ impl Catalog for SessionCatalog {
         table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        todo!()
+        let state = self.txn_mgr.lock().unwrap().state();
+        match state {
+            TxnState::AutoCommit => self.inner.update_table_meta(table_info, req).await,
+            TxnState::Active => {
+                self.txn_mgr
+                    .lock()
+                    .unwrap()
+                    .add_mutated_table(req, table_info);
+                Ok(UpdateTableMetaReply {
+                    share_table_info: None,
+                })
+            }
+            TxnState::Fail => unreachable!(),
+        }
     }
 
     async fn set_table_column_mask_policy(
