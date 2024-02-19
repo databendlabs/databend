@@ -131,13 +131,13 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the maximum byte size of a single data block that can be read.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(1..)),
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("parquet_max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8192),
                     desc: "Max block size for parquet reader",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(1..)),
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("max_threads", DefaultSettingValue {
                     value: UserSettingValue::UInt64(num_cpus),
