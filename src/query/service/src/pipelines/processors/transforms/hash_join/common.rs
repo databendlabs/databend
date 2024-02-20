@@ -18,7 +18,6 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::or_validities;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::AnyType;
-use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -29,7 +28,6 @@ use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 
 use super::desc::MARKER_KIND_FALSE;
 use super::desc::MARKER_KIND_NULL;
@@ -124,30 +122,6 @@ impl HashJoinProbeState {
             result_count == origin_count,
             result_count == 0,
         ))
-    }
-
-    // return an (option bitmap, all_true, all_false).
-    pub(crate) fn get_other_filters(
-        &self,
-        merged_block: &DataBlock,
-        filter: &Expr,
-        func_ctx: &FunctionContext,
-    ) -> Result<(Option<Bitmap>, bool, bool)> {
-        let filter = cast_expr_to_non_null_boolean(filter.clone())?;
-        let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
-        let predicates = evaluator
-            .run(&filter)?
-            .try_downcast::<BooleanType>()
-            .unwrap();
-
-        match predicates {
-            Value::Scalar(v) => Ok((None, v, !v)),
-            Value::Column(s) => {
-                let count_zeros = s.unset_bits();
-                let all_false = s.len() == count_zeros;
-                Ok((Some(s), count_zeros == 0, all_false))
-            }
-        }
     }
 
     pub(crate) fn get_nullable_filter_column(
