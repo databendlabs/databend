@@ -74,29 +74,6 @@ fn build_unnest(
                 },
             })
         }
-        DataType::Variant | DataType::Nullable(box DataType::Variant) => Arc::new(Function {
-            signature: FunctionSignature {
-                name: "unnest".to_string(),
-                args_type: vec![wrap_type(DataType::Nullable(Box::new(DataType::Variant)))],
-                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
-            },
-            eval: FunctionEval::SRF {
-                eval: Box::new(|args, ctx, max_nums_per_row| {
-                    let arg = args[0].clone().to_owned();
-                    (0..ctx.num_rows)
-                        .map(|row| match arg.index(row).unwrap() {
-                            ScalarRef::Null => {
-                                (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
-                            }
-                            ScalarRef::Variant(val) => {
-                                unnest_variant_array(val, row, max_nums_per_row)
-                            }
-                            _ => unreachable!(),
-                        })
-                        .collect()
-                }),
-            },
-        }),
         DataType::Array(ty) => build_unnest(
             ty,
             Box::new(move |ty| wrap_type(DataType::Array(Box::new(ty)))),
@@ -138,12 +115,15 @@ fn build_unnest(
                                 ScalarRef::Null => {
                                     (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
                                 }
+                                ScalarRef::Variant(val) => {
+                                    unnest_variant_array(val, row, max_nums_per_row)
+                                }
                                 ScalarRef::Array(col) => {
                                     let unnest_array = unnest_column(col);
-                                    let array_len = unnest_array.len();
+                                    let len = unnest_array.len();
                                     max_nums_per_row[row] =
-                                        std::cmp::max(max_nums_per_row[row], array_len);
-                                    (Value::Column(Column::Tuple(vec![unnest_array])), array_len)
+                                        std::cmp::max(max_nums_per_row[row], len);
+                                    (Value::Column(Column::Tuple(vec![unnest_array])), len)
                                 }
                                 _ => unreachable!(),
                             }
