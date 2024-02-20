@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::PartitionedPayload;
 use databend_common_hashtable::FastHash;
 use databend_common_hashtable::HashtableEntryMutRefLike;
 use databend_common_hashtable::HashtableEntryRefLike;
@@ -139,6 +140,48 @@ fn scatter<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
     Ok(res)
 }
 
+fn scatter2(mut payload: PartitionedPayload, buckets: usize) -> Result<Vec<PartitionedPayload>> {
+    let mut buckets = Vec::with_capacity(buckets);
+
+    for _ in 0..buckets.capacity() {
+        buckets.push(PartitionedPayload::new(payload.group_types.clone(), payload.aggrs.clone(), payload.partition_count() as u64));
+    }
+
+    let mods = StrengthReducedU64::new(buckets.len() as u64);
+    payload.repartition(new_partition_count, state)
+    for item in payload.cell.hashtable.iter() {
+        let bucket_index = (item.key().fast_hash() % mods) as usize;
+
+        unsafe {
+            match buckets[bucket_index].insert_and_entry(item.key()) {
+                Ok(mut entry) => {
+                    *entry.get_mut() = *item.get();
+                }
+                Err(mut entry) => {
+                    *entry.get_mut() = *item.get();
+                }
+            }
+        }
+    }
+
+    let mut res = Vec::with_capacity(buckets.len());
+    let dropper = payload.cell._dropper.take();
+    let arena = std::mem::replace(&mut payload.cell.arena, Area::create());
+    payload
+        .cell
+        .arena_holders
+        .push(ArenaHolder::create(Some(arena)));
+
+    for bucket_table in buckets {
+        let mut cell = HashTableCell::<Method, V>::create(bucket_table, dropper.clone().unwrap());
+        cell.arena_holders
+            .extend(payload.cell.arena_holders.clone());
+        res.push(cell);
+    }
+
+    Ok(res)
+}
+
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
     for HashTableHashScatter<Method, V>
 {
@@ -177,7 +220,9 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                         }
                     }
 
-                    AggregateMeta::AggregateHashTable(_) => todo!("AGG_HASHTABLE"),
+                    AggregateMeta::AggregateHashTable(payload) => {
+                        scatter2()
+                    },
                 };
 
                 return Ok(blocks);
