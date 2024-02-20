@@ -32,6 +32,7 @@ use crate::optimizer::SExpr;
 // add row_number for distributed merge into
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MergeIntoAddRowNumber {
+    pub plan_id: u32,
     pub cluster_index: BTreeMap<String, usize>,
     pub input: Box<PhysicalPlan>,
     pub output_schema: DataSchemaRef,
@@ -69,6 +70,7 @@ impl PhysicalPlanBuilder {
 
         Ok(PhysicalPlan::MergeIntoAddRowNumber(Box::new(
             MergeIntoAddRowNumber {
+                plan_id: u32::MAX,
                 cluster_index,
                 input: Box::new(input_plan),
                 output_schema: Arc::new(DataSchema::new_from(fields, meta)),

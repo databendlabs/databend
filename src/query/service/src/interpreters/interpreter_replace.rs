@@ -295,6 +295,7 @@ impl ReplaceInterpreter {
                 table_level_range_index,
                 need_insert: true,
                 delete_when,
+                plan_id: u32::MAX,
             },
         )));
         root = Box::new(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
@@ -312,6 +313,7 @@ impl ReplaceInterpreter {
                 .collect(),
             block_slots: None,
             need_insert: true,
+            plan_id: u32::MAX,
         })));
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
@@ -333,7 +335,9 @@ impl ReplaceInterpreter {
             merge_meta: false,
             need_lock: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+            plan_id: u32::MAX,
         })));
+        root.adjust_plan_id(&mut 0);
         Ok((root, purge_info))
     }
 
@@ -401,6 +405,7 @@ impl ReplaceInterpreter {
                 value_data: value_data.to_string(),
                 start: span_offset,
                 schema,
+                plan_id: u32::MAX,
             },
         )))
     }
