@@ -16,13 +16,17 @@ use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FilterExecutor;
+use databend_common_expression::Expr;
 use databend_common_expression::KeyAccessor;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
 use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
@@ -165,7 +169,12 @@ impl HashJoinProbeState {
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
         let mark_scan_map = &mut build_state.mark_scan_map;
         let _mark_scan_map_lock = self.mark_scan_map_lock.lock();
-        let filter_executor = probe_state.filter_executor.as_mut().unwrap();
+        let other_predicate = self
+            .hash_join_state
+            .hash_join_desc
+            .other_predicate
+            .as_ref()
+            .unwrap();
 
         // Results.
         let mut matched_idx = 0;
@@ -198,7 +207,7 @@ impl HashJoinProbeState {
                         build_indexes,
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
-                        filter_executor,
+                        other_predicate,
                         mark_scan_map,
                     )?;
                     (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
@@ -238,7 +247,7 @@ impl HashJoinProbeState {
                         build_indexes,
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
-                        filter_executor,
+                        other_predicate,
                         mark_scan_map,
                     )?;
                     (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
@@ -274,7 +283,7 @@ impl HashJoinProbeState {
                 build_indexes,
                 &mut probe_state.generation_state,
                 &build_state.generation_state,
-                filter_executor,
+                other_predicate,
                 mark_scan_map,
             )?;
         }
@@ -316,7 +325,7 @@ impl HashJoinProbeState {
         build_indexes: &[RowPtr],
         probe_state: &mut ProbeBlockGenerationState,
         build_state: &BuildBlockGenerationState,
-        filter_executor: &mut FilterExecutor,
+        other_predicate: &Expr,
         mark_scan_map: &mut [Vec<u8>],
     ) -> Result<()> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
@@ -345,35 +354,32 @@ impl HashJoinProbeState {
         } else {
             None
         };
+
         let result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
 
-        let (selection, _, _) =
-            self.get_other_predicate_selection(filter_executor, &result_block)?;
+        let filter =
+            self.get_nullable_filter_column(&result_block, other_predicate, &self.func_ctx)?;
+        let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
+        let validity = &filter_viewer.validity;
+        let data = &filter_viewer.column;
 
-        let mut count = 0;
-        for idx in selection {
+        for (idx, build_index) in build_indexes[0..matched_idx].iter().enumerate() {
             unsafe {
-                while count < *idx {
-                    let row_ptr = build_indexes.get_unchecked(count as usize);
+                if !validity.get_bit_unchecked(idx) {
+                    if *mark_scan_map
+                        .get_unchecked(build_index.chunk_index as usize)
+                        .get_unchecked(build_index.row_index as usize)
+                        == MARKER_KIND_FALSE
+                    {
+                        *mark_scan_map
+                            .get_unchecked_mut(build_index.chunk_index as usize)
+                            .get_unchecked_mut(build_index.row_index as usize) = MARKER_KIND_NULL;
+                    }
+                } else if data.get_bit_unchecked(idx) {
                     *mark_scan_map
-                        .get_unchecked_mut(row_ptr.chunk_index as usize)
-                        .get_unchecked_mut(row_ptr.row_index as usize) = MARKER_KIND_NULL;
-                    count += 1;
+                        .get_unchecked_mut(build_index.chunk_index as usize)
+                        .get_unchecked_mut(build_index.row_index as usize) = MARKER_KIND_TRUE;
                 }
-                let row_ptr = build_indexes.get_unchecked(*idx as usize);
-                *mark_scan_map
-                    .get_unchecked_mut(row_ptr.chunk_index as usize)
-                    .get_unchecked_mut(row_ptr.row_index as usize) = MARKER_KIND_TRUE;
-                count += 1;
-            }
-        }
-        while (count as usize) < matched_idx {
-            unsafe {
-                let row_ptr = build_indexes.get_unchecked(count as usize);
-                *mark_scan_map
-                    .get_unchecked_mut(row_ptr.chunk_index as usize)
-                    .get_unchecked_mut(row_ptr.row_index as usize) = MARKER_KIND_NULL;
-                count += 1;
             }
         }
 
