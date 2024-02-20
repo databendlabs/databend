@@ -37,6 +37,12 @@ pub trait VacuumHandler: Sync + Send {
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
     ) -> Result<Option<Vec<(String, String)>>>;
+
+    async fn do_vacuum_temporary_files(
+        &self,
+        temporary_dir: String,
+        vacuum_limit: Option<usize>,
+    ) -> Result<Vec<String>>;
 }
 
 pub struct VacuumHandlerWrapper {
@@ -69,6 +75,17 @@ impl VacuumHandlerWrapper {
     ) -> Result<Option<Vec<(String, String)>>> {
         self.handler
             .do_vacuum_drop_tables(tables, dry_run_limit)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_vacuum_temporary_files(
+        &self,
+        temporary_dir: String,
+        vacuum_limit: Option<usize>,
+    ) -> Result<Vec<String>> {
+        self.handler
+            .do_vacuum_temporary_files(temporary_dir, vacuum_limit)
             .await
     }
 }

@@ -139,6 +139,20 @@ impl VacuumDropTablePlan {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VacuumTemporaryFilesPlan {
+    pub limit: Option<u64>,
+}
+
+impl crate::plans::VacuumTemporaryFilesPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![DataField::new(
+            "Files",
+            DataType::String,
+        )]))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VacuumDropTableOption {
     pub dry_run: Option<()>,

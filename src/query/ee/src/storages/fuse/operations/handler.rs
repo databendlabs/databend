@@ -26,6 +26,7 @@ use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 
 use crate::storages::fuse::do_vacuum;
 use crate::storages::fuse::do_vacuum_drop_tables;
+use crate::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
 
 pub struct RealVacuumHandler {}
 
@@ -47,6 +48,14 @@ impl VacuumHandler for RealVacuumHandler {
         dry_run_limit: Option<usize>,
     ) -> Result<Option<Vec<(String, String)>>> {
         do_vacuum_drop_tables(tables, dry_run_limit).await
+    }
+
+    async fn do_vacuum_temporary_files(
+        &self,
+        temporary_dir: String,
+        vacuum_limit: Option<usize>,
+    ) -> Result<Vec<String>> {
+        do_vacuum_temporary_files(temporary_dir, vacuum_limit).await
     }
 }
 

@@ -48,6 +48,7 @@ use databend_common_ast::ast::UndropTableStmt;
 use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::VacuumDropTableStmt;
 use databend_common_ast::ast::VacuumTableStmt;
+use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::walk_expr_mut;
@@ -123,6 +124,7 @@ use crate::plans::VacuumDropTableOption;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
+use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
 use crate::Planner;
 use crate::SelectBuilder;
@@ -1157,6 +1159,19 @@ impl Binder {
             database,
             option,
         })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_temporary_files(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &VacuumTemporaryFiles,
+    ) -> Result<Plan> {
+        Ok(Plan::VacuumTemporaryFiles(Box::new(
+            VacuumTemporaryFilesPlan {
+                limit: stmt.limit.clone(),
+            },
+        )))
     }
 
     #[async_backtrace::framed]

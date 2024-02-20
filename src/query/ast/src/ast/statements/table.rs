@@ -550,6 +550,22 @@ impl Display for VacuumDropTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct VacuumTemporaryFiles {
+    pub limit: Option<u64>,
+}
+
+impl Display for crate::ast::VacuumTemporaryFiles {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM TEMPORARY FILES ")?;
+        if let Some(limit) = &self.limit {
+            write!(f, " LIMIT {limit}")?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct OptimizeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,

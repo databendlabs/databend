@@ -835,6 +835,16 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             })
         },
     );
+    let vacuum_temp_files = map(
+        rule! {
+            VACUUM ~ TEMPORARY ~ FILES ~ (LIMIT ~#literal_u64)?
+        },
+        |(_, _, _, opt_limit)| {
+            Statement::VacuumTemporaryFiles(VacuumTemporaryFiles {
+                limit: opt_limit.map(|(_, limit)| limit),
+            })
+        },
+    );
     let vacuum_table = map(
         rule! {
             VACUUM ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #vacuum_table_option
@@ -1878,6 +1888,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_indexes : "`SHOW INDEXES`"
             | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
+            | #vacuum_temp_files : "VACUUM TEMPORARY FILES [<vacuum_limit>]"
         ),
         // database
         rule!(
@@ -3247,7 +3258,7 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
 fn option_to_string(i: Input) -> IResult<String> {
     let bool_to_string = |i| map(literal_bool, |v| v.to_string())(i);
 
-    rule! (
+    rule!(
         #bool_to_string
         | #parameter_to_string
     )(i)
