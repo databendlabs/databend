@@ -269,8 +269,8 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_threshold")? as usize)
     }
 
-    pub fn get_runtime_filter(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_runtime_filter")? != 0)
+    pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_bloom_runtime_filter")? != 0)
     }
 
     pub fn get_prefer_broadcast_join(&self) -> Result<bool> {

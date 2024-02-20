@@ -251,6 +251,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
             probe_keys_rt: plan.probe_keys_rt.clone(),
+            enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
             broadcast: plan.broadcast,
             original_join_type: plan.original_join_type.clone(),
         }))

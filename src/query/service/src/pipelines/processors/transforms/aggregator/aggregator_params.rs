@@ -17,11 +17,14 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::aggregates::get_layout_offsets;
 use databend_common_functions::aggregates::AggregateFunctionRef;
 use databend_common_functions::aggregates::StateAddr;
 use databend_common_sql::IndexType;
+use itertools::Itertools;
 
 use crate::pipelines::processors::transforms::group_by::Area;
 
@@ -92,5 +95,19 @@ impl AggregatorParams {
         self.aggregate_functions
             .iter()
             .any(|f| f.name().contains("DistinctCombinator"))
+    }
+
+    pub fn empty_result_block(&self) -> DataBlock {
+        let columns = self
+            .aggregate_functions
+            .iter()
+            .map(|f| ColumnBuilder::with_capacity(&f.return_type().unwrap(), 0).build())
+            .chain(
+                self.group_data_types
+                    .iter()
+                    .map(|t| ColumnBuilder::with_capacity(t, 0).build()),
+            )
+            .collect_vec();
+        DataBlock::new_from_columns(columns)
     }
 }
