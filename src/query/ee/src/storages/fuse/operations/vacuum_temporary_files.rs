@@ -13,19 +13,13 @@
 // limitations under the License.
 
 use std::time::Duration;
-use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::TableInfo;
 use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
-use log::info;
-use opendal::EntryMode;
 use opendal::Metakey;
-use opendal::Operator;
 
 #[async_backtrace::framed]
 pub async fn do_vacuum_temporary_files(
