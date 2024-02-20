@@ -1,4 +1,4 @@
-query III?
+query IIIR
 SELECT 1 + 1 as a, 1 - 1, 1 * 1, 1 / 2
 ----
 2 0 1 0.5
@@ -8,7 +8,7 @@ SELECT -1, +1
 ----
 -1 1
 
-query ?
+query R
 SELECT 8 / 2
 ----
 4.0
@@ -82,22 +82,22 @@ SELECT Null + 1, Null - 1, Null * 1, Null / 1
 ----
 NULL NULL NULL NULL
 
-query ??
+query RR
 SELECT 1 + 1.0, 1 + 2.0
 ----
 2.0 3.0
 
-query ???
+query RRR
 SELECT 2 ^ 3, 2 ^ 0, 2 ^ -1
 ----
 8.0 1.0 0.5
 
-query ???
+query RRR
 SELECT |/ 25.0, |/ 64.0, |/ 81.0
 ----
 5.0 8.0 9.0
 
-query ???
+query RRR
 SELECT ||/ 8.0, ||/ 64.0, ||/ 125.0
 ----
 2.0 4.0 5.0
@@ -107,7 +107,7 @@ SELECT 3 !, 5!, 12!
 ----
 6 120 479001600
 
-query ???
+query RRR
 SELECT @ -3.0, @ 0.0, @ -3.3
 ----
 3.0 0.0 3.3
