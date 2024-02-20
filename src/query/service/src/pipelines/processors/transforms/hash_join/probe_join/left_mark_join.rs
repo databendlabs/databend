@@ -351,7 +351,8 @@ impl HashJoinProbeState {
         };
         let result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
 
-        let (selection, all_true, all_false) = self.get_other_predicate_selection(filter_executor, &result_block)?;
+        let (selection, all_true, all_false) =
+            self.get_other_predicate_selection(filter_executor, &result_block)?;
 
         let mut count = 0;
         for idx in selection {
@@ -359,14 +360,14 @@ impl HashJoinProbeState {
                 while count < *idx {
                     let row_ptr = build_indexes.get_unchecked(count as usize);
                     *mark_scan_map
-                            .get_unchecked_mut(row_ptr.chunk_index as usize)
-                            .get_unchecked_mut(row_ptr.row_index as usize) = MARKER_KIND_NULL;
+                        .get_unchecked_mut(row_ptr.chunk_index as usize)
+                        .get_unchecked_mut(row_ptr.row_index as usize) = MARKER_KIND_NULL;
                     count += 1;
                 }
                 let row_ptr = build_indexes.get_unchecked(*idx as usize);
                 *mark_scan_map
-                        .get_unchecked_mut(row_ptr.chunk_index as usize)
-                        .get_unchecked_mut(row_ptr.row_index as usize) = MARKER_KIND_TRUE;
+                    .get_unchecked_mut(row_ptr.chunk_index as usize)
+                    .get_unchecked_mut(row_ptr.row_index as usize) = MARKER_KIND_TRUE;
                 count += 1;
             }
         }
@@ -374,8 +375,8 @@ impl HashJoinProbeState {
             unsafe {
                 let row_ptr = build_indexes.get_unchecked(count as usize);
                 *mark_scan_map
-                        .get_unchecked_mut(row_ptr.chunk_index as usize)
-                        .get_unchecked_mut(row_ptr.row_index as usize) = MARKER_KIND_NULL;
+                    .get_unchecked_mut(row_ptr.chunk_index as usize)
+                    .get_unchecked_mut(row_ptr.row_index as usize) = MARKER_KIND_NULL;
                 count += 1;
             }
         }
