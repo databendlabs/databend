@@ -248,7 +248,7 @@ macro_rules! register_intdiv {
         type R = $rt;
         type T = <(L, R) as ResultTypeOfBinary>::IntDiv;
         $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
-            "intdiv",
+            "div",
 
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>>(

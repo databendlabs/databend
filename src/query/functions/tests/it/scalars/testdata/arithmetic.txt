@@ -1247,67 +1247,172 @@ evaluation (internal):
 +--------+-------------------------------------------------+
 
 
-error: 
-  --> SQL:1:4
-  |
-1 | a  div b
-  |    ^^^ function `div` does not exist
+ast            : a  div b
+raw expr       : div(a::Int8, b::Int16)
+checked expr   : div<Int8, Int16>(a, b)
+evaluation:
++--------+---------+---------+---------+
+|        | a       | b       | Output  |
++--------+---------+---------+---------+
+| Type   | Int8    | Int16   | Int16   |
+| Domain | {1..=3} | {2..=6} | Unknown |
+| Row 0  | 1       | 2       | 0       |
+| Row 1  | 2       | 4       | 0       |
+| Row 2  | 3       | 6       | 0       |
++--------+---------+---------+---------+
+evaluation (internal):
++--------+------------------+
+| Column | Data             |
++--------+------------------+
+| a      | Int8([1, 2, 3])  |
+| b      | Int16([2, 4, 6]) |
+| Output | Int16([0, 0, 0]) |
++--------+------------------+
 
 
-
-error: 
-  --> SQL:1:4
-  |
-1 | a2 div 10
-  |    ^^^ function `div` does not exist
-
-
-
-error: 
-  --> SQL:1:4
-  |
-1 | a2 div c
-  |    ^^^ function `div` does not exist
-
-
-
-error: 
-  --> SQL:1:3
-  |
-1 | c div 0.5
-  |   ^^^ function `div` does not exist
-
+ast            : a2 div 10
+raw expr       : div(a2::UInt8 NULL, 10)
+checked expr   : div<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
+optimized expr : div<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
+evaluation:
++--------+------------------+------------+
+|        | a2               | Output     |
++--------+------------------+------------+
+| Type   | UInt8 NULL       | UInt8 NULL |
+| Domain | {1..=3} ∪ {NULL} | Unknown    |
+| Row 0  | 1                | 0          |
+| Row 1  | 2                | 0          |
+| Row 2  | NULL             | NULL       |
++--------+------------------+------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------+
+| Column | Data                                                                |
++--------+---------------------------------------------------------------------+
+| a2     | NullableColumn { column: UInt8([1, 2, 3]), validity: [0b_____011] } |
+| Output | NullableColumn { column: UInt8([0, 0, 0]), validity: [0b_____011] } |
++--------+---------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:3
-  |
-1 | c div b
-  |   ^^^ function `div` does not exist
+ast            : a2 div c
+raw expr       : div(a2::UInt8 NULL, c::UInt32)
+checked expr   : div<UInt8 NULL, UInt32 NULL>(a2, CAST(c AS UInt32 NULL))
+evaluation:
++--------+------------------+-----------+-------------+
+|        | a2               | c         | Output      |
++--------+------------------+-----------+-------------+
+| Type   | UInt8 NULL       | UInt32    | UInt32 NULL |
+| Domain | {1..=3} ∪ {NULL} | {10..=30} | Unknown     |
+| Row 0  | 1                | 10        | 0           |
+| Row 1  | 2                | 20        | 0           |
+| Row 2  | NULL             | 30        | NULL        |
++--------+------------------+-----------+-------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------+
+| Column | Data                                                                 |
++--------+----------------------------------------------------------------------+
+| a2     | NullableColumn { column: UInt8([1, 2, 3]), validity: [0b_____011] }  |
+| c      | UInt32([10, 20, 30])                                                 |
+| Output | NullableColumn { column: UInt32([0, 0, 0]), validity: [0b_____011] } |
++--------+----------------------------------------------------------------------+
 
 
+ast            : c div 0.5
+raw expr       : div(c::UInt32, 0.5)
+checked expr   : div<UInt32, Float64>(c, to_float64<Decimal(1, 1)>(0.5_d128(1,1)))
+optimized expr : div<UInt32, Float64>(c, 0.5_f64)
+evaluation:
++--------+-----------+---------+
+|        | c         | Output  |
++--------+-----------+---------+
+| Type   | UInt32    | Int64   |
+| Domain | {10..=30} | Unknown |
+| Row 0  | 10        | 20      |
+| Row 1  | 20        | 40      |
+| Row 2  | 30        | 60      |
++--------+-----------+---------+
+evaluation (internal):
++--------+----------------------+
+| Column | Data                 |
++--------+----------------------+
+| c      | UInt32([10, 20, 30]) |
+| Output | Int64([20, 40, 60])  |
++--------+----------------------+
 
-error: 
-  --> SQL:1:3
-  |
-1 | c div d
-  |   ^^^ function `div` does not exist
+
+ast            : c div b
+raw expr       : div(c::UInt32, b::Int16)
+checked expr   : div<UInt32, Int16>(c, b)
+evaluation:
++--------+---------+-----------+---------+
+|        | b       | c         | Output  |
++--------+---------+-----------+---------+
+| Type   | Int16   | UInt32    | Int32   |
+| Domain | {2..=6} | {10..=30} | Unknown |
+| Row 0  | 2       | 10        | 5       |
+| Row 1  | 4       | 20        | 5       |
+| Row 2  | 6       | 30        | 5       |
++--------+---------+-----------+---------+
+evaluation (internal):
++--------+----------------------+
+| Column | Data                 |
++--------+----------------------+
+| b      | Int16([2, 4, 6])     |
+| c      | UInt32([10, 20, 30]) |
+| Output | Int32([5, 5, 5])     |
++--------+----------------------+
 
 
+ast            : c div d
+raw expr       : div(c::UInt32, d::Float64)
+checked expr   : div<UInt32, Float64>(c, d)
+evaluation:
++--------+-----------+------------+---------+
+|        | c         | d          | Output  |
++--------+-----------+------------+---------+
+| Type   | UInt32    | Float64    | Int64   |
+| Domain | {10..=30} | {-20..=30} | Unknown |
+| Row 0  | 10        | 10         | 1       |
+| Row 1  | 20        | -20        | -1      |
+| Row 2  | 30        | 30         | 1       |
++--------+-----------+------------+---------+
+evaluation (internal):
++--------+------------------------+
+| Column | Data                   |
++--------+------------------------+
+| c      | UInt32([10, 20, 30])   |
+| d      | Float64([10, -20, 30]) |
+| Output | Int64([1, -1, 1])      |
++--------+------------------------+
 
-error: 
-  --> SQL:1:3
-  |
-1 | c div d2
-  |   ^^^ function `div` does not exist
 
+ast            : c div d2
+raw expr       : div(c::UInt32, d2::UInt8 NULL)
+checked expr   : div<UInt32 NULL, UInt8 NULL>(CAST(c AS UInt32 NULL), d2)
+evaluation:
++--------+-----------+------------------+-------------+
+|        | c         | d2               | Output      |
++--------+-----------+------------------+-------------+
+| Type   | UInt32    | UInt8 NULL       | UInt32 NULL |
+| Domain | {10..=30} | {0..=3} ∪ {NULL} | Unknown     |
+| Row 0  | 10        | 1                | 10          |
+| Row 1  | 20        | NULL             | NULL        |
+| Row 2  | 30        | 3                | 10          |
++--------+-----------+------------------+-------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| c      | UInt32([10, 20, 30])                                                   |
+| d2     | NullableColumn { column: UInt8([1, 0, 3]), validity: [0b_____101] }    |
+| Output | NullableColumn { column: UInt32([10, 0, 10]), validity: [0b_____101] } |
++--------+------------------------------------------------------------------------+
 
 
 error: 
   --> SQL:1:3
   |
 1 | c div 0
-  |   ^^^ function `div` does not exist
+  |   ^^^ divided by zero while evaluating function `div(10, 0)`
 
 
 
