@@ -26,6 +26,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyStr;
 use databend_common_meta_types::SeqV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -99,10 +100,7 @@ async fn test_already_exists_add_udf() -> Result<()> {
 
     let err = got.unwrap_err();
 
-    assert_eq!(
-        err.to_string(),
-        r#"UDF already exists: 'tenant/isnotempty';"#
-    );
+    assert_eq!(err.to_string(), r#"UDF already exists: 'isnotempty'; "#);
 
     // udf server
     let udf = create_test_udf_server();
@@ -115,7 +113,7 @@ async fn test_already_exists_add_udf() -> Result<()> {
         .await?;
 
     let err = got.unwrap_err();
-    assert_eq!(err.to_string(), r#"UDF already exists: 'tenant/strlen';"#);
+    assert_eq!(err.to_string(), r#"UDF already exists: 'strlen'; "#);
 
     Ok(())
 }
@@ -202,6 +200,6 @@ fn create_test_udf_server() -> UserDefinedFunction {
 
 async fn new_udf_api() -> Result<(Arc<MetaEmbedded>, UdfMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
-    let mgr = UdfMgr::create(test_api.clone(), "admin")?;
+    let mgr = UdfMgr::create(test_api.clone(), NonEmptyStr::new("admin").unwrap());
     Ok((test_api, mgr))
 }

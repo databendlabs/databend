@@ -24,34 +24,26 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::NonEmptyStr;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
 use futures::stream::TryStreamExt;
 
-use crate::errors::TenantError;
 use crate::udf::UdfApiError;
 use crate::udf::UdfError;
 
 pub struct UdfMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-    tenant: String,
+    tenant: NonEmptyString,
 }
 
 impl UdfMgr {
-    pub fn create(
-        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-        tenant: &str,
-    ) -> Result<Self, TenantError> {
-        if tenant.is_empty() {
-            return Err(TenantError::CanNotBeEmpty {
-                context: "create UdfMgr".to_string(),
-            });
-        }
-
-        Ok(UdfMgr {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: NonEmptyStr) -> Self {
+        UdfMgr {
             kv_api,
-            tenant: tenant.to_string(),
-        })
+            tenant: tenant.into(),
+        }
     }
 
     /// Add a UDF to /tenant/udf-name.
@@ -68,7 +60,7 @@ impl UdfMgr {
 
         let seq = MatchSeq::from(*create_option);
 
-        let key = UdfName::new(&self.tenant, &info.name);
+        let key = UdfName::new(self.tenant.as_str(), &info.name);
         let req = UpsertPB::insert(key, info.clone()).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
@@ -98,7 +90,7 @@ impl UdfMgr {
             return Ok(Err(e));
         }
 
-        let key = UdfName::new(&self.tenant, &info.name);
+        let key = UdfName::new(self.tenant.as_str(), &info.name);
         let req = UpsertPB::update(key, info.clone()).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
@@ -121,7 +113,7 @@ impl UdfMgr {
         &self,
         udf_name: &str,
     ) -> Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
-        let key = UdfName::new(&self.tenant, udf_name);
+        let key = UdfName::new(self.tenant.as_str(), udf_name);
         let res = self.kv_api.get_pb(&key).await?;
         Ok(res)
     }
@@ -130,7 +122,7 @@ impl UdfMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     pub async fn list_udf(&self) -> Result<Vec<UserDefinedFunction>, UdfApiError> {
-        let key = DirName::new(UdfName::new(&self.tenant, ""));
+        let key = DirName::new(UdfName::new(self.tenant.as_str(), ""));
         let strm = self.kv_api.list_pb_values(&key).await?;
         let udfs = strm
             .try_collect()
@@ -150,7 +142,7 @@ impl UdfMgr {
         udf_name: &str,
         seq: MatchSeq,
     ) -> Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
-        let key = UdfName::new(&self.tenant, udf_name);
+        let key = UdfName::new(self.tenant.as_str(), udf_name);
         let req = UpsertPB::delete(key).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 

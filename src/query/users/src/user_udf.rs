@@ -31,8 +31,8 @@ impl UserApiProvider {
         info: UserDefinedFunction,
         create_option: &CreateOption,
     ) -> Result<()> {
-        let udf_api_client = self.udf_api(tenant)?;
-        udf_api_client.add_udf(info, create_option).await??;
+        let udf_api = self.for_tenant(tenant)?.udf_api();
+        udf_api.add_udf(info, create_option).await??;
         Ok(())
     }
 
@@ -40,7 +40,8 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn update_udf(&self, tenant: &str, info: UserDefinedFunction) -> Result<u64> {
         let res = self
-            .udf_api(tenant)?
+            .for_tenant(tenant)?
+            .udf_api()
             .update_udf(info, MatchSeq::GE(1))
             .await?;
 
@@ -55,7 +56,7 @@ impl UserApiProvider {
         tenant: &str,
         udf_name: &str,
     ) -> Result<Option<UserDefinedFunction>, UdfApiError> {
-        let seqv = self.udf_api(tenant)?.get_udf(udf_name).await?;
+        let seqv = self.for_tenant(tenant)?.udf_api().get_udf(udf_name).await?;
         Ok(seqv.map(|x| x.data))
     }
 
@@ -68,8 +69,9 @@ impl UserApiProvider {
     // Get all UDFs for the tenant.
     #[async_backtrace::framed]
     pub async fn get_udfs(&self, tenant: &str) -> Result<Vec<UserDefinedFunction>> {
-        let udf_api_client = self.udf_api(tenant)?;
-        let udfs = udf_api_client
+        let udf_api = self.for_tenant(tenant)?.udf_api();
+
+        let udfs = udf_api
             .list_udf()
             .await
             .map_err(|e| e.append_context("while get UDFs"))?;
@@ -86,7 +88,8 @@ impl UserApiProvider {
         allow_no_change: bool,
     ) -> std::result::Result<std::result::Result<(), UdfError>, UdfApiError> {
         let dropped = self
-            .udf_api(tenant)?
+            .for_tenant(tenant)?
+            .udf_api()
             .drop_udf(udf_name, MatchSeq::GE(1))
             .await?;
 

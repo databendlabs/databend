@@ -22,14 +22,16 @@ use crate::errors::TenantError;
 /// UDF logic error, unrelated to the backend service providing UDF management, or dependent component.
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum UdfError {
-    #[error("UDF not found: '{tenant}/{name}'; {context}")]
+    // NOTE: do not expose tenant in a for-user error message.
+    #[error("UDF not found: '{name}'; {context}")]
     NotFound {
         tenant: String,
         name: String,
         context: String,
     },
 
-    #[error("UDF already exists: '{tenant}/{name}'; {reason}")]
+    // NOTE: do not expose tenant in a for-user error message.
+    #[error("UDF already exists: '{name}'; {reason}")]
     Exists {
         tenant: String,
         name: String,
