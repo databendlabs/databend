@@ -25,6 +25,7 @@ pub struct InputCommonSettings {
     pub timezone: Tz,
     pub disable_variant_check: bool,
     pub binary_format: BinaryFormat,
+    pub is_rounding_mode: bool,
 }
 
 #[derive(Clone)]

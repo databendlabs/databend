@@ -223,6 +223,10 @@ impl Settings {
         self.try_get_u64("input_read_buffer_size")
     }
 
+    pub fn get_enable_new_copy_for_text_formats(&self) -> Result<u64> {
+        self.try_get_u64("enable_new_copy_for_text_formats")
+    }
+
     pub fn get_enable_bushy_join(&self) -> Result<u64> {
         self.try_get_u64("enable_bushy_join")
     }
