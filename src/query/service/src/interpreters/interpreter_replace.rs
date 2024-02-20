@@ -22,7 +22,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_sql::executor::adjust_plan_id;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::Exchange;
@@ -338,7 +337,7 @@ impl ReplaceInterpreter {
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
         })));
-        adjust_plan_id(&mut root, &mut 0);
+        root.adjust_plan_id(&mut 0);
         Ok((root, purge_info))
     }
 

@@ -122,6 +122,190 @@ pub enum PhysicalPlan {
 }
 
 impl PhysicalPlan {
+    /// Adjust the plan_id of the physical plan.
+    /// This function will assign a unique plan_id to each physical plan node in a top-down manner.
+    /// Which means the plan_id of a node is always greater than the plan_id of its parent node.
+    pub fn adjust_plan_id(&mut self, next_id: &mut u32) {
+        match self {
+            PhysicalPlan::TableScan(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::Filter(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::Project(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::EvalScalar(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ProjectSet(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::AggregateExpand(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::AggregatePartial(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::AggregateFinal(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::Window(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::Sort(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::Limit(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::RowFetch(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::HashJoin(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.probe.adjust_plan_id(next_id);
+                plan.build.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::RangeJoin(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.left.adjust_plan_id(next_id);
+                plan.right.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::Exchange(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::UnionAll(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.left.adjust_plan_id(next_id);
+                plan.right.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::CteScan(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::MaterializedCte(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ConstantTableScan(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::Udf(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::DistributedInsertSelect(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ExchangeSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ExchangeSink(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::CopyIntoTable(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::DeleteSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ReplaceInto(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeInto(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeIntoAddRowNumber(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeIntoSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::CommitSink(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ReplaceAsyncSourcer(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ReplaceDeduplicate(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::CompactSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ReclusterSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ReclusterSink(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::UpdateSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+        }
+    }
+
     /// Get the id of the plan node
     pub fn get_id(&self) -> u32 {
         match self {

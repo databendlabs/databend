@@ -35,7 +35,6 @@ use databend_common_expression::ROW_NUMBER_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::MergeIntoType;
-use databend_common_sql::executor::adjust_plan_id;
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
@@ -537,7 +536,7 @@ impl MergeIntoInterpreter {
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
         }));
-        adjust_plan_id(&mut physical_plan, &mut 0);
+        physical_plan.adjust_plan_id(&mut 0);
         Ok((physical_plan, table_info))
     }
 

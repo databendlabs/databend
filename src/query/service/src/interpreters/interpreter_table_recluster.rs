@@ -25,7 +25,6 @@ use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_sql::executor::adjust_plan_id;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::ReclusterSink;
@@ -257,6 +256,6 @@ pub fn build_recluster_physical_plan(
         removed_segment_summary,
         plan_id: u32::MAX,
     }));
-    adjust_plan_id(&mut plan, &mut 0);
+    plan.adjust_plan_id(&mut 0);
     Ok(plan)
 }

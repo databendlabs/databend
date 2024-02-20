@@ -30,7 +30,6 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::ColumnBindingBuilder;
-use databend_common_sql::executor::adjust_plan_id;
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::DeleteSource;
 use databend_common_sql::executor::physical_plans::Exchange;
@@ -286,7 +285,7 @@ impl DeleteInterpreter {
             deduplicated_label: None,
             plan_id: u32::MAX,
         }));
-        adjust_plan_id(&mut plan, &mut 0);
+        plan.adjust_plan_id(&mut 0);
         Ok(plan)
     }
 }
