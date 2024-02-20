@@ -239,12 +239,7 @@ echo "drop database d" | $USER_B_CONNECT
 echo "drop user a" | $BENDSQL_CLIENT_CONNECT
 echo "drop user b" | $BENDSQL_CLIENT_CONNECT
 
-echo "drop user if exists c" | $BENDSQL_CLIENT_CONNECT
-echo "create user c identified by '123'" | $BENDSQL_CLIENT_CONNECT
-echo "grant drop on default.t to c" | $BENDSQL_CLIENT_CONNECT
-export USER_C_CONNECT="bendsql --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-
-echo "drop table if exists t" | $USER_C_CONNECT
+echo "drop table if exists t" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t1" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t2" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage if exists s3;" | $BENDSQL_CLIENT_CONNECT

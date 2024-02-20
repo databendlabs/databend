@@ -16,10 +16,7 @@ DROP TABLE t
 statement ok
 DROP TABLE if exists database_error.t
 
-## in privilege access check,
-## GrantObject::Table check must depend the catalog to check the table name is table_function or not.
-## So `drop table if exists` with unknown catalog need return err.
-statement error 1119
+statement ok
 DROP TABLE IF EXISTS catalog_error.database_error.t
 
 statement error 1003

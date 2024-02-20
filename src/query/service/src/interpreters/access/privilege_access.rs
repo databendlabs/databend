@@ -625,7 +625,7 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::DropTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table,  vec![UserPrivilegeType::Drop]).await?;
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop]).await?;
             }
             Plan::UndropTable(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop]).await?;
