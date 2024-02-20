@@ -564,8 +564,8 @@ impl HashJoinProbeState {
             }
         } else {
             result_blocks.push(result_block);
+            let mut count = 0;
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
-                let mut count = 0;
                 for idx in selection {
                     unsafe {
                         while count < *idx {
@@ -583,18 +583,24 @@ impl HashJoinProbeState {
                 }
             } else {
                 self.merge_into_check_and_set_matched(build_indexes, matched_idx, Some(selection))?;
-                let mut count = 0;
                 for idx in selection {
-                    unsafe {
-                        while count < *idx {
+                    while count < *idx {
+                        unsafe {
                             *row_state.get_unchecked_mut(
                                 *row_state_indexes.get_unchecked(count as usize),
-                            ) -= 1;
-                            count += 1;
-                        }
+                            ) -= 1
+                        };
                         count += 1;
                     }
+                    count += 1;
                 }
+            }
+            while (count as usize) < matched_idx {
+                unsafe {
+                    *row_state
+                        .get_unchecked_mut(*row_state_indexes.get_unchecked(count as usize)) -= 1
+                };
+                count += 1;
             }
         }
 
