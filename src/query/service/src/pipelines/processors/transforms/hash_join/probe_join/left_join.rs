@@ -583,11 +583,16 @@ impl HashJoinProbeState {
                 }
             } else {
                 self.merge_into_check_and_set_matched(build_indexes, matched_idx, Some(selection))?;
+                let mut count = 0;
                 for idx in selection {
                     unsafe {
-                        *row_state
-                            .get_unchecked_mut(*row_state_indexes.get_unchecked(*idx as usize)) -=
-                            1;
+                        while count < *idx {
+                            *row_state.get_unchecked_mut(
+                                *row_state_indexes.get_unchecked(count as usize),
+                            ) -= 1;
+                            count += 1;
+                        }
+                        count += 1;
                     }
                 }
             }
