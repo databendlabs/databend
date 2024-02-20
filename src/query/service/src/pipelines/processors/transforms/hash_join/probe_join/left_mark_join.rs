@@ -16,9 +16,6 @@ use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::NullableType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::KeyAccessor;
@@ -26,7 +23,6 @@ use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
-use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
 use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
@@ -351,7 +347,7 @@ impl HashJoinProbeState {
         };
         let result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
 
-        let (selection, all_true, all_false) =
+        let (selection, _, _) =
             self.get_other_predicate_selection(filter_executor, &result_block)?;
 
         let mut count = 0;
