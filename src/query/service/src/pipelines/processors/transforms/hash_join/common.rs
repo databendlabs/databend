@@ -25,6 +25,7 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -91,6 +92,38 @@ impl HashJoinProbeState {
             validity: validity.into(),
         }));
         Ok(DataBlock::new_from_columns(vec![marker_column]))
+    }
+
+    // return (result data block, filtered indices, all_true, all_false).
+    pub(crate) fn get_other_predicate_result_block<'a>(
+        &self,
+        filter_executor: &'a mut FilterExecutor,
+        data_block: DataBlock,
+    ) -> Result<(DataBlock, &'a [u32], bool, bool)> {
+        let origin_count = data_block.num_rows();
+        let result_block = filter_executor.filter(data_block)?;
+        let result_count = result_block.num_rows();
+        Ok((
+            result_block,
+            &filter_executor.true_selection()[0..result_count],
+            result_count == origin_count,
+            result_count == 0,
+        ))
+    }
+
+    // return (result data block, filtered indices, all_true, all_false).
+    pub(crate) fn get_other_predicate_selection<'a>(
+        &self,
+        filter_executor: &'a mut FilterExecutor,
+        data_block: &DataBlock,
+    ) -> Result<(&'a [u32], bool, bool)> {
+        let origin_count = data_block.num_rows();
+        let result_count = filter_executor.select(data_block)?;
+        Ok((
+            &filter_executor.true_selection()[0..result_count],
+            result_count == origin_count,
+            result_count == 0,
+        ))
     }
 
     // return an (option bitmap, all_true, all_false).

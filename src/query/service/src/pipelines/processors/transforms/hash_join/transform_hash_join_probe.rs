@@ -87,6 +87,11 @@ impl TransformHashJoinProbe {
         has_string_column: bool,
     ) -> Result<Box<dyn Processor>> {
         let id = join_probe_state.probe_attach()?;
+        let other_predicate = join_probe_state
+            .hash_join_state
+            .hash_join_desc
+            .other_predicate
+            .clone();
         Ok(Box::new(TransformHashJoinProbe {
             input_port,
             output_port,
@@ -102,6 +107,7 @@ impl TransformHashJoinProbe {
                 with_conjunct,
                 has_string_column,
                 func_ctx,
+                other_predicate,
             ),
             max_block_size,
             outer_scan_finished: false,

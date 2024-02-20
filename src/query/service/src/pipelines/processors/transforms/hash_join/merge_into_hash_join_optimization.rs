@@ -16,7 +16,6 @@ use std::cell::SyncUnsafeCell;
 use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_catalog::plan::compute_row_id_prefix;
 use databend_common_catalog::plan::split_prefix;
 use databend_common_exception::ErrorCode;
@@ -157,7 +156,7 @@ impl HashJoinProbeState {
         &self,
         build_indexes: &[RowPtr],
         matched_idx: usize,
-        valids: &Bitmap,
+        selection: Option<&[u32]>,
     ) -> Result<()> {
         // merge into target table as build side.
         if self
@@ -176,45 +175,70 @@ impl HashJoinProbeState {
 
             let pointer = &merge_into_state.atomic_pointer;
             // add matched indexes.
-            for (idx, row_ptr) in build_indexes[0..matched_idx].iter().enumerate() {
-                unsafe {
-                    if !valids.get_bit_unchecked(idx) {
-                        continue;
+            if let Some(selection) = selection {
+                for idx in selection {
+                    let row_ptr = unsafe { build_indexes.get_unchecked(*idx as usize) };
+                    let offset = if row_ptr.chunk_index == 0 {
+                        row_ptr.row_index as usize
+                    } else {
+                        chunk_offsets[(row_ptr.chunk_index - 1) as usize] as usize
+                            + row_ptr.row_index as usize
+                    };
+
+                    let mut old_mactehd_counts =
+                        unsafe { (*pointer.0.add(offset)).load(Ordering::Relaxed) };
+                    loop {
+                        if old_mactehd_counts > 0 {
+                            return Err(ErrorCode::UnresolvableConflict(
+                                "multi rows from source match one and the same row in the target_table multi times in probe phase",
+                            ));
+                        }
+
+                        let res = unsafe {
+                            (*pointer.0.add(offset)).compare_exchange_weak(
+                                old_mactehd_counts,
+                                old_mactehd_counts + 1,
+                                Ordering::SeqCst,
+                                Ordering::SeqCst,
+                            )
+                        };
+                        match res {
+                            Ok(_) => break,
+                            Err(x) => old_mactehd_counts = x,
+                        };
                     }
                 }
-                let offset = if row_ptr.chunk_index == 0 {
-                    row_ptr.row_index as usize
-                } else {
-                    chunk_offsets[(row_ptr.chunk_index - 1) as usize] as usize
-                        + row_ptr.row_index as usize
-                };
-
-                let mut old_mactehd_counts =
-                    unsafe { (*pointer.0.add(offset)).load(Ordering::Relaxed) };
-                let mut new_matched_count = old_mactehd_counts + 1;
-                loop {
-                    if old_mactehd_counts > 0 {
-                        return Err(ErrorCode::UnresolvableConflict(
-                            "multi rows from source match one and the same row in the target_table multi times in probe phase",
-                        ));
-                    }
-
-                    let res = unsafe {
-                        (*pointer.0.add(offset)).compare_exchange_weak(
-                            old_mactehd_counts,
-                            new_matched_count,
-                            Ordering::SeqCst,
-                            Ordering::SeqCst,
-                        )
+            } else {
+                for row_ptr in &build_indexes[0..matched_idx] {
+                    let offset = if row_ptr.chunk_index == 0 {
+                        row_ptr.row_index as usize
+                    } else {
+                        chunk_offsets[(row_ptr.chunk_index - 1) as usize] as usize
+                            + row_ptr.row_index as usize
                     };
 
-                    match res {
-                        Ok(_) => break,
-                        Err(x) => {
-                            old_mactehd_counts = x;
-                            new_matched_count = old_mactehd_counts + 1;
+                    let mut old_mactehd_counts =
+                        unsafe { (*pointer.0.add(offset)).load(Ordering::Relaxed) };
+                    loop {
+                        if old_mactehd_counts > 0 {
+                            return Err(ErrorCode::UnresolvableConflict(
+                                "multi rows from source match one and the same row in the target_table multi times in probe phase",
+                            ));
                         }
-                    };
+
+                        let res = unsafe {
+                            (*pointer.0.add(offset)).compare_exchange_weak(
+                                old_mactehd_counts,
+                                old_mactehd_counts + 1,
+                                Ordering::SeqCst,
+                                Ordering::SeqCst,
+                            )
+                        };
+                        match res {
+                            Ok(_) => break,
+                            Err(x) => old_mactehd_counts = x,
+                        };
+                    }
                 }
             }
         }
