@@ -28,57 +28,6 @@ use opendal::Metakey;
 use opendal::Operator;
 
 #[async_backtrace::framed]
-pub async fn do_vacuum_drop_table(
-    table_info: &TableInfo,
-    operator: &Operator,
-    dry_run_limit: Option<usize>,
-) -> Result<Option<Vec<(String, String)>>> {
-    // storage_params is_some means it is an external table, ignore
-    if table_info.meta.storage_params.is_some() {
-        info!("ignore external table {}", table_info.name);
-        return Ok(None);
-    }
-
-    let dir = format!("{}/", FuseTable::parse_storage_prefix(table_info)?);
-    info!("vacuum drop table {:?} dir {:?}", table_info.name, dir);
-    let start = Instant::now();
-
-    let ret = match dry_run_limit {
-        None => {
-            operator.remove_all(&dir).await?;
-            Ok(None)
-        }
-        Some(dry_run_limit) => {
-            let mut ds = operator
-                .lister_with(&dir)
-                .recursive(true)
-                .metakey(Metakey::Mode)
-                .await?;
-            let mut list_files = Vec::new();
-            while let Some(de) = ds.try_next().await? {
-                let meta = de.metadata();
-                if EntryMode::FILE == meta.mode() {
-                    list_files.push((table_info.name.clone(), de.name().to_string()));
-                    if list_files.len() >= dry_run_limit {
-                        break;
-                    }
-                }
-            }
-
-            Ok(Some(list_files))
-        }
-    };
-
-    info!(
-        "vacuum drop table {:?} dir {:?}, cost:{} sec",
-        table_info.name,
-        dir,
-        start.elapsed().as_secs()
-    );
-    ret
-}
-
-#[async_backtrace::framed]
 pub async fn do_vacuum_temporary_files(
     temporary_dir: String,
     limit: Option<usize>,
@@ -103,7 +52,7 @@ pub async fn do_vacuum_temporary_files(
         let meta = de.metadata();
 
         if let Some(modified) = meta.last_modified() {
-            if timestamp - modified.timestamp() >= expire_time {
+            if timestamp - modified.timestamp_millis() >= expire_time {
                 operator.delete(de.path()).await?;
                 remove_temp_files_name.push(de.name().to_string());
             }
@@ -115,8 +64,4 @@ pub async fn do_vacuum_temporary_files(
     }
 
     Ok(remove_temp_files_name)
-}
-
-pub fn query_spill_prefix(tenant: &str) -> String {
-    format!("_query_spill/{}", tenant)
 }

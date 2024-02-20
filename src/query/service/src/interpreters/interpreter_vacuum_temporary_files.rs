@@ -23,7 +23,6 @@ use databend_common_license::license_manager::get_license_manager;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_sql::plans::VacuumTemporaryFilesPlan;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
-use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -61,7 +60,6 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
             .do_vacuum_temporary_files(temporary_files_prefix, self.plan.limit.map(|x| x as usize))
             .await?;
 
-        // info!("temporary files: {:?}", remove_files);
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(remove_files),
         ])])
