@@ -19,6 +19,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_management::errors::TenantError;
+use databend_common_management::udf::UdfMgr;
 use databend_common_management::ConnectionApi;
 use databend_common_management::ConnectionMgr;
 use databend_common_management::FileFormatApi;
@@ -35,7 +36,6 @@ use databend_common_management::SettingApi;
 use databend_common_management::SettingMgr;
 use databend_common_management::StageApi;
 use databend_common_management::StageMgr;
-use databend_common_management::UdfMgr;
 use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_meta_app::principal::AuthInfo;
@@ -46,6 +46,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::NonEmptyStr;
 
 use crate::idm_config::IDMConfig;
 use crate::BUILTIN_ROLE_PUBLIC;
@@ -143,10 +144,6 @@ impl UserApiProvider {
         )?))
     }
 
-    pub fn udf_api(&self, tenant: &str) -> std::result::Result<UdfMgr, TenantError> {
-        UdfMgr::create(self.client.clone(), tenant)
-    }
-
     pub fn get_tenant_quota_api_client(&self, tenant: &str) -> Result<Arc<dyn QuotaApi>> {
         Ok(Arc::new(QuotaMgr::create(self.client.clone(), tenant)?))
     }
@@ -185,5 +182,31 @@ impl UserApiProvider {
 
     pub fn get_configured_users(&self) -> HashMap<String, AuthInfo> {
         self.idm_config.users.clone()
+    }
+
+    /// Create an API container for a specific tenant that is guaranteed to have a non-empty tenant
+    pub fn for_tenant<'a>(
+        &'a self,
+        tenant: &'a str,
+    ) -> std::result::Result<ForTenant<'a>, TenantError> {
+        let tenant = NonEmptyStr::new(tenant).map_err(|_e| TenantError::CanNotBeEmpty {
+            context: "".to_string(),
+        })?;
+        Ok(ForTenant {
+            tenant,
+            user_api: self,
+        })
+    }
+}
+
+/// A wrapped UserApiProvider that guarantees the tenant is not empty
+pub struct ForTenant<'a> {
+    tenant: NonEmptyStr<'a>,
+    user_api: &'a UserApiProvider,
+}
+
+impl<'a> ForTenant<'a> {
+    pub fn udf_api(&self) -> UdfMgr {
+        UdfMgr::create(self.user_api.client.clone(), self.tenant)
     }
 }

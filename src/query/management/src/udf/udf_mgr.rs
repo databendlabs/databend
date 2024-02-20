@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
@@ -26,32 +24,26 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::NonEmptyStr;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
 use futures::stream::TryStreamExt;
 
-use crate::errors::TenantError;
+use crate::udf::UdfApiError;
+use crate::udf::UdfError;
 
 pub struct UdfMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-    tenant: String,
+    tenant: NonEmptyString,
 }
 
 impl UdfMgr {
-    pub fn create(
-        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-        tenant: &str,
-    ) -> std::result::Result<Self, TenantError> {
-        if tenant.is_empty() {
-            return Err(TenantError::CanNotBeEmpty {
-                context: "create UdfMgr".to_string(),
-            });
-        }
-
-        Ok(UdfMgr {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: NonEmptyStr) -> Self {
+        UdfMgr {
             kv_api,
-            tenant: tenant.to_string(),
-        })
+            tenant: tenant.into(),
+        }
     }
 
     /// Add a UDF to /tenant/udf-name.
@@ -61,68 +53,84 @@ impl UdfMgr {
         &self,
         info: UserDefinedFunction,
         create_option: &CreateOption,
-    ) -> Result<()> {
-        Self::ensure_non_builtin(info.name.as_str())?;
+    ) -> Result<Result<(), UdfError>, UdfApiError> {
+        if let Err(e) = self.ensure_non_builtin(info.name.as_str()) {
+            return Ok(Err(e));
+        }
 
         let seq = MatchSeq::from(*create_option);
 
-        let key = UdfName::new(&self.tenant, &info.name);
+        let key = UdfName::new(self.tenant.as_str(), &info.name);
         let req = UpsertPB::insert(key, info.clone()).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
         if let CreateOption::CreateIfNotExists(false) = create_option {
             if res.prev.is_some() {
-                return Err(ErrorCode::UdfAlreadyExists(format!(
-                    "UDF '{}' already exists.",
-                    info.name
-                )));
+                let err = UdfError::Exists {
+                    tenant: self.tenant.to_string(),
+                    name: info.name.to_string(),
+                    reason: "".to_string(),
+                };
+                return Ok(Err(err));
             }
         }
 
-        Ok(())
+        Ok(Ok(()))
     }
 
     /// Update a UDF to /tenant/udf-name.
     #[async_backtrace::framed]
     #[minitrace::trace]
-    pub async fn update_udf(&self, info: UserDefinedFunction, seq: MatchSeq) -> Result<u64> {
-        Self::ensure_non_builtin(info.name.as_str())?;
+    pub async fn update_udf(
+        &self,
+        info: UserDefinedFunction,
+        seq: MatchSeq,
+    ) -> Result<Result<u64, UdfError>, UdfApiError> {
+        if let Err(e) = self.ensure_non_builtin(info.name.as_str()) {
+            return Ok(Err(e));
+        }
 
-        let key = UdfName::new(&self.tenant, &info.name);
+        let key = UdfName::new(self.tenant.as_str(), &info.name);
         let req = UpsertPB::update(key, info.clone()).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
-        if res.is_changed() {
+
+        let res = if res.is_changed() {
             Ok(res.result.unwrap().seq)
         } else {
-            Err(ErrorCode::UnknownUDF(format!(
-                "UDF '{}' does not exist.",
-                info.name
-            )))
-        }
+            Err(UdfError::NotFound {
+                tenant: self.tenant.to_string(),
+                name: info.name.to_string(),
+                context: "while update udf".to_string(),
+            })
+        };
+        Ok(res)
     }
 
     /// Get UDF by name.
     #[async_backtrace::framed]
     #[minitrace::trace]
-    pub async fn get_udf(&self, udf_name: &str) -> Result<SeqV<UserDefinedFunction>> {
-        // TODO: do not return ErrorCode, return UDFError
-
-        let key = UdfName::new(&self.tenant, udf_name);
+    pub async fn get_udf(
+        &self,
+        udf_name: &str,
+    ) -> Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
+        let key = UdfName::new(self.tenant.as_str(), udf_name);
         let res = self.kv_api.get_pb(&key).await?;
-
-        let seqv = res
-            .ok_or_else(|| ErrorCode::UnknownUDF(format!("UDF '{}' does not exist.", udf_name)))?;
-
-        Ok(seqv)
+        Ok(res)
     }
 
     /// Get all the UDFs for a tenant.
     #[async_backtrace::framed]
     #[minitrace::trace]
-    pub async fn get_udfs(&self) -> Result<Vec<UserDefinedFunction>> {
-        let key = DirName::new(UdfName::new(&self.tenant, ""));
+    pub async fn list_udf(&self) -> Result<Vec<UserDefinedFunction>, UdfApiError> {
+        let key = DirName::new(UdfName::new(self.tenant.as_str(), ""));
         let strm = self.kv_api.list_pb_values(&key).await?;
-        let udfs = strm.try_collect().await?;
+        let udfs = strm
+            .try_collect()
+            .await
+            .map_err(|e| UdfApiError::MetaError {
+                meta_err: e,
+                context: "while list UDF".to_string(),
+            })?;
         Ok(udfs)
     }
 
@@ -133,8 +141,8 @@ impl UdfMgr {
         &self,
         udf_name: &str,
         seq: MatchSeq,
-    ) -> std::result::Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
-        let key = UdfName::new(&self.tenant, udf_name);
+    ) -> Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
+        let key = UdfName::new(self.tenant.as_str(), udf_name);
         let req = UpsertPB::delete(key).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
@@ -145,12 +153,13 @@ impl UdfMgr {
         }
     }
 
-    fn ensure_non_builtin(name: &str) -> Result<(), ErrorCode> {
+    fn ensure_non_builtin(&self, name: &str) -> Result<(), UdfError> {
         if is_builtin_function(name) {
-            return Err(ErrorCode::UdfAlreadyExists(format!(
-                "It's a builtin function: {}",
-                name
-            )));
+            return Err(UdfError::Exists {
+                tenant: self.tenant.to_string(),
+                name: name.to_string(),
+                reason: " It is a builtin function".to_string(),
+            });
         }
         Ok(())
     }
