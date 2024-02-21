@@ -204,7 +204,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
                 ));
             }
 
-            let mut writer = DFQueryResultWriter::create(writer);
+            let mut writer = DFQueryResultWriter::create(writer, self.base.session.clone());
 
             let instant = Instant::now();
             let query_result = self
@@ -422,9 +422,6 @@ impl InteractiveWorkerBase {
             ErrorCode::TokioError,
             || "Cannot join handle from context's runtime",
         )?;
-        if query_result.is_err() {
-            context.txn_mgr().lock().unwrap().set_fail();
-        }
         let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
             as Box<dyn ProgressReporter + Send>;
         query_result.map(|data| (data, Some(reporter)))
