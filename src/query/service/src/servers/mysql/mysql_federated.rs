@@ -173,6 +173,7 @@ impl MySQLFederated {
         #[ctor]
         static MIXED_RULES: Vec<(Regex, Option<(TableSchemaRef, DataBlock)>)> = vec![
             // Txn.
+            (Regex::new("(?i)^(ROLLBACK(.*))").unwrap(), None),
             (Regex::new("(?i)^(START(.*))").unwrap(), None),
             (Regex::new("(?i)^(SET NAMES(.*))").unwrap(), None),
             (Regex::new("(?i)^(SET character_set_results(.*))").unwrap(), None),
