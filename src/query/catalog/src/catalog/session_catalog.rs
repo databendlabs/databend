@@ -226,12 +226,42 @@ impl Catalog for SessionCatalog {
 
     // Get the table meta by meta id.
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
-        todo!()
+        let state = self.txn_mgr.lock().unwrap().state();
+        match state {
+            TxnState::Active => {
+                let mutated_table = self
+                    .txn_mgr
+                    .lock()
+                    .unwrap()
+                    .get_mutated_table(tenant, db_name, table_name);
+                if let Some(t) = mutated_table {
+                    Ok((t.ident.clone(), t.meta.clone()))
+                } else {
+                    self.inner.get_table_meta_by_id(table_id).await
+                }
+            }
+            _ => self.inner.get_table_meta_by_id(table_id).await,
+        }
     }
 
     // Get the table name by meta id.
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
-        todo!()
+        let state = self.txn_mgr.lock().unwrap().state();
+        match state {
+            TxnState::Active => {
+                let mutated_table = self
+                    .txn_mgr
+                    .lock()
+                    .unwrap()
+                    .get_mutated_table(tenant, db_name, table_name);
+                if let Some(t) = mutated_table {
+                    Ok(t.name.clone())
+                } else {
+                    self.inner.get_table_name_by_id(table_id).await
+                }
+            }
+            _ => self.inner.get_table_name_by_id(table_id).await,
+        }
     }
 
     // Get the db name by meta id.
@@ -266,25 +296,25 @@ impl Catalog for SessionCatalog {
     }
 
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        todo!()
+        self.inner.list_tables(tenant, db_name).await
     }
     async fn list_tables_history(
         &self,
         tenant: &str,
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
-        todo!()
+        self.inner.list_tables_history(tenant, db_name).await
     }
 
     async fn get_drop_table_infos(
         &self,
-        _req: ListDroppedTableReq,
+        req: ListDroppedTableReq,
     ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
-        todo!()
+        self.inner.get_drop_table_infos(req).await
     }
 
-    async fn gc_drop_tables(&self, _req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
-        todo!()
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<GcDroppedTableResp> {
+        self.inner.gc_drop_tables(req).await
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
@@ -309,7 +339,7 @@ impl Catalog for SessionCatalog {
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        todo!()
+        self.inner.upsert_table_option(tenant, db_name, req).await
     }
 
     async fn update_table_meta(
@@ -362,7 +392,7 @@ impl Catalog for SessionCatalog {
         table_info: &TableInfo,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
-        todo!()
+        self.inner.truncate_table(table_info, req).await
     }
 
     async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
