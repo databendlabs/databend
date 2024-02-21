@@ -80,7 +80,6 @@ impl TxnManager {
     }
 
     pub fn is_fail(&self) -> bool {
-        println!("is_fail {:?}", self.state);
         matches!(self.state, TxnState::Fail)
     }
 
