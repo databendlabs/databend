@@ -762,18 +762,9 @@ mod kvapi_key_impl {
     use crate::share::ShareMeta;
     use crate::share::ShareNameIdent;
 
-    const PREFIX_SHARE: &str = "__fd_share";
-    const PREFIX_SHARE_BY: &str = "__fd_share_by";
-    const PREFIX_SHARE_ID: &str = "__fd_share_id";
-    const PREFIX_SHARE_ID_TO_NAME: &str = "__fd_share_id_to_name";
-    const PREFIX_SHARE_ACCOUNT_ID: &str = "__fd_share_account_id";
-    const PREFIX_SHARE_ENDPOINT: &str = "__fd_share_endpoint";
-    const PREFIX_SHARE_ENDPOINT_ID: &str = "__fd_share_endpoint_id";
-    const PREFIX_SHARE_ENDPOINT_ID_TO_NAME: &str = "__fd_share_endpoint_id_to_name";
-
     /// __fd_share_by/{db|table}/<object_id> -> ObjectSharedByShareIds
     impl kvapi::Key for ShareGrantObject {
-        const PREFIX: &'static str = PREFIX_SHARE_BY;
+        const PREFIX: &'static str = "__fd_share_by";
 
         type ValueType = ObjectSharedByShareIds;
 
@@ -813,7 +804,7 @@ mod kvapi_key_impl {
 
     /// __fd_share/<tenant>/<share_name> -> <share_id>
     impl kvapi::Key for ShareNameIdent {
-        const PREFIX: &'static str = PREFIX_SHARE;
+        const PREFIX: &'static str = "__fd_share";
 
         type ValueType = ShareId;
 
@@ -837,7 +828,7 @@ mod kvapi_key_impl {
 
     /// __fd_share_id/<share_id> -> <share_meta>
     impl kvapi::Key for ShareId {
-        const PREFIX: &'static str = PREFIX_SHARE_ID;
+        const PREFIX: &'static str = "__fd_share_id";
 
         type ValueType = ShareMeta;
 
@@ -859,7 +850,7 @@ mod kvapi_key_impl {
 
     // __fd_share_account/tenant/id -> ShareAccountMeta
     impl kvapi::Key for ShareAccountNameIdent {
-        const PREFIX: &'static str = PREFIX_SHARE_ACCOUNT_ID;
+        const PREFIX: &'static str = "__fd_share_account_id";
 
         type ValueType = ShareAccountMeta;
 
@@ -889,7 +880,7 @@ mod kvapi_key_impl {
 
     /// __fd_share_id_to_name/<share_id> -> ShareNameIdent
     impl kvapi::Key for ShareIdToName {
-        const PREFIX: &'static str = PREFIX_SHARE_ID_TO_NAME;
+        const PREFIX: &'static str = "__fd_share_id_to_name";
 
         type ValueType = ShareNameIdent;
 
@@ -911,7 +902,7 @@ mod kvapi_key_impl {
 
     /// __fd_share/<tenant>/<share_endpoint_name> -> ShareEndpointId
     impl kvapi::Key for ShareEndpointIdent {
-        const PREFIX: &'static str = PREFIX_SHARE_ENDPOINT;
+        const PREFIX: &'static str = "__fd_share_endpoint";
 
         type ValueType = ShareEndpointId;
 
@@ -935,7 +926,7 @@ mod kvapi_key_impl {
 
     /// __fd_share_endpoint_id/<share_endpoint_id> -> <share_meta>
     impl kvapi::Key for ShareEndpointId {
-        const PREFIX: &'static str = PREFIX_SHARE_ENDPOINT_ID;
+        const PREFIX: &'static str = "__fd_share_endpoint_id";
 
         type ValueType = ShareEndpointMeta;
 
@@ -957,7 +948,7 @@ mod kvapi_key_impl {
 
     /// __fd_share_endpoint_id_to_name/<share_endpoint_id> -> ShareEndpointIdent
     impl kvapi::Key for ShareEndpointIdToName {
-        const PREFIX: &'static str = PREFIX_SHARE_ENDPOINT_ID_TO_NAME;
+        const PREFIX: &'static str = "__fd_share_endpoint_id_to_name";
 
         type ValueType = ShareEndpointIdent;
 
