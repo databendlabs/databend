@@ -348,8 +348,8 @@ pub enum JoinOperator {
     RightOuter,
     FullOuter,
     // PartitialFullOuter is an optimization for merge into source build,
-    // in this case, we can do pass the target block with matched and ummatched,
-    // and delete the correlated block directly, but it's limitted, we just support
+    // in this case,  we can do pass the target block of matched partition and ummatched
+    // partition, and append block directly, but it's limitted, we just support
     // the matched partial block must be modfied(update or delete), so we need to
     // make sure the last condition for matched expression is none.
     // for example:
