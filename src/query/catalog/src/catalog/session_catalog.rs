@@ -333,6 +333,10 @@ impl Catalog for SessionCatalog {
         }
     }
 
+    async fn update_multi_table_meta(&self, reqs: Vec<UpdateTableMetaReq>) -> Result<()> {
+        self.inner.update_multi_table_meta(reqs).await
+    }
+
     async fn set_table_column_mask_policy(
         &self,
         req: SetTableColumnMaskPolicyReq,

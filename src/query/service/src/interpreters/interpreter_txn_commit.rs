@@ -16,20 +16,17 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_storages_fuse::TableContext;
-use databend_storages_common_txn::TxnManagerRef;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 pub struct CommitInterpreter {
-    txn_manager: TxnManagerRef,
+    ctx: Arc<QueryContext>,
 }
 
 impl CommitInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
-        Ok(Self {
-            txn_manager: ctx.txn_mgr(),
-        })
+        Ok(Self { ctx })
     }
 }
 
@@ -49,7 +46,13 @@ impl Interpreter for CommitInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        self.txn_manager.lock().unwrap().commit();
+        let is_active = self.ctx.txn_mgr().lock().unwrap().is_active();
+        if is_active {
+            let catalog = self.ctx.get_default_catalog()?;
+            let reqs = self.ctx.txn_mgr().lock().unwrap().reqs();
+            catalog.update_multi_table_meta(reqs).await?;
+        }
+        self.ctx.txn_mgr().lock().unwrap().refresh();
         Ok(PipelineBuildResult::create())
     }
 }

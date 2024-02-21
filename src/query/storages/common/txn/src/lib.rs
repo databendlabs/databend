@@ -65,15 +65,7 @@ impl TxnManager {
         }
     }
 
-    pub fn commit(&mut self) {
-        if let TxnState::Active = self.state {
-            todo!("commit")
-        }
-        self.state = TxnState::AutoCommit;
-        self.txn_buffer.refresh();
-    }
-
-    pub fn abort(&mut self) {
+    pub fn refresh(&mut self) {
         self.state = TxnState::AutoCommit;
         self.txn_buffer.refresh();
     }
@@ -86,6 +78,10 @@ impl TxnManager {
 
     pub fn is_fail(&self) -> bool {
         matches!(self.state, TxnState::Fail)
+    }
+
+    pub fn is_active(&self) -> bool {
+        matches!(self.state, TxnState::Active)
     }
 
     pub fn state(&self) -> TxnState {
@@ -112,5 +108,13 @@ impl TxnManager {
                 meta: req.new_table_meta.clone(),
                 ..table_info.clone()
             })
+    }
+
+    pub fn reqs(&self) -> Vec<UpdateTableMetaReq> {
+        self.txn_buffer
+            .mutated_tables
+            .values()
+            .map(|(req, _)| req.clone())
+            .collect()
     }
 }

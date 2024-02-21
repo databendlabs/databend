@@ -2907,6 +2907,107 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
+    async fn update_multi_table_meta(
+        &self,
+        reqs: Vec<UpdateTableMetaReq>,
+    ) -> Result<(), KVAppError> {
+        let mut txn_req = TxnRequest {
+            condition: vec![],
+            if_then: vec![],
+            else_then: vec![],
+        };
+        for req in reqs {
+            let tbid = TableId {
+                table_id: req.table_id,
+            };
+            let req_seq = req.seq;
+
+            let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
+                get_pb_value(self, &tbid).await?;
+
+            if tb_meta_seq == 0 || table_meta.is_none() {
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(req.table_id, "update_table_meta"),
+                )));
+            }
+            if req_seq.match_seq(tb_meta_seq).is_err() {
+                return Err(KVAppError::AppError(AppError::from(
+                    TableVersionMismatched::new(
+                        req.table_id,
+                        req.seq,
+                        tb_meta_seq,
+                        "update_table_meta",
+                    ),
+                )));
+            }
+
+            txn_req.condition.push(txn_cond_seq(&tbid, Eq, tb_meta_seq));
+            txn_req
+                .if_then
+                .push(txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?));
+
+            if let Some(req) = &req.copied_files {
+                let (conditions, match_operations) =
+                    build_upsert_table_copied_file_info_conditions(
+                        &tbid,
+                        req,
+                        tb_meta_seq,
+                        req.fail_if_duplicated,
+                    )?;
+                txn_req.condition.extend(conditions);
+                txn_req.if_then.extend(match_operations)
+            }
+
+            for req in &req.update_stream_meta {
+                let stream_id = TableId {
+                    table_id: req.stream_id,
+                };
+                let (stream_meta_seq, stream_meta): (_, Option<TableMeta>) =
+                    get_pb_value(self, &stream_id).await?;
+
+                if stream_meta_seq == 0 || stream_meta.is_none() {
+                    return Err(KVAppError::AppError(AppError::UnknownStreamId(
+                        UnknownStreamId::new(req.stream_id, "update_table_meta"),
+                    )));
+                }
+
+                if req.seq.match_seq(stream_meta_seq).is_err() {
+                    return Err(KVAppError::AppError(AppError::from(
+                        StreamVersionMismatched::new(
+                            req.stream_id,
+                            req.seq,
+                            stream_meta_seq,
+                            "update_table_meta",
+                        ),
+                    )));
+                }
+
+                let mut new_stream_meta = stream_meta.unwrap();
+                new_stream_meta.options = req.options.clone();
+                new_stream_meta.updated_on = Utc::now();
+
+                txn_req
+                    .condition
+                    .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
+                txn_req
+                    .if_then
+                    .push(txn_op_put(&stream_id, serialize_struct(&new_stream_meta)?));
+            }
+
+            if let Some(deduplicated_label) = req.deduplicated_label.clone() {
+                txn_req
+                    .if_then
+                    .push(build_upsert_table_deduplicated_label(deduplicated_label))
+            }
+        }
+        let (succ, _) = send_txn(self, txn_req).await?;
+
+        if succ {
+            return Ok(());
+        }
+        todo!()
+    }
+
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn set_table_column_mask_policy(

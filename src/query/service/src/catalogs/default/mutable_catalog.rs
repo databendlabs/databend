@@ -494,6 +494,11 @@ impl Catalog for MutableCatalog {
         }
     }
 
+    #[async_backtrace::framed]
+    async fn update_multi_table_meta(&self, reqs: Vec<UpdateTableMetaReq>) -> Result<()> {
+        Ok(self.ctx.meta.update_multi_table_meta(reqs).await?)
+    }
+
     async fn set_table_column_mask_policy(
         &self,
         req: SetTableColumnMaskPolicyReq,

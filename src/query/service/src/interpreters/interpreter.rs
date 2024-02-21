@@ -28,6 +28,7 @@ use databend_common_pipeline_core::SourcePipeBuilder;
 use log::error;
 use log::info;
 
+use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::ExecutorSettings;
@@ -39,7 +40,6 @@ use crate::sessions::SessionManager;
 use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
-
 #[async_trait::async_trait]
 /// Interpreter is a trait for different PlanNode
 /// Each type of planNode has its own corresponding interpreter
@@ -66,7 +66,9 @@ pub trait Interpreter: Sync + Send {
             return Err(err);
         }
         if self.is_ddl() {
-            ctx.txn_mgr().lock().unwrap().commit();
+            CommitInterpreter::try_create(ctx.clone())?
+                .execute2()
+                .await?;
         }
         if !self.is_txn_command() && ctx.txn_mgr().lock().unwrap().is_fail() {
             let error = ErrorCode::CurrentTransactionIsAborted(

@@ -252,6 +252,12 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply>;
 
+    async fn update_multi_table_meta(&self, _reqs: Vec<UpdateTableMetaReq>) -> Result<()> {
+        Err(ErrorCode::Unimplemented(
+            "'update_multi_table_meta' not implemented",
+        ))
+    }
+
     async fn set_table_column_mask_policy(
         &self,
         req: SetTableColumnMaskPolicyReq,
