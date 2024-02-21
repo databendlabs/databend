@@ -894,17 +894,10 @@ mod kvapi_key_impl {
     use crate::schema::TableIdListKey;
     use crate::schema::TableIdToName;
     use crate::schema::TableMeta;
-    use crate::schema::PREFIX_TABLE;
-    use crate::schema::PREFIX_TABLE_BY_ID;
-    use crate::schema::PREFIX_TABLE_COPIED_FILES;
-    use crate::schema::PREFIX_TABLE_COUNT;
-    use crate::schema::PREFIX_TABLE_ID_LIST;
-    use crate::schema::PREFIX_TABLE_ID_TO_NAME;
-    use crate::schema::PREFIX_TABLE_LVT;
 
     /// "__fd_table/<db_id>/<tb_name>"
     impl kvapi::Key for DBIdTableName {
-        const PREFIX: &'static str = PREFIX_TABLE;
+        const PREFIX: &'static str = "__fd_table";
 
         type ValueType = TableId;
 
@@ -928,7 +921,7 @@ mod kvapi_key_impl {
 
     /// "__fd_table_id_to_name/<table_id> -> DBIdTableName"
     impl kvapi::Key for TableIdToName {
-        const PREFIX: &'static str = PREFIX_TABLE_ID_TO_NAME;
+        const PREFIX: &'static str = "__fd_table_id_to_name";
 
         type ValueType = DBIdTableName;
 
@@ -950,7 +943,7 @@ mod kvapi_key_impl {
 
     /// "__fd_table_by_id/<tb_id> -> TableMeta"
     impl kvapi::Key for TableId {
-        const PREFIX: &'static str = PREFIX_TABLE_BY_ID;
+        const PREFIX: &'static str = "__fd_table_by_id";
 
         type ValueType = TableMeta;
 
@@ -972,7 +965,7 @@ mod kvapi_key_impl {
 
     /// "_fd_table_id_list/<db_id>/<tb_name> -> id_list"
     impl kvapi::Key for TableIdListKey {
-        const PREFIX: &'static str = PREFIX_TABLE_ID_LIST;
+        const PREFIX: &'static str = "__fd_table_id_list";
 
         type ValueType = TableIdList;
 
@@ -996,7 +989,7 @@ mod kvapi_key_impl {
 
     /// "__fd_table_count/<tenant>" -> <table_count>
     impl kvapi::Key for CountTablesKey {
-        const PREFIX: &'static str = PREFIX_TABLE_COUNT;
+        const PREFIX: &'static str = "__fd_table_count";
 
         type ValueType = Id;
 
@@ -1018,7 +1011,7 @@ mod kvapi_key_impl {
 
     // __fd_table_copied_files/table_id/file_name -> TableCopiedFileInfo
     impl kvapi::Key for TableCopiedFileNameIdent {
-        const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
+        const PREFIX: &'static str = "__fd_table_copied_files";
 
         type ValueType = TableCopiedFileInfo;
 
@@ -1044,7 +1037,7 @@ mod kvapi_key_impl {
 
     /// "__fd_table_lvt/table_id"
     impl kvapi::Key for LeastVisibleTimeKey {
-        const PREFIX: &'static str = PREFIX_TABLE_LVT;
+        const PREFIX: &'static str = "__fd_table_lvt";
 
         type ValueType = LeastVisibleTime;
 
