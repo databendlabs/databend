@@ -38,16 +38,19 @@ pub enum TxnState {
 #[derive(Debug, Clone)]
 struct TxnBuffer {
     mutated_tables: HashMap<String, (UpdateTableMetaReq, TableInfo)>,
+    stream_tables: HashMap<String, TableInfo>,
 }
 
 impl TxnBuffer {
     fn new() -> Self {
         Self {
             mutated_tables: HashMap::new(),
+            stream_tables: HashMap::new(),
         }
     }
     fn refresh(&mut self) {
         self.mutated_tables.clear();
+        self.stream_tables.clear();
     }
 }
 
@@ -94,7 +97,13 @@ impl TxnManager {
             .insert(table_info.desc.clone(), (req, table_info.clone()));
     }
 
-    pub fn get_mutated_table(
+    pub fn add_stream_table(&mut self, table_info: TableInfo) {
+        self.txn_buffer
+            .stream_tables
+            .insert(table_info.desc.clone(), table_info);
+    }
+
+    pub fn get_table_from_buffer(
         &self,
         tenant: &str,
         db_name: &str,
@@ -108,9 +117,15 @@ impl TxnManager {
                 meta: req.new_table_meta.clone(),
                 ..table_info.clone()
             })
+            .or_else(|| {
+                self.txn_buffer
+                    .stream_tables
+                    .get(&tenant_dbname_tbname)
+                    .cloned()
+            })
     }
 
-    pub fn get_mutated_table_by_id(&self, table_id: u64) -> Option<TableInfo> {
+    pub fn get_table_from_buffer_by_id(&self, table_id: u64) -> Option<TableInfo> {
         self.txn_buffer
             .mutated_tables
             .values()

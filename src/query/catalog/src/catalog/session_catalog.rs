@@ -226,7 +226,7 @@ impl Catalog for SessionCatalog {
                     .txn_mgr
                     .lock()
                     .unwrap()
-                    .get_mutated_table_by_id(table_id);
+                    .get_table_from_buffer_by_id(table_id);
                 if let Some(t) = mutated_table {
                     Ok((t.ident.clone(), Arc::new(t.meta.clone())))
                 } else {
@@ -246,7 +246,7 @@ impl Catalog for SessionCatalog {
                     .txn_mgr
                     .lock()
                     .unwrap()
-                    .get_mutated_table_by_id(table_id);
+                    .get_table_from_buffer_by_id(table_id);
                 if let Some(t) = mutated_table {
                     Ok(t.name.clone())
                 } else {
@@ -276,12 +276,19 @@ impl Catalog for SessionCatalog {
                     .txn_mgr
                     .lock()
                     .unwrap()
-                    .get_mutated_table(tenant, db_name, table_name)
+                    .get_table_from_buffer(tenant, db_name, table_name)
                     .map(|table_info| self.get_table_by_info(&table_info));
                 if let Some(t) = mutated_table {
                     t
                 } else {
-                    self.inner.get_table(tenant, db_name, table_name).await
+                    let table = self.inner.get_table(tenant, db_name, table_name).await?;
+                    if table.engine() == "STREAM" {
+                        self.txn_mgr
+                            .lock()
+                            .unwrap()
+                            .add_stream_table(table.get_table_info().clone());
+                    }
+                    Ok(table)
                 }
             }
             _ => self.inner.get_table(tenant, db_name, table_name).await,
@@ -377,7 +384,9 @@ impl Catalog for SessionCatalog {
         db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
-        self.inner.get_table_copied_file_info(tenant, db_name, req).await
+        self.inner
+            .get_table_copied_file_info(tenant, db_name, req)
+            .await
     }
 
     async fn truncate_table(
