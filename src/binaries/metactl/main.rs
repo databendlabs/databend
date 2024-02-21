@@ -17,6 +17,7 @@
 mod grpc;
 use grpc::export_meta;
 
+pub(crate) mod reading;
 mod snapshot;
 
 use std::collections::BTreeMap;
