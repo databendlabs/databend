@@ -310,4 +310,10 @@ mod kvapi_key_impl {
             Ok(IndexIdToName { index_id })
         }
     }
+
+    impl kvapi::Value for IndexId {}
+
+    impl kvapi::Value for IndexMeta {}
+
+    impl kvapi::Value for IndexNameIdent {}
 }

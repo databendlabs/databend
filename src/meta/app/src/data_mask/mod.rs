@@ -197,4 +197,10 @@ mod kvapi_key_impl {
             Ok(MaskpolicyTableIdListKey { tenant, name })
         }
     }
+
+    impl kvapi::Value for DatamaskId {}
+
+    impl kvapi::Value for DatamaskMeta {}
+
+    impl kvapi::Value for MaskpolicyTableIdList {}
 }

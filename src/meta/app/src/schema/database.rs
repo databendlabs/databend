@@ -60,9 +60,17 @@ pub struct DatabaseIdent {
     pub seq: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord,
+)]
 pub struct DatabaseId {
     pub db_id: u64,
+}
+
+impl From<u64> for DatabaseId {
+    fn from(db_id: u64) -> Self {
+        DatabaseId { db_id }
+    }
 }
 
 impl Display for DatabaseId {
@@ -429,4 +437,12 @@ mod kvapi_key_impl {
             Ok(DbIdListKey { tenant, db_name })
         }
     }
+
+    impl kvapi::Value for DatabaseId {}
+
+    impl kvapi::Value for DatabaseMeta {}
+
+    impl kvapi::Value for DatabaseNameIdent {}
+
+    impl kvapi::Value for DbIdList {}
 }

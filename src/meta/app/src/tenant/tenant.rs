@@ -21,6 +21,8 @@ pub struct Tenant {
 }
 
 mod kvapi_key_impl {
+    use std::convert::Infallible;
+
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::KeyError;
 
@@ -28,7 +30,7 @@ mod kvapi_key_impl {
 
     impl kvapi::Key for Tenant {
         const PREFIX: &'static str = "__fd_tenant";
-        type ValueType = ();
+        type ValueType = Infallible;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

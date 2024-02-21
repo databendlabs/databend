@@ -177,4 +177,6 @@ mod kv_api_impl {
             Ok(UdfName { tenant, name })
         }
     }
+
+    impl kvapi::Value for UserDefinedFunction {}
 }

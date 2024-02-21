@@ -207,4 +207,6 @@ mod kvapi_key_impl {
             Ok(TableLockKey { table_id, revision })
         }
     }
+
+    impl kvapi::Value for LockMeta {}
 }

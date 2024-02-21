@@ -43,6 +43,9 @@ pub enum KeyError {
 
     #[error("Invalid id string: '{s}': {reason}")]
     InvalidId { s: String, reason: String },
+
+    #[error("Unknown kvapi::Key prefix: '{prefix}'")]
+    UnknownPrefix { prefix: String },
 }
 
 /// Convert structured key to a string key used by kvapi::KVApi and backwards
@@ -51,7 +54,12 @@ where Self: Sized
 {
     const PREFIX: &'static str;
 
-    type ValueType;
+    type ValueType: kvapi::Value;
+
+    /// Return the root prefix of this key: `"<PREFIX>/"`.
+    fn root_prefix() -> String {
+        format!("{}/", Self::PREFIX)
+    }
 
     /// Encode structured key into a string.
     fn to_string_key(&self) -> String;

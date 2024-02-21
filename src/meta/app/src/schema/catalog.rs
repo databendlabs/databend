@@ -307,4 +307,10 @@ mod kvapi_key_impl {
             Ok(CatalogIdToName { catalog_id })
         }
     }
+
+    impl kvapi::Value for CatalogId {}
+
+    impl kvapi::Value for CatalogMeta {}
+
+    impl kvapi::Value for CatalogNameIdent {}
 }

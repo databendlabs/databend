@@ -428,4 +428,8 @@ mod kvapi_key_impl {
             Ok(BackgroundJobId { id })
         }
     }
+
+    impl kvapi::Value for BackgroundJobId {}
+
+    impl kvapi::Value for BackgroundJobInfo {}
 }
