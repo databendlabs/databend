@@ -110,6 +110,17 @@ impl TxnManager {
             })
     }
 
+    pub fn get_mutated_table_by_id(&self, table_id: u64) -> Option<TableInfo> {
+        self.txn_buffer
+            .mutated_tables
+            .values()
+            .find(|(req, _)| req.table_id == table_id)
+            .map(|(req, table_info)| TableInfo {
+                meta: req.new_table_meta.clone(),
+                ..table_info.clone()
+            })
+    }
+
     pub fn reqs(&self) -> Vec<UpdateTableMetaReq> {
         self.txn_buffer
             .mutated_tables

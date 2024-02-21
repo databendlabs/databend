@@ -13,10 +13,8 @@
 // limitations under the License.
 use std::any::Any;
 use std::fmt::Debug;
-use std::fmt::Formatter;
 use std::sync::Arc;
 
-use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -28,15 +26,10 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
-use databend_common_meta_app::schema::DatabaseIdent;
-use databend_common_meta_app::schema::DatabaseInfo;
-use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -233,9 +226,9 @@ impl Catalog for SessionCatalog {
                     .txn_mgr
                     .lock()
                     .unwrap()
-                    .get_mutated_table(tenant, db_name, table_name);
+                    .get_mutated_table_by_id(table_id);
                 if let Some(t) = mutated_table {
-                    Ok((t.ident.clone(), t.meta.clone()))
+                    Ok((t.ident.clone(), Arc::new(t.meta.clone())))
                 } else {
                     self.inner.get_table_meta_by_id(table_id).await
                 }
@@ -253,7 +246,7 @@ impl Catalog for SessionCatalog {
                     .txn_mgr
                     .lock()
                     .unwrap()
-                    .get_mutated_table(tenant, db_name, table_name);
+                    .get_mutated_table_by_id(table_id);
                 if let Some(t) = mutated_table {
                     Ok(t.name.clone())
                 } else {
@@ -384,7 +377,7 @@ impl Catalog for SessionCatalog {
         db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
-        todo!()
+        self.inner.get_table_copied_file_info(tenant, db_name, req).await
     }
 
     async fn truncate_table(
