@@ -763,6 +763,7 @@ pub struct ShareSpec {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use super::ShareEndpointId;
     use crate::schema::DatabaseId;
@@ -1028,19 +1029,53 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for ObjectSharedByShareIds {}
+    impl kvapi::Value for ObjectSharedByShareIds {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for ShareId {}
+    impl kvapi::Value for ShareId {
+        /// ShareId is id of the two level `name->id,id->value` mapping
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
 
-    impl kvapi::Value for ShareMeta {}
+    impl kvapi::Value for ShareMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for ShareAccountMeta {}
+    impl kvapi::Value for ShareAccountMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for ShareNameIdent {}
+    impl kvapi::Value for ShareNameIdent {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for ShareEndpointId {}
+    impl kvapi::Value for ShareEndpointId {
+        /// ShareEndpointId is id of the two level `name->id,id->value` mapping
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
 
-    impl kvapi::Value for ShareEndpointMeta {}
+    impl kvapi::Value for ShareEndpointMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for ShareEndpointIdent {}
+    impl kvapi::Value for ShareEndpointIdent {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 }

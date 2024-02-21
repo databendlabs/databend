@@ -887,6 +887,7 @@ pub struct EmptyProto {}
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::primitive::Id;
     use crate::schema::CountTablesKey;
@@ -1093,17 +1094,43 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for TableId {}
+    impl kvapi::Value for TableId {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
 
-    impl kvapi::Value for DBIdTableName {}
+    impl kvapi::Value for DBIdTableName {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for TableMeta {}
+    impl kvapi::Value for TableMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for TableIdList {}
+    impl kvapi::Value for TableIdList {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            self.id_list
+                .iter()
+                .map(|id| TableId::new(*id).to_string_key())
+        }
+    }
 
-    impl kvapi::Value for TableCopiedFileInfo {}
+    impl kvapi::Value for TableCopiedFileInfo {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for LeastVisibleTime {}
+    impl kvapi::Value for LeastVisibleTime {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 }
 
 #[cfg(test)]

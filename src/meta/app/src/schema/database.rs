@@ -344,6 +344,7 @@ pub struct ListDatabaseReq {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;
@@ -461,11 +462,29 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for DatabaseId {}
+    impl kvapi::Value for DatabaseId {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
 
-    impl kvapi::Value for DatabaseMeta {}
+    impl kvapi::Value for DatabaseMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for DatabaseNameIdent {}
+    impl kvapi::Value for DatabaseNameIdent {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for DbIdList {}
+    impl kvapi::Value for DbIdList {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            self.id_list
+                .iter()
+                .map(|id| DatabaseId::new(*id).to_string_key())
+        }
+    }
 }

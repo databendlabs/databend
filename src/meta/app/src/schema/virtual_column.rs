@@ -162,5 +162,9 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for VirtualColumnMeta {}
+    impl kvapi::Value for VirtualColumnMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 }

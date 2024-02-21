@@ -243,6 +243,7 @@ impl ListIndexesByIdReq {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::schema::IndexId;
     use crate::schema::IndexIdToName;
@@ -330,9 +331,22 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for IndexId {}
+    impl kvapi::Value for IndexId {
+        /// IndexId is id of the two level `name->id,id->value` mapping
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
 
-    impl kvapi::Value for IndexMeta {}
+    impl kvapi::Value for IndexMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for IndexNameIdent {}
+    impl kvapi::Value for IndexNameIdent {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 }
