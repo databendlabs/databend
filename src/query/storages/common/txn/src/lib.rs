@@ -48,7 +48,7 @@ impl TxnBuffer {
             stream_tables: HashMap::new(),
         }
     }
-    fn refresh(&mut self) {
+    fn clear(&mut self) {
         self.mutated_tables.clear();
         self.stream_tables.clear();
     }
@@ -68,9 +68,9 @@ impl TxnManager {
         }
     }
 
-    pub fn refresh(&mut self) {
+    pub fn clear(&mut self) {
         self.state = TxnState::AutoCommit;
-        self.txn_buffer.refresh();
+        self.txn_buffer.clear();
     }
 
     pub fn set_fail(&mut self) {
