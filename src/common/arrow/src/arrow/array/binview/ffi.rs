@@ -79,7 +79,7 @@ impl<T: ViewType + ?Sized, A: ffi::ArrowArrayRef> FromFfi<A> for BinaryViewArray
         let validity = unsafe { array.validity() }?;
         let views = unsafe { array.buffer::<View>(1) }?;
 
-        // 2 - validity + views
+        // n_buffers - 2, 2 means validity + views
         let n_buffers = array.n_buffers();
         let mut remaining_buffers = n_buffers - 2;
         if remaining_buffers <= 1 {

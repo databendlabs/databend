@@ -15,6 +15,7 @@
 
 mod ffi;
 pub(crate) mod fmt;
+mod from;
 mod iterator;
 mod mutable;
 mod view;
@@ -23,6 +24,7 @@ mod private {
     pub trait Sealed: Send + Sync {}
 
     impl Sealed for str {}
+
     impl Sealed for [u8] {}
 }
 
@@ -33,6 +35,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use either::Either;
 pub use iterator::BinaryViewValueIter;
 pub use mutable::MutableBinaryViewArray;
 use private::Sealed;
@@ -70,7 +73,7 @@ pub trait ViewType: Sealed + 'static + PartialEq + AsRef<Self> {
     #[allow(clippy::wrong_self_convention)]
     fn into_owned(&self) -> Self::Owned;
 
-    fn dtype() -> &'static DataType;
+    fn data_type() -> &'static DataType;
 }
 
 impl ViewType for str {
@@ -92,7 +95,7 @@ impl ViewType for str {
         self.to_string()
     }
 
-    fn dtype() -> &'static DataType {
+    fn data_type() -> &'static DataType {
         &UTF8_VIEW_TYPE
     }
 }
@@ -116,7 +119,7 @@ impl ViewType for [u8] {
         self.to_vec()
     }
 
-    fn dtype() -> &'static DataType {
+    fn data_type() -> &'static DataType {
         &BIN_VIEW_TYPE
     }
 }
@@ -157,6 +160,7 @@ impl<T: ViewType + ?Sized> Clone for BinaryViewArrayGeneric<T> {
 }
 
 unsafe impl<T: ViewType + ?Sized> Send for BinaryViewArrayGeneric<T> {}
+
 unsafe impl<T: ViewType + ?Sized> Sync for BinaryViewArrayGeneric<T> {}
 
 fn buffers_into_raw<T>(buffers: &[Buffer<T>]) -> Arc<[(*const T, usize)]> {
@@ -233,6 +237,11 @@ impl<T: ViewType + ?Sized> BinaryViewArrayGeneric<T> {
         buffers: Arc<[Buffer<u8>]>,
         validity: Option<Bitmap>,
     ) -> Result<Self> {
+        if data_type.to_physical_type() != Self::default_data_type().to_physical_type() {
+            return Err(Error::oos(
+                "BinaryViewArray can only be initialized with DataType::BinaryView or DataType::Utf8View",
+            ));
+        }
         if T::IS_UTF8 {
             validate_utf8_view(views.as_ref(), buffers.as_ref())?;
         } else {
@@ -252,6 +261,12 @@ impl<T: ViewType + ?Sized> BinaryViewArrayGeneric<T> {
                 data_type, views, buffers, validity, None,
             ))
         }
+    }
+
+    /// Returns a new [`BinaryViewArrayGeneric`] from a slice of `&T`.
+    // Note: this can't be `impl From` because Rust does not allow double `AsRef` on it.
+    pub fn from<V: AsRef<T>, P: AsRef<[Option<V>]>>(slice: P) -> Self {
+        MutableBinaryViewArray::<T>::from(slice).into()
     }
 
     /// Creates an empty [`BinaryViewArrayGeneric`], i.e. whose `.len` is zero.
@@ -438,6 +453,84 @@ impl<T: ViewType + ?Sized> BinaryViewArrayGeneric<T> {
             total_buffer_len: self.total_buffer_len,
         }
     }
+
+    #[must_use]
+    pub fn into_mut(self) -> Either<Self, MutableBinaryViewArray<T>> {
+        use Either::*;
+        let is_unique = (Arc::strong_count(&self.buffers) + Arc::weak_count(&self.buffers)) == 1;
+
+        if let Some(bitmap) = self.validity {
+            match bitmap.into_mut() {
+                Left(bitmap) => Left(Self::new_unchecked(
+                    self.data_type,
+                    self.views,
+                    self.buffers,
+                    Some(bitmap),
+                    self.total_bytes_len.load(Ordering::Relaxed) as usize,
+                    self.total_buffer_len,
+                )),
+                Right(mutable_bitmap) => match (self.views.into_mut(), is_unique) {
+                    (Right(views), true) => Right(MutableBinaryViewArray {
+                        views,
+                        completed_buffers: self.buffers.to_vec(),
+                        in_progress_buffer: vec![],
+                        validity: Some(mutable_bitmap),
+                        phantom: Default::default(),
+                        total_bytes_len: self.total_bytes_len.load(Ordering::Relaxed) as usize,
+                        total_buffer_len: self.total_buffer_len,
+                    }),
+                    (Right(views), false) => Left(Self::new_unchecked(
+                        self.data_type,
+                        views.into(),
+                        self.buffers,
+                        Some(mutable_bitmap.into()),
+                        self.total_bytes_len.load(Ordering::Relaxed) as usize,
+                        self.total_buffer_len,
+                    )),
+                    (Left(views), _) => Left(Self::new_unchecked(
+                        self.data_type,
+                        views,
+                        self.buffers,
+                        Some(mutable_bitmap.into()),
+                        self.total_bytes_len.load(Ordering::Relaxed) as usize,
+                        self.total_buffer_len,
+                    )),
+                },
+            }
+        } else {
+            match (self.views.into_mut(), is_unique) {
+                (Right(views), true) => Right(MutableBinaryViewArray {
+                    views,
+                    completed_buffers: self.buffers.to_vec(),
+                    in_progress_buffer: vec![],
+                    validity: None,
+                    phantom: Default::default(),
+                    total_bytes_len: self.total_bytes_len.load(Ordering::Relaxed) as usize,
+                    total_buffer_len: self.total_buffer_len,
+                }),
+                (Right(views), false) => Left(Self::new_unchecked(
+                    self.data_type,
+                    views.into(),
+                    self.buffers,
+                    None,
+                    self.total_bytes_len.load(Ordering::Relaxed) as usize,
+                    self.total_buffer_len,
+                )),
+                (Left(views), _) => Left(Self::new_unchecked(
+                    self.data_type,
+                    views,
+                    self.buffers,
+                    None,
+                    self.total_bytes_len.load(Ordering::Relaxed) as usize,
+                    self.total_buffer_len,
+                )),
+            }
+        }
+    }
+
+    pub fn default_data_type() -> &'static DataType {
+        T::data_type()
+    }
 }
 
 pub type BinaryViewArray = BinaryViewArrayGeneric<[u8]>;
@@ -500,7 +593,7 @@ impl<T: ViewType + ?Sized> Array for BinaryViewArrayGeneric<T> {
     }
 
     fn data_type(&self) -> &DataType {
-        T::dtype()
+        T::data_type()
     }
 
     fn validity(&self) -> Option<&Bitmap> {

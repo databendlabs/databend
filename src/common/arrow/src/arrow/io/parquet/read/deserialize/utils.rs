@@ -116,7 +116,7 @@ impl<T: ViewType + ?Sized> Pushable<&T> for MutableBinaryViewArray<T> {
             views.push(view);
         }
 
-        if let Some(bitmap) = self.validity() {
+        if let Some(bitmap) = self.validity_mut() {
             bitmap.extend_constant(remaining, true)
         }
     }
