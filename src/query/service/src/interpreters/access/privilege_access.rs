@@ -337,10 +337,6 @@ impl PrivilegeAccess {
             GrantObject::Global => false,
         };
 
-        println!(
-            "self.has_ownership(&session, grant_object).await? {}",
-            self.has_ownership(&session, grant_object).await?.clone()
-        );
         if verify_ownership && self.has_ownership(&session, grant_object).await? {
             return Ok(());
         }
@@ -350,14 +346,7 @@ impl PrivilegeAccess {
             .validate_privilege(grant_object, privileges.clone())
             .await
         {
-            Ok(_) => {
-                println!(
-                    "grant_object is {:?}, privileges is {:?}",
-                    grant_object.clone(),
-                    privileges.clone()
-                );
-                Ok(())
-            }
+            Ok(_) => Ok(()),
             Err(err) => {
                 if err.code() != ErrorCode::PermissionDenied("").code() {
                     return Err(err);
