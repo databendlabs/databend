@@ -353,11 +353,12 @@ build_exceptions! {
     StorageInsecure(3903),
     DeprecatedIndexFormat(3904),
     InvalidOperation(3905),
-    StorageOther(4000),
-    UnresolvableConflict(4001),
 
     //transaction error codes
-    CurrentTransactionIsAborted(4002),
+    UnresolvableConflict(3101),
+    CurrentTransactionIsAborted(3102),
+
+    StorageOther(4000),
 }
 
 // Service errors [5001,6000].

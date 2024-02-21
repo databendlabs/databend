@@ -49,7 +49,7 @@ impl Interpreter for AbortInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        self.txn_manager.lock().unwrap().refresh();
+        self.txn_manager.lock().unwrap().clear();
         Ok(PipelineBuildResult::create())
     }
 }

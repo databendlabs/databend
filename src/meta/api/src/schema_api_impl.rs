@@ -33,6 +33,7 @@ use databend_common_meta_app::app_error::DropTableWithDropTime;
 use databend_common_meta_app::app_error::DuplicatedUpsertFiles;
 use databend_common_meta_app::app_error::GetIndexWithDropTime;
 use databend_common_meta_app::app_error::IndexAlreadyExists;
+use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
 use databend_common_meta_app::app_error::StreamVersionMismatched;
@@ -3005,7 +3006,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         if succ {
             return Ok(());
         }
-        todo!()
+        Err(KVAppError::AppError(AppError::from(
+            MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
+        )))
     }
 
     #[logcall::logcall("debug")]

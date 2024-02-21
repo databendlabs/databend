@@ -52,7 +52,7 @@ impl Interpreter for CommitInterpreter {
             let reqs = self.ctx.txn_mgr().lock().unwrap().reqs();
             catalog.update_multi_table_meta(reqs).await?;
         }
-        self.ctx.txn_mgr().lock().unwrap().refresh();
+        self.ctx.txn_mgr().lock().unwrap().clear();
         Ok(PipelineBuildResult::create())
     }
 }

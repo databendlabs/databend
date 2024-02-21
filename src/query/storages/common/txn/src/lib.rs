@@ -134,6 +134,13 @@ impl TxnManager {
                 meta: req.new_table_meta.clone(),
                 ..table_info.clone()
             })
+            .or_else(|| {
+                self.txn_buffer
+                    .stream_tables
+                    .values()
+                    .find(|table_info| table_info.ident.table_id == table_id)
+                    .cloned()
+            })
     }
 
     pub fn reqs(&self) -> Vec<UpdateTableMetaReq> {
