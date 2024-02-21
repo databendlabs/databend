@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_meta_api::SchemaApi;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CountTablesReply;
 use databend_common_meta_app::schema::CountTablesReq;
@@ -30,7 +29,6 @@ use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
-use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
@@ -44,13 +42,11 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
-use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
-use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
@@ -83,18 +79,15 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
-use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use databend_storages_common_txn::TxnManagerRef;
 use databend_storages_common_txn::TxnState;
-use log::info;
 
 use crate::catalog::Catalog;
 use crate::catalog::StorageDescription;
 use crate::database::Database;
 use crate::table::Table;
 use crate::table_args::TableArgs;
-use crate::table_context::TableContext;
 use crate::table_function::TableFunction;
 
 #[derive(Clone, Debug)]
@@ -228,7 +221,7 @@ impl Catalog for SessionCatalog {
                     .unwrap()
                     .get_table_from_buffer_by_id(table_id);
                 if let Some(t) = mutated_table {
-                    Ok((t.ident.clone(), Arc::new(t.meta.clone())))
+                    Ok((t.ident, Arc::new(t.meta.clone())))
                 } else {
                     self.inner.get_table_meta_by_id(table_id).await
                 }
