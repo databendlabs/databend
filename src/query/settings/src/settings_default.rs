@@ -205,6 +205,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
+                ("enable_new_copy_for_text_formats", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Use new implementation for loading CSV files.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
                 ("timezone", DefaultSettingValue {
                     value: UserSettingValue::String("UTC".to_owned()),
                     desc: "Sets the timezone.",

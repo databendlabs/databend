@@ -3774,6 +3774,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "csv-core",
  "dashmap",
  "databend-common-base",
  "databend-common-building",
@@ -3786,6 +3787,7 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
+ "databend-common-settings",
  "databend-common-storage",
  "databend-common-storages-parquet",
  "log",

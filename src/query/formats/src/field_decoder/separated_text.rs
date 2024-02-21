@@ -67,7 +67,6 @@ use crate::NestedValues;
 pub struct SeparatedTextDecoder {
     common_settings: InputCommonSettings,
     nested_decoder: NestedValues,
-    rounding_mode: bool,
 }
 
 impl FieldDecoder for SeparatedTextDecoder {
@@ -79,11 +78,7 @@ impl FieldDecoder for SeparatedTextDecoder {
 /// in CSV, we find the exact bound of each field before decode it to a type.
 /// which is diff from the case when parsing values.
 impl SeparatedTextDecoder {
-    pub fn create_csv(
-        params: &CsvFileFormatParams,
-        options_ext: &FileFormatOptionsExt,
-        rounding_mode: bool,
-    ) -> Self {
+    pub fn create_csv(params: &CsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
@@ -94,17 +89,13 @@ impl SeparatedTextDecoder {
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: params.binary_format,
+                is_rounding_mode: options_ext.is_rounding_mode,
             },
             nested_decoder: NestedValues::create(options_ext),
-            rounding_mode,
         }
     }
 
-    pub fn create_tsv(
-        _params: &TsvFileFormatParams,
-        options_ext: &FileFormatOptionsExt,
-        rounding_mode: bool,
-    ) -> Self {
+    pub fn create_tsv(_params: &TsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 null_if: vec![NULL_BYTES_ESCAPE.as_bytes().to_vec()],
@@ -115,17 +106,13 @@ impl SeparatedTextDecoder {
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
+                is_rounding_mode: options_ext.is_rounding_mode,
             },
             nested_decoder: NestedValues::create(options_ext),
-            rounding_mode,
         }
     }
 
-    pub fn create_xml(
-        _params: &XmlFileFormatParams,
-        options_ext: &FileFormatOptionsExt,
-        rounding_mode: bool,
-    ) -> Self {
+    pub fn create_xml(_params: &XmlFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 null_if: vec![NULL_BYTES_LOWER.as_bytes().to_vec()],
@@ -136,9 +123,9 @@ impl SeparatedTextDecoder {
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
+                is_rounding_mode: options_ext.is_rounding_mode,
             },
             nested_decoder: NestedValues::create(options_ext),
-            rounding_mode,
         }
     }
 
@@ -242,7 +229,7 @@ impl SeparatedTextDecoder {
             Err(_) => {
                 // cast float value to integer value
                 let val: f64 = read_num_text_exact(&data[..effective])?;
-                let new_val: Option<T::Native> = if self.rounding_mode {
+                let new_val: Option<T::Native> = if self.common_settings.is_rounding_mode {
                     num_traits::cast::cast(val.round())
                 } else {
                     num_traits::cast::cast(val)
