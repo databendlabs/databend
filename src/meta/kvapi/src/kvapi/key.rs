@@ -134,6 +134,8 @@ impl<K: Key> Key for DirName<K> {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::Infallible;
+
     use super::DirName;
     use crate::kvapi::Key;
     use crate::kvapi::KeyError;
@@ -147,7 +149,7 @@ mod tests {
 
     impl Key for FooKey {
         const PREFIX: &'static str = "pref";
-        type ValueType = ();
+        type ValueType = Infallible;
 
         fn to_string_key(&self) -> String {
             format!("{}/{}/{}/{}", Self::PREFIX, self.a, self.b, self.c)
