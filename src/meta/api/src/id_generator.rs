@@ -24,8 +24,6 @@ use crate::schema_api_keys::ID_GEN_TABLE_LOCK;
 use crate::share_api_keys::ID_GEN_SHARE;
 use crate::share_api_keys::ID_GEN_SHARE_ENDPOINT;
 
-pub(crate) const PREFIX_ID_GEN: &str = "__fd_id_gen";
-
 /// Key for resource id generator
 ///
 /// This is a special key for an application to generate unique id with kvapi::KVApi.
@@ -97,7 +95,7 @@ impl IdGenerator {
 }
 
 impl kvapi::Key for IdGenerator {
-    const PREFIX: &'static str = PREFIX_ID_GEN;
+    const PREFIX: &'static str = "__fd_id_gen";
 
     type ValueType = ();
 

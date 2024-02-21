@@ -183,11 +183,10 @@ mod kvapi_key_impl {
 
     use crate::schema::LockMeta;
     use crate::schema::TableLockKey;
-    use crate::schema::PREFIX_TABLE_LOCK;
 
     /// __fd_table_lock/table_id/revision -> LockMeta
     impl kvapi::Key for TableLockKey {
-        const PREFIX: &'static str = PREFIX_TABLE_LOCK;
+        const PREFIX: &'static str = "__fd_table_lock";
 
         type ValueType = LockMeta;
 
