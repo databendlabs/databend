@@ -113,7 +113,11 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
         &self.views
     }
 
-    pub fn validity(&mut self) -> Option<&mut MutableBitmap> {
+    pub fn validity(&self) -> Option<&MutableBitmap> {
+        self.validity.as_ref()
+    }
+
+    pub fn validity_mut(&mut self) -> Option<&mut MutableBitmap> {
         self.validity.as_mut()
     }
 
@@ -175,8 +179,16 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
         payload[0..4].copy_from_slice(&len.to_le_bytes());
 
         if len <= 12 {
+            // |   len   |  prefix  |  remaining(zero-padded)  |
+            //     ^          ^             ^
+            // | 4 bytes | 4 bytes |      8 bytes              |
             payload[4..4 + bytes.len()].copy_from_slice(bytes);
         } else {
+            // |   len   |  prefix  |  buffer |  offsets  |
+            //     ^          ^          ^         ^
+            // | 4 bytes | 4 bytes | 4 bytes |  4 bytes  |
+            //
+            // buffer index + offset -> real binary data
             self.total_buffer_len += bytes.len();
             let required_cap = self.in_progress_buffer.len() + bytes.len();
             if self.in_progress_buffer.capacity() < required_cap {
@@ -192,6 +204,7 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
             let offset = self.in_progress_buffer.len() as u32;
             self.in_progress_buffer.extend_from_slice(bytes);
 
+            // set prefix
             unsafe { payload[4..8].copy_from_slice(bytes.get_unchecked(0..4)) };
             let buffer_idx: u32 = self.completed_buffers.len().try_into().unwrap();
             payload[8..12].copy_from_slice(&buffer_idx.to_le_bytes());
@@ -347,12 +360,13 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
         let len = v.length;
 
         // view layout:
+        // for no-inlined layout:
         // length: 4 bytes
         // prefix: 4 bytes
         // buffer_index: 4 bytes
         // offset: 4 bytes
 
-        // inlined layout:
+        // for inlined layout:
         // length: 4 bytes
         // data: 12 bytes
         let bytes = if len <= 12 {
@@ -377,6 +391,10 @@ impl<T: ViewType + ?Sized> MutableBinaryViewArray<T> {
     /// Returns an iterator of `&[u8]` over every element of this array, ignoring the validity
     pub fn values_iter(&self) -> MutableBinaryViewValueIter<T> {
         MutableBinaryViewValueIter::new(self)
+    }
+
+    pub fn values(&self) -> Vec<&T> {
+        self.values_iter().collect()
     }
 }
 
