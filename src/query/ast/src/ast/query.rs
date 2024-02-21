@@ -347,6 +347,19 @@ pub enum JoinOperator {
     LeftOuter,
     RightOuter,
     FullOuter,
+    // PartitialFullOuter is an optimization for merge into source build,
+    // in this case, we can do pass the target block with matched and ummatched,
+    // and delete the correlated block directly, but it's limitted, we just support
+    // the matched partial block must be modfied(update or delete), so we need to
+    // make sure the last condition for matched expression is none.
+    // for example:
+    // a. merge into t1 using t2 on t1.a = t2.a when matched and cond1 then xx when matched
+    // then xxx.
+    // b. merge into t1 using t2 on t1.a = t2.a when matched and cond1 then xx when matched
+    // and cond2 then xxx.
+    // we can support a not b. The reason for this limitation is below:
+    // if a target block is not modfied, we will append the unmacthed partial of target block
+    // unexpectedly.
     LeftSemi,
     LeftAnti,
     RightSemi,
