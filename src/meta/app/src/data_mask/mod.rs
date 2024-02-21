@@ -21,10 +21,6 @@ use chrono::Utc;
 
 use crate::schema::CreateOption;
 
-const PREFIX_DATAMASK: &str = "__fd_datamask";
-const PREFIX_DATAMASK_BY_ID: &str = "__fd_datamask_by_id";
-const PREFIX_DATAMASK_ID_LIST: &str = "__fd_datamask_id_list";
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatamaskNameIdent {
     pub tenant: String,
@@ -130,15 +126,12 @@ mod kvapi_key_impl {
     use super::DatamaskId;
     use super::DatamaskNameIdent;
     use super::MaskpolicyTableIdListKey;
-    use super::PREFIX_DATAMASK;
-    use super::PREFIX_DATAMASK_BY_ID;
-    use super::PREFIX_DATAMASK_ID_LIST;
     use crate::data_mask::DatamaskMeta;
     use crate::data_mask::MaskpolicyTableIdList;
 
     /// __fd_database/<tenant>/<name> -> <data_mask_id>
     impl kvapi::Key for DatamaskNameIdent {
-        const PREFIX: &'static str = PREFIX_DATAMASK;
+        const PREFIX: &'static str = "__fd_datamask";
 
         type ValueType = DatamaskId;
 
@@ -162,7 +155,7 @@ mod kvapi_key_impl {
 
     /// "__fd_datamask_by_id/<id>"
     impl kvapi::Key for DatamaskId {
-        const PREFIX: &'static str = PREFIX_DATAMASK_BY_ID;
+        const PREFIX: &'static str = "__fd_datamask_by_id";
 
         type ValueType = DatamaskMeta;
 
@@ -183,7 +176,7 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Key for MaskpolicyTableIdListKey {
-        const PREFIX: &'static str = PREFIX_DATAMASK_ID_LIST;
+        const PREFIX: &'static str = "__fd_datamask_id_list";
 
         type ValueType = MaskpolicyTableIdList;
 
