@@ -528,6 +528,10 @@ async fn adjust_bloom_runtime_filter(
     table_index: Option<IndexType>,
     s_expr: &SExpr,
 ) -> Result<bool> {
+    // The setting of `enable_bloom_runtime_filter` is true by default.
+    if !ctx.get_settings().get_bloom_runtime_filter()? {
+        return Ok(false);
+    }
     if let Some(table_index) = table_index {
         let table = metadata.read().table(table_index).table();
         if let Some(stats) = table.table_statistics(ctx.clone()).await? {
