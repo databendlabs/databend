@@ -145,6 +145,7 @@ impl PrivilegeAccess {
         catalog_name: &str,
         db_name: &str,
         privileges: Vec<UserPrivilegeType>,
+        if_exists: bool,
     ) -> Result<()> {
         let tenant = self.ctx.get_tenant();
 
@@ -159,18 +160,32 @@ impl PrivilegeAccess {
                 return Ok(());
             }
             Err(_err) => {
-                let (db_id, _) = match self
+                match self
                     .convert_to_id(&tenant, catalog_name, db_name, None)
-                    .await?
+                    .await
                 {
-                    ObjectId::Table(db_id, table_id) => (db_id, Some(table_id)),
-                    ObjectId::Database(db_id) => (db_id, None),
-                };
-                self.validate_access(
-                    &GrantObject::DatabaseById(catalog_name.to_string(), db_id),
-                    privileges,
-                )
-                .await?
+                    Ok(obj) => {
+                        let (db_id, _) = match obj {
+                            ObjectId::Table(db_id, table_id) => (db_id, Some(table_id)),
+                            ObjectId::Database(db_id) => (db_id, None),
+                        };
+                        self.validate_access(
+                            &GrantObject::DatabaseById(catalog_name.to_string(), db_id),
+                            privileges,
+                        )
+                        .await?
+                    }
+                    Err(e) => match e.code() {
+                        ErrorCode::UNKNOWN_DATABASE
+                        | ErrorCode::UNKNOWN_TABLE
+                        | ErrorCode::UNKNOWN_CATALOG
+                            if if_exists =>
+                        {
+                            return Ok(());
+                        }
+                        _ => return Err(e.add_message("error on validating database access")),
+                    },
+                }
             }
         }
         Ok(())
@@ -215,22 +230,38 @@ impl PrivilegeAccess {
             )
             .await
         {
-            Ok(_) => {
-                return Ok(());
-            }
+            Ok(_) => return Ok(()),
             Err(_err) => {
-                let (db_id, table_id) = match self
+                match self
                     .convert_to_id(&tenant, catalog_name, db_name, Some(table_name))
-                    .await?
+                    .await
                 {
-                    ObjectId::Table(db_id, table_id) => (db_id, Some(table_id)),
-                    ObjectId::Database(db_id) => (db_id, None),
-                };
-                self.validate_access(
-                    &GrantObject::TableById(catalog_name.to_string(), db_id, table_id.unwrap()),
-                    privileges,
-                )
-                .await?
+                    Ok(obj) => {
+                        let (db_id, table_id) = match obj {
+                            ObjectId::Table(db_id, table_id) => (db_id, Some(table_id)),
+                            ObjectId::Database(db_id) => (db_id, None),
+                        };
+                        self.validate_access(
+                            &GrantObject::TableById(
+                                catalog_name.to_string(),
+                                db_id,
+                                table_id.unwrap(),
+                            ),
+                            privileges,
+                        )
+                        .await?
+                    }
+                    Err(e) => match e.code() {
+                        ErrorCode::UNKNOWN_DATABASE
+                        | ErrorCode::UNKNOWN_TABLE
+                        | ErrorCode::UNKNOWN_CATALOG
+                            if if_exists =>
+                        {
+                            return Ok(());
+                        }
+                        _ => return Err(e.add_message("error on validating table access")),
+                    },
+                }
             }
         }
         Ok(())
@@ -306,6 +337,10 @@ impl PrivilegeAccess {
             GrantObject::Global => false,
         };
 
+        println!(
+            "self.has_ownership(&session, grant_object).await? {}",
+            self.has_ownership(&session, grant_object).await?.clone()
+        );
         if verify_ownership && self.has_ownership(&session, grant_object).await? {
             return Ok(());
         }
@@ -315,7 +350,14 @@ impl PrivilegeAccess {
             .validate_privilege(grant_object, privileges.clone())
             .await
         {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                println!(
+                    "grant_object is {:?}, privileges is {:?}",
+                    grant_object.clone(),
+                    privileges.clone()
+                );
+                Ok(())
+            }
             Err(err) => {
                 if err.code() != ErrorCode::PermissionDenied("").code() {
                     return Err(err);
@@ -571,14 +613,14 @@ impl AccessChecker for PrivilegeAccess {
 
             // Database.
             Plan::ShowCreateDatabase(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Select]).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Select], false).await?
             }
             Plan::CreateDatabase(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::CreateDatabase])
                     .await?;
             }
             Plan::DropDatabase(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop]).await?;
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop], plan.if_exists).await?;
             }
             Plan::UndropDatabase(_)
             | Plan::DropUDF(_)
@@ -632,7 +674,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Select], false).await?
             }
             Plan::CreateTable(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create]).await?;
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create], false).await?;
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;
                 }
@@ -642,14 +684,14 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::UndropTable(plan) => {
                 // undroptable/db need convert name to id. But because of drop, can not find the id. Upgrade Object to Database.
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop]).await?;
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop], false).await?;
 
             }
             Plan::RenameTable(plan) => {
                 // You must have ALTER and DROP privileges for the original table,
                 // and CREATE for the new db.
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter, UserPrivilegeType::Drop], plan.if_exists).await?;
-                self.validate_db_access(&plan.catalog, &plan.new_database, vec![UserPrivilegeType::Create]).await?;
+                self.validate_db_access(&plan.catalog, &plan.new_database, vec![UserPrivilegeType::Create], false).await?;
             }
             Plan::SetOptions(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Alter], false).await?
@@ -691,7 +733,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Super], false).await?
             }
             Plan::VacuumDropTable(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Super]).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Super], false).await?
             }
             Plan::AnalyzeTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Super], false).await?
@@ -813,19 +855,19 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Update], false).await?;
             }
             Plan::CreateView(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create]).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create], false).await?
             }
             Plan::AlterView(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Alter]).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Alter], false).await?
             }
             Plan::DropView(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop]).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop], plan.if_exists).await?
             }
             Plan::CreateStream(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create]).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create], false).await?
             }
             Plan::DropStream(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop]).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop], plan.if_exists).await?
             }
             Plan::CreateUser(_) => {
                 self.validate_access(
