@@ -25,7 +25,7 @@ echo "create user '${TEST_USER_NAME}' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $BE
 ## create role
 echo 'create role `r_0002`' | $BENDSQL_CLIENT_CONNECT
 echo "GRANT ROLE 'r_0002' TO '${TEST_USER_NAME}'" | $BENDSQL_CLIENT_CONNECT
-echo "GRANT CREATE, SUPER ON *.* TO ROLE 'r_0002'" | $BENDSQL_CLIENT_CONNECT
+echo "GRANT CREATE DATABASE, SUPER ON *.* TO ROLE 'r_0002'" | $BENDSQL_CLIENT_CONNECT
 
 echo "create ROLE r_0002_1" | $BENDSQL_CLIENT_CONNECT
 echo "create user 'owner1' IDENTIFIED BY 'password'" | $BENDSQL_CLIENT_CONNECT
@@ -136,7 +136,7 @@ echo "create role drop_role;" | $BENDSQL_CLIENT_CONNECT
 echo "create role drop_role1;" | $BENDSQL_CLIENT_CONNECT
 echo "create user u1 identified by '123' with DEFAULT_ROLE='drop_role'" | $BENDSQL_CLIENT_CONNECT
 echo "grant role drop_role to u1;" | $BENDSQL_CLIENT_CONNECT
-echo "grant create on *.* to u1;" | $BENDSQL_CLIENT_CONNECT
+echo "grant create database on *.* to u1;" | $BENDSQL_CLIENT_CONNECT
 export USER_U1_CONNECT="bendsql --user=u1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo "create database a" | $USER_U1_CONNECT
@@ -145,12 +145,28 @@ echo "select name, owner from system.databases where name='a'" | $USER_U1_CONNEC
 echo "select name, owner from system.tables where database='a'" | $USER_U1_CONNECT
 echo "drop role drop_role;" | $BENDSQL_CLIENT_CONNECT
 echo "select name, owner from system.databases where name='a'" | $BENDSQL_CLIENT_CONNECT
+echo "select name, owner from system.tables where database='a'" | $BENDSQL_CLIENT_CONNECT
 echo "select name, owner from system.tables where database='a'" | $USER_U1_CONNECT
 echo "grant ownership on a.* to role drop_role1;" | $BENDSQL_CLIENT_CONNECT
 echo "grant ownership on a.t to role drop_role1;" | $BENDSQL_CLIENT_CONNECT
 echo "select name, owner from system.databases where name='a'" | $BENDSQL_CLIENT_CONNECT
+echo "select name, owner from system.tables where database='a'" | $BENDSQL_CLIENT_CONNECT
 echo "select name, owner from system.tables where database='a'" | $USER_U1_CONNECT
 echo "show grants for role drop_role1" | $BENDSQL_CLIENT_CONNECT
 echo "drop role drop_role1" | $BENDSQL_CLIENT_CONNECT
 echo "drop user u1" | $BENDSQL_CLIENT_CONNECT
 echo "drop database a" | $BENDSQL_CLIENT_CONNECT
+
+
+echo "== test create database privilege and drop object ==="
+echo "create role role1;" | $BENDSQL_CLIENT_CONNECT
+echo "grant create database on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
+echo "create user a identified by '123' with DEFAULT_ROLE='role1'" | $BENDSQL_CLIENT_CONNECT
+echo "grant role role1 to a;" | $BENDSQL_CLIENT_CONNECT
+
+echo "drop database if exists c" | $BENDSQL_CLIENT_CONNECT
+echo "create database c" | $USER_A_CONNECT
+echo "drop database c" | $USER_A_CONNECT
+echo "show tables from c" | $USER_A_CONNECT
+echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
