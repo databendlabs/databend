@@ -29,8 +29,7 @@ echo "Waiting on databend-meta 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9191
 
 echo 'Start databend-query with native...'
-
 nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-native.toml --internal-enable-sandbox-tenant &
 
 echo "Waiting on databend-query 10 seconds..."
-python3 scripts/ci/wait_tcp.py --timeout 30 --port 3307
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 8000
