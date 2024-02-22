@@ -20,6 +20,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_types::MetaId;
@@ -169,6 +170,7 @@ async fn generate_refresh_index_plan(
         .list_indexes_by_table_id(ListIndexesByIdReq {
             tenant: ctx.get_tenant().to_string(),
             table_id,
+            index_type: Some(IndexType::AGGREGATING),
         })
         .await?;
 

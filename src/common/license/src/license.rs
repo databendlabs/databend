@@ -30,6 +30,7 @@ pub enum Feature {
     BackgroundService,
     DataMask,
     AggregateIndex,
+    InvertedIndex,
     ComputedColumn,
     StorageEncryption,
     Stream,
@@ -58,6 +59,9 @@ impl Display for Feature {
             }
             Feature::AggregateIndex => {
                 write!(f, "aggregate_index")
+            }
+            Feature::InvertedIndex => {
+                write!(f, "inverted_index")
             }
             Feature::ComputedColumn => {
                 write!(f, "computed_column")

@@ -163,6 +163,7 @@ pub enum Statement {
 
     // Indexes
     CreateIndex(CreateIndexStmt),
+    CreateInvertedIndex(CreateInvertedIndexStmt),
     DropIndex(DropIndexStmt),
     RefreshIndex(RefreshIndexStmt),
 
@@ -551,6 +552,7 @@ impl Display for Statement {
             Statement::ShowStreams(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeStream(stmt) => write!(f, "{stmt}")?,
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateInvertedIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,
             Statement::CreateVirtualColumn(stmt) => write!(f, "{stmt}")?,

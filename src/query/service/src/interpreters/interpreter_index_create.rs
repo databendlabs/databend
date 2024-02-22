@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_ast::ast::TableIndexType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
@@ -27,6 +28,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::CreateIndexPlan;
 use databend_enterprise_aggregating_index::get_agg_index_handler;
+use databend_enterprise_inverted_index::get_inverted_index_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -64,10 +66,14 @@ impl Interpreter for CreateIndexInterpreter {
 
         let tenant = Tenant::new_nonempty(non_empty);
 
+        let feature = match self.plan.index_type {
+            TableIndexType::Aggregating => Feature::AggregateIndex,
+            TableIndexType::Inverted => Feature::InvertedIndex,
+        };
         let license_manager = get_license_manager();
         license_manager
             .manager
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), feature)?;
 
         let index_name = self.plan.index_name.clone();
         let catalog = self.ctx.get_current_catalog();
@@ -76,6 +82,10 @@ impl Interpreter for CreateIndexInterpreter {
                 "Only allow creating aggregating index in default catalog",
             ));
         }
+        let index_type = match self.plan.index_type {
+            TableIndexType::Aggregating => IndexType::AGGREGATING,
+            TableIndexType::Inverted => IndexType::INVERTED,
+        };
 
         let catalog = self.ctx.get_catalog(&catalog).await?;
 
@@ -84,18 +94,32 @@ impl Interpreter for CreateIndexInterpreter {
             name_ident: IndexNameIdent::new(tenant, &index_name),
             meta: IndexMeta {
                 table_id: self.plan.table_id,
-                index_type: IndexType::AGGREGATING,
+                index_type,
                 created_on: Utc::now(),
                 dropped_on: None,
                 updated_on: None,
                 original_query: self.plan.original_query.clone(),
                 query: self.plan.query.clone(),
+                index_schema: self.plan.index_schema.clone(),
                 sync_creation: self.plan.sync_creation,
             },
         };
 
-        let handler = get_agg_index_handler();
-        let _ = handler.do_create_index(catalog, create_index_req).await?;
+        match self.plan.index_type {
+            TableIndexType::Aggregating => {
+                let handler = get_agg_index_handler();
+                let _ = handler.do_create_index(catalog, create_index_req).await?;
+            }
+            TableIndexType::Inverted => {
+                if self.plan.index_schema.is_none() {
+                    return Err(ErrorCode::UnsupportedIndex(
+                        "Inverted index must have column schema".to_string(),
+                    ));
+                }
+                let handler = get_inverted_index_handler();
+                let _ = handler.do_create_index(catalog, create_index_req).await?;
+            }
+        }
 
         Ok(PipelineBuildResult::create())
     }

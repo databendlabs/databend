@@ -57,6 +57,7 @@ impl AsyncSystemTable for IndexesTable {
             .list_indexes(ListIndexesReq {
                 tenant: tenant.to_string(),
                 table_id: None,
+                index_type: None,
             })
             .await?;
 
@@ -64,6 +65,7 @@ impl AsyncSystemTable for IndexesTable {
         let mut types = Vec::with_capacity(indexes.len());
         let mut originals = Vec::with_capacity(indexes.len());
         let mut defs = Vec::with_capacity(indexes.len());
+        let mut schemas = Vec::with_capacity(indexes.len());
         let mut created_on = Vec::with_capacity(indexes.len());
         let mut updated_on = Vec::with_capacity(indexes.len());
 
@@ -72,6 +74,21 @@ impl AsyncSystemTable for IndexesTable {
             types.push(index.index_type.to_string());
             originals.push(index.original_query.clone());
             defs.push(index.query.clone());
+
+            let schema = match index.index_schema {
+                Some(schema) => {
+                    let mut buf = String::new();
+                    for (i, field) in schema.fields.iter().enumerate() {
+                        if i > 0 {
+                            buf.push_str(", ");
+                        }
+                        buf.push_str(&format!("{} {}", field.name, field.data_type));
+                    }
+                    Some(buf)
+                }
+                None => None,
+            };
+            schemas.push(schema);
             created_on.push(index.created_on.timestamp_micros());
             updated_on.push(index.updated_on.map(|u| u.timestamp_micros()));
         }
@@ -81,6 +98,7 @@ impl AsyncSystemTable for IndexesTable {
             StringType::from_data(types),
             StringType::from_data(originals),
             StringType::from_data(defs),
+            StringType::from_opt_data(schemas),
             TimestampType::from_data(created_on),
             TimestampType::from_opt_data(updated_on),
         ]))
@@ -94,6 +112,10 @@ impl IndexesTable {
             TableField::new("type", TableDataType::String),
             TableField::new("original", TableDataType::String),
             TableField::new("definition", TableDataType::String),
+            TableField::new(
+                "schema",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
             TableField::new("created_on", TableDataType::Timestamp),
             TableField::new(
                 "updated_on",

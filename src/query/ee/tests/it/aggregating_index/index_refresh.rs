@@ -567,6 +567,7 @@ async fn create_index(
                 original_query: original_query.to_string(),
                 query: query.to_string(),
                 sync_creation,
+                index_schema: None,
             },
         };
 

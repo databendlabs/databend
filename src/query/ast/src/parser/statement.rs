@@ -974,7 +974,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let create_index = map_res(
+    let create_agg_index = map_res(
         rule! {
             CREATE
             ~ ( OR ~ ^REPLACE )?
@@ -997,12 +997,53 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
+    let create_inverted_index = map_res(
+        rule! {
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ ASYNC?
+            ~ INVERTED ~ INDEX
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ ON ~ #dot_separated_idents_1_to_3
+            ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
+        },
+        |(
+            _,
+            opt_or_replace,
+            opt_async,
+            _,
+            _,
+            opt_if_not_exists,
+            index_name,
+            _,
+            (catalog, database, table),
+            _,
+            columns,
+            _,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateInvertedIndex(CreateInvertedIndexStmt {
+                index_type: TableIndexType::Inverted,
+                create_option,
+                index_name,
+                catalog,
+                database,
+                table,
+                columns,
+                sync_creation: opt_async.is_none(),
+            }))
+        },
+    );
+
     let drop_index = map(
         rule! {
-            DROP ~ AGGREGATING ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
+            DROP ~ #index_type ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
         },
-        |(_, _, _, opt_if_exists, index)| {
+        |(_, index_type, _, opt_if_exists, index)| {
             Statement::DropIndex(DropIndexStmt {
+                index_type,
                 if_exists: opt_if_exists.is_some(),
                 index,
             })
@@ -1011,10 +1052,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let refresh_index = map(
         rule! {
-            REFRESH ~ AGGREGATING ~ INDEX ~ #ident ~ ( LIMIT ~ #literal_u64 )?
+            REFRESH ~ #index_type ~ INDEX ~ #ident ~ ( LIMIT ~ #literal_u64 )?
         },
-        |(_, _, _, index, opt_limit)| {
+        |(_, index_type, _, index, opt_limit)| {
             Statement::RefreshIndex(RefreshIndexStmt {
+                index_type,
                 index,
                 limit: opt_limit.map(|(_, limit)| limit),
             })
@@ -2057,9 +2099,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #stream_table
-            | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
-            | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
-            | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
+            | #create_agg_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
+            | #create_inverted_index: "`CREATE [OR REPLACE] INVERTED INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
+            | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
+            | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
         ),
         rule!(
             #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
@@ -3625,6 +3668,13 @@ pub fn presign_option(i: Input) -> IResult<PresignOption> {
             rule! { CONTENT_TYPE ~ ^"=" ~ ^#literal_string },
             |(_, _, v)| PresignOption::ContentType(v),
         ),
+    ))(i)
+}
+
+pub fn index_type(i: Input) -> IResult<TableIndexType> {
+    alt((
+        value(TableIndexType::Aggregating, rule! { AGGREGATING }),
+        value(TableIndexType::Inverted, rule! { INVERTED }),
     ))(i)
 }
 

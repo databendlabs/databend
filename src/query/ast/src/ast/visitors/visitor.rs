@@ -581,6 +581,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_create_index(&mut self, _stmt: &'ast CreateIndexStmt) {}
 
+    fn visit_create_inverted_index(&mut self, _stmt: &'ast CreateInvertedIndexStmt) {}
+
     fn visit_drop_index(&mut self, _stmt: &'ast DropIndexStmt) {}
     fn visit_refresh_index(&mut self, _stmt: &'ast RefreshIndexStmt) {}
 

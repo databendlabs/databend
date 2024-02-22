@@ -1783,6 +1783,30 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_create_inverted_index(&mut self, stmt: &'ast CreateInvertedIndexStmt) {
+        self.visit_index_ref(&stmt.index_name);
+        let index_child = self.children.pop().unwrap();
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        let table_child = self.children.pop().unwrap();
+        let mut columns_children = Vec::with_capacity(stmt.columns.len());
+        for column in stmt.columns.iter() {
+            self.visit_identifier(column);
+            columns_children.push(self.children.pop().unwrap());
+        }
+        let columns_name = "Column".to_string();
+        let columns_ctx = AstFormatContext::with_children(columns_name, columns_children.len());
+        let columns_child = FormatTreeNode::with_children(columns_ctx, columns_children);
+
+        let name = "CreateInvertedIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 3);
+        let node = FormatTreeNode::with_children(format_ctx, vec![
+            index_child,
+            table_child,
+            columns_child,
+        ]);
+        self.children.push(node);
+    }
+
     fn visit_drop_index(&mut self, stmt: &'ast DropIndexStmt) {
         self.visit_index_ref(&stmt.index);
         let child = self.children.pop().unwrap();

@@ -15,8 +15,11 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
+use std::sync::Arc;
+
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_expression as ex;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::NonEmptyString;
@@ -89,6 +92,10 @@ impl FromToProto for mt::IndexMeta {
             original_query: p.original_query,
             query: p.query,
             sync_creation: p.sync_creation,
+            index_schema: match p.index_schema {
+                Some(schema) => Some(Arc::new(ex::TableSchema::from_pb(schema)?)),
+                None => None,
+            },
         };
         Ok(v)
     }
@@ -111,6 +118,10 @@ impl FromToProto for mt::IndexMeta {
             original_query: self.original_query.clone(),
             query: self.query.clone(),
             sync_creation: self.sync_creation,
+            index_schema: match &self.index_schema {
+                Some(schema) => Some(schema.to_pb()?),
+                None => None,
+            },
         };
         Ok(p)
     }

@@ -118,6 +118,7 @@ use databend_common_meta_app::schema::IndexId;
 use databend_common_meta_app::schema::IndexIdToName;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::LeastVisibleTimeKey;
 use databend_common_meta_app::schema::ListCatalogReq;
@@ -939,6 +940,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         construct_drop_index_txn_operations(
                             self,
                             tenant_index,
+                            &req.meta.index_type,
                             false,
                             false,
                             &mut condition,
@@ -1016,6 +1018,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (index_id, index_id_seq) = construct_drop_index_txn_operations(
                 self,
                 tenant_index,
+                &req.index_type,
                 req.if_exists,
                 true,
                 &mut condition,
@@ -1152,8 +1155,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     // 1. index is not dropped.
                     // 2. table_id is not specified
                     //    or table_id is specified and equals to the given table_id.
+                    // 3. index_type is not specified
+                    //    or index_type is specified and equals to the given meta index_type.
                     meta.dropped_on.is_none()
                         && req.table_id.filter(|id| *id != meta.table_id).is_none()
+                        && req
+                            .index_type
+                            .as_ref()
+                            .filter(|ty| **ty != meta.index_type)
+                            .is_none()
                 })
                 .collect::<Vec<_>>()
         };
@@ -1194,7 +1204,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let index_metas = get_index_metas_by_ids(self, id_name_list).await?;
             index_metas
                 .into_iter()
-                .filter(|(_, _, meta)| req.table_id == meta.table_id)
+                .filter(|(_, _, meta)| {
+                    req.table_id == meta.table_id
+                        && req
+                            .index_type
+                            .as_ref()
+                            .filter(|ty| **ty != meta.index_type)
+                            .is_none()
+                })
                 .map(|(id, _, _)| id)
                 .collect::<Vec<_>>()
         };
@@ -1235,7 +1252,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let index_metas = get_index_metas_by_ids(self, id_name_list).await?;
             index_metas
                 .into_iter()
-                .filter(|(_, _, meta)| req.table_id == meta.table_id)
+                .filter(|(_, _, meta)| {
+                    req.table_id == meta.table_id
+                        && req
+                            .index_type
+                            .as_ref()
+                            .filter(|ty| **ty != meta.index_type)
+                            .is_none()
+                })
                 .collect::<Vec<_>>()
         };
 
@@ -3958,6 +3982,7 @@ async fn construct_drop_virtual_column_txn_operations(
 async fn construct_drop_index_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant_index: &IndexNameIdent,
+    index_type: &IndexType,
     drop_if_exists: bool,
     if_delete: bool,
     condition: &mut Vec<TxnCondition>,
@@ -3980,6 +4005,12 @@ async fn construct_drop_index_txn_operations(
     let index_id_key = IndexId { index_id };
     // Safe unwrap(): index_meta_seq > 0 implies index_meta is not None.
     let mut index_meta = index_meta.unwrap();
+
+    if index_type != &index_meta.index_type {
+        return Err(KVAppError::AppError(AppError::UnknownIndex(
+            UnknownIndex::new(&tenant_index.index_name, "drop index with different type"),
+        )));
+    }
 
     debug!(index_id = index_id, name_key :? =(tenant_index); "drop_index");
 

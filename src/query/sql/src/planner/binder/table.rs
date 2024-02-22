@@ -68,6 +68,7 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::IndexType as MetaIndexType;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_types::MetaId;
 use databend_common_storage::DataOperator;
@@ -1489,13 +1490,14 @@ impl Binder {
         tenant: &str,
         catalog_name: &str,
         table_id: MetaId,
+        index_type: Option<MetaIndexType>,
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
         let catalog = self
             .catalogs
             .get_catalog(tenant, catalog_name, self.ctx.txn_mgr())
             .await?;
         let index_metas = catalog
-            .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
+            .list_indexes(ListIndexesReq::new(tenant, Some(table_id), index_type))
             .await?;
 
         Ok(index_metas)

@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_ast::ast::walk_statement_mut;
 use databend_common_ast::ast::CreateIndexStmt;
+use databend_common_ast::ast::CreateInvertedIndexStmt;
 use databend_common_ast::ast::DropIndexStmt;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::Identifier;
@@ -21,6 +24,7 @@ use databend_common_ast::ast::Query;
 use databend_common_ast::ast::RefreshIndexStmt;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TableIndexType;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::Visitor;
 use databend_common_ast::ast::VisitorMut;
@@ -28,11 +32,15 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_license::license::Feature::AggregateIndex;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::NonEmptyString;
 use databend_storages_common_table_meta::meta::Location;
@@ -111,6 +119,7 @@ impl Binder {
                             self.ctx.get_tenant().as_str(),
                             catalog.as_str(),
                             table.get_id(),
+                            Some(IndexType::AGGREGATING),
                         )
                         .await?;
 
@@ -142,6 +151,7 @@ impl Binder {
 
         Ok(())
     }
+
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_index(
         &mut self,
@@ -213,6 +223,73 @@ impl Binder {
             index_name,
             original_query: original_query.to_string(),
             query: query.to_string(),
+            index_schema: None,
+            table_id,
+            sync_creation: *sync_creation,
+        };
+        Ok(Plan::CreateIndex(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_create_inverted_index(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &CreateInvertedIndexStmt,
+    ) -> Result<Plan> {
+        let CreateInvertedIndexStmt {
+            index_type,
+            create_option,
+            index_name,
+            catalog,
+            database,
+            table,
+            columns,
+            sync_creation,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        let table = self.ctx.get_table(&catalog, &database, &table).await?;
+        if !table.support_index() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table engine {} does not support create inverted index",
+                table.engine()
+            )));
+        }
+        let table_schema = table.schema();
+        let mut index_fileds = Vec::with_capacity(columns.len());
+        for column in columns {
+            match table_schema.field_with_name(&column.name) {
+                Ok(field) => {
+                    if field.data_type.remove_nullable() != TableDataType::String {
+                        return Err(ErrorCode::UnsupportedIndex(format!(
+                            "Inverted index currently only support string type, but the type of column {} is {}",
+                            column, field.data_type
+                        )));
+                    }
+                }
+                Err(_) => {
+                    return Err(ErrorCode::UnsupportedIndex(format!(
+                        "Table does not have column {}",
+                        column
+                    )));
+                }
+            }
+            index_fileds.push(TableField::new(&column.name, TableDataType::String));
+        }
+        let index_schema = Arc::new(TableSchema::new(index_fileds));
+        let table_id = table.get_id();
+
+        let index_name = self.normalize_object_identifier(index_name);
+
+        let plan = CreateIndexPlan {
+            create_option: *create_option,
+            index_type: *index_type,
+            index_name,
+            original_query: "".to_string(),
+            query: "".to_string(),
+            index_schema: Some(index_schema),
             table_id,
             sync_creation: *sync_creation,
         };
@@ -224,10 +301,15 @@ impl Binder {
         &mut self,
         stmt: &DropIndexStmt,
     ) -> Result<Plan> {
-        let DropIndexStmt { if_exists, index } = stmt;
+        let DropIndexStmt {
+            if_exists,
+            index,
+            index_type,
+        } = stmt;
 
         let plan = DropIndexPlan {
             if_exists: *if_exists,
+            index_type: *index_type,
             index: index.to_string(),
         };
         Ok(Plan::DropIndex(Box::new(plan)))
@@ -239,7 +321,11 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &RefreshIndexStmt,
     ) -> Result<Plan> {
-        let RefreshIndexStmt { index, limit } = stmt;
+        let RefreshIndexStmt {
+            index,
+            index_type,
+            limit,
+        } = stmt;
 
         if limit.is_some() && limit.unwrap() < 1 {
             return Err(ErrorCode::RefreshIndexError(format!(
@@ -272,6 +358,25 @@ impl Binder {
 
         let index_id = res.index_id;
         let index_meta = res.index_meta;
+
+        match index_type {
+            TableIndexType::Aggregating => {
+                if index_meta.index_type != IndexType::AGGREGATING {
+                    return Err(ErrorCode::RefreshIndexError(format!(
+                        "Expecting refresh aggregating index, but index type is {}",
+                        index_meta.index_type
+                    )));
+                }
+            }
+            TableIndexType::Inverted => {
+                if index_meta.index_type != IndexType::INVERTED {
+                    return Err(ErrorCode::RefreshIndexError(format!(
+                        "Expecting refresh inverted index, but index type is {}",
+                        index_meta.index_type
+                    )));
+                }
+            }
+        }
 
         let plan = self
             .build_refresh_index_plan(bind_context, index_id, index_name, index_meta, *limit, None)

@@ -22,6 +22,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::LoadParams;
@@ -85,6 +86,7 @@ impl FuseTable {
             .list_index_ids_by_table_id(ListIndexesByIdReq {
                 tenant: ctx.get_tenant().to_string(),
                 table_id: self.get_id(),
+                index_type: Some(IndexType::AGGREGATING),
             })
             .await?;
 
