@@ -330,7 +330,7 @@ impl FieldJsonAstDecoder {
     fn read_geometry(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
         match value {
             Value::String(v) => {
-                let geom = parse_to_ewkb(v.as_bytes())?;
+                let geom = parse_to_ewkb(v.as_bytes(), None)?;
                 column.put_slice(&geom);
                 column.commit_row();
                 Ok(())
