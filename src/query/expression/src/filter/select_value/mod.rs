@@ -28,9 +28,99 @@ mod select_scalar;
 
 impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_type_values<T: ValueType>(
+    pub(crate) fn select_type_values_cmp<T: ValueType>(
         &self,
         op: &SelectOp,
+        left: Value<AnyType>,
+        right: Value<AnyType>,
+        validity: Option<Bitmap>,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<usize> {
+        match op {
+            SelectOp::Equal => self.select_type_values::<T>(
+                T::equal,
+                left,
+                right,
+                validity,
+                true_selection,
+                false_selection,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+            SelectOp::NotEqual => self.select_type_values::<T>(
+                T::not_equal,
+                left,
+                right,
+                validity,
+                true_selection,
+                false_selection,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+            SelectOp::Gt => self.select_type_values::<T>(
+                T::greater_than,
+                left,
+                right,
+                validity,
+                true_selection,
+                false_selection,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+            SelectOp::Lt => self.select_type_values::<T>(
+                T::less_than,
+                left,
+                right,
+                validity,
+                true_selection,
+                false_selection,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+            SelectOp::Gte => self.select_type_values::<T>(
+                T::greater_than_equal,
+                left,
+                right,
+                validity,
+                true_selection,
+                false_selection,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+            SelectOp::Lte => self.select_type_values::<T>(
+                T::less_than_equal,
+                left,
+                right,
+                validity,
+                true_selection,
+                false_selection,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn select_type_values<T: ValueType>(
+        &self,
+        cmp: impl Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
         left: Value<AnyType>,
         right: Value<AnyType>,
         validity: Option<Bitmap>,
@@ -44,7 +134,7 @@ impl<'a> Selector<'a> {
         let has_false = false_selection.1;
         match (left, right) {
             (Value::Scalar(left), Value::Scalar(right)) => self.select_scalars::<T>(
-                op,
+                cmp,
                 left,
                 right,
                 true_selection,
@@ -60,7 +150,7 @@ impl<'a> Selector<'a> {
 
                 if has_false {
                     self.select_columns::<T, true>(
-                        op,
+                        cmp,
                         left,
                         right,
                         validity,
@@ -73,7 +163,7 @@ impl<'a> Selector<'a> {
                     )
                 } else {
                     self.select_columns::<T, false>(
-                        op,
+                        cmp,
                         left,
                         right,
                         validity,
@@ -94,7 +184,7 @@ impl<'a> Selector<'a> {
 
                 if has_false {
                     self.select_column_scalar::<T, true>(
-                        op,
+                        cmp,
                         column,
                         scalar,
                         validity,
@@ -107,7 +197,7 @@ impl<'a> Selector<'a> {
                     )
                 } else {
                     self.select_column_scalar::<T, false>(
-                        op,
+                        cmp,
                         column,
                         scalar,
                         validity,
