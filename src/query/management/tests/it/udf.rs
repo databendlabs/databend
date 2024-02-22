@@ -19,11 +19,14 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_management::udf::UdfMgr;
 use databend_common_management::*;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyStr;
 use databend_common_meta_types::SeqV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -32,7 +35,10 @@ async fn test_add_udf() -> Result<()> {
 
     // lambda udf
     let udf = create_test_lambda_udf();
-    udf_api.add_udf(udf.clone()).await?;
+    udf_api
+        .add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false))
+        .await??;
+
     let value = kv_api
         .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
         .await?;
@@ -52,7 +58,11 @@ async fn test_add_udf() -> Result<()> {
     }
     // udf server
     let udf = create_test_udf_server();
-    udf_api.add_udf(udf.clone()).await?;
+
+    udf_api
+        .add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false))
+        .await??;
+
     let value = kv_api
         .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
         .await?;
@@ -80,19 +90,30 @@ async fn test_already_exists_add_udf() -> Result<()> {
 
     // lambda udf
     let udf = create_test_lambda_udf();
-    udf_api.add_udf(udf.clone()).await?;
-    match udf_api.add_udf(udf.clone()).await {
-        Ok(_) => panic!("Already exists add udf must be return Err."),
-        Err(cause) => assert_eq!(cause.code(), 2603),
-    }
+    udf_api
+        .add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false))
+        .await??;
+
+    let got = udf_api
+        .add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false))
+        .await?;
+
+    let err = got.unwrap_err();
+
+    assert_eq!(err.to_string(), r#"UDF already exists: 'isnotempty'; "#);
 
     // udf server
     let udf = create_test_udf_server();
-    udf_api.add_udf(udf.clone()).await?;
-    match udf_api.add_udf(udf.clone()).await {
-        Ok(_) => panic!("Already exists add udf must be return Err."),
-        Err(cause) => assert_eq!(cause.code(), 2603),
-    }
+    udf_api
+        .add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false))
+        .await??;
+
+    let got = udf_api
+        .add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false))
+        .await?;
+
+    let err = got.unwrap_err();
+    assert_eq!(err.to_string(), r#"UDF already exists: 'strlen'; "#);
 
     Ok(())
 }
@@ -101,16 +122,21 @@ async fn test_already_exists_add_udf() -> Result<()> {
 async fn test_successfully_get_udfs() -> Result<()> {
     let (_, udf_api) = new_udf_api().await?;
 
-    let udfs = udf_api.get_udfs().await?;
+    let udfs = udf_api.list_udf().await?;
     assert_eq!(udfs, vec![]);
 
     let lambda_udf = create_test_lambda_udf();
     let udf_server = create_test_udf_server();
 
-    udf_api.add_udf(lambda_udf.clone()).await?;
-    udf_api.add_udf(udf_server.clone()).await?;
+    udf_api
+        .add_udf(lambda_udf.clone(), &CreateOption::CreateIfNotExists(false))
+        .await??;
 
-    let udfs = udf_api.get_udfs().await?;
+    udf_api
+        .add_udf(udf_server.clone(), &CreateOption::CreateIfNotExists(false))
+        .await??;
+
+    let udfs = udf_api.list_udf().await?;
     assert_eq!(udfs, vec![lambda_udf, udf_server]);
     Ok(())
 }
@@ -122,16 +148,21 @@ async fn test_successfully_drop_udf() -> Result<()> {
     let lambda_udf = create_test_lambda_udf();
     let udf_server = create_test_udf_server();
 
-    udf_api.add_udf(lambda_udf.clone()).await?;
-    udf_api.add_udf(udf_server.clone()).await?;
+    udf_api
+        .add_udf(lambda_udf.clone(), &CreateOption::CreateIfNotExists(false))
+        .await??;
 
-    let udfs = udf_api.get_udfs().await?;
+    udf_api
+        .add_udf(udf_server.clone(), &CreateOption::CreateIfNotExists(false))
+        .await??;
+
+    let udfs = udf_api.list_udf().await?;
     assert_eq!(udfs, vec![lambda_udf.clone(), udf_server.clone()]);
 
     udf_api.drop_udf(&lambda_udf.name, MatchSeq::GE(1)).await?;
     udf_api.drop_udf(&udf_server.name, MatchSeq::GE(1)).await?;
 
-    let udfs = udf_api.get_udfs().await?;
+    let udfs = udf_api.list_udf().await?;
     assert_eq!(udfs, vec![]);
     Ok(())
 }
@@ -140,10 +171,8 @@ async fn test_successfully_drop_udf() -> Result<()> {
 async fn test_unknown_udf_drop_udf() -> Result<()> {
     let (_, udf_api) = new_udf_api().await?;
 
-    match udf_api.drop_udf("UNKNOWN_NAME", MatchSeq::GE(1)).await {
-        Ok(_) => panic!("Unknown Function drop must be return Err."),
-        Err(cause) => assert_eq!(cause.code(), 2602),
-    }
+    let res = udf_api.drop_udf("UNKNOWN_NAME", MatchSeq::GE(1)).await;
+    assert_eq!(Ok(None), res);
 
     Ok(())
 }
@@ -171,6 +200,6 @@ fn create_test_udf_server() -> UserDefinedFunction {
 
 async fn new_udf_api() -> Result<(Arc<MetaEmbedded>, UdfMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
-    let mgr = UdfMgr::create(test_api.clone(), "admin")?;
+    let mgr = UdfMgr::create(test_api.clone(), NonEmptyStr::new("admin").unwrap());
     Ok((test_api, mgr))
 }

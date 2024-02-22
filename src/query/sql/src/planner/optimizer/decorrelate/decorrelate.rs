@@ -199,7 +199,6 @@ impl SubqueryRewriter {
             marker_index: None,
             from_correlated_subquery: true,
             need_hold_hash_table: false,
-            broadcast: false,
             is_lateral: false,
             original_join_type: None,
         };
@@ -268,15 +267,28 @@ impl SubqueryRewriter {
                     &mut right_conditions,
                     &mut left_conditions,
                 )?;
+
+                let mut join_type = JoinType::LeftSingle;
+                if subquery.contain_agg.unwrap() {
+                    let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
+                    let has_precise_cardinality = rel_expr
+                        .derive_cardinality()?
+                        .statistics
+                        .precise_cardinality
+                        .is_some();
+                    if has_precise_cardinality {
+                        join_type = JoinType::Left;
+                    }
+                }
+
                 let join_plan = Join {
                     left_conditions,
                     right_conditions,
                     non_equi_conditions: vec![],
-                    join_type: JoinType::LeftSingle,
+                    join_type,
                     marker_index: None,
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
-                    broadcast: false,
                     is_lateral: false,
                     original_join_type: None,
                 };
@@ -326,7 +338,6 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
-                    broadcast: false,
                     is_lateral: false,
                     original_join_type: None,
                 };
@@ -391,7 +402,6 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
-                    broadcast: false,
                     is_lateral: false,
                     original_join_type: None,
                 }
@@ -427,6 +437,7 @@ impl SubqueryRewriter {
                     Box::from(column_entry.data_type()),
                     Visibility::Visible,
                 )
+                .table_index(column_entry.table_index())
                 .build(),
             });
             let derive_column = self.derived_columns.get(correlated_column).unwrap();
@@ -439,6 +450,7 @@ impl SubqueryRewriter {
                     Box::from(column_entry.data_type()),
                     Visibility::Visible,
                 )
+                .table_index(column_entry.table_index())
                 .build(),
             });
             left_conditions.push(left_column);

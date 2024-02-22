@@ -1,0 +1,28 @@
+statement ok
+DROP DATABASE IF EXISTS db_large_limit
+
+statement ok
+CREATE DATABASE db_large_limit
+
+statement ok
+USE db_large_limit
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1(id Int, v binary) Engine = Fuse
+
+statement ok
+INSERT INTO t1 (id, v) VALUES(1, to_binary('aaa')),(2, from_hex('616161')),(3, from_base64('YWFh'))
+
+statement ok
+INSERT INTO t1 (id, v) VALUES(4, 'aaa')
+
+query IT
+SELECT id, v FROM t1 order by id LIMIT 100000000;
+----
+1 616161
+2 616161
+3 616161
+4 616161
+
+statement ok
+DROP DATABASE db_large_limit

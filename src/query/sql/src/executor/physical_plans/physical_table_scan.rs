@@ -242,7 +242,7 @@ impl PhysicalPlanBuilder {
             Some(project_internal_columns)
         };
         Ok(PhysicalPlan::TableScan(TableScan {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             name_mapping,
             source: Box::new(source),
             table_index: scan.table_index,
@@ -272,7 +272,7 @@ impl PhysicalPlanBuilder {
             )
             .await?;
         Ok(PhysicalPlan::TableScan(TableScan {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
             source: Box::new(source),
             table_index: DUMMY_TABLE_INDEX,

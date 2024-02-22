@@ -14,6 +14,8 @@
 
 use std::ops::Deref;
 
+use databend_common_meta_kvapi::kvapi;
+
 /// The identifier of a internal record used in an application upon kvapi::KVApi.
 ///
 /// E.g. TableId, DatabaseId.
@@ -41,3 +43,5 @@ impl Deref for Id {
         &self.0
     }
 }
+
+impl kvapi::Value for Id {}

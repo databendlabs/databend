@@ -30,3 +30,12 @@ show FILE FORMATS
 
 statement error 1005
 CREATE FILE FORMAT csv TYPE=CSV
+
+statement ok
+CREATE FILE FORMAT replace_file_format TYPE=CSV;
+
+statement error 1005
+CREATE OR REPLACE FILE FORMAT IF NOT EXISTS replace_file_format TYPE=CSV  FIELD_DELIMITER='\t' ESCAPE='\\';
+
+statement ok
+CREATE OR REPLACE FILE FORMAT replace_file_format TYPE=CSV  FIELD_DELIMITER='\t' ESCAPE='\\';

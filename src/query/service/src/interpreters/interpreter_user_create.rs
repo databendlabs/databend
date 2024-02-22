@@ -84,7 +84,7 @@ impl Interpreter for CreateUserInterpreter {
             lockout_time: None,
         };
         user_mgr
-            .add_user(&tenant, user_info, plan.if_not_exists)
+            .add_user(&tenant, user_info, &plan.create_option)
             .await?;
 
         Ok(PipelineBuildResult::create())

@@ -1496,6 +1496,24 @@ async fn test_affect() -> Result<()> {
                 )])),
             }),
         ),
+        (
+            serde_json::json!({"sql": "set global max_threads=2", "session": {"settings": {"max_threads": "4", "timezone": "Asia/Shanghai"}}}),
+            Some(QueryAffect::ChangeSettings {
+                keys: vec!["max_threads".to_string()],
+                values: vec!["2".to_string()],
+                is_globals: vec![true],
+            }),
+            Some(HttpSessionConf {
+                database: Some("default".to_string()),
+                role: Some("account_admin".to_string()),
+                secondary_roles: None,
+                keep_server_session_secs: None,
+                settings: Some(BTreeMap::from([(
+                    "timezone".to_string(),
+                    "Asia/Shanghai".to_string(),
+                )])),
+            }),
+        ),
     ];
 
     for (json, affect, session_conf) in sqls {

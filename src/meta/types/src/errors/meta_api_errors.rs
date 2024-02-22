@@ -23,6 +23,7 @@ use crate::raft_types::ChangeMembershipError;
 use crate::raft_types::Fatal;
 use crate::raft_types::ForwardToLeader;
 use crate::ClientWriteError;
+use crate::InvalidArgument;
 use crate::InvalidReply;
 use crate::MetaNetworkError;
 use crate::RaftError;
@@ -169,6 +170,13 @@ impl From<MetaDataReadError> for MetaOperationError {
 impl From<Status> for MetaAPIError {
     fn from(status: Status) -> Self {
         let net_err = MetaNetworkError::from(status);
+        Self::NetworkError(net_err)
+    }
+}
+
+impl From<InvalidArgument> for MetaAPIError {
+    fn from(e: InvalidArgument) -> Self {
+        let net_err = MetaNetworkError::from(e);
         Self::NetworkError(net_err)
     }
 }

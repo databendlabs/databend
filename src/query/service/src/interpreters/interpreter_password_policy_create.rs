@@ -128,7 +128,7 @@ impl Interpreter for CreatePasswordPolicyInterpreter {
             update_on: None,
         };
         user_mgr
-            .add_password_policy(&tenant, password_policy, plan.if_not_exists)
+            .add_password_policy(&tenant, password_policy, &plan.create_option)
             .await?;
 
         Ok(PipelineBuildResult::create())

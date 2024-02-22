@@ -32,7 +32,7 @@ impl Binder {
         stmt: &CreateNetworkPolicyStmt,
     ) -> Result<Plan> {
         let CreateNetworkPolicyStmt {
-            if_not_exists,
+            create_option,
             name,
             allowed_ip_list,
             blocked_ip_list,
@@ -60,7 +60,7 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
         let plan = CreateNetworkPolicyPlan {
-            if_not_exists: *if_not_exists,
+            create_option: *create_option,
             tenant,
             name: name.to_string(),
             allowed_ip_list: allowed_ip_list.clone(),

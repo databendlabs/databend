@@ -28,6 +28,7 @@ remove_nullable -> assume_not_null
 rlike -> regexp
 sha1 -> sha
 siphash -> siphash64
+st_point -> st_makepoint
 str_to_date -> to_date
 str_to_timestamp -> to_timestamp
 substr_utf8 -> substr
@@ -1178,6 +1179,7 @@ Functions overloads:
 1 crc32(String NULL) :: UInt32 NULL
 0 degrees(Float64) :: Float64
 1 degrees(Float64 NULL) :: Float64 NULL
+0 delete_by_keypath FACTORY
 0 div(UInt8, UInt8) :: UInt8
 1 div(UInt8 NULL, UInt8 NULL) :: UInt8 NULL
 2 div(UInt8, UInt16) :: UInt16
@@ -1378,6 +1380,206 @@ Functions overloads:
 197 div(Float64 NULL, Float32 NULL) :: Int64 NULL
 198 div(Float64, Float64) :: Int64
 199 div(Float64 NULL, Float64 NULL) :: Int64 NULL
+0 div0(UInt8, UInt8) :: Float64
+1 div0(UInt8 NULL, UInt8 NULL) :: Float64 NULL
+2 div0(UInt8, UInt16) :: Float64
+3 div0(UInt8 NULL, UInt16 NULL) :: Float64 NULL
+4 div0(UInt8, UInt32) :: Float64
+5 div0(UInt8 NULL, UInt32 NULL) :: Float64 NULL
+6 div0(UInt8, UInt64) :: Float64
+7 div0(UInt8 NULL, UInt64 NULL) :: Float64 NULL
+8 div0(UInt8, Int8) :: Float64
+9 div0(UInt8 NULL, Int8 NULL) :: Float64 NULL
+10 div0(UInt8, Int16) :: Float64
+11 div0(UInt8 NULL, Int16 NULL) :: Float64 NULL
+12 div0(UInt8, Int32) :: Float64
+13 div0(UInt8 NULL, Int32 NULL) :: Float64 NULL
+14 div0(UInt8, Int64) :: Float64
+15 div0(UInt8 NULL, Int64 NULL) :: Float64 NULL
+16 div0(UInt16, UInt8) :: Float64
+17 div0(UInt16 NULL, UInt8 NULL) :: Float64 NULL
+18 div0(UInt16, UInt16) :: Float64
+19 div0(UInt16 NULL, UInt16 NULL) :: Float64 NULL
+20 div0(UInt16, UInt32) :: Float64
+21 div0(UInt16 NULL, UInt32 NULL) :: Float64 NULL
+22 div0(UInt16, UInt64) :: Float64
+23 div0(UInt16 NULL, UInt64 NULL) :: Float64 NULL
+24 div0(UInt16, Int8) :: Float64
+25 div0(UInt16 NULL, Int8 NULL) :: Float64 NULL
+26 div0(UInt16, Int16) :: Float64
+27 div0(UInt16 NULL, Int16 NULL) :: Float64 NULL
+28 div0(UInt16, Int32) :: Float64
+29 div0(UInt16 NULL, Int32 NULL) :: Float64 NULL
+30 div0(UInt16, Int64) :: Float64
+31 div0(UInt16 NULL, Int64 NULL) :: Float64 NULL
+32 div0(UInt32, UInt8) :: Float64
+33 div0(UInt32 NULL, UInt8 NULL) :: Float64 NULL
+34 div0(UInt32, UInt16) :: Float64
+35 div0(UInt32 NULL, UInt16 NULL) :: Float64 NULL
+36 div0(UInt32, UInt32) :: Float64
+37 div0(UInt32 NULL, UInt32 NULL) :: Float64 NULL
+38 div0(UInt32, UInt64) :: Float64
+39 div0(UInt32 NULL, UInt64 NULL) :: Float64 NULL
+40 div0(UInt32, Int8) :: Float64
+41 div0(UInt32 NULL, Int8 NULL) :: Float64 NULL
+42 div0(UInt32, Int16) :: Float64
+43 div0(UInt32 NULL, Int16 NULL) :: Float64 NULL
+44 div0(UInt32, Int32) :: Float64
+45 div0(UInt32 NULL, Int32 NULL) :: Float64 NULL
+46 div0(UInt32, Int64) :: Float64
+47 div0(UInt32 NULL, Int64 NULL) :: Float64 NULL
+48 div0(UInt64, UInt8) :: Float64
+49 div0(UInt64 NULL, UInt8 NULL) :: Float64 NULL
+50 div0(UInt64, UInt16) :: Float64
+51 div0(UInt64 NULL, UInt16 NULL) :: Float64 NULL
+52 div0(UInt64, UInt32) :: Float64
+53 div0(UInt64 NULL, UInt32 NULL) :: Float64 NULL
+54 div0(UInt64, UInt64) :: Float64
+55 div0(UInt64 NULL, UInt64 NULL) :: Float64 NULL
+56 div0(UInt64, Int8) :: Float64
+57 div0(UInt64 NULL, Int8 NULL) :: Float64 NULL
+58 div0(UInt64, Int16) :: Float64
+59 div0(UInt64 NULL, Int16 NULL) :: Float64 NULL
+60 div0(UInt64, Int32) :: Float64
+61 div0(UInt64 NULL, Int32 NULL) :: Float64 NULL
+62 div0(UInt64, Int64) :: Float64
+63 div0(UInt64 NULL, Int64 NULL) :: Float64 NULL
+64 div0(Int8, UInt8) :: Float64
+65 div0(Int8 NULL, UInt8 NULL) :: Float64 NULL
+66 div0(Int8, UInt16) :: Float64
+67 div0(Int8 NULL, UInt16 NULL) :: Float64 NULL
+68 div0(Int8, UInt32) :: Float64
+69 div0(Int8 NULL, UInt32 NULL) :: Float64 NULL
+70 div0(Int8, UInt64) :: Float64
+71 div0(Int8 NULL, UInt64 NULL) :: Float64 NULL
+72 div0(Int8, Int8) :: Float64
+73 div0(Int8 NULL, Int8 NULL) :: Float64 NULL
+74 div0(Int8, Int16) :: Float64
+75 div0(Int8 NULL, Int16 NULL) :: Float64 NULL
+76 div0(Int8, Int32) :: Float64
+77 div0(Int8 NULL, Int32 NULL) :: Float64 NULL
+78 div0(Int8, Int64) :: Float64
+79 div0(Int8 NULL, Int64 NULL) :: Float64 NULL
+80 div0(Int16, UInt8) :: Float64
+81 div0(Int16 NULL, UInt8 NULL) :: Float64 NULL
+82 div0(Int16, UInt16) :: Float64
+83 div0(Int16 NULL, UInt16 NULL) :: Float64 NULL
+84 div0(Int16, UInt32) :: Float64
+85 div0(Int16 NULL, UInt32 NULL) :: Float64 NULL
+86 div0(Int16, UInt64) :: Float64
+87 div0(Int16 NULL, UInt64 NULL) :: Float64 NULL
+88 div0(Int16, Int8) :: Float64
+89 div0(Int16 NULL, Int8 NULL) :: Float64 NULL
+90 div0(Int16, Int16) :: Float64
+91 div0(Int16 NULL, Int16 NULL) :: Float64 NULL
+92 div0(Int16, Int32) :: Float64
+93 div0(Int16 NULL, Int32 NULL) :: Float64 NULL
+94 div0(Int16, Int64) :: Float64
+95 div0(Int16 NULL, Int64 NULL) :: Float64 NULL
+96 div0(Int32, UInt8) :: Float64
+97 div0(Int32 NULL, UInt8 NULL) :: Float64 NULL
+98 div0(Int32, UInt16) :: Float64
+99 div0(Int32 NULL, UInt16 NULL) :: Float64 NULL
+100 div0(Int32, UInt32) :: Float64
+101 div0(Int32 NULL, UInt32 NULL) :: Float64 NULL
+102 div0(Int32, UInt64) :: Float64
+103 div0(Int32 NULL, UInt64 NULL) :: Float64 NULL
+104 div0(Int32, Int8) :: Float64
+105 div0(Int32 NULL, Int8 NULL) :: Float64 NULL
+106 div0(Int32, Int16) :: Float64
+107 div0(Int32 NULL, Int16 NULL) :: Float64 NULL
+108 div0(Int32, Int32) :: Float64
+109 div0(Int32 NULL, Int32 NULL) :: Float64 NULL
+110 div0(Int32, Int64) :: Float64
+111 div0(Int32 NULL, Int64 NULL) :: Float64 NULL
+112 div0(Int64, UInt8) :: Float64
+113 div0(Int64 NULL, UInt8 NULL) :: Float64 NULL
+114 div0(Int64, UInt16) :: Float64
+115 div0(Int64 NULL, UInt16 NULL) :: Float64 NULL
+116 div0(Int64, UInt32) :: Float64
+117 div0(Int64 NULL, UInt32 NULL) :: Float64 NULL
+118 div0(Int64, UInt64) :: Float64
+119 div0(Int64 NULL, UInt64 NULL) :: Float64 NULL
+120 div0(Int64, Int8) :: Float64
+121 div0(Int64 NULL, Int8 NULL) :: Float64 NULL
+122 div0(Int64, Int16) :: Float64
+123 div0(Int64 NULL, Int16 NULL) :: Float64 NULL
+124 div0(Int64, Int32) :: Float64
+125 div0(Int64 NULL, Int32 NULL) :: Float64 NULL
+126 div0(Int64, Int64) :: Float64
+127 div0(Int64 NULL, Int64 NULL) :: Float64 NULL
+128 div0(UInt8, Float32) :: Float64
+129 div0(UInt8 NULL, Float32 NULL) :: Float64 NULL
+130 div0(UInt8, Float64) :: Float64
+131 div0(UInt8 NULL, Float64 NULL) :: Float64 NULL
+132 div0(UInt16, Float32) :: Float64
+133 div0(UInt16 NULL, Float32 NULL) :: Float64 NULL
+134 div0(UInt16, Float64) :: Float64
+135 div0(UInt16 NULL, Float64 NULL) :: Float64 NULL
+136 div0(UInt32, Float32) :: Float64
+137 div0(UInt32 NULL, Float32 NULL) :: Float64 NULL
+138 div0(UInt32, Float64) :: Float64
+139 div0(UInt32 NULL, Float64 NULL) :: Float64 NULL
+140 div0(UInt64, Float32) :: Float64
+141 div0(UInt64 NULL, Float32 NULL) :: Float64 NULL
+142 div0(UInt64, Float64) :: Float64
+143 div0(UInt64 NULL, Float64 NULL) :: Float64 NULL
+144 div0(Int8, Float32) :: Float64
+145 div0(Int8 NULL, Float32 NULL) :: Float64 NULL
+146 div0(Int8, Float64) :: Float64
+147 div0(Int8 NULL, Float64 NULL) :: Float64 NULL
+148 div0(Int16, Float32) :: Float64
+149 div0(Int16 NULL, Float32 NULL) :: Float64 NULL
+150 div0(Int16, Float64) :: Float64
+151 div0(Int16 NULL, Float64 NULL) :: Float64 NULL
+152 div0(Int32, Float32) :: Float64
+153 div0(Int32 NULL, Float32 NULL) :: Float64 NULL
+154 div0(Int32, Float64) :: Float64
+155 div0(Int32 NULL, Float64 NULL) :: Float64 NULL
+156 div0(Int64, Float32) :: Float64
+157 div0(Int64 NULL, Float32 NULL) :: Float64 NULL
+158 div0(Int64, Float64) :: Float64
+159 div0(Int64 NULL, Float64 NULL) :: Float64 NULL
+160 div0(Float32, UInt8) :: Float64
+161 div0(Float32 NULL, UInt8 NULL) :: Float64 NULL
+162 div0(Float32, UInt16) :: Float64
+163 div0(Float32 NULL, UInt16 NULL) :: Float64 NULL
+164 div0(Float32, UInt32) :: Float64
+165 div0(Float32 NULL, UInt32 NULL) :: Float64 NULL
+166 div0(Float32, UInt64) :: Float64
+167 div0(Float32 NULL, UInt64 NULL) :: Float64 NULL
+168 div0(Float32, Int8) :: Float64
+169 div0(Float32 NULL, Int8 NULL) :: Float64 NULL
+170 div0(Float32, Int16) :: Float64
+171 div0(Float32 NULL, Int16 NULL) :: Float64 NULL
+172 div0(Float32, Int32) :: Float64
+173 div0(Float32 NULL, Int32 NULL) :: Float64 NULL
+174 div0(Float32, Int64) :: Float64
+175 div0(Float32 NULL, Int64 NULL) :: Float64 NULL
+176 div0(Float64, UInt8) :: Float64
+177 div0(Float64 NULL, UInt8 NULL) :: Float64 NULL
+178 div0(Float64, UInt16) :: Float64
+179 div0(Float64 NULL, UInt16 NULL) :: Float64 NULL
+180 div0(Float64, UInt32) :: Float64
+181 div0(Float64 NULL, UInt32 NULL) :: Float64 NULL
+182 div0(Float64, UInt64) :: Float64
+183 div0(Float64 NULL, UInt64 NULL) :: Float64 NULL
+184 div0(Float64, Int8) :: Float64
+185 div0(Float64 NULL, Int8 NULL) :: Float64 NULL
+186 div0(Float64, Int16) :: Float64
+187 div0(Float64 NULL, Int16 NULL) :: Float64 NULL
+188 div0(Float64, Int32) :: Float64
+189 div0(Float64 NULL, Int32 NULL) :: Float64 NULL
+190 div0(Float64, Int64) :: Float64
+191 div0(Float64 NULL, Int64 NULL) :: Float64 NULL
+192 div0(Float32, Float32) :: Float64
+193 div0(Float32 NULL, Float32 NULL) :: Float64 NULL
+194 div0(Float32, Float64) :: Float64
+195 div0(Float32 NULL, Float64 NULL) :: Float64 NULL
+196 div0(Float64, Float32) :: Float64
+197 div0(Float64 NULL, Float32 NULL) :: Float64 NULL
+198 div0(Float64, Float64) :: Float64
+199 div0(Float64 NULL, Float64 NULL) :: Float64 NULL
 0 divide FACTORY
 1 divide(UInt8, UInt8) :: Float64
 2 divide(UInt8 NULL, UInt8 NULL) :: Float64 NULL
@@ -1579,6 +1781,106 @@ Functions overloads:
 198 divide(Float64 NULL, Float32 NULL) :: Float64 NULL
 199 divide(Float64, Float64) :: Float64
 200 divide(Float64 NULL, Float64 NULL) :: Float64 NULL
+0 divnull(UInt8 NULL, UInt8 NULL) :: Float64 NULL
+1 divnull(UInt8 NULL, UInt16 NULL) :: Float64 NULL
+2 divnull(UInt8 NULL, UInt32 NULL) :: Float64 NULL
+3 divnull(UInt8 NULL, UInt64 NULL) :: Float64 NULL
+4 divnull(UInt8 NULL, Int8 NULL) :: Float64 NULL
+5 divnull(UInt8 NULL, Int16 NULL) :: Float64 NULL
+6 divnull(UInt8 NULL, Int32 NULL) :: Float64 NULL
+7 divnull(UInt8 NULL, Int64 NULL) :: Float64 NULL
+8 divnull(UInt16 NULL, UInt8 NULL) :: Float64 NULL
+9 divnull(UInt16 NULL, UInt16 NULL) :: Float64 NULL
+10 divnull(UInt16 NULL, UInt32 NULL) :: Float64 NULL
+11 divnull(UInt16 NULL, UInt64 NULL) :: Float64 NULL
+12 divnull(UInt16 NULL, Int8 NULL) :: Float64 NULL
+13 divnull(UInt16 NULL, Int16 NULL) :: Float64 NULL
+14 divnull(UInt16 NULL, Int32 NULL) :: Float64 NULL
+15 divnull(UInt16 NULL, Int64 NULL) :: Float64 NULL
+16 divnull(UInt32 NULL, UInt8 NULL) :: Float64 NULL
+17 divnull(UInt32 NULL, UInt16 NULL) :: Float64 NULL
+18 divnull(UInt32 NULL, UInt32 NULL) :: Float64 NULL
+19 divnull(UInt32 NULL, UInt64 NULL) :: Float64 NULL
+20 divnull(UInt32 NULL, Int8 NULL) :: Float64 NULL
+21 divnull(UInt32 NULL, Int16 NULL) :: Float64 NULL
+22 divnull(UInt32 NULL, Int32 NULL) :: Float64 NULL
+23 divnull(UInt32 NULL, Int64 NULL) :: Float64 NULL
+24 divnull(UInt64 NULL, UInt8 NULL) :: Float64 NULL
+25 divnull(UInt64 NULL, UInt16 NULL) :: Float64 NULL
+26 divnull(UInt64 NULL, UInt32 NULL) :: Float64 NULL
+27 divnull(UInt64 NULL, UInt64 NULL) :: Float64 NULL
+28 divnull(UInt64 NULL, Int8 NULL) :: Float64 NULL
+29 divnull(UInt64 NULL, Int16 NULL) :: Float64 NULL
+30 divnull(UInt64 NULL, Int32 NULL) :: Float64 NULL
+31 divnull(UInt64 NULL, Int64 NULL) :: Float64 NULL
+32 divnull(Int8 NULL, UInt8 NULL) :: Float64 NULL
+33 divnull(Int8 NULL, UInt16 NULL) :: Float64 NULL
+34 divnull(Int8 NULL, UInt32 NULL) :: Float64 NULL
+35 divnull(Int8 NULL, UInt64 NULL) :: Float64 NULL
+36 divnull(Int8 NULL, Int8 NULL) :: Float64 NULL
+37 divnull(Int8 NULL, Int16 NULL) :: Float64 NULL
+38 divnull(Int8 NULL, Int32 NULL) :: Float64 NULL
+39 divnull(Int8 NULL, Int64 NULL) :: Float64 NULL
+40 divnull(Int16 NULL, UInt8 NULL) :: Float64 NULL
+41 divnull(Int16 NULL, UInt16 NULL) :: Float64 NULL
+42 divnull(Int16 NULL, UInt32 NULL) :: Float64 NULL
+43 divnull(Int16 NULL, UInt64 NULL) :: Float64 NULL
+44 divnull(Int16 NULL, Int8 NULL) :: Float64 NULL
+45 divnull(Int16 NULL, Int16 NULL) :: Float64 NULL
+46 divnull(Int16 NULL, Int32 NULL) :: Float64 NULL
+47 divnull(Int16 NULL, Int64 NULL) :: Float64 NULL
+48 divnull(Int32 NULL, UInt8 NULL) :: Float64 NULL
+49 divnull(Int32 NULL, UInt16 NULL) :: Float64 NULL
+50 divnull(Int32 NULL, UInt32 NULL) :: Float64 NULL
+51 divnull(Int32 NULL, UInt64 NULL) :: Float64 NULL
+52 divnull(Int32 NULL, Int8 NULL) :: Float64 NULL
+53 divnull(Int32 NULL, Int16 NULL) :: Float64 NULL
+54 divnull(Int32 NULL, Int32 NULL) :: Float64 NULL
+55 divnull(Int32 NULL, Int64 NULL) :: Float64 NULL
+56 divnull(Int64 NULL, UInt8 NULL) :: Float64 NULL
+57 divnull(Int64 NULL, UInt16 NULL) :: Float64 NULL
+58 divnull(Int64 NULL, UInt32 NULL) :: Float64 NULL
+59 divnull(Int64 NULL, UInt64 NULL) :: Float64 NULL
+60 divnull(Int64 NULL, Int8 NULL) :: Float64 NULL
+61 divnull(Int64 NULL, Int16 NULL) :: Float64 NULL
+62 divnull(Int64 NULL, Int32 NULL) :: Float64 NULL
+63 divnull(Int64 NULL, Int64 NULL) :: Float64 NULL
+64 divnull(UInt8 NULL, Float32 NULL) :: Float64 NULL
+65 divnull(UInt8 NULL, Float64 NULL) :: Float64 NULL
+66 divnull(UInt16 NULL, Float32 NULL) :: Float64 NULL
+67 divnull(UInt16 NULL, Float64 NULL) :: Float64 NULL
+68 divnull(UInt32 NULL, Float32 NULL) :: Float64 NULL
+69 divnull(UInt32 NULL, Float64 NULL) :: Float64 NULL
+70 divnull(UInt64 NULL, Float32 NULL) :: Float64 NULL
+71 divnull(UInt64 NULL, Float64 NULL) :: Float64 NULL
+72 divnull(Int8 NULL, Float32 NULL) :: Float64 NULL
+73 divnull(Int8 NULL, Float64 NULL) :: Float64 NULL
+74 divnull(Int16 NULL, Float32 NULL) :: Float64 NULL
+75 divnull(Int16 NULL, Float64 NULL) :: Float64 NULL
+76 divnull(Int32 NULL, Float32 NULL) :: Float64 NULL
+77 divnull(Int32 NULL, Float64 NULL) :: Float64 NULL
+78 divnull(Int64 NULL, Float32 NULL) :: Float64 NULL
+79 divnull(Int64 NULL, Float64 NULL) :: Float64 NULL
+80 divnull(Float32 NULL, UInt8 NULL) :: Float64 NULL
+81 divnull(Float32 NULL, UInt16 NULL) :: Float64 NULL
+82 divnull(Float32 NULL, UInt32 NULL) :: Float64 NULL
+83 divnull(Float32 NULL, UInt64 NULL) :: Float64 NULL
+84 divnull(Float32 NULL, Int8 NULL) :: Float64 NULL
+85 divnull(Float32 NULL, Int16 NULL) :: Float64 NULL
+86 divnull(Float32 NULL, Int32 NULL) :: Float64 NULL
+87 divnull(Float32 NULL, Int64 NULL) :: Float64 NULL
+88 divnull(Float64 NULL, UInt8 NULL) :: Float64 NULL
+89 divnull(Float64 NULL, UInt16 NULL) :: Float64 NULL
+90 divnull(Float64 NULL, UInt32 NULL) :: Float64 NULL
+91 divnull(Float64 NULL, UInt64 NULL) :: Float64 NULL
+92 divnull(Float64 NULL, Int8 NULL) :: Float64 NULL
+93 divnull(Float64 NULL, Int16 NULL) :: Float64 NULL
+94 divnull(Float64 NULL, Int32 NULL) :: Float64 NULL
+95 divnull(Float64 NULL, Int64 NULL) :: Float64 NULL
+96 divnull(Float32 NULL, Float32 NULL) :: Float64 NULL
+97 divnull(Float32 NULL, Float64 NULL) :: Float64 NULL
+98 divnull(Float64 NULL, Float32 NULL) :: Float64 NULL
+99 divnull(Float64 NULL, Float64 NULL) :: Float64 NULL
 0 eq(Variant, Variant) :: Boolean
 1 eq(Variant NULL, Variant NULL) :: Boolean NULL
 2 eq(String, String) :: Boolean
@@ -3161,6 +3463,8 @@ Functions overloads:
 17 sqrt(Float32 NULL) :: Float64 NULL
 18 sqrt(Float64) :: Float64
 19 sqrt(Float64 NULL) :: Float64 NULL
+0 st_makepoint(Float64, Float64) :: Geometry
+1 st_makepoint(Float64 NULL, Float64 NULL) :: Geometry NULL
 0 strcmp(String, String) :: Int8
 1 strcmp(String NULL, String NULL) :: Int8 NULL
 0 string_to_h3(String) :: UInt64
@@ -3518,6 +3822,8 @@ Functions overloads:
 32 to_string(Binary NULL) :: String NULL
 33 to_string(Bitmap) :: String
 34 to_string(Bitmap NULL) :: String NULL
+35 to_string(Geometry) :: String
+36 to_string(Geometry NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp

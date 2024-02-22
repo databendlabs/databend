@@ -30,6 +30,8 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::TransformPipeBuilder;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
+use databend_common_pipeline_transforms::processors::BlockCompactor;
+use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_sql::binder::MergeIntoType;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
@@ -227,9 +229,23 @@ impl PipelineBuilder {
                 self.main_pipeline.add_pipe(builder.finalize());
             }
 
-            // 3. cluster sort
-
+            // 3. we should avoid too much little block write, because for s3 write, there are too many
+            // little blocks, it will cause high latency.
             let block_thresholds = table.get_block_thresholds();
+            let mut builder = self.main_pipeline.add_transform_with_specified_len(
+                |transform_input_port, transform_output_port| {
+                    Ok(ProcessorPtr::create(TransformCompact::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        BlockCompactor::new(block_thresholds),
+                    )?))
+                },
+                1,
+            )?;
+            builder.add_items(vec![create_dummy_item()]);
+            self.main_pipeline.add_pipe(builder.finalize());
+
+            // 4. cluster sort
             table.cluster_gen_for_append_with_specified_len(
                 self.ctx.clone(),
                 &mut self.main_pipeline,
@@ -238,7 +254,7 @@ impl PipelineBuilder {
                 1,
             )?;
 
-            // 4. serialize block
+            // 5. serialize block
             let cluster_stats_gen =
                 table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
             let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -256,7 +272,7 @@ impl PipelineBuilder {
             ];
             self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
-            // 5. serialize segment
+            // 6. serialize segment
             let serialize_segment_transform = TransformSerializeSegment::new(
                 self.ctx.clone(),
                 InputPort::create(),
@@ -335,6 +351,8 @@ impl PipelineBuilder {
         } = merge_into_source;
 
         self.build_pipeline(input)?;
+        self.main_pipeline
+            .try_resize(self.ctx.get_settings().get_max_threads()? as usize)?;
         // 1. if matchedOnly, we will use inner join
         // 2. if insert Only, we will use right anti join
         // 3. other cases, we use right outer join
@@ -729,6 +747,28 @@ impl PipelineBuilder {
                 output_lens
             };
 
+            // we should avoid too much little block write, because for s3 write, there are too many
+            // little blocks, it will cause high latency.
+            let mut builder = self.main_pipeline.add_transform_with_specified_len(
+                |transform_input_port, transform_output_port| {
+                    Ok(ProcessorPtr::create(TransformCompact::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        BlockCompactor::new(block_thresholds),
+                    )?))
+                },
+                mid_len,
+            )?;
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
+
+            // need to receive row_number, we should give a dummy item here.
+            if *distributed && need_unmatch && !*change_join_order {
+                builder.add_items(vec![create_dummy_item()]);
+            }
+            self.main_pipeline.add_pipe(builder.finalize());
+
             table.cluster_gen_for_append_with_specified_len(
                 self.ctx.clone(),
                 &mut self.main_pipeline,
@@ -758,6 +798,29 @@ impl PipelineBuilder {
                 // arrive the same result (that's appending only one dummy item)
                 (output_lens - 1, 0)
             };
+
+            // we should avoid too much little block write, because for s3 write, there are too many
+            // little blocks, it will cause high latency.
+            let mut builder = self.main_pipeline.add_transform_with_specified_len(
+                |transform_input_port, transform_output_port| {
+                    Ok(ProcessorPtr::create(TransformCompact::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        BlockCompactor::new(block_thresholds),
+                    )?))
+                },
+                mid_len,
+            )?;
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
+
+            // need to receive row_number, we should give a dummy item here.
+            if *distributed && need_unmatch && !*change_join_order {
+                builder.add_items(vec![create_dummy_item()]);
+            }
+            self.main_pipeline.add_pipe(builder.finalize());
+
             table.cluster_gen_for_append_with_specified_len(
                 self.ctx.clone(),
                 &mut self.main_pipeline,

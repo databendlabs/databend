@@ -251,6 +251,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
             probe_keys_rt: plan.probe_keys_rt.clone(),
+            enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
             broadcast: plan.broadcast,
             original_join_type: plan.original_join_type.clone(),
         }))
@@ -321,8 +322,6 @@ impl PhysicalPlanReplacer for Fragmenter {
         self.state = State::Other;
         let exchange = Self::get_exchange(self.ctx.clone(), &plan)?;
 
-        let table_index = plan.get_table_index();
-
         let mut source_fragment = PlanFragment {
             plan,
             fragment_type,
@@ -348,7 +347,6 @@ impl PhysicalPlanReplacer for Fragmenter {
             query_id: self.query_id.clone(),
 
             source_fragment_id,
-            table_index,
         }))
     }
 }

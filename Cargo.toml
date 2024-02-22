@@ -107,9 +107,9 @@ members = [
 
 [workspace.dependencies]
 # databend maintains
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "0247ffc" }
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "a7325f4" }
 
-opendal = { version = "0.44.2", features = [
+opendal = { version = "0.45.0", features = [
     "layers-minitrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
@@ -128,7 +128,7 @@ openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.9.0-alph
 
 # Core crates and utilities
 async-backtrace = "0.2"
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
+async-trait = { version = "0.1.77", package = "async-trait-fn" }
 bincode = { version = "2.0.0-rc.3", features = ["serde", "std", "alloc"] }
 borsh = { version = "1.2.1", features = ["derive"] }
 bytes = "1.5.0"
@@ -141,6 +141,8 @@ derive_more = "0.99.17"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 feature-set = { version = "0.1.1" }
+geo = { version = "0.27.0", features = ["use-serde"] }
+geozero = { version = "0.11.0", features = ["default", "with-wkb"] }
 itertools = "0.10.5"
 log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.5"
@@ -251,11 +253,11 @@ rpath = false
 
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
-arrow-format = { git = "https://github.com/everpcpc/arrow-format", rev = "588d371" }
+arrow-format = { git = "https://github.com/everpcpc/arrow-format", rev = "ad8f2dd" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "b0e6545" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "f06cdf3" }
 sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "6ef6d97" }
 micromarshal = { git = "https://github.com/ariesdevil/opensrv", rev = "6c96813" }
-async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "e7e1b5f" }
-opendal = { git = "https://github.com/apache/opendal", rev = "e94f068" }
+async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
+geozero = { git = "https://github.com/georust/geozero", rev = "1d78b36" }

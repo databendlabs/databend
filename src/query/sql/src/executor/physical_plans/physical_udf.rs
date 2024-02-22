@@ -148,7 +148,7 @@ impl PhysicalPlanBuilder {
             .collect::<Result<Vec<_>>>()?;
 
         Ok(PhysicalPlan::Udf(Udf {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             input: Box::new(input),
             udf_funcs,
             stat_info: Some(stat_info),

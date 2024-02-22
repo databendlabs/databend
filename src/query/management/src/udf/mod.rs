@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod udf_api;
+mod errors;
 mod udf_mgr;
 
-pub use udf_api::UdfApi;
+pub use errors::UdfApiError;
+pub use errors::UdfError;
 pub use udf_mgr::UdfMgr;

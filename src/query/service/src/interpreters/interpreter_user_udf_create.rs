@@ -58,7 +58,7 @@ impl Interpreter for CreateUserUDFInterpreter {
         let tenant = self.ctx.get_tenant();
         let udf = plan.udf;
         let _ = UserApiProvider::instance()
-            .add_udf(&tenant, udf, plan.if_not_exists)
+            .add_udf(&tenant, udf, &plan.create_option)
             .await?;
 
         // Grant ownership as the current role

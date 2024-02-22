@@ -566,6 +566,8 @@ pub struct SubqueryExpr {
     pub(crate) data_type: Box<DataType>,
     #[educe(Hash(method = "hash_column_set"))]
     pub outer_columns: ColumnSet,
+    // If contain aggregation function in scalar subquery output
+    pub contain_agg: Option<bool>,
 }
 
 impl SubqueryExpr {

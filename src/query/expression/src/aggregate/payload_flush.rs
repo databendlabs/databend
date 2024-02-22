@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_io::prelude::bincode_deserialize_from_slice;
 use ethnum::i256;
 
 use super::partitioned_payload::PartitionedPayload;
@@ -19,6 +20,7 @@ use super::payload::Payload;
 use super::probe_state::ProbeState;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
+use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
@@ -26,11 +28,15 @@ use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::DecimalSize;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::TimestampType;
+use crate::types::ValueType;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::ColumnBuilder;
+use crate::Scalar;
 use crate::StateAddr;
 use crate::BATCH_SIZE;
 
@@ -160,11 +166,11 @@ impl Payload {
                     self.flush_type_column::<NumberType<NUM_TYPE>>(col_offset, state),
             }),
             DataType::Decimal(v) => match v {
-                crate::types::DecimalDataType::Decimal128(_) => {
-                    self.flush_type_column::<DecimalType<i128>>(col_offset, state)
+                crate::types::DecimalDataType::Decimal128(s) => {
+                    self.flush_decimal_column::<i128>(col_offset, state, s)
                 }
-                crate::types::DecimalDataType::Decimal256(_) => {
-                    self.flush_type_column::<DecimalType<i256>>(col_offset, state)
+                crate::types::DecimalDataType::Decimal256(s) => {
+                    self.flush_decimal_column::<i256>(col_offset, state, s)
                 }
             },
             DataType::Timestamp => self.flush_type_column::<TimestampType>(col_offset, state),
@@ -173,11 +179,9 @@ impl Payload {
             DataType::String => Column::String(self.flush_string_column(col_offset, state)),
             DataType::Bitmap => Column::Bitmap(self.flush_binary_column(col_offset, state)),
             DataType::Variant => Column::Variant(self.flush_binary_column(col_offset, state)),
+            DataType::Geometry => Column::Geometry(self.flush_binary_column(col_offset, state)),
             DataType::Nullable(_) => unreachable!(),
-            DataType::Array(_) => todo!(),
-            DataType::Map(_) => todo!(),
-            DataType::Tuple(_) => todo!(),
-            DataType::Generic(_) => unreachable!(),
+            other => self.flush_generic_column(&other, col_offset, state),
         };
 
         let validity_offset = self.validity_offsets[col_index];
@@ -205,6 +209,22 @@ impl Payload {
         });
         let col = T::column_from_iter(iter, &[]);
         T::upcast_column(col)
+    }
+
+    fn flush_decimal_column<Num: Decimal>(
+        &self,
+        col_offset: usize,
+        state: &mut PayloadFlushState,
+        decimal_size: DecimalSize,
+    ) -> Column {
+        let len = state.probe_state.row_count;
+        let iter = (0..len).map(|idx| unsafe {
+            core::ptr::read::<<DecimalType<Num> as ValueType>::Scalar>(
+                state.addresses[idx].add(col_offset) as _,
+            )
+        });
+        let col = DecimalType::<Num>::column_from_iter(iter, &[]);
+        Num::upcast_column(col, decimal_size)
     }
 
     fn flush_binary_column(
@@ -238,5 +258,31 @@ impl Payload {
         state: &mut PayloadFlushState,
     ) -> StringColumn {
         unsafe { StringColumn::from_binary_unchecked(self.flush_binary_column(col_offset, state)) }
+    }
+
+    fn flush_generic_column(
+        &self,
+        data_type: &DataType,
+        col_offset: usize,
+        state: &mut PayloadFlushState,
+    ) -> Column {
+        let len = state.probe_state.row_count;
+        let mut builder = ColumnBuilder::with_capacity(data_type, len);
+
+        unsafe {
+            for idx in 0..len {
+                let str_len =
+                    core::ptr::read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
+                let data_address =
+                    core::ptr::read::<u64>(state.addresses[idx].add(col_offset + 4) as _) as usize
+                        as *const u8;
+
+                let scalar = std::slice::from_raw_parts(data_address, str_len);
+                let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
+
+                builder.push(scalar.as_ref());
+            }
+        }
+        builder.build()
     }
 }

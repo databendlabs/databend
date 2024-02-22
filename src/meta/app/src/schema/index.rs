@@ -20,6 +20,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_types::MetaId;
 
+use super::CreateOption;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct IndexNameIdent {
     pub tenant: String,
@@ -125,18 +127,26 @@ impl Default for IndexMeta {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateIndexReq {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name_ident: IndexNameIdent,
     pub meta: IndexMeta,
 }
 
 impl Display for CreateIndexReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "create_index(if_not_exists={}):{}={:?}",
-            self.if_not_exists, self.name_ident.tenant, self.meta
-        )
+        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
+            write!(
+                f,
+                "create_index(if_not_exists={}):{}={:?}",
+                if_not_exists, self.name_ident.tenant, self.meta
+            )
+        } else {
+            write!(
+                f,
+                "create_or_replace_index:{}={:?}",
+                self.name_ident.tenant, self.meta
+            )
+        }
     }
 }
 
@@ -232,13 +242,10 @@ mod kvapi_key_impl {
     use crate::schema::IndexIdToName;
     use crate::schema::IndexMeta;
     use crate::schema::IndexNameIdent;
-    use crate::schema::PREFIX_INDEX;
-    use crate::schema::PREFIX_INDEX_BY_ID;
-    use crate::schema::PREFIX_INDEX_ID_TO_NAME;
 
     /// <prefix>/<tenant>/<index_name> -> <index_id>
     impl kvapi::Key for IndexNameIdent {
-        const PREFIX: &'static str = PREFIX_INDEX;
+        const PREFIX: &'static str = "__fd_index";
 
         type ValueType = IndexId;
 
@@ -262,7 +269,7 @@ mod kvapi_key_impl {
 
     /// "<prefix>/<index_id>"
     impl kvapi::Key for IndexId {
-        const PREFIX: &'static str = PREFIX_INDEX_BY_ID;
+        const PREFIX: &'static str = "__fd_index_by_id";
 
         type ValueType = IndexMeta;
 
@@ -284,7 +291,7 @@ mod kvapi_key_impl {
 
     /// "<prefix>/<index_id> -> IndexNameIdent"
     impl kvapi::Key for IndexIdToName {
-        const PREFIX: &'static str = PREFIX_INDEX_ID_TO_NAME;
+        const PREFIX: &'static str = "__fd_index_id_to_name";
 
         type ValueType = IndexNameIdent;
 
@@ -303,4 +310,10 @@ mod kvapi_key_impl {
             Ok(IndexIdToName { index_id })
         }
     }
+
+    impl kvapi::Value for IndexId {}
+
+    impl kvapi::Value for IndexMeta {}
+
+    impl kvapi::Value for IndexNameIdent {}
 }

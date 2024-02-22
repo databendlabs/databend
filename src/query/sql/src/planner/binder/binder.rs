@@ -425,14 +425,14 @@ impl<'a> Binder {
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             // File Formats
-            Statement::CreateFileFormat { if_not_exists, name, file_format_options } => {
+            Statement::CreateFileFormat { create_option, name, file_format_options } => {
                 if StageFileFormatType::from_str(name).is_ok() {
                     return Err(ErrorCode::SyntaxException(format!(
                         "File format {name} is reserved"
                     )));
                 }
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
-                    if_not_exists: *if_not_exists,
+                    create_option: *create_option,
                     name: name.clone(),
                     file_format_params: file_format_options.clone().try_into()?,
                 }))

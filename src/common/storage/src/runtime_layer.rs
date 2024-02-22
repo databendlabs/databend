@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::io::SeekFrom;
 use std::mem;
 use std::pin::Pin;
@@ -21,9 +23,11 @@ use std::task::Poll;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use databend_common_base::base::tokio::runtime::Handle;
 use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrackedFuture;
+use databend_common_base::runtime::TrySpawn;
+use databend_common_base::GLOBAL_TASK;
 use futures::ready;
 use futures::Future;
 use opendal::raw::oio;
@@ -53,13 +57,19 @@ use opendal::Result;
 /// However, the new processor framework will make sure that all async task running
 /// in the same, global, separate, IO only async runtime, so we can remove `RuntimeLayer`
 /// after new processor framework finished.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RuntimeLayer {
-    runtime: Handle,
+    runtime: Arc<Runtime>,
+}
+
+impl Debug for RuntimeLayer {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", &self.runtime.inner())
+    }
 }
 
 impl RuntimeLayer {
-    pub fn new(runtime: Handle) -> Self {
+    pub fn new(runtime: Arc<Runtime>) -> Self {
         RuntimeLayer { runtime }
     }
 }
@@ -75,10 +85,16 @@ impl<A: Accessor> Layer<A> for RuntimeLayer {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RuntimeAccessor<A> {
     inner: Arc<A>,
-    runtime: Handle,
+    runtime: Arc<Runtime>,
+}
+
+impl<A> Debug for RuntimeAccessor<A> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.runtime.inner())
+    }
 }
 
 #[async_trait]
@@ -101,7 +117,10 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
         let path = path.to_string();
         let future = async move { op.create_dir(&path, args).await };
         let future = TrackedFuture::create(future);
-        self.runtime.spawn(future).await.expect("join must success")
+        self.runtime
+            .spawn(GLOBAL_TASK, future)
+            .await
+            .expect("join must success")
     }
 
     #[async_backtrace::framed]
@@ -113,7 +132,7 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
 
         let future = TrackedFuture::create(future);
         self.runtime
-            .spawn(future)
+            .spawn(GLOBAL_TASK, future)
             .await
             .expect("join must success")
             .map(|(rp, r)| {
@@ -128,7 +147,10 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
         let path = path.to_string();
         let future = async move { op.write(&path, args).await };
         let future = TrackedFuture::create(future);
-        self.runtime.spawn(future).await.expect("join must success")
+        self.runtime
+            .spawn(GLOBAL_TASK, future)
+            .await
+            .expect("join must success")
     }
 
     #[async_backtrace::framed]
@@ -137,7 +159,10 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
         let path = path.to_string();
         let future = async move { op.stat(&path, args).await };
         let future = TrackedFuture::create(future);
-        self.runtime.spawn(future).await.expect("join must success")
+        self.runtime
+            .spawn(GLOBAL_TASK, future)
+            .await
+            .expect("join must success")
     }
 
     #[async_backtrace::framed]
@@ -146,7 +171,10 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
         let path = path.to_string();
         let future = async move { op.delete(&path, args).await };
         let future = TrackedFuture::create(future);
-        self.runtime.spawn(future).await.expect("join must success")
+        self.runtime
+            .spawn(GLOBAL_TASK, future)
+            .await
+            .expect("join must success")
     }
 
     #[async_backtrace::framed]
@@ -155,7 +183,10 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
         let path = path.to_string();
         let future = async move { op.list(&path, args).await };
         let future = TrackedFuture::create(future);
-        self.runtime.spawn(future).await.expect("join must success")
+        self.runtime
+            .spawn(GLOBAL_TASK, future)
+            .await
+            .expect("join must success")
     }
 
     fn blocking_read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::BlockingReader)> {
@@ -172,13 +203,13 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
 }
 
 pub struct RuntimeIO<R: 'static> {
-    runtime: Handle,
+    runtime: Arc<Runtime>,
     state: State<R>,
     buf: Vec<u8>,
 }
 
 impl<R> RuntimeIO<R> {
-    fn new(inner: R, runtime: Handle) -> Self {
+    fn new(inner: R, runtime: Arc<Runtime>) -> Self {
         Self {
             runtime,
             state: State::Idle(Some(inner)),
@@ -225,7 +256,7 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
                     }
                 };
                 let future = TrackedFuture::create(future);
-                self.state = State::Read(self.runtime.spawn(future));
+                self.state = State::Read(self.runtime.spawn(GLOBAL_TASK, future));
 
                 self.poll_read(cx, buf)
             }
@@ -269,7 +300,7 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
                     (r, res)
                 };
                 let future = TrackedFuture::create(future);
-                self.state = State::Seek(self.runtime.spawn(future));
+                self.state = State::Seek(self.runtime.spawn(GLOBAL_TASK, future));
 
                 self.poll_seek(cx, pos)
             }
@@ -303,7 +334,7 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
                     (r, res)
                 };
                 let future = TrackedFuture::create(future);
-                self.state = State::Next(self.runtime.spawn(future));
+                self.state = State::Next(self.runtime.spawn(GLOBAL_TASK, future));
 
                 self.poll_next(cx)
             }

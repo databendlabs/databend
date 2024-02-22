@@ -25,6 +25,7 @@ use crate::executor::PhysicalPlan;
 /// The commit sink is used to commit the data to the table.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CommitSink {
+    pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub snapshot: Arc<TableSnapshot>,
     pub table_info: TableInfo,

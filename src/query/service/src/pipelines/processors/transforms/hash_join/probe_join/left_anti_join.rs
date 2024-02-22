@@ -39,23 +39,37 @@ impl HashJoinProbeState {
         H::Key: 'a,
     {
         // Probe states.
-        let mutable_indexes = &mut probe_state.mutable_indexes;
-        let probe_indexes = &mut mutable_indexes.probe_indexes;
         let pointers = probe_state.hashes.as_slice();
 
-        // Results.
-        let mut matched_idx = 0;
-        let mut result_blocks = vec![];
-
         // Probe hash table and generate data blocks.
-        for idx in 0..input.num_rows() {
-            let key = unsafe { keys.key_unchecked(idx) };
-            let ptr = unsafe { *pointers.get_unchecked(idx) };
-            if !hash_table.next_contains(key, ptr) {
-                unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
-                matched_idx += 1;
+        let (probe_indexes, count) = if probe_state.probe_with_selection {
+            // Safe to unwrap.
+            let probe_unmatched_indexes = probe_state.probe_unmatched_indexes.as_mut().unwrap();
+            let mut unmatched_idx = probe_state.probe_unmatched_indexes_count;
+            let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
+            for idx in selection.iter() {
+                let key = unsafe { keys.key_unchecked(*idx as usize) };
+                let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
+                if !hash_table.next_contains(key, ptr) {
+                    unsafe { *probe_unmatched_indexes.get_unchecked_mut(unmatched_idx) = *idx };
+                    unmatched_idx += 1;
+                }
             }
-        }
+            (probe_unmatched_indexes, unmatched_idx)
+        } else {
+            let mutable_indexes = &mut probe_state.mutable_indexes;
+            let probe_indexes = &mut mutable_indexes.probe_indexes;
+            let mut unmatched_idx = 0;
+            for idx in 0..input.num_rows() {
+                let key = unsafe { keys.key_unchecked(idx) };
+                let ptr = unsafe { *pointers.get_unchecked(idx) };
+                if !hash_table.next_contains(key, ptr) {
+                    unsafe { *probe_indexes.get_unchecked_mut(unmatched_idx) = idx as u32 };
+                    unmatched_idx += 1;
+                }
+            }
+            (probe_indexes, unmatched_idx)
+        };
 
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
@@ -63,15 +77,16 @@ impl HashJoinProbeState {
             ));
         }
 
-        if matched_idx > 0 {
-            result_blocks.push(DataBlock::take(
-                input,
-                &probe_indexes[0..matched_idx],
-                &mut probe_state.generation_state.string_items_buf,
-            )?);
+        let result_block = DataBlock::take(
+            input,
+            &probe_indexes[0..count],
+            &mut probe_state.generation_state.string_items_buf,
+        )?;
+        if result_block.is_empty() {
+            Ok(vec![])
+        } else {
+            Ok(vec![result_block])
         }
-
-        Ok(result_blocks)
     }
 
     pub(crate) fn left_anti_join_with_conjunct<'a, H: HashJoinHashtableLike>(
@@ -109,46 +124,87 @@ impl HashJoinProbeState {
         let mut result_blocks = vec![];
 
         // Probe hash table and generate data blocks.
-        for idx in 0..input.num_rows() {
-            let key = unsafe { keys.key_unchecked(idx) };
-            let ptr = unsafe { *pointers.get_unchecked(idx) };
+        if probe_state.probe_with_selection {
+            let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
+            for idx in selection.iter() {
+                let key = unsafe { keys.key_unchecked(*idx as usize) };
+                let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
 
-            // Probe hash table and fill `build_indexes`.
-            let (mut match_count, mut incomplete_ptr) =
-                hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
+                // Probe hash table and fill `build_indexes`.
+                let (match_count, mut incomplete_ptr) =
+                    hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
 
-            if match_count == 0 {
-                continue;
+                if match_count == 0 {
+                    continue;
+                }
+
+                // Fill `probe_indexes`.
+                for _ in 0..match_count {
+                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
+                    matched_idx += 1;
+                }
+
+                while matched_idx == max_block_size {
+                    self.process_left_anti_join_block(
+                        matched_idx,
+                        input,
+                        probe_indexes,
+                        build_indexes,
+                        &mut probe_state.generation_state,
+                        &build_state.generation_state,
+                        other_predicate,
+                        &mut row_state,
+                    )?;
+                    (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
+                        hash_table,
+                        key,
+                        incomplete_ptr,
+                        *idx,
+                        probe_indexes,
+                        build_indexes_ptr,
+                        max_block_size,
+                    )?;
+                }
             }
+        } else {
+            for idx in 0..input.num_rows() {
+                let key = unsafe { keys.key_unchecked(idx) };
+                let ptr = unsafe { *pointers.get_unchecked(idx) };
 
-            // Fill `probe_indexes`.
-            for _ in 0..match_count {
-                unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
-                matched_idx += 1;
-            }
+                // Probe hash table and fill `build_indexes`.
+                let (match_count, mut incomplete_ptr) =
+                    hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
 
-            while matched_idx == max_block_size {
-                self.process_left_anti_join_block(
-                    matched_idx,
-                    input,
-                    probe_indexes,
-                    build_indexes,
-                    &mut probe_state.generation_state,
-                    &build_state.generation_state,
-                    other_predicate,
-                    &mut row_state,
-                )?;
-                matched_idx = 0;
-                (match_count, incomplete_ptr) = hash_table.next_probe(
-                    key,
-                    incomplete_ptr,
-                    build_indexes_ptr,
-                    matched_idx,
-                    max_block_size,
-                );
+                if match_count == 0 {
+                    continue;
+                }
+
+                // Fill `probe_indexes`.
                 for _ in 0..match_count {
                     unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
                     matched_idx += 1;
+                }
+
+                while matched_idx == max_block_size {
+                    self.process_left_anti_join_block(
+                        matched_idx,
+                        input,
+                        probe_indexes,
+                        build_indexes,
+                        &mut probe_state.generation_state,
+                        &build_state.generation_state,
+                        other_predicate,
+                        &mut row_state,
+                    )?;
+                    (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
+                        hash_table,
+                        key,
+                        incomplete_ptr,
+                        idx as u32,
+                        probe_indexes,
+                        build_indexes_ptr,
+                        max_block_size,
+                    )?;
                 }
             }
         }
@@ -167,17 +223,17 @@ impl HashJoinProbeState {
         }
 
         // Find all unmatched indexes and generate the result `DataBlock`.
-        matched_idx = 0;
+        let mut unmatched_idx = 0;
         for (i, state) in row_state.iter().enumerate() {
             if !*state {
-                unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = i as u32 };
-                matched_idx += 1;
+                unsafe { *probe_indexes.get_unchecked_mut(unmatched_idx) = i as u32 };
+                unmatched_idx += 1;
             }
         }
-        if matched_idx > 0 {
+        if unmatched_idx > 0 {
             result_blocks.push(DataBlock::take(
                 input,
-                &probe_indexes[0..matched_idx],
+                &probe_indexes[0..unmatched_idx],
                 &mut probe_state.generation_state.string_items_buf,
             )?);
         }

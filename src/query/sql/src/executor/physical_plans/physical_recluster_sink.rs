@@ -24,6 +24,7 @@ use crate::executor::PhysicalPlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReclusterSink {
+    pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
 
     pub table_info: TableInfo,

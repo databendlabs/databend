@@ -116,7 +116,7 @@ async fn test_interval_job() -> Result<()> {
     };
     scheduler.add_job(job.clone()).await?;
     let suspend_tx = scheduler.suspend_tx.clone();
-    tokio::spawn(async move {
+    databend_common_base::runtime::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let _ = suspend_tx.lock().await.send(()).await;
     });

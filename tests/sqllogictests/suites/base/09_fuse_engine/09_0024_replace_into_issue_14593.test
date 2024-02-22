@@ -1,0 +1,41 @@
+statement ok
+DROP DATABASE IF EXISTS issue_14593
+
+statement ok
+CREATE DATABASE issue_14593
+
+statement ok
+USE issue_14593
+
+# https://github.com/datafuselabs/databend/issues/14593
+
+statement ok
+create table t (a string, b string, c string,  id int, d string) cluster by (id);
+
+statement ok
+replace into t (b, id, a) on(id) values('b', 1, 'a');
+
+query ITT
+select id, a, b from t;
+----
+1 a b
+
+statement ok
+alter table t drop column c;
+
+statement ok
+alter table t drop column d;
+
+statement ok
+replace into t (b, id, a) on(id) values('bb', 1, 'aa');
+
+query ITT
+select id, a, b from t;
+----
+1 aa bb
+
+statement ok
+drop table t;
+
+statement ok
+DROP DATABASE issue_14593

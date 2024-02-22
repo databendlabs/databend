@@ -19,6 +19,7 @@ echo "create user 'test-user' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $BENDSQL_CL
 echo 'create role `test-role1`' | $BENDSQL_CLIENT_CONNECT
 echo 'create role `test-role2`' | $BENDSQL_CLIENT_CONNECT
 ## create table
+echo "drop table if exists t20_0012" | $BENDSQL_CLIENT_CONNECT
 echo "create table t20_0012(c int not null)" | $BENDSQL_CLIENT_CONNECT
 
 ## show tables
@@ -160,10 +161,6 @@ echo "show tables from nogrant" | $USER_A_CONNECT
 
 echo "select count(1) from information_schema.columns where table_schema in ('grant_db');" | $USER_A_CONNECT
 echo "select count(1) from information_schema.columns where table_schema in ('nogrant');" | $USER_A_CONNECT
-echo "select count(1) from information_schema.columns where table_schema in ('information_schema', 'system');" | $USER_A_CONNECT
-echo "select count(1) from information_schema.tables where table_schema in ('information_schema', 'system');;" | $USER_A_CONNECT
-echo "select count(1) from information_schema.tables where table_schema in ('grant_db');" | $USER_A_CONNECT
-echo "select count(1) from information_schema.tables where table_schema in ('nogrant');" | $USER_A_CONNECT
 
 #DML privilege check
 export USER_B_CONNECT="bendsql --user=b --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
@@ -235,13 +232,23 @@ echo "insert into d.t1 values(3)" | $USER_B_CONNECT
 echo "select * from d.t1 order by id" | $USER_B_CONNECT
 
 ## Drop user
+echo "drop database if exists no_grant" | $BENDSQL_CLIENT_CONNECT
+echo "grant drop on d.* to b" | $BENDSQL_CLIENT_CONNECT
+echo "grant drop on *.* to a" | $BENDSQL_CLIENT_CONNECT
+echo "drop database grant_db" | $USER_A_CONNECT
+echo "drop database d" | $USER_B_CONNECT
 echo "drop user a" | $BENDSQL_CLIENT_CONNECT
 echo "drop user b" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists no_grant" | $BENDSQL_CLIENT_CONNECT
-echo "drop database grant_db" | $BENDSQL_CLIENT_CONNECT
-echo "drop database d" | $BENDSQL_CLIENT_CONNECT
 
-echo "drop table if exists t" | $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists c" | $BENDSQL_CLIENT_CONNECT
+echo "create user c identified by '123'" | $BENDSQL_CLIENT_CONNECT
+echo "grant drop on default.t to c" | $BENDSQL_CLIENT_CONNECT
+export USER_C_CONNECT="bendsql --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+
+echo "drop table if exists t" | $USER_C_CONNECT
+echo "drop table if exists unknown_t" | $USER_C_CONNECT
+echo "drop database if exists unknown_db" | $USER_C_CONNECT
+
 echo "drop table if exists t1" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t2" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage if exists s3;" | $BENDSQL_CLIENT_CONNECT

@@ -56,5 +56,5 @@ runs:
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: benchmark-${{ inputs.dataset }}
+        name: benchmark
         path: benchmark/clickbench/result-${{ inputs.dataset }}-local.json

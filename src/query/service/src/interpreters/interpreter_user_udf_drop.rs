@@ -72,9 +72,11 @@ impl Interpreter for DropUserUDFInterpreter {
             RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
+        // TODO: if it is appropriate to return an ErrorCode that contains either meta-service error and UdfNotFound error?
+
         UserApiProvider::instance()
             .drop_udf(&tenant, plan.udf.as_str(), plan.if_exists)
-            .await?;
+            .await??;
 
         Ok(PipelineBuildResult::create())
     }

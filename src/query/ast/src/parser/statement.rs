@@ -889,16 +889,27 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let create_view = map(
+    let create_view = map_res(
         rule! {
-            CREATE ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
         },
-        |(_, _, opt_if_not_exists, (catalog, database, view), opt_columns, _, query)| {
-            Statement::CreateView(CreateViewStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            (catalog, database, view),
+            opt_columns,
+            _,
+            query,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateView(CreateViewStmt {
+                create_option,
                 catalog,
                 database,
                 view,
@@ -906,7 +917,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     .map(|(_, columns, _)| columns)
                     .unwrap_or_default(),
                 query: Box::new(query),
-            })
+            }))
         },
     );
     let drop_view = map(
@@ -942,20 +953,22 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let create_index = map(
+    let create_index = map_res(
         rule! {
-            CREATE ~ ASYNC? ~ AGGREGATING ~ INDEX ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ ASYNC? ~ AGGREGATING ~ INDEX ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ AS ~ #query
         },
-        |(_, opt_async, _, _, opt_if_not_exists, index_name, _, query)| {
-            Statement::CreateIndex(CreateIndexStmt {
+        |(_, opt_or_replace, opt_async, _, _, opt_if_not_exists, index_name, _, query)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateIndex(CreateIndexStmt {
                 index_type: TableIndexType::Aggregating,
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 index_name,
                 query: Box::new(query),
                 sync_creation: opt_async.is_none(),
-            })
+            }))
         },
     );
 
@@ -983,18 +996,31 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let create_virtual_column = map(
+    let create_virtual_column = map_res(
         rule! {
-            CREATE ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
+            CREATE ~ (OR ~ REPLACE)? ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, _, opt_if_not_exists, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+        |(
+            _,
+            opt_or_replace,
+            _,
+            _,
+            opt_if_not_exists,
+            _,
+            virtual_columns,
+            _,
+            _,
+            (catalog, database, table),
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
+                create_option,
                 catalog,
                 database,
                 table,
                 virtual_columns,
-            })
+            }))
         },
     );
 
@@ -1061,16 +1087,28 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
 
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
-    let create_user = map(
+    let create_user = map_res(
         rule! {
-            CREATE ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~  (OR ~ REPLACE)? ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #user_identity
             ~ IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )?
             ~ ( WITH ~ ^#comma_separated_list1(user_option))?
         },
-        |(_, _, opt_if_not_exists, user, _, opt_auth_type, opt_password, opt_user_option)| {
-            Statement::CreateUser(CreateUserStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            user,
+            _,
+            opt_auth_type,
+            opt_password,
+            opt_user_option,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateUser(CreateUserStmt {
+                create_option,
                 user,
                 auth_option: AuthOption {
                     auth_type: opt_auth_type.map(|(_, auth_type)| auth_type),
@@ -1079,7 +1117,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 user_options: opt_user_option
                     .map(|(_, user_options)| user_options)
                     .unwrap_or_default(),
-            })
+            }))
         },
     );
     let alter_user = map(
@@ -1182,19 +1220,21 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             })
         },
     );
-    let create_udf = map(
+    let create_udf = map_res(
         rule! {
-            CREATE ~ FUNCTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ FUNCTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #udf_definition
             ~ ( DESC ~ ^"=" ~ ^#literal_string )?
         },
-        |(_, _, opt_if_not_exists, udf_name, definition, opt_description)| {
-            Statement::CreateUDF(CreateUDFStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+        |(_, opt_or_replace, _, opt_if_not_exists, udf_name, definition, opt_description)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateUDF(CreateUDFStmt {
+                create_option,
                 udf_name,
                 description: opt_description.map(|(_, _, description)| description),
                 definition,
-            })
+            }))
         },
     );
     let drop_udf = map(
@@ -1306,14 +1346,26 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let connection_opt = connection_opt("=");
     let create_connection = map_res(
         rule! {
-            CREATE ~ CONNECTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ CONNECTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ STORAGE_TYPE ~ "=" ~  #literal_string ~ #connection_opt*
         },
-        |(_, _, opt_if_not_exists, connection_name, _, _, storage_type, options)| {
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            connection_name,
+            _,
+            _,
+            storage_type,
+            options,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             let options =
                 BTreeMap::from_iter(options.iter().map(|(k, v)| (k.to_lowercase(), v.clone())));
             Ok(Statement::CreateConnection(CreateConnectionStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: connection_name,
                 storage_type,
                 storage_params: options,
@@ -1380,18 +1432,36 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
 
     // share statements
-    let create_share_endpoint = map(
+    let create_share_endpoint = map_res(
         rule! {
-            CREATE ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
              ~ #ident
              ~ URL ~ "=" ~ #share_endpoint_uri_location
              ~ TENANT ~ "=" ~ #ident
              ~ ( ARGS ~ ^"=" ~ ^#options)?
              ~ ( COMMENT ~ ^"=" ~ ^#literal_string)?
         },
-        |(_, _, _, opt_if_not_exists, endpoint, _, _, url, _, _, tenant, args_opt, comment_opt)| {
-            Statement::CreateShareEndpoint(CreateShareEndpointStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+        |(
+            _,
+            opt_or_replace,
+            _,
+            _,
+            opt_if_not_exists,
+            endpoint,
+            _,
+            _,
+            url,
+            _,
+            _,
+            tenant,
+            args_opt,
+            comment_opt,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+
+            Ok(Statement::CreateShareEndpoint(CreateShareEndpointStmt {
+                create_option,
                 endpoint,
                 url,
                 tenant,
@@ -1403,7 +1473,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     Some(opt) => Some(opt.2),
                     None => None,
                 },
-            })
+            }))
         },
     );
     let show_share_endpoints = map(
@@ -1501,13 +1571,15 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_file_format = map_res(
         rule! {
-            CREATE ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #format_options
         },
-        |(_, _, _, opt_if_not_exists, name, options)| {
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, options)| {
             let file_format_options = FileFormatOptionsAst { options };
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             Ok(Statement::CreateFileFormat {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: name.to_string(),
                 file_format_options,
             })
@@ -1527,17 +1599,19 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let show_file_formats = value(Statement::ShowFileFormats, rule! { SHOW ~ FILE ~ FORMATS });
 
     // data mark policy
-    let create_data_mask_policy = map(
+    let create_data_mask_policy = map_res(
         rule! {
-            CREATE ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
+            CREATE ~ (OR ~ REPLACE)? ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
         },
-        |(_, _, _, opt_if_not_exists, name, policy)| {
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, policy)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             let stmt = CreateDatamaskPolicyStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: name.to_string(),
                 policy,
             };
-            Statement::CreateDatamaskPolicy(stmt)
+            Ok(Statement::CreateDatamaskPolicy(stmt))
         },
     );
     let drop_data_mask_policy = map(
@@ -1563,15 +1637,16 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let create_network_policy = map(
+    let create_network_policy = map_res(
         rule! {
-            CREATE ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+            CREATE ~  (OR ~ REPLACE)? ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
              ~ ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")"
              ~ ( BLOCKED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
              ~ ( COMMENT ~ ^Eq ~ ^#literal_string)?
         },
         |(
             _,
+            opt_or_replace,
             _,
             _,
             opt_if_not_exists,
@@ -1584,8 +1659,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             opt_blocked_ip_list,
             opt_comment,
         )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             let stmt = CreateNetworkPolicyStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: name.to_string(),
                 allowed_ip_list,
                 blocked_ip_list: match opt_blocked_ip_list {
@@ -1597,7 +1674,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     None => None,
                 },
             };
-            Statement::CreateNetworkPolicy(stmt)
+            Ok(Statement::CreateNetworkPolicy(stmt))
         },
     );
     let alter_network_policy = map(
@@ -1664,18 +1741,20 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         rule! { SHOW ~ NETWORK ~ ^POLICIES },
     );
 
-    let create_password_policy = map(
+    let create_password_policy = map_res(
         rule! {
-            CREATE ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+            CREATE ~ (OR ~ REPLACE)? ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
              ~ #password_set_options
         },
-        |(_, _, _, opt_if_not_exists, name, set_options)| {
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, set_options)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             let stmt = CreatePasswordPolicyStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+                create_option,
                 name: name.to_string(),
                 set_options,
             };
-            Statement::CreatePasswordPolicy(stmt)
+            Ok(Statement::CreatePasswordPolicy(stmt))
         },
     );
     let alter_password_policy = map(
@@ -1870,11 +1949,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         ),
         // view,stream,index
         rule!(
-            #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+            #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #stream_table
-            | #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
+            | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
             | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
         ),
@@ -1887,13 +1966,13 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         ),
         rule!(
             #show_users : "`SHOW USERS`"
-            | #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
+            | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
             | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
             | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
             | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
             | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
-            | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
+            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
@@ -1982,7 +2061,7 @@ AS
 
         ),
         rule!(
-            #create_connection: "`CREATE CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
+            #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
         | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
         | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
         | #show_connections: "`SHOW CONNECTIONS`"
@@ -2000,7 +2079,7 @@ AS
     )(i)
 }
 
-fn parse_create_option(
+pub fn parse_create_option(
     opt_or_replace: bool,
     opt_if_not_exists: bool,
 ) -> Result<CreateOption, nom::Err<ErrorKind>> {
@@ -2338,6 +2417,10 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Alter, rule! { ALTER }),
         value(UserPrivilegeType::Super, rule! { SUPER }),
         value(UserPrivilegeType::CreateUser, rule! { CREATE ~ USER }),
+        value(
+            UserPrivilegeType::CreateDatabase,
+            rule! { CREATE ~ DATABASE },
+        ),
         value(UserPrivilegeType::DropUser, rule! { DROP ~ USER }),
         value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
         value(UserPrivilegeType::DropRole, rule! { DROP ~ ROLE }),

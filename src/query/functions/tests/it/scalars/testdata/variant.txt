@@ -3203,6 +3203,24 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : parse_json('{"k": null}') #> '{k}'
+raw expr       : get_by_keypath(parse_json('{"k": null}'), '{k}')
+checked expr   : get_by_keypath<Variant, String>(parse_json<String>("{\"k\": null}"), "{k}")
+optimized expr : 0x2000000000000000
+output type    : Variant NULL
+output domain  : Undefined
+output         : 'null'
+
+
+ast            : parse_json('[10, 20, null]') #> '{2}'
+raw expr       : get_by_keypath(parse_json('[10, 20, null]'), '{2}')
+checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, 20, null]"), "{2}")
+optimized expr : 0x2000000000000000
+output type    : Variant NULL
+output domain  : Undefined
+output         : 'null'
+
+
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #> '{1, a, k1}'
 raw expr       : get_by_keypath(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1}')
 checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1}")
@@ -3329,6 +3347,24 @@ optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
 output         : NULL
+
+
+ast            : parse_json('{"k": null}') #>> '{k}'
+raw expr       : get_by_keypath_string(parse_json('{"k": null}'), '{k}')
+checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("{\"k\": null}"), "{k}")
+optimized expr : "null"
+output type    : String NULL
+output domain  : {"null"..="null"}
+output         : 'null'
+
+
+ast            : parse_json('[10, 20, null]') #>> '{2}'
+raw expr       : get_by_keypath_string(parse_json('[10, 20, null]'), '{2}')
+checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, 20, null]"), "{2}")
+optimized expr : "null"
+output type    : String NULL
+output domain  : {"null"..="null"}
+output         : 'null'
 
 
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #>> '{1, a, k1}'
@@ -4538,5 +4574,160 @@ optimized expr : 0x80000002200000022000000250015002
 output type    : Variant
 output domain  : Undefined
 output         : '[1,2]'
+
+
+ast            : parse_json('[1,2,3]') #- NULL
+raw expr       : delete_by_keypath(parse_json('[1,2,3]'), NULL)
+checked expr   : delete_by_keypath<Variant, NULL>(parse_json<String>("[1,2,3]"), NULL)
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('[1,2,3]') #- '{}'
+raw expr       : delete_by_keypath(parse_json('[1,2,3]'), '{}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("[1,2,3]"), "{}")
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '[1,2,3]'
+
+
+ast            : parse_json('[1,2,3]') #- '{0}'
+raw expr       : delete_by_keypath(parse_json('[1,2,3]'), '{0}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("[1,2,3]"), "{0}")
+optimized expr : 0x80000002200000022000000250025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '[2,3]'
+
+
+ast            : parse_json('[1,2,3]') #- '{-1}'
+raw expr       : delete_by_keypath(parse_json('[1,2,3]'), '{-1}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("[1,2,3]"), "{-1}")
+optimized expr : 0x80000002200000022000000250015002
+output type    : Variant NULL
+output domain  : Undefined
+output         : '[1,2]'
+
+
+ast            : parse_json('[1,2,3]') #- '{3}'
+raw expr       : delete_by_keypath(parse_json('[1,2,3]'), '{3}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("[1,2,3]"), "{3}")
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '[1,2,3]'
+
+
+ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b}")
+optimized expr : 0x400000011000000120000002615001
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1}'
+
+
+ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{c}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{c}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{c}")
+optimized expr : 0x40000002100000011000000120000002500000166162500180000003200000022000000220000002500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1,"b":[1,2,3]}'
+
+
+ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b,2}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b,2}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b,2}")
+optimized expr : 0x40000002100000011000000120000002500000106162500180000002200000022000000250015002
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1,"b":[1,2]}'
+
+
+ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b,-2}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b,-2}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b,-2}")
+optimized expr : 0x40000002100000011000000120000002500000106162500180000002200000022000000250015003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1,"b":[1,3]}'
+
+
+ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b,20}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b,20}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b,20}")
+optimized expr : 0x40000002100000011000000120000002500000166162500180000003200000022000000220000002500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1,"b":[1,2,3]}'
+
+
+ast            : parse_json('{"a":1,"b":[1,2,3]}') #- '{b,20,c,e}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[1,2,3]}'), '{b,20,c,e}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[1,2,3]}"), "{b,20,c,e}")
+optimized expr : 0x40000002100000011000000120000002500000166162500180000003200000022000000220000002500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1,"b":[1,2,3]}'
+
+
+ast            : parse_json('{"a":1,"b":[{"c":1,"d":10},2,3]}') #- '{b,0,d}'
+raw expr       : delete_by_keypath(parse_json('{"a":1,"b":[{"c":1,"d":10},2,3]}'), '{b,0,d}')
+checked expr   : delete_by_keypath<Variant, String>(parse_json<String>("{\"a\":1,\"b\":[{\"c\":1,\"d\":10},2,3]}"), "{b,0,d}")
+optimized expr : 0x400000021000000110000001200000025000002361625001800000035000000f200000022000000240000001100000012000000263500150025003
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"a":1,"b":[{"c":1},2,3]}'
+
+
+ast            : parse_json(s) #- '{0,a}'
+raw expr       : delete_by_keypath(parse_json(s::String NULL), '{0,a}')
+checked expr   : delete_by_keypath<Variant NULL, String>(parse_json<String NULL>(s), "{0,a}")
+evaluation:
++--------+---------------------------------+--------------+
+|        | s                               | Output       |
++--------+---------------------------------+--------------+
+| Type   | String NULL                     | Variant NULL |
+| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown      |
+| Row 0  | '[{"a":1},2,3]'                 | '[{},2,3]'   |
+| Row 1  | '[1,2,3]'                       | '[1,2,3]'    |
+| Row 2  | NULL                            | NULL         |
+| Row 3  | '{"a":"b"}'                     | '{"a":"b"}'  |
++--------+---------------------------------+--------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                               |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x5b7b2261223a317d2c322c335d5b312c322c335d7b2261223a2262227d, offsets: [0, 13, 20, 20, 29] }, validity: [0b____1011] }                                                               |
+| Output | NullableColumn { column: BinaryColumn { data: 0x800000035000000420000002200000024000000050025003800000032000000220000002200000025001500250034000000110000001100000016162, offsets: [0, 24, 46, 46, 60] }, validity: [0b____1011] } |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : parse_json(s) #- k
+raw expr       : delete_by_keypath(parse_json(s::String NULL), k::String NULL)
+checked expr   : delete_by_keypath<Variant NULL, String NULL>(parse_json<String NULL>(s), k)
+evaluation:
++--------+-----------------------------------+----------------------------+---------------+
+|        | s                                 | k                          | Output        |
++--------+-----------------------------------+----------------------------+---------------+
+| Type   | String NULL                       | String NULL                | Variant NULL  |
+| Domain | {""..="{\"k\":[1,2,3]}"} ∪ {NULL} | {"{1,a}"..="{k}"} ∪ {NULL} | Unknown       |
+| Row 0  | '[1,{"a":2},3]'                   | '{1,a}'                    | '[1,{},3]'    |
+| Row 1  | '{"k":[1,2,3]}'                   | '{k,-1}'                   | '{"k":[1,2]}' |
+| Row 2  | NULL                              | NULL                       | NULL          |
+| Row 3  | '{"a":"b"}'                       | '{c}'                      | '{"a":"b"}'   |
++--------+-----------------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                             |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x5b312c7b2261223a327d2c335d7b226b223a5b312c322c335d7d7b2261223a2262227d, offsets: [0, 13, 26, 26, 35] }, validity: [0b____1011] }                                                                 |
+| k      | NullableColumn { column: StringColumn { data: 0x7b312c617d7b6b2c2d317d7b6b7d7b637d, offsets: [0, 5, 11, 14, 17] }, validity: [0b____1011] }                                                                                                      |
+| Output | NullableColumn { column: BinaryColumn { data: 0x8000000320000002500000042000000250014000000050034000000110000001500000106b800000022000000220000002500150024000000110000001100000016162, offsets: [0, 24, 53, 53, 67] }, validity: [0b____1011] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 

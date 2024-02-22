@@ -16,6 +16,8 @@ use ethnum::i256;
 use ordered_float::OrderedFloat;
 
 use crate::types::decimal::DecimalType;
+use crate::types::geometry::GeometryType;
+use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::BinaryType;
 use crate::types::BitmapType;
@@ -27,9 +29,11 @@ use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
+use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::ScalarRef;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
@@ -68,6 +72,7 @@ pub fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut 
         DataType::String => combine_group_hash_string_column::<IS_FIRST, StringType>(c, values),
         DataType::Bitmap => combine_group_hash_string_column::<IS_FIRST, BitmapType>(c, values),
         DataType::Variant => combine_group_hash_string_column::<IS_FIRST, VariantType>(c, values),
+        DataType::Geometry => combine_group_hash_string_column::<IS_FIRST, GeometryType>(c, values),
         DataType::Nullable(_) => {
             let col = c.as_nullable().unwrap();
             if IS_FIRST {
@@ -94,14 +99,12 @@ pub fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut 
                 }
             }
         }
-        DataType::Tuple(_) => todo!(),
-        DataType::Array(_) => todo!(),
-        DataType::Map(_) => todo!(),
         DataType::Generic(_) => unreachable!(),
+        _ => combine_group_hash_type_column::<IS_FIRST, AnyType>(c, values),
     }
 }
 
-fn combine_group_hash_type_column<const IS_FIRST: bool, T: ArgType>(
+fn combine_group_hash_type_column<const IS_FIRST: bool, T: ValueType>(
     col: &Column,
     values: &mut [u64],
 ) where
@@ -242,5 +245,12 @@ impl AggHash for OrderedFloat<f64> {
         } else {
             self.to_bits().agg_hash()
         }
+    }
+}
+
+impl AggHash for ScalarRef<'_> {
+    #[inline(always)]
+    fn agg_hash(&self) -> u64 {
+        self.to_string().as_bytes().agg_hash()
     }
 }

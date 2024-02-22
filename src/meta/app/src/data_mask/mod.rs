@@ -19,9 +19,7 @@ use std::fmt::Formatter;
 use chrono::DateTime;
 use chrono::Utc;
 
-const PREFIX_DATAMASK: &str = "__fd_datamask";
-const PREFIX_DATAMASK_BY_ID: &str = "__fd_datamask_by_id";
-const PREFIX_DATAMASK_ID_LIST: &str = "__fd_datamask_id_list";
+use crate::schema::CreateOption;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatamaskNameIdent {
@@ -72,7 +70,7 @@ impl From<CreateDatamaskReq> for DatamaskMeta {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatamaskReq {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name: DatamaskNameIdent,
     pub args: Vec<(String, String)>,
     pub return_type: String,
@@ -128,15 +126,12 @@ mod kvapi_key_impl {
     use super::DatamaskId;
     use super::DatamaskNameIdent;
     use super::MaskpolicyTableIdListKey;
-    use super::PREFIX_DATAMASK;
-    use super::PREFIX_DATAMASK_BY_ID;
-    use super::PREFIX_DATAMASK_ID_LIST;
     use crate::data_mask::DatamaskMeta;
     use crate::data_mask::MaskpolicyTableIdList;
 
     /// __fd_database/<tenant>/<name> -> <data_mask_id>
     impl kvapi::Key for DatamaskNameIdent {
-        const PREFIX: &'static str = PREFIX_DATAMASK;
+        const PREFIX: &'static str = "__fd_datamask";
 
         type ValueType = DatamaskId;
 
@@ -160,7 +155,7 @@ mod kvapi_key_impl {
 
     /// "__fd_datamask_by_id/<id>"
     impl kvapi::Key for DatamaskId {
-        const PREFIX: &'static str = PREFIX_DATAMASK_BY_ID;
+        const PREFIX: &'static str = "__fd_datamask_by_id";
 
         type ValueType = DatamaskMeta;
 
@@ -181,7 +176,7 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Key for MaskpolicyTableIdListKey {
-        const PREFIX: &'static str = PREFIX_DATAMASK_ID_LIST;
+        const PREFIX: &'static str = "__fd_datamask_id_list";
 
         type ValueType = MaskpolicyTableIdList;
 
@@ -202,4 +197,10 @@ mod kvapi_key_impl {
             Ok(MaskpolicyTableIdListKey { tenant, name })
         }
     }
+
+    impl kvapi::Value for DatamaskId {}
+
+    impl kvapi::Value for DatamaskMeta {}
+
+    impl kvapi::Value for MaskpolicyTableIdList {}
 }

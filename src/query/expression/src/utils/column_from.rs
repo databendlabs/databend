@@ -18,6 +18,7 @@ use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use itertools::Itertools;
 
 use crate::types::decimal::*;
+use crate::types::geometry::GeometryType;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::*;
 use crate::types::*;
@@ -71,6 +72,7 @@ impl_from_data! { DateType }
 impl_from_data! { TimestampType }
 impl_from_data! { VariantType }
 impl_from_data! { BitmapType }
+impl_from_data! { GeometryType }
 
 impl<'a> FromData<&'a [u8]> for BinaryType {
     fn from_data(d: Vec<&'a [u8]>) -> Column {

@@ -182,6 +182,10 @@ impl Column {
                 let column = Self::filter_binary_scalars(column, filter);
                 Column::Variant(column)
             }
+            Column::Geometry(column) => {
+                let column = Self::filter_binary_scalars(column, filter);
+                Column::Geometry(column)
+            }
         }
     }
 

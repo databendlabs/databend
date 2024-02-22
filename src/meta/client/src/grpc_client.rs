@@ -22,7 +22,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_arrow::arrow_format::flight::data::BasicAuth;
-use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::select;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::sync::mpsc::Receiver;
@@ -485,7 +484,7 @@ impl MetaGrpcClient {
                 _ => {}
             }
 
-            tokio::spawn(
+            databend_common_base::runtime::spawn(
                 self.clone()
                     .handle_rpc_request(worker_request)
                     .in_span(span),

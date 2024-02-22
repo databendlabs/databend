@@ -165,7 +165,7 @@ impl JobScheduler {
             info!(background = true; "Running execute job");
         }
 
-        tokio::spawn(async move { job.run().await });
+        databend_common_base::runtime::spawn(async move { job.run().await });
         Ok(())
     }
 

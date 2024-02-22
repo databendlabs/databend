@@ -57,7 +57,9 @@ impl Interpreter for RevokePrivilegeInterpreter {
 
         let plan = self.plan.clone();
 
-        validate_grant_object_exists(&self.ctx, &plan.on).await?;
+        for object in &plan.on {
+            validate_grant_object_exists(&self.ctx, object).await?;
+        }
 
         // TODO: check user existence
         // TODO: check privilege on granting on the grant object
@@ -67,9 +69,11 @@ impl Interpreter for RevokePrivilegeInterpreter {
 
         match plan.principal {
             PrincipalIdentity::User(user) => {
-                user_mgr
-                    .revoke_privileges_from_user(&tenant, user, plan.on, plan.priv_types)
-                    .await?;
+                for object in plan.on {
+                    user_mgr
+                        .revoke_privileges_from_user(&tenant, user.clone(), object, plan.priv_types)
+                        .await?;
+                }
             }
             PrincipalIdentity::Role(role) => {
                 if role == BUILTIN_ROLE_ACCOUNT_ADMIN {
@@ -77,9 +81,11 @@ impl Interpreter for RevokePrivilegeInterpreter {
                         "Illegal REVOKE command. Can not revoke built-in role [ account_admin ]",
                     ));
                 }
-                user_mgr
-                    .revoke_privileges_from_role(&tenant, &role, plan.on, plan.priv_types)
-                    .await?;
+                for object in plan.on {
+                    user_mgr
+                        .revoke_privileges_from_role(&tenant, &role, object, plan.priv_types)
+                        .await?;
+                }
             }
         }
 

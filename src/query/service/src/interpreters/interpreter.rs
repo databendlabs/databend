@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -113,7 +113,7 @@ pub trait Interpreter: Sync + Send {
                     struct QueryProfiles {
                         query_id: String,
                         profiles: Vec<PlanProfile>,
-                        statistics_desc: Arc<HashMap<ProfileStatisticsName, ProfileDesc>>,
+                        statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
                     }
 
                     info!(

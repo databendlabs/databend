@@ -14,6 +14,7 @@
 
 use anyerror::AnyError;
 use databend_common_base::base::*;
+use databend_common_base::runtime;
 use log::info;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
@@ -62,7 +63,7 @@ async fn test_stoppable() -> anyhow::Result<()> {
 
     // Gracefully stop blocks.
 
-    tokio::spawn(async move {
+    runtime::spawn(async move {
         let _ = t.stop(Some(rx)).await;
         fin_tx.send(()).expect("fail to send fin signal");
     });
@@ -112,7 +113,7 @@ async fn test_stop_handle() -> anyhow::Result<()> {
     // Block on waiting for the handle to finish.
 
     let fut = h.wait_to_terminate(stop_tx.clone());
-    tokio::spawn(async move {
+    runtime::spawn(async move {
         fut.await;
         fin_tx.send(()).expect("fail to send fin signal");
     });

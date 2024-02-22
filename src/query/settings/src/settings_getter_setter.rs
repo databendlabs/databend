@@ -223,6 +223,10 @@ impl Settings {
         self.try_get_u64("input_read_buffer_size")
     }
 
+    pub fn get_enable_new_copy_for_text_formats(&self) -> Result<u64> {
+        self.try_get_u64("enable_new_copy_for_text_formats")
+    }
+
     pub fn get_enable_bushy_join(&self) -> Result<u64> {
         self.try_get_u64("enable_bushy_join")
     }
@@ -269,8 +273,8 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_threshold")? as usize)
     }
 
-    pub fn get_runtime_filter(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_runtime_filter")? != 0)
+    pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_bloom_runtime_filter")? != 0)
     }
 
     pub fn get_prefer_broadcast_join(&self) -> Result<bool> {

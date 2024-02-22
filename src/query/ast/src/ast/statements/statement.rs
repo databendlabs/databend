@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::schema::CreateOption;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
@@ -219,7 +220,7 @@ pub enum Statement {
 
     // UserDefinedFileFormat
     CreateFileFormat {
-        if_not_exists: bool,
+        create_option: CreateOption,
         name: String,
         file_format_options: FileFormatOptionsAst,
     },
@@ -572,13 +573,19 @@ impl Display for Statement {
             }
             Statement::DescribeStage { stage_name } => write!(f, "DESC STAGE {stage_name}")?,
             Statement::CreateFileFormat {
-                if_not_exists,
+                create_option,
                 name,
                 file_format_options,
             } => {
-                write!(f, "CREATE FILE_FORMAT")?;
-                if *if_not_exists {
-                    write!(f, " IF NOT EXISTS")?;
+                write!(f, "CREATE")?;
+                if let CreateOption::CreateOrReplace = create_option {
+                    write!(f, " OR REPLACE")?;
+                }
+                write!(f, " FILE_FORMAT")?;
+                if let CreateOption::CreateIfNotExists(if_not_exists) = create_option {
+                    if *if_not_exists {
+                        write!(f, " IF NOT EXISTS")?;
+                    }
                 }
                 write!(f, " {name}")?;
                 write!(f, " {file_format_options}")?;

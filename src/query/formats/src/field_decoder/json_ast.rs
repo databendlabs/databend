@@ -39,6 +39,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::parse_bitmap;
+use databend_common_io::parse_to_ewkb;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
 use num_traits::NumCast;
@@ -52,7 +53,7 @@ pub struct FieldJsonAstDecoder {
     timezone: Tz,
     pub ident_case_sensitive: bool,
     pub is_select: bool,
-    rounding_mode: bool,
+    is_rounding_mode: bool,
 }
 
 impl FieldDecoder for FieldJsonAstDecoder {
@@ -67,7 +68,7 @@ impl FieldJsonAstDecoder {
             timezone: options.timezone,
             ident_case_sensitive: options.ident_case_sensitive,
             is_select: options.is_select,
-            rounding_mode,
+            is_rounding_mode: rounding_mode,
         }
     }
 
@@ -99,6 +100,7 @@ impl FieldJsonAstDecoder {
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, value),
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, value),
             ColumnBuilder::Variant(c) => self.read_variant(c, value),
+            ColumnBuilder::Geometry(c) => self.read_geometry(c, value),
             _ => unimplemented!(),
         }
     }
@@ -144,7 +146,7 @@ impl FieldJsonAstDecoder {
                     Some(v) => num_traits::cast::cast(v),
                     None => match v.as_f64() {
                         Some(v) => {
-                            if self.rounding_mode {
+                            if self.is_rounding_mode {
                                 num_traits::cast::cast(v.round())
                             } else {
                                 num_traits::cast::cast(v)
@@ -176,7 +178,7 @@ impl FieldJsonAstDecoder {
                     Some(v) => num_traits::cast::cast(v),
                     None => match v.as_f64() {
                         Some(v) => {
-                            if self.rounding_mode {
+                            if self.is_rounding_mode {
                                 num_traits::cast::cast(v.round())
                             } else {
                                 num_traits::cast::cast(v)
@@ -323,6 +325,18 @@ impl FieldJsonAstDecoder {
         v.write_to_vec(&mut column.data);
         column.commit_row();
         Ok(())
+    }
+
+    fn read_geometry(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
+        match value {
+            Value::String(v) => {
+                let geom = parse_to_ewkb(v.as_bytes())?;
+                column.put_slice(&geom);
+                column.commit_row();
+                Ok(())
+            }
+            _ => Err(ErrorCode::BadBytes("Incorrect Geometry value")),
+        }
     }
 
     fn read_array(&self, column: &mut ArrayColumnBuilder<AnyType>, value: &Value) -> Result<()> {
