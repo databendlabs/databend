@@ -57,8 +57,10 @@ runs:
         done
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
-    - name: Read elf
+    - name: Check Binary Info
       if: env.BUILD_PROFILE == 'debug' && endsWith(inputs.target, '-gnu')
       shell: bash
+      continue-on-error: true
       run: |
         readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
+        ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
