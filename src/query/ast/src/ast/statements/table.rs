@@ -559,6 +559,17 @@ pub struct VacuumTemporaryFiles {
 impl Display for crate::ast::VacuumTemporaryFiles {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "VACUUM TEMPORARY FILES ")?;
+        if let Some(retain) = &self.retain {
+            let days = Duration::from_secs(60 * 60 * 24);
+            if retain >= &days {
+                let days = retain.as_secs() / (60 * 60 * 24);
+                write!(f, "RETAIN {days} DAYS ")?;
+            } else {
+                let seconds = retain.as_secs();
+                write!(f, "RETAIN {seconds} SECONDS ")?;
+            }
+        }
+
         if let Some(limit) = &self.limit {
             write!(f, " LIMIT {limit}")?;
         }

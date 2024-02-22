@@ -1889,7 +1889,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_indexes : "`SHOW INDEXES`"
             | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
-            | #vacuum_temp_files : "VACUUM TEMPORARY FILES [<vacuum_limit>]"
+            | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
         ),
         // database
         rule!(

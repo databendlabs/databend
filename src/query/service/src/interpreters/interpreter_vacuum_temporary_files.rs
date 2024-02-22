@@ -59,7 +59,7 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
         let remove_files = handler
             .do_vacuum_temporary_files(
                 temporary_files_prefix,
-                self.plan.retain.clone(),
+                self.plan.retain,
                 self.plan.limit.map(|x| x as usize),
             )
             .await?;
