@@ -140,6 +140,7 @@ impl StreamTable {
     pub async fn source_table(&self, catalog: Arc<dyn Catalog>) -> Result<Arc<dyn Table>> {
         let table = catalog
             .stream_source_table(
+                &self.stream_info.desc,
                 &self.stream_info.tenant,
                 &self.table_database,
                 &self.table_name,

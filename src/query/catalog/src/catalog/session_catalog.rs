@@ -447,9 +447,10 @@ impl Catalog for SessionCatalog {
 
     async fn stream_source_table(
         &self,
+        stream_desc: &str,
         tenant: &str,
         db_name: &str,
-        table_name: &str,
+        source_table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         let is_active = self.txn_mgr.lock().unwrap().is_active();
         if is_active {
@@ -457,14 +458,14 @@ impl Catalog for SessionCatalog {
                 .txn_mgr
                 .lock()
                 .unwrap()
-                .get_stream_table_source(tenant, db_name, table_name)
+                .get_stream_table_source(stream_desc)
                 .map(|table_info| self.get_table_by_info(&table_info));
             if maybe_table.is_some() {
                 return maybe_table.unwrap();
             }
-            self.get_table(tenant, db_name, table_name).await
+            self.get_table(tenant, db_name, source_table_name).await
         } else {
-            self.get_table(tenant, db_name, table_name).await
+            self.get_table(tenant, db_name, source_table_name).await
         }
     }
 }

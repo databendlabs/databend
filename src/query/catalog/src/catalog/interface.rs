@@ -319,9 +319,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn stream_source_table(
         &self,
+        _stream_desc: &str,
         _tenant: &str,
         _db_name: &str,
-        _table_name: &str,
+        _source_table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         unimplemented!()
     }

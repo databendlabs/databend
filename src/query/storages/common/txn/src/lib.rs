@@ -109,16 +109,10 @@ impl TxnManager {
             .insert(stream.desc.clone(), StreamSnapshot { stream, source });
     }
 
-    pub fn get_stream_table_source(
-        &self,
-        tenant: &str,
-        db_name: &str,
-        table_name: &str,
-    ) -> Option<TableInfo> {
-        let tenant_dbname_tbname = TableNameIdent::new(tenant, db_name, table_name).to_string();
+    pub fn get_stream_table_source(&self, stream_desc: &str) -> Option<TableInfo> {
         self.txn_buffer
             .stream_tables
-            .get(&tenant_dbname_tbname)
+            .get(stream_desc)
             .map(|snapshot| snapshot.source.clone())
     }
 
