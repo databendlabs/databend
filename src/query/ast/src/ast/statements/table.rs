@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::format;
+use std::time::Duration;
 
 use databend_common_meta_app::schema::CreateOption;
 
@@ -552,6 +553,7 @@ impl Display for VacuumDropTableStmt {
 #[derive(Debug, Clone, PartialEq)]
 pub struct VacuumTemporaryFiles {
     pub limit: Option<u64>,
+    pub retain: Option<Duration>,
 }
 
 impl Display for crate::ast::VacuumTemporaryFiles {

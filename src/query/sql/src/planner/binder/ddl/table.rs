@@ -1168,7 +1168,10 @@ impl Binder {
         stmt: &VacuumTemporaryFiles,
     ) -> Result<Plan> {
         Ok(Plan::VacuumTemporaryFiles(Box::new(
-            VacuumTemporaryFilesPlan { limit: stmt.limit },
+            VacuumTemporaryFilesPlan {
+                limit: stmt.limit,
+                retain: stmt.retain,
+            },
         )))
     }
 

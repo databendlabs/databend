@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -53,9 +54,10 @@ impl VacuumHandler for RealVacuumHandler {
     async fn do_vacuum_temporary_files(
         &self,
         temporary_dir: String,
+        retain: Option<Duration>,
         vacuum_limit: Option<usize>,
     ) -> Result<Vec<String>> {
-        do_vacuum_temporary_files(temporary_dir, vacuum_limit).await
+        do_vacuum_temporary_files(temporary_dir, retain, vacuum_limit).await
     }
 }
 

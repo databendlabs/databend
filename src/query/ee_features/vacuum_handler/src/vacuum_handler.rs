@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -41,6 +42,7 @@ pub trait VacuumHandler: Sync + Send {
     async fn do_vacuum_temporary_files(
         &self,
         temporary_dir: String,
+        retain: Option<Duration>,
         vacuum_limit: Option<usize>,
     ) -> Result<Vec<String>>;
 }
@@ -82,10 +84,11 @@ impl VacuumHandlerWrapper {
     pub async fn do_vacuum_temporary_files(
         &self,
         temporary_dir: String,
+        retain: Option<Duration>,
         vacuum_limit: Option<usize>,
     ) -> Result<Vec<String>> {
         self.handler
-            .do_vacuum_temporary_files(temporary_dir, vacuum_limit)
+            .do_vacuum_temporary_files(temporary_dir, retain, vacuum_limit)
             .await
     }
 }

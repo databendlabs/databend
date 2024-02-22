@@ -24,6 +24,7 @@ use opendal::Metakey;
 #[async_backtrace::framed]
 pub async fn do_vacuum_temporary_files(
     temporary_dir: String,
+    retain: Option<Duration>,
     limit: Option<usize>,
 ) -> Result<Vec<String>> {
     let operator = DataOperator::instance().operator();
@@ -35,7 +36,7 @@ pub async fn do_vacuum_temporary_files(
         .await?;
 
     let limit = limit.unwrap_or(usize::MAX);
-    let expire_time = Duration::from_secs(60 * 60 * 24 * 3).as_millis() as i64;
+    let expire_time = retain.map(|x| x.as_millis()).unwrap_or(60 * 60 * 24 * 3) as i64;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
