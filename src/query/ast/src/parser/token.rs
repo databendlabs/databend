@@ -1159,6 +1159,8 @@ pub enum TokenKind {
     COMMIT,
     #[token("ABORT", ignore(ascii_case))]
     ABORT,
+    #[token("ROLLBACK", ignore(ascii_case))]
+    ROLLBACK,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

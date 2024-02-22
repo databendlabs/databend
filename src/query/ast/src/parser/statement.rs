@@ -1786,7 +1786,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let begin = map(rule!(BEGIN), |_| Statement::Begin);
     let commit = map(rule!(COMMIT), |_| Statement::Commit);
-    let abort = map(rule!(ABORT), |_| Statement::Abort);
+    let abort = map(
+        rule! {
+            (ABORT | ROLLBACK)
+        },
+        |_| Statement::Abort,
+    );
 
     let statement_body = alt((
         // query, explain,show
