@@ -324,6 +324,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         _db_name: &str,
         _source_table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "'stream_source_table' not implemented",
+        ))
     }
 }

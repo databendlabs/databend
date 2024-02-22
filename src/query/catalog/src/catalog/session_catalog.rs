@@ -460,8 +460,8 @@ impl Catalog for SessionCatalog {
                 .unwrap()
                 .get_stream_table_source(stream_desc)
                 .map(|table_info| self.get_table_by_info(&table_info));
-            if maybe_table.is_some() {
-                return maybe_table.unwrap();
+            if let Some(t) = maybe_table {
+                return t;
             }
             self.get_table(tenant, db_name, source_table_name).await
         } else {
