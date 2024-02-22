@@ -67,6 +67,8 @@ use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::sessions::QueryContext;
 
+use super::SerializePayload;
+
 pub struct TransformExchangeGroupBySerializer<Method: HashMethodBounds> {
     ctx: Arc<QueryContext>,
     method: Method,
@@ -207,7 +209,22 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         },
                     ));
                 }
-                Some(AggregateMeta::AggregateHashTable(_)) => todo!("AGG_HASHTABLE"),
+                Some(AggregateMeta::AggregateHashTable(payload)) => {
+                    if index == self.local_pos {
+                        serialized_blocks.push(FlightSerialized::DataBlock(block.add_meta(
+                            Some(Box::new(AggregateMeta::<Method, ()>::AggregateHashTable(payload))),
+                        )?));
+                        continue;
+                    }
+                    let bucket = -1;
+                    let mut stream = SerializeGroupByStream::create(&self.method, SerializePayload::PartitionedPayload(payload));
+                    serialized_blocks.push(FlightSerialized::DataBlock(match stream.next() {
+                        None => DataBlock::empty(),
+                        Some(data_block) => {
+                            serialize_block(bucket, data_block?, &self.ipc_fields, &self.options)?
+                        }
+                    }));
+                }
                 Some(AggregateMeta::HashTable(payload)) => {
                     if index == self.local_pos {
                         serialized_blocks.push(FlightSerialized::DataBlock(block.add_meta(
@@ -216,8 +233,8 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         continue;
                     }
 
-                    let mut stream = SerializeGroupByStream::create(&self.method, payload);
-                    let bucket = stream.payload.bucket;
+                    let bucket = payload.bucket.clone();
+                    let mut stream = SerializeGroupByStream::create(&self.method, SerializePayload::HashTablePayload(payload));
                     serialized_blocks.push(FlightSerialized::DataBlock(match stream.next() {
                         None => DataBlock::empty(),
                         Some(data_block) => {

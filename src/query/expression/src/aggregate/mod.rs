@@ -91,6 +91,10 @@ impl HashTableConfig {
     pub fn with_partial(mut self, partial_agg: bool, active_threads: usize) -> Self {
         self.partial_agg = partial_agg;
 
+        if active_threads <= 0 {
+            return self;
+        }
+
         // init max_partial_capacity
         let total_shared_cache_size = active_threads * L3_CACHE_SIZE;
         let cache_per_active_thread =
