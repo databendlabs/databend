@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::ops::DerefMut;
+use std::ops::Sub;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -200,27 +201,35 @@ impl SessionManager {
     pub fn graceful_shutdown(
         &self,
         mut signal: SignalStream,
-        timeout_secs: i32,
+        timeout: Option<Duration>,
     ) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
-            info!(
-                "Waiting {} secs for connections to close. You can press Ctrl + C again to force shutdown.",
-                timeout_secs
-            );
-            let mut signal = Box::pin(signal.next());
+            if let Some(mut timeout) = timeout {
+                info!(
+                    "Waiting {:?} for connections to close. You can press Ctrl + C again to force shutdown.",
+                    timeout
+                );
 
-            for _index in 0..timeout_secs {
-                if SessionManager::destroy_idle_sessions(&active_sessions) {
-                    return;
+                let mut signal = Box::pin(signal.next());
+
+                while !timeout.is_zero() {
+                    if SessionManager::destroy_idle_sessions(&active_sessions) {
+                        return;
+                    }
+
+                    let interval = Duration::from_secs(1);
+                    let sleep = Box::pin(tokio::time::sleep(interval));
+                    match futures::future::select(sleep, signal).await {
+                        Either::Right((_, _)) => break,
+                        Either::Left((_, reserve_signal)) => signal = reserve_signal,
+                    };
+
+                    timeout = match timeout > Duration::from_secs(1) {
+                        true => timeout - Duration::from_secs(1),
+                        false => Duration::from_secs(0),
+                    };
                 }
-
-                let interval = Duration::from_secs(1);
-                let sleep = Box::pin(tokio::time::sleep(interval));
-                match futures::future::select(sleep, signal).await {
-                    Either::Right((_, _)) => break,
-                    Either::Left((_, reserve_signal)) => signal = reserve_signal,
-                };
             }
 
             info!("Will shutdown forcefully.");

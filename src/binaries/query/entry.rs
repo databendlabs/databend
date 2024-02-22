@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::env;
+use std::time::Duration;
 
 use databend_common_base::mem_allocator::GlobalAllocator;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
@@ -348,7 +349,10 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         // for one shot background service, we need to drop it manually.
         drop(shutdown_handle);
     } else {
-        shutdown_handle.wait_for_termination_request().await;
+        let graceful_shutdown_timeout = Some(Duration::from_millis(conf.query.wait_timeout_mills));
+        shutdown_handle
+            .wait_for_termination_request(graceful_shutdown_timeout)
+            .await;
     }
     info!("Shutdown server.");
     Ok(())

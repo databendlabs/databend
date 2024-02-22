@@ -190,6 +190,7 @@ pub struct QueryConfig {
     pub rpc_client_timeout_secs: u64,
     /// Table engine memory enabled
     pub table_engine_memory_enabled: bool,
+    /// Graceful shutdown timeout
     pub wait_timeout_mills: u64,
     pub max_query_log_size: usize,
     pub databend_enterprise_license: Option<String>,
