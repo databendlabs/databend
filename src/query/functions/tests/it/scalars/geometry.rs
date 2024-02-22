@@ -30,7 +30,7 @@ fn test_geometry() {
     test_st_makepoint(file);
     test_to_string(file);
     test_st_geometryfromwkt(file);
-    test_st_transform(file);
+    // test_st_transform(file);
 }
 
 fn test_st_makepoint(file: &mut impl Write) {
@@ -87,36 +87,36 @@ fn test_st_geometryfromwkt(file: &mut impl Write) {
     ]);
 }
 
-fn test_st_transform(file: &mut impl Write) {
-    // just to_srid
-    run_ast(
-        file,
-        "st_transform(st_geomfromwkt('POINT(389866.35 5819003.03)', 32633), 3857)",
-        &[],
-    );
-
-    run_ast(file, "st_transform(st_geomfromwkt(a, b), c)", &[
-        (
-            "a",
-            StringType::from_data(vec!["POINT(389866.35 5819003.03)"]),
-        ),
-        ("b", Int32Type::from_data(vec![32633])),
-        ("c", Int32Type::from_data(vec![3857])),
-    ]);
-
-    // from_srid and to_srid
-    run_ast(
-        file,
-        "st_transform(st_geomfromwkt('POINT(4.500212 52.161170)'), 4326, 28992)",
-        &[],
-    );
-
-    run_ast(file, "st_transform(st_geomfromwkt(a), b, c)", &[
-        (
-            "a",
-            StringType::from_data(vec!["POINT(4.500212 52.161170)"]),
-        ),
-        ("b", Int32Type::from_data(vec![4326])),
-        ("c", Int32Type::from_data(vec![28992])),
-    ]);
-}
+// fn test_st_transform(file: &mut impl Write) {
+//     // just to_srid
+//     run_ast(
+//         file,
+//         "st_transform(st_geomfromwkt('POINT(389866.35 5819003.03)', 32633), 3857)",
+//         &[],
+//     );
+//
+//     run_ast(file, "st_transform(st_geomfromwkt(a, b), c)", &[
+//         (
+//             "a",
+//             StringType::from_data(vec!["POINT(389866.35 5819003.03)"]),
+//         ),
+//         ("b", Int32Type::from_data(vec![32633])),
+//         ("c", Int32Type::from_data(vec![3857])),
+//     ]);
+//
+//     // from_srid and to_srid
+//     run_ast(
+//         file,
+//         "st_transform(st_geomfromwkt('POINT(4.500212 52.161170)'), 4326, 28992)",
+//         &[],
+//     );
+//
+//     run_ast(file, "st_transform(st_geomfromwkt(a), b, c)", &[
+//         (
+//             "a",
+//             StringType::from_data(vec!["POINT(4.500212 52.161170)"]),
+//         ),
+//         ("b", Int32Type::from_data(vec![4326])),
+//         ("c", Int32Type::from_data(vec![28992])),
+//     ]);
+// }

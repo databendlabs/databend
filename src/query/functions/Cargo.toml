@@ -51,11 +51,11 @@ ordered-float = { workspace = true, features = [
     "serde",
     "rand",
 ] }
-proj = { version = "0.27.2", features = ["geo-types", "bundled_proj"] }
+#proj = { version = "0.27.2", features = ["geo-types", "bundled_proj"] }
 rand = { workspace = true }
 regex = { workspace = true }
 roaring = "0.10.1"
-scroll = "0.12.0"
+#scroll = "0.12.0"
 sha1 = "0.10.5"
 sha2 = "0.10.6"
 simdutf8 = "0.1.4"
