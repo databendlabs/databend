@@ -36,8 +36,7 @@ impl GlobalSledDb {
         GlobalSledDb {
             temp_dir: Some(temp_dir),
             path: temp_path.clone(),
-            db: sled::open(temp_path.clone())
-                .unwrap_or_else(|e| panic!("open global sled::Db(path: {}): {}", temp_path, e)),
+            db: Self::open(&temp_path),
         }
     }
 
@@ -45,9 +44,20 @@ impl GlobalSledDb {
         GlobalSledDb {
             temp_dir: None,
             path: path.clone(),
-            db: sled::open(path.clone())
-                .unwrap_or_else(|e| panic!("open global sled::Db(path: {}): {}", path, e)),
+            db: Self::open(&path),
         }
+    }
+
+    /// Open a sled db at the specified path, with default predefined config for databend-meta.
+    fn open(path: &str) -> sled::Db {
+        let config = sled::Config::default()
+            .path(path)
+            .cache_capacity(10_000_000_000)
+            .mode(sled::Mode::LowSpace);
+
+        config
+            .open()
+            .unwrap_or_else(|e| panic!("open global sled::Db(path: {}): {}", path, e))
     }
 }
 
