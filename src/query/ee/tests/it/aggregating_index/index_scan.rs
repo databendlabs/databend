@@ -590,10 +590,7 @@ fn is_index_scan_sexpr(s_expr: &SExpr) -> bool {
     if let RelOperator::Scan(scan) = s_expr.plan() {
         scan.agg_index.is_some()
     } else {
-        s_expr
-            .children()
-            .iter()
-            .any(|child| is_index_scan_sexpr(child.as_ref()))
+        s_expr.children().any(|child| is_index_scan_sexpr(child))
     }
 }
 
