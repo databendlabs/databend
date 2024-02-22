@@ -597,6 +597,8 @@ pub enum TokenKind {
     FUSE,
     #[token("GENERATED", ignore(ascii_case))]
     GENERATED,
+    #[token("GEOMETRY", ignore(ascii_case))]
+    GEOMETRY,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
