@@ -277,10 +277,15 @@ impl Catalog for SessionCatalog {
                 } else {
                     let table = self.inner.get_table(tenant, db_name, table_name).await?;
                     if table.engine() == "STREAM" {
+                        let source_table = table
+                            .stream_source_table(Arc::new(self.clone()))
+                            .await?
+                            .get_table_info()
+                            .clone();
                         self.txn_mgr
                             .lock()
                             .unwrap()
-                            .add_stream_table(table.get_table_info().clone());
+                            .add_stream_table(table.get_table_info().clone(), source_table);
                     }
                     Ok(table)
                 }
@@ -438,5 +443,28 @@ impl Catalog for SessionCatalog {
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         self.inner.get_table_engines()
+    }
+
+    async fn stream_source_table(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        let is_active = self.txn_mgr.lock().unwrap().is_active();
+        if is_active {
+            let maybe_table = self
+                .txn_mgr
+                .lock()
+                .unwrap()
+                .get_stream_table_source(tenant, db_name, table_name)
+                .map(|table_info| self.get_table_by_info(&table_info));
+            if maybe_table.is_some() {
+                return maybe_table.unwrap();
+            }
+            self.get_table(tenant, db_name, table_name).await
+        } else {
+            self.get_table(tenant, db_name, table_name).await
+        }
     }
 }

@@ -316,4 +316,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         unimplemented!()
     }
+
+    async fn stream_source_table(
+        &self,
+        _tenant: &str,
+        _db_name: &str,
+        _table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        unimplemented!()
+    }
 }

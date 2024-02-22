@@ -38,7 +38,13 @@ pub enum TxnState {
 #[derive(Debug, Clone)]
 struct TxnBuffer {
     mutated_tables: HashMap<String, (UpdateTableMetaReq, TableInfo)>,
-    stream_tables: HashMap<String, TableInfo>,
+    stream_tables: HashMap<String, StreamSnapshot>,
+}
+
+#[derive(Debug, Clone)]
+struct StreamSnapshot {
+    pub stream: TableInfo,
+    pub source: TableInfo,
 }
 
 impl TxnBuffer {
@@ -97,10 +103,23 @@ impl TxnManager {
             .insert(table_info.desc.clone(), (req, table_info.clone()));
     }
 
-    pub fn add_stream_table(&mut self, table_info: TableInfo) {
+    pub fn add_stream_table(&mut self, stream: TableInfo, source: TableInfo) {
         self.txn_buffer
             .stream_tables
-            .insert(table_info.desc.clone(), table_info);
+            .insert(stream.desc.clone(), StreamSnapshot { stream, source });
+    }
+
+    pub fn get_stream_table_source(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Option<TableInfo> {
+        let tenant_dbname_tbname = TableNameIdent::new(tenant, db_name, table_name).to_string();
+        self.txn_buffer
+            .stream_tables
+            .get(&tenant_dbname_tbname)
+            .map(|snapshot| snapshot.source.clone())
     }
 
     pub fn get_table_from_buffer(
@@ -122,6 +141,7 @@ impl TxnManager {
                     .stream_tables
                     .get(&tenant_dbname_tbname)
                     .cloned()
+                    .map(|snapshot| snapshot.stream)
             })
     }
 
@@ -138,8 +158,9 @@ impl TxnManager {
                 self.txn_buffer
                     .stream_tables
                     .values()
-                    .find(|table_info| table_info.ident.table_id == table_id)
+                    .find(|ss| ss.stream.ident.table_id == table_id)
                     .cloned()
+                    .map(|snapshot| snapshot.stream)
             })
     }
 
