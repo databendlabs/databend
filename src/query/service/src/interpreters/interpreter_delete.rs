@@ -260,6 +260,7 @@ impl DeleteInterpreter {
             col_indices,
             query_row_id_col,
             snapshot: snapshot.clone(),
+            plan_id: u32::MAX,
         }));
 
         if is_distributed {
@@ -272,8 +273,7 @@ impl DeleteInterpreter {
                 ignore_exchange: false,
             });
         }
-
-        Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
+        let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             snapshot,
             table_info,
@@ -283,7 +283,10 @@ impl DeleteInterpreter {
             merge_meta,
             need_lock: false,
             deduplicated_label: None,
-        })))
+            plan_id: u32::MAX,
+        }));
+        plan.adjust_plan_id(&mut 0);
+        Ok(plan)
     }
 }
 

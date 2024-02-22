@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
+use databend_common_ast::ast::contain_agg_func;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::Expr;
@@ -26,6 +27,8 @@ use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::Query;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SubqueryModifier;
 use databend_common_ast::ast::TrimWhere;
 use databend_common_ast::ast::TypeName;
@@ -2337,6 +2340,17 @@ impl<'a> TypeChecker<'a> {
             )));
         }
 
+        let mut contain_agg = None;
+        if let SetExpr::Select(select_stmt) = &subquery.body {
+            if typ == SubqueryType::Scalar {
+                let select = &select_stmt.select_list[0];
+                if let SelectTarget::AliasedExpr { expr, .. } = select {
+                    // Check if contain aggregation function
+                    contain_agg = Some(contain_agg_func(expr));
+                }
+            }
+        }
+
         let mut data_type = output_context.columns[0].data_type.clone();
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
@@ -2362,6 +2376,7 @@ impl<'a> TypeChecker<'a> {
             data_type: data_type.clone(),
             typ,
             outer_columns: rel_prop.outer_columns.clone(),
+            contain_agg,
         };
 
         let data_type = subquery_expr.data_type();
@@ -2922,11 +2937,9 @@ impl<'a> TypeChecker<'a> {
 
         let udf = UserApiProvider::instance()
             .get_udf(self.ctx.get_tenant().as_str(), udf_name)
-            .await;
+            .await?;
 
-        let udf = if let Ok(udf) = udf {
-            udf
-        } else {
+        let Some(udf) = udf else {
             return Ok(None);
         };
 
@@ -3429,6 +3442,7 @@ impl<'a> TypeChecker<'a> {
             data_type: data_type.clone(),
             typ: SubqueryType::Any,
             outer_columns: rel_prop.outer_columns.clone(),
+            contain_agg: None,
         };
         let data_type = subquery_expr.data_type();
         Ok(Box::new((subquery_expr.into(), data_type)))

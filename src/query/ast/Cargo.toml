@@ -13,6 +13,7 @@ doctest = false
 # Workspace dependencies
 databend-common-base = { path = "../../common/base" }
 databend-common-exception = { path = "../../common/exception" }
+databend-common-functions = { path = "../functions" }
 databend-common-io = { path = "../../common/io" }
 databend-common-meta-app = { path = "../../meta/app" }
 

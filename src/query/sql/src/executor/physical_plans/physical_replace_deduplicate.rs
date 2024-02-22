@@ -29,6 +29,7 @@ use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceDeduplicate {
+    pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub on_conflicts: Vec<OnConflictField>,
     pub bloom_filter_column_indexes: Vec<FieldIndex>,

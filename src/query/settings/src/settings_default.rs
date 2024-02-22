@@ -131,13 +131,13 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the maximum byte size of a single data block that can be read.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("parquet_max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8192),
                     desc: "Max block size for parquet reader",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("max_threads", DefaultSettingValue {
                     value: UserSettingValue::UInt64(num_cpus),
@@ -205,6 +205,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
+                ("enable_new_copy_for_text_formats", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Use new implementation for loading CSV files.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
                 ("timezone", DefaultSettingValue {
                     value: UserSettingValue::String("UTC".to_owned()),
                     desc: "Sets the timezone.",
@@ -265,8 +271,8 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("enable_runtime_filter", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                ("enable_bloom_runtime_filter", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables runtime filter optimization for JOIN.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -606,13 +612,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                 ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
+                ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
                         value: UserSettingValue::UInt64(0),
                         desc: "Enables experimental aggregate hashtable",
                         mode: SettingMode::Both,
-                        range: None,
+                        range: Some(SettingRange::Numeric(0..=1)),
                 }),
-
                 ("numeric_cast_option", DefaultSettingValue {
                     value: UserSettingValue::String("rounding".to_string()),
                     desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",

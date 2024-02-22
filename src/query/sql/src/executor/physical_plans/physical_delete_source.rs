@@ -22,6 +22,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DeleteSource {
+    pub plan_id: u32,
     pub parts: Partitions,
     pub filters: Filters,
     pub table_info: TableInfo,

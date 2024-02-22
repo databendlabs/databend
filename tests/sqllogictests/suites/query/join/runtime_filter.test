@@ -1,7 +1,4 @@
 statement ok
-set enable_runtime_filter = 1;
-
-statement ok
 CREATE TABLE table1 (
     key1 String,
     key2 String,
@@ -88,9 +85,6 @@ NULL NULL
 NULL NULL
 NULL NULL
 NULL NULL
-
-statement ok
-set enable_runtime_filter = 0;
 
 statement ok
 drop table table1;

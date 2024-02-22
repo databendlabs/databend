@@ -480,7 +480,14 @@ impl DataOperator {
         // IO hang on reuse connection.
         let op = operator.clone();
         if let Err(cause) = GlobalIORuntime::instance()
-            .spawn(GLOBAL_TASK, async move { op.check().await })
+            .spawn(GLOBAL_TASK, async move {
+                let res = op.stat("/").await;
+                match res {
+                    Ok(_) => Ok(()),
+                    Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(()),
+                    Err(e) => Err(e),
+                }
+            })
             .await
             .expect("join must succeed")
         {

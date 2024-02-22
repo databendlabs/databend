@@ -100,6 +100,7 @@ impl PipelineBuilder {
             segments,
             block_slots,
             need_insert,
+            ..
         } = replace;
         let max_threads = self.settings.get_max_threads()?;
         let segment_partition_num = std::cmp::min(segments.len(), max_threads as usize);
@@ -262,6 +263,7 @@ impl PipelineBuilder {
             target_schema,
             need_insert,
             delete_when,
+            ..
         } = deduplicate;
 
         let tbl = self
