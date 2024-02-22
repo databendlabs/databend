@@ -248,4 +248,6 @@ mod kvapi_key_impl {
             })
         }
     }
+
+    impl kvapi::Value for BackgroundTaskInfo {}
 }

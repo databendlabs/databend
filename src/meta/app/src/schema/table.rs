@@ -1056,6 +1056,18 @@ mod kvapi_key_impl {
             Ok(LeastVisibleTimeKey { table_id })
         }
     }
+
+    impl kvapi::Value for TableId {}
+
+    impl kvapi::Value for DBIdTableName {}
+
+    impl kvapi::Value for TableMeta {}
+
+    impl kvapi::Value for TableIdList {}
+
+    impl kvapi::Value for TableCopiedFileInfo {}
+
+    impl kvapi::Value for LeastVisibleTime {}
 }
 
 #[cfg(test)]

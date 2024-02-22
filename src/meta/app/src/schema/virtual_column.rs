@@ -155,4 +155,6 @@ mod kvapi_key_impl {
             Ok(VirtualColumnNameIdent { tenant, table_id })
         }
     }
+
+    impl kvapi::Value for VirtualColumnMeta {}
 }

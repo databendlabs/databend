@@ -967,4 +967,20 @@ mod kvapi_key_impl {
             Ok(ShareEndpointIdToName { share_endpoint_id })
         }
     }
+
+    impl kvapi::Value for ObjectSharedByShareIds {}
+
+    impl kvapi::Value for ShareId {}
+
+    impl kvapi::Value for ShareMeta {}
+
+    impl kvapi::Value for ShareAccountMeta {}
+
+    impl kvapi::Value for ShareNameIdent {}
+
+    impl kvapi::Value for ShareEndpointId {}
+
+    impl kvapi::Value for ShareEndpointMeta {}
+
+    impl kvapi::Value for ShareEndpointIdent {}
 }
