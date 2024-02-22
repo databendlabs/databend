@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2024 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_writer;
-mod inverted_index_writer;
-mod meta_writer;
-mod segment_writer;
-mod write_settings;
+pub mod inverted_index_handler;
 
-pub use block_writer::serialize_block;
-pub use block_writer::write_data;
-pub use block_writer::BlockBuilder;
-pub use block_writer::BlockSerialization;
-pub use inverted_index_writer::InvertedIndexWriter;
-pub use meta_writer::CachedMetaWriter;
-pub use meta_writer::MetaWriter;
-pub use segment_writer::SegmentWriter;
-pub use write_settings::WriteSettings;
+pub use inverted_index_handler::get_inverted_index_handler;
+pub use inverted_index_handler::InvertedIndexHandler;
+pub use inverted_index_handler::InvertedIndexHandlerWrapper;

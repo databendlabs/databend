@@ -15,6 +15,7 @@
 mod agg_index;
 mod block;
 pub mod bloom;
+mod inverted_index;
 pub mod meta;
 mod read_settings;
 mod snapshot_history_reader;
@@ -28,6 +29,7 @@ pub use block::NativeReaderExt;
 pub use block::NativeSourceData;
 pub use block::UncompressedBuffer;
 pub use bloom::BloomBlockFilterReader;
+pub use inverted_index::InvertedIndexReader;
 pub use meta::CompactSegmentInfoReader;
 pub use meta::MetaReaders;
 pub use meta::TableSnapshotReader;

@@ -1,4 +1,4 @@
-// Copyright 2023 Databend Cloud
+// Copyright 2024 Databend Cloud
 //
 // Licensed under the Elastic License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod aggregating_index;
-pub mod background_service;
-pub mod data_mask;
-pub mod enterprise_services;
-pub mod inverted_index;
-pub mod license;
-pub mod storage_encryption;
-pub mod storages;
-pub mod stream;
-pub mod test_kits;
-pub mod virtual_column;
+mod indexer;
+mod inverted_index_handler;
+pub use inverted_index_handler::RealInvertedIndexHandler;
