@@ -171,22 +171,23 @@ impl FuseTable {
                 let mut selected_segs = vec![];
                 let mut block_count = 0;
                 for compact_segment in compact_segments.into_iter() {
-                    if ReclusterMutator::segment_can_recluster(
+                    if !ReclusterMutator::segment_can_recluster(
                         &compact_segment.1.summary,
                         block_per_seg,
                         default_cluster_key_id,
                     ) {
-                        block_count += compact_segment.1.summary.block_count as usize;
-                        selected_segs.push(compact_segment);
+                        continue;
                     }
 
+                    block_count += compact_segment.1.summary.block_count as usize;
+                    selected_segs.push(compact_segment);
                     if block_count >= block_per_seg {
                         let seg_num = selected_segs.len();
                         if mutator
                             .target_select(std::mem::take(&mut selected_segs))
                             .await?
                         {
-                            recluster_seg_num = seg_num as u64;
+                            recluster_seg_num = seg_num;
                             break 'F;
                         }
                         block_count = 0;
@@ -199,7 +200,7 @@ impl FuseTable {
                     selected_segments.push(compact_segments[i].clone());
                 });
                 if mutator.target_select(selected_segments).await? {
-                    recluster_seg_num = seg_num as u64;
+                    recluster_seg_num = seg_num;
                     break;
                 }
             }
@@ -214,7 +215,7 @@ impl FuseTable {
                 elapsed_time,
             ));
             metrics_inc_recluster_build_task_milliseconds(elapsed_time);
-            metrics_inc_recluster_segment_nums_scheduled(recluster_seg_num);
+            metrics_inc_recluster_segment_nums_scheduled(recluster_seg_num as u64);
         }
         Ok(Some(mutator))
     }
