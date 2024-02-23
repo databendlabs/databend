@@ -8,7 +8,7 @@ edition = { workspace = true }
 
 [dependencies]
 # Temp workaround, should come back to tagged version after https://github.com/Nemo157/async-compression/issues/150 resolved.
-async-compression = { git = "https://github.com/youngsofun/async-compression", rev = "1568ceafd", features = [
+async-compression = { git = "https://github.com/everpcpc/async-compression", rev = "dc81082", features = [
     "futures-io",
     "all-algorithms",
 ] }

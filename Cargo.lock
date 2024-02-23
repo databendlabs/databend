@@ -601,7 +601,7 @@ dependencies = [
 [[package]]
 name = "async-compression"
 version = "0.4.3"
-source = "git+https://github.com/youngsofun/async-compression?rev=1568ceafd#1568ceafdcb590a0c28226ee9e4cebf39e26e46c"
+source = "git+https://github.com/everpcpc/async-compression?rev=dc81082#dc8108229e3a0288ee9097c986b89a90788fe9f6"
 dependencies = [
  "brotli",
  "bzip2",
