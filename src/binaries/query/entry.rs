@@ -349,7 +349,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         // for one shot background service, we need to drop it manually.
         drop(shutdown_handle);
     } else {
-        let graceful_shutdown_timeout = Some(Duration::from_millis(conf.query.shutdown_wait_timeout_ms));
+        let graceful_shutdown_timeout =
+            Some(Duration::from_millis(conf.query.shutdown_wait_timeout_ms));
         shutdown_handle
             .wait_for_termination_request(graceful_shutdown_timeout)
             .await;
