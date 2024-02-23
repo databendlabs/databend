@@ -153,6 +153,13 @@ static COMPACT_BLOCK_READ_MILLISECONDS: LazyLock<Histogram> =
 static COMPACT_BLOCK_BUILD_TASK_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_in_milliseconds("fuse_compact_block_build_task_milliseconds")
 });
+static COMPACT_BLOCK_BUILD_LAZY_PART_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_compact_block_build_lazy_part_milliseconds")
+});
+static RECLUSTER_BUILD_TASK_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("fuse_recluster_build_task_milliseconds"));
+static RECLUSTER_SEGMENT_NUMS_SCHEDULED: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_recluster_segment_nums_scheduled"));
 static RECLUSTER_BLOCK_NUMS_TO_READ: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_recluster_block_nums_to_read"));
 static RECLUSTER_BLOCK_BYTES_TO_READ: LazyLock<Counter> =
@@ -502,6 +509,10 @@ pub fn metrics_inc_compact_block_build_task_milliseconds(c: u64) {
     COMPACT_BLOCK_BUILD_TASK_MILLISECONDS.observe(c as f64);
 }
 
+pub fn metrics_inc_compact_block_build_lazy_part_milliseconds(c: u64) {
+    COMPACT_BLOCK_BUILD_LAZY_PART_MILLISECONDS.observe(c as f64);
+}
+
 /// Pruning metrics.
 pub fn metrics_inc_segments_range_pruning_before(c: u64) {
     SEGMENTS_RANGE_PRUNING_BEFORE.inc_by(c);
@@ -666,6 +677,15 @@ pub fn metrics_inc_replace_deleted_blocks_rows(c: u64) {
 // rows of blocks that are appended
 pub fn metrics_inc_replace_append_blocks_rows(c: u64) {
     REPLACE_INTO_APPEND_BLOCKS_ROWS.inc_by(c);
+}
+
+/// Recluster metrics.
+pub fn metrics_inc_recluster_build_task_milliseconds(c: u64) {
+    RECLUSTER_BUILD_TASK_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_recluster_segment_nums_scheduled(c: u64) {
+    RECLUSTER_SEGMENT_NUMS_SCHEDULED.inc_by(c);
 }
 
 pub fn metrics_inc_recluster_block_nums_to_read(c: u64) {
