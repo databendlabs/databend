@@ -384,9 +384,18 @@ impl Catalog for SessionCatalog {
         db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
-        self.inner
+        let table_id = req.table_id;
+        let mut reply = self
+            .inner
             .get_table_copied_file_info(tenant, db_name, req)
-            .await
+            .await?;
+        reply.file_info.extend(
+            self.txn_mgr
+                .lock()
+                .unwrap()
+                .get_table_copied_file_info(table_id),
+        );
+        Ok(reply)
     }
 
     async fn truncate_table(

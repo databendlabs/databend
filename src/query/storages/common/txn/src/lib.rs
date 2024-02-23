@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -215,5 +217,22 @@ impl TxnManager {
 
     pub fn contains_deduplicated_label(&self, label: &str) -> bool {
         self.txn_buffer.deduplicated_labels.contains(label)
+    }
+
+    pub fn get_table_copied_file_info(
+        &self,
+        table_id: u64,
+    ) -> BTreeMap<String, TableCopiedFileInfo> {
+        let mut ret = BTreeMap::new();
+        if !self.is_active() {
+            return ret;
+        }
+        let reqs = self.txn_buffer.copied_files.get(&table_id);
+        if let Some(reqs) = reqs {
+            for req in reqs {
+                ret.extend(req.file_info.clone().into_iter());
+            }
+        }
+        ret
     }
 }
