@@ -22,9 +22,12 @@ use crate::Scalar;
 impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
     // Select indices by comparing two scalars.
-    pub(crate) fn select_scalars<T: ValueType>(
+    pub(crate) fn select_scalars<
+        T: ValueType,
+        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
+    >(
         &self,
-        cmp: impl Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
+        cmp: C,
         left: Scalar,
         right: Scalar,
         true_selection: &mut [u32],

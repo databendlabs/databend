@@ -22,9 +22,13 @@ use crate::types::ValueType;
 impl<'a> Selector<'a> {
     // Select indices by comparing scalar and column.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_column_scalar<T: ValueType, const FALSE: bool>(
+    pub(crate) fn select_column_scalar<
+        T: ValueType,
+        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
+        const FALSE: bool,
+    >(
         &self,
-        cmp: impl Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
+        cmp: C,
         column: T::Column,
         scalar: T::ScalarRef<'a>,
         validity: Option<Bitmap>,

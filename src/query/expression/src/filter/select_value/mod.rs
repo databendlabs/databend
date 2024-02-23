@@ -17,6 +17,7 @@ use databend_common_exception::Result;
 
 use crate::types::AnyType;
 use crate::types::ValueType;
+use crate::with_mapped_cmp_method;
 use crate::SelectOp;
 use crate::SelectStrategy;
 use crate::Selector;
@@ -41,9 +42,9 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        match op {
-            SelectOp::Equal => self.select_type_values::<T>(
-                T::equal,
+        with_mapped_cmp_method!(|OP| match op {
+            SelectOp::OP => self.select_type_values::<T, _>(
+                T::OP,
                 left,
                 right,
                 validity,
@@ -54,73 +55,16 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             ),
-            SelectOp::NotEqual => self.select_type_values::<T>(
-                T::not_equal,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            SelectOp::Gt => self.select_type_values::<T>(
-                T::greater_than,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            SelectOp::Lt => self.select_type_values::<T>(
-                T::less_than,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            SelectOp::Gte => self.select_type_values::<T>(
-                T::greater_than_equal,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-            SelectOp::Lte => self.select_type_values::<T>(
-                T::less_than_equal,
-                left,
-                right,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
-        }
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_type_values<T: ValueType>(
+    pub(crate) fn select_type_values<
+        T: ValueType,
+        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
+    >(
         &self,
-        cmp: impl Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
+        cmp: C,
         left: Value<AnyType>,
         right: Value<AnyType>,
         validity: Option<Bitmap>,
@@ -133,7 +77,7 @@ impl<'a> Selector<'a> {
     ) -> Result<usize> {
         let has_false = false_selection.1;
         match (left, right) {
-            (Value::Scalar(left), Value::Scalar(right)) => self.select_scalars::<T>(
+            (Value::Scalar(left), Value::Scalar(right)) => self.select_scalars::<T, C>(
                 cmp,
                 left,
                 right,
@@ -149,7 +93,7 @@ impl<'a> Selector<'a> {
                 let right = T::try_downcast_column(&right).unwrap();
 
                 if has_false {
-                    self.select_columns::<T, true>(
+                    self.select_columns::<T, C, true>(
                         cmp,
                         left,
                         right,
@@ -162,7 +106,7 @@ impl<'a> Selector<'a> {
                         count,
                     )
                 } else {
-                    self.select_columns::<T, false>(
+                    self.select_columns::<T, C, false>(
                         cmp,
                         left,
                         right,
@@ -183,7 +127,7 @@ impl<'a> Selector<'a> {
                 let scalar = T::try_downcast_scalar(&scalar).unwrap();
 
                 if has_false {
-                    self.select_column_scalar::<T, true>(
+                    self.select_column_scalar::<T, C, true>(
                         cmp,
                         column,
                         scalar,
@@ -196,7 +140,7 @@ impl<'a> Selector<'a> {
                         count,
                     )
                 } else {
-                    self.select_column_scalar::<T, false>(
+                    self.select_column_scalar::<T, C, false>(
                         cmp,
                         column,
                         scalar,
