@@ -190,7 +190,8 @@ pub struct QueryConfig {
     pub rpc_client_timeout_secs: u64,
     /// Table engine memory enabled
     pub table_engine_memory_enabled: bool,
-    pub wait_timeout_mills: u64,
+    /// Graceful shutdown timeout
+    pub shutdown_wait_timeout_ms: u64,
     pub max_query_log_size: usize,
     pub databend_enterprise_license: Option<String>,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
@@ -269,7 +270,7 @@ impl Default for QueryConfig {
             rpc_tls_query_service_domain_name: "localhost".to_string(),
             rpc_client_timeout_secs: 0,
             table_engine_memory_enabled: true,
-            wait_timeout_mills: 5000,
+            shutdown_wait_timeout_ms: 5000,
             max_query_log_size: 10_000,
             databend_enterprise_license: None,
             management_mode: false,
