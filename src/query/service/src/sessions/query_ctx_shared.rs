@@ -348,6 +348,11 @@ impl QueryContextShared {
         Ok(())
     }
 
+    pub fn clear_tables_cache(&self) {
+        let mut tables_refs = self.tables_refs.lock();
+        tables_refs.clear();
+    }
+
     /// Init runtime when first get
     pub fn try_get_runtime(&self) -> Result<Arc<Runtime>> {
         let mut query_runtime = self.runtime.write();

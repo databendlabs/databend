@@ -69,6 +69,7 @@ pub trait Interpreter: Sync + Send {
             CommitInterpreter::try_create(ctx.clone())?
                 .execute2()
                 .await?;
+            ctx.clear_tables_cache();
         }
         if !self.is_txn_command() && ctx.txn_mgr().lock().unwrap().is_fail() {
             let error = ErrorCode::CurrentTransactionIsAborted(
