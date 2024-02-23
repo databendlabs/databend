@@ -32,6 +32,7 @@ impl VisitorMut for ViewRewriter {
                 table,
                 alias,
                 travel_point,
+                since_point,
                 pivot,
                 unpivot,
             } => {
@@ -49,6 +50,7 @@ impl VisitorMut for ViewRewriter {
                         table: table.clone(),
                         alias: alias.clone(),
                         travel_point: travel_point.clone(),
+                        since_point: since_point.clone(),
                         pivot: pivot.clone(),
                         unpivot: unpivot.clone(),
                     }

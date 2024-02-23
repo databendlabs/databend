@@ -292,8 +292,13 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn navigate_to(&self, instant: &NavigationPoint) -> Result<Arc<dyn Table>> {
-        let _ = instant;
+    async fn navigate_since_to(
+        &self,
+        since_point: &Option<NavigationPoint>,
+        to_point: &Option<NavigationPoint>,
+    ) -> Result<Arc<dyn Table>> {
+        let _ = since_point;
+        let _ = to_point;
 
         Err(ErrorCode::Unimplemented(format!(
             "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",

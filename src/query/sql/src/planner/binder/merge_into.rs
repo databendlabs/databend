@@ -211,6 +211,7 @@ impl Binder {
             table: table_ident.clone(),
             alias: target_alias.clone(),
             travel_point: None,
+            since_point: None,
             pivot: None,
             unpivot: None,
         };

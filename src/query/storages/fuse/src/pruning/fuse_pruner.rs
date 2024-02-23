@@ -404,6 +404,65 @@ impl FusePruner {
         Ok(metas)
     }
 
+    // Used to prune Vec<Arc<BlockMeta>>
+    #[async_backtrace::framed]
+    pub async fn blocks_pruning(
+        self: &Arc<Self>,
+        block_metas: Vec<Arc<BlockMeta>>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let mut remain = block_metas.len() % self.max_concurrency;
+        let batch_size = block_metas.len() / self.max_concurrency;
+        let mut works = Vec::with_capacity(self.max_concurrency);
+        let mut block_metas = block_metas.into_iter().enumerate().collect::<Vec<_>>();
+
+        while !block_metas.is_empty() {
+            let gap_size = std::cmp::min(1, remain);
+            let batch_size = batch_size + gap_size;
+            remain -= gap_size;
+
+            let batch = block_metas.drain(0..batch_size).collect::<Vec<_>>();
+            works.push(
+                self.pruning_ctx
+                    .pruning_runtime
+                    .spawn(self.pruning_ctx.ctx.get_id(), {
+                        let self_clone = self.clone();
+
+                        async move {
+                            // Build pruning tasks.
+                            let res =
+                                if let Some(bloom_pruner) = &self_clone.pruning_ctx.bloom_pruner {
+                                    self_clone.block_pruning(bloom_pruner, batch).await?
+                                } else {
+                                    // if no available filter pruners, just prune the blocks by
+                                    // using zone map index, and do not spawn async tasks
+                                    self_clone.block_pruning_sync(batch)?
+                                };
+
+                            Result::<_, ErrorCode>::Ok(res)
+                        }
+                    }),
+            );
+        }
+
+        match futures::future::try_join_all(works).await {
+            Err(e) => Err(ErrorCode::StorageOther(format!(
+                "segment pruning failure, {}",
+                e
+            ))),
+            Ok(workers) => {
+                let mut metas = vec![];
+                for worker in workers {
+                    let res = worker?;
+                    metas.extend(res);
+                }
+                // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
+                // will get here, we can prevent other mutations like update and so on.
+                // TopN pruner.
+                self.topn_pruning(metas)
+            }
+        }
+    }
+
     // Pruning stats.
     pub fn pruning_stats(&self) -> databend_common_catalog::plan::PruningStatistics {
         let stats = self.pruning_ctx.pruning_stats.clone();

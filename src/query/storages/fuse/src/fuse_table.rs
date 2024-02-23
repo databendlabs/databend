@@ -112,6 +112,9 @@ pub struct FuseTable {
     pub(crate) data_metrics: Arc<StorageMetrics>,
 
     table_type: FuseTableType,
+
+    // If this is set, reading from fuse_table should only returns the increment blocks
+    pub(crate) since_table: Option<Arc<FuseTable>>,
 }
 
 impl FuseTable {
@@ -226,6 +229,7 @@ impl FuseTable {
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
+            since_table: None,
         }))
     }
 
@@ -719,12 +723,6 @@ impl Table for FuseTable {
         }
     }
 
-    #[minitrace::trace]
-    #[async_backtrace::framed]
-    async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        self.do_analyze(&ctx).await
-    }
-
     async fn table_statistics(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -791,24 +789,21 @@ impl Table for FuseTable {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<dyn Table>> {
-        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
-            loc
+    async fn navigate_since_to(
+        &self,
+        since_point: &Option<NavigationPoint>,
+        to_point: &Option<NavigationPoint>,
+    ) -> Result<Arc<dyn Table>> {
+        let mut to_point = if let Some(to_point) = to_point {
+            self.navigate_to(to_point).await?.as_ref().clone()
         } else {
-            // not an error?
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "Empty Table has no historical data",
-            ));
+            self.clone()
         };
 
-        match point {
-            NavigationPoint::SnapshotID(snapshot_id) => Ok(self
-                .navigate_to_snapshot(snapshot_location, snapshot_id.as_str())
-                .await?),
-            NavigationPoint::TimePoint(time_point) => Ok(self
-                .navigate_to_time_point(snapshot_location, *time_point)
-                .await?),
+        if let Some(since_point) = since_point {
+            to_point.since_table = Some(self.navigate_to(since_point).await?);
         }
+        Ok(Arc::new(to_point))
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {

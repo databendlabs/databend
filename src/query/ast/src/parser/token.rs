@@ -920,6 +920,8 @@ pub enum TokenKind {
     SHA256_PASSWORD,
     #[token("SHOW", ignore(ascii_case))]
     SHOW,
+    #[token("SINCE", ignore(ascii_case))]
+    SINCE,
     #[token("SIGNED", ignore(ascii_case))]
     SIGNED,
     #[token("SINGLE", ignore(ascii_case))]

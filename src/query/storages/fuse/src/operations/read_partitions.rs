@@ -42,7 +42,9 @@ use opendal::Operator;
 use sha2::Digest;
 use sha2::Sha256;
 
+use super::collect_incremental_blocks;
 use crate::fuse_part::FusePartInfo;
+use crate::io::SegmentsIO;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::FuseLazyPartInfo;
@@ -74,6 +76,12 @@ impl FuseTable {
 
                 if !cluster.is_empty() {
                     nodes_num = cluster.nodes.len();
+                }
+
+                if let Some(c) = &self.since_table {
+                    return self
+                        .do_read_increment_partitions(ctx, &c.snapshot_loc().await?)
+                        .await;
                 }
 
                 if (!dry_run && snapshot.segments.len() > nodes_num) || is_lazy {
@@ -118,6 +126,55 @@ impl FuseTable {
             }
             None => Ok((PartStatistics::default(), Partitions::default())),
         }
+    }
+
+    async fn do_read_increment_partitions(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        base_snapshot: &Option<String>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        let fuse_segment_io = SegmentsIO::create(ctx.clone(), self.get_operator(), self.schema());
+        let lastest_snapshot = self.snapshot_loc().await?;
+
+        let (_, add_blocks) = collect_incremental_blocks(
+            ctx.clone(),
+            fuse_segment_io,
+            self.get_operator(),
+            &lastest_snapshot,
+            base_snapshot,
+        )
+        .await?;
+
+        let block_metas: Vec<_> = add_blocks
+            .into_iter()
+            .enumerate()
+            .map(|(block_idx, block_meta)| {
+                (
+                    Some(BlockMetaIndex {
+                        segment_idx: 0,
+                        block_idx,
+                        range: None,
+                        page_size: block_meta.page_size() as usize,
+                        block_id: 0,
+                        block_location: block_meta.as_ref().location.0.clone(),
+                        segment_location: "".to_string(),
+                        snapshot_location: None,
+                    }),
+                    block_meta.clone(),
+                )
+            })
+            .collect();
+        let pruning_stats = PruningStatistics::default();
+        let (stats, parts) = self.read_partitions_with_metas(
+            ctx.clone(),
+            self.schema(),
+            None,
+            &block_metas,
+            block_metas.len(),
+            pruning_stats,
+        )?;
+
+        Ok((stats, parts))
     }
 
     #[minitrace::trace]
