@@ -104,7 +104,7 @@ impl ProbeState {
         } else {
             None
         };
-        let filter_executor = if matches!(
+        let filter_executor = if !matches!(
             &join_type,
             JoinType::LeftMark | JoinType::RightMark | JoinType::Cross
         ) && let Some(predicate) = other_predicate
