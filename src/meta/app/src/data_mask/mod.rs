@@ -109,6 +109,15 @@ pub struct MaskpolicyTableIdListKey {
     pub name: String,
 }
 
+impl MaskpolicyTableIdListKey {
+    pub fn new(tenant: impl ToString, name: impl ToString) -> Self {
+        MaskpolicyTableIdListKey {
+            tenant: tenant.to_string(),
+            name: name.to_string(),
+        }
+    }
+}
+
 impl Display for MaskpolicyTableIdListKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}'/'{}'", self.tenant, self.name)
