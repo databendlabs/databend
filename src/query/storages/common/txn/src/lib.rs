@@ -13,12 +13,16 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
-
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_types::MatchSeq;
 #[derive(Debug, Clone)]
 pub struct TxnManager {
     state: TxnState,
@@ -34,10 +38,16 @@ pub enum TxnState {
     Fail,
 }
 
-#[derive(Debug, Clone)]
-struct TxnBuffer {
-    mutated_tables: HashMap<String, (UpdateTableMetaReq, TableInfo)>,
-    stream_tables: HashMap<String, StreamSnapshot>,
+#[derive(Debug, Clone, Default)]
+pub struct TxnBuffer {
+    table_desc_to_id: HashMap<String, u64>,
+
+    mutated_tables: HashMap<u64, TableInfo>,
+    copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
+    update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
+    deduplicated_labels: HashSet<String>,
+
+    stream_tables: HashMap<u64, StreamSnapshot>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,15 +57,37 @@ struct StreamSnapshot {
 }
 
 impl TxnBuffer {
-    fn new() -> Self {
-        Self {
-            mutated_tables: HashMap::new(),
-            stream_tables: HashMap::new(),
-        }
-    }
     fn clear(&mut self) {
+        self.table_desc_to_id.clear();
         self.mutated_tables.clear();
+        self.copied_files.clear();
+        self.update_stream_meta.clear();
+        self.deduplicated_labels.clear();
         self.stream_tables.clear();
+    }
+
+    fn update_table_meta(&mut self, req: UpdateTableMetaReq, table_info: &TableInfo) {
+        let table_id = req.table_id;
+        self.table_desc_to_id
+            .insert(table_info.desc.clone(), table_id);
+
+        self.mutated_tables.insert(table_id, TableInfo {
+            meta: req.new_table_meta.clone(),
+            ..table_info.clone()
+        });
+
+        self.copied_files
+            .entry(table_id)
+            .or_default()
+            .extend(req.copied_files);
+
+        for stream_meta in req.update_stream_meta.iter() {
+            self.update_stream_meta
+                .entry(stream_meta.stream_id)
+                .or_insert(stream_meta.clone());
+        }
+
+        self.deduplicated_labels.extend(req.deduplicated_label);
     }
 }
 
@@ -63,7 +95,7 @@ impl TxnManager {
     pub fn init() -> Self {
         TxnManager {
             state: TxnState::AutoCommit,
-            txn_buffer: TxnBuffer::new(),
+            txn_buffer: TxnBuffer::default(),
         }
     }
 
@@ -96,22 +128,24 @@ impl TxnManager {
         self.state.clone()
     }
 
-    pub fn add_mutated_table(&mut self, req: UpdateTableMetaReq, table_info: &TableInfo) {
-        self.txn_buffer
-            .mutated_tables
-            .insert(table_info.desc.clone(), (req, table_info.clone()));
+    pub fn update_table_meta(&mut self, req: UpdateTableMetaReq, table_info: &TableInfo) {
+        self.txn_buffer.update_table_meta(req, table_info);
     }
 
     pub fn add_stream_table(&mut self, stream: TableInfo, source: TableInfo) {
         self.txn_buffer
+            .table_desc_to_id
+            .insert(stream.desc.clone(), stream.ident.table_id);
+        self.txn_buffer
             .stream_tables
-            .insert(stream.desc.clone(), StreamSnapshot { stream, source });
+            .insert(stream.ident.table_id, StreamSnapshot { stream, source });
     }
 
     pub fn get_stream_table_source(&self, stream_desc: &str) -> Option<TableInfo> {
         self.txn_buffer
-            .stream_tables
+            .table_desc_to_id
             .get(stream_desc)
+            .and_then(|id| self.txn_buffer.stream_tables.get(id))
             .map(|snapshot| snapshot.source.clone())
     }
 
@@ -123,52 +157,63 @@ impl TxnManager {
     ) -> Option<TableInfo> {
         let desc = format!("'{}'.'{}'", db_name, table_name);
         self.txn_buffer
-            .mutated_tables
+            .table_desc_to_id
             .get(&desc)
-            .map(|(req, table_info)| TableInfo {
-                meta: req.new_table_meta.clone(),
-                ..table_info.clone()
-            })
-            .or_else(|| {
-                self.txn_buffer
-                    .stream_tables
-                    .get(&desc)
-                    .cloned()
-                    .map(|snapshot| snapshot.stream)
-            })
+            .and_then(|id| self.txn_buffer.mutated_tables.get(id))
+            .cloned()
     }
 
     pub fn get_table_from_buffer_by_id(&self, table_id: u64) -> Option<TableInfo> {
         self.txn_buffer
             .mutated_tables
-            .values()
-            .find(|(req, _)| req.table_id == table_id)
-            .map(|(req, table_info)| TableInfo {
-                meta: req.new_table_meta.clone(),
-                ..table_info.clone()
-            })
+            .get(&table_id)
+            .cloned()
             .or_else(|| {
                 self.txn_buffer
                     .stream_tables
-                    .values()
-                    .find(|ss| ss.stream.ident.table_id == table_id)
-                    .cloned()
-                    .map(|snapshot| snapshot.stream)
+                    .get(&table_id)
+                    .map(|snapshot| snapshot.stream.clone())
             })
     }
 
-    pub fn reqs(&self) -> Vec<UpdateTableMetaReq> {
-        self.txn_buffer
-            .mutated_tables
-            .values()
-            .map(|(req, _)| req.clone())
-            .collect()
+    pub fn req(&self) -> UpdateMultiTableMetaReq {
+        let mut copied_files = Vec::new();
+        for (tbl_id, v) in &self.txn_buffer.copied_files {
+            for file in v {
+                copied_files.push((*tbl_id, file.clone()));
+            }
+        }
+        UpdateMultiTableMetaReq {
+            update_table_metas: self
+                .txn_buffer
+                .mutated_tables
+                .iter()
+                .map(|(id, info)| UpdateTableMetaReq {
+                    table_id: *id,
+                    seq: MatchSeq::Exact(info.ident.seq),
+                    new_table_meta: info.meta.clone(),
+                    copied_files: None,
+                    update_stream_meta: vec![],
+                    deduplicated_label: None,
+                })
+                .collect(),
+            copied_files,
+            update_stream_metas: self
+                .txn_buffer
+                .update_stream_meta
+                .values()
+                .cloned()
+                .collect(),
+            deduplicated_labels: self
+                .txn_buffer
+                .deduplicated_labels
+                .iter()
+                .cloned()
+                .collect(),
+        }
     }
 
     pub fn contains_deduplicated_label(&self, label: &str) -> bool {
-        self.txn_buffer
-            .mutated_tables
-            .values()
-            .any(|(req, _)| req.deduplicated_label.as_ref().is_some_and(|l| l == label))
+        self.txn_buffer.deduplicated_labels.contains(label)
     }
 }

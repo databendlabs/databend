@@ -103,6 +103,7 @@ pub use table::TruncateTableReply;
 pub use table::TruncateTableReq;
 pub use table::UndropTableReply;
 pub use table::UndropTableReq;
+pub use table::UpdateMultiTableMetaReq;
 pub use table::UpdateStreamMetaReq;
 pub use table::UpdateTableMetaReply;
 pub use table::UpdateTableMetaReq;

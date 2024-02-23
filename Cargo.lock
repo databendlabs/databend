@@ -4548,6 +4548,7 @@ name = "databend-storages-common-txn"
 version = "0.1.0"
 dependencies = [
  "databend-common-meta-app",
+ "databend-common-meta-types",
 ]
 
 [[package]]

@@ -159,6 +159,7 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -2921,14 +2922,21 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     async fn update_multi_table_meta(
         &self,
-        reqs: Vec<UpdateTableMetaReq>,
+        req: UpdateMultiTableMetaReq,
     ) -> Result<(), KVAppError> {
+        let UpdateMultiTableMetaReq {
+            update_table_metas,
+            copied_files,
+            update_stream_metas,
+            deduplicated_labels,
+        } = req;
+        let mut tbl_seqs = HashMap::new();
         let mut txn_req = TxnRequest {
             condition: vec![],
             if_then: vec![],
             else_then: vec![],
         };
-        for req in reqs {
+        for req in update_table_metas {
             let tbid = TableId {
                 table_id: req.table_id,
             };
@@ -2952,65 +2960,64 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     ),
                 )));
             }
-
+            tbl_seqs.insert(req.table_id, tb_meta_seq);
             txn_req.condition.push(txn_cond_seq(&tbid, Eq, tb_meta_seq));
             txn_req
                 .if_then
                 .push(txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?));
+        }
+        for (tbid, req) in copied_files {
+            let tbid = TableId { table_id: tbid };
+            let (conditions, match_operations) = build_upsert_table_copied_file_info_conditions(
+                &tbid,
+                &req,
+                tbl_seqs[&tbid.table_id],
+                req.fail_if_duplicated,
+            )?;
+            txn_req.condition.extend(conditions);
+            txn_req.if_then.extend(match_operations)
+        }
 
-            if let Some(req) = &req.copied_files {
-                let (conditions, match_operations) =
-                    build_upsert_table_copied_file_info_conditions(
-                        &tbid,
-                        req,
-                        tb_meta_seq,
-                        req.fail_if_duplicated,
-                    )?;
-                txn_req.condition.extend(conditions);
-                txn_req.if_then.extend(match_operations)
+        for req in &update_stream_metas {
+            let stream_id = TableId {
+                table_id: req.stream_id,
+            };
+            let (stream_meta_seq, stream_meta): (_, Option<TableMeta>) =
+                get_pb_value(self, &stream_id).await?;
+
+            if stream_meta_seq == 0 || stream_meta.is_none() {
+                return Err(KVAppError::AppError(AppError::UnknownStreamId(
+                    UnknownStreamId::new(req.stream_id, "update_table_meta"),
+                )));
             }
 
-            for req in &req.update_stream_meta {
-                let stream_id = TableId {
-                    table_id: req.stream_id,
-                };
-                let (stream_meta_seq, stream_meta): (_, Option<TableMeta>) =
-                    get_pb_value(self, &stream_id).await?;
-
-                if stream_meta_seq == 0 || stream_meta.is_none() {
-                    return Err(KVAppError::AppError(AppError::UnknownStreamId(
-                        UnknownStreamId::new(req.stream_id, "update_table_meta"),
-                    )));
-                }
-
-                if req.seq.match_seq(stream_meta_seq).is_err() {
-                    return Err(KVAppError::AppError(AppError::from(
-                        StreamVersionMismatched::new(
-                            req.stream_id,
-                            req.seq,
-                            stream_meta_seq,
-                            "update_table_meta",
-                        ),
-                    )));
-                }
-
-                let mut new_stream_meta = stream_meta.unwrap();
-                new_stream_meta.options = req.options.clone();
-                new_stream_meta.updated_on = Utc::now();
-
-                txn_req
-                    .condition
-                    .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
-                txn_req
-                    .if_then
-                    .push(txn_op_put(&stream_id, serialize_struct(&new_stream_meta)?));
+            if req.seq.match_seq(stream_meta_seq).is_err() {
+                return Err(KVAppError::AppError(AppError::from(
+                    StreamVersionMismatched::new(
+                        req.stream_id,
+                        req.seq,
+                        stream_meta_seq,
+                        "update_table_meta",
+                    ),
+                )));
             }
 
-            if let Some(deduplicated_label) = req.deduplicated_label.clone() {
-                txn_req
-                    .if_then
-                    .push(build_upsert_table_deduplicated_label(deduplicated_label))
-            }
+            let mut new_stream_meta = stream_meta.unwrap();
+            new_stream_meta.options = req.options.clone();
+            new_stream_meta.updated_on = Utc::now();
+
+            txn_req
+                .condition
+                .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
+            txn_req
+                .if_then
+                .push(txn_op_put(&stream_id, serialize_struct(&new_stream_meta)?));
+        }
+
+        for deduplicated_label in deduplicated_labels {
+            txn_req
+                .if_then
+                .push(build_upsert_table_deduplicated_label(deduplicated_label));
         }
         let (succ, _) = send_txn(self, txn_req).await?;
 

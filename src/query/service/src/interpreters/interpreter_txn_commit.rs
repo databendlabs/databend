@@ -49,8 +49,8 @@ impl Interpreter for CommitInterpreter {
         let is_active = self.ctx.txn_mgr().lock().unwrap().is_active();
         if is_active {
             let catalog = self.ctx.get_default_catalog()?;
-            let reqs = self.ctx.txn_mgr().lock().unwrap().reqs();
-            catalog.update_multi_table_meta(reqs).await?;
+            let req = self.ctx.txn_mgr().lock().unwrap().req();
+            catalog.update_multi_table_meta(req).await?;
         }
         self.ctx.txn_mgr().lock().unwrap().clear();
         Ok(PipelineBuildResult::create())

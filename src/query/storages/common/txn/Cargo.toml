@@ -8,3 +8,4 @@ edition = { workspace = true }
 
 [dependencies]
 databend-common-meta-app = { path = "../../../../meta/app" }
+databend-common-meta-types = { path = "../../../../meta/types" }
