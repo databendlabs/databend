@@ -14,6 +14,7 @@
 
 use std::cmp::min;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -2995,8 +2996,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let _ = update_mask_policy(
                 self,
                 &req.action,
-                &mut txn_req.condition,
-                &mut txn_req.if_then,
+                &mut txn_req,
                 req.tenant.clone(),
                 req.table_id,
             )
@@ -5150,75 +5150,68 @@ pub fn catalog_has_to_exist(
     }
 }
 
-async fn update_mask_policy_table_id_list(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    condition: &mut Vec<TxnCondition>,
-    if_then: &mut Vec<TxnOp>,
-    tenant: String,
-    name: String,
-    table_id: u64,
-    add: bool,
-) -> Result<(), KVAppError> {
-    let id_list_key = MaskpolicyTableIdListKey { tenant, name };
-
-    let (id_list_seq, id_list_opt): (_, Option<MaskpolicyTableIdList>) =
-        get_pb_value(kv_api, &id_list_key).await?;
-    if let Some(mut id_list) = id_list_opt {
-        if add {
-            id_list.id_list.insert(table_id);
-        } else {
-            id_list.id_list.remove(&table_id);
-        }
-
-        condition.push(txn_cond_seq(&id_list_key, Eq, id_list_seq));
-        if_then.push(txn_op_put(&id_list_key, serialize_struct(&id_list)?));
-    }
-
-    Ok(())
-}
-
 async fn update_mask_policy(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     action: &SetTableColumnMaskPolicyAction,
-    condition: &mut Vec<TxnCondition>,
-    if_then: &mut Vec<TxnOp>,
+    txn_req: &mut TxnRequest,
     tenant: String,
     table_id: u64,
 ) -> Result<(), KVAppError> {
+    /// Fetch and update the table id list with `f`, and fill in the txn preconditions and operations.
+    async fn update_table_ids(
+        kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+        txn_req: &mut TxnRequest,
+        key: MaskpolicyTableIdListKey,
+        f: impl FnOnce(&mut BTreeSet<u64>),
+    ) -> Result<(), KVAppError> {
+        let (id_list_seq, id_list_opt): (_, Option<MaskpolicyTableIdList>) =
+            get_pb_value(kv_api, &key).await?;
+
+        if let Some(mut id_list) = id_list_opt {
+            f(&mut id_list.id_list);
+
+            txn_req.condition.push(txn_cond_seq(&key, Eq, id_list_seq));
+
+            txn_req
+                .if_then
+                .push(txn_op_put(&key, serialize_struct(&id_list)?));
+        }
+
+        Ok(())
+    }
+
     match action {
         SetTableColumnMaskPolicyAction::Set(new_mask_name, old_mask_name_opt) => {
-            update_mask_policy_table_id_list(
+            update_table_ids(
                 kv_api,
-                condition,
-                if_then,
-                tenant.clone(),
-                new_mask_name.clone(),
-                table_id,
-                true,
+                txn_req,
+                MaskpolicyTableIdListKey::new(&tenant, new_mask_name),
+                |list: &mut BTreeSet<u64>| {
+                    list.insert(table_id);
+                },
             )
             .await?;
-            if let Some(old_mask_name) = old_mask_name_opt {
-                update_mask_policy_table_id_list(
+
+            if let Some(old) = old_mask_name_opt {
+                update_table_ids(
                     kv_api,
-                    condition,
-                    if_then,
-                    tenant.clone(),
-                    old_mask_name.clone(),
-                    table_id,
-                    false,
+                    txn_req,
+                    MaskpolicyTableIdListKey::new(&tenant, old),
+                    |list: &mut BTreeSet<u64>| {
+                        list.remove(&table_id);
+                    },
                 )
                 .await?;
             }
         }
         SetTableColumnMaskPolicyAction::Unset(mask_name) => {
-            update_mask_policy_table_id_list(
+            update_table_ids(
                 kv_api,
-                condition,
-                if_then,
-                tenant.clone(),
-                mask_name.clone(),
-                table_id,
-                false,
+                txn_req,
+                MaskpolicyTableIdListKey::new(&tenant, mask_name),
+                |list: &mut BTreeSet<u64>| {
+                    list.remove(&table_id);
+                },
             )
             .await?;
         }
