@@ -164,4 +164,11 @@ impl TxnManager {
             .map(|(req, _)| req.clone())
             .collect()
     }
+
+    pub fn contains_deduplicated_label(&self, label: &str) -> bool {
+        self.txn_buffer
+            .mutated_tables
+            .values()
+            .any(|(req, _)| req.deduplicated_label.as_ref().is_some_and(|l| l == label))
+    }
 }
