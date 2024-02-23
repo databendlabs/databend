@@ -135,6 +135,7 @@ use crate::plans::UpdatePlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
+use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
 use crate::MetadataRef;
 
@@ -203,6 +204,7 @@ pub enum Plan {
     OptimizeTable(Box<OptimizeTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),
     VacuumDropTable(Box<VacuumDropTablePlan>),
+    VacuumTemporaryFiles(Box<VacuumTemporaryFilesPlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
     SetOptions(Box<SetOptionsPlan>),
@@ -408,6 +410,7 @@ impl Plan {
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
             Plan::VacuumDropTable(plan) => plan.schema(),
+            Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),

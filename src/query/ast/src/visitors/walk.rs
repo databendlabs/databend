@@ -423,6 +423,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::OptimizeTable(stmt) => visitor.visit_optimize_table(stmt),
         Statement::VacuumTable(stmt) => visitor.visit_vacuum_table(stmt),
         Statement::VacuumDropTable(stmt) => visitor.visit_vacuum_drop_table(stmt),
+        Statement::VacuumTemporaryFiles(stmt) => visitor.visit_vacuum_temporary_files(stmt),
         Statement::AnalyzeTable(stmt) => visitor.visit_analyze_table(stmt),
         Statement::ExistsTable(stmt) => visitor.visit_exists_table(stmt),
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),

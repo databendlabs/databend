@@ -94,7 +94,7 @@ impl DeduplicateJoinConditionOptimizer {
     }
 
     pub fn deduplicate_children(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut children = Vec::with_capacity(s_expr.children().len());
+        let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
             let child = self.deduplicate(child)?;
             children.push(Arc::new(child));

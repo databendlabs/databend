@@ -835,6 +835,17 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             })
         },
     );
+    let vacuum_temp_files = map(
+        rule! {
+            VACUUM ~ TEMPORARY ~ FILES ~ (RETAIN ~ #literal_duration)? ~ (LIMIT ~ #literal_u64)?
+        },
+        |(_, _, _, retain, opt_limit)| {
+            Statement::VacuumTemporaryFiles(VacuumTemporaryFiles {
+                limit: opt_limit.map(|(_, limit)| limit),
+                retain: retain.map(|(_, reatin)| reatin),
+            })
+        },
+    );
     let vacuum_table = map(
         rule! {
             VACUUM ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #vacuum_table_option
@@ -1887,6 +1898,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_indexes : "`SHOW INDEXES`"
             | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
+            | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
         ),
         // database
         rule!(
@@ -2998,6 +3010,27 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     ))(i)
 }
 
+pub fn literal_duration(i: Input) -> IResult<Duration> {
+    let seconds = map(
+        rule! {
+            #literal_u64 ~ SECONDS
+        },
+        |(v, _)| Duration::from_secs(v),
+    );
+
+    let days = map(
+        rule! {
+            #literal_u64 ~ DAYS
+        },
+        |(v, _)| Duration::from_secs(v * 60 * 60 * 24),
+    );
+
+    rule!(
+        #days
+        | #seconds
+    )(i)
+}
+
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
@@ -3263,7 +3296,7 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
 fn option_to_string(i: Input) -> IResult<String> {
     let bool_to_string = |i| map(literal_bool, |v| v.to_string())(i);
 
-    rule! (
+    rule!(
         #bool_to_string
         | #parameter_to_string
     )(i)

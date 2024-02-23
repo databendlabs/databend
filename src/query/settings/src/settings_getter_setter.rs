@@ -602,4 +602,12 @@ impl Settings {
     pub fn get_cost_factor_network_per_row(&self) -> Result<u64> {
         self.try_get_u64("cost_factor_network_per_row")
     }
+
+    pub fn get_enable_geo_create_table(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_geo_create_table")? != 0)
+    }
+
+    pub fn set_enable_geo_create_table(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_geo_create_table", u64::from(val))
+    }
 }

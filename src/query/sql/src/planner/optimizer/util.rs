@@ -20,7 +20,6 @@ use crate::MetadataRef;
 pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool {
     s_expr
         .children()
-        .iter()
         .any(|s_expr| contains_local_table_scan(s_expr, metadata))
         || if let RelOperator::Scan(get) = s_expr.plan() {
             metadata.read().table(get.table_index).table().is_local()

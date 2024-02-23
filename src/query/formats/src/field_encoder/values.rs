@@ -32,9 +32,9 @@ use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
-use geozero::wkb::Ewkb;
-use geozero::CoordDimensions;
-use geozero::ToWkb;
+use geozero::wkb::FromWkb;
+use geozero::wkb::WkbDialect;
+use geozero::wkt::Ewkt;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
@@ -296,10 +296,9 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
-        let s = Ewkb(v.to_vec())
-            .to_ewkb(CoordDimensions::xy(), None)
-            .unwrap();
-        self.write_string_inner(&s, out_buf, in_nested);
+        let mut data_cursor = std::io::Cursor::new(v);
+        let s = Ewkt::from_wkb(&mut data_cursor, WkbDialect::Ewkb).unwrap();
+        self.write_string_inner(s.0.as_bytes(), out_buf, in_nested);
     }
 
     fn write_array<T: ValueType>(

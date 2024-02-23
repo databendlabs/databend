@@ -44,10 +44,12 @@ use databend_common_ast::ast::ShowTablesStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TruncateTableStmt;
+use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UndropTableStmt;
 use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::VacuumDropTableStmt;
 use databend_common_ast::ast::VacuumTableStmt;
+use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::walk_expr_mut;
@@ -123,6 +125,7 @@ use crate::plans::VacuumDropTableOption;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
+use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
 use crate::Planner;
 use crate::SelectBuilder;
@@ -466,6 +469,21 @@ impl Binder {
         // If table is TRANSIENT, set a flag in table option
         if *transient {
             options.insert("TRANSIENT".to_owned(), "T".to_owned());
+        }
+
+        // todo(geometry): remove this when geometry stable.
+        if let Some(CreateTableSource::Columns(cols)) = &source {
+            if cols
+                .iter()
+                .any(|col| matches!(col.data_type, TypeName::Geometry))
+                && !self.ctx.get_settings().get_enable_geo_create_table()?
+            {
+                return Err(ErrorCode::GeometryError(
+                    "Create table using the geometry type is an experimental feature. \
+                    You can `set enable_geo_create_table=1` to use this feature. \
+                    We do not guarantee its compatibility until we doc this feature.",
+                ));
+            }
         }
 
         // Build table schema
@@ -1157,6 +1175,20 @@ impl Binder {
             database,
             option,
         })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_temporary_files(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &VacuumTemporaryFiles,
+    ) -> Result<Plan> {
+        Ok(Plan::VacuumTemporaryFiles(Box::new(
+            VacuumTemporaryFilesPlan {
+                limit: stmt.limit,
+                retain: stmt.retain,
+            },
+        )))
     }
 
     #[async_backtrace::framed]

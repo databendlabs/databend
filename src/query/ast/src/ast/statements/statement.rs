@@ -135,6 +135,7 @@ pub enum Statement {
     OptimizeTable(OptimizeTableStmt),
     VacuumTable(VacuumTableStmt),
     VacuumDropTable(VacuumDropTableStmt),
+    VacuumTemporaryFiles(VacuumTemporaryFiles),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
     // Columns
@@ -478,6 +479,7 @@ impl Display for Statement {
             Statement::OptimizeTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumDropTable(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumTemporaryFiles(stmt) => write!(f, "{stmt}")?,
             Statement::AnalyzeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ExistsTable(stmt) => write!(f, "{stmt}")?,
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,

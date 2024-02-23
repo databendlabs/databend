@@ -15,5 +15,7 @@
 pub mod handler;
 pub mod vacuum_drop_tables;
 pub mod vacuum_table;
+pub mod vacuum_temporary_files;
 pub mod virtual_columns;
+
 pub use handler::RealVacuumHandler;
