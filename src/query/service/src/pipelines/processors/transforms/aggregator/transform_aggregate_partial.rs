@@ -297,11 +297,33 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     let group_columns: Vec<Column> =
                         group_columns.into_iter().map(|c| c.0).collect();
 
-                    let params_columns = Self::aggregate_arguments(&block, &self.params)?;
+                    let (params_columns, agg_states) = if is_agg_index_block {
+                        (
+                            vec![],
+                            (0..self.params.aggregate_functions.len())
+                                .map(|index| {
+                                    block
+                                        .get_by_offset(
+                                            block.num_columns()
+                                                - self.params.aggregate_functions.len()
+                                                + index,
+                                        )
+                                        .value
+                                        .as_column()
+                                        .cloned()
+                                        .unwrap()
+                                })
+                                .collect(),
+                        )
+                    } else {
+                        (Self::aggregate_arguments(&block, &self.params)?, vec![])
+                    };
+
                     let _ = hashtable.add_groups(
                         &mut self.probe_state,
                         &group_columns,
                         &params_columns,
+                        &agg_states,
                         rows_num,
                     )?;
                     Ok(())

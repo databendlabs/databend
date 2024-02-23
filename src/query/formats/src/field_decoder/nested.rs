@@ -83,6 +83,7 @@ impl NestedValues {
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
+                is_rounding_mode: options_ext.is_rounding_mode,
             },
         }
     }
@@ -327,7 +328,7 @@ impl NestedValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
-        let geom = parse_to_ewkb(&buf)?;
+        let geom = parse_to_ewkb(&buf, None)?;
         column.put_slice(geom.as_bytes());
         column.commit_row();
         Ok(())

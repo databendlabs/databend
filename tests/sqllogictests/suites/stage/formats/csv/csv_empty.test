@@ -44,7 +44,7 @@ copy into ints from @data/csv/empty/ file_format = (type = CSV) force=true on_er
 csv/empty/empty1.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 1
 csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 1
 csv/empty/empty3.csv 1 0 NULL NULL
-csv/empty/empty4.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 2
+csv/empty/empty4.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 1
 
 query 
 select * from ints order by c0,c1,c2,c3,c4;
@@ -60,7 +60,7 @@ copy into ints from @data/csv/empty/ file_format = (type = CSV empty_field_as = 
 csv/empty/empty1.csv 0 1 Empty value for column 1 (c1 Int32 NULL), when option empty_field_as = STRING 1
 csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = STRING 1
 csv/empty/empty3.csv 1 0 NULL NULL
-csv/empty/empty4.csv 0 1 Empty value for column 0 (c0 Int32 NULL), when option empty_field_as = STRING 2
+csv/empty/empty4.csv 0 1 Empty value for column 0 (c0 Int32 NULL), when option empty_field_as = STRING 1
 
 query 
 select * from ints order by c0,c1,c2,c3,c4;
@@ -99,7 +99,7 @@ copy into strings from @data/csv/empty/ file_format = (type = CSV) force=true  o
 csv/empty/empty1.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 1
 csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 1
 csv/empty/empty3.csv 1 0 NULL NULL
-csv/empty/empty4.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 2
+csv/empty/empty4.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 1
 
 query 
 select * from strings order by c0,c1,c2,c3,c4;
@@ -115,7 +115,7 @@ copy into strings from @data/csv/empty/ file_format = (type = CSV empty_field_as
 csv/empty/empty1.csv 1 0 NULL NULL
 csv/empty/empty2.csv 1 0 NULL NULL
 csv/empty/empty3.csv 1 0 NULL NULL
-csv/empty/empty4.csv 0 1 Empty value for column 0 (c0 Int32 NULL), when option empty_field_as = STRING 2
+csv/empty/empty4.csv 0 1 Empty value for column 0 (c0 Int32 NULL), when option empty_field_as = STRING 1
 
 query 
 select * from strings order by c0,c1,c2,c3,c4;

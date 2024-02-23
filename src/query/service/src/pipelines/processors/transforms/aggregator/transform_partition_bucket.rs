@@ -194,11 +194,11 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         self.max_partition_count =
                             self.max_partition_count.max(p.partition_count());
 
-                        (SINGLE_LEVEL_BUCKET_NUM, SINGLE_LEVEL_BUCKET_NUM)
+                        (0, 0)
                     }
                 };
 
-                if bucket > SINGLE_LEVEL_BUCKET_NUM {
+                if bucket > SINGLE_LEVEL_BUCKET_NUM && self.max_partition_count == 0 {
                     match self.buckets_blocks.entry(bucket) {
                         Entry::Vacant(v) => {
                             v.insert(vec![data_block]);
@@ -220,7 +220,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             {
                 self.partition_payloads.push(p);
             }
-            return SINGLE_LEVEL_BUCKET_NUM;
+            return 0;
         }
 
         self.unsplitted_blocks.push(data_block);
@@ -460,10 +460,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
 
                 partition_payload.arenas.extend_from_slice(&arenas);
 
-                self.buckets_blocks
-                    .insert(bucket as isize, vec![DataBlock::empty_with_meta(
-                        AggregateMeta::<Method, V>::create_agg_hashtable(partition_payload),
-                    )]);
+                if partition_payload.len() != 0 {
+                    self.buckets_blocks
+                        .insert(bucket as isize, vec![DataBlock::empty_with_meta(
+                            AggregateMeta::<Method, V>::create_agg_hashtable(partition_payload),
+                        )]);
+                }
             }
             return Ok(());
         }
