@@ -724,6 +724,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::VacuumDropTable(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Super], false).await?
             }
+            Plan::VacuumTemporaryFiles(_) => {
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Super]).await?
+            }
             Plan::AnalyzeTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Super], false).await?
             }

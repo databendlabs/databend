@@ -1158,6 +1158,12 @@ pub enum TokenKind {
     PREFIX,
     #[token("MODIFIED_AFTER", ignore(ascii_case))]
     MODIFIED_AFTER,
+    #[token("TEMPORARY", ignore(ascii_case))]
+    TEMPORARY,
+    #[token("SECONDS", ignore(ascii_case))]
+    SECONDS,
+    #[token("DAYS", ignore(ascii_case))]
+    DAYS,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

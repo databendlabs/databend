@@ -4063,6 +4063,7 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-sql",
+ "databend-common-storage",
  "databend-common-storages-fuse",
  "databend-common-storages-stream",
  "databend-common-tracing",

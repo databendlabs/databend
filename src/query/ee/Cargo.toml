@@ -28,6 +28,7 @@ databend-common-meta-app = { path = "../../meta/app" }
 databend-common-meta-store = { path = "../../meta/store" }
 databend-common-meta-types = { path = "../../meta/types" }
 databend-common-sql = { path = "../sql" }
+databend-common-storage = { path = "../../common/storage" }
 databend-common-storages-fuse = { path = "../storages/fuse" }
 databend-common-storages-stream = { path = "../storages/stream" }
 databend-common-tracing = { path = "../../common/tracing" }

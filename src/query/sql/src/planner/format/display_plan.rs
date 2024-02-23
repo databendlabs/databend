@@ -90,6 +90,7 @@ impl Plan {
             Plan::OptimizeTable(_) => Ok("OptimizeTable".to_string()),
             Plan::VacuumTable(_) => Ok("VacuumTable".to_string()),
             Plan::VacuumDropTable(_) => Ok("VacuumDropTable".to_string()),
+            Plan::VacuumTemporaryFiles(_) => Ok("VacuumTemporaryFiles".to_string()),
             Plan::AnalyzeTable(_) => Ok("AnalyzeTable".to_string()),
             Plan::ExistsTable(_) => Ok("ExistsTable".to_string()),
 
