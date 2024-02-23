@@ -173,12 +173,14 @@ impl BlockCompactMutator {
         );
 
         // Status.
+        let elapsed_time = start.elapsed().as_millis() as u64;
         self.ctx.set_status_info(&format!(
-            "compact: end to build lazy compact parts:{}, segments to be compacted:{}, cost:{} sec",
+            "compact: end to build lazy compact parts:{}, segments to be compacted:{}, cost:{} ms",
             parts.len(),
             checker.compacted_segment_cnt,
-            start.elapsed().as_secs()
+            elapsed_time
         ));
+        metrics_inc_compact_block_build_lazy_part_milliseconds(elapsed_time);
 
         let cluster = self.ctx.get_cluster();
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;

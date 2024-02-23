@@ -312,7 +312,7 @@ impl ReclusterMutator {
     ) -> bool {
         if let Some(stats) = &summary.cluster_stats {
             stats.cluster_key_id == cluster_key_id
-                && (stats.level >= 0 || (summary.block_count as usize) >= block_per_seg)
+                && (stats.level >= 0 || (summary.block_count as usize) < block_per_seg)
         } else {
             false
         }
