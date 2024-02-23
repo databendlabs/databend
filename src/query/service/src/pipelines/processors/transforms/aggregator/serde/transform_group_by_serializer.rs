@@ -22,6 +22,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::PayloadFlushState;
+use databend_common_expression::ColumnBuilder;
 use databend_common_hashtable::HashtableEntryRefLike;
 use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::Event;
@@ -36,6 +37,7 @@ use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::HashTablePayload;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
+use itertools::Itertools;
 
 pub struct TransformGroupBySerializer<Method: HashMethodBounds> {
     method: Method,
@@ -251,7 +253,7 @@ impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
 
                 for item in p.payloads.iter() {
                     state.clear();
-                    if item.flush(&mut state) {
+                    while item.flush(&mut state) {
                         blocks.push(DataBlock::new_from_columns(
                             state.take_group_columns(),
                         ));
@@ -260,14 +262,28 @@ impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
 
                 self.end_iter = true;
                 let data_block = if blocks.is_empty() {
-                    DataBlock::empty()
+                    empty_block(p)
                 } else {
                     DataBlock::concat(&blocks).unwrap()
                 };
-                Some(data_block.add_meta(Some(AggregateSerdeMeta::create(0))))
+                Some(data_block.add_meta(Some(AggregateSerdeMeta::create(-1))))
             }
         }
     }
+}
+
+pub fn empty_block(p: &PartitionedPayload) -> DataBlock {
+    let columns = p
+        .aggrs
+        .iter()
+        .map(|f| ColumnBuilder::with_capacity(&f.return_type().unwrap(), 0).build())
+        .chain(
+            p.group_types
+                .iter()
+                .map(|t| ColumnBuilder::with_capacity(t, 0).build()),
+        )
+        .collect_vec();
+    DataBlock::new_from_columns(columns)
 }
 
 // pub struct SerializeGroupByStream<Method: HashMethodBounds> {

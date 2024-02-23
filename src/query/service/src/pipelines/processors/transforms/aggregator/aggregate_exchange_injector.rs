@@ -143,7 +143,8 @@ fn scatter<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
     Ok(res)
 }
 
-fn scatter2(payload: PartitionedPayload, buckets: usize) -> Result<Vec<AggregateHashTable>> {
+// TODO: buckets and partitions have a relationship of integer division
+fn agg_hashtable_scatter(payload: PartitionedPayload, buckets: usize) -> Result<Vec<AggregateHashTable>> {
     let mut buckets = Vec::with_capacity(buckets);
 
     for _ in 0..buckets.capacity() {
@@ -200,13 +201,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                         }
                     }
                     AggregateMeta::AggregateHashTable(payload) => {
-                        for agg_hashtable in scatter2(payload, self.buckets)? {
-                            // blocks.push(match agg_hashtable.len() == 0 {
-                            //     true => DataBlock::empty(),
-                            //     false => DataBlock::empty_with_meta(
-                            //         AggregateMeta::<Method, V>::create_agg_hashtable(agg_hashtable.payload)
-                            //     ),
-                            // });
+                        for agg_hashtable in agg_hashtable_scatter(payload, self.buckets)? {
                             blocks.push(
                             DataBlock::empty_with_meta(
                                         AggregateMeta::<Method, V>::create_agg_hashtable(agg_hashtable.payload)

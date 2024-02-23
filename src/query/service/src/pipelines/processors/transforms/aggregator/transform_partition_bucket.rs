@@ -418,6 +418,13 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             return Ok(Event::NeedConsume);
         }
 
+        if let Some(p) = self.partition_payloads.pop() {
+            let data = AggregateMeta::<Method, V>::AggregateHashTable(p);
+            let data_block = DataBlock::empty_with_meta(AggregateMeta::<Method, V>::create_partitioned(0, vec![data]));
+            self.output.push_data(Ok(data_block));
+            return Ok(Event::NeedConsume);
+        }
+
         self.output.finish();
         Ok(Event::Finished)
     }
