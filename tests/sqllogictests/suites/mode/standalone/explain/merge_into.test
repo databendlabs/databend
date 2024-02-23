@@ -29,18 +29,19 @@ target_table: default.default.salaries2
 ├── matched update: [condition: eq(employees2.department (#2), 'HR'),update set salary = plus(salaries2.salary (#4), 1000.00)]
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
 ├── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
-└── HashJoin: LEFT OUTER
-    ├── equi conditions: [eq(employees2.employee_id (#0), salaries2.employee_id (#3))]
-    ├── non-equi conditions: []
+└── Join(Left)
+    ├── build keys: [salaries2.employee_id (#3)]
+    ├── probe keys: [employees2.employee_id (#0)]
+    ├── other filters: []
     ├── EvalScalar
-    │   ├── scalars: [employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2)]
-    │   └── LogicalGet
-    │       ├── table: default.default.employees2
+    │   ├── scalars: [employees2.employee_id (#0) AS (#0), employees2.employee_name (#1) AS (#1), employees2.department (#2) AS (#2)]
+    │   └── Scan
+    │       ├── table: default.employees2
     │       ├── filters: []
     │       ├── order by: []
     │       └── limit: NONE
-    └── LogicalGet
-        ├── table: default.default.salaries2
+    └── Scan
+        ├── table: default.salaries2
         ├── filters: []
         ├── order by: []
         └── limit: NONE
@@ -59,18 +60,19 @@ target_table: default.default.salaries2
 ├── matched update: [condition: eq(employees2.department (#2), 'HR'),update set salary = plus(salaries2.salary (#4), 1000.00)]
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
 ├── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
-└── HashJoin: RIGHT OUTER
-    ├── equi conditions: [eq(salaries2.employee_id (#3), employees2.employee_id (#0))]
-    ├── non-equi conditions: []
-    ├── LogicalGet
-    │   ├── table: default.default.salaries2
+└── Join(Right)
+    ├── build keys: [employees2.employee_id (#0)]
+    ├── probe keys: [salaries2.employee_id (#3)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.salaries2
     │   ├── filters: []
     │   ├── order by: []
     │   └── limit: NONE
     └── EvalScalar
-        ├── scalars: [employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2)]
-        └── LogicalGet
-            ├── table: default.default.employees2
+        ├── scalars: [employees2.employee_id (#0) AS (#0), employees2.employee_name (#1) AS (#1), employees2.department (#2) AS (#2)]
+        └── Scan
+            ├── table: default.employees2
             ├── filters: []
             ├── order by: []
             └── limit: NONE
@@ -99,16 +101,17 @@ target_table: default.default.column_only_optimization_target
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set b = t2.b (#1)]
 ├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
-└── HashJoin: LEFT OUTER
-    ├── equi conditions: [eq(t2.a (#0), t1.a (#2))]
-    ├── non-equi conditions: []
-    ├── LogicalGet
-    │   ├── table: default.default.column_only_optimization_source
+└── Join(Left)
+    ├── build keys: [t1.a (#2)]
+    ├── probe keys: [t2.a (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.column_only_optimization_source
     │   ├── filters: []
     │   ├── order by: []
     │   └── limit: NONE
-    └── LogicalGet
-        ├── table: default.default.column_only_optimization_target
+    └── Scan
+        ├── table: default.column_only_optimization_target
         ├── filters: []
         ├── order by: []
         └── limit: NONE
@@ -124,16 +127,17 @@ target_table: default.default.column_only_optimization_target
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0),b = b (#1)]
 ├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
-└── HashJoin: LEFT OUTER
-    ├── equi conditions: [eq(t2.a (#0), t1.a (#2))]
-    ├── non-equi conditions: []
-    ├── LogicalGet
-    │   ├── table: default.default.column_only_optimization_source
+└── Join(Left)
+    ├── build keys: [t1.a (#2)]
+    ├── probe keys: [t2.a (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.column_only_optimization_source
     │   ├── filters: []
     │   ├── order by: []
     │   └── limit: NONE
-    └── LogicalGet
-        ├── table: default.default.column_only_optimization_target
+    └── Scan
+        ├── table: default.column_only_optimization_target
         ├── filters: []
         ├── order by: []
         └── limit: NONE
@@ -149,16 +153,17 @@ target_table: default.default.column_only_optimization_target
 ├── can_try_update_column_only: false
 ├── matched update: [condition: None,update set b = 'test']
 ├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
-└── HashJoin: LEFT OUTER
-    ├── equi conditions: [eq(t2.a (#0), t1.a (#2))]
-    ├── non-equi conditions: []
-    ├── LogicalGet
-    │   ├── table: default.default.column_only_optimization_source
+└── Join(Left)
+    ├── build keys: [t1.a (#2)]
+    ├── probe keys: [t2.a (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.column_only_optimization_source
     │   ├── filters: []
     │   ├── order by: []
     │   └── limit: NONE
-    └── LogicalGet
-        ├── table: default.default.column_only_optimization_target
+    └── Scan
+        ├── table: default.column_only_optimization_target
         ├── filters: []
         ├── order by: []
         └── limit: NONE
@@ -174,16 +179,17 @@ target_table: default.default.column_only_optimization_target
 ├── can_try_update_column_only: false
 ├── matched update: [condition: None,update set b = concat(t2.b (#1), 'test')]
 ├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
-└── HashJoin: LEFT OUTER
-    ├── equi conditions: [eq(t2.a (#0), t1.a (#2))]
-    ├── non-equi conditions: []
-    ├── LogicalGet
-    │   ├── table: default.default.column_only_optimization_source
+└── Join(Left)
+    ├── build keys: [t1.a (#2)]
+    ├── probe keys: [t2.a (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.column_only_optimization_source
     │   ├── filters: []
     │   ├── order by: []
     │   └── limit: NONE
-    └── LogicalGet
-        ├── table: default.default.column_only_optimization_target
+    └── Scan
+        ├── table: default.column_only_optimization_target
         ├── filters: []
         ├── order by: []
         └── limit: NONE

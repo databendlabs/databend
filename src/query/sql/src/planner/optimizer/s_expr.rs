@@ -99,8 +99,8 @@ impl SExpr {
         &self.plan
     }
 
-    pub fn children(&self) -> &[Arc<SExpr>] {
-        &self.children
+    pub fn children(&self) -> impl Iterator<Item = &SExpr> {
+        self.children.iter().map(|v| v.as_ref())
     }
 
     pub fn child(&self, n: usize) -> Result<&SExpr> {
@@ -376,9 +376,8 @@ impl SExpr {
         self.applied_rules.clear();
         let children = self
             .children()
-            .iter()
             .map(|child| {
-                let mut child = (**child).clone();
+                let mut child = child.clone();
                 child.clear_applied_rules();
                 Arc::new(child)
             })

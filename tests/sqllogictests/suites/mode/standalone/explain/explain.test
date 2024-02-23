@@ -106,19 +106,20 @@ query T
 explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)
 ----
 EvalScalar
-├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t2.a (#2) AS (#2), t2.b (#3) AS (#3)]
 └── Filter
     ├── filters: [or(and(eq(t1.a (#0), t2.a (#2)), gt(t1.a (#0), 3)), eq(t1.a (#0), t2.a (#2)))]
-    └── CrossJoin
-        ├── equi conditions: []
-        ├── non-equi conditions: []
-        ├── LogicalGet
-        │   ├── table: default.default.t1
+    └── Join(Cross)
+        ├── build keys: []
+        ├── probe keys: []
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.t1
         │   ├── filters: []
         │   ├── order by: []
         │   └── limit: NONE
-        └── LogicalGet
-            ├── table: default.default.t2
+        └── Scan
+            ├── table: default.t2
             ├── filters: []
             ├── order by: []
             └── limit: NONE
@@ -127,19 +128,20 @@ query T
 explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2
 ----
 EvalScalar
-├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-└── HashJoin: INNER
-    ├── equi conditions: [and(eq(t1.a (#0), t2.a (#2)), eq(t1.b (#1), t2.b (#3)))]
-    ├── non-equi conditions: []
+├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t2.a (#2) AS (#2), t2.b (#3) AS (#3)]
+└── Join(Inner)
+    ├── build keys: [t2.a (#2), t2.b (#3)]
+    ├── probe keys: [t1.a (#0), t1.b (#1)]
+    ├── other filters: []
     ├── Filter
     │   ├── filters: [gt(t1.a (#0), 2)]
-    │   └── LogicalGet
-    │       ├── table: default.default.t1
+    │   └── Scan
+    │       ├── table: default.t1
     │       ├── filters: []
     │       ├── order by: []
     │       └── limit: NONE
-    └── LogicalGet
-        ├── table: default.default.t2
+    └── Scan
+        ├── table: default.t2
         ├── filters: []
         ├── order by: []
         └── limit: NONE
@@ -1420,22 +1422,23 @@ query T
 EXPLAIN optimized SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
 ----
 EvalScalar
-├── scalars: [t1.i (#0), t1.j (#1), t2.k (#2), t2.l (#3)]
+├── scalars: [t1.i (#0) AS (#0), t1.j (#1) AS (#1), t2.k (#2) AS (#2), t2.l (#3) AS (#3)]
 └── Sort
-    ├── sort keys: [i (#0) ASC, j (#1) ASC]
+    ├── sort keys: [default.t1.i (#0) ASC, default.t1.j (#1) ASC]
     ├── limit: [NONE]
-    └── HashJoin: LEFT OUTER
-        ├── equi conditions: [eq(t1.i (#0), t2.k (#2))]
-        ├── non-equi conditions: []
-        ├── LogicalGet
-        │   ├── table: default.default.t1
+    └── Join(Left)
+        ├── build keys: [t2.k (#2)]
+        ├── probe keys: [t1.i (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.t1
         │   ├── filters: []
         │   ├── order by: []
         │   └── limit: NONE
         └── Filter
             ├── filters: [false]
-            └── LogicalGet
-                ├── table: default.default.t2
+            └── Scan
+                ├── table: default.t2
                 ├── filters: [false]
                 ├── order by: []
                 └── limit: NONE
