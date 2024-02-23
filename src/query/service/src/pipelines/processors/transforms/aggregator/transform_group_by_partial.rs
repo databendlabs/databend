@@ -185,6 +185,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                         &mut self.probe_state,
                         &group_columns,
                         &[vec![]],
+                        &[],
                         rows_num,
                     )?;
                 }

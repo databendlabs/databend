@@ -10,6 +10,7 @@ BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 killall databend-query || true
 killall databend-meta || true
+killall open-sharing || true
 sleep 1
 
 for bin in databend-query databend-meta; do
@@ -31,4 +32,4 @@ echo 'Start databend-query...'
 nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-hive.toml &
 
 echo "Waiting on databend-query 10 seconds..."
-python3 scripts/ci/wait_tcp.py --timeout 30 --port 3307
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 8000

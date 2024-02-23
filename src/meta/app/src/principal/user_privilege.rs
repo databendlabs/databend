@@ -73,7 +73,8 @@ pub enum UserPrivilegeType {
     Read = 1 << 18,
     // Privilege to Write stage
     Write = 1 << 19,
-
+    // Privilege to Create database
+    CreateDatabase = 1 << 20,
     // Discard Privilege Type
     Set = 1 << 4,
 }
@@ -99,6 +100,7 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | Ownership
         | Read
         | Write
+        | CreateDatabase
     }
 );
 
@@ -125,6 +127,7 @@ impl std::fmt::Display for UserPrivilegeType {
             UserPrivilegeType::Ownership => "OWNERSHIP",
             UserPrivilegeType::Read => "Read",
             UserPrivilegeType::Write => "Write",
+            UserPrivilegeType::CreateDatabase => "CREATE DATABASE",
         })
     }
 }
@@ -157,7 +160,7 @@ impl UserPrivilegeSet {
         let database_privs = Self::available_privileges_on_database(false);
         let stage_privs_without_ownership = Self::available_privileges_on_stage(false);
         let udf_privs_without_ownership = Self::available_privileges_on_udf(false);
-        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | Grant | CreateDataMask });
+        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask });
         (database_privs.privileges
             | privs
             | stage_privs_without_ownership.privileges

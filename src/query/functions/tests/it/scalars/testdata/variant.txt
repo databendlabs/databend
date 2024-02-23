@@ -3203,6 +3203,24 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : parse_json('{"k": null}') #> '{k}'
+raw expr       : get_by_keypath(parse_json('{"k": null}'), '{k}')
+checked expr   : get_by_keypath<Variant, String>(parse_json<String>("{\"k\": null}"), "{k}")
+optimized expr : 0x2000000000000000
+output type    : Variant NULL
+output domain  : Undefined
+output         : 'null'
+
+
+ast            : parse_json('[10, 20, null]') #> '{2}'
+raw expr       : get_by_keypath(parse_json('[10, 20, null]'), '{2}')
+checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, 20, null]"), "{2}")
+optimized expr : 0x2000000000000000
+output type    : Variant NULL
+output domain  : Undefined
+output         : 'null'
+
+
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #> '{1, a, k1}'
 raw expr       : get_by_keypath(parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]'), '{1, a, k1}')
 checked expr   : get_by_keypath<Variant, String>(parse_json<String>("[10, {\"a\":{\"k1\":[1,2,3], \"k2\":2}}, 30]"), "{1, a, k1}")
@@ -3329,6 +3347,24 @@ optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
 output         : NULL
+
+
+ast            : parse_json('{"k": null}') #>> '{k}'
+raw expr       : get_by_keypath_string(parse_json('{"k": null}'), '{k}')
+checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("{\"k\": null}"), "{k}")
+optimized expr : "null"
+output type    : String NULL
+output domain  : {"null"..="null"}
+output         : 'null'
+
+
+ast            : parse_json('[10, 20, null]') #>> '{2}'
+raw expr       : get_by_keypath_string(parse_json('[10, 20, null]'), '{2}')
+checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, 20, null]"), "{2}")
+optimized expr : "null"
+output type    : String NULL
+output domain  : {"null"..="null"}
+output         : 'null'
 
 
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #>> '{1, a, k1}'

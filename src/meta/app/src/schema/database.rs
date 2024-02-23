@@ -60,9 +60,17 @@ pub struct DatabaseIdent {
     pub seq: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord,
+)]
 pub struct DatabaseId {
     pub db_id: u64,
+}
+
+impl From<u64> for DatabaseId {
+    fn from(db_id: u64) -> Self {
+        DatabaseId { db_id }
+    }
 }
 
 impl Display for DatabaseId {
@@ -337,14 +345,10 @@ mod kvapi_key_impl {
     use crate::schema::DatabaseNameIdent;
     use crate::schema::DbIdList;
     use crate::schema::DbIdListKey;
-    use crate::schema::PREFIX_DATABASE;
-    use crate::schema::PREFIX_DATABASE_BY_ID;
-    use crate::schema::PREFIX_DATABASE_ID_TO_NAME;
-    use crate::schema::PREFIX_DB_ID_LIST;
 
     /// __fd_database/<tenant>/<db_name> -> <db_id>
     impl kvapi::Key for DatabaseNameIdent {
-        const PREFIX: &'static str = PREFIX_DATABASE;
+        const PREFIX: &'static str = "__fd_database";
 
         type ValueType = DatabaseId;
 
@@ -368,7 +372,7 @@ mod kvapi_key_impl {
 
     /// "__fd_database_by_id/<db_id>"
     impl kvapi::Key for DatabaseId {
-        const PREFIX: &'static str = PREFIX_DATABASE_BY_ID;
+        const PREFIX: &'static str = "__fd_database_by_id";
 
         type ValueType = DatabaseMeta;
 
@@ -390,7 +394,7 @@ mod kvapi_key_impl {
 
     /// "__fd_database_id_to_name/<db_id> -> DatabaseNameIdent"
     impl kvapi::Key for DatabaseIdToName {
-        const PREFIX: &'static str = PREFIX_DATABASE_ID_TO_NAME;
+        const PREFIX: &'static str = "__fd_database_id_to_name";
 
         type ValueType = DatabaseNameIdent;
 
@@ -412,7 +416,7 @@ mod kvapi_key_impl {
 
     /// "_fd_db_id_list/<tenant>/<db_name> -> db_id_list"
     impl kvapi::Key for DbIdListKey {
-        const PREFIX: &'static str = PREFIX_DB_ID_LIST;
+        const PREFIX: &'static str = "__fd_db_id_list";
 
         type ValueType = DbIdList;
 
@@ -433,4 +437,12 @@ mod kvapi_key_impl {
             Ok(DbIdListKey { tenant, db_name })
         }
     }
+
+    impl kvapi::Value for DatabaseId {}
+
+    impl kvapi::Value for DatabaseMeta {}
+
+    impl kvapi::Value for DatabaseNameIdent {}
+
+    impl kvapi::Value for DbIdList {}
 }

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod beyond_end_reader;
-mod error_utils;
+pub mod error_utils;
 mod impls;
 mod input_context;
 mod input_format;

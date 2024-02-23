@@ -76,7 +76,6 @@ pub fn require_property(
     // First, we will require the child SExpr with input `RequiredProperty`
     let optimized_children = s_expr
         .children()
-        .iter()
         .map(|child| Ok(Arc::new(require_property(ctx.clone(), required, child)?)))
         .collect::<Result<Vec<_>>>()?;
     let optimized_expr = SExpr::create(

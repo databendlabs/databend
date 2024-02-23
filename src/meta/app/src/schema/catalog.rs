@@ -236,13 +236,10 @@ mod kvapi_key_impl {
     use super::CatalogIdToName;
     use super::CatalogNameIdent;
     use crate::schema::CatalogMeta;
-    use crate::schema::PREFIX_CATALOG;
-    use crate::schema::PREFIX_CATALOG_BY_ID;
-    use crate::schema::PREFIX_CATALOG_ID_TO_NAME;
 
     /// __fd_catalog/<tenant>/<catalog_name> -> <catalog_id>
     impl kvapi::Key for CatalogNameIdent {
-        const PREFIX: &'static str = PREFIX_CATALOG;
+        const PREFIX: &'static str = "__fd_catalog";
 
         type ValueType = CatalogId;
 
@@ -269,7 +266,7 @@ mod kvapi_key_impl {
 
     /// "__fd_catalog_by_id/<catalog_id>"
     impl kvapi::Key for CatalogId {
-        const PREFIX: &'static str = PREFIX_CATALOG_BY_ID;
+        const PREFIX: &'static str = "__fd_catalog_by_id";
 
         type ValueType = CatalogMeta;
 
@@ -291,7 +288,7 @@ mod kvapi_key_impl {
 
     /// "__fd_catalog_id_to_name/<catalog_id> -> CatalogNameIdent"
     impl kvapi::Key for CatalogIdToName {
-        const PREFIX: &'static str = PREFIX_CATALOG_ID_TO_NAME;
+        const PREFIX: &'static str = "__fd_catalog_id_to_name";
 
         type ValueType = CatalogNameIdent;
 
@@ -310,4 +307,10 @@ mod kvapi_key_impl {
             Ok(CatalogIdToName { catalog_id })
         }
     }
+
+    impl kvapi::Value for CatalogId {}
+
+    impl kvapi::Value for CatalogMeta {}
+
+    impl kvapi::Value for CatalogNameIdent {}
 }

@@ -1,4 +1,4 @@
-query IIIF
+query IIIR
 SELECT 1 + 1 as a, 1 - 1, 1 * 1, 1 / 2
 ----
 2 0 1 0.5
@@ -8,7 +8,7 @@ SELECT -1, +1
 ----
 -1 1
 
-query F
+query R
 SELECT 8 / 2
 ----
 4.0
@@ -28,9 +28,9 @@ statement error 1006
 SELECT 20 DIV 0
 
 query I
-SELECT 20 DIV 1
+SELECT 20 DIV 8, intdiv(20, 8), div0(20, 8), div0(20, 0), divnull(20, 8), divnull(20, 0)
 ----
-20
+2 2 2.5 0.0 2.5 NULL
 
 query I
 SELECT 20 DIV 2
@@ -82,22 +82,22 @@ SELECT Null + 1, Null - 1, Null * 1, Null / 1
 ----
 NULL NULL NULL NULL
 
-query FF
+query RR
 SELECT 1 + 1.0, 1 + 2.0
 ----
 2.0 3.0
 
-query FFF
+query RRR
 SELECT 2 ^ 3, 2 ^ 0, 2 ^ -1
 ----
 8.0 1.0 0.5
 
-query FFF
+query RRR
 SELECT |/ 25.0, |/ 64.0, |/ 81.0
 ----
 5.0 8.0 9.0
 
-query FFF
+query RRR
 SELECT ||/ 8.0, ||/ 64.0, ||/ 125.0
 ----
 2.0 4.0 5.0
@@ -107,7 +107,7 @@ SELECT 3 !, 5!, 12!
 ----
 6 120 479001600
 
-query FFF
+query RRR
 SELECT @ -3.0, @ 0.0, @ -3.3
 ----
 3.0 0.0 3.3

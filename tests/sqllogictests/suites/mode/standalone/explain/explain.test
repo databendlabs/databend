@@ -106,19 +106,20 @@ query T
 explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)
 ----
 EvalScalar
-├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t2.a (#2) AS (#2), t2.b (#3) AS (#3)]
 └── Filter
     ├── filters: [or(and(eq(t1.a (#0), t2.a (#2)), gt(t1.a (#0), 3)), eq(t1.a (#0), t2.a (#2)))]
-    └── CrossJoin
-        ├── equi conditions: []
-        ├── non-equi conditions: []
-        ├── LogicalGet
-        │   ├── table: default.default.t1
+    └── Join(Cross)
+        ├── build keys: []
+        ├── probe keys: []
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.t1
         │   ├── filters: []
         │   ├── order by: []
         │   └── limit: NONE
-        └── LogicalGet
-            ├── table: default.default.t2
+        └── Scan
+            ├── table: default.t2
             ├── filters: []
             ├── order by: []
             └── limit: NONE
@@ -127,19 +128,20 @@ query T
 explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2
 ----
 EvalScalar
-├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-└── HashJoin: INNER
-    ├── equi conditions: [and(eq(t1.a (#0), t2.a (#2)), eq(t1.b (#1), t2.b (#3)))]
-    ├── non-equi conditions: []
+├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t2.a (#2) AS (#2), t2.b (#3) AS (#3)]
+└── Join(Inner)
+    ├── build keys: [t2.a (#2), t2.b (#3)]
+    ├── probe keys: [t1.a (#0), t1.b (#1)]
+    ├── other filters: []
     ├── Filter
     │   ├── filters: [gt(t1.a (#0), 2)]
-    │   └── LogicalGet
-    │       ├── table: default.default.t1
+    │   └── Scan
+    │       ├── table: default.t1
     │       ├── filters: []
     │       ├── order by: []
     │       └── limit: NONE
-    └── LogicalGet
-        ├── table: default.default.t2
+    └── Scan
+        ├── table: default.t2
         ├── filters: []
         ├── order by: []
         └── limit: NONE
@@ -1169,49 +1171,49 @@ from numbers(10) where number > 5
 ) b on  a.number=b.number order by a.number) where pt = register_at;
 ----
 Sort
-├── output columns: [register_at (#3), numbers.number (#0), pt (#1)]
+├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
 ├── sort keys: [number ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── HashJoin
-    ├── output columns: [register_at (#3), numbers.number (#0), pt (#1)]
+    ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
     ├── join type: INNER
-    ├── build keys: [a.number (#0), a.pt (#1)]
-    ├── probe keys: [b.number (#2), b.register_at (#3)]
+    ├── build keys: [b.number (#2), b.register_at (#3)]
+    ├── probe keys: [a.number (#0), a.pt (#1)]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)
-    │   ├── output columns: [numbers.number (#0), pt (#1)]
-    │   ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#0))))]
+    │   ├── output columns: [numbers.number (#2), register_at (#3)]
+    │   ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#2))))]
     │   ├── estimated rows: 0.00
     │   └── Filter
-    │       ├── output columns: [numbers.number (#0)]
-    │       ├── filters: [numbers.number (#0) > 5]
+    │       ├── output columns: [numbers.number (#2)]
+    │       ├── filters: [numbers.number (#2) > 5]
     │       ├── estimated rows: 0.00
     │       └── TableScan
     │           ├── table: default.system.numbers
-    │           ├── output columns: [number (#0)]
+    │           ├── output columns: [number (#2)]
     │           ├── read rows: 10
     │           ├── read bytes: 80
     │           ├── partitions total: 1
     │           ├── partitions scanned: 1
-    │           ├── push downs: [filters: [numbers.number (#0) > 5], limit: NONE]
+    │           ├── push downs: [filters: [numbers.number (#2) > 5], limit: NONE]
     │           └── estimated rows: 10.00
     └── EvalScalar(Probe)
-        ├── output columns: [numbers.number (#2), register_at (#3)]
-        ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#2))))]
+        ├── output columns: [numbers.number (#0), pt (#1)]
+        ├── expressions: [to_yyyymmdd(to_timestamp(to_int64(numbers.number (#0))))]
         ├── estimated rows: 0.00
         └── Filter
-            ├── output columns: [numbers.number (#2)]
-            ├── filters: [numbers.number (#2) > 5]
+            ├── output columns: [numbers.number (#0)]
+            ├── filters: [numbers.number (#0) > 5]
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.system.numbers
-                ├── output columns: [number (#2)]
+                ├── output columns: [number (#0)]
                 ├── read rows: 10
                 ├── read bytes: 80
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── push downs: [filters: [numbers.number (#2) > 5], limit: NONE]
+                ├── push downs: [filters: [numbers.number (#0) > 5], limit: NONE]
                 └── estimated rows: 10.00
 
 
@@ -1420,22 +1422,23 @@ query T
 EXPLAIN optimized SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
 ----
 EvalScalar
-├── scalars: [t1.i (#0), t1.j (#1), t2.k (#2), t2.l (#3)]
+├── scalars: [t1.i (#0) AS (#0), t1.j (#1) AS (#1), t2.k (#2) AS (#2), t2.l (#3) AS (#3)]
 └── Sort
-    ├── sort keys: [i (#0) ASC, j (#1) ASC]
+    ├── sort keys: [default.t1.i (#0) ASC, default.t1.j (#1) ASC]
     ├── limit: [NONE]
-    └── HashJoin: LEFT OUTER
-        ├── equi conditions: [eq(t1.i (#0), t2.k (#2))]
-        ├── non-equi conditions: []
-        ├── LogicalGet
-        │   ├── table: default.default.t1
+    └── Join(Left)
+        ├── build keys: [t2.k (#2)]
+        ├── probe keys: [t1.i (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.t1
         │   ├── filters: []
         │   ├── order by: []
         │   └── limit: NONE
         └── Filter
             ├── filters: [false]
-            └── LogicalGet
-                ├── table: default.default.t2
+            └── Scan
+                ├── table: default.t2
                 ├── filters: [false]
                 ├── order by: []
                 └── limit: NONE
@@ -1485,7 +1488,7 @@ FROM numbers(500);
 query T
 explain join SELECT customer_name, segment, (SELECT SUM(net_paid) FROM sales WHERE customer_id IN (SELECT customer_id FROM customers WHERE segment = c.segment AND active = true)) FROM customers c WHERE c.customer_id IN (SELECT customer_id FROM sales WHERE net_paid > 100) LIMIT 10;
 ----
-HashJoin: LEFT SINGLE
+HashJoin: LEFT OUTER
 ├── Build
 │   └── HashJoin: RIGHT SEMI
 │       ├── Build
