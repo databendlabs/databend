@@ -104,7 +104,9 @@ impl ProbeState {
         } else {
             None
         };
-        let filter_executor = if let Some(predicate) = other_predicate {
+        let filter_executor = matches!(&join_type, JoinType::LeftMark | JoinType::RightMark | JoinType::Cross)
+            && let Some(predicate) = other_predicate
+        {
             let (select_expr, has_or) = build_select_expr(&predicate).into();
             let filter_executor = FilterExecutor::new(
                 select_expr,
