@@ -154,11 +154,17 @@ mod kv_api_impl {
 
     use super::UdfName;
     use crate::principal::UserDefinedFunction;
+    use crate::tenant::Tenant;
 
     impl kvapi::Key for UdfName {
         const PREFIX: &'static str = "__fd_udfs";
 
         type ValueType = UserDefinedFunction;
+
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

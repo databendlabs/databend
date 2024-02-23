@@ -101,6 +101,10 @@ impl kvapi::Key for IdGenerator {
 
     type ValueType = Infallible;
 
+    fn parent(&self) -> Option<String> {
+        None
+    }
+
     fn to_string_key(&self) -> String {
         kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
             .push_raw(&self.resource)

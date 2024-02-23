@@ -125,6 +125,12 @@ pub struct CatalogId {
     pub catalog_id: u64,
 }
 
+impl CatalogId {
+    pub fn new(catalog_id: u64) -> CatalogId {
+        CatalogId { catalog_id }
+    }
+}
+
 impl Display for CatalogNameIdent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}'/'{}'", self.tenant, self.catalog_name)
@@ -236,12 +242,18 @@ mod kvapi_key_impl {
     use super::CatalogIdToName;
     use super::CatalogNameIdent;
     use crate::schema::CatalogMeta;
+    use crate::tenant::Tenant;
 
     /// __fd_catalog/<tenant>/<catalog_name> -> <catalog_id>
     impl kvapi::Key for CatalogNameIdent {
         const PREFIX: &'static str = "__fd_catalog";
 
         type ValueType = CatalogId;
+
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -270,6 +282,10 @@ mod kvapi_key_impl {
 
         type ValueType = CatalogMeta;
 
+        fn parent(&self) -> Option<String> {
+            None
+        }
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.catalog_id)
@@ -291,6 +307,10 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = "__fd_catalog_id_to_name";
 
         type ValueType = CatalogNameIdent;
+
+        fn parent(&self) -> Option<String> {
+            Some(CatalogId::new(self.catalog_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
