@@ -37,6 +37,16 @@ impl PipelineBuilder {
         stage_info: StageInfo,
         main_pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let files: Vec<String> = files.iter().map(|v| v.path.clone()).collect();
+        let is_active = {
+            let txn_mgr = ctx.txn_mgr();
+            let mut txn_mgr = txn_mgr.lock().unwrap();
+            let is_active = txn_mgr.is_active();
+            if is_active && copy_purge_option {
+                txn_mgr.add_need_purge_files(stage_info.clone(), files.clone());
+            }
+            is_active
+        };
         // set on_finished callback.
         main_pipeline.set_on_finished(move |may_error| {
             match may_error {
@@ -57,7 +67,7 @@ impl PipelineBuilder {
 
                         // 2. Try to purge copied files if purge option is true, if error will skip.
                         // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-                        if copy_purge_option {
+                        if !is_active && copy_purge_option {
                             let start = Instant::now();
                             Self::try_purge_files(ctx.clone(), &stage_info, &files).await;
 
@@ -83,21 +93,13 @@ impl PipelineBuilder {
     }
 
     #[async_backtrace::framed]
-    async fn try_purge_files(
-        ctx: Arc<QueryContext>,
-        stage_info: &StageInfo,
-        stage_files: &[StageFileInfo],
-    ) {
+    pub async fn try_purge_files(ctx: Arc<QueryContext>, stage_info: &StageInfo, files: &[String]) {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let op = StageTable::get_op(stage_info);
         match op {
             Ok(op) => {
                 let file_op = Files::create(table_ctx, op);
-                let files = stage_files
-                    .iter()
-                    .map(|v| v.path.clone())
-                    .collect::<Vec<_>>();
-                if let Err(e) = file_op.remove_file_in_batch(&files).await {
+                if let Err(e) = file_op.remove_file_in_batch(files).await {
                     error!("Failed to delete file: {:?}, error: {}", files, e);
                 }
             }

@@ -19,6 +19,7 @@ use databend_common_storages_fuse::TableContext;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 pub struct CommitInterpreter {
     ctx: Arc<QueryContext>,
@@ -51,6 +52,10 @@ impl Interpreter for CommitInterpreter {
             let catalog = self.ctx.get_default_catalog()?;
             let req = self.ctx.txn_mgr().lock().unwrap().req();
             catalog.update_multi_table_meta(req).await?;
+            let need_purge_files = self.ctx.txn_mgr().lock().unwrap().need_purge_files();
+            for (stage_info, files) in need_purge_files {
+                PipelineBuilder::try_purge_files(self.ctx.clone(), &stage_info, &files).await;
+            }
         }
         self.ctx.txn_mgr().lock().unwrap().clear();
         Ok(PipelineBuildResult::create())

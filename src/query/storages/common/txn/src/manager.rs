@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -50,6 +51,8 @@ pub struct TxnBuffer {
     deduplicated_labels: HashSet<String>,
 
     stream_tables: HashMap<u64, StreamSnapshot>,
+
+    need_purge_files: Vec<(StageInfo, Vec<String>)>,
 }
 
 #[derive(Debug, Clone)]
@@ -234,5 +237,13 @@ impl TxnManager {
             }
         }
         ret
+    }
+
+    pub fn add_need_purge_files(&mut self, stage_info: StageInfo, files: Vec<String>) {
+        self.txn_buffer.need_purge_files.push((stage_info, files));
+    }
+
+    pub fn need_purge_files(&mut self) -> Vec<(StageInfo, Vec<String>)> {
+        std::mem::take(&mut self.txn_buffer.need_purge_files)
     }
 }
