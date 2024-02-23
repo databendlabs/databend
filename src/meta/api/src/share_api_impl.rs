@@ -330,8 +330,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             let mut add_share_account_keys = vec![];
             for account in req.accounts.iter() {
                 if !share_meta.has_account(account) {
-                    add_share_account_keys.push(ShareAccountNameIdent {
-                        account: account.clone(),
+                    add_share_account_keys.push(ShareConsumer {
+                        tenant: account.clone(),
                         share_id,
                     });
                 }
@@ -362,7 +362,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     condition.push(txn_cond_seq(share_account_key, Eq, 0));
 
                     let share_account_meta = ShareAccountMeta::new(
-                        share_account_key.account.clone(),
+                        share_account_key.tenant.clone(),
                         share_id,
                         req.share_on,
                     );
@@ -372,7 +372,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         serialize_struct(&share_account_meta)?,
                     )); /* (account, share_id) -> share_account_meta */
 
-                    share_meta.add_account(share_account_key.account.clone());
+                    share_meta.add_account(share_account_key.tenant.clone());
                 }
                 if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
 
@@ -443,8 +443,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     continue;
                 }
                 if share_meta.has_account(account) {
-                    let share_account_key = ShareAccountNameIdent {
-                        account: account.clone(),
+                    let share_account_key = ShareConsumer {
+                        tenant: account.clone(),
                         share_id,
                     };
 
@@ -491,7 +491,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
                     if_then.push(txn_op_del(&share_account_key_and_seq.0)); // del (account, share_id)
 
-                    share_meta.del_account(&share_account_key_and_seq.0.account);
+                    share_meta.del_account(&share_account_key_and_seq.0.tenant);
                 }
                 if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
 
@@ -1367,8 +1367,8 @@ async fn get_outbound_share_tenants_by_name(
 
     let mut accounts = vec![];
     for account in share_meta.get_accounts() {
-        let share_account_key = ShareAccountNameIdent {
-            account: account.clone(),
+        let share_account_key = ShareConsumer {
+            tenant: account.clone(),
             share_id,
         };
 
@@ -1664,8 +1664,8 @@ async fn drop_accounts_granted_from_share(
 ) -> Result<(), KVAppError> {
     // get all accounts seq from share_meta
     for account in share_meta.get_accounts() {
-        let share_account_key = ShareAccountNameIdent {
-            account: account.clone(),
+        let share_account_key = ShareConsumer {
+            tenant: account.clone(),
             share_id,
         };
         let ret = get_share_account_meta_or_err(
