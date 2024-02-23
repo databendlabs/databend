@@ -15,6 +15,7 @@
 mod segment;
 mod snapshot;
 pub mod statistics;
+mod table_snapshot_statistics;
 
 pub use segment::BlockMeta;
 pub use segment::ColumnMeta;
@@ -23,3 +24,5 @@ pub use snapshot::TableSnapshot;
 pub use statistics::ClusterStatistics;
 pub use statistics::ColumnStatistics;
 pub use statistics::Statistics;
+pub use table_snapshot_statistics::MetaHLL;
+pub use table_snapshot_statistics::TableSnapshotStatistics;

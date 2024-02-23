@@ -164,14 +164,4 @@ mod tests {
         );
         snapshot.marshal().unwrap();
     }
-
-    #[test]
-    fn test_table_snapshot_statistics_format_version_validation() {
-        // since there is only one version for TableSnapshotStatistics,
-        // we omit the checking of invalid format versions, otherwise clippy will complain about empty_ranges
-
-        // current version allowed
-        let snapshot_stats = TableSnapshotStatistics::new(HashMap::new());
-        snapshot_stats.marshal().unwrap();
-    }
 }

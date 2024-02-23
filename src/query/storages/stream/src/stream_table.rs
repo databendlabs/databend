@@ -196,7 +196,7 @@ impl StreamTable {
             SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), self.schema());
 
         let lastest_snapshot = fuse_table.snapshot_loc().await?;
-        let (del_blocks, add_blocks) = collect_incremental_blocks(
+        let (_, del_blocks, add_blocks) = collect_incremental_blocks(
             ctx.clone(),
             fuse_segment_io,
             fuse_table.get_operator(),

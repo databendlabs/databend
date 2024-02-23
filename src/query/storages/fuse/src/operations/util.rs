@@ -247,7 +247,7 @@ pub async fn collect_incremental_blocks(
     op: Operator,
     latest: &Option<String>,
     base: &Option<String>,
-) -> Result<(Vec<Arc<BlockMeta>>, Vec<Arc<BlockMeta>>)> {
+) -> Result<(Vec<(String, u64)>, Vec<Arc<BlockMeta>>, Vec<Arc<BlockMeta>>)> {
     let latest_segments = if let Some(snapshot) = latest {
         let (sn, _) = SnapshotsIO::read_snapshot(snapshot.to_string(), op.clone()).await?;
         HashSet::from_iter(sn.segments.clone())
@@ -304,5 +304,5 @@ pub async fn collect_incremental_blocks(
     }
 
     let del_blocks = base_blocks.into_values().collect::<Vec<_>>();
-    Ok((del_blocks, add_blocks))
+    Ok((diff_in_latest, del_blocks, add_blocks))
 }

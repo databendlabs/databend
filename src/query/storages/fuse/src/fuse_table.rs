@@ -57,6 +57,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -297,26 +298,21 @@ impl FuseTable {
         Ok(table_storage_prefix(db_id, table_id))
     }
 
-    pub fn table_snapshot_statistics_format_version(&self, location: &String) -> u64 {
-        TableMetaLocationGenerator::snapshot_version(location)
-    }
-
     #[minitrace::trace]
     #[async_backtrace::framed]
-    pub(crate) async fn read_table_snapshot_statistics(
+    pub async fn read_table_snapshot_statistics(
         &self,
         snapshot: Option<&Arc<TableSnapshot>>,
     ) -> Result<Option<Arc<TableSnapshotStatistics>>> {
         match snapshot {
             Some(snapshot) => {
                 if let Some(loc) = &snapshot.table_statistics_location {
-                    let ver = self.table_snapshot_statistics_format_version(loc);
                     let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
 
                     let load_params = LoadParams {
                         location: loc.clone(),
                         len_hint: None,
-                        ver,
+                        ver: TableMetaLocationGenerator::snapshot_statistics_version(),
                         put_cache: true,
                     };
 
@@ -771,7 +767,7 @@ impl Table for FuseTable {
             if let Some(table_statistics) = table_statistics {
                 FuseTableColumnStatisticsProvider::new(
                     stats.clone(),
-                    Some(table_statistics.column_distinct_values.clone()),
+                    Some(table_statistics.column_distinct_values()),
                     snapshot.summary.row_count,
                 )
             } else {
