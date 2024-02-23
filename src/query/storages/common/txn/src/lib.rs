@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 
 #[derive(Debug, Clone)]
@@ -118,14 +117,14 @@ impl TxnManager {
 
     pub fn get_table_from_buffer(
         &self,
-        tenant: &str,
+        _tenant: &str,
         db_name: &str,
         table_name: &str,
     ) -> Option<TableInfo> {
-        let tenant_dbname_tbname = TableNameIdent::new(tenant, db_name, table_name).to_string();
+        let desc = format!("'{}'.'{}'", db_name, table_name);
         self.txn_buffer
             .mutated_tables
-            .get(&tenant_dbname_tbname)
+            .get(&desc)
             .map(|(req, table_info)| TableInfo {
                 meta: req.new_table_meta.clone(),
                 ..table_info.clone()
@@ -133,7 +132,7 @@ impl TxnManager {
             .or_else(|| {
                 self.txn_buffer
                     .stream_tables
-                    .get(&tenant_dbname_tbname)
+                    .get(&desc)
                     .cloned()
                     .map(|snapshot| snapshot.stream)
             })
