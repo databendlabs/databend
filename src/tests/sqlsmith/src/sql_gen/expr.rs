@@ -237,6 +237,38 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     lambda: None,
                 }
             }
+            DataType::Binary => {
+                let arg = Expr::Literal {
+                    span: None,
+                    lit: self.gen_literal(&DataType::String),
+                };
+                Expr::FunctionCall {
+                    span: None,
+                    distinct: false,
+                    name: Identifier::from_name("to_binary".to_string()),
+                    args: vec![arg],
+                    params: vec![],
+                    window: None,
+                    lambda: None,
+                }
+            }
+            DataType::Geometry => {
+                let x: f64 = self.rng.gen_range(-1.7e10..=1.7e10);
+                let y: f64 = self.rng.gen_range(-1.7e10..=1.7e10);
+                let arg = Expr::Literal {
+                    span: None,
+                    lit: Literal::String(format!("POINT({} {})", x, y)),
+                };
+                Expr::FunctionCall {
+                    span: None,
+                    distinct: false,
+                    name: Identifier::from_name("to_geometry".to_string()),
+                    args: vec![arg],
+                    params: vec![],
+                    window: None,
+                    lambda: None,
+                }
+            }
             _ => Expr::Literal {
                 span: None,
                 lit: Literal::Null,
@@ -464,7 +496,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 3 => {
                     let expr_ty = self.gen_all_number_data_type();
                     let expr = self.gen_expr(&expr_ty);
-                    let op = match self.rng.gen_range(0..=5) {
+                    let op = match self.rng.gen_range(0..=7) {
                         0 => UnaryOperator::Plus,
                         1 => UnaryOperator::Minus,
                         2 => UnaryOperator::Not,
@@ -503,7 +535,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let interval_expr = self.gen_expr(&interval_ty);
                 let date_expr = self.gen_expr(&date_ty);
 
-                match self.rng.gen_range(0..2) {
+                match self.rng.gen_range(0..=2) {
                     0 => Expr::DateAdd {
                         span: None,
                         unit,
@@ -549,6 +581,55 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     };
                 }
                 expr
+            }
+            DataType::Binary => {
+                let arg_ty = DataType::String;
+                let arg = self.gen_expr(&arg_ty);
+                Expr::FunctionCall {
+                    span: None,
+                    distinct: false,
+                    name: Identifier::from_name("to_binary"),
+                    args: vec![arg],
+                    params: vec![],
+                    window: None,
+                    lambda: None,
+                }
+            }
+            DataType::Geometry => {
+                let (func_name, args) = match self.rng.gen_range(0..=1) {
+                    0 => {
+                        let arg_ty = DataType::Number(NumberDataType::Float64);
+                        let x = self.gen_expr(&arg_ty);
+                        let y = self.gen_expr(&arg_ty);
+                        ("st_makegeompoint", vec![x, y])
+                    }
+                    1 => {
+                        let x: f64 = self.rng.gen_range(-1.7e10..=1.7e10);
+                        let y: f64 = self.rng.gen_range(-1.7e10..=1.7e10);
+                        let arg0 = Expr::Literal {
+                            span: None,
+                            lit: Literal::String(format!("POINT({} {})", x, y)),
+                        };
+                        let args = if self.rng.gen_bool(0.5) {
+                            let arg1_ty = DataType::Number(NumberDataType::Int32);
+                            let arg1 = self.gen_expr(&arg1_ty);
+                            vec![arg0, arg1]
+                        } else {
+                            vec![arg0]
+                        };
+                        ("st_geometryfromwkt", args)
+                    }
+                    _ => unreachable!(),
+                };
+                Expr::FunctionCall {
+                    span: None,
+                    distinct: false,
+                    name: Identifier::from_name(func_name),
+                    args,
+                    params: vec![],
+                    window: None,
+                    lambda: None,
+                }
             }
             _ => {
                 if self.rng.gen_bool(0.3) {
