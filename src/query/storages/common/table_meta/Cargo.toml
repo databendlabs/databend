@@ -25,8 +25,8 @@ parquet_rs = { workspace = true }
 rmp-serde = "1.1.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
-snap = { version = "1.1.0", optional = true }
 simple_hll = { version = "0.0.1", features = ["serde_borsh"] }
+snap = { version = "1.1.0", optional = true }
 typetag = { workspace = true }
 zstd = "0.12.3"
 

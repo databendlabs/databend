@@ -720,7 +720,7 @@ impl Table for FuseTable {
 
     async fn table_statistics(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Option<TableStatistics>> {
         let stats = match self.table_type {
             FuseTableType::AttachedReadOnly => {
@@ -742,14 +742,22 @@ impl Table for FuseTable {
             }
             _ => {
                 let s = &self.table_info.meta.statistics;
-                TableStatistics {
+                let mut res = TableStatistics {
                     num_rows: Some(s.number_of_rows),
                     data_size: Some(s.data_bytes),
                     data_size_compressed: Some(s.compressed_data_bytes),
                     index_size: Some(s.index_data_bytes),
                     number_of_blocks: s.number_of_blocks,
                     number_of_segments: s.number_of_segments,
+                };
+
+                if let Some(since) = &self.since_table {
+                    if let Some(since_stats) = since.table_statistics(ctx).await? {
+                        res = res.increment_since_from(&since_stats);
+                    }
                 }
+
+                res
             }
         };
         Ok(Some(stats))

@@ -443,6 +443,26 @@ pub struct TableStatistics {
     pub number_of_segments: Option<u64>,
 }
 
+fn merge(a: Option<u64>, b: Option<u64>) -> Option<u64> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some(a - b),
+        _ => None,
+    }
+}
+
+impl TableStatistics {
+    pub fn increment_since_from(&self, other: &TableStatistics) -> Self {
+        TableStatistics {
+            num_rows: merge(self.num_rows, other.num_rows),
+            data_size: merge(self.data_size, other.data_size),
+            data_size_compressed: merge(self.data_size_compressed, other.data_size_compressed),
+            index_size: None,
+            number_of_blocks: merge(self.number_of_blocks, other.number_of_blocks),
+            number_of_segments: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ColumnStatistics {
     pub min: Scalar,
