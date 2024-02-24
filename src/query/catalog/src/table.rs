@@ -265,13 +265,6 @@ pub trait Table: Sync + Send {
         Ok(None)
     }
 
-    #[async_backtrace::framed]
-    async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        let _ = ctx;
-
-        Ok(())
-    }
-
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,

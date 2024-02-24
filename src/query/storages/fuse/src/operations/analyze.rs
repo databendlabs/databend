@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -26,12 +29,17 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
-use databend_common_pipeline_transforms::processors::Transform;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::MetaHLL;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 
+use crate::io::SegmentsIO;
+use crate::statistics::reduce_block_statistics;
+use crate::statistics::reduce_cluster_statistics;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -163,8 +171,12 @@ impl AsyncSink for SinkAnalyzeState {
                 table_statistics.format_version(),
             )?;
 
+        let (col_stats, cluster_stats) =
+            regenerate_statistics(table, snapshot.as_ref(), &self.ctx).await?;
         // 4. Save table statistics
         let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
+        new_snapshot.summary.col_stats = col_stats;
+        new_snapshot.summary.cluster_stats = cluster_stats;
         new_snapshot.table_statistics_location = Some(table_statistics_location);
 
         FuseTable::commit_to_meta_server(
@@ -180,4 +192,58 @@ impl AsyncSink for SinkAnalyzeState {
 
         Ok(true)
     }
+}
+
+pub async fn regenerate_statistics(
+    table: &FuseTable,
+    snapshot: &TableSnapshot,
+    ctx: &Arc<dyn TableContext>,
+) -> Result<(StatisticsOfColumns, Option<ClusterStatistics>)> {
+    // 1. Read table snapshot.
+    let default_cluster_key_id = table.cluster_key_id();
+
+    // 2. Iterator segments and blocks to estimate statistics.
+    let mut read_segment_count = 0;
+    let mut col_stats = HashMap::new();
+    let mut cluster_stats = None;
+
+    let start = Instant::now();
+    let segments_io = SegmentsIO::create(ctx.clone(), table.operator.clone(), table.schema());
+    let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
+    let number_segments = snapshot.segments.len();
+    for chunk in snapshot.segments.chunks(chunk_size) {
+        let mut stats_of_columns = Vec::new();
+        let mut blocks_cluster_stats = Vec::new();
+        if !col_stats.is_empty() {
+            stats_of_columns.push(col_stats.clone());
+            blocks_cluster_stats.push(cluster_stats.clone());
+        }
+
+        let segments = segments_io
+            .read_segments::<SegmentInfo>(chunk, true)
+            .await?;
+        for segment in segments {
+            let segment = segment?;
+            stats_of_columns.push(segment.summary.col_stats.clone());
+            blocks_cluster_stats.push(segment.summary.cluster_stats.clone());
+        }
+
+        // Generate new column statistics for snapshot
+        col_stats = reduce_block_statistics(&stats_of_columns);
+        cluster_stats = reduce_cluster_statistics(&blocks_cluster_stats, default_cluster_key_id);
+
+        // Status.
+        {
+            read_segment_count += chunk.len();
+            let status = format!(
+                "analyze: read segment files:{}/{}, cost:{} sec",
+                read_segment_count,
+                number_segments,
+                start.elapsed().as_secs()
+            );
+            ctx.set_status_info(&status);
+        }
+    }
+
+    Ok((col_stats, cluster_stats))
 }
