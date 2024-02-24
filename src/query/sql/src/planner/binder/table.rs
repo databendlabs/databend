@@ -243,7 +243,7 @@ impl Binder {
                     }
                     parent = bind_context.parent.as_mut();
                 }
-                if e.code() == ErrorCode::UnknownDatabase {
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
                     return Err(ErrorCode::UnknownDatabase(format!(
                         "Unknown database `{}` in catalog '{catalog}'",
                         database
