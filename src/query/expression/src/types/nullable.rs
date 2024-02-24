@@ -20,6 +20,7 @@ use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
 
 use super::AnyType;
+use super::DecimalSize;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -121,8 +122,13 @@ impl<T: ValueType> ValueType for NullableType<T> {
         }
     }
 
-    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
-        Some(ColumnBuilder::Nullable(Box::new(builder.upcast())))
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Nullable(Box::new(
+            builder.upcast(decimal_size),
+        )))
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -377,9 +383,9 @@ impl<T: ValueType> NullableColumnBuilder<T> {
         }
     }
 
-    pub fn upcast(self) -> NullableColumnBuilder<AnyType> {
+    pub fn upcast(self, decimal_size: Option<DecimalSize>) -> NullableColumnBuilder<AnyType> {
         NullableColumnBuilder {
-            builder: T::try_upcast_column_builder(self.builder).unwrap(),
+            builder: T::try_upcast_column_builder(self.builder, decimal_size).unwrap(),
             validity: self.validity,
         }
     }
