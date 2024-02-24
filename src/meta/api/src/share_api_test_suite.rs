@@ -80,8 +80,8 @@ async fn is_all_share_data_removed(
     }
 
     for account in share_meta.get_accounts() {
-        let share_account_key = ShareAccountNameIdent {
-            account: account.clone(),
+        let share_account_key = ShareConsumer {
+            tenant: account.clone(),
             share_id,
         };
         let res = get_share_account_meta_or_err(kv_api, &share_account_key, "").await;
@@ -595,8 +595,8 @@ impl ShareApiTestSuite {
             assert!(share_meta.has_account(&account.to_string()));
 
             // get and check share account meta
-            let share_account_name = ShareAccountNameIdent {
-                account: account.to_string(),
+            let share_account_name = ShareConsumer {
+                tenant: account.to_string(),
                 share_id,
             };
             let (_share_account_meta_seq, share_account_meta) =
@@ -721,8 +721,8 @@ impl ShareApiTestSuite {
             assert!(!share_meta.has_account(&account2.to_string()));
 
             // check share account meta has been removed
-            let share_account_name = ShareAccountNameIdent {
-                account: account2.to_string(),
+            let share_account_name = ShareConsumer {
+                tenant: account2.to_string(),
                 share_id,
             };
             let res = get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await;
@@ -744,8 +744,8 @@ impl ShareApiTestSuite {
             assert!(res.is_ok());
 
             // check share account meta has been removed
-            let share_account_name = ShareAccountNameIdent {
-                account: account.to_string(),
+            let share_account_name = ShareConsumer {
+                tenant: account.to_string(),
                 share_id,
             };
             let res = get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await;

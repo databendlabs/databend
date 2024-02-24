@@ -597,6 +597,8 @@ pub enum TokenKind {
     FUSE,
     #[token("GENERATED", ignore(ascii_case))]
     GENERATED,
+    #[token("GEOMETRY", ignore(ascii_case))]
+    GEOMETRY,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
@@ -1158,6 +1160,12 @@ pub enum TokenKind {
     PREFIX,
     #[token("MODIFIED_AFTER", ignore(ascii_case))]
     MODIFIED_AFTER,
+    #[token("TEMPORARY", ignore(ascii_case))]
+    TEMPORARY,
+    #[token("SECONDS", ignore(ascii_case))]
+    SECONDS,
+    #[token("DAYS", ignore(ascii_case))]
+    DAYS,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

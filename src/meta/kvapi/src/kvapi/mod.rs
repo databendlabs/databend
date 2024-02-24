@@ -21,6 +21,7 @@ mod key_parser;
 mod message;
 mod prefix;
 mod test_suite;
+mod value;
 
 pub use api::ApiBuilder;
 pub use api::AsKVApi;
@@ -43,3 +44,4 @@ pub use message::UpsertKVReply;
 pub use message::UpsertKVReq;
 pub use prefix::prefix_to_range;
 pub use test_suite::TestSuite;
+pub use value::Value;

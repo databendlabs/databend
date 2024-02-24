@@ -63,6 +63,12 @@ pub struct IndexId {
     pub index_id: u64,
 }
 
+impl IndexId {
+    pub fn new(index_id: u64) -> IndexId {
+        IndexId { index_id }
+    }
+}
+
 impl Display for IndexId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.index_id)
@@ -242,12 +248,17 @@ mod kvapi_key_impl {
     use crate::schema::IndexIdToName;
     use crate::schema::IndexMeta;
     use crate::schema::IndexNameIdent;
+    use crate::tenant::Tenant;
 
     /// <prefix>/<tenant>/<index_name> -> <index_id>
     impl kvapi::Key for IndexNameIdent {
         const PREFIX: &'static str = "__fd_index";
 
         type ValueType = IndexId;
+
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -273,6 +284,10 @@ mod kvapi_key_impl {
 
         type ValueType = IndexMeta;
 
+        fn parent(&self) -> Option<String> {
+            None
+        }
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.index_id)
@@ -295,6 +310,10 @@ mod kvapi_key_impl {
 
         type ValueType = IndexNameIdent;
 
+        fn parent(&self) -> Option<String> {
+            Some(IndexId::new(self.index_id).to_string_key())
+        }
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.index_id)
@@ -310,4 +329,10 @@ mod kvapi_key_impl {
             Ok(IndexIdToName { index_id })
         }
     }
+
+    impl kvapi::Value for IndexId {}
+
+    impl kvapi::Value for IndexMeta {}
+
+    impl kvapi::Value for IndexNameIdent {}
 }

@@ -60,9 +60,23 @@ pub struct DatabaseIdent {
     pub seq: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord,
+)]
 pub struct DatabaseId {
     pub db_id: u64,
+}
+
+impl DatabaseId {
+    pub fn new(db_id: u64) -> Self {
+        DatabaseId { db_id }
+    }
+}
+
+impl From<u64> for DatabaseId {
+    fn from(db_id: u64) -> Self {
+        DatabaseId { db_id }
+    }
 }
 
 impl Display for DatabaseId {
@@ -337,12 +351,17 @@ mod kvapi_key_impl {
     use crate::schema::DatabaseNameIdent;
     use crate::schema::DbIdList;
     use crate::schema::DbIdListKey;
+    use crate::tenant::Tenant;
 
     /// __fd_database/<tenant>/<db_name> -> <db_id>
     impl kvapi::Key for DatabaseNameIdent {
         const PREFIX: &'static str = "__fd_database";
 
         type ValueType = DatabaseId;
+
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -368,6 +387,10 @@ mod kvapi_key_impl {
 
         type ValueType = DatabaseMeta;
 
+        fn parent(&self) -> Option<String> {
+            None
+        }
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.db_id)
@@ -389,6 +412,10 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = "__fd_database_id_to_name";
 
         type ValueType = DatabaseNameIdent;
+
+        fn parent(&self) -> Option<String> {
+            Some(DatabaseId::new(self.db_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -412,6 +439,10 @@ mod kvapi_key_impl {
 
         type ValueType = DbIdList;
 
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_str(&self.tenant)
@@ -429,4 +460,12 @@ mod kvapi_key_impl {
             Ok(DbIdListKey { tenant, db_name })
         }
     }
+
+    impl kvapi::Value for DatabaseId {}
+
+    impl kvapi::Value for DatabaseMeta {}
+
+    impl kvapi::Value for DatabaseNameIdent {}
+
+    impl kvapi::Value for DbIdList {}
 }

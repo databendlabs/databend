@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::Infallible;
+
 use databend_common_meta_kvapi::kvapi;
 
 use crate::background_api_keys::ID_GEN_BACKGROUND_JOB;
@@ -97,7 +99,11 @@ impl IdGenerator {
 impl kvapi::Key for IdGenerator {
     const PREFIX: &'static str = "__fd_id_gen";
 
-    type ValueType = ();
+    type ValueType = Infallible;
+
+    fn parent(&self) -> Option<String> {
+        None
+    }
 
     fn to_string_key(&self) -> String {
         kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

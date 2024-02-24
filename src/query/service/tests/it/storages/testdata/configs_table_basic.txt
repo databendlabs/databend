@@ -121,11 +121,11 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'rpc_tls_server_key'                       | ''                                                             | ''       |
 | 'query'   | 'share_endpoint_address'                   | ''                                                             | ''       |
 | 'query'   | 'share_endpoint_auth_token_file'           | ''                                                             | ''       |
+| 'query'   | 'shutdown_wait_timeout_ms'                 | '5000'                                                         | ''       |
 | 'query'   | 'table_engine_memory_enabled'              | 'true'                                                         | ''       |
 | 'query'   | 'tenant_id'                                | 'test'                                                         | ''       |
 | 'query'   | 'udf_server_allow_list'                    | ''                                                             | ''       |
 | 'query'   | 'users'                                    | '{"name":"root","auth_type":"no_password","auth_string":null}' | ''       |
-| 'query'   | 'wait_timeout_mills'                       | '5000'                                                         | ''       |
 | 'storage' | 'allow_insecure'                           | 'false'                                                        | ''       |
 | 'storage' | 'azblob.account_key'                       | ''                                                             | ''       |
 | 'storage' | 'azblob.account_name'                      | ''                                                             | ''       |

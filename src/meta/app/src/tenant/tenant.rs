@@ -17,10 +17,21 @@
 /// It is just a type for use on the client side.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Tenant {
+    // TODO: consider using NonEmptyString?
     pub tenant: String,
 }
 
+impl Tenant {
+    pub fn new(tenant: impl ToString) -> Self {
+        Self {
+            tenant: tenant.to_string(),
+        }
+    }
+}
+
 mod kvapi_key_impl {
+    use std::convert::Infallible;
+
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::KeyError;
 
@@ -28,7 +39,11 @@ mod kvapi_key_impl {
 
     impl kvapi::Key for Tenant {
         const PREFIX: &'static str = "__fd_tenant";
-        type ValueType = ();
+        type ValueType = Infallible;
+
+        fn parent(&self) -> Option<String> {
+            None
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
