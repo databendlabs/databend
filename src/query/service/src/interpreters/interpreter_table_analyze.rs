@@ -96,7 +96,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                 } else {
                     format!(
                         "SINCE (snapshot => '{}')",
-                        table_statistics.snapshot_id.simple().to_string(),
+                        table_statistics.snapshot_id.simple(),
                     )
                 }
             } else {
@@ -127,7 +127,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                 "SELECT {select_expr}, {is_full} as is_full from {}.{} AT (snapshot => '{}') {since_str} ",
                 plan.database,
                 plan.table,
-                snapshot.snapshot_id.simple().to_string()
+                snapshot.snapshot_id.simple(),
             );
 
             log::info!("Analyze via sql {:?}", sql);

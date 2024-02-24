@@ -445,7 +445,7 @@ pub struct TableStatistics {
 
 fn merge(a: Option<u64>, b: Option<u64>) -> Option<u64> {
     match (a, b) {
-        (Some(a), Some(b)) => Some(a - b),
+        (Some(a), Some(b)) if a > b => Some(a - b),
         _ => None,
     }
 }
