@@ -22,13 +22,11 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_io::prelude::borsh_deserialize_from_slice;
 use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
 use databend_storages_common_table_meta::meta::MetaHLL;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -143,7 +141,7 @@ impl AsyncSink for SinkAnalyzeState {
 
             let col = col.value.index(0).unwrap();
             let col = col.as_binary().unwrap();
-            let hll: MetaHLL = borsh_deserialize_from_slice(*col)?;
+            let hll: MetaHLL = borsh_deserialize_from_slice(col)?;
 
             if !is_full {
                 ndv_states
@@ -157,19 +155,13 @@ impl AsyncSink for SinkAnalyzeState {
 
         let snapshot = snapshot.unwrap();
         // 3. Generate new table statistics
-        let table_statistics = TableSnapshotStatistics::new(ndv_states, self.snapshot_id.clone());
+        let table_statistics = TableSnapshotStatistics::new(ndv_states, self.snapshot_id);
         let table_statistics_location = table
             .meta_location_generator
             .snapshot_statistics_location_from_uuid(
                 &table_statistics.snapshot_id,
                 table_statistics.format_version(),
             )?;
-
-        println!(
-            "write to {:?} {:?}",
-            table_statistics_location,
-            table_statistics.column_distinct_values()
-        );
 
         // 4. Save table statistics
         let mut new_snapshot = TableSnapshot::from_previous(&snapshot);

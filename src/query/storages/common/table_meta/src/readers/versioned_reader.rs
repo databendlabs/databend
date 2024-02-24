@@ -38,7 +38,7 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
         let r = match self {
             TableSnapshotStatisticsVersion::V0(v) => {
                 let ts = load_json(&buffer, v).await?;
-                TableSnapshotStatistics::from(ts).into()
+                TableSnapshotStatistics::from(ts)
             }
             TableSnapshotStatisticsVersion::V2(v) => load_json(&buffer, v).await?,
         };

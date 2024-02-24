@@ -111,7 +111,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                 .collect();
 
             // 0.01625 --> 12 buckets --> 4K size per column
-            // 1.04 / math.sqrt(1<<12) --> 0.01624
+            // 1.04 / math.sqrt(1<<12) --> 0.01625
             const DISTINCT_ERROR_RATE: f64 = 0.01625;
             let select_expr = index_cols
                 .iter()
@@ -130,7 +130,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                 snapshot.snapshot_id.simple().to_string()
             );
 
-            println!("sql {:?}", sql);
+            log::info!("Analyze via sql {:?}", sql);
 
             let mut planner = Planner::new(self.ctx.clone());
             let (plan, _) = planner.plan_sql(&sql).await?;

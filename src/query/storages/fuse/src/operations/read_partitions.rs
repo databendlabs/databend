@@ -136,13 +136,13 @@ impl FuseTable {
         base_snapshot: &Option<String>,
     ) -> Result<(PartStatistics, Partitions)> {
         let fuse_segment_io = SegmentsIO::create(ctx.clone(), self.get_operator(), self.schema());
-        let lastest_snapshot = self.snapshot_loc().await?;
+        let latest_snapshot = self.snapshot_loc().await?;
 
         let (increment_segments, _, add_blocks) = collect_incremental_blocks(
             ctx.clone(),
             fuse_segment_io,
             self.get_operator(),
-            &lastest_snapshot,
+            &latest_snapshot,
             base_snapshot,
         )
         .await?;

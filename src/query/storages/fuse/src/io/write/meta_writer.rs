@@ -104,7 +104,6 @@ impl Marshal for TableSnapshotStatistics {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
 
     use databend_common_base::runtime::catch_unwind;
     use databend_common_expression::TableSchema;
