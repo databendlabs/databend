@@ -26,7 +26,6 @@ use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use futures_util::future;
 
 use super::SegmentLocation;
@@ -44,17 +43,6 @@ impl BlockPruner {
 
     #[async_backtrace::framed]
     pub async fn pruning(
-        &self,
-        segment_location: SegmentLocation,
-        segment_info: &CompactSegmentInfo,
-    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let block_metas = segment_info.block_metas()?;
-        self.stream_pruning(segment_location, block_metas).await
-    }
-
-    // Used for stream pruning.
-    #[async_backtrace::framed]
-    pub async fn stream_pruning(
         &self,
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,

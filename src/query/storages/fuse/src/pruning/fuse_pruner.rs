@@ -329,7 +329,7 @@ impl FusePruner {
                                                     block_pruner
                                                         .pruning(
                                                             segment_location.clone(),
-                                                            compact_segment_info,
+                                                            compact_segment_info.block_metas()?,
                                                         )
                                                         .await?,
                                                 );
@@ -340,7 +340,7 @@ impl FusePruner {
                                                 block_pruner
                                                     .pruning(
                                                         segment_location.clone(),
-                                                        compact_segment_info,
+                                                        compact_segment_info.block_metas()?,
                                                     )
                                                     .await?,
                                             );
@@ -349,7 +349,8 @@ impl FusePruner {
                                 }
                             } else {
                                 for (location, info) in pruned_segments {
-                                    res.extend(block_pruner.pruning(location, &info).await?);
+                                    let block_metas = info.block_metas()?;
+                                    res.extend(block_pruner.pruning(location, block_metas).await?);
                                 }
                             }
                             Result::<_, ErrorCode>::Ok((res, deleted_segments))
@@ -407,7 +408,7 @@ impl FusePruner {
                         async move {
                             // Build pruning tasks.
                             let res = block_pruner
-                                .stream_pruning(
+                                .pruning(
                                     // unused segment location.
                                     SegmentLocation {
                                         segment_idx,
