@@ -18,6 +18,7 @@ mod global_runtime;
 #[allow(clippy::module_inception)]
 mod runtime;
 mod runtime_tracker;
+mod stat_buffer;
 mod thread;
 
 pub use backtrace::dump_backtrace;

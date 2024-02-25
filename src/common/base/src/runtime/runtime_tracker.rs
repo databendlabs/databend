@@ -47,7 +47,6 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::future::Future;
-use std::mem::take;
 use std::pin::Pin;
 use std::ptr::addr_of_mut;
 use std::sync::atomic::AtomicI64;
@@ -59,6 +58,8 @@ use std::task::Poll;
 use bytesize::ByteSize;
 use log::info;
 use pin_project_lite::pin_project;
+
+use crate::runtime::stat_buffer::StatBuffer;
 
 /// The root tracker.
 ///
@@ -72,9 +73,7 @@ thread_local! {
 }
 
 #[thread_local]
-static mut STAT_BUFFER: StatBuffer = StatBuffer::empty();
-
-static MEM_STAT_BUFFER_SIZE: i64 = 4 * 1024 * 1024;
+static mut STAT_BUFFER: StatBuffer = StatBuffer::empty(&GLOBAL_MEM_STAT);
 
 pub fn set_alloc_error_hook() {
     std::alloc::set_alloc_error_hook(|layout| {
@@ -112,29 +111,29 @@ pub struct LimitMemGuard {
 impl LimitMemGuard {
     pub fn enter_unlimited() -> Self {
         unsafe {
-            let saved = STAT_BUFFER.unlimited_flag;
-            STAT_BUFFER.unlimited_flag = true;
-            Self { saved }
+            Self {
+                saved: STAT_BUFFER.set_unlimited_flag(true),
+            }
         }
     }
 
     pub fn enter_limited() -> Self {
         unsafe {
-            let saved = STAT_BUFFER.unlimited_flag;
-            STAT_BUFFER.unlimited_flag = false;
-            Self { saved }
+            Self {
+                saved: STAT_BUFFER.set_unlimited_flag(false),
+            }
         }
     }
 
     pub(crate) fn is_unlimited() -> bool {
-        unsafe { STAT_BUFFER.unlimited_flag }
+        unsafe { STAT_BUFFER.is_unlimited() }
     }
 }
 
 impl Drop for LimitMemGuard {
     fn drop(&mut self) {
         unsafe {
-            STAT_BUFFER.unlimited_flag = self.saved;
+            STAT_BUFFER.set_unlimited_flag(self.saved);
         }
     }
 }
@@ -175,12 +174,7 @@ pub struct ThreadTracker {
 impl Drop for ThreadTracker {
     fn drop(&mut self) {
         unsafe {
-            let _guard = LimitMemGuard::enter_unlimited();
-            let memory_usage = take(&mut STAT_BUFFER.memory_usage);
-
-            // Memory operations during destruction will be recorded to global stat.
-            STAT_BUFFER.destroyed_thread_local_macro = true;
-            let _ = MemStat::record_memory::<false>(&None, memory_usage);
+            STAT_BUFFER.mark_destroyed();
         }
     }
 }
@@ -234,22 +228,7 @@ impl ThreadTracker {
     pub fn alloc(size: i64) -> Result<(), AllocError> {
         let state_buffer = unsafe { &mut *addr_of_mut!(STAT_BUFFER) };
 
-        // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
-        // This is the boundary of thread exit. It may be dangerous to throw mistakes here.
-        if state_buffer.destroyed_thread_local_macro {
-            let used = GLOBAL_MEM_STAT.used.fetch_add(size, Ordering::Relaxed);
-            GLOBAL_MEM_STAT
-                .peak_used
-                .fetch_max(used + size, Ordering::Relaxed);
-            return Ok(());
-        }
-
-        let has_oom = match state_buffer.incr(size) <= MEM_STAT_BUFFER_SIZE {
-            true => Ok(()),
-            false => state_buffer.flush::<true>(),
-        };
-
-        if let Err(out_of_limit) = has_oom {
+        if let Err(out_of_limit) = state_buffer.alloc(size) {
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
             if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
                 let _guard = LimitMemGuard::enter_unlimited();
@@ -268,59 +247,21 @@ impl ThreadTracker {
     pub fn dealloc(size: i64) {
         let state_buffer = unsafe { &mut *addr_of_mut!(STAT_BUFFER) };
 
-        // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
-        if state_buffer.destroyed_thread_local_macro {
-            GLOBAL_MEM_STAT.used.fetch_add(-size, Ordering::Relaxed);
-            return;
-        }
-
-        if state_buffer.incr(-size) < -MEM_STAT_BUFFER_SIZE {
-            let _ = state_buffer.flush::<false>();
-        }
-
-        // NOTE: De-allocation does not panic
-        // even when it's possible exceeding the limit
-        // due to other threads sharing the same MemStat may have allocated a lot of memory.
-    }
-}
-
-/// Buffering memory allocation stats.
-///
-/// A StatBuffer buffers stats changes in local variables, and periodically flush them to other storage such as an `Arc<T>` shared by several threads.
-#[derive(Clone, Debug, Default)]
-pub struct StatBuffer {
-    memory_usage: i64,
-    // Whether to allow unlimited memory. Alloc memory will not panic if it is true.
-    unlimited_flag: bool,
-    destroyed_thread_local_macro: bool,
-}
-
-impl StatBuffer {
-    pub const fn empty() -> Self {
-        Self {
-            memory_usage: 0,
-            unlimited_flag: false,
-            destroyed_thread_local_macro: false,
-        }
+        state_buffer.dealloc(size)
     }
 
-    pub fn incr(&mut self, bs: i64) -> i64 {
-        self.memory_usage += bs;
-        self.memory_usage
-    }
-
-    /// Flush buffered stat to MemStat it belongs to.
-    pub fn flush<const NEED_ROLLBACK: bool>(&mut self) -> Result<(), OutOfLimit> {
-        let memory_usage = take(&mut self.memory_usage);
+    pub fn record_memory<const NEED_ROLLBACK: bool>(memory_usage: i64) -> Result<(), OutOfLimit> {
         let has_thread_local = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
             // We need to ensure no heap memory alloc or dealloc. it will cause panic of borrow recursive call.
-            MemStat::record_memory::<NEED_ROLLBACK>(&tracker.borrow().mem_stat, memory_usage)
+            let tracker = tracker.borrow_mut();
+            let mem_stat = tracker.mem_stat.as_deref().unwrap_or(&GLOBAL_MEM_STAT);
+            mem_stat.record_memory::<NEED_ROLLBACK>(memory_usage)
         });
 
         match has_thread_local {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(oom)) => Err(oom),
-            Err(_access_error) => MemStat::record_memory::<NEED_ROLLBACK>(&None, memory_usage),
+            Err(_access_error) => GLOBAL_MEM_STAT.record_memory::<NEED_ROLLBACK>(memory_usage),
         }
     }
 }
@@ -331,11 +272,13 @@ impl StatBuffer {
 /// - Every stat that is fed to a child is also fed to its parent.
 /// - A MemStat has at most one parent.
 pub struct MemStat {
+    global: bool,
+
     name: Option<String>,
 
-    used: AtomicI64,
+    pub used: AtomicI64,
 
-    peak_used: AtomicI64,
+    pub peak_used: AtomicI64,
 
     /// The limit of max used memory for this tracker.
     ///
@@ -349,6 +292,7 @@ impl MemStat {
     pub const fn global() -> Self {
         Self {
             name: None,
+            global: true,
             used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
             peak_used: AtomicI64::new(0),
@@ -363,6 +307,7 @@ impl MemStat {
 
     pub fn create_child(name: String, parent_memory_stat: Option<Arc<MemStat>>) -> Arc<MemStat> {
         Arc::new(MemStat {
+            global: false,
             name: Some(name),
             used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
@@ -387,46 +332,33 @@ impl MemStat {
     /// It feeds `state` to the this tracker and all of its ancestors, including GLOBAL_TRACKER.
     #[inline]
     pub fn record_memory<const NEED_ROLLBACK: bool>(
-        mem_stat: &Option<Arc<MemStat>>,
+        &self,
         memory_usage: i64,
     ) -> Result<(), OutOfLimit> {
-        let mut is_root = false;
-
-        let mem_stat = match mem_stat {
-            Some(x) => x,
-            None => {
-                // No parent, report to GLOBAL_TRACKER
-                is_root = true;
-                &GLOBAL_MEM_STAT
-            }
-        };
-
-        let mut used = mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
+        let mut used = self.used.fetch_add(memory_usage, Ordering::Relaxed);
 
         used += memory_usage;
-        mem_stat.peak_used.fetch_max(used, Ordering::Relaxed);
+        let peak_used = self.peak_used.fetch_max(used, Ordering::Relaxed);
 
-        if !is_root {
-            if let Err(cause) =
-                Self::record_memory::<NEED_ROLLBACK>(&mem_stat.parent_memory_stat, memory_usage)
-            {
+        if !self.global {
+            let parent_memory_stat = self
+                .parent_memory_stat
+                .as_deref()
+                .unwrap_or(&GLOBAL_MEM_STAT);
+            if let Err(cause) = parent_memory_stat.record_memory::<NEED_ROLLBACK>(memory_usage) {
                 if NEED_ROLLBACK {
-                    let used = mem_stat.used.fetch_sub(memory_usage, Ordering::Relaxed);
-                    mem_stat
-                        .peak_used
-                        .fetch_max(used - memory_usage, Ordering::Relaxed);
+                    self.peak_used.store(peak_used, Ordering::Relaxed);
+                    self.used.fetch_sub(memory_usage, Ordering::Relaxed);
                 }
 
                 return Err(cause);
             }
         }
 
-        if let Err(cause) = mem_stat.check_limit(used) {
+        if let Err(cause) = self.check_limit(used) {
             if NEED_ROLLBACK {
-                let used = mem_stat.used.fetch_sub(memory_usage, Ordering::Relaxed);
-                mem_stat
-                    .peak_used
-                    .fetch_max(used - memory_usage, Ordering::Relaxed);
+                self.peak_used.store(peak_used, Ordering::Relaxed);
+                self.used.fetch_sub(memory_usage, Ordering::Relaxed);
             }
 
             return Err(cause);
