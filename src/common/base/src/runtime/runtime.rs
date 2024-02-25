@@ -31,7 +31,7 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 use crate::runtime::catch_unwind::CatchUnwindFuture;
-use crate::runtime::MemStat;
+use crate::runtime::memory::MemStat;
 use crate::runtime::Thread;
 use crate::runtime::ThreadJoinHandle;
 
@@ -132,9 +132,7 @@ impl Runtime {
 
     fn tracker_builder(mem_stat: Arc<MemStat>) -> tokio::runtime::Builder {
         let mut builder = tokio::runtime::Builder::new_multi_thread();
-        builder
-            .enable_all()
-            .on_thread_start(mem_stat.on_start_thread());
+        builder.enable_all();
 
         builder
     }

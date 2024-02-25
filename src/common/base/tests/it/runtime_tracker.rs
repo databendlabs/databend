@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::mem_stat::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrackedFuture;
 use databend_common_base::runtime::TrySpawn;

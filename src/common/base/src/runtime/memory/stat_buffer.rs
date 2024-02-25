@@ -2,9 +2,9 @@ use std::sync::atomic::Ordering;
 
 use databend_common_exception::Result;
 
+use crate::runtime::memory::MemStat;
 use crate::runtime::runtime_tracker::OutOfLimit;
 use crate::runtime::LimitMemGuard;
-use crate::runtime::MemStat;
 use crate::runtime::ThreadTracker;
 
 static MEM_STAT_BUFFER_SIZE: i64 = 4 * 1024 * 1024;
@@ -108,8 +108,9 @@ mod tests {
 
     use databend_common_exception::Result;
 
-    use crate::runtime::stat_buffer::StatBuffer;
-    use crate::runtime::MemStat;
+    use crate::runtime::memory::stat_buffer::MEM_STAT_BUFFER_SIZE;
+    use crate::runtime::memory::MemStat;
+    use crate::runtime::memory::StatBuffer;
 
     #[test]
     fn test_mark_destroyed() -> Result<()> {
@@ -123,8 +124,28 @@ mod tests {
         buffer.mark_destroyed();
         assert_eq!(buffer.destroyed_thread_local_macro, true);
         assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), 1);
-        buffer.alloc(1).unwrap();
-        assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dealloc() -> Result<()> {
+        static TEST_MEM_STATE: MemStat = MemStat::global();
+
+        let mut buffer = StatBuffer::empty(&TEST_MEM_STATE);
+
+        assert_eq!(buffer.destroyed_thread_local_macro, false);
+        buffer.dealloc(1);
+        assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), 0);
+        buffer.destroyed_thread_local_macro = true;
+        buffer.dealloc(2);
+        assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), -2);
+        buffer.destroyed_thread_local_macro = false;
+        buffer.dealloc(MEM_STAT_BUFFER_SIZE);
+        assert_eq!(
+            TEST_MEM_STATE.used.load(Ordering::Relaxed),
+            -(1 + 2 + MEM_STAT_BUFFER_SIZE)
+        );
 
         Ok(())
     }

@@ -15,10 +15,10 @@
 mod backtrace;
 mod catch_unwind;
 mod global_runtime;
+mod memory;
 #[allow(clippy::module_inception)]
 mod runtime;
 mod runtime_tracker;
-mod stat_buffer;
 mod thread;
 
 pub use backtrace::dump_backtrace;
@@ -28,6 +28,7 @@ pub use catch_unwind::catch_unwind;
 pub use catch_unwind::CatchUnwindFuture;
 pub use global_runtime::GlobalIORuntime;
 pub use global_runtime::GlobalQueryRuntime;
+pub use memory::MemStat;
 pub use runtime::block_on;
 pub use runtime::execute_futures_in_parallel;
 pub use runtime::match_join_handle;
@@ -42,7 +43,6 @@ pub use runtime::TrySpawn;
 pub use runtime::GLOBAL_TASK;
 pub use runtime_tracker::set_alloc_error_hook;
 pub use runtime_tracker::LimitMemGuard;
-pub use runtime_tracker::MemStat;
 pub use runtime_tracker::ThreadTracker;
 pub use runtime_tracker::TrackedFuture;
 pub use runtime_tracker::UnlimitedFuture;
