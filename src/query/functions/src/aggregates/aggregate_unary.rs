@@ -35,7 +35,8 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 
-pub trait UnaryState<T, R>: Send + Sync + Default
+pub trait UnaryState<T, R>:
+    Send + Sync + Default + borsh::BorshSerialize + borsh::BorshDeserialize
 where
     T: ValueType,
     R: ValueType,
@@ -49,11 +50,6 @@ where
         builder: &mut R::ColumnBuilder,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()>;
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
-
-    fn deserialize(reader: &mut &[u8]) -> Result<Self>
-    where Self: Sized;
 }
 
 pub trait FunctionData: Send + Sync {
@@ -248,12 +244,12 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state: &mut S = place.get::<S>();
-        state.serialize(writer)
+        Ok(borsh::to_writer(writer, state)?)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state: &mut S = place.get::<S>();
-        let rhs = S::deserialize(reader)?;
+        let rhs = S::deserialize_reader(reader)?;
         state.merge(&rhs)
     }
 

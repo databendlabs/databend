@@ -69,15 +69,6 @@ where
     T: Number + AsPrimitive<TSum> + BorshSerialize + BorshDeserialize,
     TSum: Number + AsPrimitive<f64> + std::ops::AddAssign + std::ops::SubAssign,
 {
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, &self.values)
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.values = borsh_deserialize_state(reader)?;
-        Ok(())
-    }
-
     fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()> {
         let buffer = match column {
             Column::Null { .. } => {
@@ -242,15 +233,6 @@ where T: Decimal
         + std::fmt::Debug
         + std::cmp::PartialOrd
 {
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, &self.values)
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.values = borsh_deserialize_state(reader)?;
-        Ok(())
-    }
-
     fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()> {
         let buffer = match column {
             Column::Null { .. } => {
