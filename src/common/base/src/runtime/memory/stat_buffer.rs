@@ -141,11 +141,11 @@ mod tests {
 
         let mut buffer = StatBuffer::empty(&TEST_MEM_STATE);
 
-        assert_eq!(buffer.destroyed_thread_local_macro, false);
+        assert!(!buffer.destroyed_thread_local_macro);
         buffer.alloc(1).unwrap();
         assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), 0);
         buffer.mark_destroyed();
-        assert_eq!(buffer.destroyed_thread_local_macro, true);
+        assert!(buffer.destroyed_thread_local_macro);
         assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), 1);
 
         Ok(())
@@ -157,7 +157,7 @@ mod tests {
 
         let mut buffer = StatBuffer::empty(&TEST_MEM_STATE);
 
-        assert_eq!(buffer.destroyed_thread_local_macro, false);
+        assert!(!buffer.destroyed_thread_local_macro);
         assert_eq!(buffer.memory_usage, 0);
         buffer.dealloc(1);
         assert_eq!(buffer.memory_usage, -1);

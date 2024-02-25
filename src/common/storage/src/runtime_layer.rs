@@ -25,7 +25,6 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrackedFuture;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::GLOBAL_TASK;
 use futures::ready;

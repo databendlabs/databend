@@ -16,7 +16,7 @@ use std::env;
 use std::time::Duration;
 
 use databend_common_base::mem_allocator::GlobalAllocator;
-use databend_common_base::runtime::memory::alloc_error_hook::set_alloc_error_hook;
+use databend_common_base::runtime::set_alloc_error_hook;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::Commands;
 use databend_common_config::InnerConfig;
