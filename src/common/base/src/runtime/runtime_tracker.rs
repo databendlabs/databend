@@ -63,19 +63,6 @@ thread_local! {
     static TRACKER: RefCell<ThreadTracker> = const { RefCell::new(ThreadTracker::empty()) };
 }
 
-/// A guard that restores the thread local tracker to the `saved` when dropped.
-pub struct Entered {
-    /// Saved tracker for restoring
-    saved: Option<Arc<MemStat>>,
-}
-
-impl Drop for Entered {
-    fn drop(&mut self) {
-        let _ = StatBuffer::current().flush::<false>();
-        ThreadTracker::replace_mem_stat(self.saved.take());
-    }
-}
-
 pub struct LimitMemGuard {
     saved: bool,
 }
@@ -149,14 +136,6 @@ impl ThreadTracker {
         })
     }
 
-    /// Enters a context in which it reports memory stats to `mem stat` and returns a guard that restores the previous mem stat when being dropped.
-    pub fn enter(mem_state: Option<Arc<MemStat>>) -> Entered {
-        let _ = StatBuffer::current().flush::<false>();
-        Entered {
-            saved: ThreadTracker::replace_mem_stat(mem_state),
-        }
-    }
-
     /// Accumulate stat about allocated memory.
     ///
     /// `size` is the positive number of allocated bytes.
@@ -201,37 +180,6 @@ impl ThreadTracker {
 pin_project! {
     /// A [`Future`] that enters its thread tracker when being polled.
     #[must_use = "futures do nothing unless you `.await` or poll them"]
-    pub struct TrackedFuture<T> {
-        #[pin]
-        inner: T,
-
-        mem_stat: Option<Arc<MemStat>>,
-    }
-}
-
-impl<T> TrackedFuture<T> {
-    pub fn create(inner: T) -> TrackedFuture<T> {
-        Self::create_with_mem_stat(None, inner)
-    }
-
-    pub fn create_with_mem_stat(mem_stat: Option<Arc<MemStat>>, inner: T) -> Self {
-        Self { inner, mem_stat }
-    }
-}
-
-impl<T: Future> Future for TrackedFuture<T> {
-    type Output = T::Output;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.project();
-        let _g = ThreadTracker::enter(this.mem_stat.clone());
-        this.inner.poll(cx)
-    }
-}
-
-pin_project! {
-    /// A [`Future`] that enters its thread tracker when being polled.
-    #[must_use = "futures do nothing unless you `.await` or poll them"]
     pub struct UnlimitedFuture<T> {
         #[pin]
         inner: T,
@@ -252,135 +200,5 @@ impl<T: Future> Future for UnlimitedFuture<T> {
 
         let this = self.project();
         this.inner.poll(cx)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    mod async_thread_tracker {
-        use std::future::Future;
-        use std::pin::Pin;
-        use std::task::Context;
-        use std::task::Poll;
-
-        use crate::runtime::memory::MemStat;
-        use crate::runtime::memory::StatBuffer;
-        use crate::runtime::TrackedFuture;
-
-        struct Foo {
-            i: usize,
-        }
-
-        impl Future for Foo {
-            type Output = Vec<u8>;
-
-            fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-                let _ = cx;
-                let v = Vec::with_capacity(self.i * 1024 * 1024);
-
-                Poll::Ready(v)
-            }
-        }
-
-        #[test]
-        fn test_async_thread_tracker_normal_quit() -> anyhow::Result<()> {
-            // A future alloc memory and it should be tracked.
-            // The memory is passed out and is de-allocated outside the future and should not be tracked.
-
-            let mem_stat = MemStat::create("test_async_thread_tracker_normal_quit".to_string());
-
-            let f = Foo { i: 3 };
-            let f = TrackedFuture::create_with_mem_stat(Some(mem_stat.clone()), f);
-
-            let rt = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()?;
-
-            let v = rt.block_on(f);
-
-            let used = mem_stat.get_memory_usage();
-            assert_eq!(
-                3 * 1024 * 1024,
-                used,
-                "when future dropped, mem stat buffer is flushed"
-            );
-
-            drop(v);
-
-            let _ = StatBuffer::current().flush::<false>();
-
-            let used = mem_stat.get_memory_usage();
-            assert_eq!(
-                3 * 1024 * 1024,
-                used,
-                "can not see mem dropped outside the future"
-            );
-
-            Ok(())
-        }
-    }
-
-    mod async_thread_tracker_panic {
-        use std::future::Future;
-        use std::pin::Pin;
-        use std::sync::Arc;
-        use std::task::Context;
-        use std::task::Poll;
-
-        use crate::runtime::memory::MemStat;
-        use crate::runtime::TrackedFuture;
-
-        struct Foo {
-            i: usize,
-        }
-
-        impl Future for Foo {
-            type Output = Vec<u8>;
-
-            fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-                let _ = cx;
-                let _v: Vec<u8> = Vec::with_capacity(self.i * 1024 * 1024);
-                panic!("foo");
-            }
-        }
-
-        #[test]
-        fn test_async_thread_tracker_panic() -> anyhow::Result<()> {
-            // A future alloc memory then panic.
-            // The memory stat should revert to 0.
-            //
-            // But it looks panicking allocates some memory.
-            // The used memory after the first panic stays stable.
-
-            // Run a future in a one-shot runtime, return the used memory.
-            fn run_fut_in_rt(mem_stat: &Arc<MemStat>) -> i64 {
-                let f = Foo { i: 8 };
-                let f = TrackedFuture::create_with_mem_stat(Some(mem_stat.clone()), f);
-
-                let rt = tokio::runtime::Builder::new_multi_thread()
-                    .worker_threads(5)
-                    .enable_all()
-                    .build()
-                    .unwrap();
-
-                rt.block_on(async {
-                    let h = crate::runtime::spawn(f);
-                    let res = h.await;
-                    assert!(res.is_err(), "panicked");
-                });
-                mem_stat.get_memory_usage()
-            }
-
-            let mem_stat = MemStat::create("test_async_thread_tracker_panic".to_string());
-
-            let used0 = run_fut_in_rt(&mem_stat);
-            let used1 = run_fut_in_rt(&mem_stat);
-
-            // The constantly used memory is about 1MB.
-            assert!(used1 - used0 < 1024 * 1024);
-            assert!(used0 - used1 < 1024 * 1024);
-
-            Ok(())
-        }
     }
 }

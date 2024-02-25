@@ -403,7 +403,7 @@ impl ScheduleQueue {
             let process_future = proc.processor.async_process();
             executor.async_runtime.spawn(
                 query_id.as_ref().clone(),
-                TrackedFuture::create(ProcessorAsyncTask::create(
+                ProcessorAsyncTask::create(
                     query_id,
                     wakeup_worker_id,
                     proc.processor.clone(),
@@ -413,7 +413,7 @@ impl ScheduleQueue {
                     node_profile,
                     graph,
                     process_future,
-                ))
+                )
                 .in_span(Span::enter_with_local_parent(std::any::type_name::<
                     ProcessorAsyncTask,
                 >())),
