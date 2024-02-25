@@ -55,7 +55,6 @@ use pin_project_lite::pin_project;
 use crate::runtime::memory::MemStat;
 use crate::runtime::memory::OutOfLimit;
 use crate::runtime::memory::StatBuffer;
-use crate::runtime::memory::GLOBAL_MEM_STAT;
 
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=ea33533387d401e86423df1a764b5609
@@ -165,14 +164,15 @@ impl ThreadTracker {
         let has_thread_local = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
             // We need to ensure no heap memory alloc or dealloc. it will cause panic of borrow recursive call.
             let tracker = tracker.borrow();
-            let mem_stat = tracker.mem_stat.as_deref().unwrap_or(&GLOBAL_MEM_STAT);
-            mem_stat.record_memory::<NEED_ROLLBACK>(memory_usage)
+            match tracker.mem_stat.as_deref() {
+                None => Ok(()),
+                Some(mem_stat) => mem_stat.record_memory::<NEED_ROLLBACK>(memory_usage),
+            }
         });
 
         match has_thread_local {
-            Ok(Ok(_)) => Ok(()),
+            Ok(Ok(_)) | Err(_) => Ok(()),
             Ok(Err(oom)) => Err(oom),
-            Err(_access_error) => GLOBAL_MEM_STAT.record_memory::<NEED_ROLLBACK>(memory_usage),
         }
     }
 }

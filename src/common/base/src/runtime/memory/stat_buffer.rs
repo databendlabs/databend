@@ -73,7 +73,11 @@ impl StatBuffer {
     pub fn flush<const NEED_ROLLBACK: bool>(&mut self) -> Result<(), OutOfLimit> {
         match std::mem::take(&mut self.memory_usage) {
             0 => Ok(()),
-            memory_usage => ThreadTracker::record_memory::<NEED_ROLLBACK>(memory_usage),
+            memory_usage => {
+                self.global_mem_stat
+                    .record_memory::<NEED_ROLLBACK>(memory_usage)?;
+                ThreadTracker::record_memory::<NEED_ROLLBACK>(memory_usage)
+            }
         }
     }
 
@@ -136,6 +140,56 @@ mod tests {
     use crate::runtime::memory::StatBuffer;
 
     #[test]
+    fn test_alloc() -> Result<()> {
+        static TEST_MEM_STATE: MemStat = MemStat::global();
+        let mut buffer = StatBuffer::empty(&TEST_MEM_STATE);
+
+        buffer.alloc(1).unwrap();
+        assert_eq!(buffer.memory_usage, 1);
+        assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), 0);
+
+        buffer.destroyed_thread_local_macro = true;
+        buffer.alloc(2).unwrap();
+        assert_eq!(buffer.memory_usage, 1);
+        assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), 2);
+
+        buffer.destroyed_thread_local_macro = false;
+        buffer.alloc(MEM_STAT_BUFFER_SIZE).unwrap();
+        assert_eq!(buffer.memory_usage, 0);
+        assert_eq!(
+            TEST_MEM_STATE.used.load(Ordering::Relaxed),
+            MEM_STAT_BUFFER_SIZE + 1 + 2
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dealloc() -> Result<()> {
+        static TEST_MEM_STATE: MemStat = MemStat::global();
+        let mut buffer = StatBuffer::empty(&TEST_MEM_STATE);
+
+        buffer.dealloc(1);
+        assert_eq!(buffer.memory_usage, -1);
+        assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), 0);
+
+        buffer.destroyed_thread_local_macro = true;
+        buffer.dealloc(2);
+        assert_eq!(buffer.memory_usage, -1);
+        assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), -2);
+
+        buffer.destroyed_thread_local_macro = false;
+        buffer.dealloc(MEM_STAT_BUFFER_SIZE);
+        assert_eq!(buffer.memory_usage, 0);
+        assert_eq!(
+            TEST_MEM_STATE.used.load(Ordering::Relaxed),
+            -(MEM_STAT_BUFFER_SIZE + 1 + 2)
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_mark_destroyed() -> Result<()> {
         static TEST_MEM_STATE: MemStat = MemStat::global();
 
@@ -147,27 +201,6 @@ mod tests {
         buffer.mark_destroyed();
         assert!(buffer.destroyed_thread_local_macro);
         assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), 1);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_dealloc() -> Result<()> {
-        static TEST_MEM_STATE: MemStat = MemStat::global();
-
-        let mut buffer = StatBuffer::empty(&TEST_MEM_STATE);
-
-        assert!(!buffer.destroyed_thread_local_macro);
-        assert_eq!(buffer.memory_usage, 0);
-        buffer.dealloc(1);
-        assert_eq!(buffer.memory_usage, -1);
-        buffer.destroyed_thread_local_macro = true;
-        buffer.dealloc(2);
-        assert_eq!(buffer.memory_usage, -1);
-        assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), -2);
-        buffer.destroyed_thread_local_macro = false;
-        buffer.dealloc(MEM_STAT_BUFFER_SIZE);
-        assert_eq!(buffer.memory_usage, 0);
 
         Ok(())
     }
