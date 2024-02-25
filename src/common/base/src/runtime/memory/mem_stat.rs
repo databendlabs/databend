@@ -124,7 +124,7 @@ impl MemStat {
         Ok(())
     }
 
-    fn rollback(&self, memory_usage: i64) {
+    pub fn rollback(&self, memory_usage: i64) {
         self.used.fetch_sub(memory_usage, Ordering::Relaxed);
 
         if let Some(parent_memory_stat) = self.parent_memory_stat.as_deref() {

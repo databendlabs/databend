@@ -74,9 +74,27 @@ impl StatBuffer {
         match std::mem::take(&mut self.memory_usage) {
             0 => Ok(()),
             memory_usage => {
+                if let Err(error) = self
+                    .global_mem_stat
+                    .record_memory::<NEED_ROLLBACK>(memory_usage)
+                {
+                    if !NEED_ROLLBACK {
+                        let _ = ThreadTracker::record_memory::<false>(memory_usage);
+                    }
+
+                    return Err(error);
+                }
+
                 self.global_mem_stat
                     .record_memory::<NEED_ROLLBACK>(memory_usage)?;
-                ThreadTracker::record_memory::<NEED_ROLLBACK>(memory_usage)
+                if let Err(error) = ThreadTracker::record_memory::<NEED_ROLLBACK>(memory_usage) {
+                    if NEED_ROLLBACK {
+                        self.global_mem_stat.rollback(memory_usage);
+                        return Err(error);
+                    }
+                }
+
+                Ok(())
             }
         }
     }
