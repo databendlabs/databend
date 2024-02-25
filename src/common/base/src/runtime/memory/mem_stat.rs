@@ -1,4 +1,19 @@
-use std::cell::RefCell;
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -6,9 +21,10 @@ use std::sync::Arc;
 use bytesize::ByteSize;
 use log::info;
 
-use crate::runtime::runtime_tracker::OutOfLimit;
-use crate::runtime::ThreadTracker;
-use crate::runtime::GLOBAL_MEM_STAT;
+/// The program mem stat
+///
+/// Every alloc/dealloc stat will be fed to this mem stat.
+pub static GLOBAL_MEM_STAT: MemStat = MemStat::global();
 
 /// Memory allocation stat.
 ///
@@ -20,9 +36,9 @@ pub struct MemStat {
 
     name: Option<String>,
 
-    pub used: AtomicI64,
+    pub(crate) used: AtomicI64,
 
-    pub peak_used: AtomicI64,
+    pub(crate) peak_used: AtomicI64,
 
     /// The limit of max used memory for this tracker.
     ///
@@ -160,5 +176,31 @@ impl MemStat {
             name,
             ByteSize::b(peak_memory_usage)
         );
+    }
+}
+
+/// Error of exceeding limit.
+#[derive(Clone)]
+pub struct OutOfLimit<V = i64> {
+    pub value: V,
+    pub limit: V,
+}
+
+impl<V> OutOfLimit<V> {
+    pub const fn new(value: V, limit: V) -> Self {
+        Self { value, limit }
+    }
+}
+
+impl Debug for OutOfLimit<i64> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "memory usage {}({}) exceeds limit {}({})",
+            ByteSize::b(self.value as u64),
+            self.value,
+            ByteSize::b(self.limit as u64),
+            self.limit,
+        )
     }
 }

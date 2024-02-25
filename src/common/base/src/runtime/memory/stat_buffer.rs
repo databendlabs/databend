@@ -1,11 +1,30 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::ptr::addr_of_mut;
 use std::sync::atomic::Ordering;
 
 use databend_common_exception::Result;
 
+use crate::runtime::memory::mem_stat::OutOfLimit;
 use crate::runtime::memory::MemStat;
-use crate::runtime::runtime_tracker::OutOfLimit;
 use crate::runtime::LimitMemGuard;
 use crate::runtime::ThreadTracker;
+use crate::runtime::GLOBAL_MEM_STAT;
+
+#[thread_local]
+static mut STAT_BUFFER: StatBuffer = StatBuffer::empty(&GLOBAL_MEM_STAT);
 
 static MEM_STAT_BUFFER_SIZE: i64 = 4 * 1024 * 1024;
 
@@ -29,6 +48,10 @@ impl StatBuffer {
             unlimited_flag: false,
             destroyed_thread_local_macro: false,
         }
+    }
+
+    pub fn current() -> &'static mut StatBuffer {
+        unsafe { &mut *addr_of_mut!(STAT_BUFFER) }
     }
 
     pub fn is_unlimited(&self) -> bool {
@@ -135,17 +158,16 @@ mod tests {
         let mut buffer = StatBuffer::empty(&TEST_MEM_STATE);
 
         assert_eq!(buffer.destroyed_thread_local_macro, false);
+        assert_eq!(buffer.memory_usage, 0);
         buffer.dealloc(1);
-        assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), 0);
+        assert_eq!(buffer.memory_usage, -1);
         buffer.destroyed_thread_local_macro = true;
         buffer.dealloc(2);
+        assert_eq!(buffer.memory_usage, -1);
         assert_eq!(TEST_MEM_STATE.used.load(Ordering::Relaxed), -2);
         buffer.destroyed_thread_local_macro = false;
         buffer.dealloc(MEM_STAT_BUFFER_SIZE);
-        assert_eq!(
-            TEST_MEM_STATE.used.load(Ordering::Relaxed),
-            -(1 + 2 + MEM_STAT_BUFFER_SIZE)
-        );
+        assert_eq!(buffer.memory_usage, 0);
 
         Ok(())
     }

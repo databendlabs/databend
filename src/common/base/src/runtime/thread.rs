@@ -18,9 +18,6 @@ use std::thread::JoinHandle;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::runtime::memory::MemStat;
-use crate::runtime::ThreadTracker;
-
 pub struct Thread;
 
 pub struct ThreadJoinHandle<T> {
@@ -67,10 +64,7 @@ impl Thread {
             thread_builder = thread_builder.stack_size(5 * 1024 * 1024);
         }
 
-        let mut mem_stat_name = String::from("UnnamedThread");
-
         if let Some(named) = name.take() {
-            mem_stat_name = format!("{}Thread", named);
             thread_builder = thread_builder.name(named);
         }
 

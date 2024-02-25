@@ -12,12 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod alloc_error_hook;
-mod mem_stat;
-mod stat_buffer;
+use crate::runtime::LimitMemGuard;
+use crate::runtime::ThreadTracker;
 
-pub use alloc_error_hook::set_alloc_error_hook;
-pub use mem_stat::MemStat;
-pub use mem_stat::OutOfLimit;
-pub use mem_stat::GLOBAL_MEM_STAT;
-pub use stat_buffer::StatBuffer;
+pub fn set_alloc_error_hook() {
+    std::alloc::set_alloc_error_hook(|layout| {
+        let _guard = LimitMemGuard::enter_unlimited();
+
+        let out_of_limit_desc = ThreadTracker::replace_error_message(None);
+
+        panic!(
+            "{}",
+            out_of_limit_desc
+                .unwrap_or_else(|| format!("memory allocation of {} bytes failed", layout.size()))
+        );
+    })
+}

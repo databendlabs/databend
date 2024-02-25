@@ -130,13 +130,6 @@ impl Runtime {
         })
     }
 
-    fn tracker_builder(mem_stat: Arc<MemStat>) -> tokio::runtime::Builder {
-        let mut builder = tokio::runtime::Builder::new_multi_thread();
-        builder.enable_all();
-
-        builder
-    }
-
     pub fn get_tracker(&self) -> Arc<MemStat> {
         self.tracker.clone()
     }
@@ -146,7 +139,7 @@ impl Runtime {
     /// its executor.
     pub fn with_default_worker_threads() -> Result<Self> {
         let mem_stat = MemStat::create(String::from("UnnamedRuntime"));
-        let mut runtime_builder = Self::tracker_builder(mem_stat.clone());
+        let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
 
         #[cfg(debug_assertions)]
         {
@@ -160,7 +153,7 @@ impl Runtime {
             runtime_builder.thread_stack_size(20 * 1024 * 1024);
         }
 
-        Self::create(None, mem_stat, &mut runtime_builder)
+        Self::create(None, mem_stat, runtime_builder.enable_all())
     }
 
     #[allow(unused_mut)]
@@ -172,7 +165,7 @@ impl Runtime {
         }
 
         let mem_stat = MemStat::create(mem_stat_name);
-        let mut runtime_builder = Self::tracker_builder(mem_stat.clone());
+        let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
 
         #[cfg(debug_assertions)]
         {
@@ -193,7 +186,7 @@ impl Runtime {
         Self::create(
             thread_name,
             mem_stat,
-            runtime_builder.worker_threads(workers),
+            runtime_builder.enable_all().worker_threads(workers),
         )
     }
 
