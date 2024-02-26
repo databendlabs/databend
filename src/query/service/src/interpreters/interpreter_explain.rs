@@ -23,7 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::BindContext;

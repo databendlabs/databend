@@ -18,8 +18,8 @@ use std::sync::Arc;
 
 use crate::processors::InputPort;
 use crate::processors::OutputPort;
+use crate::processors::PlanScope;
 use crate::processors::ProcessorPtr;
-use crate::PlanScope;
 
 #[derive(Clone)]
 pub struct PipeItem {

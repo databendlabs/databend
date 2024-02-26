@@ -23,16 +23,16 @@ use databend_common_exception::Result;
 
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
-use crate::processors::profile::PlanScope;
 use crate::processors::profile::Profile;
 use crate::processors::DuplicateProcessor;
 use crate::processors::InputPort;
 use crate::processors::OutputPort;
+use crate::processors::PlanScope;
+use crate::processors::PlanScopeGuard;
 use crate::processors::ProcessorPtr;
 use crate::processors::ResizeProcessor;
 use crate::processors::ShuffleProcessor;
 use crate::LockGuard;
-use crate::PlanScopeGuard;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;

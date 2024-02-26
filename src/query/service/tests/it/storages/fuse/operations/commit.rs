@@ -107,7 +107,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::MetaId;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::plan_profile::PlanProfile;
 use databend_common_pipeline_core::processors::profile::Profile;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;

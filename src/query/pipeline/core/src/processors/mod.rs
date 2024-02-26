@@ -16,6 +16,7 @@ mod port;
 mod processor;
 
 mod duplicate_processor;
+mod plan_profile;
 mod port_trigger;
 pub mod profile;
 mod profiles;
@@ -23,6 +24,9 @@ mod resize_processor;
 mod shuffle_processor;
 
 pub use duplicate_processor::DuplicateProcessor;
+pub use plan_profile::PlanProfile;
+pub use plan_profile::PlanScope;
+pub use plan_profile::PlanScopeGuard;
 pub use port::connect;
 pub use port::InputPort;
 pub use port::OutputPort;
@@ -33,8 +37,6 @@ pub use processor::Event;
 pub use processor::EventCause;
 pub use processor::Processor;
 pub use processor::ProcessorPtr;
-pub use profile::PlanScope;
-pub use profile::PlanScopeGuard;
 pub use profile::Profile;
 pub use profile::ProfileLabel;
 pub use profiles::get_statistics_desc;

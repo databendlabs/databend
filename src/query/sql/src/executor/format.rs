@@ -20,7 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::get_statistics_desc;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
