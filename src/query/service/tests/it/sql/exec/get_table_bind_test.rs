@@ -21,6 +21,7 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -107,9 +108,8 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::MetaId;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
-use databend_common_pipeline_core::processors::profile::Profile;
 use databend_common_pipeline_core::InputError;
+use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
 use databend_common_sql::Planner;
@@ -122,6 +122,7 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -392,6 +393,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    fn txn_mgr(&self) -> TxnManagerRef {
         todo!()
     }
 

@@ -48,6 +48,10 @@ impl Interpreter for VacuumTableInterpreter {
         "VacuumTableInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();

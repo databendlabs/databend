@@ -1,0 +1,12 @@
+[package]
+name = "databend-storages-common-txn"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+databend-common-meta-app = { path = "../../../../meta/app" }
+databend-common-meta-types = { path = "../../../../meta/types" }
+parking_lot = { workspace = true }

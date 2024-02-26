@@ -78,6 +78,10 @@ impl Interpreter for InsertInterpreter {
         "InsertIntoInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if check_deduplicate_label(self.ctx.clone()).await? {

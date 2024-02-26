@@ -93,6 +93,10 @@ impl Interpreter for CreateTableInterpreter {
         "CreateTableInterpreterV2"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.plan.tenant.clone();

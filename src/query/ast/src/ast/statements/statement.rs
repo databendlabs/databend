@@ -280,6 +280,11 @@ pub enum Statement {
     DescribePipe(DescribePipeStmt),
     DropPipe(DropPipeStmt),
     AlterPipe(AlterPipeStmt),
+
+    // Transactions
+    Begin,
+    Commit,
+    Abort,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -641,6 +646,9 @@ impl Display for Statement {
             Statement::DropConnection(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeConnection(stmt) => write!(f, "{stmt}")?,
             Statement::ShowConnections(stmt) => write!(f, "{stmt}")?,
+            Statement::Begin => write!(f, "BEGIN")?,
+            Statement::Commit => write!(f, "COMMIT")?,
+            Statement::Abort => write!(f, "ABORT")?,
         }
         Ok(())
     }

@@ -18,9 +18,10 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::convert_byte_size;
-use databend_common_base::base::convert_number_size;
 use once_cell::sync::OnceCell;
+
+use crate::base::convert_byte_size;
+use crate::base::convert_number_size;
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize, Debug)]
 pub enum ProfileStatisticsName {

@@ -254,7 +254,7 @@ impl PhysicalPlanBuilder {
     pub(crate) async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {
         let catalogs = CatalogManager::instance();
         let table = catalogs
-            .get_default_catalog()?
+            .get_default_catalog(self.ctx.txn_mgr())?
             .get_table(self.ctx.get_tenant().as_str(), "system", "one")
             .await?;
 

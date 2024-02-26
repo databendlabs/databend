@@ -48,6 +48,9 @@ use crate::interpreters::interpreter_task_describe::DescribeTaskInterpreter;
 use crate::interpreters::interpreter_task_drop::DropTaskInterpreter;
 use crate::interpreters::interpreter_task_execute::ExecuteTaskInterpreter;
 use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
+use crate::interpreters::interpreter_txn_abort::AbortInterpreter;
+use crate::interpreters::interpreter_txn_begin::BeginInterpreter;
+use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareEndpointInterpreter;
 use crate::interpreters::CreateShareInterpreter;
@@ -518,6 +521,9 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::ShowConnections(_) => Ok(Arc::new(ShowConnectionsInterpreter::try_create(ctx)?)),
+            Plan::Begin => Ok(Arc::new(BeginInterpreter::try_create(ctx)?)),
+            Plan::Commit => Ok(Arc::new(CommitInterpreter::try_create(ctx)?)),
+            Plan::Abort => Ok(Arc::new(AbortInterpreter::try_create(ctx)?)),
         }
     }
 }

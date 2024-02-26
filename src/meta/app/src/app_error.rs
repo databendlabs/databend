@@ -320,6 +320,20 @@ impl UnknownStreamId {
     }
 }
 
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("MultiStmtTxnCommitFailed: {context}")]
+pub struct MultiStmtTxnCommitFailed {
+    context: String,
+}
+
+impl MultiStmtTxnCommitFailed {
+    pub fn new(context: impl Into<String>) -> MultiStmtTxnCommitFailed {
+        Self {
+            context: context.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("DuplicatedUpsertFiles: {table_id} , in operation `{context}`")]
 pub struct DuplicatedUpsertFiles {
@@ -1032,6 +1046,9 @@ pub enum AppError {
 
     #[error(transparent)]
     UnknownStreamId(#[from] UnknownStreamId),
+
+    #[error(transparent)]
+    MultiStatementTxnCommitFailed(#[from] MultiStmtTxnCommitFailed),
 }
 
 impl AppErrorMessage for UnknownBackgroundJob {
@@ -1103,6 +1120,8 @@ impl AppErrorMessage for StreamAlreadyExists {
 impl AppErrorMessage for StreamVersionMismatched {}
 
 impl AppErrorMessage for UnknownStreamId {}
+
+impl AppErrorMessage for MultiStmtTxnCommitFailed {}
 
 impl AppErrorMessage for DuplicatedUpsertFiles {}
 
@@ -1449,6 +1468,9 @@ impl From<AppError> for ErrorCode {
             AppError::VirtualColumnNotFound(err) => ErrorCode::VirtualColumnNotFound(err.message()),
             AppError::VirtualColumnAlreadyExists(err) => {
                 ErrorCode::VirtualColumnAlreadyExists(err.message())
+            }
+            AppError::MultiStatementTxnCommitFailed(err) => {
+                ErrorCode::UnresolvableConflict(err.message())
             }
         }
     }

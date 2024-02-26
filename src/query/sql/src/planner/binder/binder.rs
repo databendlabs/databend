@@ -612,6 +612,9 @@ impl<'a> Binder {
             Statement::DropPipe(_) => {
                 todo!()
             }
+            Statement::Begin=> Plan::Begin,
+            Statement::Commit=>Plan::Commit,
+            Statement::Abort=>Plan::Abort,
         };
         Ok(plan)
     }

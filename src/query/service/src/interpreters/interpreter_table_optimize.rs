@@ -67,6 +67,10 @@ impl Interpreter for OptimizeTableInterpreter {
         "OptimizeTableInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let ctx = self.ctx.clone();

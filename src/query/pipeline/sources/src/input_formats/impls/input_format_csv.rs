@@ -81,6 +81,10 @@ impl InputFormatCSV {
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
                                     empty_field_as: empty_filed_as.to_string(),
+                                    remedy: format!(
+                                        "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set `EMPTY_FIELD_AS = FIELD_DEFAULT`.",
+                                        field.name()
+                                    ),
                                 });
                             }
                             builder.push_default();
@@ -93,6 +97,8 @@ impl InputFormatCSV {
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
                                     empty_field_as: empty_filed_as.to_string(),
+                                    remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL."
+                                        .to_string(),
                                 });
                             }
 

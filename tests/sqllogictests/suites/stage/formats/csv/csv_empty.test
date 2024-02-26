@@ -41,10 +41,10 @@ truncate table ints
 query TIITI
 copy into ints from @data/csv/empty/ file_format = (type = CSV) force=true on_error=continue
 ----
-csv/empty/empty1.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 1
-csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 1
+csv/empty/empty1.csv 0 1 Encountered an empty value for column 3 (`c3` of type Int32), with the FILE_FORMAT option `EMPTY_FIELD_AS=NULL`. To resolve this, please consider one of the following options: 1. Modify the `c3` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT. 1
+csv/empty/empty2.csv 0 1 Encountered an empty value for column 3 (`c3` of type Int32), with the FILE_FORMAT option `EMPTY_FIELD_AS=NULL`. To resolve this, please consider one of the following options: 1. Modify the `c3` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT. 1
 csv/empty/empty3.csv 1 0 NULL NULL
-csv/empty/empty4.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = NULL 1
+csv/empty/empty4.csv 0 1 Encountered an empty value for column 3 (`c3` of type Int32), with the FILE_FORMAT option `EMPTY_FIELD_AS=NULL`. To resolve this, please consider one of the following options: 1. Modify the `c3` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT. 1
 
 query 
 select * from ints order by c0,c1,c2,c3,c4;
@@ -57,10 +57,10 @@ truncate table ints
 query TIITI
 copy into ints from @data/csv/empty/ file_format = (type = CSV empty_field_as = STRING) force=true on_error=continue
 ----
-csv/empty/empty1.csv 0 1 Empty value for column 1 (c1 Int32 NULL), when option empty_field_as = STRING 1
-csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 Int32), when option empty_field_as = STRING 1
+csv/empty/empty1.csv 0 1 Encountered an empty value for column 1 (`c1` of type Int32 NULL), with the FILE_FORMAT option `EMPTY_FIELD_AS=STRING`. To resolve this, please consider Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL. 1
+csv/empty/empty2.csv 0 1 Encountered an empty value for column 3 (`c3` of type Int32), with the FILE_FORMAT option `EMPTY_FIELD_AS=STRING`. To resolve this, please consider Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL. 1
 csv/empty/empty3.csv 1 0 NULL NULL
-csv/empty/empty4.csv 0 1 Empty value for column 0 (c0 Int32 NULL), when option empty_field_as = STRING 1
+csv/empty/empty4.csv 0 1 Encountered an empty value for column 0 (`c0` of type Int32 NULL), with the FILE_FORMAT option `EMPTY_FIELD_AS=STRING`. To resolve this, please consider Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL. 1
 
 query 
 select * from ints order by c0,c1,c2,c3,c4;
@@ -96,10 +96,10 @@ truncate table strings
 query TIITI
 copy into strings from @data/csv/empty/ file_format = (type = CSV) force=true  on_error=continue
 ----
-csv/empty/empty1.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 1
-csv/empty/empty2.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 1
+csv/empty/empty1.csv 0 1 Encountered an empty value for column 3 (`c3` of type String), with the FILE_FORMAT option `EMPTY_FIELD_AS=NULL`. To resolve this, please consider one of the following options: 1. Modify the `c3` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT. 1
+csv/empty/empty2.csv 0 1 Encountered an empty value for column 3 (`c3` of type String), with the FILE_FORMAT option `EMPTY_FIELD_AS=NULL`. To resolve this, please consider one of the following options: 1. Modify the `c3` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT. 1
 csv/empty/empty3.csv 1 0 NULL NULL
-csv/empty/empty4.csv 0 1 Empty value for column 3 (c3 String), when option empty_field_as = NULL 1
+csv/empty/empty4.csv 0 1 Encountered an empty value for column 3 (`c3` of type String), with the FILE_FORMAT option `EMPTY_FIELD_AS=NULL`. To resolve this, please consider one of the following options: 1. Modify the `c3` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT. 1
 
 query 
 select * from strings order by c0,c1,c2,c3,c4;
@@ -115,7 +115,7 @@ copy into strings from @data/csv/empty/ file_format = (type = CSV empty_field_as
 csv/empty/empty1.csv 1 0 NULL NULL
 csv/empty/empty2.csv 1 0 NULL NULL
 csv/empty/empty3.csv 1 0 NULL NULL
-csv/empty/empty4.csv 0 1 Empty value for column 0 (c0 Int32 NULL), when option empty_field_as = STRING 1
+csv/empty/empty4.csv 0 1 Encountered an empty value for column 0 (`c0` of type Int32 NULL), with the FILE_FORMAT option `EMPTY_FIELD_AS=STRING`. To resolve this, please consider Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL. 1
 
 query 
 select * from strings order by c0,c1,c2,c3,c4;

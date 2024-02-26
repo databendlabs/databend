@@ -46,6 +46,10 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
         "ShowGrantTenantsOfShareInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();

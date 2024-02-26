@@ -15,12 +15,12 @@
 use std::collections::HashMap;
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::get_statistics_desc;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;

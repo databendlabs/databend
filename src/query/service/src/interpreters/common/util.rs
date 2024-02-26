@@ -38,12 +38,18 @@ pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool>
     match unsafe { ctx.get_settings().get_deduplicate_label()? } {
         None => Ok(false),
         Some(deduplicate_label) => {
-            let kv_store = UserApiProvider::instance().get_meta_store_client();
-            let raw = kv_store.get_kv(&deduplicate_label).await?;
-            match raw {
-                None => Ok(false),
-                Some(_) => Ok(true),
-            }
+            let is_exists = if ctx.txn_mgr().lock().is_active() {
+                ctx.txn_mgr()
+                    .lock()
+                    .contains_deduplicated_label(&deduplicate_label)
+            } else {
+                UserApiProvider::instance()
+                    .get_meta_store_client()
+                    .get_kv(&deduplicate_label)
+                    .await?
+                    .is_some()
+            };
+            Ok(is_exists)
         }
     }
 }

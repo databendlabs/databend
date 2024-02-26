@@ -16,18 +16,19 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use databend_common_base::runtime::profile::get_statistics_desc;
+use databend_common_base::runtime::profile::ProfileDesc;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::SendableDataBlockStream;
-use databend_common_pipeline_core::get_statistics_desc;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
-use databend_common_pipeline_core::processors::ProfileDesc;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
+use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use log::error;
 use log::info;
 
+use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::ExecutorSettings;
@@ -39,13 +40,18 @@ use crate::sessions::SessionManager;
 use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
-
 #[async_trait::async_trait]
 /// Interpreter is a trait for different PlanNode
 /// Each type of planNode has its own corresponding interpreter
 pub trait Interpreter: Sync + Send {
     /// Return the name of Interpreter, such as "CreateDatabaseInterpreter"
     fn name(&self) -> &str;
+
+    fn is_txn_command(&self) -> bool {
+        false
+    }
+
+    fn is_ddl(&self) -> bool;
 
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
     #[async_backtrace::framed]
@@ -58,6 +64,19 @@ pub trait Interpreter: Sync + Send {
         if let Err(err) = ctx.check_aborting() {
             log_query_finished(&ctx, Some(err.clone()), false);
             return Err(err);
+        }
+        if self.is_ddl() {
+            CommitInterpreter::try_create(ctx.clone())?
+                .execute2()
+                .await?;
+            ctx.clear_tables_cache();
+        }
+        if !self.is_txn_command() && ctx.txn_mgr().lock().is_fail() {
+            let error = ErrorCode::CurrentTransactionIsAborted(
+                "current transaction is aborted, commands ignored until end of transaction block",
+            );
+            log_query_finished(&ctx, Some(error.clone()), false);
+            return Err(error);
         }
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,

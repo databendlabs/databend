@@ -17,6 +17,7 @@ use chrono::Utc;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_storages_common_txn::TxnManager;
 use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;
@@ -46,7 +47,7 @@ pub struct TenantTableInfo {
 }
 
 async fn load_tenant_tables(tenant: &str) -> Result<TenantTablesResponse> {
-    let catalog = CatalogManager::instance().get_default_catalog()?;
+    let catalog = CatalogManager::instance().get_default_catalog(TxnManager::init())?;
     let databases = catalog.list_databases(tenant).await?;
 
     let mut table_infos: Vec<TenantTableInfo> = vec![];

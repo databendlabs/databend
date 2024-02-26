@@ -24,6 +24,7 @@ databend-common-settings = { path = "../settings" }
 databend-common-storage = { path = "../../common/storage" }
 databend-common-users = { path = "../users" }
 databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
+databend-storages-common-txn = { path = "../storages/common/txn" }
 
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }

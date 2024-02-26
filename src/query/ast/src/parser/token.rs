@@ -1158,6 +1158,14 @@ pub enum TokenKind {
     PREFIX,
     #[token("MODIFIED_AFTER", ignore(ascii_case))]
     MODIFIED_AFTER,
+    #[token("BEGIN", ignore(ascii_case))]
+    BEGIN,
+    #[token("COMMIT", ignore(ascii_case))]
+    COMMIT,
+    #[token("ABORT", ignore(ascii_case))]
+    ABORT,
+    #[token("ROLLBACK", ignore(ascii_case))]
+    ROLLBACK,
     #[token("TEMPORARY", ignore(ascii_case))]
     TEMPORARY,
     #[token("SECONDS", ignore(ascii_case))]

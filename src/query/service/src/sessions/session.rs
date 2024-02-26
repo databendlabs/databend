@@ -26,6 +26,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use parking_lot::RwLock;
 
@@ -307,6 +308,10 @@ impl Session {
     pub fn update_query_ids_results(self: &Arc<Self>, query_id: String, result_cache_key: String) {
         self.session_ctx
             .update_query_ids_results(query_id, Some(result_cache_key))
+    }
+
+    pub fn txn_mgr(&self) -> TxnManagerRef {
+        self.session_ctx.txn_mgr()
     }
 }
 

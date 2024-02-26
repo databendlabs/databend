@@ -35,6 +35,8 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
@@ -69,9 +71,7 @@ use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::*;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
-use databend_common_pipeline_core::processors::profile::Profile;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
+use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
@@ -91,6 +91,7 @@ use databend_common_storages_stage::StageTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
@@ -304,6 +305,10 @@ impl QueryContext {
     pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
         self.shared.evict_table_from_cache(catalog, database, table)
     }
+
+    pub fn clear_tables_cache(&self) {
+        self.shared.clear_tables_cache()
+    }
 }
 
 #[async_trait::async_trait]
@@ -508,12 +513,14 @@ impl TableContext for QueryContext {
     async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_catalog(&self.get_tenant(), catalog_name.as_ref())
+            .get_catalog(&self.get_tenant(), catalog_name.as_ref(), self.txn_mgr())
             .await
     }
 
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
-        self.shared.catalog_manager.get_default_catalog()
+        self.shared
+            .catalog_manager
+            .get_default_catalog(self.txn_mgr())
     }
 
     fn get_id(&self) -> String {
@@ -993,6 +1000,10 @@ impl TableContext for QueryContext {
             return !runtime_filter.get_bloom().is_empty();
         }
         false
+    }
+
+    fn txn_mgr(&self) -> TxnManagerRef {
+        self.shared.session.session_ctx.txn_mgr()
     }
 }
 

@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_metrics::transform::*;
-use databend_common_pipeline_core::processors::profile::Profile;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
