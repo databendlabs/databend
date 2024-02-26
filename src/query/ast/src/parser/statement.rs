@@ -642,9 +642,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let describe_table = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ #dot_separated_idents_1_to_3
+            ( DESC | DESCRIBE ) ~ TABLE? ~ #dot_separated_idents_1_to_3
         },
-        |(_, (catalog, database, table))| {
+        |(_, _, (catalog, database, table))| {
             Statement::DescribeTable(DescribeTableStmt {
                 catalog,
                 database,
