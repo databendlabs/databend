@@ -159,7 +159,7 @@ impl Runtime {
             mem_stat,
             runtime_builder
                 .enable_all()
-                .on_thread_start(|| ThreadTracker::init()),
+                .on_thread_start(ThreadTracker::init),
         )
     }
 
