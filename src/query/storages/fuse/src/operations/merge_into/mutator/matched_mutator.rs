@@ -71,12 +71,14 @@ struct AggregationContext {
     block_reader: Arc<BlockReader>,
 }
 
+type UpdateOffset = HashSet<usize>;
+type DeleteOffset = HashSet<usize>;
 pub struct MatchedAggregator {
     ctx: Arc<dyn TableContext>,
     io_request_semaphore: Arc<Semaphore>,
     segment_reader: CompactSegmentInfoReader,
     segment_locations: AHashMap<SegmentIndex, Location>,
-    block_mutation_row_offset: HashMap<u64, (HashSet<usize>, HashSet<usize>)>,
+    block_mutation_row_offset: HashMap<u64, (UpdateOffset, DeleteOffset)>,
     aggregation_ctx: Arc<AggregationContext>,
     target_build_optimization: bool,
     meta_indexes: HashSet<(SegmentIndex, BlockIndex)>,
