@@ -18,7 +18,8 @@
 mod entry;
 
 use databend_common_base::mem_allocator::GlobalAllocator;
-use databend_common_base::runtime::{Runtime, ThreadTracker};
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
