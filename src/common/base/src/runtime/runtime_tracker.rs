@@ -115,6 +115,12 @@ impl ThreadTracker {
         }
     }
 
+    pub fn init() {
+        TRACKER.with(|x| {
+            let _ = x.borrow_mut();
+        })
+    }
+
     /// Replace the `mem_stat` with the current thread's.
     pub fn replace_mem_stat(mem_state: Option<Arc<MemStat>>) -> Option<Arc<MemStat>> {
         TRACKER.with(|v: &RefCell<ThreadTracker>| {

@@ -18,6 +18,8 @@ use std::thread::JoinHandle;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::runtime::ThreadTracker;
+
 pub struct Thread;
 
 pub struct ThreadJoinHandle<T> {
@@ -68,7 +70,14 @@ impl Thread {
             thread_builder = thread_builder.name(named);
         }
 
-        ThreadJoinHandle::create(thread_builder.spawn(f).unwrap())
+        ThreadJoinHandle::create(
+            thread_builder
+                .spawn(move || {
+                    ThreadTracker::init();
+                    f()
+                })
+                .unwrap(),
+        )
     }
 
     pub fn spawn<F, T>(f: F) -> ThreadJoinHandle<T>

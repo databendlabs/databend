@@ -34,6 +34,7 @@ use crate::runtime::catch_unwind::CatchUnwindFuture;
 use crate::runtime::memory::MemStat;
 use crate::runtime::Thread;
 use crate::runtime::ThreadJoinHandle;
+use crate::runtime::ThreadTracker;
 
 /// Methods to spawn tasks.
 pub trait TrySpawn {
@@ -153,7 +154,13 @@ impl Runtime {
             runtime_builder.thread_stack_size(20 * 1024 * 1024);
         }
 
-        Self::create(None, mem_stat, runtime_builder.enable_all())
+        Self::create(
+            None,
+            mem_stat,
+            runtime_builder
+                .enable_all()
+                .on_thread_start(|| ThreadTracker::init()),
+        )
     }
 
     #[allow(unused_mut)]
