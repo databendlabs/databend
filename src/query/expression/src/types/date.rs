@@ -28,6 +28,7 @@ use crate::date_helper::DateConverter;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
+use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::utils::arrow::buffer_into_mut;
@@ -108,7 +109,10 @@ impl ValueType for DateType {
         }
     }
 
-    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
         Some(ColumnBuilder::Date(builder))
     }
 
