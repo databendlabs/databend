@@ -124,6 +124,7 @@ impl Display for MaskpolicyTableIdListKey {
     }
 }
 
+/// A list of table ids
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, Default, PartialEq)]
 pub struct MaskpolicyTableIdList {
     pub id_list: BTreeSet<u64>,
@@ -131,6 +132,7 @@ pub struct MaskpolicyTableIdList {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use super::DatamaskId;
     use super::DatamaskNameIdent;
@@ -222,9 +224,22 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for DatamaskId {}
+    impl kvapi::Value for DatamaskId {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
 
-    impl kvapi::Value for DatamaskMeta {}
+    impl kvapi::Value for DatamaskMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for MaskpolicyTableIdList {}
+    impl kvapi::Value for MaskpolicyTableIdList {
+        /// It contains table ids but it does not own these table in the meta-data hierarchy.
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 }

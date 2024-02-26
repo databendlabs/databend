@@ -237,6 +237,7 @@ impl ListCatalogReq {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use super::CatalogId;
     use super::CatalogIdToName;
@@ -328,9 +329,21 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for CatalogId {}
+    impl kvapi::Value for CatalogId {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
 
-    impl kvapi::Value for CatalogMeta {}
+    impl kvapi::Value for CatalogMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 
-    impl kvapi::Value for CatalogNameIdent {}
+    impl kvapi::Value for CatalogNameIdent {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 }
