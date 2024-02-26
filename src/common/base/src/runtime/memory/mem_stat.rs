@@ -102,7 +102,8 @@ impl MemStat {
         self.peak_used.fetch_max(used, Ordering::Relaxed);
 
         if let Some(parent_memory_stat) = self.parent_memory_stat.as_deref() {
-            if let Err(cause) = parent_memory_stat.record_memory::<NEED_ROLLBACK>(batch_memory_used)
+            if let Err(cause) = parent_memory_stat
+                .record_memory::<NEED_ROLLBACK>(batch_memory_used, current_memory_alloc)
             {
                 if NEED_ROLLBACK {
                     // We only roll back the memory that alloc failed
@@ -228,9 +229,9 @@ mod tests {
     fn test_single_level_mem_stat() -> Result<()> {
         let mem_stat = MemStat::create("TEST".to_string());
 
-        mem_stat.record_memory::<false>(1).unwrap();
-        mem_stat.record_memory::<false>(2).unwrap();
-        mem_stat.record_memory::<false>(-1).unwrap();
+        mem_stat.record_memory::<false>(1, 1).unwrap();
+        mem_stat.record_memory::<false>(2, 2).unwrap();
+        mem_stat.record_memory::<false>(-1, -1).unwrap();
 
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 2);
         assert_eq!(mem_stat.peak_used.load(Ordering::Relaxed), 3);
@@ -243,10 +244,10 @@ mod tests {
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT);
 
-        mem_stat.record_memory::<false>(1).unwrap();
+        mem_stat.record_memory::<false>(1, 1).unwrap();
         assert!(
             mem_stat
-                .record_memory::<false>(MINIMUM_MEMORY_LIMIT)
+                .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
                 .is_err()
         );
         assert_eq!(
@@ -258,7 +259,7 @@ mod tests {
             1 + MINIMUM_MEMORY_LIMIT
         );
 
-        assert!(mem_stat.record_memory::<false>(1).is_err());
+        assert!(mem_stat.record_memory::<false>(1, 1).is_err());
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT + 1
@@ -268,7 +269,7 @@ mod tests {
             1 + MINIMUM_MEMORY_LIMIT + 1
         );
 
-        assert!(mem_stat.record_memory::<true>(1).is_err());
+        assert!(mem_stat.record_memory::<true>(1, 1).is_err());
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT + 1
@@ -278,7 +279,7 @@ mod tests {
             1 + MINIMUM_MEMORY_LIMIT + 1
         );
 
-        assert!(mem_stat.record_memory::<true>(-1).is_err());
+        assert!(mem_stat.record_memory::<true>(-1, -1).is_err());
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT + 1
@@ -288,7 +289,7 @@ mod tests {
             1 + MINIMUM_MEMORY_LIMIT + 1
         );
 
-        assert!(mem_stat.record_memory::<false>(-1).is_err());
+        assert!(mem_stat.record_memory::<false>(-1, -1).is_err());
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT
@@ -307,18 +308,18 @@ mod tests {
         let child_mem_stat =
             MemStat::create_child("TEST_CHILD".to_string(), Some(mem_stat.clone()));
 
-        mem_stat.record_memory::<false>(1).unwrap();
-        mem_stat.record_memory::<false>(2).unwrap();
-        mem_stat.record_memory::<false>(-1).unwrap();
+        mem_stat.record_memory::<false>(1, 1).unwrap();
+        mem_stat.record_memory::<false>(2, 2).unwrap();
+        mem_stat.record_memory::<false>(-1, -1).unwrap();
 
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 2);
         assert_eq!(mem_stat.peak_used.load(Ordering::Relaxed), 3);
         assert_eq!(child_mem_stat.used.load(Ordering::Relaxed), 0);
         assert_eq!(child_mem_stat.peak_used.load(Ordering::Relaxed), 0);
 
-        child_mem_stat.record_memory::<false>(1).unwrap();
-        child_mem_stat.record_memory::<false>(2).unwrap();
-        child_mem_stat.record_memory::<false>(-1).unwrap();
+        child_mem_stat.record_memory::<false>(1, 1).unwrap();
+        child_mem_stat.record_memory::<false>(2, 2).unwrap();
+        child_mem_stat.record_memory::<false>(-1, -1).unwrap();
 
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 4);
         assert_eq!(mem_stat.peak_used.load(Ordering::Relaxed), 5);
@@ -336,10 +337,10 @@ mod tests {
             MemStat::create_child("TEST_CHILD".to_string(), Some(mem_stat.clone()));
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT);
 
-        mem_stat.record_memory::<false>(1).unwrap();
+        mem_stat.record_memory::<false>(1, 1).unwrap();
         assert!(
             mem_stat
-                .record_memory::<false>(MINIMUM_MEMORY_LIMIT)
+                .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
                 .is_ok()
         );
         assert_eq!(
@@ -353,10 +354,10 @@ mod tests {
         assert_eq!(child_mem_stat.used.load(Ordering::Relaxed), 0);
         assert_eq!(child_mem_stat.peak_used.load(Ordering::Relaxed), 0);
 
-        child_mem_stat.record_memory::<false>(1).unwrap();
+        child_mem_stat.record_memory::<false>(1, 1).unwrap();
         assert!(
             child_mem_stat
-                .record_memory::<false>(MINIMUM_MEMORY_LIMIT)
+                .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
                 .is_err()
         );
         assert_eq!(
@@ -385,7 +386,7 @@ mod tests {
 
         assert!(
             child_mem_stat
-                .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT)
+                .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT, 1 + MINIMUM_MEMORY_LIMIT)
                 .is_err()
         );
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
@@ -402,7 +403,7 @@ mod tests {
 
         assert!(
             child_mem_stat
-                .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT)
+                .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT, 1 + MINIMUM_MEMORY_LIMIT)
                 .is_err()
         );
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
