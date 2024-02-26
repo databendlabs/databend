@@ -279,7 +279,7 @@ impl TransformHashJoinProbe {
         }
 
         // Input port is finished, make spilling finished
-        if !self.spill_handler.spill_done() {
+        if self.join_probe_state.hash_join_state.enable_spill && !self.spill_handler.spill_done() {
             return self.spill_finished();
         }
 

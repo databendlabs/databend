@@ -43,9 +43,7 @@ impl SpillHandler {
     }
 
     pub fn spill_done(&self) -> bool {
-        // Only spilling is enabled, `spill done` is meaningful
-        // So check if enabling spilling firstly, then check `spill_done`.
-        self.spill_state.is_some() && self.spill_done
+        self.spill_done
     }
 
     pub fn set_spill_done(&mut self) {
