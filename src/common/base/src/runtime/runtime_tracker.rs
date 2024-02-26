@@ -115,6 +115,8 @@ impl ThreadTracker {
         }
     }
 
+    // rust style thread local is always lazy init.
+    // need to be called immediately after the threads start
     pub fn init() {
         TRACKER.with(|x| {
             let _ = x.borrow_mut();
