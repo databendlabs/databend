@@ -129,11 +129,13 @@ impl TransformHashJoinProbe {
         if self.check_fast_return() {
             self.step = HashJoinProbeStep::FastReturn;
             self.step_logs.push(HashJoinProbeStep::FastReturn);
+            return Ok(());
         }
 
         if self.spill_handler.spill_done() {
             self.step = HashJoinProbeStep::Restore;
             self.step_logs.push(HashJoinProbeStep::Restore);
+            return Ok(());
         }
 
         self.step = HashJoinProbeStep::Running;
@@ -276,9 +278,9 @@ impl TransformHashJoinProbe {
             return Ok(Event::NeedData);
         }
 
-        // Input port is finished, go to spilling step
+        // Input port is finished, make spilling finished
         if !self.spill_handler.spill_done() {
-            return self.set_spill_step();
+            return self.spill_finished();
         }
 
         if self.join_probe_state.hash_join_state.need_final_scan() {
@@ -354,7 +356,6 @@ impl Processor for TransformHashJoinProbe {
     fn event(&mut self) -> Result<Event> {
         match self.step {
             HashJoinProbeStep::WaitBuild => self.wait_build(),
-            HashJoinProbeStep::Spill => self.spill(),
             HashJoinProbeStep::FastReturn => {
                 self.input_port.finish();
                 self.output_port.finish();
@@ -363,6 +364,7 @@ impl Processor for TransformHashJoinProbe {
             HashJoinProbeStep::Running => self.run(),
             HashJoinProbeStep::Restore => self.restore(),
             HashJoinProbeStep::FinalScan => self.final_scan(),
+            HashJoinProbeStep::Spill => unreachable!("{:?}", self.step),
         }
     }
 

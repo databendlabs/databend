@@ -45,7 +45,7 @@ impl SpillHandler {
     pub fn spill_done(&self) -> bool {
         // Only spilling is enabled, `spill done` is meaningful
         // So check if enabling spilling firstly, then check `spill_done`.
-        self.spill_state.is_some() && !self.spill_done
+        self.spill_state.is_some() && self.spill_done
     }
 
     pub fn set_spill_done(&mut self) {
@@ -57,11 +57,16 @@ impl SpillHandler {
         debug_assert!(self.spill_state.is_some());
         self.spill_state.as_ref().unwrap()
     }
+
+    pub fn spill_state_mut(&mut self) -> &mut Box<ProbeSpillState> {
+        debug_assert!(self.spill_state.is_some());
+        self.spill_state.as_mut().unwrap()
+    }
 }
 
 /// Spilling related methods for `TransformHashJoinProbe`
 impl TransformHashJoinProbe {
-    // Restore spilled data from storage
+    // Restore step
     // If `input_data` isn't empty, go to `Running` step
     pub(crate) fn restore(&mut self) -> Result<Event> {
         debug_assert!(self.input_port.is_finished());
@@ -97,11 +102,7 @@ impl TransformHashJoinProbe {
     // 2. the input port has finished and spill finished,
     //    then add spill_partitions to `spill_partition_set` and set `spill_done` to true.
     //    change current step to `WaitBuild`
-    pub(crate) fn spill(&mut self) -> Result<Event> {
-        if !self.input_data.is_empty() {
-            return Ok(Event::Async);
-        }
-        debug_assert!(self.input_port.is_finished());
+    pub(crate) fn spill_finished(&mut self) -> Result<Event> {
         // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
         let spilled_partition_set = &self
             .spill_handler
@@ -165,8 +166,9 @@ impl TransformHashJoinProbe {
 
     // Async spill action
     pub(crate) async fn spill_action(&mut self) -> Result<()> {
-        if let Some(data) = self.input_data.pop_front() {
-            let spill_state = self.spill_handler.spill_state.as_mut().unwrap();
+        let mut unmatched_data_blocks = vec![];
+        for data in self.input_data.drain(..) {
+            let spill_state = self.spill_handler.spill_state_mut();
             let mut hashes = Vec::with_capacity(data.num_rows());
             spill_state.get_hashes(&data, &mut hashes)?;
             // Pass build spilled partition set, we only need to spill data in build spilled partition set
@@ -176,20 +178,28 @@ impl TransformHashJoinProbe {
                 .build_spilled_partitions
                 .read()
                 .clone();
-            let non_matched_data = spill_state
+            let unmatched_data_block = spill_state
                 .spiller
                 .spill_input(data, &hashes, &build_spilled_partitions, self.processor_id)
                 .await?;
-            // Use `non_matched_data` to probe the first round hashtable (if the hashtable isn't empty)
-            if !non_matched_data.is_empty()
+            // Use `unmatched_data_block` to probe the first round hashtable (if the hashtable isn't empty)
+            if !unmatched_data_block.is_empty()
                 && unsafe { &*self.join_probe_state.hash_join_state.build_state.get() }
                     .generation_state
                     .build_num_rows
                     != 0
             {
-                self.probe(non_matched_data)?;
+                unmatched_data_blocks.push(unmatched_data_block);
             }
         }
+        // Probe unmatched blocks with the first round hashtable
+        for block in unmatched_data_blocks.into_iter() {
+            self.probe(block)?;
+        }
+
+        // Back to Running step and try to pull input data
+        self.step = HashJoinProbeStep::Running;
+        self.step_logs.push(HashJoinProbeStep::Running);
         Ok(())
     }
 
