@@ -89,6 +89,24 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                             agg_hashtable = Some(hashtable);
                         }
                     },
+                    // AggregateMeta::Serialized(payload) => {
+                    //     blocks.push(payload.data_block);
+                    // }
+                    // AggregateMeta::AggregatePayload(payload) => match agg_hashtable.as_mut() {
+                    //     Some(ht) => ht.combine_payload(&payload.payload, &mut self.flush_state)?,
+                    //     None => {
+                    //         let capacity =
+                    //             AggregateHashTable::get_capacity_for_count(payload.payload.len());
+                    //         let mut hashtable = AggregateHashTable::new_with_capacity(
+                    //             self.params.group_data_types.clone(),
+                    //             self.params.aggregate_functions.clone(),
+                    //             HashTableConfig::default().with_initial_radix_bits(0),
+                    //             capacity,
+                    //         );
+                    //         hashtable.combine_payload(&payload.payload, &mut self.flush_state)?;
+                    //         agg_hashtable = Some(hashtable);
+                    //     }
+                    // }
                     _ => unreachable!(),
                 }
             }
@@ -240,6 +258,7 @@ where Method: HashMethodBounds
                         }
                     },
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
+                    AggregateMeta::AggregatePayload(_) => unreachable!(),
                 }
             }
 

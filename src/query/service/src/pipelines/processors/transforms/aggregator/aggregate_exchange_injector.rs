@@ -81,7 +81,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                         AggregateMeta::Partitioned { .. } => unreachable!(),
                         AggregateMeta::Serialized(v) => Ok(v.bucket),
                         AggregateMeta::HashTable(v) => Ok(v.bucket),
-                        AggregateMeta::AggregateHashTable(_) => Ok(0),
+                        AggregateMeta::AggregateHashTable(_) => Ok(-1),
+                        AggregateMeta::AggregatePayload(_) => todo!("AGG_HASHTABLE"),
                         AggregateMeta::Spilled(_)
                         | AggregateMeta::Spilling(_)
                         | AggregateMeta::BucketSpilled(_) => Ok(-1),
@@ -200,14 +201,16 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                             });
                         }
                     }
-                    AggregateMeta::AggregateHashTable(payload) => {
-                        for agg_hashtable in agg_hashtable_scatter(payload, self.buckets)? {
-                            blocks.push(
-                            DataBlock::empty_with_meta(
-                                        AggregateMeta::<Method, V>::create_agg_hashtable(agg_hashtable.payload)
-                                    ))
-                        }
-                    },
+                    // AggregateMeta::AggregateHashTable(payload) => {
+                    //     for agg_hashtable in agg_hashtable_scatter(payload, self.buckets)? {
+                    //         blocks.push(
+                    //         DataBlock::empty_with_meta(
+                    //                     AggregateMeta::<Method, V>::create_agg_hashtable(agg_hashtable.payload)
+                    //                 ))
+                    //     }
+                    // },
+                    AggregateMeta::AggregateHashTable(_) => todo!("AGG_HASHTABLE"),
+                    AggregateMeta::AggregatePayload(_) => todo!("AGG_HASHTABLE"),
                 };
 
                 return Ok(blocks);

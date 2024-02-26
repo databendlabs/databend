@@ -21,6 +21,7 @@ use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
+use databend_common_expression::Payload;
 
 use crate::pipelines::processors::transforms::aggregator::HashTableCell;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -29,6 +30,12 @@ use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 pub struct HashTablePayload<T: HashMethodBounds, V: Send + Sync + 'static> {
     pub bucket: isize,
     pub cell: HashTableCell<T, V>,
+}
+
+pub struct AggregatePayload {
+    pub bucket: isize,
+    pub payload: Payload,
+    pub max_partition_count: usize,
 }
 
 pub struct SerializedPayload {
@@ -54,6 +61,7 @@ pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
     Serialized(SerializedPayload),
     HashTable(HashTablePayload<Method, V>),
     AggregateHashTable(PartitionedPayload),
+    AggregatePayload(AggregatePayload),
     BucketSpilled(BucketSpilledPayload),
     Spilled(Vec<BucketSpilledPayload>),
     Spilling(HashTablePayload<PartitionedHashMethod<Method>, V>),
@@ -66,6 +74,14 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
         Box::new(AggregateMeta::<Method, V>::HashTable(HashTablePayload {
             cell,
             bucket,
+        }))
+    }
+
+    pub fn create_agg_payload(bucket: isize, payload: Payload, max_partition_count: usize) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::AggregatePayload(AggregatePayload {
+            bucket,
+            payload,
+            max_partition_count,
         }))
     }
 
@@ -135,6 +151,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
             AggregateMeta::BucketSpilled(_) => f.debug_struct("Aggregate::BucketSpilled").finish(),
             AggregateMeta::AggregateHashTable(_) => {
                 f.debug_struct("AggregateMeta:AggHashTable").finish()
+            }
+            AggregateMeta::AggregatePayload(_) => {
+                f.debug_struct("AggregateMeta:AggregatePayload").finish()
             }
         }
     }

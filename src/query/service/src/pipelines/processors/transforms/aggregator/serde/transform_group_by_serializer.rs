@@ -130,13 +130,13 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
-                    AggregateMeta::AggregateHashTable(payload) => {
-                        self.input_data = Some(SerializeGroupByStream::create(
-                            &self.method,
-                            SerializePayload::PartitionedPayload(payload),
-                        ));
-                        return Ok(Event::Sync);
-                    }
+                    // AggregateMeta::AggregateHashTable(payload) => {
+                    //     self.input_data = Some(SerializeGroupByStream::create(
+                    //         &self.method,
+                    //         SerializePayload::PartitionedPayload(payload),
+                    //     ));
+                    //     return Ok(Event::Sync);
+                    // }
                     AggregateMeta::HashTable(payload) => {
                         self.input_data = Some(SerializeGroupByStream::create(
                             &self.method,
@@ -144,6 +144,8 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
                         ));
                         return Ok(Event::Sync);
                     }
+                    AggregateMeta::AggregateHashTable(_) => todo!("AGG_HASHTABLE"),
+                    AggregateMeta::AggregatePayload(_) => todo!("AGG_HASHTABLE"),
                 }
             }
         }

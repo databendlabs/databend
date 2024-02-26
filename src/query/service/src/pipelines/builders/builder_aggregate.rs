@@ -102,13 +102,13 @@ impl PipelineBuilder {
         let max_block_size = self.settings.get_max_block_size()?;
         let max_threads = self.settings.get_max_threads()?;
 
-        // let enable_experimental_aggregate_hashtable = self
-        //     .settings
-        //     .get_enable_experimental_aggregate_hashtable()?
-        //     && self.ctx.get_cluster().is_empty();
         let enable_experimental_aggregate_hashtable = self
             .settings
-            .get_enable_experimental_aggregate_hashtable()?;
+            .get_enable_experimental_aggregate_hashtable()?
+            && self.ctx.get_cluster().is_empty();
+        // let enable_experimental_aggregate_hashtable = self
+        //     .settings
+        //     .get_enable_experimental_aggregate_hashtable()?;
 
         let params = Self::build_aggregator_params(
             aggregate.input.output_schema()?,
@@ -214,13 +214,13 @@ impl PipelineBuilder {
 
     pub(crate) fn build_aggregate_final(&mut self, aggregate: &AggregateFinal) -> Result<()> {
         let max_block_size = self.settings.get_max_block_size()?;
-        // let enable_experimental_aggregate_hashtable = self
-        //     .settings
-        //     .get_enable_experimental_aggregate_hashtable()?
-        //     && self.ctx.get_cluster().is_empty();
         let enable_experimental_aggregate_hashtable = self
             .settings
-            .get_enable_experimental_aggregate_hashtable()?;
+            .get_enable_experimental_aggregate_hashtable()?
+            && self.ctx.get_cluster().is_empty();
+        // let enable_experimental_aggregate_hashtable = self
+        //     .settings
+        //     .get_enable_experimental_aggregate_hashtable()?;
 
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),

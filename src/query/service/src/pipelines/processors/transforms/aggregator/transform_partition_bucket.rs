@@ -51,6 +51,8 @@ use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 
+use super::AggregatePayload;
+
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
 
 struct InputPortState {
@@ -69,6 +71,7 @@ pub struct TransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send + S
     buckets_blocks: BTreeMap<isize, Vec<DataBlock>>,
     flush_state: PayloadFlushState,
     partition_payloads: Vec<PartitionedPayload>,
+    payloads: Vec<AggregatePayload>,
     unsplitted_blocks: Vec<DataBlock>,
     max_partition_count: usize,
     _phantom: PhantomData<V>,
@@ -98,6 +101,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             unsplitted_blocks: vec![],
             flush_state: PayloadFlushState::default(),
             partition_payloads: vec![],
+            payloads: vec![],
             initialized_all_inputs: false,
             max_partition_count: 0,
             _phantom: Default::default(),
@@ -158,9 +162,14 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     AggregateMeta::BucketSpilled(payload) => {
                         (payload.bucket, SINGLE_LEVEL_BUCKET_NUM)
                     }
-                    AggregateMeta::Serialized(payload) => (payload.bucket, payload.bucket),
-                    AggregateMeta::HashTable(payload) => (payload.bucket, payload.bucket),
+                    AggregateMeta::Serialized(payload) => {
+                        println!("ser");
+                        (payload.bucket, payload.bucket)},
+                    AggregateMeta::HashTable(payload) => {
+                        println!("hash");
+                        (payload.bucket, payload.bucket)},
                     AggregateMeta::Spilled(_) => {
+                        println!("spilled");
                         let meta = data_block.take_meta().unwrap();
 
                         if let Some(AggregateMeta::Spilled(buckets_payload)) =
@@ -191,10 +200,17 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         unreachable!()
                     }
                     AggregateMeta::AggregateHashTable(p) => {
+                        println!("agg");
                         self.max_partition_count =
                             self.max_partition_count.max(p.partition_count());
 
                         (0, 0)
+                    }
+                    AggregateMeta::AggregatePayload(p) => {
+                        println!("agg_payload");
+                        self.max_partition_count = self.max_partition_count.max(p.max_partition_count);
+
+                        (p.bucket, p.bucket)
                     }
                 };
 
@@ -214,13 +230,20 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         }
 
         if self.max_partition_count > 0 {
+            // self.unsplitted_blocks.push(data_block);
             let meta = data_block.take_meta().unwrap();
-            if let Some(AggregateMeta::AggregateHashTable(p)) =
-                AggregateMeta::<Method, V>::downcast_from(meta)
-            {
-                self.partition_payloads.push(p);
+            // if let Some(AggregateMeta::AggregateHashTable(p)) =
+            //     AggregateMeta::<Method, V>::downcast_from(meta)
+            // {
+            //     self.partition_payloads.push(p);
+            //     return 0;
+            // }
+
+            if let Some(AggregateMeta::AggregatePayload(p)) = AggregateMeta::<Method, V>::downcast_from(meta) {
+                let res = p.bucket.clone();
+                self.payloads.push(p);
+                return res;
             }
-            return 0;
         }
 
         self.unsplitted_blocks.push(data_block);
@@ -349,7 +372,14 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             return Ok(Event::NeedData);
         }
 
-        if self.partition_payloads.len() == self.inputs.len()
+        // if self.partition_payloads.len() == self.inputs.len()
+        //     || (!self.buckets_blocks.is_empty() && !self.unsplitted_blocks.is_empty())
+        // {
+        //     // Split data blocks if it's unsplitted.
+        //     return Ok(Event::Sync);
+        // }
+
+        if (self.payloads.len()>0 && self.initialized_all_inputs)
             || (!self.buckets_blocks.is_empty() && !self.unsplitted_blocks.is_empty())
         {
             // Split data blocks if it's unsplitted.
@@ -418,18 +448,59 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(p) = self.partition_payloads.pop() {
-            let data = AggregateMeta::<Method, V>::AggregateHashTable(p);
-            let data_block = DataBlock::empty_with_meta(AggregateMeta::<Method, V>::create_partitioned(0, vec![data]));
-            self.output.push_data(Ok(data_block));
-            return Ok(Event::NeedConsume);
-        }
-
         self.output.finish();
         Ok(Event::Finished)
     }
 
     fn process(&mut self) -> Result<()> {
+        if !self.payloads.is_empty() {
+            let group_types = self.payloads[0].payload.group_types.clone();
+            let aggrs = self.payloads[0].payload.aggrs.clone();
+            let mut partitioned_payload = PartitionedPayload::new(group_types.clone(), aggrs.clone(), self.max_partition_count as u64);
+
+            let mut arenas = vec![];
+            for p in self.payloads.drain(0..) {
+                arenas.append(&mut vec![p.payload.arena.clone()]);
+                if p.max_partition_count != self.max_partition_count {
+                    partitioned_payload.combine_single(p.payload, &mut self.flush_state);
+                } else {
+                    partitioned_payload.payloads[p.bucket as usize].combine(p.payload);
+                }
+                // partitioned_payload.combine_single(p.payload, &mut self.flush_state);
+            }
+            partitioned_payload.arenas.extend_from_slice(&arenas);
+
+            for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
+                let mut part = PartitionedPayload::new(group_types.clone(), aggrs.clone(), 1);
+                part.combine_single(payload, &mut self.flush_state);
+                part.arenas.extend_from_slice(&partitioned_payload.arenas);
+
+                if part.len() != 0 {
+                    match self.buckets_blocks.entry(bucket as isize) {
+                        Entry::Vacant(v) => {
+                            v.insert(vec![DataBlock::empty_with_meta(
+                                AggregateMeta::<Method, V>::create_agg_hashtable(part),
+                            )]);
+                        }
+                        Entry::Occupied(mut v) => {
+                            v.get_mut().push(DataBlock::empty_with_meta(
+                                AggregateMeta::<Method, V>::create_agg_hashtable(part),
+                            ));
+                        }
+                    };
+
+                    // self.buckets_blocks
+                    //     .insert(bucket as isize, vec![DataBlock::empty_with_meta(
+                    //         AggregateMeta::<Method, V>::create_agg_hashtable(part),
+                    //     )]);
+                }
+            }
+
+
+            return Ok(());
+
+        }
+
         if !self.partition_payloads.is_empty() {
             let mut payloads = Vec::with_capacity(self.partition_payloads.len());
 
@@ -496,6 +567,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                     AggregateMeta::Serialized(payload) => self.partition_block(payload)?,
                     AggregateMeta::HashTable(payload) => self.partition_hashtable(payload)?,
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
+                    AggregateMeta::AggregatePayload(_) => unreachable!(),
                 };
 
                 for (bucket, block) in data_blocks.into_iter().enumerate() {
