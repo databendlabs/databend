@@ -20,6 +20,8 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -67,7 +69,7 @@ pub(crate) struct Node {
     state: std::sync::Mutex<State>,
     pub(crate) processor: ProcessorPtr,
 
-    pub(crate) profile: Arc<Profile>,
+    pub(crate) tracking_payload: TrackingPayload,
     updated_list: Arc<UpdateList>,
     inputs_port: Vec<Arc<InputPort>>,
     outputs_port: Vec<Arc<OutputPort>>,
@@ -88,21 +90,24 @@ impl Node {
             updated_list: UpdateList::create(),
             inputs_port: inputs_port.to_vec(),
             outputs_port: outputs_port.to_vec(),
-            profile: Arc::new(Profile::create(
-                pid,
-                p_name,
-                scope.as_ref().map(|x| x.id),
-                scope.as_ref().map(|x| x.name.clone()),
-                scope.as_ref().and_then(|x| x.parent_id),
-                scope
-                    .as_ref()
-                    .map(|x| x.title.clone())
-                    .unwrap_or(Arc::new(String::new())),
-                scope
-                    .as_ref()
-                    .map(|x| x.labels.clone())
-                    .unwrap_or(Arc::new(vec![])),
-            )),
+            tracking_payload: TrackingPayload {
+                profile: Some(Arc::new(Profile::create(
+                    pid,
+                    p_name,
+                    scope.as_ref().map(|x| x.id),
+                    scope.as_ref().map(|x| x.name.clone()),
+                    scope.as_ref().and_then(|x| x.parent_id),
+                    scope
+                        .as_ref()
+                        .map(|x| x.title.clone())
+                        .unwrap_or(Arc::new(String::new())),
+                    scope
+                        .as_ref()
+                        .map(|x| x.labels.clone())
+                        .unwrap_or(Arc::new(vec![])),
+                ))),
+                mem_stat: None,
+            },
         })
     }
 
@@ -220,9 +225,18 @@ impl ExecutingGraph {
                     let output_trigger = graph[source_node].create_trigger(edge_index);
                     graph[source_node].outputs_port[source_port].set_trigger(output_trigger);
 
-                    if graph[source_node].profile.plan_id.is_some()
-                        && graph[source_node].profile.plan_id != graph[target_node].profile.plan_id
-                    {
+                    let source_plan_id = graph[source_node]
+                        .tracking_payload
+                        .profile
+                        .as_ref()
+                        .and_then(|x| x.plan_id);
+                    let target_plan_id = graph[target_node]
+                        .tracking_payload
+                        .profile
+                        .as_ref()
+                        .and_then(|x| x.plan_id);
+
+                    if source_plan_id.is_some() && source_plan_id != target_plan_id {
                         graph[source_node].outputs_port[source_port].record_profile();
                     }
 
@@ -297,12 +311,16 @@ impl ExecutingGraph {
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
                 let node = &locker.graph[schedule_index];
 
-                Profile::track_profile(&node.profile);
+                let event = {
+                    let _guard = ThreadTracker::tracking(node.tracking_payload.clone());
 
-                if state_guard_cache.is_none() {
-                    state_guard_cache = Some(node.state.lock().unwrap());
-                }
-                let event = node.processor.event(event_cause)?;
+                    if state_guard_cache.is_none() {
+                        state_guard_cache = Some(node.state.lock().unwrap());
+                    }
+
+                    node.processor.event(event_cause)
+                }?;
+
                 trace!(
                     "node id: {:?}, name: {:?}, event: {:?}",
                     node.processor.id(),
@@ -412,7 +430,10 @@ impl ScheduleQueue {
             workers_condvar.inc_active_async_worker();
             let weak_executor = Arc::downgrade(executor);
             let graph = proc.graph;
-            let node_profile = executor.graph.get_node_profile(proc.processor.id()).clone();
+            let tracking_payload = executor
+                .graph
+                .get_node_tracking_payload(proc.processor.id())
+                .clone();
             let process_future = proc.processor.async_process();
             executor.async_runtime.spawn(
                 query_id.as_ref().clone(),
@@ -423,7 +444,7 @@ impl ScheduleQueue {
                     global_queue,
                     workers_condvar,
                     weak_executor,
-                    node_profile,
+                    tracking_payload,
                     graph,
                     process_future,
                 )
@@ -482,15 +503,15 @@ impl RunningGraph {
         Ok(schedule_queue)
     }
 
-    pub(crate) fn get_node_profile(&self, pid: NodeIndex) -> &Arc<Profile> {
-        &self.0.graph[pid].profile
+    pub(crate) fn get_node_tracking_payload(&self, pid: NodeIndex) -> &TrackingPayload {
+        &self.0.graph[pid].tracking_payload
     }
 
     pub fn get_proc_profiles(&self) -> Vec<Arc<Profile>> {
         self.0
             .graph
             .node_weights()
-            .map(|x| x.profile.clone())
+            .map(|x| x.tracking_payload.profile.clone().unwrap())
             .collect::<Vec<_>>()
     }
 

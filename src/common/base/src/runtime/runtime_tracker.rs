@@ -103,6 +103,21 @@ pub struct TrackingPayload {
     pub mem_stat: Option<Arc<MemStat>>,
 }
 
+pub struct TrackingGuard {
+    saved: TrackingPayload,
+}
+
+impl Drop for TrackingGuard {
+    fn drop(&mut self) {
+        let _ = StatBuffer::current().flush::<false>(0);
+
+        TRACKER.with(|x| {
+            let mut thread_tracker = x.borrow_mut();
+            std::mem::swap(&mut thread_tracker.payload, &mut self.saved);
+        });
+    }
+}
+
 impl Drop for ThreadTracker {
     fn drop(&mut self) {
         StatBuffer::current().mark_destroyed();
@@ -138,6 +153,19 @@ impl ThreadTracker {
         TRACKER.with(f)
     }
 
+    pub fn tracking(mut tracking_payload: TrackingPayload) -> TrackingGuard {
+        let _ = StatBuffer::current().flush::<false>(0);
+
+        TRACKER.with(move |x| {
+            let mut thread_tracker = x.borrow_mut();
+            std::mem::swap(&mut thread_tracker.payload, &mut tracking_payload);
+
+            TrackingGuard {
+                saved: tracking_payload,
+            }
+        })
+    }
+
     /// Replace the `out_of_limit_desc` with the current thread's.
     pub fn replace_error_message(desc: Option<String>) -> Option<String> {
         TRACKER.with(|v: &RefCell<ThreadTracker>| {
@@ -171,6 +199,24 @@ impl ThreadTracker {
     #[inline]
     pub fn dealloc(size: i64) {
         StatBuffer::current().dealloc(size)
+    }
+
+    pub fn movein_memory(size: i64) {
+        TRACKER.with(|tracker| {
+            let thread_tracker = tracker.borrow();
+            if let Some(mem_stat) = &thread_tracker.payload.mem_stat {
+                mem_stat.movein_memory(size);
+            }
+        })
+    }
+
+    pub fn moveout_memory(size: i64) {
+        TRACKER.with(|tracker| {
+            let thread_tracker = tracker.borrow();
+            if let Some(mem_stat) = &thread_tracker.payload.mem_stat {
+                mem_stat.moveout_memory(size);
+            }
+        })
     }
 
     pub fn record_memory<const ROLLBACK: bool>(batch: i64, cur: i64) -> Result<(), OutOfLimit> {

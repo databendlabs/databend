@@ -46,6 +46,7 @@ pub use runtime::TrySpawn;
 pub use runtime::GLOBAL_TASK;
 pub use runtime_tracker::LimitMemGuard;
 pub use runtime_tracker::ThreadTracker;
+pub use runtime_tracker::TrackingPayload;
 pub use runtime_tracker::UnlimitedFuture;
 pub use thread::Thread;
 pub use thread::ThreadJoinHandle;

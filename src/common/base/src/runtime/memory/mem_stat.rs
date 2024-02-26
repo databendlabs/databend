@@ -137,6 +137,14 @@ impl MemStat {
         }
     }
 
+    pub fn movein_memory(&self, size: i64) {
+        self.used.fetch_add(size, Ordering::Relaxed);
+    }
+
+    pub fn moveout_memory(&self, size: i64) {
+        self.used.fetch_sub(size, Ordering::Relaxed);
+    }
+
     /// Check if used memory is out of the limit.
     #[inline]
     fn check_limit(&self, used: i64) -> Result<(), OutOfLimit> {

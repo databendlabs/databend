@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use petgraph::prelude::NodeIndex;
@@ -93,7 +94,8 @@ impl ExecutorWorkerContext {
         &mut self,
         proc: ProcessorWrapper,
     ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
-        Profile::track_profile(proc.graph.get_node_profile(proc.processor.id()));
+        let payload = proc.graph.get_node_tracking_payload(proc.processor.id());
+        let _guard = ThreadTracker::tracking(payload.clone());
 
         let instant = Instant::now();
 

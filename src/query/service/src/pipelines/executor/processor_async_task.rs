@@ -26,6 +26,8 @@ use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayload;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -47,7 +49,7 @@ pub struct ProcessorAsyncTask {
     processor_id: NodeIndex,
     queue: Arc<ExecutorTasksQueue>,
     workers_condvar: Arc<WorkersCondvar>,
-    profile: Arc<Profile>,
+    tracking_payload: TrackingPayload,
     instant: Instant,
     last_nanos: usize,
     graph: Arc<RunningGraph>,
@@ -62,7 +64,7 @@ impl ProcessorAsyncTask {
         queue: Arc<ExecutorTasksQueue>,
         workers_condvar: Arc<WorkersCondvar>,
         weak_executor: Weak<PipelineExecutor>,
-        profile: Arc<Profile>,
+        tracking_payload: TrackingPayload,
         graph: Arc<RunningGraph>,
         inner: Inner,
     ) -> ProcessorAsyncTask {
@@ -133,7 +135,7 @@ impl ProcessorAsyncTask {
             processor_id,
             queue,
             workers_condvar,
-            profile,
+            tracking_payload,
             last_nanos: instant.elapsed().as_nanos() as usize,
             instant,
             graph,
@@ -150,7 +152,7 @@ impl Future for ProcessorAsyncTask {
             return Poll::Ready(());
         }
 
-        Profile::track_profile(&self.profile);
+        let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
 
         let last_nanos = self.last_nanos;
         let last_instant = self.instant;
