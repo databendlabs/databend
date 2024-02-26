@@ -15,13 +15,13 @@ statement ok
 insert into t values (1);
 
 statement ok
-DROP STAGE IF EXISTS s;
+DROP STAGE IF EXISTS s_txn_copy;
 
 statement ok
-CREATE STAGE s;
+CREATE STAGE s_txn_copy;
 
 statement ok
-copy into @s from t;
+copy into @s_txn_copy from t;
 
 statement ok
 create table t1(c int);
@@ -31,7 +31,7 @@ statement ok
 begin;
 
 statement ok
-copy into t1 from @s;
+copy into t1 from @s_txn_copy;
 
 query I
 select * from t1;
@@ -39,7 +39,7 @@ select * from t1;
 1
 
 statement ok
-copy into t1 from @s;
+copy into t1 from @s_txn_copy;
 
 query I
 select * from t1;
@@ -56,7 +56,7 @@ select * from t1;
 1
 
 statement ok
-copy into t1 from @s;
+copy into t1 from @s_txn_copy;
 
 query I
 select * from t1;
@@ -80,13 +80,13 @@ statement ok
 insert into t values (1);
 
 statement ok
-DROP STAGE IF EXISTS s;
+DROP STAGE IF EXISTS s_txn_copy;
 
 statement ok
-CREATE STAGE s;
+CREATE STAGE s_txn_copy;
 
 statement ok
-copy into @s from t;
+copy into @s_txn_copy from t;
 
 statement ok
 create table t1(c int);
@@ -97,7 +97,7 @@ begin;
 
 onlyif mysql
 statement ok
-copy into t1 from @s purge = true;
+copy into t1 from @s_txn_copy purge = true;
 
 onlyif mysql
 statement error 1025
@@ -118,7 +118,7 @@ select count(*) from t1;
 0
 
 query I
-select * from @s;
+select * from @s_txn_copy;
 ----
 1
 
