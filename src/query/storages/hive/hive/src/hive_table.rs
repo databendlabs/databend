@@ -54,6 +54,7 @@ use databend_common_storage::DataOperator;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::table::ChangeType;
 use futures::TryStreamExt;
 use log::info;
 use log::trace;
@@ -621,6 +622,7 @@ impl Table for HiveTable {
     async fn table_statistics(
         &self,
         _ctx: Arc<dyn TableContext>,
+        _change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         Ok(None)
     }

@@ -534,7 +534,7 @@ async fn adjust_bloom_runtime_filter(
     }
     if let Some(table_index) = table_index {
         let table = metadata.read().table(table_index).table();
-        if let Some(stats) = table.table_statistics(ctx.clone()).await? {
+        if let Some(stats) = table.table_statistics(ctx.clone(), None).await? {
             if let Some(num_rows) = stats.num_rows {
                 let join_cardinality = RelExpr::with_s_expr(s_expr)
                     .derive_cardinality()?

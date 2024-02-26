@@ -63,6 +63,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::table_storage_prefix;
+use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
@@ -728,6 +729,7 @@ impl Table for FuseTable {
     async fn table_statistics(
         &self,
         _ctx: Arc<dyn TableContext>,
+        _change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         let stats = match self.table_type {
             FuseTableType::AttachedReadOnly => {

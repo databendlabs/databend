@@ -82,7 +82,6 @@ use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
-use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use log::info;
 use parking_lot::RwLock;
@@ -338,11 +337,7 @@ impl Binder {
                     return Ok((s_expr, bind_context));
                 }
 
-                let mode = table_meta
-                    .options()
-                    .get(OPT_KEY_MODE)
-                    .and_then(|s| s.parse::<StreamMode>().ok())
-                    .unwrap_or(StreamMode::AppendOnly);
+                let mode = table_meta.get_stream_mode(self.ctx.clone()).await?;
                 let table_version = table_meta
                     .options()
                     .get(OPT_KEY_TABLE_VER)
@@ -1407,7 +1402,9 @@ impl Binder {
             }
         }
 
-        let stat = table.table_statistics(self.ctx.clone()).await?;
+        let stat = table
+            .table_statistics(self.ctx.clone(), change_type.clone())
+            .await?;
 
         Ok((
             SExpr::create_leaf(Arc::new(

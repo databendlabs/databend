@@ -36,6 +36,8 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::StreamMode;
 
 use crate::catalog::Catalog;
 use crate::lock::Lock;
@@ -128,6 +130,14 @@ pub trait Table: Sync + Send {
             fields,
             ..self.schema().as_ref().clone()
         })
+    }
+
+    async fn get_stream_mode(&self, ctx: Arc<dyn TableContext>) -> Result<StreamMode> {
+        let _ = ctx;
+        Err(ErrorCode::UnsupportedEngineParams(format!(
+            "Stream mode is not supported for the '{}' engine.",
+            self.engine()
+        )))
     }
 
     /// Whether the table engine supports prewhere optimization.
@@ -275,8 +285,9 @@ pub trait Table: Sync + Send {
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
+        change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
-        let _ = ctx;
+        let (_, _) = (ctx, change_type);
 
         Ok(None)
     }
