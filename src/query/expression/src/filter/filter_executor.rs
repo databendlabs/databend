@@ -179,7 +179,11 @@ impl FilterExecutor {
         true_idx
     }
 
-    pub fn mut_true_selection(&mut self) -> &mut [u32] {
+    pub fn true_selection(&mut self) -> &[u32] {
+        &self.true_selection
+    }
+
+    pub fn mutable_true_selection(&mut self) -> &mut [u32] {
         &mut self.true_selection
     }
 }

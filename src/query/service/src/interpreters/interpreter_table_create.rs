@@ -28,6 +28,7 @@ use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -165,7 +166,7 @@ impl CreateTableInterpreter {
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
         let reply = catalog.create_table(self.build_request(None)?).await?;
-        if !reply.new_table {
+        if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
         }
 

@@ -182,14 +182,18 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::LockMeta;
+    use crate::schema::TableId;
     use crate::schema::TableLockKey;
-    use crate::schema::PREFIX_TABLE_LOCK;
 
     /// __fd_table_lock/table_id/revision -> LockMeta
     impl kvapi::Key for TableLockKey {
-        const PREFIX: &'static str = PREFIX_TABLE_LOCK;
+        const PREFIX: &'static str = "__fd_table_lock";
 
         type ValueType = LockMeta;
+
+        fn parent(&self) -> Option<String> {
+            Some(TableId::new(self.table_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -208,4 +212,6 @@ mod kvapi_key_impl {
             Ok(TableLockKey { table_id, revision })
         }
     }
+
+    impl kvapi::Value for LockMeta {}
 }

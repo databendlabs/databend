@@ -94,8 +94,14 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         Num::try_downcast_owned_builder(builder)
     }
 
-    fn try_upcast_column_builder(_builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
-        None
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Decimal(Num::upcast_builder(
+            builder,
+            decimal_size.unwrap(),
+        )))
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -360,6 +366,7 @@ pub trait Decimal:
     fn upcast_scalar(scalar: Self, size: DecimalSize) -> Scalar;
     fn upcast_column(col: Buffer<Self>, size: DecimalSize) -> Column;
     fn upcast_domain(domain: SimpleDomain<Self>, size: DecimalSize) -> Domain;
+    fn upcast_builder(builder: Vec<Self>, size: DecimalSize) -> DecimalColumnBuilder;
     fn data_type() -> DataType;
     const MIN: Self;
     const MAX: Self;
@@ -574,6 +581,10 @@ impl Decimal for i128 {
         Domain::Decimal(DecimalDomain::Decimal128(domain, size))
     }
 
+    fn upcast_builder(builder: Vec<Self>, size: DecimalSize) -> DecimalColumnBuilder {
+        DecimalColumnBuilder::Decimal128(builder, size)
+    }
+
     fn data_type() -> DataType {
         DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
             precision: MAX_DECIMAL128_PRECISION,
@@ -731,6 +742,10 @@ impl Decimal for i256 {
 
     fn upcast_domain(domain: SimpleDomain<Self>, size: DecimalSize) -> Domain {
         Domain::Decimal(DecimalDomain::Decimal256(domain, size))
+    }
+
+    fn upcast_builder(builder: Vec<Self>, size: DecimalSize) -> DecimalColumnBuilder {
+        DecimalColumnBuilder::Decimal256(builder, size)
     }
 
     fn data_type() -> DataType {
@@ -1079,6 +1094,13 @@ impl DecimalColumnBuilder {
                     .map(|num| DecimalScalar::DECIMAL_TYPE(num, *size))
             }
         })
+    }
+
+    pub fn decimal_size(&self) -> DecimalSize {
+        match self {
+            DecimalColumnBuilder::Decimal128(_, size)
+            | DecimalColumnBuilder::Decimal256(_, size) => *size,
+        }
     }
 }
 

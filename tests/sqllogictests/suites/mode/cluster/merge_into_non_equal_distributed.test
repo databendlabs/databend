@@ -22,7 +22,7 @@ insert into t1 values(11),(12),(13),(14),(15);
 statement ok
 insert into t2 values(8);
 
-query t
+query ?
 select * from t1 order by a;
 ----
 1
@@ -57,18 +57,19 @@ target_table: default.default.t1
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0)]
 ├── unmatched insert: [condition: None,insert into (a) values(CAST(a (#0) AS Int32 NULL))]
-└── HashJoin: RIGHT OUTER
-    ├── equi conditions: []
-    ├── non-equi conditions: [lt(t1.a (#1), t2.a (#0))]
+└── Join(Right)
+    ├── build keys: []
+    ├── probe keys: []
+    ├── other filters: [lt(t1.a (#1), t2.a (#0))]
     ├── Exchange(Merge)
-    │   └── LogicalGet
-    │       ├── table: default.default.t1
+    │   └── Scan
+    │       ├── table: default.t1
     │       ├── filters: []
     │       ├── order by: []
     │       └── limit: NONE
     └── Exchange(Merge)
-        └── LogicalGet
-            ├── table: default.default.t2
+        └── Scan
+            ├── table: default.t2
             ├── filters: []
             ├── order by: []
             └── limit: NONE

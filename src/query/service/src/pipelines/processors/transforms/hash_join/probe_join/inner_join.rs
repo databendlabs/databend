@@ -17,15 +17,10 @@ use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
 use databend_common_expression::KeyAccessor;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
-use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
@@ -183,13 +178,9 @@ impl HashJoinProbeState {
             )?);
         }
 
-        match &self.hash_join_state.hash_join_desc.other_predicate {
+        match &mut probe_state.filter_executor {
             None => Ok(result_blocks),
-            Some(other_predicate) => {
-                // Wrap `is_true` to `other_predicate`
-                let other_predicate = cast_expr_to_non_null_boolean(other_predicate.clone())?;
-                assert_eq!(other_predicate.data_type(), &DataType::Boolean);
-
+            Some(filter_executor) => {
                 let mut filtered_blocks = Vec::with_capacity(result_blocks.len());
                 for result_block in result_blocks {
                     if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
@@ -197,16 +188,9 @@ impl HashJoinProbeState {
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
                     }
-
-                    let evaluator =
-                        Evaluator::new(&result_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                    let predicate = evaluator
-                        .run(&other_predicate)?
-                        .try_downcast::<BooleanType>()
-                        .unwrap();
-                    let res = result_block.filter_boolean_value(&predicate)?;
-                    if !res.is_empty() {
-                        filtered_blocks.push(res);
+                    let result_block = filter_executor.filter(result_block)?;
+                    if !result_block.is_empty() {
+                        filtered_blocks.push(result_block);
                     }
                 }
 

@@ -21,10 +21,6 @@ use chrono::Utc;
 
 use crate::schema::CreateOption;
 
-const PREFIX_DATAMASK: &str = "__fd_datamask";
-const PREFIX_DATAMASK_BY_ID: &str = "__fd_datamask_by_id";
-const PREFIX_DATAMASK_ID_LIST: &str = "__fd_datamask_id_list";
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatamaskNameIdent {
     pub tenant: String,
@@ -113,6 +109,15 @@ pub struct MaskpolicyTableIdListKey {
     pub name: String,
 }
 
+impl MaskpolicyTableIdListKey {
+    pub fn new(tenant: impl ToString, name: impl ToString) -> Self {
+        MaskpolicyTableIdListKey {
+            tenant: tenant.to_string(),
+            name: name.to_string(),
+        }
+    }
+}
+
 impl Display for MaskpolicyTableIdListKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}'/'{}'", self.tenant, self.name)
@@ -130,17 +135,20 @@ mod kvapi_key_impl {
     use super::DatamaskId;
     use super::DatamaskNameIdent;
     use super::MaskpolicyTableIdListKey;
-    use super::PREFIX_DATAMASK;
-    use super::PREFIX_DATAMASK_BY_ID;
-    use super::PREFIX_DATAMASK_ID_LIST;
     use crate::data_mask::DatamaskMeta;
     use crate::data_mask::MaskpolicyTableIdList;
+    use crate::tenant::Tenant;
 
     /// __fd_database/<tenant>/<name> -> <data_mask_id>
     impl kvapi::Key for DatamaskNameIdent {
-        const PREFIX: &'static str = PREFIX_DATAMASK;
+        const PREFIX: &'static str = "__fd_datamask";
 
         type ValueType = DatamaskId;
+
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -162,9 +170,13 @@ mod kvapi_key_impl {
 
     /// "__fd_datamask_by_id/<id>"
     impl kvapi::Key for DatamaskId {
-        const PREFIX: &'static str = PREFIX_DATAMASK_BY_ID;
+        const PREFIX: &'static str = "__fd_datamask_by_id";
 
         type ValueType = DatamaskMeta;
+
+        fn parent(&self) -> Option<String> {
+            None
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -183,9 +195,14 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Key for MaskpolicyTableIdListKey {
-        const PREFIX: &'static str = PREFIX_DATAMASK_ID_LIST;
+        const PREFIX: &'static str = "__fd_datamask_id_list";
 
         type ValueType = MaskpolicyTableIdList;
+
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -204,4 +221,10 @@ mod kvapi_key_impl {
             Ok(MaskpolicyTableIdListKey { tenant, name })
         }
     }
+
+    impl kvapi::Value for DatamaskId {}
+
+    impl kvapi::Value for DatamaskMeta {}
+
+    impl kvapi::Value for MaskpolicyTableIdList {}
 }

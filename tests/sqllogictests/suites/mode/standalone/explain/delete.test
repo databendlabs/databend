@@ -21,21 +21,22 @@ explain delete from t1 where a in (select b from t2);
 ----
 DeletePlan:
 EvalScalar
-├── scalars: [t1._row_id (#2)]
+├── scalars: [t1._row_id (#2) AS (#0)]
 └── Filter
     ├── filters: [3 (#3)]
-    └── HashJoin: RIGHT MARK
-        ├── equi conditions: [eq(t1.a (#0), CAST(subquery_1 (#1) AS Int32 NULL))]
-        ├── non-equi conditions: []
-        ├── LogicalGet
-        │   ├── table: default.default.t1
+    └── Join(RightMark)
+        ├── build keys: [CAST(subquery_1 (#1) AS Int32 NULL)]
+        ├── probe keys: [t1.a (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.t1
         │   ├── filters: []
         │   ├── order by: []
         │   └── limit: NONE
         └── EvalScalar
-            ├── scalars: [t2.b (#1)]
-            └── LogicalGet
-                ├── table: default.default.t2
+            ├── scalars: [t2.b (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t2
                 ├── filters: []
                 ├── order by: []
                 └── limit: NONE
@@ -47,8 +48,8 @@ explain delete from t1 where a > 2;
 DeletePlan:
 Filter
 ├── filters: [gt(t1.a (#0), 2)]
-└── LogicalGet
-    ├── table: default.default.t1
+└── Scan
+    ├── table: default.t1
     ├── filters: []
     ├── order by: []
     └── limit: NONE

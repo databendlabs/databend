@@ -262,6 +262,10 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
             span: None,
             lit: Literal::String("null".to_string()),
         },
+        TypeName::Geometry => Expr::Literal {
+            span: None,
+            lit: Literal::String("POINT(0, 0)".to_string()),
+        },
         TypeName::Nullable(_) => Expr::Literal {
             span: None,
             lit: Literal::Null,

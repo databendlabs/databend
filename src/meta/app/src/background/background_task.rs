@@ -220,15 +220,19 @@ mod kvapi_key_impl {
 
     use crate::background::background_task::BackgroundTaskIdent;
     use crate::background::BackgroundTaskInfo;
-
-    const PREFIX_BACKGROUND: &str = "__fd_background_task_by_name";
+    use crate::tenant::Tenant;
 
     // task is named by id, and will not encounter renaming issue.
     /// <prefix>/<tenant>/<background_task_ident> -> info
     impl kvapi::Key for BackgroundTaskIdent {
-        const PREFIX: &'static str = PREFIX_BACKGROUND;
+        const PREFIX: &'static str = "__fd_background_task_by_name";
 
         type ValueType = BackgroundTaskInfo;
+
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -250,4 +254,6 @@ mod kvapi_key_impl {
             })
         }
     }
+
+    impl kvapi::Value for BackgroundTaskInfo {}
 }

@@ -630,7 +630,6 @@ fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
-		export RUSTFLAGS="-C target-feature=-crt-static"
 		while read -r tool; do
 			# Use cargo install to prevent downloading the tools with incompatible GLIBC
 			cargo install "$tool"

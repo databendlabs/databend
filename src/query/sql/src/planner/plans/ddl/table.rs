@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
 use databend_common_catalog::table::NavigationPoint;
@@ -136,6 +137,21 @@ impl VacuumDropTablePlan {
         } else {
             Arc::new(DataSchema::empty())
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VacuumTemporaryFilesPlan {
+    pub limit: Option<u64>,
+    pub retain: Option<Duration>,
+}
+
+impl crate::plans::VacuumTemporaryFilesPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![DataField::new(
+            "Files",
+            DataType::String,
+        )]))
     }
 }
 

@@ -35,8 +35,6 @@ use simple_hll::HyperLogLog;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -68,15 +66,6 @@ where
     ) -> Result<()> {
         builder.push(self.count() as u64);
         Ok(())
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, &self)
-    }
-
-    fn deserialize(reader: &mut &[u8]) -> Result<Self>
-    where Self: Sized {
-        borsh_deserialize_state(reader)
     }
 }
 

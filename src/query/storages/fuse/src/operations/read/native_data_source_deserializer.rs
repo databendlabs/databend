@@ -984,7 +984,7 @@ impl NativeDeserializeDataTransform {
             let offset = self.read_state.offset;
             let offsets = if let Some(count) = self.read_state.filtered_count {
                 let filter_executor = self.filter_executor.as_mut().unwrap();
-                filter_executor.mut_true_selection()[0..count]
+                filter_executor.mutable_true_selection()[0..count]
                     .iter()
                     .map(|idx| *idx as usize + offset)
                     .collect::<Vec<_>>()

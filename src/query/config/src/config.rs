@@ -1490,7 +1490,7 @@ pub struct QueryConfig {
     pub table_engine_memory_enabled: bool,
 
     #[clap(long, value_name = "VALUE", default_value = "5000")]
-    pub wait_timeout_mills: u64,
+    pub shutdown_wait_timeout_ms: u64,
 
     #[clap(long, value_name = "VALUE", default_value = "10000")]
     pub max_query_log_size: usize,
@@ -1703,7 +1703,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             rpc_tls_query_service_domain_name: self.rpc_tls_query_service_domain_name,
             rpc_client_timeout_secs: self.rpc_client_timeout_secs,
             table_engine_memory_enabled: self.table_engine_memory_enabled,
-            wait_timeout_mills: self.wait_timeout_mills,
+            shutdown_wait_timeout_ms: self.shutdown_wait_timeout_ms,
             max_query_log_size: self.max_query_log_size,
             databend_enterprise_license: self.databend_enterprise_license,
             management_mode: self.management_mode,
@@ -1787,7 +1787,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             rpc_tls_query_service_domain_name: inner.rpc_tls_query_service_domain_name,
             rpc_client_timeout_secs: inner.rpc_client_timeout_secs,
             table_engine_memory_enabled: inner.table_engine_memory_enabled,
-            wait_timeout_mills: inner.wait_timeout_mills,
+            shutdown_wait_timeout_ms: inner.shutdown_wait_timeout_ms,
             max_query_log_size: inner.max_query_log_size,
             databend_enterprise_license: inner.databend_enterprise_license,
             management_mode: inner.management_mode,

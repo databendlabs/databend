@@ -17,19 +17,15 @@ databend-common-catalog = { path = "../../catalog" }
 databend-common-exception = { path = "../../../common/exception" }
 databend-common-expression = { path = "../../expression" }
 databend-common-meta-app = { path = "../../../meta/app" }
-databend-common-metrics = { path = "../../../common/metrics" }
 databend-common-pipeline-core = { path = "../../pipeline/core" }
 databend-common-pipeline-sources = { path = "../../pipeline/sources" }
 databend-common-sql = { path = "../../sql" }
 databend-common-storages-fuse = { path = "../fuse" }
 
-databend-storages-common-pruner = { path = "../common/pruner" }
 databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
-futures = { workspace = true }
-futures-util = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
 
