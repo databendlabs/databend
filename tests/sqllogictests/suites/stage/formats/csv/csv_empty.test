@@ -120,6 +120,6 @@ csv/empty/empty4.csv 0 1 Encountered an empty value for column 0 (`c0` of type I
 query 
 select * from strings order by c0,c1,c2,c3,c4;
 ----
+0 (empty) (empty) (empty) (empty)
 0 1 2 3 4
 0 11 22 (empty) (empty)
-0 NULL NULL (empty) (empty)
