@@ -73,23 +73,18 @@ impl StatBuffer {
     pub fn flush<const NEED_ROLLBACK: bool>(&mut self) -> Result<(), OutOfLimit> {
         match std::mem::take(&mut self.memory_usage) {
             0 => Ok(()),
-            memory_usage => {
-                if let Err(error) = self
-                    .global_mem_stat
-                    .record_memory::<NEED_ROLLBACK>(memory_usage)
-                {
+            usage => {
+                if let Err(e) = self.global_mem_stat.record_memory::<NEED_ROLLBACK>(usage) {
                     if !NEED_ROLLBACK {
-                        let _ = ThreadTracker::record_memory::<false>(memory_usage);
+                        let _ = ThreadTracker::record_memory::<false>(usage);
                     }
 
-                    return Err(error);
+                    return Err(e);
                 }
 
-                self.global_mem_stat
-                    .record_memory::<NEED_ROLLBACK>(memory_usage)?;
-                if let Err(error) = ThreadTracker::record_memory::<NEED_ROLLBACK>(memory_usage) {
+                if let Err(error) = ThreadTracker::record_memory::<NEED_ROLLBACK>(usage) {
                     if NEED_ROLLBACK {
-                        self.global_mem_stat.rollback(memory_usage);
+                        self.global_mem_stat.rollback(usage);
                         return Err(error);
                     }
                 }
