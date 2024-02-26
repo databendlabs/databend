@@ -13,7 +13,11 @@
 // limitations under the License.
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_expression::filter::build_select_expr;
+use databend_common_expression::filter::FilterExecutor;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::RowPtr;
 
 use super::desc::MARKER_KIND_FALSE;
@@ -58,6 +62,8 @@ pub struct ProbeState {
     // 5.If join type is LEFT / LEFT SINGLE / LEFT ANTI / FULL, we use it to store unmatched indexes
     // count during early filtering.
     pub(crate) probe_unmatched_indexes_count: usize,
+
+    pub(crate) filter_executor: Option<FilterExecutor>,
 }
 
 impl ProbeState {
@@ -72,6 +78,7 @@ impl ProbeState {
         with_conjunction: bool,
         has_string_column: bool,
         func_ctx: FunctionContext,
+        other_predicate: Option<Expr>,
     ) -> Self {
         let (row_state, row_state_indexes) = match &join_type {
             JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
@@ -97,6 +104,25 @@ impl ProbeState {
         } else {
             None
         };
+        let filter_executor = if !matches!(
+            &join_type,
+            JoinType::LeftMark | JoinType::RightMark | JoinType::Cross
+        ) && let Some(predicate) = other_predicate
+        {
+            let (select_expr, has_or) = build_select_expr(&predicate).into();
+            let filter_executor = FilterExecutor::new(
+                select_expr,
+                func_ctx.clone(),
+                has_or,
+                max_block_size,
+                None,
+                &BUILTIN_FUNCTIONS,
+                false,
+            );
+            Some(filter_executor)
+        } else {
+            None
+        };
         ProbeState {
             max_block_size,
             mutable_indexes: MutableIndexes::new(max_block_size),
@@ -114,6 +140,7 @@ impl ProbeState {
             markers,
             probe_unmatched_indexes_count: 0,
             with_conjunction,
+            filter_executor,
         }
     }
 

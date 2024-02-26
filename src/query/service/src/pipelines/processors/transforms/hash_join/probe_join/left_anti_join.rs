@@ -17,7 +17,7 @@ use std::sync::atomic::Ordering;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::KeyAccessor;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
@@ -112,12 +112,7 @@ impl HashJoinProbeState {
 
         // For anti join, it defaults to false.
         let mut row_state = vec![false; input.num_rows()];
-        let other_predicate = self
-            .hash_join_state
-            .hash_join_desc
-            .other_predicate
-            .as_ref()
-            .unwrap();
+        let filter_executor = probe_state.filter_executor.as_mut().unwrap();
 
         // Results.
         let mut matched_idx = 0;
@@ -152,8 +147,8 @@ impl HashJoinProbeState {
                         build_indexes,
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
-                        other_predicate,
                         &mut row_state,
+                        filter_executor,
                     )?;
                     (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
                         hash_table,
@@ -193,8 +188,8 @@ impl HashJoinProbeState {
                         build_indexes,
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
-                        other_predicate,
                         &mut row_state,
+                        filter_executor,
                     )?;
                     (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
                         hash_table,
@@ -217,8 +212,8 @@ impl HashJoinProbeState {
                 build_indexes,
                 &mut probe_state.generation_state,
                 &build_state.generation_state,
-                other_predicate,
                 &mut row_state,
+                filter_executor,
             )?;
         }
 
@@ -251,8 +246,8 @@ impl HashJoinProbeState {
         build_indexes: &[RowPtr],
         probe_state: &mut ProbeBlockGenerationState,
         build_state: &BuildBlockGenerationState,
-        other_predicate: &Expr,
         row_state: &mut [bool],
+        filter_executor: &mut FilterExecutor,
     ) -> Result<()> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
@@ -284,9 +279,9 @@ impl HashJoinProbeState {
         let result_block = self.merge_eq_block(probe_block.clone(), build_block, matched_idx);
         self.update_row_state(
             &result_block,
-            other_predicate,
             &probe_indexes[0..matched_idx],
             row_state,
+            filter_executor,
         )?;
 
         Ok(())
