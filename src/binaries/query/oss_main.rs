@@ -18,7 +18,7 @@
 mod entry;
 
 use databend_common_base::mem_allocator::GlobalAllocator;
-use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::{Runtime, ThreadTracker};
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
@@ -32,6 +32,8 @@ use crate::entry::start_services;
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 
 fn main() {
+    ThreadTracker::init();
+
     match Runtime::with_default_worker_threads() {
         Err(cause) => {
             eprintln!("Databend Query start failure, cause: {:?}", cause);
