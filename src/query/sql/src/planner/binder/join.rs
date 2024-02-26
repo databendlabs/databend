@@ -174,6 +174,24 @@ impl Binder {
                     right_child,
                 )
             }
+            JoinOperator::PartialFullOuter => {
+                bind_context = right_context;
+                self.bind_join_with_type(
+                    JoinType::PartialFull,
+                    join_conditions,
+                    left_child,
+                    right_child,
+                )
+            }
+            JoinOperator::PartialRightInner => {
+                bind_context = right_context;
+                self.bind_join_with_type(
+                    JoinType::PartialRightInner,
+                    join_conditions,
+                    left_child,
+                    right_child,
+                )
+            }
         }?;
         Ok((s_expr, bind_context))
     }
@@ -290,6 +308,18 @@ impl Binder {
                     JoinType::Right | JoinType::RightSingle | JoinType::LeftMark => {
                         need_push_down = true;
                         left_push_down.push(predicate.clone());
+                    }
+                    JoinType::PartialFull => {
+                        // if a block can't be matched for target table entirely,we can filter it directly.
+                        need_push_down = true;
+                        left_push_down.push(predicate.clone())
+                    }
+                    JoinType::PartialRightInner => {
+                        need_push_down = true;
+                        // if a block can't be matched for target table entirely,we can filter it directly.
+                        left_push_down.push(predicate.clone());
+                        // we can filter the unmatched parts of source block.
+                        right_push_down.push(predicate.clone())
                     }
                     JoinType::Full => non_equi_conditions.push(predicate.clone()),
                 },

@@ -394,7 +394,9 @@ impl PhysicalPlanBuilder {
             | JoinType::LeftSingle
             | JoinType::Right
             | JoinType::RightSingle
-            | JoinType::Full => {
+            | JoinType::Full
+            | JoinType::PartialFull
+            | JoinType::PartialRightInner => {
                 probe_fields.extend(build_fields);
                 probe_fields
             }
