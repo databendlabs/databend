@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(lazy_cell)]
+use crate::runtime::LimitMemGuard;
+use crate::runtime::ThreadTracker;
 
-use databend_common_base::mem_allocator::GlobalAllocator;
+pub fn set_alloc_error_hook() {
+    std::alloc::set_alloc_error_hook(|layout| {
+        let _guard = LimitMemGuard::enter_unlimited();
 
-mod fixed_heap;
-mod pool;
-mod pool_retry;
-mod progress;
-mod range_merger;
-mod runtime;
-mod stoppable;
-mod string;
+        let out_of_limit_desc = ThreadTracker::replace_error_message(None);
 
-// runtime tests depends on the memory stat collector.
-#[global_allocator]
-pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
+        panic!(
+            "{}",
+            out_of_limit_desc
+                .unwrap_or_else(|| format!("memory allocation of {} bytes failed", layout.size()))
+        );
+    })
+}

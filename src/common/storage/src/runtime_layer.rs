@@ -25,7 +25,6 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrackedFuture;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::GLOBAL_TASK;
 use futures::ready;
@@ -115,10 +114,8 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
     async fn create_dir(&self, path: &str, args: OpCreateDir) -> Result<RpCreateDir> {
         let op = self.inner.clone();
         let path = path.to_string();
-        let future = async move { op.create_dir(&path, args).await };
-        let future = TrackedFuture::create(future);
         self.runtime
-            .spawn(GLOBAL_TASK, future)
+            .spawn(GLOBAL_TASK, async move { op.create_dir(&path, args).await })
             .await
             .expect("join must success")
     }
@@ -128,11 +125,8 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
         let op = self.inner.clone();
         let path = path.to_string();
 
-        let future = async move { op.read(&path, args).await };
-
-        let future = TrackedFuture::create(future);
         self.runtime
-            .spawn(GLOBAL_TASK, future)
+            .spawn(GLOBAL_TASK, async move { op.read(&path, args).await })
             .await
             .expect("join must success")
             .map(|(rp, r)| {
@@ -145,10 +139,8 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
     async fn write(&self, path: &str, args: OpWrite) -> Result<(RpWrite, Self::Writer)> {
         let op = self.inner.clone();
         let path = path.to_string();
-        let future = async move { op.write(&path, args).await };
-        let future = TrackedFuture::create(future);
         self.runtime
-            .spawn(GLOBAL_TASK, future)
+            .spawn(GLOBAL_TASK, async move { op.write(&path, args).await })
             .await
             .expect("join must success")
     }
@@ -157,10 +149,8 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
     async fn stat(&self, path: &str, args: OpStat) -> Result<RpStat> {
         let op = self.inner.clone();
         let path = path.to_string();
-        let future = async move { op.stat(&path, args).await };
-        let future = TrackedFuture::create(future);
         self.runtime
-            .spawn(GLOBAL_TASK, future)
+            .spawn(GLOBAL_TASK, async move { op.stat(&path, args).await })
             .await
             .expect("join must success")
     }
@@ -169,10 +159,8 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
     async fn delete(&self, path: &str, args: OpDelete) -> Result<RpDelete> {
         let op = self.inner.clone();
         let path = path.to_string();
-        let future = async move { op.delete(&path, args).await };
-        let future = TrackedFuture::create(future);
         self.runtime
-            .spawn(GLOBAL_TASK, future)
+            .spawn(GLOBAL_TASK, async move { op.delete(&path, args).await })
             .await
             .expect("join must success")
     }
@@ -181,10 +169,8 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
     async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Lister)> {
         let op = self.inner.clone();
         let path = path.to_string();
-        let future = async move { op.list(&path, args).await };
-        let future = TrackedFuture::create(future);
         self.runtime
-            .spawn(GLOBAL_TASK, future)
+            .spawn(GLOBAL_TASK, async move { op.list(&path, args).await })
             .await
             .expect("join must success")
     }
@@ -243,7 +229,7 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
                     buffer.set_len(buf.len())
                 }
 
-                let future = async move {
+                self.state = State::Read(self.runtime.spawn(GLOBAL_TASK, async move {
                     let mut buffer = buffer;
                     let res = r.read(&mut buffer).await;
                     match res {
@@ -254,9 +240,7 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
                         }
                         Err(err) => (r, Err(err)),
                     }
-                };
-                let future = TrackedFuture::create(future);
-                self.state = State::Read(self.runtime.spawn(GLOBAL_TASK, future));
+                }));
 
                 self.poll_read(cx, buf)
             }
@@ -295,12 +279,11 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
         match &mut self.state {
             State::Idle(r) => {
                 let mut r = r.take().expect("Idle must have a valid reader");
-                let future = async move {
+
+                self.state = State::Seek(self.runtime.spawn(GLOBAL_TASK, async move {
                     let res = r.seek(pos).await;
                     (r, res)
-                };
-                let future = TrackedFuture::create(future);
-                self.state = State::Seek(self.runtime.spawn(GLOBAL_TASK, future));
+                }));
 
                 self.poll_seek(cx, pos)
             }
@@ -329,12 +312,10 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
         match &mut self.state {
             State::Idle(r) => {
                 let mut r = r.take().expect("Idle must have a valid reader");
-                let future = async move {
+                self.state = State::Next(self.runtime.spawn(GLOBAL_TASK, async move {
                     let res = r.next().await;
                     (r, res)
-                };
-                let future = TrackedFuture::create(future);
-                self.state = State::Next(self.runtime.spawn(GLOBAL_TASK, future));
+                }));
 
                 self.poll_next(cx)
             }

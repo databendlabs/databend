@@ -12,19 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(lazy_cell)]
+mod alloc_error_hook;
+mod mem_stat;
+mod stat_buffer;
 
-use databend_common_base::mem_allocator::GlobalAllocator;
-
-mod fixed_heap;
-mod pool;
-mod pool_retry;
-mod progress;
-mod range_merger;
-mod runtime;
-mod stoppable;
-mod string;
-
-// runtime tests depends on the memory stat collector.
-#[global_allocator]
-pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
+pub use alloc_error_hook::set_alloc_error_hook;
+pub use mem_stat::MemStat;
+pub use mem_stat::OutOfLimit;
+pub use mem_stat::GLOBAL_MEM_STAT;
+pub use stat_buffer::StatBuffer;
