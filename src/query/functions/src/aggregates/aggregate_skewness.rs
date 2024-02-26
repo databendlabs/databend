@@ -24,8 +24,6 @@ use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
 
 use super::assert_unary_arguments;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
 use super::FunctionData;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_unary::AggregateUnaryFunction;
@@ -94,14 +92,6 @@ where
             builder.push(F64::from(value));
         }
         Ok(())
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, self)
-    }
-
-    fn deserialize(reader: &mut &[u8]) -> Result<Self> {
-        borsh_deserialize_state::<Self>(reader)
     }
 }
 

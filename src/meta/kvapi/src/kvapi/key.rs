@@ -61,6 +61,11 @@ where Self: Sized
         format!("{}/", Self::PREFIX)
     }
 
+    /// Return the parent key of this key.
+    ///
+    /// For example, a table name's parent is db-id.
+    fn parent(&self) -> Option<String>;
+
     /// Encode structured key into a string.
     fn to_string_key(&self) -> String;
 
@@ -73,6 +78,10 @@ impl kvapi::Key for String {
 
     /// For a non structured key, the value type can never be used.
     type ValueType = Infallible;
+
+    fn parent(&self) -> Option<String> {
+        unimplemented!("illegal to get parent of generic String key")
+    }
 
     fn to_string_key(&self) -> String {
         self.clone()
@@ -121,6 +130,10 @@ impl<K: Key> Key for DirName<K> {
     const PREFIX: &'static str = K::PREFIX;
     type ValueType = K::ValueType;
 
+    fn parent(&self) -> Option<String> {
+        unimplemented!("DirName is not a record thus it has no parent")
+    }
+
     fn to_string_key(&self) -> String {
         let k = self.key.to_string_key();
         k.rsplitn(self.level + 1, '/').last().unwrap().to_string()
@@ -150,6 +163,10 @@ mod tests {
     impl Key for FooKey {
         const PREFIX: &'static str = "pref";
         type ValueType = Infallible;
+
+        fn parent(&self) -> Option<String> {
+            None
+        }
 
         fn to_string_key(&self) -> String {
             format!("{}/{}/{}/{}", Self::PREFIX, self.a, self.b, self.c)

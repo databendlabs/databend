@@ -129,6 +129,12 @@ pub struct TableId {
     pub table_id: u64,
 }
 
+impl TableId {
+    pub fn new(table_id: u64) -> Self {
+        TableId { table_id }
+    }
+}
+
 impl Display for TableId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "TableId{{{}}}", self.table_id)
@@ -892,6 +898,7 @@ mod kvapi_key_impl {
     use crate::primitive::Id;
     use crate::schema::CountTablesKey;
     use crate::schema::DBIdTableName;
+    use crate::schema::DatabaseId;
     use crate::schema::LeastVisibleTime;
     use crate::schema::LeastVisibleTimeKey;
     use crate::schema::TableCopiedFileInfo;
@@ -901,12 +908,17 @@ mod kvapi_key_impl {
     use crate::schema::TableIdListKey;
     use crate::schema::TableIdToName;
     use crate::schema::TableMeta;
+    use crate::tenant::Tenant;
 
     /// "__fd_table/<db_id>/<tb_name>"
     impl kvapi::Key for DBIdTableName {
         const PREFIX: &'static str = "__fd_table";
 
         type ValueType = TableId;
+
+        fn parent(&self) -> Option<String> {
+            Some(DatabaseId::new(self.db_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -932,6 +944,10 @@ mod kvapi_key_impl {
 
         type ValueType = DBIdTableName;
 
+        fn parent(&self) -> Option<String> {
+            Some(TableId::new(self.table_id).to_string_key())
+        }
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.table_id)
@@ -954,6 +970,10 @@ mod kvapi_key_impl {
 
         type ValueType = TableMeta;
 
+        fn parent(&self) -> Option<String> {
+            None
+        }
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.table_id)
@@ -975,6 +995,10 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = "__fd_table_id_list";
 
         type ValueType = TableIdList;
+
+        fn parent(&self) -> Option<String> {
+            Some(DatabaseId::new(self.db_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -1000,6 +1024,10 @@ mod kvapi_key_impl {
 
         type ValueType = Id;
 
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_raw(&self.tenant)
@@ -1021,6 +1049,10 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = "__fd_table_copied_files";
 
         type ValueType = TableCopiedFileInfo;
+
+        fn parent(&self) -> Option<String> {
+            Some(TableId::new(self.table_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             // TODO: file is not escaped!!!
@@ -1047,6 +1079,10 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = "__fd_table_lvt";
 
         type ValueType = LeastVisibleTime;
+
+        fn parent(&self) -> Option<String> {
+            Some(TableId::new(self.table_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

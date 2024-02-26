@@ -30,8 +30,6 @@ use databend_common_expression::StateAddr;
 use num_traits::AsPrimitive;
 
 use super::assert_unary_arguments;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
 use super::FunctionData;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_unary::UnaryState;
@@ -42,8 +40,7 @@ pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 
     fn mem_size() -> Option<usize> {
         None
     }
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
+
     fn accumulate(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()>;
 
     fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()>;
@@ -109,15 +106,6 @@ where
         N::push_item(builder, N::to_scalar_ref(&self.value));
         Ok(())
     }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, &self.value)
-    }
-
-    fn deserialize(reader: &mut &[u8]) -> Result<Self> {
-        let value = borsh_deserialize_state(reader)?;
-        Ok(Self { value })
-    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -170,16 +158,6 @@ where
     ) -> Result<()> {
         T::push_item(builder, T::to_scalar_ref(&self.value));
         Ok(())
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, &self.value)
-    }
-
-    fn deserialize(reader: &mut &[u8]) -> Result<Self>
-    where Self: Sized {
-        let value = borsh_deserialize_state(reader)?;
-        Ok(Self { value })
     }
 }
 

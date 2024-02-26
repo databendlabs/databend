@@ -28,8 +28,6 @@ use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
 
 use super::aggregate_sum::DecimalSumState;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -93,15 +91,6 @@ where
         let value = self.value.as_() / (self.count as f64);
         builder.push(F64::from(value));
         Ok(())
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, self)
-    }
-
-    fn deserialize(reader: &mut &[u8]) -> Result<Self>
-    where Self: Sized {
-        borsh_deserialize_state(reader)
     }
 }
 
@@ -201,15 +190,6 @@ where
                 T::Scalar::e(decimal_avg_data.scale_add as u32)
             ))),
         }
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, self)
-    }
-
-    fn deserialize(reader: &mut &[u8]) -> Result<Self>
-    where Self: Sized {
-        borsh_deserialize_state(reader)
     }
 }
 

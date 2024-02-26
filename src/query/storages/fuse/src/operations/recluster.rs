@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::GLOBAL_TASK;
@@ -22,6 +23,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseconds;
+use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
 use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use log::warn;
@@ -84,6 +87,8 @@ impl FuseTable {
             return Ok(None);
         };
 
+        let start = Instant::now();
+
         let settings = ctx.get_settings();
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
@@ -100,8 +105,7 @@ impl FuseTable {
             FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
             DEFAULT_AVG_DEPTH_THRESHOLD,
         );
-        let block_count = snapshot.summary.block_count;
-        let threshold = (block_count as f64 * avg_depth_threshold)
+        let threshold = (snapshot.summary.block_count as f64 * avg_depth_threshold)
             .max(1.0)
             .min(64.0);
         let mut mutator = ReclusterMutator::try_create(
@@ -125,6 +129,9 @@ impl FuseTable {
         // The max number of segments to be reclustered.
         let max_seg_num = limit.min(max_threads * 2);
 
+        let number_segments = segment_locations.len();
+        let mut segment_idx = 0;
+        let mut recluster_seg_num = 0;
         'F: for chunk in segment_locations.chunks(chunk_size) {
             // read segments.
             let compact_segments = Self::segment_pruning(
@@ -135,6 +142,19 @@ impl FuseTable {
                 chunk.to_vec(),
             )
             .await?;
+
+            // Status.
+            {
+                segment_idx += chunk.len();
+                let status = format!(
+                    "recluster: read segment files:{}/{}, cost:{} sec",
+                    segment_idx,
+                    number_segments,
+                    start.elapsed().as_secs()
+                );
+                ctx.set_status_info(&status);
+            }
+
             if compact_segments.is_empty() {
                 continue;
             }
@@ -148,6 +168,8 @@ impl FuseTable {
             )?;
             // select the blocks with the highest depth.
             if selected_segs.is_empty() {
+                let mut selected_segs = vec![];
+                let mut block_count = 0;
                 for compact_segment in compact_segments.into_iter() {
                     if !ReclusterMutator::segment_can_recluster(
                         &compact_segment.1.summary,
@@ -157,9 +179,18 @@ impl FuseTable {
                         continue;
                     }
 
-                    if mutator.target_select(vec![compact_segment]).await? {
-                        log::info!("Number of segments scheduled for recluster: 1");
-                        break 'F;
+                    block_count += compact_segment.1.summary.block_count as usize;
+                    selected_segs.push(compact_segment);
+                    if block_count >= block_per_seg {
+                        let seg_num = selected_segs.len();
+                        if mutator
+                            .target_select(std::mem::take(&mut selected_segs))
+                            .await?
+                        {
+                            recluster_seg_num = seg_num;
+                            break 'F;
+                        }
+                        block_count = 0;
                     }
                 }
             } else {
@@ -169,12 +200,23 @@ impl FuseTable {
                     selected_segments.push(compact_segments[i].clone());
                 });
                 if mutator.target_select(selected_segments).await? {
-                    log::info!("Number of segments scheduled for recluster: {}", seg_num);
+                    recluster_seg_num = seg_num;
                     break;
                 }
             }
         }
 
+        {
+            let elapsed_time = start.elapsed().as_millis() as u64;
+            ctx.set_status_info(&format!(
+                "recluster: end to build recluster tasks, recluster segments count: {}, blocks count: {}, cost:{} ms",
+                recluster_seg_num,
+                mutator.recluster_blocks_count,
+                elapsed_time,
+            ));
+            metrics_inc_recluster_build_task_milliseconds(elapsed_time);
+            metrics_inc_recluster_segment_nums_scheduled(recluster_seg_num as u64);
+        }
         Ok(Some(mutator))
     }
 

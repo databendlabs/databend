@@ -31,8 +31,6 @@ use databend_common_expression::ScalarRef;
 use num_traits::AsPrimitive;
 use ordered_float::OrderedFloat;
 
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -142,15 +140,6 @@ where
             }
         }
         Ok(())
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, self)
-    }
-
-    fn deserialize(reader: &mut &[u8]) -> Result<Self>
-    where Self: Sized {
-        borsh_deserialize_state(reader)
     }
 }
 

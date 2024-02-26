@@ -51,6 +51,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::SnapshotsIO;
+use databend_common_storages_fuse::pruning::FusePruner;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -62,8 +63,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
-
-use crate::stream_pruner::StreamPruner;
 
 pub const STREAM_ENGINE: &str = "STREAM";
 
@@ -294,11 +293,28 @@ impl StreamTable {
         }
 
         let table_schema = fuse_table.schema_with_stream();
-        let stream_pruner =
-            StreamPruner::create(&ctx, table_schema.clone(), push_downs.clone(), fuse_table)?;
+        let (cluster_keys, cluster_key_meta) =
+            if !fuse_table.is_native() || fuse_table.cluster_key_meta().is_none() {
+                (vec![], None)
+            } else {
+                (
+                    fuse_table.cluster_keys(ctx.clone()),
+                    fuse_table.cluster_key_meta(),
+                )
+            };
+        let bloom_index_cols = fuse_table.bloom_index_cols();
+        let mut pruner = FusePruner::create_with_pages(
+            &ctx,
+            fuse_table.get_operator(),
+            table_schema.clone(),
+            &push_downs,
+            cluster_key_meta,
+            cluster_keys,
+            bloom_index_cols,
+        )?;
 
-        let block_metas = stream_pruner.pruning(blocks).await?;
-        let pruning_stats = stream_pruner.pruning_stats();
+        let block_metas = pruner.stream_pruning(blocks).await?;
+        let pruning_stats = pruner.pruning_stats();
 
         log::info!(
             "prune snapshot block end, final block numbers:{}, cost:{}",

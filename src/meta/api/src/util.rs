@@ -612,7 +612,7 @@ fn share_has_to_exist(
 /// Returns (share_account_meta_seq, share_account_meta)
 pub async fn get_share_account_meta_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_key: &ShareAccountNameIdent,
+    name_key: &ShareConsumer,
     msg: impl Display,
 ) -> Result<(u64, ShareAccountMeta), KVAppError> {
     let (share_account_meta_seq, share_account_meta): (u64, Option<ShareAccountMeta>) =
@@ -631,7 +631,7 @@ pub async fn get_share_account_meta_or_err(
 /// Otherwise returns UnknownShareAccounts error
 fn share_account_meta_has_to_exist(
     seq: u64,
-    name_key: &ShareAccountNameIdent,
+    name_key: &ShareConsumer,
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
@@ -639,7 +639,7 @@ fn share_account_meta_has_to_exist(
 
         Err(KVAppError::AppError(AppError::UnknownShareAccounts(
             UnknownShareAccounts::new(
-                &[name_key.account.clone()],
+                &[name_key.tenant.clone()],
                 name_key.share_id,
                 format!("{}: {}", msg, name_key),
             ),

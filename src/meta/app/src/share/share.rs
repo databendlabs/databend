@@ -30,6 +30,7 @@ use crate::schema::DatabaseMeta;
 use crate::schema::TableInfo;
 use crate::schema::TableMeta;
 
+/// A share that is created by `tenant` and is named with `share_name`.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareNameIdent {
     pub tenant: String,
@@ -42,15 +43,17 @@ impl Display for ShareNameIdent {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct ShareAccountNameIdent {
-    pub account: String,
+/// The share consuming key describes that the `tenant`, who is a consumer of a shared object,
+/// which is created by another tenant and is identified by `share_id`.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ShareConsumer {
+    pub tenant: String,
     pub share_id: u64,
 }
 
-impl Display for ShareAccountNameIdent {
+impl Display for ShareConsumer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.account, self.share_id)
+        write!(f, "'{}'/'{}'", self.tenant, self.share_id)
     }
 }
 
@@ -381,12 +384,18 @@ impl ShareAccountMeta {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareId {
     pub share_id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+impl ShareId {
+    pub fn new(share_id: u64) -> Self {
+        Self { share_id }
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareIdToName {
     pub share_id: u64,
 }
@@ -397,12 +406,18 @@ impl Display for ShareIdToName {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareEndpointId {
     pub share_endpoint_id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+impl ShareEndpointId {
+    pub fn new(share_endpoint_id: u64) -> Self {
+        Self { share_endpoint_id }
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareEndpointIdToName {
     pub share_endpoint_id: u64,
 }
@@ -750,9 +765,11 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use super::ShareEndpointId;
+    use crate::schema::DatabaseId;
+    use crate::schema::TableId;
     use crate::share::ObjectSharedByShareIds;
     use crate::share::ShareAccountMeta;
-    use crate::share::ShareAccountNameIdent;
+    use crate::share::ShareConsumer;
     use crate::share::ShareEndpointIdToName;
     use crate::share::ShareEndpointIdent;
     use crate::share::ShareEndpointMeta;
@@ -761,12 +778,21 @@ mod kvapi_key_impl {
     use crate::share::ShareIdToName;
     use crate::share::ShareMeta;
     use crate::share::ShareNameIdent;
+    use crate::tenant::Tenant;
 
     /// __fd_share_by/{db|table}/<object_id> -> ObjectSharedByShareIds
     impl kvapi::Key for ShareGrantObject {
         const PREFIX: &'static str = "__fd_share_by";
 
         type ValueType = ObjectSharedByShareIds;
+
+        fn parent(&self) -> Option<String> {
+            let k = match self {
+                ShareGrantObject::Database(db_id) => DatabaseId::new(*db_id).to_string_key(),
+                ShareGrantObject::Table(table_id) => TableId::new(*table_id).to_string_key(),
+            };
+            Some(k)
+        }
 
         fn to_string_key(&self) -> String {
             match *self {
@@ -808,6 +834,11 @@ mod kvapi_key_impl {
 
         type ValueType = ShareId;
 
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_str(&self.tenant)
@@ -832,6 +863,10 @@ mod kvapi_key_impl {
 
         type ValueType = ShareMeta;
 
+        fn parent(&self) -> Option<String> {
+            None
+        }
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.share_id)
@@ -849,20 +884,25 @@ mod kvapi_key_impl {
     }
 
     // __fd_share_account/tenant/id -> ShareAccountMeta
-    impl kvapi::Key for ShareAccountNameIdent {
+    impl kvapi::Key for ShareConsumer {
         const PREFIX: &'static str = "__fd_share_account_id";
 
         type ValueType = ShareAccountMeta;
 
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
+
         fn to_string_key(&self) -> String {
             if self.share_id != 0 {
                 kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                    .push_str(&self.account)
+                    .push_str(&self.tenant)
                     .push_u64(self.share_id)
                     .done()
             } else {
                 kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                    .push_str(&self.account)
+                    .push_str(&self.tenant)
                     .done()
             }
         }
@@ -874,7 +914,10 @@ mod kvapi_key_impl {
             let share_id = p.next_u64()?;
             p.done()?;
 
-            Ok(ShareAccountNameIdent { account, share_id })
+            Ok(ShareConsumer {
+                tenant: account,
+                share_id,
+            })
         }
     }
 
@@ -883,6 +926,10 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = "__fd_share_id_to_name";
 
         type ValueType = ShareNameIdent;
+
+        fn parent(&self) -> Option<String> {
+            Some(ShareId::new(self.share_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -905,6 +952,11 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = "__fd_share_endpoint";
 
         type ValueType = ShareEndpointId;
+
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -930,6 +982,10 @@ mod kvapi_key_impl {
 
         type ValueType = ShareEndpointMeta;
 
+        fn parent(&self) -> Option<String> {
+            None
+        }
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.share_endpoint_id)
@@ -951,6 +1007,10 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = "__fd_share_endpoint_id_to_name";
 
         type ValueType = ShareEndpointIdent;
+
+        fn parent(&self) -> Option<String> {
+            Some(ShareEndpointId::new(self.share_endpoint_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

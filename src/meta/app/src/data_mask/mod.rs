@@ -109,6 +109,15 @@ pub struct MaskpolicyTableIdListKey {
     pub name: String,
 }
 
+impl MaskpolicyTableIdListKey {
+    pub fn new(tenant: impl ToString, name: impl ToString) -> Self {
+        MaskpolicyTableIdListKey {
+            tenant: tenant.to_string(),
+            name: name.to_string(),
+        }
+    }
+}
+
 impl Display for MaskpolicyTableIdListKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}'/'{}'", self.tenant, self.name)
@@ -128,12 +137,18 @@ mod kvapi_key_impl {
     use super::MaskpolicyTableIdListKey;
     use crate::data_mask::DatamaskMeta;
     use crate::data_mask::MaskpolicyTableIdList;
+    use crate::tenant::Tenant;
 
     /// __fd_database/<tenant>/<name> -> <data_mask_id>
     impl kvapi::Key for DatamaskNameIdent {
         const PREFIX: &'static str = "__fd_datamask";
 
         type ValueType = DatamaskId;
+
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -159,6 +174,10 @@ mod kvapi_key_impl {
 
         type ValueType = DatamaskMeta;
 
+        fn parent(&self) -> Option<String> {
+            None
+        }
+
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_u64(self.id)
@@ -179,6 +198,11 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = "__fd_datamask_id_list";
 
         type ValueType = MaskpolicyTableIdList;
+
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)

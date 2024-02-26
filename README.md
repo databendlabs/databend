@@ -55,13 +55,15 @@
 
 - **Cost-Effective**: Designed for scalable storage and computation, reducing costs while enhancing performance. 👉 [TPC-H](https://docs.databend.com/guides/benchmark/tpch).
 
-- **Data Simplification**: Streamlines data ingestion, no external ETL needed. 👉 [Data Loading](https://docs.databend.com/guides/load-data/).
+- **AI-Powered Analytics**: Enables advanced analytics with [AI Functions](https://docs.databend.com/guides/ai-functions/).
 
-- **Version Control**: Provides Git-like version control for data, allowing querying, cloning, and reverting at any point.
+- **Data Simplification**: Streamlines data ingestion, no external ETL needed. 👉 [Data Loading](https://docs.databend.com/guides/load-data/).
 
 - **Format Flexibility**: Supports multiple data formats and types, including JSON, CSV, Parquet, GEO, and more.
 
-- **AI-Powered Analytics**: Enables advanced analytics with [AI Functions](https://docs.databend.com/guides/ai-functions/).
+- **ACID Transactions**: Ensures data integrity with atomic, consistent, isolated, and durable operations.
+
+- **Version Control**: Provides Git-like version control for data, allowing querying, cloning, and reverting at any point.
 
 - **Community-Driven**: Join a welcoming community for a user-friendly cloud analytics experience.
 
