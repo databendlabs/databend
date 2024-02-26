@@ -398,7 +398,7 @@ impl Table for StreamTable {
         match self.mode {
             StreamMode::AppendOnly => Ok(StreamMode::AppendOnly),
             StreamMode::Standard => {
-                let table = self.source_table(ctx.clone()).await?;
+                let table = self.source_table(ctx.get_default_catalog()?).await?;
                 let fuse_table = FuseTable::try_from_table(table.as_ref())?;
                 let latest_segments =
                     if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
