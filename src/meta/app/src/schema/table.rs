@@ -639,6 +639,13 @@ pub struct UpdateTableMetaReq {
     pub deduplicated_label: Option<String>,
 }
 
+pub struct UpdateMultiTableMetaReq {
+    pub update_table_metas: Vec<UpdateTableMetaReq>,
+    pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
+    pub update_stream_metas: Vec<UpdateStreamMetaReq>,
+    pub deduplicated_labels: Vec<String>,
+}
+
 impl UpsertTableOptionReq {
     pub fn new(
         table_ident: &TableIdent,

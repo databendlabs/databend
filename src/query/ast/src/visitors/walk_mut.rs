@@ -537,5 +537,8 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::AlterPipe(_) => todo!(),
         Statement::DropPipe(_) => todo!(),
         Statement::DescribePipe(_) => todo!(),
+        Statement::Begin => {}
+        Statement::Commit => {}
+        Statement::Abort => {}
     }
 }

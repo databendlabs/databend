@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -127,6 +126,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_txn::TxnManagerRef;
 use futures::TryStreamExt;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -369,6 +369,10 @@ impl TableContext for CtxDelegation {
 
     fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         todo!()
+    }
+
+    fn txn_mgr(&self) -> TxnManagerRef {
+        self.ctx.txn_mgr()
     }
 
     fn incr_total_scan_value(&self, _value: ProgressValues) {

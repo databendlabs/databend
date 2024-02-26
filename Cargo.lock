@@ -2529,6 +2529,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-users",
  "databend-storages-common-table-meta",
+ "databend-storages-common-txn",
  "dyn-clone",
  "goldenfile",
  "log",
@@ -4255,6 +4256,7 @@ dependencies = [
  "databend-storages-common-cache-manager",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
+ "databend-storages-common-txn",
  "ethnum 1.5.0",
  "futures",
  "futures-util",
@@ -4521,6 +4523,15 @@ dependencies = [
  "snap",
  "typetag",
  "zstd",
+]
+
+[[package]]
+name = "databend-storages-common-txn"
+version = "0.1.0"
+dependencies = [
+ "databend-common-meta-app",
+ "databend-common-meta-types",
+ "parking_lot 0.12.1",
 ]
 
 [[package]]

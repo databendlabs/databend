@@ -50,6 +50,10 @@ impl Interpreter for DropTableInterpreter {
         "DropTableInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.as_str();

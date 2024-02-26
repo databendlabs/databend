@@ -204,7 +204,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
                 ));
             }
 
-            let mut writer = DFQueryResultWriter::create(writer);
+            let mut writer = DFQueryResultWriter::create(writer, self.base.session.clone());
 
             let instant = Instant::now();
             let query_result = self

@@ -394,6 +394,9 @@ pub(crate) async fn query_handler(
                     .await
                     .map_err(|err| err.display_with_sql(&sql))
                     .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
+                if matches!(resp.state.state,ExecuteStateKind::Failed) {
+                    ctx.set_fail();
+                }
                 let (rows, next_page) = match &resp.data {
                     None => (0, None),
                     Some(p) => (p.page.data.num_rows(), p.next_page_no),
@@ -407,6 +410,7 @@ pub(crate) async fn query_handler(
             }
             Err(e) => {
                 error!("{}: http query fail to start sql, error: {:?}", &ctx.query_id, e);
+                ctx.set_fail();
                 Ok(QueryResponse::fail_to_start_sql(&e).into_response())
             }
         }

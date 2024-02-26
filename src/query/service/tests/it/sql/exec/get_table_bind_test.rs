@@ -122,6 +122,7 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -392,6 +393,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    fn txn_mgr(&self) -> TxnManagerRef {
         todo!()
     }
 

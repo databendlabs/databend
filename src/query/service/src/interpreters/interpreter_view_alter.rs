@@ -48,6 +48,10 @@ impl Interpreter for AlterViewInterpreter {
         "AlterViewInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // drop view

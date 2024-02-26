@@ -35,9 +35,11 @@ use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
+use databend_storages_common_txn::TxnManagerRef;
 
 use super::Catalog;
 use super::CatalogCreator;
+use crate::catalog::session_catalog::SessionCatalog;
 
 pub const CATALOG_DEFAULT: &str = "default";
 
@@ -56,7 +58,8 @@ pub struct CatalogManager {
 impl CatalogManager {
     /// Fetch catalog manager from global instance.
     pub fn instance() -> Arc<CatalogManager> {
-        GlobalInstance::get()
+        let global_instance: Arc<CatalogManager> = GlobalInstance::get();
+        global_instance
     }
 
     /// Init the catalog manager in global instance.
@@ -125,8 +128,11 @@ impl CatalogManager {
     ///
     /// There are some place that we don't have async context, so we provide
     /// `get_default_catalog` to allow users fetch default catalog without async.
-    pub fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
-        Ok(self.default_catalog.clone())
+    pub fn get_default_catalog(&self, txn_mgr: TxnManagerRef) -> Result<Arc<dyn Catalog>> {
+        Ok(Arc::new(SessionCatalog::create(
+            self.default_catalog.clone(),
+            txn_mgr,
+        )))
     }
 
     /// build_catalog builds a catalog from catalog info.
@@ -152,9 +158,14 @@ impl CatalogManager {
     /// DEFAULT catalog is handled specially via `get_default_catalog`. Other catalogs
     /// will be fetched from metasrv.
     #[async_backtrace::framed]
-    pub async fn get_catalog(&self, tenant: &str, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+    pub async fn get_catalog(
+        &self,
+        tenant: &str,
+        catalog_name: &str,
+        txn_mgr: TxnManagerRef,
+    ) -> Result<Arc<dyn Catalog>> {
         if catalog_name == CATALOG_DEFAULT {
-            return self.get_default_catalog();
+            return self.get_default_catalog(txn_mgr);
         }
 
         if let Some(ctl) = self.external_catalogs.get(catalog_name) {
@@ -221,8 +232,12 @@ impl CatalogManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn list_catalogs(&self, tenant: &str) -> Result<Vec<Arc<dyn Catalog>>> {
-        let mut catalogs = vec![self.get_default_catalog()?];
+    pub async fn list_catalogs(
+        &self,
+        tenant: &str,
+        txn_mgr: TxnManagerRef,
+    ) -> Result<Vec<Arc<dyn Catalog>>> {
+        let mut catalogs = vec![self.get_default_catalog(txn_mgr)?];
 
         // insert external catalogs.
         for ctl in self.external_catalogs.values() {

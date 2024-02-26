@@ -88,6 +88,10 @@ impl Interpreter for MergeIntoInterpreter {
         "MergeIntoInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let (physical_plan, _) = self.build_physical_plan().await?;

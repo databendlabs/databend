@@ -28,7 +28,6 @@ use databend_common_expression::TableSchema;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
-use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -38,6 +37,7 @@ use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
+use crate::catalog::Catalog;
 use crate::lock::Lock;
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
@@ -393,6 +393,14 @@ pub trait Table: Sync + Send {
     fn is_read_only(&self) -> bool {
         false
     }
+
+    async fn stream_source_table(&self, _catalog: Arc<dyn Catalog>) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "The 'stream_source_table' operation is not supported for the table '{}'. Table engine: '{}'.",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
 }
 
 #[async_trait::async_trait]
@@ -400,17 +408,13 @@ pub trait TableExt: Table {
     #[async_backtrace::framed]
     async fn refresh(&self, ctx: &dyn TableContext) -> Result<Arc<dyn Table>> {
         let table_info = self.get_table_info();
-        let name = table_info.name.clone();
         let tid = table_info.ident.table_id;
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
         let table_info = TableInfo {
             ident,
-            desc: "".to_owned(),
-            name,
             meta: meta.as_ref().clone(),
-            tenant: "".to_owned(),
-            db_type: DatabaseType::NormalDB,
+            ..table_info.clone()
         };
         catalog.get_table_by_info(&table_info)
     }

@@ -68,6 +68,10 @@ impl Interpreter for ReclusterTableInterpreter {
         "ReclusterTableInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;

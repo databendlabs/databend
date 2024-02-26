@@ -128,9 +128,9 @@ impl QueryContextShared {
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
+            catalog_manager: CatalogManager::instance(),
             session,
             cluster_cache,
-            catalog_manager: CatalogManager::instance(),
             data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             total_scan_values: Arc::new(Progress::create()),
@@ -327,7 +327,10 @@ impl QueryContextShared {
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
-        let catalog = self.catalog_manager.get_catalog(&tenant, catalog).await?;
+        let catalog = self
+            .catalog_manager
+            .get_catalog(&tenant, catalog, self.session.session_ctx.txn_mgr())
+            .await?;
         let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();
@@ -343,6 +346,11 @@ impl QueryContextShared {
         let mut tables_refs = self.tables_refs.lock();
         tables_refs.remove(&table_meta_key);
         Ok(())
+    }
+
+    pub fn clear_tables_cache(&self) {
+        let mut tables_refs = self.tables_refs.lock();
+        tables_refs.clear();
     }
 
     /// Init runtime when first get
