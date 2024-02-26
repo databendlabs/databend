@@ -53,12 +53,12 @@ impl SpillHandler {
     }
 
     // Note: the caller should ensure `spill_state` is Some
-    pub fn spill_state(&self) -> &Box<ProbeSpillState> {
+    pub fn spill_state(&self) -> &ProbeSpillState {
         debug_assert!(self.spill_state.is_some());
         self.spill_state.as_ref().unwrap()
     }
 
-    pub fn spill_state_mut(&mut self) -> &mut Box<ProbeSpillState> {
+    pub fn spill_state_mut(&mut self) -> &mut ProbeSpillState {
         debug_assert!(self.spill_state.is_some());
         self.spill_state.as_mut().unwrap()
     }
