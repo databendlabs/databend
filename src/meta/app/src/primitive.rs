@@ -44,4 +44,8 @@ impl Deref for Id {
     }
 }
 
-impl kvapi::Value for Id {}
+impl kvapi::Value for Id {
+    fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        []
+    }
+}

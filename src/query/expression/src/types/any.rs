@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 use std::ops::Range;
 
 use crate::property::Domain;
+use crate::types::DecimalSize;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -67,7 +68,10 @@ impl ValueType for AnyType {
         Some(builder)
     }
 
-    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
         Some(builder)
     }
 

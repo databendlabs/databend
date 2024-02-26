@@ -12,21 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::Infallible;
-use std::fmt::Debug;
+mod alloc_error_hook;
+mod mem_stat;
+mod stat_buffer;
 
-/// A value that can be stored in kvapi::KVApi.
-pub trait Value: Debug {
-    /// Return keys this value depends on.
-    ///
-    /// For example, the name-to-id record `database-name -> a database-id`
-    /// depends on the `database-id -> database-meta` record.
-    /// Thus `DatabaseId::dependency_keys()` returns itself for further traversing.
-    fn dependency_keys(&self) -> impl IntoIterator<Item = String>;
-}
-
-impl Value for Infallible {
-    fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-        []
-    }
-}
+pub use alloc_error_hook::set_alloc_error_hook;
+pub use mem_stat::MemStat;
+pub use mem_stat::OutOfLimit;
+pub use mem_stat::GLOBAL_MEM_STAT;
+pub use stat_buffer::StatBuffer;

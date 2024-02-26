@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::Infallible;
-use std::fmt::Debug;
+use crate::runtime::LimitMemGuard;
+use crate::runtime::ThreadTracker;
 
-/// A value that can be stored in kvapi::KVApi.
-pub trait Value: Debug {
-    /// Return keys this value depends on.
-    ///
-    /// For example, the name-to-id record `database-name -> a database-id`
-    /// depends on the `database-id -> database-meta` record.
-    /// Thus `DatabaseId::dependency_keys()` returns itself for further traversing.
-    fn dependency_keys(&self) -> impl IntoIterator<Item = String>;
-}
+pub fn set_alloc_error_hook() {
+    std::alloc::set_alloc_error_hook(|layout| {
+        let _guard = LimitMemGuard::enter_unlimited();
 
-impl Value for Infallible {
-    fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-        []
-    }
+        let out_of_limit_desc = ThreadTracker::replace_error_message(None);
+
+        panic!(
+            "{}",
+            out_of_limit_desc
+                .unwrap_or_else(|| format!("memory allocation of {} bytes failed", layout.size()))
+        );
+    })
 }

@@ -184,5 +184,9 @@ mod kv_api_impl {
         }
     }
 
-    impl kvapi::Value for UserDefinedFunction {}
+    impl kvapi::Value for UserDefinedFunction {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 }

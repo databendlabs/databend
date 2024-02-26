@@ -232,6 +232,11 @@ SELECT quantile_cont(0, 0.5, 0.6, 1)(number) from numbers_mt(10000);
 ----
 [0.0,4999.5,5999.4,9999.0]
 
+query T
+SELECT quantile_cont(0, 0.5, 0.6, 1)(number::decimal(10,2)) from numbers_mt(10000);
+----
+[0.00,4999.00,5999.00,9999.00]
+
 statement error 1010
 SELECT quantile_cont(5)(number) from numbers_mt(10000)
 
@@ -239,6 +244,11 @@ query T
 SELECT quantile_disc(0, 0.5, 0.6, 1)(number) from numbers_mt(10000);
 ----
 [0,4999,5999,9999]
+
+query T
+SELECT quantile_disc(0, 0.5, 0.6, 1)(number::decimal(10,2)) from numbers_mt(10000);
+----
+[0.00,4999.00,5999.00,9999.00]
 
 query F
 SELECT quantile_tdigest(0.6)(number) from numbers_mt(10000)
