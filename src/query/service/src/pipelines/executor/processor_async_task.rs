@@ -47,7 +47,6 @@ pub struct ProcessorAsyncTask {
     processor_id: NodeIndex,
     queue: Arc<ExecutorTasksQueue>,
     workers_condvar: Arc<WorkersCondvar>,
-    profile: Arc<Profile>,
     instant: Instant,
     last_nanos: usize,
     graph: Arc<RunningGraph>,
@@ -62,7 +61,6 @@ impl ProcessorAsyncTask {
         queue: Arc<ExecutorTasksQueue>,
         workers_condvar: Arc<WorkersCondvar>,
         weak_executor: Weak<PipelineExecutor>,
-        profile: Arc<Profile>,
         graph: Arc<RunningGraph>,
         inner: Inner,
     ) -> ProcessorAsyncTask {
@@ -133,7 +131,6 @@ impl ProcessorAsyncTask {
             processor_id,
             queue,
             workers_condvar,
-            profile,
             last_nanos: instant.elapsed().as_nanos() as usize,
             instant,
             graph,
@@ -149,8 +146,6 @@ impl Future for ProcessorAsyncTask {
         if self.queue.is_finished() {
             return Poll::Ready(());
         }
-
-        Profile::track_profile(&self.profile);
 
         let last_nanos = self.last_nanos;
         let last_instant = self.instant;

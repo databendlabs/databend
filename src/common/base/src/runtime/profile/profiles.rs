@@ -44,6 +44,7 @@ pub enum ProfileStatisticsName {
     SpillReadBytes,
     SpillReadTime,
     RuntimeFilterPruneParts,
+    MemoryUsage,
 }
 
 #[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
@@ -104,7 +105,7 @@ pub static PROFILES_INDEX: OnceCell<
     Arc<[Option<ProfileStatisticsName>; std::mem::variant_count::<ProfileStatisticsName>()]>,
 > = OnceCell::new();
 
-fn get_statistics_name_index()
+pub fn get_statistics_name_index()
 -> Arc<[Option<ProfileStatisticsName>; std::mem::variant_count::<ProfileStatisticsName>()]> {
     PROFILES_INDEX
         .get_or_init(|| {
@@ -234,6 +235,13 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 index: ProfileStatisticsName::RuntimeFilterPruneParts as usize,
                 unit: StatisticsUnit::Count,
                 plain_statistics: true,
+            }),
+            (ProfileStatisticsName::MemoryUsage, ProfileDesc {
+                display_name: "memory usage",
+                desc: "The real time memory usage",
+                index: ProfileStatisticsName::MemoryUsage as usize,
+                unit: StatisticsUnit::Bytes,
+                plain_statistics: false,
             })
         ]))
     }).clone()

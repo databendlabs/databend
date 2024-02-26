@@ -14,7 +14,10 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Thread;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayload;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::Pipeline;
@@ -26,14 +29,27 @@ use crate::pipelines::executor::PipelineExecutor;
 
 pub struct PipelineCompleteExecutor {
     executor: Arc<PipelineExecutor>,
+    tracking_payload: TrackingPayload,
 }
 
 // Use this executor when the pipeline is complete pipeline (has source and sink)
 impl PipelineCompleteExecutor {
+    fn execution_tracking_payload(query_id: &str) -> TrackingPayload {
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.mem_stat = Some(MemStat::create(format!(
+            "QueryExecutionMemStat-{}",
+            query_id
+        )));
+        tracking_payload
+    }
+
     pub fn try_create(
         pipeline: Pipeline,
         settings: ExecutorSettings,
     ) -> Result<PipelineCompleteExecutor> {
+        let tracking_payload = Self::execution_tracking_payload(settings.query_id.as_ref());
+        let _guard = ThreadTracker::tracking(tracking_payload.clone());
+
         if !pipeline.is_complete_pipeline()? {
             return Err(ErrorCode::Internal(
                 "Logical error, PipelineCompleteExecutor can only work on complete pipeline.",
@@ -41,13 +57,19 @@ impl PipelineCompleteExecutor {
         }
 
         let executor = PipelineExecutor::create(pipeline, settings)?;
-        Ok(PipelineCompleteExecutor { executor })
+        Ok(PipelineCompleteExecutor {
+            executor,
+            tracking_payload,
+        })
     }
 
     pub fn from_pipelines(
         pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
     ) -> Result<Arc<PipelineCompleteExecutor>> {
+        let tracking_payload = Self::execution_tracking_payload(settings.query_id.as_ref());
+        let _guard = ThreadTracker::tracking(tracking_payload.clone());
+
         for pipeline in &pipelines {
             if !pipeline.is_complete_pipeline()? {
                 return Err(ErrorCode::Internal(
@@ -57,7 +79,10 @@ impl PipelineCompleteExecutor {
         }
 
         let executor = PipelineExecutor::from_pipelines(pipelines, settings)?;
-        Ok(Arc::new(PipelineCompleteExecutor { executor }))
+        Ok(Arc::new(PipelineCompleteExecutor {
+            executor,
+            tracking_payload,
+        }))
     }
 
     pub fn get_inner(&self) -> Arc<PipelineExecutor> {
@@ -65,11 +90,14 @@ impl PipelineCompleteExecutor {
     }
 
     pub fn finish(&self, cause: Option<ErrorCode>) {
+        let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
         self.executor.finish(cause);
     }
 
     #[minitrace::trace]
     pub fn execute(&self) -> Result<()> {
+        let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
+
         Thread::named_spawn(
             Some(String::from("CompleteExecutor")),
             self.thread_function(),
