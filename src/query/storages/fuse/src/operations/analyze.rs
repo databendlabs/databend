@@ -18,8 +18,10 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
+use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
@@ -99,22 +101,21 @@ impl SinkAnalyzeState {
         });
         Ok(ProcessorPtr::create(sinker))
     }
-}
-
-#[async_trait]
-impl AsyncSink for SinkAnalyzeState {
-    const NAME: &'static str = "SinkAnalyzeState";
 
     #[unboxed_simple]
     #[async_backtrace::framed]
-    async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
+    pub async fn merge_analyze_states(&mut self, data_block: DataBlock) -> Result<bool> {
         if data_block.num_rows() == 0 {
             return Ok(false);
         }
+
         // always use the latest table
-        let table = self
-            .ctx
-            .get_table(&self.catalog, &self.database, &self.table)
+        let tenant = self.ctx.get_tenant();
+        let catalog = CatalogManager::instance()
+            .get_catalog(&tenant, &self.catalog)
+            .await?;
+        let table = catalog
+            .get_table(tenant.as_str(), &self.database, &self.table)
             .await?;
 
         let table = FuseTable::try_from_table(table.as_ref())?;
@@ -190,6 +191,31 @@ impl AsyncSink for SinkAnalyzeState {
         )
         .await?;
 
+        Ok(true)
+    }
+}
+
+#[async_trait]
+impl AsyncSink for SinkAnalyzeState {
+    const NAME: &'static str = "SinkAnalyzeState";
+
+    #[unboxed_simple]
+    #[async_backtrace::framed]
+    async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
+        let mismatch_code = ErrorCode::TableVersionMismatched("").code();
+
+        loop {
+            if let Err(e) = self.merge_analyze_states(data_block.clone()).await {
+                if e.code() == mismatch_code {
+                    log::warn!("Retry after got TableVersionMismatched");
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
+
+            break;
+        }
         Ok(true)
     }
 }

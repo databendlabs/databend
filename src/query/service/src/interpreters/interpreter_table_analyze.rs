@@ -82,9 +82,8 @@ impl Interpreter for AnalyzeTableInterpreter {
                 .read_table_snapshot_statistics(Some(&snapshot))
                 .await?;
 
-            let mut is_full = true;
             let since_str = if let Some(table_statistics) = &table_statistics {
-                is_full = table
+                let is_full = table
                     .navigate_to(&NavigationPoint::SnapshotID(
                         table_statistics.snapshot_id.simple().to_string(),
                     ))
@@ -124,7 +123,8 @@ impl Interpreter for AnalyzeTableInterpreter {
                 .join(", ");
 
             let sql = format!(
-                "SELECT {select_expr}, {is_full} as is_full from {}.{} AT (snapshot => '{}') {since_str} ",
+                "SELECT {select_expr}, {} as is_full from {}.{} AT (snapshot => '{}') {since_str} ",
+                since_str.is_empty(),
                 plan.database,
                 plan.table,
                 snapshot.snapshot_id.simple(),
