@@ -26,8 +26,6 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
 use ethnum::i256;
 
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
 use super::get_levels;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
@@ -107,15 +105,6 @@ where
         }
         Ok(())
     }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, self)
-    }
-
-    fn deserialize(reader: &mut &[u8]) -> Result<Self>
-    where Self: Sized {
-        borsh_deserialize_state(reader)
-    }
 }
 
 impl<T> UnaryState<T, T> for QuantileState<T>
@@ -160,15 +149,6 @@ where
         }
 
         Ok(())
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, self)
-    }
-
-    fn deserialize(reader: &mut &[u8]) -> Result<Self>
-    where Self: Sized {
-        borsh_deserialize_state(reader)
     }
 }
 
