@@ -19,12 +19,12 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::PlanScope;
-use databend_common_pipeline_core::processors::Profile;
 use databend_common_pipeline_core::Pipeline;
 use log::debug;
 use log::trace;
@@ -88,7 +88,21 @@ impl Node {
             updated_list: UpdateList::create(),
             inputs_port: inputs_port.to_vec(),
             outputs_port: outputs_port.to_vec(),
-            profile: Arc::new(Profile::create(pid, p_name, scope)),
+            profile: Arc::new(Profile::create(
+                pid,
+                p_name,
+                scope.as_ref().map(|x| x.id),
+                scope.as_ref().map(|x| x.name.clone()),
+                scope.as_ref().and_then(|x| x.parent_id),
+                scope
+                    .as_ref()
+                    .map(|x| x.title.clone())
+                    .unwrap_or(Arc::new(String::new())),
+                scope
+                    .as_ref()
+                    .map(|x| x.labels.clone())
+                    .unwrap_or(Arc::new(vec![])),
+            )),
         })
     }
 

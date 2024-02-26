@@ -15,11 +15,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_base::runtime::profile::ProfileLabel;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
-use databend_common_pipeline_core::processors::profile::ProfileLabel;
 use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::processors::PlanScopeGuard;
 use databend_common_pipeline_core::Pipeline;

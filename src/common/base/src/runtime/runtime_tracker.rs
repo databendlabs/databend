@@ -55,6 +55,7 @@ use pin_project_lite::pin_project;
 use crate::runtime::memory::MemStat;
 use crate::runtime::memory::OutOfLimit;
 use crate::runtime::memory::StatBuffer;
+use crate::runtime::profile::Profile;
 
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=ea33533387d401e86423df1a764b5609
@@ -91,10 +92,15 @@ impl Drop for LimitMemGuard {
 }
 
 /// A per-thread tracker that tracks memory usage stat.
-#[derive(Default)]
 pub struct ThreadTracker {
-    mem_stat: Option<Arc<MemStat>>,
     out_of_limit_desc: Option<String>,
+    pub(crate) payload: TrackingPayload,
+}
+
+#[derive(Clone)]
+pub struct TrackingPayload {
+    pub profile: Option<Arc<Profile>>,
+    pub mem_stat: Option<Arc<MemStat>>,
 }
 
 impl Drop for ThreadTracker {
@@ -110,8 +116,12 @@ impl Drop for ThreadTracker {
 impl ThreadTracker {
     pub(crate) const fn empty() -> Self {
         Self {
-            mem_stat: None,
+            // mem_stat: None,
             out_of_limit_desc: None,
+            payload: TrackingPayload {
+                profile: None,
+                mem_stat: None,
+            },
         }
     }
 
@@ -123,14 +133,9 @@ impl ThreadTracker {
         })
     }
 
-    /// Replace the `mem_stat` with the current thread's.
-    pub fn replace_mem_stat(mem_state: Option<Arc<MemStat>>) -> Option<Arc<MemStat>> {
-        TRACKER.with(|v: &RefCell<ThreadTracker>| {
-            let mut borrow_mut = v.borrow_mut();
-            let old = borrow_mut.mem_stat.take();
-            borrow_mut.mem_stat = mem_state;
-            old
-        })
+    pub(crate) fn with<F, R>(f: F) -> R
+    where F: FnOnce(&RefCell<ThreadTracker>) -> R {
+        TRACKER.with(f)
     }
 
     /// Replace the `out_of_limit_desc` with the current thread's.
@@ -172,7 +177,7 @@ impl ThreadTracker {
         let has_thread_local = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
             // We need to ensure no heap memory alloc or dealloc. it will cause panic of borrow recursive call.
             let tracker = tracker.borrow();
-            match tracker.mem_stat.as_deref() {
+            match tracker.payload.mem_stat.as_deref() {
                 None => Ok(()),
                 Some(mem_stat) => mem_stat.record_memory::<ROLLBACK>(batch, cur),
             }

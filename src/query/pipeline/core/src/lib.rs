@@ -36,8 +36,6 @@ pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;
 pub use pipeline::query_spill_prefix;
 pub use pipeline::Pipeline;
-pub use processors::get_statistics_desc;
 pub use processors::PlanProfile;
 pub use processors::PlanScope;
 pub use processors::PlanScopeGuard;
-pub use processors::ProfileLabel;
