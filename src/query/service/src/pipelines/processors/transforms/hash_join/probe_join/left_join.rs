@@ -18,7 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::KeyAccessor;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
@@ -233,12 +233,7 @@ impl HashJoinProbeState {
         // Build states.
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
         let outer_scan_map = &mut build_state.outer_scan_map;
-        let other_predicate = self
-            .hash_join_state
-            .hash_join_desc
-            .other_predicate
-            .as_ref()
-            .unwrap();
+        let filter_executor = probe_state.filter_executor.as_mut().unwrap();
 
         // Results.
         let mut matched_idx = 0;
@@ -282,7 +277,7 @@ impl HashJoinProbeState {
                         &build_state.generation_state,
                         outer_scan_map,
                         &mut result_blocks,
-                        Some(other_predicate),
+                        Some(filter_executor),
                         Some(row_state),
                         Some(row_state_indexes),
                     )?;
@@ -336,7 +331,7 @@ impl HashJoinProbeState {
                         &build_state.generation_state,
                         outer_scan_map,
                         &mut result_blocks,
-                        Some(other_predicate),
+                        Some(filter_executor),
                         Some(row_state),
                         Some(row_state_indexes),
                     )?;
@@ -366,7 +361,7 @@ impl HashJoinProbeState {
                 &build_state.generation_state,
                 outer_scan_map,
                 &mut result_blocks,
-                Some(other_predicate),
+                Some(filter_executor),
                 Some(row_state),
                 Some(row_state_indexes),
             )?;
@@ -465,7 +460,7 @@ impl HashJoinProbeState {
         build_state: &BuildBlockGenerationState,
         outer_scan_map: &mut [Vec<bool>],
         result_blocks: &mut Vec<DataBlock>,
-        other_predicate: Option<&Expr>,
+        filter_executor: Option<&mut FilterExecutor>,
         row_state: Option<&mut Vec<usize>>,
         row_state_indexes: Option<&mut Vec<usize>>,
     ) -> Result<()> {
@@ -526,7 +521,7 @@ impl HashJoinProbeState {
 
         let result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
 
-        if other_predicate.is_none() {
+        if filter_executor.is_none() {
             result_blocks.push(result_block);
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                 for row_ptr in build_indexes[0..matched_idx].iter() {
@@ -537,25 +532,17 @@ impl HashJoinProbeState {
                     };
                 }
             }
-            self.merge_into_check_and_set_matched(
-                build_indexes,
-                matched_idx,
-                &probe_state.true_validity,
-            )?;
+            self.merge_into_check_and_set_matched(build_indexes, matched_idx, None)?;
             return Ok(());
         }
 
+        // Safe to unwrap.
         let row_state = row_state.unwrap();
         let row_state_indexes = row_state_indexes.unwrap();
-        let (bm, all_true, all_false) = self.get_other_filters(
-            &result_block,
-            self.hash_join_state
-                .hash_join_desc
-                .other_predicate
-                .as_ref()
-                .unwrap(),
-            &self.func_ctx,
-        )?;
+        let filter_executor = filter_executor.unwrap();
+
+        let (result_block, selection, all_true, all_false) =
+            self.get_other_predicate_result_block(filter_executor, result_block)?;
 
         if all_true {
             result_blocks.push(result_block);
@@ -568,55 +555,53 @@ impl HashJoinProbeState {
                     };
                 }
             }
-            self.merge_into_check_and_set_matched(
-                build_indexes,
-                matched_idx,
-                &probe_state.true_validity,
-            )?;
+            self.merge_into_check_and_set_matched(build_indexes, matched_idx, Some(selection))?;
         } else if all_false {
-            let mut idx = 0;
-            while idx < matched_idx {
+            for idx in 0..matched_idx {
                 unsafe {
                     *row_state.get_unchecked_mut(*row_state_indexes.get_unchecked(idx)) -= 1;
                 };
-                idx += 1;
             }
         } else {
-            // Safe to unwrap.
-            let validity = bm.unwrap();
+            result_blocks.push(result_block);
+            let mut count = 0;
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
-                let mut idx = 0;
-                while idx < matched_idx {
+                for idx in selection {
                     unsafe {
-                        let valid = validity.get_bit_unchecked(idx);
-                        let row_ptr = build_indexes.get_unchecked(idx);
-                        if valid {
-                            *outer_scan_map
-                                .get_unchecked_mut(row_ptr.chunk_index as usize)
-                                .get_unchecked_mut(row_ptr.row_index as usize) = true;
-                        } else {
-                            *row_state.get_unchecked_mut(*row_state_indexes.get_unchecked(idx)) -=
-                                1;
+                        while count < *idx {
+                            *row_state.get_unchecked_mut(
+                                *row_state_indexes.get_unchecked(count as usize),
+                            ) -= 1;
+                            count += 1;
                         }
+                        let row_ptr = build_indexes.get_unchecked(*idx as usize);
+                        *outer_scan_map
+                            .get_unchecked_mut(row_ptr.chunk_index as usize)
+                            .get_unchecked_mut(row_ptr.row_index as usize) = true;
+                        count += 1;
                     }
-                    idx += 1;
                 }
             } else {
-                let mut idx = 0;
-                self.merge_into_check_and_set_matched(build_indexes, matched_idx, &validity)?;
-                while idx < matched_idx {
-                    unsafe {
-                        let valid = validity.get_bit_unchecked(idx);
-                        if !valid {
-                            *row_state.get_unchecked_mut(*row_state_indexes.get_unchecked(idx)) -=
-                                1;
-                        }
+                self.merge_into_check_and_set_matched(build_indexes, matched_idx, Some(selection))?;
+                for idx in selection {
+                    while count < *idx {
+                        unsafe {
+                            *row_state.get_unchecked_mut(
+                                *row_state_indexes.get_unchecked(count as usize),
+                            ) -= 1
+                        };
+                        count += 1;
                     }
-                    idx += 1;
+                    count += 1;
                 }
             }
-            let filtered_block = DataBlock::filter_with_bitmap(result_block, &validity)?;
-            result_blocks.push(filtered_block);
+            while (count as usize) < matched_idx {
+                unsafe {
+                    *row_state
+                        .get_unchecked_mut(*row_state_indexes.get_unchecked(count as usize)) -= 1
+                };
+                count += 1;
+            }
         }
 
         Ok(())

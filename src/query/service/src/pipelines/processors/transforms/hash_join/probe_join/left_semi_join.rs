@@ -17,7 +17,7 @@ use std::sync::atomic::Ordering;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::KeyAccessor;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
@@ -109,12 +109,7 @@ impl HashJoinProbeState {
 
         // For semi join, it defaults to false.
         let mut row_state = vec![false; input.num_rows()];
-        let other_predicate = self
-            .hash_join_state
-            .hash_join_desc
-            .other_predicate
-            .as_ref()
-            .unwrap();
+        let filter_executor = probe_state.filter_executor.as_mut().unwrap();
 
         // Results.
         let mut matched_idx = 0;
@@ -148,8 +143,8 @@ impl HashJoinProbeState {
                         build_indexes,
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
-                        other_predicate,
                         &mut row_state,
+                        filter_executor,
                     )?;
                     (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
                         hash_table,
@@ -188,8 +183,8 @@ impl HashJoinProbeState {
                         build_indexes,
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
-                        other_predicate,
                         &mut row_state,
+                        filter_executor,
                     )?;
                     (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
                         hash_table,
@@ -212,8 +207,8 @@ impl HashJoinProbeState {
                 build_indexes,
                 &mut probe_state.generation_state,
                 &build_state.generation_state,
-                other_predicate,
                 &mut row_state,
+                filter_executor,
             )?;
         }
 
@@ -246,8 +241,8 @@ impl HashJoinProbeState {
         build_indexes: &[RowPtr],
         probe_state: &mut ProbeBlockGenerationState,
         build_state: &BuildBlockGenerationState,
-        other_predicate: &Expr,
         row_state: &mut [bool],
+        filter_executor: &mut FilterExecutor,
     ) -> Result<()> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
@@ -279,9 +274,9 @@ impl HashJoinProbeState {
         let result_block = self.merge_eq_block(probe_block.clone(), build_block, matched_idx);
         self.update_row_state(
             &result_block,
-            other_predicate,
             &probe_indexes[0..matched_idx],
             row_state,
+            filter_executor,
         )?;
 
         Ok(())
@@ -291,25 +286,22 @@ impl HashJoinProbeState {
     pub(crate) fn update_row_state(
         &self,
         result_block: &DataBlock,
-        other_predicate: &Expr,
         probe_indexes: &[u32],
         row_state: &mut [bool],
+        filter_executor: &mut FilterExecutor,
     ) -> Result<()> {
-        match self.get_other_filters(result_block, other_predicate, &self.func_ctx)? {
-            (Some(bm), _, _) => {
-                for (row, selected) in probe_indexes.iter().zip(bm.iter()) {
-                    if selected && unsafe { !*row_state.get_unchecked(*row as usize) } {
-                        unsafe { *row_state.get_unchecked_mut(*row as usize) = true };
-                    }
-                }
+        let (selection, all_true, all_false) =
+            self.get_other_predicate_selection(filter_executor, result_block)?;
+        if all_true {
+            for index in probe_indexes.iter() {
+                unsafe { *row_state.get_unchecked_mut(*index as usize) = true };
             }
-            (_, true, _) => {
-                for row in probe_indexes.iter() {
-                    unsafe { *row_state.get_unchecked_mut(*row as usize) = true };
-                }
+        } else if !all_false {
+            for i in selection {
+                let index = unsafe { *probe_indexes.get_unchecked(*i as usize) };
+                unsafe { *row_state.get_unchecked_mut(index as usize) = true };
             }
-            _ => (),
-        };
+        }
         Ok(())
     }
 }
