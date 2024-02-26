@@ -18,6 +18,7 @@ use std::ops::Range;
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
 
 use super::ArrayType;
+use super::DecimalSize;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::ArgType;
@@ -92,7 +93,10 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         None
     }
 
-    fn try_upcast_column_builder(_builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+    fn try_upcast_column_builder(
+        _builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
         None
     }
 
@@ -358,8 +362,11 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
         <MapInternal<K, V> as ValueType>::try_downcast_owned_builder(builder)
     }
 
-    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
-        <MapInternal<K, V> as ValueType>::try_upcast_column_builder(builder)
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        <MapInternal<K, V> as ValueType>::try_upcast_column_builder(builder, decimal_size)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {

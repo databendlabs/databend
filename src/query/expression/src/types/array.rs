@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::AnyType;
+use super::DecimalSize;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -107,8 +108,11 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         }
     }
 
-    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
-        Some(ColumnBuilder::Array(Box::new(builder.upcast())))
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Array(Box::new(builder.upcast(decimal_size))))
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -395,9 +399,9 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
         )
     }
 
-    pub fn upcast(self) -> ArrayColumnBuilder<AnyType> {
+    pub fn upcast(self, decimal_size: Option<DecimalSize>) -> ArrayColumnBuilder<AnyType> {
         ArrayColumnBuilder {
-            builder: T::try_upcast_column_builder(self.builder).unwrap(),
+            builder: T::try_upcast_column_builder(self.builder, decimal_size).unwrap(),
             offsets: self.offsets,
         }
     }
