@@ -160,13 +160,13 @@ impl ThreadTracker {
         StatBuffer::current().dealloc(size)
     }
 
-    pub fn record_memory<const NEED_ROLLBACK: bool>(memory_usage: i64) -> Result<(), OutOfLimit> {
+    pub fn record_memory<const ROLLBACK: bool>(batch: i64, cur: i64) -> Result<(), OutOfLimit> {
         let has_thread_local = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
             // We need to ensure no heap memory alloc or dealloc. it will cause panic of borrow recursive call.
             let tracker = tracker.borrow();
             match tracker.mem_stat.as_deref() {
                 None => Ok(()),
-                Some(mem_stat) => mem_stat.record_memory::<NEED_ROLLBACK>(memory_usage),
+                Some(mem_stat) => mem_stat.record_memory::<ROLLBACK>(batch, cur),
             }
         });
 

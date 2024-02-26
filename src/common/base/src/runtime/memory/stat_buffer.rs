@@ -70,22 +70,22 @@ impl StatBuffer {
     }
 
     /// Flush buffered stat to MemStat it belongs to.
-    pub fn flush<const NEED_ROLLBACK: bool>(&mut self) -> Result<(), OutOfLimit> {
+    pub fn flush<const ROLLBACK: bool>(&mut self, alloc: i64) -> Result<(), OutOfLimit> {
         match std::mem::take(&mut self.memory_usage) {
             0 => Ok(()),
             usage => {
-                if let Err(e) = self.global_mem_stat.record_memory::<NEED_ROLLBACK>(usage) {
-                    if !NEED_ROLLBACK {
-                        let _ = ThreadTracker::record_memory::<false>(usage);
+                if let Err(e) = self.global_mem_stat.record_memory::<ROLLBACK>(usage, alloc) {
+                    if !ROLLBACK {
+                        let _ = ThreadTracker::record_memory::<false>(usage, alloc);
                     }
 
                     return Err(e);
                 }
 
-                if let Err(error) = ThreadTracker::record_memory::<NEED_ROLLBACK>(usage) {
-                    if NEED_ROLLBACK {
-                        self.global_mem_stat.rollback(usage);
-                        return Err(error);
+                if let Err(e) = ThreadTracker::record_memory::<ROLLBACK>(usage, alloc) {
+                    if ROLLBACK {
+                        self.global_mem_stat.rollback(alloc);
+                        return Err(e);
                     }
                 }
 
@@ -110,7 +110,7 @@ impl StatBuffer {
 
         match self.incr(memory_usage) <= MEM_STAT_BUFFER_SIZE {
             true => Ok(()),
-            false => self.flush::<true>(),
+            false => self.flush::<true>(memory_usage),
         }
     }
 
@@ -124,7 +124,7 @@ impl StatBuffer {
         }
 
         if self.incr(-memory_usage) < -MEM_STAT_BUFFER_SIZE {
-            let _ = self.flush::<false>();
+            let _ = self.flush::<false>(memory_usage);
         }
 
         // NOTE: De-allocation does not panic

@@ -93,18 +93,22 @@ impl MemStat {
     #[inline]
     pub fn record_memory<const NEED_ROLLBACK: bool>(
         &self,
-        memory_usage: i64,
+        batch_memory_used: i64,
+        current_memory_alloc: i64,
     ) -> Result<(), OutOfLimit> {
-        let mut used = self.used.fetch_add(memory_usage, Ordering::Relaxed);
+        let mut used = self.used.fetch_add(batch_memory_used, Ordering::Relaxed);
 
-        used += memory_usage;
-        let peak_used = self.peak_used.fetch_max(used, Ordering::Relaxed);
+        used += batch_memory_used;
+        self.peak_used.fetch_max(used, Ordering::Relaxed);
 
         if let Some(parent_memory_stat) = self.parent_memory_stat.as_deref() {
-            if let Err(cause) = parent_memory_stat.record_memory::<NEED_ROLLBACK>(memory_usage) {
+            if let Err(cause) = parent_memory_stat.record_memory::<NEED_ROLLBACK>(batch_memory_used)
+            {
                 if NEED_ROLLBACK {
-                    self.peak_used.store(peak_used, Ordering::Relaxed);
-                    self.used.fetch_sub(memory_usage, Ordering::Relaxed);
+                    // We only roll back the memory that alloc failed
+                    self.used.fetch_sub(current_memory_alloc, Ordering::Relaxed);
+                    self.peak_used
+                        .store(used - current_memory_alloc, Ordering::Relaxed);
                 }
 
                 return Err(cause);
@@ -114,8 +118,8 @@ impl MemStat {
         if let Err(cause) = self.check_limit(used) {
             if NEED_ROLLBACK {
                 // NOTE: we cannot rollback peak_used of parent mem stat in this case
-                self.peak_used.store(peak_used, Ordering::Relaxed);
-                self.rollback(memory_usage);
+                // self.peak_used.store(peak_used, Ordering::Relaxed);
+                self.rollback(current_memory_alloc);
             }
 
             return Err(cause);
