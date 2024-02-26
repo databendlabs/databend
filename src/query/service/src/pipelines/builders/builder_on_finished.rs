@@ -40,7 +40,7 @@ impl PipelineBuilder {
         let files: Vec<String> = files.iter().map(|v| v.path.clone()).collect();
         let is_active = {
             let txn_mgr = ctx.txn_mgr();
-            let mut txn_mgr = txn_mgr.lock().unwrap();
+            let mut txn_mgr = txn_mgr.lock();
             let is_active = txn_mgr.is_active();
             if is_active && copy_purge_option {
                 txn_mgr.add_need_purge_files(stage_info.clone(), files.clone());

@@ -4549,6 +4549,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-meta-app",
  "databend-common-meta-types",
+ "parking_lot 0.12.1",
 ]
 
 [[package]]

@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::Mutex;
-
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::catalog::CatalogManager;
@@ -50,8 +47,7 @@ pub struct TenantTableInfo {
 }
 
 async fn load_tenant_tables(tenant: &str) -> Result<TenantTablesResponse> {
-    let catalog =
-        CatalogManager::instance().get_default_catalog(Arc::new(Mutex::new(TxnManager::init())))?;
+    let catalog = CatalogManager::instance().get_default_catalog(TxnManager::init())?;
     let databases = catalog.list_databases(tenant).await?;
 
     let mut table_infos: Vec<TenantTableInfo> = vec![];

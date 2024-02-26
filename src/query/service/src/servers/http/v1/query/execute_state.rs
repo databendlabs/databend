@@ -324,7 +324,6 @@ async fn execute(
     let data_stream_res = interpreter.execute(ctx.clone()).await;
     if let Err(err) = data_stream_res {
         // duplicate codes, but there is an async call
-        ctx.txn_mgr().lock().unwrap().set_fail();
         let data = BlockEntry::new(
             DataType::String,
             databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
@@ -342,7 +341,6 @@ async fn execute(
         }
         Some(Err(err)) => {
             // duplicate codes, but there is an async call
-            ctx.txn_mgr().lock().unwrap().set_fail();
             let data = BlockEntry::new(
                 DataType::String,
                 databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
@@ -361,7 +359,6 @@ async fn execute(
                     }
                     Err(err) => {
                         // duplicate codes, but there is an async call
-                        ctx.txn_mgr().lock().unwrap().set_fail();
                         let data = BlockEntry::new(
                             DataType::String,
                             databend_common_expression::Value::Scalar(Scalar::String(

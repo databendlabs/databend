@@ -38,10 +38,9 @@ pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool>
     match unsafe { ctx.get_settings().get_deduplicate_label()? } {
         None => Ok(false),
         Some(deduplicate_label) => {
-            let is_exists = if ctx.txn_mgr().lock().unwrap().is_active() {
+            let is_exists = if ctx.txn_mgr().lock().is_active() {
                 ctx.txn_mgr()
                     .lock()
-                    .unwrap()
                     .contains_deduplicated_label(&deduplicate_label)
             } else {
                 UserApiProvider::instance()

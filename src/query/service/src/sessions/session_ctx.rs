@@ -17,7 +17,6 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::Weak;
 
 use databend_common_config::GlobalConfig;
@@ -26,6 +25,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_settings::Settings;
 use databend_storages_common_txn::TxnManager;
+use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::RwLock;
 
 use super::SessionType;
@@ -65,7 +65,7 @@ pub struct SessionContext {
     // query result through previous query_id easily.
     query_ids_results: RwLock<Vec<(String, Option<String>)>>,
     typ: SessionType,
-    txn_mgr: Arc<Mutex<TxnManager>>,
+    txn_mgr: TxnManagerRef,
 }
 
 impl SessionContext {
@@ -85,7 +85,7 @@ impl SessionContext {
             query_context_shared: Default::default(),
             query_ids_results: Default::default(),
             typ,
-            txn_mgr: Arc::new(Mutex::new(TxnManager::init())),
+            txn_mgr: TxnManager::init(),
         }))
     }
 
@@ -291,7 +291,7 @@ impl SessionContext {
         HashSet::from_iter(lock.iter().map(|result| result.clone().0))
     }
 
-    pub fn txn_mgr(&self) -> Arc<Mutex<TxnManager>> {
+    pub fn txn_mgr(&self) -> TxnManagerRef {
         self.txn_mgr.clone()
     }
 }

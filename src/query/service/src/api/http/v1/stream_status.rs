@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::Mutex;
-
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::Result;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -43,8 +40,7 @@ async fn check_stream_status(
     tenant: &str,
     params: Query<StreamStatusQuery>,
 ) -> Result<StreamStatusResponse> {
-    let catalog =
-        CatalogManager::instance().get_default_catalog(Arc::new(Mutex::new(TxnManager::init())))?;
+    let catalog = CatalogManager::instance().get_default_catalog(TxnManager::init())?;
     let db_name = params.database.clone().unwrap_or("default".to_string());
     let tbl = catalog
         .get_table(tenant, &db_name, &params.stream_name)

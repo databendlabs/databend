@@ -71,7 +71,7 @@ pub trait Interpreter: Sync + Send {
                 .await?;
             ctx.clear_tables_cache();
         }
-        if !self.is_txn_command() && ctx.txn_mgr().lock().unwrap().is_fail() {
+        if !self.is_txn_command() && ctx.txn_mgr().lock().is_fail() {
             let error = ErrorCode::CurrentTransactionIsAborted(
                 "current transaction is aborted, commands ignored until end of transaction block",
             );

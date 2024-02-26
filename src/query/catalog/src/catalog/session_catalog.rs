@@ -214,14 +214,10 @@ impl Catalog for SessionCatalog {
 
     // Get the table meta by meta id.
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
-        let state = self.txn_mgr.lock().unwrap().state();
+        let state = self.txn_mgr.lock().state();
         match state {
             TxnState::Active => {
-                let mutated_table = self
-                    .txn_mgr
-                    .lock()
-                    .unwrap()
-                    .get_table_from_buffer_by_id(table_id);
+                let mutated_table = self.txn_mgr.lock().get_table_from_buffer_by_id(table_id);
                 if let Some(t) = mutated_table {
                     Ok((t.ident, Arc::new(t.meta.clone())))
                 } else {
@@ -234,14 +230,10 @@ impl Catalog for SessionCatalog {
 
     // Get the table name by meta id.
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
-        let state = self.txn_mgr.lock().unwrap().state();
+        let state = self.txn_mgr.lock().state();
         match state {
             TxnState::Active => {
-                let mutated_table = self
-                    .txn_mgr
-                    .lock()
-                    .unwrap()
-                    .get_table_from_buffer_by_id(table_id);
+                let mutated_table = self.txn_mgr.lock().get_table_from_buffer_by_id(table_id);
                 if let Some(t) = mutated_table {
                     Ok(t.name.clone())
                 } else {
@@ -264,13 +256,12 @@ impl Catalog for SessionCatalog {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        let state = self.txn_mgr.lock().unwrap().state();
+        let state = self.txn_mgr.lock().state();
         match state {
             TxnState::Active => {
                 let mutated_table = self
                     .txn_mgr
                     .lock()
-                    .unwrap()
                     .get_table_from_buffer(tenant, db_name, table_name)
                     .map(|table_info| self.get_table_by_info(&table_info));
                 if let Some(t) = mutated_table {
@@ -285,7 +276,6 @@ impl Catalog for SessionCatalog {
                             .clone();
                         self.txn_mgr
                             .lock()
-                            .unwrap()
                             .add_stream_table(table.get_table_info().clone(), source_table);
                     }
                     Ok(table)
@@ -347,14 +337,11 @@ impl Catalog for SessionCatalog {
         table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        let state = self.txn_mgr.lock().unwrap().state();
+        let state = self.txn_mgr.lock().state();
         match state {
             TxnState::AutoCommit => self.inner.update_table_meta(table_info, req).await,
             TxnState::Active => {
-                self.txn_mgr
-                    .lock()
-                    .unwrap()
-                    .update_table_meta(req, table_info);
+                self.txn_mgr.lock().update_table_meta(req, table_info);
                 Ok(UpdateTableMetaReply {
                     share_table_info: None,
                 })
@@ -389,12 +376,9 @@ impl Catalog for SessionCatalog {
             .inner
             .get_table_copied_file_info(tenant, db_name, req)
             .await?;
-        reply.file_info.extend(
-            self.txn_mgr
-                .lock()
-                .unwrap()
-                .get_table_copied_file_info(table_id),
-        );
+        reply
+            .file_info
+            .extend(self.txn_mgr.lock().get_table_copied_file_info(table_id));
         Ok(reply)
     }
 
@@ -462,12 +446,11 @@ impl Catalog for SessionCatalog {
         db_name: &str,
         source_table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        let is_active = self.txn_mgr.lock().unwrap().is_active();
+        let is_active = self.txn_mgr.lock().is_active();
         if is_active {
             let maybe_table = self
                 .txn_mgr
                 .lock()
-                .unwrap()
                 .get_stream_table_source(stream_desc)
                 .map(|table_info| self.get_table_by_info(&table_info));
             if let Some(t) = maybe_table {

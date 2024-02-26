@@ -317,7 +317,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
 
     #[async_backtrace::framed]
     async fn err(&self, error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
-        self.session.txn_mgr().lock().unwrap().set_fail();
+        self.session.txn_mgr().lock().set_fail();
         if error.code() != ErrorCode::ABORTED_QUERY && error.code() != ErrorCode::ABORTED_SESSION {
             error!("OnQuery Error: {:?}", error);
             writer

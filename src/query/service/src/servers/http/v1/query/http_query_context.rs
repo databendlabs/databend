@@ -79,6 +79,10 @@ impl HttpQueryContext {
         ]);
         properties
     }
+
+    pub fn set_fail(&self) {
+        self.session.txn_mgr().lock().set_fail();
+    }
 }
 
 #[async_trait::async_trait]

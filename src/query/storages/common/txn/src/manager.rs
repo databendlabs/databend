@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
@@ -26,6 +25,7 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_types::MatchSeq;
+use parking_lot::Mutex;
 #[derive(Debug, Clone)]
 pub struct TxnManager {
     state: TxnState,
@@ -97,11 +97,11 @@ impl TxnBuffer {
 }
 
 impl TxnManager {
-    pub fn init() -> Self {
-        TxnManager {
+    pub fn init() -> TxnManagerRef {
+        Arc::new(Mutex::new(TxnManager {
             state: TxnState::AutoCommit,
             txn_buffer: TxnBuffer::default(),
-        }
+        }))
     }
 
     pub fn begin(&mut self) {

@@ -47,17 +47,17 @@ impl Interpreter for CommitInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let is_active = self.ctx.txn_mgr().lock().unwrap().is_active();
+        let is_active = self.ctx.txn_mgr().lock().is_active();
         if is_active {
             let catalog = self.ctx.get_default_catalog()?;
-            let req = self.ctx.txn_mgr().lock().unwrap().req();
+            let req = self.ctx.txn_mgr().lock().req();
             catalog.update_multi_table_meta(req).await?;
-            let need_purge_files = self.ctx.txn_mgr().lock().unwrap().need_purge_files();
+            let need_purge_files = self.ctx.txn_mgr().lock().need_purge_files();
             for (stage_info, files) in need_purge_files {
                 PipelineBuilder::try_purge_files(self.ctx.clone(), &stage_info, &files).await;
             }
         }
-        self.ctx.txn_mgr().lock().unwrap().clear();
+        self.ctx.txn_mgr().lock().clear();
         Ok(PipelineBuildResult::create())
     }
 }
