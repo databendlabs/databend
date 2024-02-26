@@ -138,7 +138,7 @@ impl StatBuffer {
 
         // Memory operations during destruction will be recorded to global stat.
         self.destroyed_thread_local_macro = true;
-        let _ = self.global_mem_stat.record_memory::<false>(memory_usage);
+        let _ = self.global_mem_stat.record_memory::<false>(memory_usage, 0);
     }
 }
 
