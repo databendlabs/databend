@@ -17,6 +17,7 @@ use std::time::Instant;
 
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::catch_unwind;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
@@ -25,7 +26,6 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::Profile;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use futures::future::select;

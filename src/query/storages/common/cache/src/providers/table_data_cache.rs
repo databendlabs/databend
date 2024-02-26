@@ -18,6 +18,8 @@ use std::thread::JoinHandle;
 
 use bytes::Bytes;
 use crossbeam_channel::TrySendError;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_cache::Count;
 use databend_common_cache::DefaultHashBuilder;
 use databend_common_exception::ErrorCode;
@@ -93,7 +95,7 @@ impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache 
         let k = k.as_ref();
         if let Some(item) = self.external_cache.get(k) {
             metrics_inc_cache_hit_count(1, TABLE_DATA_CACHE_NAME);
-            // Profile::record_usize_profile(ProfileStatisticsName::ScanCacheBytes, process_values.bytes);
+            Profile::record_usize_profile(ProfileStatisticsName::ScanCacheBytes, item.len());
             Some(item)
         } else {
             metrics_inc_cache_miss_count(1, TABLE_DATA_CACHE_NAME);

@@ -16,6 +16,7 @@ mod backtrace;
 mod catch_unwind;
 mod global_runtime;
 mod memory;
+pub mod profile;
 #[allow(clippy::module_inception)]
 mod runtime;
 mod runtime_tracker;
