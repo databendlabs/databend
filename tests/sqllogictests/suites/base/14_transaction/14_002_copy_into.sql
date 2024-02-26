@@ -68,10 +68,10 @@ select * from t1;
 #################################################################################################################
 
 statement ok
-create or replace database test_txn_copy;
+create or replace database test_txn_copy_1;
 
 statement ok
-use test_txn_copy;
+use test_txn_copy_1;
 
 statement ok
 CREATE TABLE t(c int);
