@@ -150,7 +150,11 @@ impl BuildSpillState {
         }
 
         // Check if global memory usage exceeds the threshold.
-        let global_used = GLOBAL_MEM_STAT.get_memory_usage();
+        let mut global_used = GLOBAL_MEM_STAT.get_memory_usage();
+        // `global_used` may be negative at the beginning of starting query.
+        if global_used < 0 {
+            global_used = 0;
+        }
         let byte = Byte::from_unit(global_used as f64, ByteUnit::B).unwrap();
         let total_gb = byte.get_appropriate_unit(false).format(3);
         let spill_threshold = self
