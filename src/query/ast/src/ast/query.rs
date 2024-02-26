@@ -349,8 +349,8 @@ pub enum JoinOperator {
     FullOuter,
     // PartialFullOuter/PartialRightInner are optimizations for merge into source build
     // in this case,  we can do pass the target block of matched partition and ummatched
-    // partition, and append block directly, but it's limitted, we just support
-    // the matched partial block must be modfied(update or delete), so we need to
+    // partition, and append block directly, but it's limited, we just support
+    // the matched partial block must be modified(update or delete), so we need to
     // make sure the last condition for matched expression is none.
     // for example:
     // a. merge into t1 using t2 on t1.a = t2.a when matched and cond1 then xx when matched
@@ -358,7 +358,7 @@ pub enum JoinOperator {
     // b. merge into t1 using t2 on t1.a = t2.a when matched and cond1 then xx when matched
     // and cond2 then xxx.
     // we can support a not b. The reason for this limitation is below:
-    // if a target block is not modfied, we will append the unmacthed partial of target block
+    // if a target block is not modified, we will append the unmacthed partial of target block
     // unexpectedly.
     // (we must have matched expressions),
     // I. if there are no not matched expressions.
