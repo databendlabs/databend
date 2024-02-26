@@ -193,7 +193,10 @@ impl Runtime {
         Self::create(
             thread_name,
             mem_stat,
-            runtime_builder.enable_all().worker_threads(workers),
+            runtime_builder
+                .enable_all()
+                .on_thread_start(ThreadTracker::init)
+                .worker_threads(workers),
         )
     }
 
