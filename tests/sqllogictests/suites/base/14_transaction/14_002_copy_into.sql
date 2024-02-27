@@ -85,13 +85,13 @@ statement ok
 insert into t values (1478);
 
 statement ok
-DROP STAGE IF EXISTS s_txn_copy;
+DROP STAGE IF EXISTS s_txn_copy_1;
 
 statement ok
-CREATE STAGE s_txn_copy;
+CREATE STAGE s_txn_copy_1;
 
 statement ok
-copy into @s_txn_copy from t;
+copy into @s_txn_copy_1 from t;
 
 statement ok
 create table t1(c int);
@@ -102,7 +102,7 @@ begin;
 
 onlyif mysql
 statement ok
-copy into t1 from @s_txn_copy purge = true;
+copy into t1 from @s_txn_copy_1 purge = true;
 
 onlyif mysql
 statement error 1025
@@ -123,7 +123,7 @@ select count(*) from t1;
 0
 
 query I
-select * from @s_txn_copy;
+select * from @s_txn_copy_1;
 ----
 1478
 
