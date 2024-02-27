@@ -24,6 +24,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_hashtable::MergeIntoBlockInfoIndex;
 use databend_common_hashtable::RowPtr;
+use databend_common_sql::plans::JoinType;
 use databend_common_sql::IndexType;
 use databend_common_sql::DUMMY_TABLE_INDEX;
 use databend_common_storages_fuse::operations::BlockMetaIndex;
@@ -246,6 +247,10 @@ impl HashJoinProbeState {
     }
 
     pub(crate) fn probe_merge_into_partial_modified_done(&self) -> Result<()> {
+        assert!(matches!(
+            self.hash_join_state.hash_join_desc.join_type,
+            JoinType::Left
+        ));
         let old_count = self.probe_workers.fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {
             // Divide the final scan phase into multiple tasks.
