@@ -23,8 +23,8 @@ use databend_common_expression::FunctionContext;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::JoinType;
 
-use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillState;
 use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillHandler;
+use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::Event;
