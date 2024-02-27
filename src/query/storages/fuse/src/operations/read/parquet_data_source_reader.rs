@@ -20,6 +20,7 @@ use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::filter;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchema;
@@ -234,15 +235,15 @@ impl Processor for ReadParquetDataSource<false> {
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
             // do min-max filter firstly.
+            let filters = self
+                .partitions
+                .ctx
+                .get_min_max_runtime_filter_with_id(self.table_index);
             filters.extend(
                 self.partitions
                     .ctx
-                    .get_min_max_runtime_filter_with_id(self.table_index),
+                    .get_inlist_runtime_filter_with_id(self.table_index),
             );
-            let mut filters = self
-                .partitions
-                .ctx
-                .get_inlist_runtime_filter_with_id(self.table_index);
 
             let mut fuse_part_infos = Vec::with_capacity(parts.len());
             for part in parts.into_iter() {
