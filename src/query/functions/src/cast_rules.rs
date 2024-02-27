@@ -51,6 +51,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
         registry.register_additional_cast_rules(func_name, CAST_FROM_VARIANT_RULES());
     }
+    // for eq function: we allow cast from string to int or float, eg: col_int = '1'
+    registry.register_additional_cast_rules("eq", CAST_FROM_STRING_RULES.iter().cloned());
 
     // Timestamp/Date --> other ints and floats
     // Now it only overload 'to_int64'

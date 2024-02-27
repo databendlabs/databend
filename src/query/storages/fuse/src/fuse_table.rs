@@ -309,10 +309,11 @@ impl FuseTable {
                 if let Some(loc) = &snapshot.table_statistics_location {
                     let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
 
+                    let ver = TableMetaLocationGenerator::table_statistics_version(loc);
                     let load_params = LoadParams {
                         location: loc.clone(),
                         len_hint: None,
-                        ver: TableMetaLocationGenerator::snapshot_statistics_version(),
+                        ver,
                         put_cache: true,
                     };
 

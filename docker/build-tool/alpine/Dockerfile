@@ -6,7 +6,7 @@ ENV LANGUAGE en_US
 ENV LANG en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
 
-RUN apk --update add --no-cache bash
+RUN apk --update add --no-cache bash sudo
 
 COPY rust-toolchain.toml /build/rust-toolchain.toml
 COPY dev_setup.sh /build/scripts/setup/dev_setup.sh
@@ -23,6 +23,7 @@ RUN curl -sSfLo /tmp/mold.tar.gz https://github.com/rui314/mold/releases/downloa
     rm -rf /tmp/mold.tar.gz && \
     ln -sf /usr/local/bin/mold /usr/bin/$(uname -m)-linux-gnu-ld
 
+ENV LIBCLANG_PATH /usr/lib/llvm17/lib
 ENV RUSTUP_HOME /opt/rust/rustup
 ENV CARGO_HOME /opt/rust/cargo
 ENV PATH /opt/rust/cargo/bin:/opt/java/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

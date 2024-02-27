@@ -39,6 +39,8 @@ static SNAPSHOT_V2: SnapshotVersion = SnapshotVersion::V2(PhantomData);
 static SNAPSHOT_V3: SnapshotVersion = SnapshotVersion::V3(PhantomData);
 static SNAPSHOT_V4: SnapshotVersion = SnapshotVersion::V4(PhantomData);
 
+static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
+    TableSnapshotStatisticsVersion::V0(PhantomData);
 static SNAPSHOT_STATISTICS_V2: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V2(PhantomData);
 
@@ -135,16 +137,23 @@ impl TableMetaLocationGenerator {
         Ok(statistics_version.create(id, &self.prefix))
     }
 
-    pub fn snapshot_statistics_version() -> u64 {
-        SNAPSHOT_STATISTICS_V2.version()
-    }
-
     pub fn gen_last_snapshot_hint_location(&self) -> String {
         format!("{}/{}", &self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT)
     }
 
     pub fn gen_virtual_block_location(location: &str) -> String {
         location.replace(FUSE_TBL_BLOCK_PREFIX, FUSE_TBL_VIRTUAL_BLOCK_PREFIX)
+    }
+
+    pub fn table_statistics_version(table_statistics_location: impl AsRef<str>) -> u64 {
+        if table_statistics_location
+            .as_ref()
+            .ends_with(SNAPSHOT_STATISTICS_V0.suffix().as_str())
+        {
+            SNAPSHOT_STATISTICS_V0.version()
+        } else {
+            SNAPSHOT_STATISTICS_V2.version()
+        }
     }
 
     pub fn gen_agg_index_location_from_block_location(loc: &str, index_id: u64) -> String {
