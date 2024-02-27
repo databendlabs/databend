@@ -365,7 +365,7 @@ jobs:
             core.setOutput('tags', tags.join(','));
       - name: Build and push
         id: docker_build
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
@@ -454,7 +454,7 @@ jobs:
             }
             core.setOutput('tags', tags.join(','));
       - name: push service image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
