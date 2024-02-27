@@ -438,6 +438,7 @@ impl Table for StreamTable {
             number_of_blocks: Some(number_of_blocks),
             number_of_segments: None,
         };
+        // In order to join order, the statistics are predicted, which may have a large bias.
         let min_stats = TableStatistics {
             num_rows: Some(num_rows / 2),
             data_size: Some(data_size / 2),
