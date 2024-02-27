@@ -28,7 +28,7 @@ select count(*) from t1;
 query
 copy into t1 from @data/csv/numbers.csv file_format = (type = CSV);
 ----
-(empty)
+
 
 query I
 select count(*) from t1;
@@ -47,7 +47,7 @@ select count(*) from t1;
 query
 copy into t1 from @data/csv/numbers.csv file_format = (type = CSV);
 ----
-(empty)
+
 
 query I
 select count(*) from t1;
