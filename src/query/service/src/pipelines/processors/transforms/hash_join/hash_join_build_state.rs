@@ -150,6 +150,7 @@ impl HashJoinBuildState {
             // For cluster, only support runtime filter for broadcast join.
             let is_broadcast_join = hash_join_state.hash_join_desc.broadcast;
             if !is_cluster || is_broadcast_join {
+                info!("enable broadcast join or standalone join runtime filter");
                 enable_inlist_runtime_filter = true;
                 enable_min_max_runtime_filter = true;
                 enable_bloom_runtime_filter =
@@ -800,6 +801,7 @@ impl HashJoinBuildState {
             let mut runtime_filter = RuntimeFilterInfo::default();
             if self.enable_inlist_runtime_filter && build_num_rows < INLIST_RUNTIME_FILTER_THRESHOLD
             {
+                info!("add inlist runtime filter");
                 self.inlist_runtime_filter(
                     &mut runtime_filter,
                     build_chunks,
@@ -808,9 +810,11 @@ impl HashJoinBuildState {
                 )?;
             }
             if self.enable_bloom_runtime_filter {
+                info!("add bloom runtime filter");
                 self.bloom_runtime_filter(build_chunks, &mut runtime_filter, build_key, probe_key)?;
             }
             if self.enable_min_max_runtime_filter {
+                info!("add min-max runtime filter");
                 self.min_max_runtime_filter(
                     build_chunks,
                     &mut runtime_filter,
@@ -819,6 +823,7 @@ impl HashJoinBuildState {
                 )?;
             }
             if !runtime_filter.is_empty() {
+                info!("set runtime filter");
                 self.ctx.set_runtime_filter((*table_index, runtime_filter));
             }
         }
