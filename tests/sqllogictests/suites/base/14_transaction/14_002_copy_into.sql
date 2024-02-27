@@ -88,6 +88,7 @@ select count(*) from t1;
 0
 
 onlyif mysql
+statement ok
 create table t2(c int);
 
 onlyif mysql
