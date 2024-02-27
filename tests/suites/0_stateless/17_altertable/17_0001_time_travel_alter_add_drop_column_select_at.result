@@ -7,11 +7,11 @@ counting the data set of first insertion, which should contain 2 rows
 select the data set of first insertion, which should contain 2 rows
 1
 2
-planner_v2: counting the data set of first insertion, which should contain 2 rows
+counting the data set of first insertion, which should contain 2 rows
 2
-planner_v2: counting the data set of first insertion by timestamp, which should contains 2 rows
+counting the data set of first insertion by timestamp, which should contains 2 rows
 2
-planner_v2: select the data set of first insertion by timestamp, which should contains 2 rows
+select the data set of first insertion by timestamp, which should contains 2 rows
 1
 2
 alter table drop a column
@@ -20,10 +20,10 @@ counting the data set of first insertion, which should contain 2 rows
 select the data set of first insertion, which should contain 2 rows
 1
 2
-planner_v2: counting the data set of first insertion, which should contain 2 rows
+counting the data set of first insertion, which should contain 2 rows
 2
-planner_v2: counting the data set of first insertion by timestamp, which should contains 2 rows
+counting the data set of first insertion by timestamp, which should contains 2 rows
 2
-planner_v2: select the data set of first insertion by timestamp, which should contains 2 rows
+select the data set of first insertion by timestamp, which should contains 2 rows
 1
 2

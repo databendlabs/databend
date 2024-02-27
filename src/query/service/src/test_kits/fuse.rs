@@ -270,8 +270,12 @@ pub async fn append_sample_data(num_blocks: usize, fixture: &TestFixture) -> Res
 }
 
 pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
-    let table = fixture.latest_default_table().await?;
-    table.analyze(fixture.default_ctx.clone()).await
+    let query = format!(
+        "analyze table {}.{}",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+    fixture.execute_command(&query).await
 }
 
 pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()> {
