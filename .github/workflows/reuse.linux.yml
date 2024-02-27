@@ -73,12 +73,11 @@ jobs:
           artifacts: all
 
   build_address_sanitizer:
-    runs-on: [ self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}" ]
+    runs-on: [ self-hosted, ARM64, Linux, 8c16g, "${{ inputs.runner_provider }}" ]
     strategy:
       fail-fast: false
       matrix:
         include:
-          # - { arch: x86_64, libc: gnu }
           - { arch: aarch64, libc: gnu }
     steps:
       - uses: actions/checkout@v4
@@ -97,9 +96,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - { arch: x86_64, libc: musl }
           - { arch: aarch64, libc: musl }
-          # - { arch: aarch64, libc: gnu }
     steps:
       - uses: actions/checkout@v4
         with:
