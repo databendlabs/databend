@@ -26,7 +26,7 @@ impl<'a> NonEmptyStr<'a> {
         Ok(NonEmptyStr { non_empty: s })
     }
 
-    fn get(&self) -> &str {
+    pub fn get(&self) -> &str {
         self.non_empty
     }
 }
