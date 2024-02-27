@@ -12,8 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod probe_spill_state;
-mod transform_probe_spill;
+use databend_common_expression::DataBlock;
+use crate::pipelines::processors::transforms::BuildSpillState;
 
-pub use probe_spill_state::ProbeSpillState;
-pub use transform_probe_spill::ProbeSpillHandler;
+pub struct BuildSpillHandler {
+    // The flag indicates whether data is from spilled data.
+    from_spill: bool,
+    spill_state: Option<Box<BuildSpillState>>,
+    spill_data: Option<DataBlock>,
+    // If processor has sent partition set to probe
+    sent_partition_set: bool,
+}
+
+
+

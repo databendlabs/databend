@@ -26,6 +26,7 @@ use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::Event;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::Processor;
+use crate::pipelines::processors::transforms::hash_join::build_spill::BuildSpillHandler;
 
 #[derive(Clone, Debug)]
 enum HashJoinBuildStep {
@@ -56,12 +57,7 @@ pub struct TransformHashJoinBuild {
     finalize_finished: bool,
     processor_id: usize,
 
-    // The flag indicates whether data is from spilled data.
-    from_spill: bool,
-    spill_state: Option<Box<BuildSpillState>>,
-    spill_data: Option<DataBlock>,
-    // If send partition set to probe
-    send_partition_set: bool,
+    spill_handler: BuildSpillHandler,
 }
 
 impl TransformHashJoinBuild {
@@ -81,7 +77,7 @@ impl TransformHashJoinBuild {
             finalize_finished: false,
             from_spill: false,
             processor_id,
-            send_partition_set: false,
+            sent_partition_set: false,
         }))
     }
 
@@ -289,11 +285,11 @@ impl Processor for TransformHashJoinBuild {
                     if let Some(spill_state) = &mut self.spill_state {
                         // Send spilled partition to `HashJoinState`, used by probe spill.
                         // The method should be called only once.
-                        if !self.send_partition_set {
+                        if !self.sent_partition_set {
                             self.build_state
                                 .hash_join_state
                                 .set_spilled_partition(&spill_state.spiller.spilled_partition_set);
-                            self.send_partition_set = true;
+                            self.sent_partition_set = true;
                         }
                     }
                     self.build_state.build_done()
