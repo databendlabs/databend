@@ -754,7 +754,7 @@ impl Table for FuseTable {
                 };
 
                 if let Some(since) = &self.since_table {
-                    if let Some(since_stats) = since.table_statistics(ctx).await? {
+                    if let Some(since_stats) = since.table_statistics(ctx, None).await? {
                         res = res.increment_since_from(&since_stats);
                     }
                 }
