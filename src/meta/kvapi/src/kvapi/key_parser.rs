@@ -51,6 +51,13 @@ impl<'s> KeyParser<'s> {
         Ok(s)
     }
 
+    /// Get the index of the last returned element.
+    ///
+    /// If no element is returned, it will panic.
+    pub fn index(&self) -> usize {
+        self.i - 1
+    }
+
     /// Pop the next element in raw `&str`, without unescaping or decoding.
     ///
     /// If there is no more element, it returns KeyError::WrongNumberOfSegments.

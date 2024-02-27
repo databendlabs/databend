@@ -23,15 +23,20 @@ use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::RoleGrantee;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::NonEmptyStr;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
@@ -42,7 +47,6 @@ use crate::serde::check_and_upgrade_to_pb;
 use crate::serialize_struct;
 
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
-static OBJECT_OWNER_API_KEY_PREFIX: &str = "__fd_object_owners";
 
 static TXN_MAX_RETRY_TIMES: u32 = 5;
 
@@ -50,26 +54,21 @@ static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
+    tenant: NonEmptyString,
     role_prefix: String,
-    object_owner_prefix: String,
 }
 
 impl RoleMgr {
     pub fn create(
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
-        tenant: &str,
-    ) -> Result<Self, ErrorCode> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while role mgr create)",
-            ));
-        }
-        let tenant = tenant.to_string();
-        Ok(RoleMgr {
+        tenant: NonEmptyStr,
+    ) -> Self {
+        let t = tenant.get();
+        RoleMgr {
             kv_api,
-            role_prefix: format!("{}/{}", ROLE_API_KEY_PREFIX, tenant),
-            object_owner_prefix: format!("{}/{}", OBJECT_OWNER_API_KEY_PREFIX, tenant),
-        })
+            tenant: tenant.into(),
+            role_prefix: format!("{}/{}", ROLE_API_KEY_PREFIX, t),
+        }
     }
 
     #[async_backtrace::framed]
@@ -107,35 +106,25 @@ impl RoleMgr {
             .await
     }
 
-    fn make_role_key(&self, role: &str) -> String {
-        format!("{}/{}", self.role_prefix, role)
+    /// Build meta-service for a role grantee, which is a tenant's database, table, stage, udf, etc.
+    fn grantee_key(&self, object: &OwnershipObject) -> String {
+        let grantee = RoleGrantee::new(Tenant::new(self.tenant.as_str()), object.clone());
+        grantee.to_string_key()
     }
 
-    fn make_object_owner_key(&self, object: &OwnershipObject) -> String {
-        match object {
-            OwnershipObject::Database {
-                catalog_name: _,
-                db_id: database_id,
-            } => {
-                format!(
-                    "{}/database-by-id/{}",
-                    self.object_owner_prefix, database_id
-                )
-            }
-            OwnershipObject::Table {
-                catalog_name: _,
-                db_id: _,
-                table_id,
-            } => {
-                format!("{}/table-by-id/{}", self.object_owner_prefix, table_id)
-            }
-            OwnershipObject::Stage { name } => {
-                format!("{}/stage-by-name/{}", self.object_owner_prefix, name)
-            }
-            OwnershipObject::UDF { name } => {
-                format!("{}/udf-by-name/{}", self.object_owner_prefix, name)
-            }
-        }
+    /// Build meta-service for a listing keys belongs to the tenant.
+    ///
+    /// In form of `__fd_object_owners/<tenant>/`.
+    fn grantee_prefix(&self) -> String {
+        let dummy = OwnershipObject::UDF {
+            name: "dummy".to_string(),
+        };
+        let grantee = RoleGrantee::new(Tenant::new(self.tenant.as_str()), dummy);
+        grantee.tenant_prefix()
+    }
+
+    fn make_role_key(&self, role: &str) -> String {
+        format!("{}/{}", self.role_prefix, role)
     }
 }
 
@@ -217,7 +206,7 @@ impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
-        let object_owner_prefix = self.object_owner_prefix.clone();
+        let object_owner_prefix = self.grantee_prefix();
         let kv_api = self.kv_api.clone();
         let values = kv_api.prefix_list_kv(object_owner_prefix.as_str()).await?;
 
@@ -277,7 +266,9 @@ impl RoleApi for RoleMgr {
     ) -> databend_common_exception::Result<()> {
         let old_role = self.get_ownership(object).await?.map(|o| o.role);
         let grant_object = convert_to_grant_obj(object);
-        let owner_key = self.make_object_owner_key(object);
+
+        let owner_key = self.grantee_key(object);
+
         let owner_value = serialize_struct(
             &OwnershipInfo {
                 object: object.clone(),
@@ -356,7 +347,8 @@ impl RoleApi for RoleMgr {
         &self,
         object: &OwnershipObject,
     ) -> databend_common_exception::Result<Option<OwnershipInfo>> {
-        let key = self.make_object_owner_key(object);
+        let key = self.grantee_key(object);
+
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value = match res {
             Some(value) => value,
@@ -383,7 +375,8 @@ impl RoleApi for RoleMgr {
         object: &OwnershipObject,
     ) -> databend_common_exception::Result<()> {
         let role = self.get_ownership(object).await?.map(|o| o.role);
-        let owner_key = self.make_object_owner_key(object);
+
+        let owner_key = self.grantee_key(object);
 
         let mut if_then = vec![txn_op_del(&owner_key)];
         let mut condition = vec![];
