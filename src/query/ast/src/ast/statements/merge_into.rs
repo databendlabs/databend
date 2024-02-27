@@ -258,6 +258,7 @@ impl MergeSource {
                 table: table.clone(),
                 alias: alias.clone(),
                 travel_point: None,
+                since_point: None,
                 pivot: None,
                 unpivot: None,
             },

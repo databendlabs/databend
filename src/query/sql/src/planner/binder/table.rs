@@ -175,6 +175,7 @@ impl Binder {
         table: &Identifier,
         alias: &Option<TableAlias>,
         travel_point: &Option<TimeTravelPoint>,
+        since_point: &Option<TimeTravelPoint>,
     ) -> Result<(SExpr, BindContext)> {
         let (catalog, database, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);
@@ -212,6 +213,11 @@ impl Binder {
             None => None,
         };
 
+        let since_point = match since_point {
+            Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp).await?),
+            None => None,
+        };
+
         // Resolve table with catalog
         let table_meta = match self
             .resolve_data_source(
@@ -220,6 +226,7 @@ impl Binder {
                 database.as_str(),
                 table_name.as_str(),
                 &navigation_point,
+                &since_point,
             )
             .await
         {
@@ -895,6 +902,7 @@ impl Binder {
                 table,
                 alias,
                 travel_point,
+                since_point,
                 pivot: _,
                 unpivot: _,
             } => {
@@ -906,6 +914,7 @@ impl Binder {
                     table,
                     alias,
                     travel_point,
+                    since_point,
                 )
                 .await
             }
@@ -1416,6 +1425,7 @@ impl Binder {
         database_name: &str,
         table_name: &str,
         travel_point: &Option<NavigationPoint>,
+        since_point: &Option<NavigationPoint>,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with ctx
         // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
@@ -1426,8 +1436,10 @@ impl Binder {
             .get_table(catalog_name, database_name, table_name)
             .await?;
 
-        if let Some(tp) = travel_point {
-            table_meta = table_meta.navigate_to(tp).await?;
+        if travel_point.is_some() || since_point.is_some() {
+            table_meta = table_meta
+                .navigate_since_to(since_point, travel_point)
+                .await?;
         }
         Ok(table_meta)
     }

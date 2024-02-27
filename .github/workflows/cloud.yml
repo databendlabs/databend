@@ -98,7 +98,7 @@ jobs:
           short_sha=$(echo "${{ needs.info.outputs.sha }}" | cut -c1-7)
           echo "tag=pr-${{ github.event.pull_request.number }}-${short_sha}" >> $GITHUB_OUTPUT
       - name: push service image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           push: true
           tags: ${{ steps.login.outputs.ecr_repo }}:${{ steps.prepare.outputs.tag }}

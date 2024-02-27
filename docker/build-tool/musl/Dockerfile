@@ -23,15 +23,6 @@ RUN ln -s ${MUSL_TARGET}-gcc /usr/local/bin/musl-gcc
 
 RUN rustup target add ${MUSL_RUST_TARGET}
 
-# HACK: To avoid the `undefined reference to pthread_getname_np` error during linking,
-# here we override set config environment var `je_cv_pthread_getname_np` to `no`,
-# as suggested by tikv-jemalloc-sys's maintainer @BusyJay:
-# https://github.com/tikv/jemallocator/issues/30#issuecomment-1183786410
-#
-# Hopefully this trick can be removed when rust upgraded to musl 1.2.3
-# https://github.com/rust-lang/rust/pull/102891
-ENV je_cv_pthread_getname_np no
-
 # needed by z3
 RUN ln -s ${MUSL_TARGET}-g++ /usr/local/bin/musl-g++
 RUN ln -s ${MUSL_TARGET}-ar /usr/local/bin/musl-ar
