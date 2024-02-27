@@ -43,6 +43,7 @@ use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::QueryAffect;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_txn::TxnState;
 use futures_util::future::try_join_all;
 use headers::Header;
 use headers::HeaderMapExt;
@@ -1445,6 +1446,9 @@ async fn test_affect() -> Result<()> {
                     ("max_threads".to_string(), "1".to_string()),
                     ("timezone".to_string(), "Asia/Shanghai".to_string()),
                 ])),
+                txn_state: Some(TxnState::AutoCommit),
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
         (
@@ -1464,6 +1468,9 @@ async fn test_affect() -> Result<()> {
                     "max_threads".to_string(),
                     "6".to_string(),
                 )])),
+                txn_state: Some(TxnState::AutoCommit),
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
         (
@@ -1478,6 +1485,9 @@ async fn test_affect() -> Result<()> {
                     "max_threads".to_string(),
                     "6".to_string(),
                 )])),
+                txn_state: Some(TxnState::AutoCommit),
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
         (
@@ -1494,6 +1504,9 @@ async fn test_affect() -> Result<()> {
                     "max_threads".to_string(),
                     "6".to_string(),
                 )])),
+                txn_state: Some(TxnState::AutoCommit),
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
         (
@@ -1512,6 +1525,9 @@ async fn test_affect() -> Result<()> {
                     "timezone".to_string(),
                     "Asia/Shanghai".to_string(),
                 )])),
+                txn_state: Some(TxnState::AutoCommit),
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
     ];
@@ -1525,7 +1541,13 @@ async fn test_affect() -> Result<()> {
         assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
         assert_eq!(result.1.state, ExecuteStateKind::Succeeded);
         assert_eq!(result.1.affect, affect);
-        assert_eq!(result.1.session, session_conf);
+        let session = result.1.session.map(|s| HttpSessionConf {
+            last_server_info: None,
+            last_query_ids: vec![],
+            ..s
+        });
+
+        assert_eq!(session, session_conf);
     }
 
     Ok(())

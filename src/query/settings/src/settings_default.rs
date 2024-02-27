@@ -691,6 +691,12 @@ impl DefaultSettings {
                     mode:SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1))
                 }),
+                ("idle_transaction_timeout_secs", DefaultSettingValue{
+                    value: UserSettingValue::UInt64(4 * 60 * 60),
+                    desc: "Set the timeout in seconds for active session without any query",
+                    mode:SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX))
+                }),
                 ("enable_experimental_queries_executor", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables experimental new executor",

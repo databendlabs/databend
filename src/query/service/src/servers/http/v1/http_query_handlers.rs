@@ -77,7 +77,7 @@ pub struct QueryError {
 }
 
 impl QueryError {
-    fn from_error_code(e: &ErrorCode) -> Self {
+    pub(crate) fn from_error_code(e: &ErrorCode) -> Self {
         QueryError {
             code: e.code(),
             message: e.display_text(),
@@ -200,27 +200,6 @@ impl QueryResponse {
         .with_header(HEADER_QUERY_ID, id.clone())
         .with_header(HEADER_QUERY_STATE, state.state.to_string())
         .with_header(HEADER_QUERY_PAGE_ROWS, rows)
-    }
-
-    pub(crate) fn fail_to_start_sql(err: &ErrorCode) -> impl IntoResponse {
-        metrics_incr_http_response_errors_count(err.name(), err.code());
-        Json(QueryResponse {
-            id: "".to_string(),
-            stats: QueryStats::default(),
-            state: ExecuteStateKind::Failed,
-            affect: None,
-            data: vec![],
-            schema: vec![],
-            session_id: None,
-            warnings: vec![],
-            node_id: "".to_string(),
-            session: None,
-            next_uri: None,
-            stats_uri: None,
-            final_uri: None,
-            kill_uri: None,
-            error: Some(QueryError::from_error_code(err)),
-        })
     }
 }
 
@@ -384,7 +363,7 @@ pub(crate) async fn query_handler(
         let sql = req.sql.clone();
 
         let query = http_query_manager
-            .try_create_query(ctx, req)
+            .try_create_query(ctx, req.clone())
             .await
             .map_err(|err| err.display_with_sql(&sql));
         match query {
@@ -412,7 +391,7 @@ pub(crate) async fn query_handler(
             Err(e) => {
                 error!("{}: http query fail to start sql, error: {:?}", &ctx.query_id, e);
                 ctx.set_fail();
-                Ok(QueryResponse::fail_to_start_sql(&e).into_response())
+                Ok(req.fail_to_start_sql(&e).into_response())
             }
         }
     }

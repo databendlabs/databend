@@ -14,6 +14,8 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -26,10 +28,14 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
+use databend_storages_common_txn::TxnState;
 use log::info;
 use log::warn;
 use minitrace::prelude::*;
+use poem::web::Json;
+use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -50,6 +56,9 @@ use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::Wait;
 use crate::servers::http::v1::HttpQueryManager;
+use crate::servers::http::v1::QueryError;
+use crate::servers::http::v1::QueryResponse;
+use crate::servers::http::v1::QueryStats;
 use crate::sessions::short_sql;
 use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
@@ -59,7 +68,7 @@ fn default_as_true() -> bool {
     true
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct HttpQueryRequest {
     pub session_id: Option<String>,
     pub session: Option<HttpSessionConf>,
@@ -69,6 +78,40 @@ pub struct HttpQueryRequest {
     #[serde(default = "default_as_true")]
     pub string_fields: bool,
     pub stage_attachment: Option<StageAttachmentConf>,
+}
+
+impl HttpQueryRequest {
+    pub(crate) fn fail_to_start_sql(&self, err: &ErrorCode) -> impl IntoResponse {
+        metrics_incr_http_response_errors_count(err.name(), err.code());
+        let session = self.session.as_ref().map(|s| {
+            let txn_state = if matches!(s.txn_state, Some(TxnState::Active)) {
+                Some(TxnState::Fail)
+            } else {
+                s.txn_state.clone()
+            };
+            HttpSessionConf {
+                txn_state,
+                ..s.clone()
+            }
+        });
+        Json(QueryResponse {
+            id: "".to_string(),
+            stats: QueryStats::default(),
+            state: ExecuteStateKind::Failed,
+            affect: None,
+            data: vec![],
+            schema: vec![],
+            session_id: None,
+            warnings: vec![],
+            node_id: "".to_string(),
+            session,
+            next_uri: None,
+            stats_uri: None,
+            final_uri: None,
+            kill_uri: None,
+            error: Some(QueryError::from_error_code(err)),
+        })
+    }
 }
 
 impl Debug for HttpQueryRequest {
@@ -100,7 +143,7 @@ fn default_wait_time_secs() -> u32 {
     DEFAULT_WAIT_TIME_SECS
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct PaginationConf {
     #[serde(default = "default_wait_time_secs")]
     pub(crate) wait_time_secs: u32,
@@ -131,7 +174,13 @@ impl PaginationConf {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq, Clone)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
+pub struct ServerInfo {
+    pub id: String,
+    pub start_time: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct HttpSessionConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
@@ -143,6 +192,14 @@ pub struct HttpSessionConf {
     pub keep_server_session_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub txn_state: Option<TxnState>,
+    // used to check if the session is still on the same server
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_server_info: Option<ServerInfo>,
+    // last_query_ids[0] is the last query id, last_query_ids[1] is the second last query id, etc.
+    #[serde(default)]
+    pub last_query_ids: Vec<String>,
 }
 
 impl HttpSessionConf {}
@@ -198,6 +255,7 @@ pub struct HttpQuery {
     /// should fetch the paginated result in a timely manner, and the interval should not
     /// exceed this result_timeout_secs.
     pub(crate) result_timeout_secs: u64,
+    pub(crate) is_txn_mgr_saved: AtomicBool,
 }
 
 impl HttpQuery {
@@ -252,6 +310,7 @@ impl HttpQuery {
             if let Some(role) = &session_conf.role {
                 session.set_current_role_checked(role).await?;
             }
+
             // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
             session
                 .set_secondary_roles_checked(session_conf.secondary_roles.clone())
@@ -274,6 +333,48 @@ impl HttpQuery {
                             }
                         })?;
                 }
+            }
+            match &session_conf.txn_state {
+                Some(TxnState::Active) => {
+                    if let Some(ServerInfo { id, start_time }) = &session_conf.last_server_info {
+                        if http_query_manager.server_info.id != *id {
+                            return Err(ErrorCode::InvalidSessionState(
+                                "transaction is active but last_query_ids is empty".to_string(),
+                            ));
+                        }
+                        if http_query_manager.server_info.start_time != *start_time {
+                            return Err(ErrorCode::CurrentTransactionIsAborted(format!(
+                                "transaction is aborted because server restarted as {}.",
+                                start_time
+                            )));
+                        }
+                    } else {
+                        return Err(ErrorCode::InvalidSessionState(
+                            "transaction is active but missing server_info".to_string(),
+                        ));
+                    }
+
+                    let last_query_id = session_conf.last_query_ids.first().ok_or_else(|| {
+                        ErrorCode::InvalidSessionState(
+                            "transaction is active but last_query_ids is empty".to_string(),
+                        )
+                    })?;
+                    if let Some(txn_mgr) = http_query_manager.get_txn(last_query_id) {
+                        session.set_txn_mgr(txn_mgr);
+                        info!(
+                            "{}: continue transaction from last query {}",
+                            &ctx.query_id, last_query_id
+                        );
+                    } else {
+                        // the returned TxnState should be Fail
+                        return Err(ErrorCode::TransactionTimeout(format!(
+                            "transaction timeout: last_query_id {} not found",
+                            last_query_id
+                        )));
+                    }
+                }
+                Some(TxnState::Fail) => session.txn_mgr().lock().force_set_fail(),
+                _ => {}
             }
             if let Some(secs) = session_conf.keep_server_session_secs {
                 if secs > 0 && request.session_id.is_none() {
@@ -403,6 +504,7 @@ impl HttpQuery {
             page_manager: data,
             result_timeout_secs,
             expire_state: Arc::new(TokioMutex::new(ExpireState::Working)),
+            is_txn_mgr_saved: AtomicBool::new(false),
         };
 
         Ok(Arc::new(query))
@@ -479,13 +581,31 @@ impl HttpQuery {
         let database = session_state.current_database.clone();
         let role = session_state.current_role.clone();
         let secondary_roles = session_state.secondary_roles.clone();
-
+        let txn_state = session_state.txn_manager.lock().state();
+        if !self.is_txn_mgr_saved.load(Ordering::Relaxed)
+            && matches!(executor.state, ExecuteState::Stopped(_))
+            && self
+                .is_txn_mgr_saved
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
+                .is_ok()
+        {
+            let timeout = session_state
+                .settings
+                .get_idle_transaction_timeout_secs()
+                .unwrap();
+            HttpQueryManager::instance()
+                .add_txn(self.id.clone(), session_state.txn_manager.clone(), timeout)
+                .await;
+        }
         HttpSessionConf {
             database: Some(database),
             role,
             secondary_roles,
             keep_server_session_secs,
             settings: Some(settings),
+            txn_state: Some(txn_state),
+            last_server_info: Some(HttpQueryManager::instance().server_info.clone()),
+            last_query_ids: vec![self.id.clone()],
         }
     }
 

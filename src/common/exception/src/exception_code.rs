@@ -359,8 +359,10 @@ build_exceptions! {
     StorageOther(4000),
     UnresolvableConflict(4001),
 
-    //transaction error codes
+    // transaction error codes
     CurrentTransactionIsAborted(4002),
+    TransactionTimeout(4003),
+    InvalidSessionState(4004),
 }
 
 // Service errors [5001,6000].
