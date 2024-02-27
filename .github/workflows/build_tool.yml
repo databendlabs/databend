@@ -33,17 +33,16 @@ jobs:
           echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
 
       - name: Build and publish databend build base image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           pull: true
           push: true
           tags: |
             ${{ steps.login.outputs.dockerhub_repo }}:base
             ${{ steps.login.outputs.dockerhub_repo }}:base-${{ steps.toolchain.outputs.TOOLCHAIN }}
-            ${{ steps.login.outputs.ecr_repo }}:base
-            ${{ steps.login.outputs.ecr_repo }}:base-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: ./scripts/setup
           file: ./docker/build-tool/base/Dockerfile
+          platforms: linux/amd64,linux/arm64
 
   build:
     runs-on: ubuntu-latest
@@ -75,7 +74,7 @@ jobs:
           echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
 
       - name: Build and publish databend build image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           pull: true
           push: true
@@ -111,7 +110,7 @@ jobs:
           echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
 
       - name: Build and publish databend build base image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           pull: true
           push: true

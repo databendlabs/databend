@@ -749,13 +749,13 @@ HashJoin: LEFT OUTER
                 └── Probe
                     └── HashJoin: INNER
                         ├── Build
-                        │   └── Scan: default.tpcds.item (#4) (read rows: 180)
+                        │   └── HashJoin: INNER
+                        │       ├── Build
+                        │       │   └── Scan: default.tpcds.item (#4) (read rows: 180)
+                        │       └── Probe
+                        │           └── Scan: default.tpcds.store_sales (#2) (read rows: 28810)
                         └── Probe
-                            └── HashJoin: INNER
-                                ├── Build
-                                │   └── Scan: default.tpcds.store_sales (#2) (read rows: 28810)
-                                └── Probe
-                                    └── Scan: default.tpcds.date_dim (#3) (read rows: 73049)
+                            └── Scan: default.tpcds.date_dim (#3) (read rows: 73049)
 
 # Q7
 query I
@@ -786,11 +786,11 @@ LIMIT 100;
 ----
 HashJoin: INNER
 ├── Build
-│   └── Scan: default.tpcds.promotion (#4) (read rows: 3)
+│   └── Scan: default.tpcds.item (#3) (read rows: 180)
 └── Probe
     └── HashJoin: INNER
         ├── Build
-        │   └── Scan: default.tpcds.item (#3) (read rows: 180)
+        │   └── Scan: default.tpcds.promotion (#4) (read rows: 3)
         └── Probe
             └── HashJoin: INNER
                 ├── Build
@@ -1768,15 +1768,15 @@ HashJoin: INNER
 │       │       │       │       ├── Build
 │       │       │       │       │   └── Scan: default.tpcds.store_sales (#0) (read rows: 28810)
 │       │       │       │       └── Probe
-│       │       │       │           └── Scan: default.tpcds.customer_address (#4) (read rows: 500)
+│       │       │       │           └── Scan: default.tpcds.customer_demographics (#2) (read rows: 19208)
 │       │       │       └── Probe
-│       │       │           └── Scan: default.tpcds.date_dim (#5) (read rows: 73049)
+│       │       │           └── Scan: default.tpcds.household_demographics (#3) (read rows: 7200)
 │       │       └── Probe
-│       │           └── Scan: default.tpcds.household_demographics (#3) (read rows: 7200)
+│       │           └── Scan: default.tpcds.store (#1) (read rows: 1)
 │       └── Probe
-│           └── Scan: default.tpcds.store (#1) (read rows: 1)
+│           └── Scan: default.tpcds.customer_address (#4) (read rows: 500)
 └── Probe
-    └── Scan: default.tpcds.customer_demographics (#2) (read rows: 19208)
+    └── Scan: default.tpcds.date_dim (#5) (read rows: 73049)
 
 
 # Q14
@@ -2310,25 +2310,25 @@ LIMIT 100 ;
 ----
 HashJoin: INNER
 ├── Build
-│   └── Scan: default.tpcds.store (#5) (read rows: 1)
+│   └── HashJoin: INNER
+│       ├── Build
+│       │   └── HashJoin: INNER
+│       │       ├── Build
+│       │       │   └── Scan: default.tpcds.store (#5) (read rows: 1)
+│       │       └── Probe
+│       │           └── HashJoin: INNER
+│       │               ├── Build
+│       │               │   └── Scan: default.tpcds.item (#2) (read rows: 180)
+│       │               └── Probe
+│       │                   └── HashJoin: INNER
+│       │                       ├── Build
+│       │                       │   └── Scan: default.tpcds.date_dim (#0) (read rows: 73049)
+│       │                       └── Probe
+│       │                           └── Scan: default.tpcds.store_sales (#1) (read rows: 28810)
+│       └── Probe
+│           └── Scan: default.tpcds.customer (#3) (read rows: 1000)
 └── Probe
-    └── HashJoin: INNER
-        ├── Build
-        │   └── HashJoin: INNER
-        │       ├── Build
-        │       │   └── HashJoin: INNER
-        │       │       ├── Build
-        │       │       │   └── Scan: default.tpcds.item (#2) (read rows: 180)
-        │       │       └── Probe
-        │       │           └── HashJoin: INNER
-        │       │               ├── Build
-        │       │               │   └── Scan: default.tpcds.date_dim (#0) (read rows: 73049)
-        │       │               └── Probe
-        │       │                   └── Scan: default.tpcds.store_sales (#1) (read rows: 28810)
-        │       └── Probe
-        │           └── Scan: default.tpcds.customer (#3) (read rows: 1000)
-        └── Probe
-            └── Scan: default.tpcds.customer_address (#4) (read rows: 500)
+    └── Scan: default.tpcds.customer_address (#4) (read rows: 500)
 
 # Q20
 query I
@@ -2409,11 +2409,11 @@ HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
-│       │   └── Scan: default.tpcds.item (#2) (read rows: 180)
+│       │   └── Scan: default.tpcds.date_dim (#3) (read rows: 73049)
 │       └── Probe
 │           └── HashJoin: INNER
 │               ├── Build
-│               │   └── Scan: default.tpcds.date_dim (#3) (read rows: 73049)
+│               │   └── Scan: default.tpcds.item (#2) (read rows: 180)
 │               └── Probe
 │                   └── Scan: default.tpcds.inventory (#0) (read rows: 23490)
 └── Probe
@@ -2830,21 +2830,21 @@ LIMIT 100;
 ----
 HashJoin: INNER
 ├── Build
-│   └── Scan: default.tpcds.promotion (#4) (read rows: 3)
+│   └── HashJoin: INNER
+│       ├── Build
+│       │   └── Scan: default.tpcds.promotion (#4) (read rows: 3)
+│       └── Probe
+│           └── HashJoin: INNER
+│               ├── Build
+│               │   └── HashJoin: INNER
+│               │       ├── Build
+│               │       │   └── Scan: default.tpcds.date_dim (#2) (read rows: 73049)
+│               │       └── Probe
+│               │           └── Scan: default.tpcds.catalog_sales (#0) (read rows: 14313)
+│               └── Probe
+│                   └── Scan: default.tpcds.customer_demographics (#1) (read rows: 19208)
 └── Probe
-    └── HashJoin: INNER
-        ├── Build
-        │   └── HashJoin: INNER
-        │       ├── Build
-        │       │   └── HashJoin: INNER
-        │       │       ├── Build
-        │       │       │   └── Scan: default.tpcds.date_dim (#2) (read rows: 73049)
-        │       │       └── Probe
-        │       │           └── Scan: default.tpcds.catalog_sales (#0) (read rows: 14313)
-        │       └── Probe
-        │           └── Scan: default.tpcds.customer_demographics (#1) (read rows: 19208)
-        └── Probe
-            └── Scan: default.tpcds.item (#3) (read rows: 180)
+    └── Scan: default.tpcds.item (#3) (read rows: 180)
 
 # Q27
 query I
@@ -3373,13 +3373,13 @@ HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
-│       │   └── HashJoin: INNER
-│       │       ├── Build
-│       │       │   └── Scan: default.tpcds.date_dim (#2) (read rows: 73049)
-│       │       └── Probe
-│       │           └── Scan: default.tpcds.catalog_sales (#0) (read rows: 14313)
+│       │   └── Scan: default.tpcds.item (#1) (read rows: 0)
 │       └── Probe
-│           └── Scan: default.tpcds.item (#1) (read rows: 0)
+│           └── HashJoin: INNER
+│               ├── Build
+│               │   └── Scan: default.tpcds.date_dim (#2) (read rows: 73049)
+│               └── Probe
+│                   └── Scan: default.tpcds.catalog_sales (#0) (read rows: 14313)
 └── Probe
     └── HashJoin: INNER
         ├── Build
@@ -3723,11 +3723,11 @@ UnionAll
 │       ├── Left
 │       │   └── HashJoin: INNER
 │       │       ├── Build
-│       │       │   └── Scan: default.tpcds.store (#3) (read rows: 1)
+│       │       │   └── Scan: default.tpcds.item (#2) (read rows: 180)
 │       │       └── Probe
 │       │           └── HashJoin: INNER
 │       │               ├── Build
-│       │               │   └── Scan: default.tpcds.item (#2) (read rows: 180)
+│       │               │   └── Scan: default.tpcds.store (#3) (read rows: 1)
 │       │               └── Probe
 │       │                   └── HashJoin: INNER
 │       │                       ├── Build
@@ -3737,11 +3737,11 @@ UnionAll
 │       └── Right
 │           └── HashJoin: INNER
 │               ├── Build
-│               │   └── Scan: default.tpcds.store (#7) (read rows: 1)
+│               │   └── Scan: default.tpcds.item (#6) (read rows: 180)
 │               └── Probe
 │                   └── HashJoin: INNER
 │                       ├── Build
-│                       │   └── Scan: default.tpcds.item (#6) (read rows: 180)
+│                       │   └── Scan: default.tpcds.store (#7) (read rows: 1)
 │                       └── Probe
 │                           └── HashJoin: INNER
 │                               ├── Build
@@ -3751,11 +3751,11 @@ UnionAll
 └── Right
     └── HashJoin: INNER
         ├── Build
-        │   └── Scan: default.tpcds.store (#11) (read rows: 1)
+        │   └── Scan: default.tpcds.item (#10) (read rows: 180)
         └── Probe
             └── HashJoin: INNER
                 ├── Build
-                │   └── Scan: default.tpcds.item (#10) (read rows: 180)
+                │   └── Scan: default.tpcds.store (#11) (read rows: 1)
                 └── Probe
                     └── HashJoin: INNER
                         ├── Build
@@ -3793,11 +3793,11 @@ HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
-│       │   └── Scan: default.tpcds.item (#0) (read rows: 180)
+│       │   └── Scan: default.tpcds.date_dim (#2) (read rows: 73049)
 │       └── Probe
 │           └── HashJoin: INNER
 │               ├── Build
-│               │   └── Scan: default.tpcds.date_dim (#2) (read rows: 73049)
+│               │   └── Scan: default.tpcds.item (#0) (read rows: 180)
 │               └── Probe
 │                   └── Scan: default.tpcds.inventory (#1) (read rows: 23490)
 └── Probe
@@ -3935,11 +3935,11 @@ HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
-│       │   └── Scan: default.tpcds.warehouse (#6) (read rows: 1)
+│       │   └── Scan: default.tpcds.item (#5) (read rows: 180)
 │       └── Probe
 │           └── HashJoin: INNER
 │               ├── Build
-│               │   └── Scan: default.tpcds.item (#5) (read rows: 180)
+│               │   └── Scan: default.tpcds.warehouse (#6) (read rows: 1)
 │               └── Probe
 │                   └── HashJoin: INNER
 │                       ├── Build
@@ -3949,11 +3949,11 @@ HashJoin: INNER
 └── Probe
     └── HashJoin: INNER
         ├── Build
-        │   └── Scan: default.tpcds.warehouse (#2) (read rows: 1)
+        │   └── Scan: default.tpcds.item (#1) (read rows: 180)
         └── Probe
             └── HashJoin: INNER
                 ├── Build
-                │   └── Scan: default.tpcds.item (#1) (read rows: 180)
+                │   └── Scan: default.tpcds.warehouse (#2) (read rows: 1)
                 └── Probe
                     └── HashJoin: INNER
                         ├── Build
@@ -4318,11 +4318,11 @@ HashJoin: RIGHT MARK
         │       │       │       └── Probe
         │       │       │           └── Scan: default.tpcds.web_sales (#0) (read rows: 7212)
         │       │       └── Probe
-        │       │           └── Scan: default.tpcds.customer (#1) (read rows: 1000)
+        │       │           └── Scan: default.tpcds.item (#4) (read rows: 180)
         │       └── Probe
-        │           └── Scan: default.tpcds.customer_address (#2) (read rows: 500)
+        │           └── Scan: default.tpcds.customer (#1) (read rows: 1000)
         └── Probe
-            └── Scan: default.tpcds.item (#4) (read rows: 180)
+            └── Scan: default.tpcds.customer_address (#2) (read rows: 500)
 
 # Q46
 query I
@@ -4576,11 +4576,11 @@ HashJoin: INNER
 │       │       │       └── Probe
 │       │       │           └── Scan: default.tpcds.customer_address (#3) (read rows: 500)
 │       │       └── Probe
-│       │           └── Scan: default.tpcds.date_dim (#4) (read rows: 73049)
+│       │           └── Scan: default.tpcds.store (#1) (read rows: 1)
 │       └── Probe
 │           └── Scan: default.tpcds.customer_demographics (#2) (read rows: 19208)
 └── Probe
-    └── Scan: default.tpcds.store (#1) (read rows: 1)
+    └── Scan: default.tpcds.date_dim (#4) (read rows: 73049)
 
 # Q49
 query I
@@ -5460,13 +5460,13 @@ HashJoin: INNER
 │               ├── Build
 │               │   └── HashJoin: INNER
 │               │       ├── Build
-│               │       │   └── HashJoin: INNER
-│               │       │       ├── Build
-│               │       │       │   └── Scan: default.tpcds.item (#6) (read rows: 180)
-│               │       │       └── Probe
-│               │       │           └── Scan: default.tpcds.catalog_sales (#5) (read rows: 14313)
+│               │       │   └── Scan: default.tpcds.item (#6) (read rows: 180)
 │               │       └── Probe
-│               │           └── Scan: default.tpcds.date_dim (#7) (read rows: 73049)
+│               │           └── HashJoin: INNER
+│               │               ├── Build
+│               │               │   └── Scan: default.tpcds.catalog_sales (#5) (read rows: 14313)
+│               │               └── Probe
+│               │                   └── Scan: default.tpcds.date_dim (#7) (read rows: 73049)
 │               └── Probe
 │                   └── HashJoin: INNER
 │                       ├── Build
@@ -6116,65 +6116,65 @@ HashJoin: INNER
 │       │       │       │       │       │       ├── Build
 │       │       │       │       │       │       │   └── HashJoin: INNER
 │       │       │       │       │       │       │       ├── Build
-│       │       │       │       │       │       │       │   └── Scan: default.tpcds.promotion (#30) (read rows: 3)
+│       │       │       │       │       │       │       │   └── HashJoin: INNER
+│       │       │       │       │       │       │       │       ├── Build
+│       │       │       │       │       │       │       │       │   └── HashJoin: INNER
+│       │       │       │       │       │       │       │       │       ├── Build
+│       │       │       │       │       │       │       │       │       │   └── HashJoin: INNER
+│       │       │       │       │       │       │       │       │       │       ├── Build
+│       │       │       │       │       │       │       │       │       │       │   └── HashJoin: INNER
+│       │       │       │       │       │       │       │       │       │       │       ├── Build
+│       │       │       │       │       │       │       │       │       │       │       │   └── Scan: default.tpcds.promotion (#30) (read rows: 3)
+│       │       │       │       │       │       │       │       │       │       │       └── Probe
+│       │       │       │       │       │       │       │       │       │       │           └── HashJoin: INNER
+│       │       │       │       │       │       │       │       │       │       │               ├── Build
+│       │       │       │       │       │       │       │       │       │       │               │   └── HashJoin: INNER
+│       │       │       │       │       │       │       │       │       │       │               │       ├── Build
+│       │       │       │       │       │       │       │       │       │       │               │       │   └── Scan: default.tpcds.store (#26) (read rows: 1)
+│       │       │       │       │       │       │       │       │       │       │               │       └── Probe
+│       │       │       │       │       │       │       │       │       │       │               │           └── HashJoin: INNER
+│       │       │       │       │       │       │       │       │       │       │               │               ├── Build
+│       │       │       │       │       │       │       │       │       │       │               │               │   └── HashJoin: INNER
+│       │       │       │       │       │       │       │       │       │       │               │               │       ├── Build
+│       │       │       │       │       │       │       │       │       │       │               │               │       │   └── HashJoin: INNER
+│       │       │       │       │       │       │       │       │       │       │               │               │       │       ├── Build
+│       │       │       │       │       │       │       │       │       │       │               │               │       │       │   └── HashJoin: INNER
+│       │       │       │       │       │       │       │       │       │       │               │               │       │       │       ├── Build
+│       │       │       │       │       │       │       │       │       │       │               │               │       │       │       │   └── Scan: default.tpcds.item (#37) (read rows: 180)
+│       │       │       │       │       │       │       │       │       │       │               │               │       │       │       └── Probe
+│       │       │       │       │       │       │       │       │       │       │               │               │       │       │           └── HashJoin: INNER
+│       │       │       │       │       │       │       │       │       │       │               │               │       │       │               ├── Build
+│       │       │       │       │       │       │       │       │       │       │               │               │       │       │               │   └── Scan: default.tpcds.catalog_returns (#22) (read rows: 1358)
+│       │       │       │       │       │       │       │       │       │       │               │               │       │       │               └── Probe
+│       │       │       │       │       │       │       │       │       │       │               │               │       │       │                   └── Scan: default.tpcds.catalog_sales (#21) (read rows: 14313)
+│       │       │       │       │       │       │       │       │       │       │               │               │       │       └── Probe
+│       │       │       │       │       │       │       │       │       │       │               │               │       │           └── Scan: default.tpcds.store_returns (#20) (read rows: 2810)
+│       │       │       │       │       │       │       │       │       │       │               │               │       └── Probe
+│       │       │       │       │       │       │       │       │       │       │               │               │           └── Scan: default.tpcds.store_sales (#19) (read rows: 28810)
+│       │       │       │       │       │       │       │       │       │       │               │               └── Probe
+│       │       │       │       │       │       │       │       │       │       │               │                   └── Scan: default.tpcds.date_dim (#23) (read rows: 73049)
+│       │       │       │       │       │       │       │       │       │       │               └── Probe
+│       │       │       │       │       │       │       │       │       │       │                   └── Scan: default.tpcds.customer_demographics (#28) (read rows: 19208)
+│       │       │       │       │       │       │       │       │       │       └── Probe
+│       │       │       │       │       │       │       │       │       │           └── Scan: default.tpcds.household_demographics (#31) (read rows: 7200)
+│       │       │       │       │       │       │       │       │       └── Probe
+│       │       │       │       │       │       │       │       │           └── Scan: default.tpcds.income_band (#35) (read rows: 20)
+│       │       │       │       │       │       │       │       └── Probe
+│       │       │       │       │       │       │       │           └── Scan: default.tpcds.customer_address (#33) (read rows: 500)
 │       │       │       │       │       │       │       └── Probe
-│       │       │       │       │       │       │           └── HashJoin: INNER
-│       │       │       │       │       │       │               ├── Build
-│       │       │       │       │       │       │               │   └── HashJoin: INNER
-│       │       │       │       │       │       │               │       ├── Build
-│       │       │       │       │       │       │               │       │   └── HashJoin: INNER
-│       │       │       │       │       │       │               │       │       ├── Build
-│       │       │       │       │       │       │               │       │       │   └── HashJoin: INNER
-│       │       │       │       │       │       │               │       │       │       ├── Build
-│       │       │       │       │       │       │               │       │       │       │   └── HashJoin: INNER
-│       │       │       │       │       │       │               │       │       │       │       ├── Build
-│       │       │       │       │       │       │               │       │       │       │       │   └── HashJoin: INNER
-│       │       │       │       │       │       │               │       │       │       │       │       ├── Build
-│       │       │       │       │       │       │               │       │       │       │       │       │   └── Scan: default.tpcds.store (#26) (read rows: 1)
-│       │       │       │       │       │       │               │       │       │       │       │       └── Probe
-│       │       │       │       │       │       │               │       │       │       │       │           └── HashJoin: INNER
-│       │       │       │       │       │       │               │       │       │       │       │               ├── Build
-│       │       │       │       │       │       │               │       │       │       │       │               │   └── HashJoin: INNER
-│       │       │       │       │       │       │               │       │       │       │       │               │       ├── Build
-│       │       │       │       │       │       │               │       │       │       │       │               │       │   └── HashJoin: INNER
-│       │       │       │       │       │       │               │       │       │       │       │               │       │       ├── Build
-│       │       │       │       │       │       │               │       │       │       │       │               │       │       │   └── HashJoin: INNER
-│       │       │       │       │       │       │               │       │       │       │       │               │       │       │       ├── Build
-│       │       │       │       │       │       │               │       │       │       │       │               │       │       │       │   └── Scan: default.tpcds.item (#37) (read rows: 180)
-│       │       │       │       │       │       │               │       │       │       │       │               │       │       │       └── Probe
-│       │       │       │       │       │       │               │       │       │       │       │               │       │       │           └── HashJoin: INNER
-│       │       │       │       │       │       │               │       │       │       │       │               │       │       │               ├── Build
-│       │       │       │       │       │       │               │       │       │       │       │               │       │       │               │   └── Scan: default.tpcds.catalog_returns (#22) (read rows: 1358)
-│       │       │       │       │       │       │               │       │       │       │       │               │       │       │               └── Probe
-│       │       │       │       │       │       │               │       │       │       │       │               │       │       │                   └── Scan: default.tpcds.catalog_sales (#21) (read rows: 14313)
-│       │       │       │       │       │       │               │       │       │       │       │               │       │       └── Probe
-│       │       │       │       │       │       │               │       │       │       │       │               │       │           └── Scan: default.tpcds.store_returns (#20) (read rows: 2810)
-│       │       │       │       │       │       │               │       │       │       │       │               │       └── Probe
-│       │       │       │       │       │       │               │       │       │       │       │               │           └── Scan: default.tpcds.store_sales (#19) (read rows: 28810)
-│       │       │       │       │       │       │               │       │       │       │       │               └── Probe
-│       │       │       │       │       │       │               │       │       │       │       │                   └── Scan: default.tpcds.date_dim (#23) (read rows: 73049)
-│       │       │       │       │       │       │               │       │       │       │       └── Probe
-│       │       │       │       │       │       │               │       │       │       │           └── Scan: default.tpcds.customer (#27) (read rows: 1000)
-│       │       │       │       │       │       │               │       │       │       └── Probe
-│       │       │       │       │       │       │               │       │       │           └── Scan: default.tpcds.date_dim (#24) (read rows: 73049)
-│       │       │       │       │       │       │               │       │       └── Probe
-│       │       │       │       │       │       │               │       │           └── Scan: default.tpcds.date_dim (#25) (read rows: 73049)
-│       │       │       │       │       │       │               │       └── Probe
-│       │       │       │       │       │       │               │           └── Scan: default.tpcds.customer_demographics (#28) (read rows: 19208)
-│       │       │       │       │       │       │               └── Probe
-│       │       │       │       │       │       │                   └── Scan: default.tpcds.customer_demographics (#29) (read rows: 19208)
+│       │       │       │       │       │       │           └── Scan: default.tpcds.customer (#27) (read rows: 1000)
 │       │       │       │       │       │       └── Probe
-│       │       │       │       │       │           └── Scan: default.tpcds.household_demographics (#31) (read rows: 7200)
+│       │       │       │       │       │           └── Scan: default.tpcds.customer_demographics (#29) (read rows: 19208)
 │       │       │       │       │       └── Probe
 │       │       │       │       │           └── Scan: default.tpcds.household_demographics (#32) (read rows: 7200)
 │       │       │       │       └── Probe
-│       │       │       │           └── Scan: default.tpcds.customer_address (#33) (read rows: 500)
+│       │       │       │           └── Scan: default.tpcds.income_band (#36) (read rows: 20)
 │       │       │       └── Probe
 │       │       │           └── Scan: default.tpcds.customer_address (#34) (read rows: 500)
 │       │       └── Probe
-│       │           └── Scan: default.tpcds.income_band (#35) (read rows: 20)
+│       │           └── Scan: default.tpcds.date_dim (#24) (read rows: 73049)
 │       └── Probe
-│           └── Scan: default.tpcds.income_band (#36) (read rows: 20)
+│           └── Scan: default.tpcds.date_dim (#25) (read rows: 73049)
 └── Probe
     └── HashJoin: INNER
         ├── Build
@@ -6190,65 +6190,65 @@ HashJoin: INNER
         │       │       │       │       │       ├── Build
         │       │       │       │       │       │   └── HashJoin: INNER
         │       │       │       │       │       │       ├── Build
-        │       │       │       │       │       │       │   └── Scan: default.tpcds.promotion (#11) (read rows: 3)
+        │       │       │       │       │       │       │   └── HashJoin: INNER
+        │       │       │       │       │       │       │       ├── Build
+        │       │       │       │       │       │       │       │   └── HashJoin: INNER
+        │       │       │       │       │       │       │       │       ├── Build
+        │       │       │       │       │       │       │       │       │   └── HashJoin: INNER
+        │       │       │       │       │       │       │       │       │       ├── Build
+        │       │       │       │       │       │       │       │       │       │   └── HashJoin: INNER
+        │       │       │       │       │       │       │       │       │       │       ├── Build
+        │       │       │       │       │       │       │       │       │       │       │   └── Scan: default.tpcds.promotion (#11) (read rows: 3)
+        │       │       │       │       │       │       │       │       │       │       └── Probe
+        │       │       │       │       │       │       │       │       │       │           └── HashJoin: INNER
+        │       │       │       │       │       │       │       │       │       │               ├── Build
+        │       │       │       │       │       │       │       │       │       │               │   └── HashJoin: INNER
+        │       │       │       │       │       │       │       │       │       │               │       ├── Build
+        │       │       │       │       │       │       │       │       │       │               │       │   └── Scan: default.tpcds.store (#7) (read rows: 1)
+        │       │       │       │       │       │       │       │       │       │               │       └── Probe
+        │       │       │       │       │       │       │       │       │       │               │           └── HashJoin: INNER
+        │       │       │       │       │       │       │       │       │       │               │               ├── Build
+        │       │       │       │       │       │       │       │       │       │               │               │   └── HashJoin: INNER
+        │       │       │       │       │       │       │       │       │       │               │               │       ├── Build
+        │       │       │       │       │       │       │       │       │       │               │               │       │   └── HashJoin: INNER
+        │       │       │       │       │       │       │       │       │       │               │               │       │       ├── Build
+        │       │       │       │       │       │       │       │       │       │               │               │       │       │   └── HashJoin: INNER
+        │       │       │       │       │       │       │       │       │       │               │               │       │       │       ├── Build
+        │       │       │       │       │       │       │       │       │       │               │               │       │       │       │   └── Scan: default.tpcds.item (#18) (read rows: 180)
+        │       │       │       │       │       │       │       │       │       │               │               │       │       │       └── Probe
+        │       │       │       │       │       │       │       │       │       │               │               │       │       │           └── HashJoin: INNER
+        │       │       │       │       │       │       │       │       │       │               │               │       │       │               ├── Build
+        │       │       │       │       │       │       │       │       │       │               │               │       │       │               │   └── Scan: default.tpcds.catalog_returns (#3) (read rows: 1358)
+        │       │       │       │       │       │       │       │       │       │               │               │       │       │               └── Probe
+        │       │       │       │       │       │       │       │       │       │               │               │       │       │                   └── Scan: default.tpcds.catalog_sales (#2) (read rows: 14313)
+        │       │       │       │       │       │       │       │       │       │               │               │       │       └── Probe
+        │       │       │       │       │       │       │       │       │       │               │               │       │           └── Scan: default.tpcds.store_returns (#1) (read rows: 2810)
+        │       │       │       │       │       │       │       │       │       │               │               │       └── Probe
+        │       │       │       │       │       │       │       │       │       │               │               │           └── Scan: default.tpcds.store_sales (#0) (read rows: 28810)
+        │       │       │       │       │       │       │       │       │       │               │               └── Probe
+        │       │       │       │       │       │       │       │       │       │               │                   └── Scan: default.tpcds.date_dim (#4) (read rows: 73049)
+        │       │       │       │       │       │       │       │       │       │               └── Probe
+        │       │       │       │       │       │       │       │       │       │                   └── Scan: default.tpcds.customer_demographics (#9) (read rows: 19208)
+        │       │       │       │       │       │       │       │       │       └── Probe
+        │       │       │       │       │       │       │       │       │           └── Scan: default.tpcds.household_demographics (#12) (read rows: 7200)
+        │       │       │       │       │       │       │       │       └── Probe
+        │       │       │       │       │       │       │       │           └── Scan: default.tpcds.income_band (#16) (read rows: 20)
+        │       │       │       │       │       │       │       └── Probe
+        │       │       │       │       │       │       │           └── Scan: default.tpcds.customer_address (#14) (read rows: 500)
         │       │       │       │       │       │       └── Probe
-        │       │       │       │       │       │           └── HashJoin: INNER
-        │       │       │       │       │       │               ├── Build
-        │       │       │       │       │       │               │   └── HashJoin: INNER
-        │       │       │       │       │       │               │       ├── Build
-        │       │       │       │       │       │               │       │   └── HashJoin: INNER
-        │       │       │       │       │       │               │       │       ├── Build
-        │       │       │       │       │       │               │       │       │   └── HashJoin: INNER
-        │       │       │       │       │       │               │       │       │       ├── Build
-        │       │       │       │       │       │               │       │       │       │   └── HashJoin: INNER
-        │       │       │       │       │       │               │       │       │       │       ├── Build
-        │       │       │       │       │       │               │       │       │       │       │   └── HashJoin: INNER
-        │       │       │       │       │       │               │       │       │       │       │       ├── Build
-        │       │       │       │       │       │               │       │       │       │       │       │   └── Scan: default.tpcds.store (#7) (read rows: 1)
-        │       │       │       │       │       │               │       │       │       │       │       └── Probe
-        │       │       │       │       │       │               │       │       │       │       │           └── HashJoin: INNER
-        │       │       │       │       │       │               │       │       │       │       │               ├── Build
-        │       │       │       │       │       │               │       │       │       │       │               │   └── HashJoin: INNER
-        │       │       │       │       │       │               │       │       │       │       │               │       ├── Build
-        │       │       │       │       │       │               │       │       │       │       │               │       │   └── HashJoin: INNER
-        │       │       │       │       │       │               │       │       │       │       │               │       │       ├── Build
-        │       │       │       │       │       │               │       │       │       │       │               │       │       │   └── HashJoin: INNER
-        │       │       │       │       │       │               │       │       │       │       │               │       │       │       ├── Build
-        │       │       │       │       │       │               │       │       │       │       │               │       │       │       │   └── Scan: default.tpcds.item (#18) (read rows: 180)
-        │       │       │       │       │       │               │       │       │       │       │               │       │       │       └── Probe
-        │       │       │       │       │       │               │       │       │       │       │               │       │       │           └── HashJoin: INNER
-        │       │       │       │       │       │               │       │       │       │       │               │       │       │               ├── Build
-        │       │       │       │       │       │               │       │       │       │       │               │       │       │               │   └── Scan: default.tpcds.catalog_returns (#3) (read rows: 1358)
-        │       │       │       │       │       │               │       │       │       │       │               │       │       │               └── Probe
-        │       │       │       │       │       │               │       │       │       │       │               │       │       │                   └── Scan: default.tpcds.catalog_sales (#2) (read rows: 14313)
-        │       │       │       │       │       │               │       │       │       │       │               │       │       └── Probe
-        │       │       │       │       │       │               │       │       │       │       │               │       │           └── Scan: default.tpcds.store_returns (#1) (read rows: 2810)
-        │       │       │       │       │       │               │       │       │       │       │               │       └── Probe
-        │       │       │       │       │       │               │       │       │       │       │               │           └── Scan: default.tpcds.store_sales (#0) (read rows: 28810)
-        │       │       │       │       │       │               │       │       │       │       │               └── Probe
-        │       │       │       │       │       │               │       │       │       │       │                   └── Scan: default.tpcds.date_dim (#4) (read rows: 73049)
-        │       │       │       │       │       │               │       │       │       │       └── Probe
-        │       │       │       │       │       │               │       │       │       │           └── Scan: default.tpcds.customer (#8) (read rows: 1000)
-        │       │       │       │       │       │               │       │       │       └── Probe
-        │       │       │       │       │       │               │       │       │           └── Scan: default.tpcds.date_dim (#5) (read rows: 73049)
-        │       │       │       │       │       │               │       │       └── Probe
-        │       │       │       │       │       │               │       │           └── Scan: default.tpcds.date_dim (#6) (read rows: 73049)
-        │       │       │       │       │       │               │       └── Probe
-        │       │       │       │       │       │               │           └── Scan: default.tpcds.customer_demographics (#9) (read rows: 19208)
-        │       │       │       │       │       │               └── Probe
-        │       │       │       │       │       │                   └── Scan: default.tpcds.customer_demographics (#10) (read rows: 19208)
+        │       │       │       │       │       │           └── Scan: default.tpcds.customer (#8) (read rows: 1000)
         │       │       │       │       │       └── Probe
-        │       │       │       │       │           └── Scan: default.tpcds.household_demographics (#12) (read rows: 7200)
+        │       │       │       │       │           └── Scan: default.tpcds.customer_demographics (#10) (read rows: 19208)
         │       │       │       │       └── Probe
         │       │       │       │           └── Scan: default.tpcds.household_demographics (#13) (read rows: 7200)
         │       │       │       └── Probe
-        │       │       │           └── Scan: default.tpcds.customer_address (#14) (read rows: 500)
+        │       │       │           └── Scan: default.tpcds.income_band (#17) (read rows: 20)
         │       │       └── Probe
         │       │           └── Scan: default.tpcds.customer_address (#15) (read rows: 500)
         │       └── Probe
-        │           └── Scan: default.tpcds.income_band (#16) (read rows: 20)
+        │           └── Scan: default.tpcds.date_dim (#5) (read rows: 73049)
         └── Probe
-            └── Scan: default.tpcds.income_band (#17) (read rows: 20)
+            └── Scan: default.tpcds.date_dim (#6) (read rows: 73049)
 
 # Q65
 query I
@@ -6297,21 +6297,21 @@ HashJoin: INNER
 │       ├── Build
 │       │   └── HashJoin: INNER
 │       │       ├── Build
-│       │       │   └── Scan: default.tpcds.date_dim (#3) (read rows: 73049)
+│       │       │   └── HashJoin: INNER
+│       │       │       ├── Build
+│       │       │       │   └── Scan: default.tpcds.date_dim (#3) (read rows: 73049)
+│       │       │       └── Probe
+│       │       │           └── Scan: default.tpcds.store_sales (#2) (read rows: 28810)
 │       │       └── Probe
-│       │           └── Scan: default.tpcds.store_sales (#2) (read rows: 28810)
+│       │           └── Scan: default.tpcds.store (#0) (read rows: 1)
 │       └── Probe
-│           └── Scan: default.tpcds.store (#0) (read rows: 1)
+│           └── HashJoin: INNER
+│               ├── Build
+│               │   └── Scan: default.tpcds.date_dim (#5) (read rows: 73049)
+│               └── Probe
+│                   └── Scan: default.tpcds.store_sales (#4) (read rows: 28810)
 └── Probe
-    └── HashJoin: INNER
-        ├── Build
-        │   └── HashJoin: INNER
-        │       ├── Build
-        │       │   └── Scan: default.tpcds.date_dim (#5) (read rows: 73049)
-        │       └── Probe
-        │           └── Scan: default.tpcds.store_sales (#4) (read rows: 28810)
-        └── Probe
-            └── Scan: default.tpcds.item (#1) (read rows: 180)
+    └── Scan: default.tpcds.item (#1) (read rows: 180)
 
 
 # Q66
@@ -6712,7 +6712,7 @@ HashJoin: INNER
 
 
 # Q69
-query
+query 
 explain join
 SELECT cd_gender,
        cd_marital_status,
@@ -7502,13 +7502,13 @@ UnionAll
 │       └── Right
 │           └── HashJoin: INNER
 │               ├── Build
-│               │   └── Scan: default.tpcds.item (#4) (read rows: 180)
+│               │   └── HashJoin: INNER
+│               │       ├── Build
+│               │       │   └── Scan: default.tpcds.item (#4) (read rows: 180)
+│               │       └── Probe
+│               │           └── Scan: default.tpcds.web_sales (#3) (read rows: 0)
 │               └── Probe
-│                   └── HashJoin: INNER
-│                       ├── Build
-│                       │   └── Scan: default.tpcds.web_sales (#3) (read rows: 0)
-│                       └── Probe
-│                           └── Scan: default.tpcds.date_dim (#5) (read rows: 73049)
+│                   └── Scan: default.tpcds.date_dim (#5) (read rows: 73049)
 └── Right
     └── HashJoin: INNER
         ├── Build
@@ -7626,13 +7626,13 @@ UnionAll
 │       │       ├── Build
 │       │       │   └── HashJoin: INNER
 │       │       │       ├── Build
-│       │       │       │   └── HashJoin: INNER
-│       │       │       │       ├── Build
-│       │       │       │       │   └── Scan: default.tpcds.date_dim (#4) (read rows: 73049)
-│       │       │       │       └── Probe
-│       │       │       │           └── Scan: default.tpcds.store_returns (#3) (read rows: 2810)
+│       │       │       │   └── Scan: default.tpcds.store (#5) (read rows: 1)
 │       │       │       └── Probe
-│       │       │           └── Scan: default.tpcds.store (#5) (read rows: 1)
+│       │       │           └── HashJoin: INNER
+│       │       │               ├── Build
+│       │       │               │   └── Scan: default.tpcds.date_dim (#4) (read rows: 73049)
+│       │       │               └── Probe
+│       │       │                   └── Scan: default.tpcds.store_returns (#3) (read rows: 2810)
 │       │       └── Probe
 │       │           └── HashJoin: INNER
 │       │               ├── Build
@@ -7662,23 +7662,23 @@ UnionAll
         ├── Build
         │   └── HashJoin: INNER
         │       ├── Build
-        │       │   └── HashJoin: INNER
-        │       │       ├── Build
-        │       │       │   └── Scan: default.tpcds.date_dim (#14) (read rows: 73049)
-        │       │       └── Probe
-        │       │           └── Scan: default.tpcds.web_returns (#13) (read rows: 679)
+        │       │   └── Scan: default.tpcds.web_page (#15) (read rows: 1)
         │       └── Probe
-        │           └── Scan: default.tpcds.web_page (#15) (read rows: 1)
+        │           └── HashJoin: INNER
+        │               ├── Build
+        │               │   └── Scan: default.tpcds.date_dim (#14) (read rows: 73049)
+        │               └── Probe
+        │                   └── Scan: default.tpcds.web_returns (#13) (read rows: 679)
         └── Probe
             └── HashJoin: INNER
                 ├── Build
-                │   └── HashJoin: INNER
-                │       ├── Build
-                │       │   └── Scan: default.tpcds.date_dim (#11) (read rows: 73049)
-                │       └── Probe
-                │           └── Scan: default.tpcds.web_sales (#10) (read rows: 7212)
+                │   └── Scan: default.tpcds.web_page (#12) (read rows: 1)
                 └── Probe
-                    └── Scan: default.tpcds.web_page (#12) (read rows: 1)
+                    └── HashJoin: INNER
+                        ├── Build
+                        │   └── Scan: default.tpcds.date_dim (#11) (read rows: 73049)
+                        └── Probe
+                            └── Scan: default.tpcds.web_sales (#10) (read rows: 7212)
 
 # Q78
 query I
@@ -8132,18 +8132,18 @@ HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
-│       │   └── Scan: default.tpcds.item (#0) (read rows: 180)
+│       │   └── Scan: default.tpcds.date_dim (#2) (read rows: 73049)
 │       └── Probe
 │           └── HashJoin: INNER
 │               ├── Build
-│               │   └── Scan: default.tpcds.date_dim (#2) (read rows: 73049)
+│               │   └── Scan: default.tpcds.item (#0) (read rows: 180)
 │               └── Probe
 │                   └── Scan: default.tpcds.inventory (#1) (read rows: 23490)
 └── Probe
     └── Scan: default.tpcds.store_sales (#3) (read rows: 28810)
 
 # Q83
-query
+query 
 explain join
 WITH sr_items AS
   (SELECT i_item_id item_id,
@@ -8399,15 +8399,15 @@ HashJoin: INNER
 │       │       │       │       │       └── Probe
 │       │       │       │       │           └── Scan: default.tpcds.customer_address (#5) (read rows: 500)
 │       │       │       │       └── Probe
-│       │       │       │           └── Scan: default.tpcds.date_dim (#6) (read rows: 73049)
+│       │       │       │           └── Scan: default.tpcds.web_page (#2) (read rows: 1)
 │       │       │       └── Probe
-│       │       │           └── Scan: default.tpcds.web_page (#2) (read rows: 1)
+│       │       │           └── Scan: default.tpcds.customer_demographics (#3) (read rows: 19208)
 │       │       └── Probe
-│       │           └── Scan: default.tpcds.customer_demographics (#3) (read rows: 19208)
+│       │           └── Scan: default.tpcds.customer_demographics (#4) (read rows: 19208)
 │       └── Probe
-│           └── Scan: default.tpcds.customer_demographics (#4) (read rows: 19208)
+│           └── Scan: default.tpcds.reason (#7) (read rows: 1)
 └── Probe
-    └── Scan: default.tpcds.reason (#7) (read rows: 1)
+    └── Scan: default.tpcds.date_dim (#6) (read rows: 73049)
 
 # Q86
 query I
@@ -8963,13 +8963,13 @@ HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
-│       │   └── HashJoin: INNER
-│       │       ├── Build
-│       │       │   └── Scan: default.tpcds.date_dim (#2) (read rows: 73049)
-│       │       └── Probe
-│       │           └── Scan: default.tpcds.web_sales (#0) (read rows: 7212)
+│       │   └── Scan: default.tpcds.item (#1) (read rows: 180)
 │       └── Probe
-│           └── Scan: default.tpcds.item (#1) (read rows: 180)
+│           └── HashJoin: INNER
+│               ├── Build
+│               │   └── Scan: default.tpcds.date_dim (#2) (read rows: 73049)
+│               └── Probe
+│                   └── Scan: default.tpcds.web_sales (#0) (read rows: 7212)
 └── Probe
     └── HashJoin: INNER
         ├── Build
@@ -9318,4 +9318,3 @@ HashJoin: INNER
         │                   └── Scan: default.tpcds.catalog_sales (#0) (read rows: 14313)
         └── Probe
             └── Scan: default.tpcds.ship_mode (#2) (read rows: 20)
-

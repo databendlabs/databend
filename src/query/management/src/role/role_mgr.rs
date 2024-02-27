@@ -81,8 +81,8 @@ impl RoleMgr {
         let key = self.make_role_key(role_info.identity());
         let value = serialize_struct(role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
-        let kv_api = self.kv_api.clone();
-        let res = kv_api
+        let res = self
+            .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Update(value), None))
             .await?;
         match res.result {
@@ -148,8 +148,7 @@ impl RoleApi for RoleMgr {
         let key = self.make_role_key(role_info.identity());
         let value = serialize_struct(&role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
-        let kv_api = self.kv_api.clone();
-        let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(
+        let upsert_kv = self.kv_api.upsert_kv(UpsertKVReq::new(
             &key,
             match_seq,
             Operation::Update(value),
@@ -196,8 +195,7 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
         let role_prefix = self.role_prefix.clone();
-        let kv_api = self.kv_api.clone();
-        let values = kv_api.prefix_list_kv(role_prefix.as_str()).await?;
+        let values = self.kv_api.prefix_list_kv(role_prefix.as_str()).await?;
 
         let mut r = vec![];
         for (key, val) in values {
@@ -435,18 +433,16 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<(), ErrorCode> {
         let key = self.make_role_key(&role);
-        let kv_api = self.kv_api.clone();
-        let res = kv_api
+
+        let res = self
+            .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
             .await?;
-        if res.prev.is_some() && res.result.is_none() {
-            Ok(())
-        } else {
-            Err(ErrorCode::UnknownRole(format!(
-                "Role '{}' does not exist.",
-                role
-            )))
-        }
+
+        res.removed_or_else(|_p| {
+            ErrorCode::UnknownRole(format!("Role '{}' does not exist.", role))
+        })?;
+        Ok(())
     }
 }
 
