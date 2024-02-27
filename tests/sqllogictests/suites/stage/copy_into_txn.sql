@@ -74,6 +74,7 @@ begin;
 onlyif mysql
 query
 copy into t1 from @data/csv/numbers.csv file_format = (type = CSV) purge = true;
+----
 csv/numbers.csv 18 0 NULL NULL
 
 onlyif mysql
@@ -101,6 +102,7 @@ create table t2(c int);
 onlyif mysql
 query
 copy into t2 from @data/csv/numbers.csv file_format = (type = CSV);
+----
 csv/numbers.csv 18 0 NULL NULL
 
 onlyif mysql
