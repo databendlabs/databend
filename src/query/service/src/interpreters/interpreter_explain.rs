@@ -156,6 +156,15 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
+                Plan::MergeInto(plan) => {
+                    self.explain_analyze(
+                        &*plan.input,
+                        &plan.meta_data,
+                        *plan.columns_set.clone(),
+                        true,
+                    )
+                    .await?
+                }
                 _ => Err(ErrorCode::Unimplemented(
                     "Unsupported EXPLAIN ANALYZE statement",
                 ))?,
