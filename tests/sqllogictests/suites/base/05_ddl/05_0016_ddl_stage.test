@@ -52,6 +52,11 @@ CREATE OR REPLACE STAGE if not exists replace_test_stage_huggingface url='hf://o
 statement ok
 CREATE OR REPLACE STAGE replace_test_stage_huggingface url='hf://opendal/huggingface-testdata/'
 
+query I
+select count(*) > 0 from replace_test_stage_huggingface;
+----
+1
+
 statement ok
 DROP STAGE replace_test_stage_huggingface
 
@@ -73,5 +78,11 @@ copy into @s from t;
 statement ok
 create or replace stage s;
 
-statement error 1006
+statement error 1006.*no file found
 select * from @s;
+
+statement ok
+DROP STAGE s;
+
+statement ok
+drop table t;
