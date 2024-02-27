@@ -25,7 +25,7 @@ use crate::pipelines::processors::transforms::BuildSpillState;
 
 pub struct BuildSpillHandler {
     // The flag indicates whether data is from spilled data.
-    from_spill: bool,
+    after_spill: bool,
     spill_state: Option<Box<BuildSpillState>>,
     spill_data: Option<DataBlock>,
     // If processor has sent partition set to probe
@@ -35,7 +35,7 @@ pub struct BuildSpillHandler {
 impl BuildSpillHandler {
     pub fn create(spill_state: Option<Box<BuildSpillState>>) -> Self {
         Self {
-            from_spill: false,
+            after_spill: false,
             spill_state,
             spill_data: None,
             sent_partition_set: false,
@@ -56,12 +56,12 @@ impl BuildSpillHandler {
         self.spill_state.as_mut().unwrap()
     }
 
-    pub(crate) fn from_spill(&self) -> bool {
-        self.from_spill
+    pub(crate) fn after_spill(&self) -> bool {
+        self.after_spill
     }
 
-    pub(crate) fn set_from_spill(&mut self, val: bool) {
-        self.from_spill = val;
+    pub(crate) fn set_after_spill(&mut self, val: bool) {
+        self.after_spill = val;
     }
 
     pub(crate) fn set_spill_data(&mut self, spill_data: DataBlock) {
@@ -109,8 +109,11 @@ impl BuildSpillHandler {
     // Check if fit into memory and return next step
     // If step doesn't be changed, return None.
     pub(crate) fn check_memory_and_next_step(&mut self) -> Result<Option<HashJoinBuildStep>> {
+        if !self.enabled_spill() || self.after_spill() {
+            return Ok(None);
+        }
         let spill_state = self.spill_state();
-        if !self.enabled_spill() || self.from_spill() || spill_state.spiller.is_all_spilled() {
+        if spill_state.spiller.is_all_spilled() {
             return Ok(None);
         }
         if spill_state.check_need_spill()? {
@@ -126,7 +129,7 @@ impl BuildSpillHandler {
 
     // Check if current processor is the last processor that is responsible for notifying spilling
     pub(crate) fn try_notify_spill(&self) -> Result<()> {
-        if !self.enabled_spill() || self.from_spill() {
+        if !self.enabled_spill() || self.after_spill() {
             return Ok(());
         }
         let spill_state = self.spill_state();

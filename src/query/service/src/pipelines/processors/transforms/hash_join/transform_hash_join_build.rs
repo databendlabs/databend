@@ -81,7 +81,7 @@ impl TransformHashJoinBuild {
     // It means next round build will start, need to reset some variables.
     async fn reset(&mut self) -> Result<()> {
         self.finalize_finished = false;
-        self.spill_handler.set_from_spill(true);
+        self.spill_handler.set_after_spill(true);
         // Only need to reset the following variables once
         if self
             .build_state
@@ -123,9 +123,11 @@ impl Processor for TransformHashJoinBuild {
     fn event(&mut self) -> Result<Event> {
         match self.step {
             HashJoinBuildStep::Running => {
-                if self.spill_handler.check_memory_and_next_step()?.is_some() {
+                if let Some(step) = self.spill_handler.check_memory_and_next_step()? {
+                    self.step = step;
                     return Ok(Event::Async);
                 }
+
                 if self.input_data.is_some() {
                     return Ok(Event::Sync);
                 }
@@ -179,7 +181,7 @@ impl Processor for TransformHashJoinBuild {
         match self.step {
             HashJoinBuildStep::Running => {
                 if let Some(data_block) = self.input_data.take() {
-                    if self.spill_handler.from_spill() {
+                    if self.spill_handler.after_spill() {
                         return self.build_state.build(data_block);
                     }
                     if self.spill_handler.enabled_spill() {
