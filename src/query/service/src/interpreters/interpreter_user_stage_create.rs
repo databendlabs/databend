@@ -82,14 +82,12 @@ impl Interpreter for CreateUserStageInterpreter {
             )));
         };
 
-        let old_stage = if let CreateOption::CreateOrReplace = plan.create_option {
-            Some(
-                user_mgr
-                    .get_stage(&plan.tenant, &user_stage.stage_name)
-                    .await,
-            )
-        } else {
-            None
+        let old_stage = match plan.create_option {
+            CreateOption::CreateOrReplace => user_mgr
+                .get_stage(&plan.tenant, &user_stage.stage_name)
+                .await
+                .ok(),
+            _ => None,
         };
 
         let mut user_stage = user_stage;
@@ -100,7 +98,7 @@ impl Interpreter for CreateUserStageInterpreter {
             .await?;
 
         // when create or replace stage success, if old stage is not External stage, remove stage files
-        if let Some(Ok(stage)) = old_stage {
+        if let Some(stage) = old_stage {
             if stage.stage_type != StageType::External {
                 let op = StageTable::get_op(&stage)?;
                 op.remove_all("/").await?;
