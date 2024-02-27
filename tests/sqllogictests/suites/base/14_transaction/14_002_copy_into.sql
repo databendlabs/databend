@@ -9,64 +9,44 @@ statement ok
 use test_txn_copy;
 
 statement ok
-CREATE TABLE t(c int);
-
-statement ok
-insert into t values (1478);
-
-statement ok
-DROP STAGE IF EXISTS s_txn_copy;
-
-statement ok
-CREATE STAGE s_txn_copy;
-
-statement ok
-copy into @s_txn_copy from t;
-
-statement ok
 create table t1(c int);
 
 onlyif mysql
 statement ok
 begin;
 
+statement ok
+copy into t1 from @data/csv/numbers.csv file_format = (type = CSV);
+
 query I
-select * from @s_txn_copy;
+select count(*) from t1;
 ----
-1478
+18
 
 statement ok
-copy into t1 from @s_txn_copy;
+copy into t1 from @data/csv/numbers.csv file_format = (type = CSV);
 
 query I
-select * from t1;
+select count(*) from t1;
 ----
-1478
-
-statement ok
-copy into t1 from @s_txn_copy;
-
-query I
-select * from t1;
-----
-1478
+18
 
 onlyif mysql
 statement ok
 commit;
 
 query I
-select * from t1;
+select count(*) from t1;
 ----
-1478
+18
 
 statement ok
-copy into t1 from @s_txn_copy;
+copy into t1 from @data/csv/numbers.csv file_format = (type = CSV);
 
 query I
-select * from t1;
+select count(*) from t1;
 ----
-1478
+18
 
 #################################################################################################################
 # test when txn is aborted, the stage files are not purged
@@ -79,21 +59,6 @@ statement ok
 use test_txn_copy_1;
 
 statement ok
-CREATE TABLE t(c int);
-
-statement ok
-insert into t values (1478);
-
-statement ok
-DROP STAGE IF EXISTS s_txn_copy_1;
-
-statement ok
-CREATE STAGE s_txn_copy_1;
-
-statement ok
-copy into @s_txn_copy_1 from t;
-
-statement ok
 create table t1(c int);
 
 onlyif mysql
@@ -102,7 +67,7 @@ begin;
 
 onlyif mysql
 statement ok
-copy into t1 from @s_txn_copy_1 purge = true;
+copy into t1 from @data/csv/numbers.csv file_format = (type = CSV) purge = true;
 
 onlyif mysql
 statement error 1025
@@ -122,8 +87,16 @@ select count(*) from t1;
 ----
 0
 
+onlyif mysql
+create table t2(c int);
+
+onlyif mysql
+statement ok
+copy into t2 from @data/csv/numbers.csv file_format = (type = CSV);
+
+onlyif mysql
 query I
-select * from @s_txn_copy_1;
+select count(*) from t2;
 ----
-1478
+18
 
