@@ -15,16 +15,20 @@ onlyif mysql
 statement ok
 begin;
 
-statement ok
+query
 copy into t1 from @data/csv/numbers.csv file_format = (type = CSV);
+----
+csv/numbers.csv 18 0 NULL NULL
 
 query I
 select count(*) from t1;
 ----
 18
 
-statement ok
+query
 copy into t1 from @data/csv/numbers.csv file_format = (type = CSV);
+----
+(empty)
 
 query I
 select count(*) from t1;
@@ -40,8 +44,10 @@ select count(*) from t1;
 ----
 18
 
-statement ok
+query
 copy into t1 from @data/csv/numbers.csv file_format = (type = CSV);
+----
+(empty)
 
 query I
 select count(*) from t1;
@@ -66,8 +72,9 @@ statement ok
 begin;
 
 onlyif mysql
-statement ok
+query
 copy into t1 from @data/csv/numbers.csv file_format = (type = CSV) purge = true;
+csv/numbers.csv 18 0 NULL NULL
 
 onlyif mysql
 statement error 1025
@@ -92,8 +99,9 @@ statement ok
 create table t2(c int);
 
 onlyif mysql
-statement ok
+query
 copy into t2 from @data/csv/numbers.csv file_format = (type = CSV);
+csv/numbers.csv 18 0 NULL NULL
 
 onlyif mysql
 query I
