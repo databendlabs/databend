@@ -58,3 +58,26 @@ DROP STAGE replace_test_stage_huggingface
 statement ok
 SHOW STAGES
 
+statement ok
+create stage s;
+
+statement ok
+create table t(c int);
+
+statement ok
+insert into t values(1);
+
+statement ok
+copy into @s from t;
+
+statement ok
+create or replace stage s;
+
+statement error 1006.*no file found
+select * from @s;
+
+statement ok
+DROP STAGE s;
+
+statement ok
+drop table t;

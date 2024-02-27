@@ -20,11 +20,14 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateStagePlan;
+use databend_common_storages_stage::StageTable;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -79,6 +82,24 @@ impl Interpreter for CreateUserStageInterpreter {
             )));
         };
 
+        // when create or replace stage, if old stage is not External stage, remove stage files
+        if let CreateOption::CreateOrReplace = plan.create_option {
+            if let Ok(stage) = user_mgr
+                .get_stage(&plan.tenant, &user_stage.stage_name)
+                .await
+            {
+                if stage.stage_type != StageType::External {
+                    let op = StageTable::get_op(&stage)?;
+                    op.remove_all("/").await?;
+                    info!(
+                        "create or replace stage {:?} with all objects removed in stage",
+                        user_stage.stage_name
+                    );
+                }
+            }
+        }
+
+        // create dir if new stage if not external stage
         if user_stage.stage_type != StageType::External {
             let op = self.ctx.get_data_operator()?.operator();
             op.create_dir(&user_stage.stage_prefix()).await?
