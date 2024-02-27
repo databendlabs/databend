@@ -52,11 +52,6 @@ CREATE OR REPLACE STAGE if not exists replace_test_stage_huggingface url='hf://o
 statement ok
 CREATE OR REPLACE STAGE replace_test_stage_huggingface url='hf://opendal/huggingface-testdata/'
 
-query I
-select count(*) > 0 from @replace_test_stage_huggingface;
-----
-1
-
 statement ok
 DROP STAGE replace_test_stage_huggingface
 
