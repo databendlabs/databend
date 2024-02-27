@@ -19,6 +19,7 @@ use databend_common_management::*;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyStr;
 use mockall::predicate::*;
 
 fn make_role_key(role: &str) -> String {
@@ -64,6 +65,6 @@ mod add {
 
 async fn new_role_api() -> databend_common_exception::Result<(Arc<MetaEmbedded>, RoleMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
-    let mgr = RoleMgr::create(test_api.clone(), "admin")?;
+    let mgr = RoleMgr::create(test_api.clone(), NonEmptyStr::new("admin").unwrap());
     Ok((test_api, mgr))
 }
