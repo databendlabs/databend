@@ -265,13 +265,23 @@ impl FuseTable {
         let partitions = if is_lazy {
             let mut segments = Vec::with_capacity(snapshot.segments.len());
             for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
+                segments.push(FuseLazyPartInfo::create(
+                    idx,
+                    segment_location.location.clone(),
+                ));
             }
             Partitions::create(PartitionsShuffleKind::Mod, segments, true)
         } else {
             let projection = Projection::Columns(col_indices.clone());
             let prune_ctx = MutationBlockPruningContext {
-                segment_locations: create_segment_location_vector(snapshot.segments.clone(), None),
+                segment_locations: create_segment_location_vector(
+                    snapshot
+                        .segments
+                        .iter()
+                        .map(|v| v.location.clone())
+                        .collect(),
+                    None,
+                ),
                 block_count: Some(snapshot.summary.block_count as usize),
             };
             let (partitions, info) = self

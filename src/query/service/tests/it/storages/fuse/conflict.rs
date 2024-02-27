@@ -37,13 +37,13 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 fn test_unresolvable_delete_conflict() {
     let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
     base_snapshot.segments = vec![
-        ("1".to_string(), 1),
-        ("2".to_string(), 1),
-        ("3".to_string(), 1),
+        ("1".to_string(), 1).into(),
+        ("2".to_string(), 1).into(),
+        ("3".to_string(), 1).into(),
     ];
 
     let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
-    latest_snapshot.segments = vec![("1".to_string(), 1), ("4".to_string(), 1)];
+    latest_snapshot.segments = vec![("1".to_string(), 1).into(), ("4".to_string(), 1).into()];
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
         appended_segments: vec![],
@@ -77,9 +77,9 @@ fn test_unresolvable_delete_conflict() {
 fn test_resolvable_delete_conflict() {
     let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
     base_snapshot.segments = vec![
-        ("1".to_string(), 1),
-        ("2".to_string(), 1),
-        ("3".to_string(), 1),
+        ("1".to_string(), 1).into(),
+        ("2".to_string(), 1).into(),
+        ("3".to_string(), 1).into(),
     ];
 
     base_snapshot.summary = Statistics {
@@ -95,9 +95,9 @@ fn test_resolvable_delete_conflict() {
 
     let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
     latest_snapshot.segments = vec![
-        ("2".to_string(), 1),
-        ("3".to_string(), 1),
-        ("4".to_string(), 1),
+        ("2".to_string(), 1).into(),
+        ("3".to_string(), 1).into(),
+        ("4".to_string(), 1).into(),
     ];
 
     latest_snapshot.summary = Statistics {
@@ -135,7 +135,7 @@ fn test_resolvable_delete_conflict() {
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
         appended_segments: vec![],
-        replaced_segments: HashMap::from([(2, ("8".to_string(), 1))]),
+        replaced_segments: HashMap::from([(2, ("8".to_string(), 1).into())]),
         removed_segment_indexes: vec![1],
         removed_statistics,
         merged_statistics,
@@ -150,7 +150,7 @@ fn test_resolvable_delete_conflict() {
         Some(Arc::new(latest_snapshot)),
     );
     let snapshot = result.unwrap();
-    let expected = vec![("8".to_string(), 1), ("4".to_string(), 1)];
+    let expected = vec![("8".to_string(), 1).into(), ("4".to_string(), 1).into()];
     assert_eq!(snapshot.segments, expected);
 
     let actual = snapshot.summary;
@@ -180,9 +180,9 @@ fn test_resolvable_delete_conflict() {
 fn test_resolvable_replace_conflict() {
     let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
     base_snapshot.segments = vec![
-        ("1".to_string(), 1),
-        ("2".to_string(), 1),
-        ("3".to_string(), 1),
+        ("1".to_string(), 1).into(),
+        ("2".to_string(), 1).into(),
+        ("3".to_string(), 1).into(),
     ];
 
     base_snapshot.summary = Statistics {
@@ -198,9 +198,9 @@ fn test_resolvable_replace_conflict() {
 
     let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
     latest_snapshot.segments = vec![
-        ("2".to_string(), 1),
-        ("3".to_string(), 1),
-        ("4".to_string(), 1),
+        ("2".to_string(), 1).into(),
+        ("3".to_string(), 1).into(),
+        ("4".to_string(), 1).into(),
     ];
 
     latest_snapshot.summary = Statistics {
@@ -237,8 +237,8 @@ fn test_resolvable_replace_conflict() {
     };
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
-        appended_segments: vec![("6".to_string(), 1)],
-        replaced_segments: HashMap::from([(2, ("5".to_string(), 1))]),
+        appended_segments: vec![("6".to_string(), 1).into()],
+        replaced_segments: HashMap::from([(2, ("5".to_string(), 1).into())]),
         removed_segment_indexes: vec![1],
         removed_statistics,
         merged_statistics,
@@ -254,9 +254,9 @@ fn test_resolvable_replace_conflict() {
     );
     let snapshot = result.unwrap();
     let expected = vec![
-        ("6".to_string(), 1),
-        ("5".to_string(), 1),
-        ("4".to_string(), 1),
+        ("6".to_string(), 1).into(), // TODO
+        ("5".to_string(), 1).into(),
+        ("4".to_string(), 1).into(),
     ];
     assert_eq!(snapshot.segments, expected);
 

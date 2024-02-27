@@ -17,5 +17,7 @@ mod snapshot;
 
 pub use segment::CompactSegmentInfo;
 pub use segment::SegmentInfo;
+pub use snapshot::SegmentDescriptor;
+pub use snapshot::SegmentSummary;
 pub use snapshot::TableSnapshot;
 pub use snapshot::TableSnapshotLite;

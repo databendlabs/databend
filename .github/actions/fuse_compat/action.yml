@@ -31,6 +31,7 @@ runs:
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.306 rbac
           bash ./tests/fuse-compat/test-fuse-forward-compat.sh 1.2.307 rbac
           bash ./tests/fuse-compat/test-fuse-forward-compat.sh 1.2.318 rbac
+          bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.307 base
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure

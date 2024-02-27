@@ -118,7 +118,11 @@ impl FuseTable {
             max_tasks,
         )?;
 
-        let segment_locations = snapshot.segments.clone();
+        let segment_locations = snapshot
+            .segments
+            .iter()
+            .map(|v| v.location.clone())
+            .collect();
         let segment_locations = create_segment_location_vector(segment_locations, None);
 
         let max_threads = settings.get_max_threads()? as usize;

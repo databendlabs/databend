@@ -133,9 +133,9 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     );
     for segment in after_update.segments.iter() {
         let param = LoadParams {
-            location: segment.0.clone(),
+            location: segment.location.0.clone(),
             len_hint: None,
-            ver: segment.1,
+            ver: segment.location.1,
             put_cache: false,
         };
         let compact_segment = segment_reader.read(&param).await?;

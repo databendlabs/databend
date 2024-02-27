@@ -267,10 +267,10 @@ impl SnapshotsIO {
         let mut segments = HashSet::new();
         // collects extended segments.
         for segment_location in &snapshot.segments {
-            if root_snapshot.segments.contains(segment_location) {
+            if root_snapshot.segments.contains(&segment_location.location) {
                 continue;
             }
-            segments.insert(segment_location.clone());
+            segments.insert(segment_location.location.clone());
         }
         let table_statistics_location =
             if snapshot.table_statistics_location != root_snapshot.table_statistics_location {

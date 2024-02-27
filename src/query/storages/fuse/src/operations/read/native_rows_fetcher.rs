@@ -197,7 +197,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             }
 
             let (segment, block) = split_prefix(prefix);
-            let (location, ver) = snapshot.segments[segment as usize].clone();
+            let (location, ver) = snapshot.segments[segment as usize].location.clone();
             let compact_segment_info = self
                 .segment_reader
                 .read(&LoadParams {

@@ -103,14 +103,14 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
 
     let snapshot = reader.read(&load_params).await?;
     for segment in &snapshot.segments {
-        segment_name.insert(segment.0.clone());
+        segment_name.insert(segment.location.0.clone());
 
         let compact_segment_reader = MetaReaders::segment_info_reader(
             fuse_table.get_operator(),
             TestFixture::default_table_schema(),
         );
         let params = LoadParams {
-            location: segment.0.clone(),
+            location: segment.location.0.clone(),
             len_hint: None,
             ver: SegmentInfo::VERSION,
             put_cache: false,

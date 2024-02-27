@@ -313,6 +313,7 @@ impl ReplaceInterpreter {
                 .segments
                 .clone()
                 .into_iter()
+                .map(|v| v.location)
                 .enumerate()
                 .collect(),
             block_slots: None,

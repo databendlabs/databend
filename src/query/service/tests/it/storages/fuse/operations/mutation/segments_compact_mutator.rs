@@ -59,7 +59,9 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentDescriptor;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentSummary;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use futures_util::TryStreamExt;
@@ -712,7 +714,7 @@ impl CompactSegmentTestFixture {
         thresholds: BlockThresholds,
         cluster_key_id: Option<u32>,
         block_per_seg: usize,
-    ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
+    ) -> Result<(Vec<SegmentDescriptor>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
         let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
         let data_accessor = ctx.get_data_operator()?.operator();
         let threads_nums = ctx.get_settings().get_max_threads()? as usize;
@@ -792,7 +794,15 @@ impl CompactSegmentTestFixture {
                 let segment_info = SegmentInfo::new(stats_acc.blocks_metas, summary);
                 let path = location_gen.gen_segment_info_location();
                 segment_info.write_meta(&data_accessor, &path).await?;
-                Ok::<_, ErrorCode>(((path, SegmentInfo::VERSION), collected_blocks, segment_info))
+
+                let segment_descr = SegmentDescriptor {
+                    location: (path, SegmentInfo::VERSION),
+                    summary: Some(SegmentSummary {
+                        row_count: segment_info.summary.row_count,
+                        block_count: segment_info.summary.block_count,
+                    }),
+                };
+                Ok::<_, ErrorCode>((segment_descr, collected_blocks, segment_info))
             });
         }
 
@@ -908,9 +918,9 @@ impl CompactCase {
         // 4. input blocks should be there and in the original order
         for location in r.segments_locations.iter().rev() {
             let load_params = LoadParams {
-                location: location.0.clone(),
+                location: location.location.0.clone(),
                 len_hint: None,
-                ver: location.1,
+                ver: location.location.1,
                 put_cache: false,
             };
 
@@ -1061,15 +1071,15 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
         );
         let mut statistics_of_segments: Statistics = Statistics::default();
         let mut output_block_id = Vec::with_capacity(number_of_blocks);
-        for location in state.segments_locations.iter().rev() {
-            let load_params = LoadParams {
-                location: location.0.clone(),
+        for segment_descr in state.segments_locations.iter().rev() {
+            let location = LoadParams {
+                location: segment_descr.location.0.clone(),
                 len_hint: None,
-                ver: location.1,
+                ver: segment_descr.location.1,
                 put_cache: false,
             };
 
-            let compact_segment = compact_segment_reader.read(&load_params).await?;
+            let compact_segment = compact_segment_reader.read(&location).await?;
             let segment = SegmentInfo::try_from(compact_segment)?;
             merge_statistics_mut(
                 &mut statistics_of_segments,

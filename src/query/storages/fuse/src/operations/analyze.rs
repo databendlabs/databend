@@ -72,8 +72,9 @@ impl FuseTable {
                     blocks_cluster_stats.push(cluster_stats.clone());
                 }
 
+                let locations = chunk.iter().map(|v| v.location.clone()).collect::<Vec<_>>();
                 let segments = segments_io
-                    .read_segments::<SegmentInfo>(chunk, true)
+                    .read_segments::<SegmentInfo>(&locations, true)
                     .await?;
                 for segment in segments {
                     let segment = segment?;

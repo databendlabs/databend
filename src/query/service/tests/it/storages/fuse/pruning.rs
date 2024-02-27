@@ -61,10 +61,14 @@ async fn apply_block_pruning(
     bloom_index_cols: BloomIndexColumns,
 ) -> Result<Vec<Arc<BlockMeta>>> {
     let ctx: Arc<dyn TableContext> = ctx;
-    let segment_locs = table_snapshot.segments.clone();
-    let segment_locs = create_segment_location_vector(segment_locs, None);
+    let locations = table_snapshot
+        .segments
+        .iter()
+        .map(|v| v.location.clone())
+        .collect();
+    let indexed_segment_locations = create_segment_location_vector(locations, None);
     FusePruner::create(&ctx, op, schema, push_down, bloom_index_cols)?
-        .read_pruning(segment_locs)
+        .read_pruning(indexed_segment_locations)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }

@@ -268,7 +268,7 @@ async fn test_safety() -> Result<()> {
             let loc = locations.get(idx).unwrap();
             let compact_segment = SegmentsIO::read_compact_segment(
                 ctx.get_data_operator()?.operator(),
-                loc.clone(),
+                loc.location.clone(),
                 TestFixture::default_table_schema(),
                 false,
             )

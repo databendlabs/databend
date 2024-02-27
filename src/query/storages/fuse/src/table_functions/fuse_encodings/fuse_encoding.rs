@@ -97,8 +97,10 @@ impl<'a> FuseEncoding<'a> {
             let schema = table.schema();
             let fields = schema.fields();
             for chunk in snapshot.segments.chunks(chunk_size) {
+                // TODO
+                let locations = chunk.iter().map(|v| v.location.clone()).collect::<Vec<_>>();
                 let segments = segments_io
-                    .read_segments::<SegmentInfo>(chunk, false)
+                    .read_segments::<SegmentInfo>(&locations, false)
                     .await?;
                 for segment in segments {
                     let segment = segment?;

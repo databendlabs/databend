@@ -37,7 +37,7 @@ use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransforme
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache_manager::CachedObject;
-use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentDescriptor;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -287,7 +287,7 @@ impl FuseTable {
         &self,
         ctx: &Arc<dyn TableContext>,
         base_snapshot: Arc<TableSnapshot>,
-        base_segments: &[Location],
+        base_segments: &[SegmentDescriptor],
         base_summary: Statistics,
         abort_operation: AbortOperation,
         max_retry_elapsed: Option<Duration>,
@@ -303,7 +303,7 @@ impl FuseTable {
         let mut latest_table_ref: Arc<dyn Table>;
 
         // potentially concurrently appended segments, init it to empty
-        let mut concurrently_appended_segment_locations: &[Location] = &[];
+        let mut concurrently_appended_segment_locations: &[SegmentDescriptor] = &[];
 
         // Status
         ctx.set_status_info("mutation: begin try to commit");
@@ -422,12 +422,12 @@ impl FuseTable {
     async fn merge_with_base(
         ctx: Arc<dyn TableContext>,
         operator: Operator,
-        base_segments: &[Location],
+        base_segments: &[SegmentDescriptor],
         base_summary: &Statistics,
-        concurrently_appended_segment_locations: &[Location],
+        concurrently_appended_segment_locations: &[SegmentDescriptor],
         schema: TableSchemaRef,
         default_cluster_key_id: Option<u32>,
-    ) -> Result<(Vec<Location>, Statistics)> {
+    ) -> Result<(Vec<SegmentDescriptor>, Statistics)> {
         if concurrently_appended_segment_locations.is_empty() {
             Ok((base_segments.to_owned(), base_summary.clone()))
         } else {
@@ -439,8 +439,13 @@ impl FuseTable {
                 .collect();
 
             let fuse_segment_io = SegmentsIO::create(ctx, operator, schema);
+            // TODO
+            let locations = concurrently_appended_segment_locations
+                .iter()
+                .map(|v| v.location.clone())
+                .collect::<Vec<_>>();
             let concurrent_appended_segment_infos = fuse_segment_io
-                .read_segments::<SegmentInfo>(concurrently_appended_segment_locations, true)
+                .read_segments::<SegmentInfo>(&locations, true)
                 .await?;
 
             let mut new_statistics = base_summary.clone();
