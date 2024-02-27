@@ -233,15 +233,17 @@ impl Processor for ReadParquetDataSource<false> {
 
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
-            let mut filters = self
-                .partitions
-                .ctx
-                .get_inlist_runtime_filter_with_id(self.table_index);
+            // do min-max filter firstly.
             filters.extend(
                 self.partitions
                     .ctx
                     .get_min_max_runtime_filter_with_id(self.table_index),
             );
+            let mut filters = self
+                .partitions
+                .ctx
+                .get_inlist_runtime_filter_with_id(self.table_index);
+
             let mut fuse_part_infos = Vec::with_capacity(parts.len());
             for part in parts.into_iter() {
                 if runtime_filter_pruner(
