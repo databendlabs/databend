@@ -53,7 +53,7 @@ statement ok
 CREATE OR REPLACE STAGE replace_test_stage_huggingface url='hf://opendal/huggingface-testdata/'
 
 query I
-select count(*) > 0 from replace_test_stage_huggingface;
+select count(*) > 0 from @replace_test_stage_huggingface;
 ----
 1
 
