@@ -91,7 +91,7 @@ impl HashTableConfig {
     pub fn with_partial(mut self, partial_agg: bool, active_threads: usize) -> Self {
         self.partial_agg = partial_agg;
 
-        if active_threads <= 0 {
+        if active_threads == 0 {
             return self;
         }
 

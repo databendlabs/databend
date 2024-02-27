@@ -145,12 +145,20 @@ fn scatter<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
 }
 
 // TODO: buckets and partitions have a relationship of integer division
-fn agg_hashtable_scatter(payload: PartitionedPayload, buckets: usize) -> Result<Vec<AggregateHashTable>> {
+#[allow(dead_code)]
+fn agg_hashtable_scatter(
+    payload: PartitionedPayload,
+    buckets: usize,
+) -> Result<Vec<AggregateHashTable>> {
     let mut buckets = Vec::with_capacity(buckets);
 
     for _ in 0..buckets.capacity() {
         let config = HashTableConfig::default().with_partial(true, 0);
-        buckets.push(AggregateHashTable::new(payload.group_types.clone(), payload.aggrs.clone(), config));
+        buckets.push(AggregateHashTable::new(
+            payload.group_types.clone(),
+            payload.aggrs.clone(),
+            config,
+        ));
     }
 
     let mut state = PayloadFlushState::default();

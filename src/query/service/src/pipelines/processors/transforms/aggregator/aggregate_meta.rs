@@ -77,12 +77,18 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
         }))
     }
 
-    pub fn create_agg_payload(bucket: isize, payload: Payload, max_partition_count: usize) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::<Method, V>::AggregatePayload(AggregatePayload {
-            bucket,
-            payload,
-            max_partition_count,
-        }))
+    pub fn create_agg_payload(
+        bucket: isize,
+        payload: Payload,
+        max_partition_count: usize,
+    ) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::AggregatePayload(
+            AggregatePayload {
+                bucket,
+                payload,
+                max_partition_count,
+            },
+        ))
     }
 
     pub fn create_agg_hashtable(payload: PartitionedPayload) -> BlockMetaInfoPtr {
