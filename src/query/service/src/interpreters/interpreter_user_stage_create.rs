@@ -84,7 +84,10 @@ impl Interpreter for CreateUserStageInterpreter {
 
         // when create or replace stage, if old stage is not External stage, remove stage files
         if let CreateOption::CreateOrReplace = plan.create_option {
-            if let Ok(stage) = user_mgr.get_stage(&user_stage.stage_name).await {
+            if let Ok(stage) = user_mgr
+                .get_stage(&plan.tenant, &user_stage.stage_name)
+                .await
+            {
                 if stage.stage_type != StageType::External {
                     let op = StageTable::get_op(&stage)?;
                     op.remove_all("/").await?;
@@ -106,7 +109,7 @@ impl Interpreter for CreateUserStageInterpreter {
         user_stage.creator = Some(self.ctx.get_current_user()?.identity());
         user_stage.created_on = Utc::now();
         let _ = user_mgr
-            .add_stage(&plan.tenant, user_stage.clone(), &plan.create_option)
+            .add_stage(&plan.tenant, user_stage, &plan.create_option)
             .await?;
 
         // Grant ownership as the current role
