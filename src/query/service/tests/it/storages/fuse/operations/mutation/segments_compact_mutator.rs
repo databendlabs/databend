@@ -159,7 +159,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let latest = table.refresh(ctx.as_ref()).await?;
     let latest_fuse_table = FuseTable::try_from_table(latest.as_ref())?;
     let table_statistics = latest_fuse_table
-        .table_statistics(ctx.clone())
+        .table_statistics(ctx.clone(), None)
         .await?
         .unwrap();
 

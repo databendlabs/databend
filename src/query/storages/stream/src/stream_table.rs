@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -52,6 +53,7 @@ use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::operations::collect_incremental_blocks;
 use databend_common_storages_fuse::pruning::FusePruner;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
@@ -332,6 +334,44 @@ impl Table for StreamTable {
         ]
     }
 
+    #[async_backtrace::framed]
+    async fn get_stream_mode(&self, ctx: Arc<dyn TableContext>) -> Result<StreamMode> {
+        match self.mode {
+            StreamMode::AppendOnly => Ok(StreamMode::AppendOnly),
+            StreamMode::Standard => {
+                if self.snapshot_location.is_none() {
+                    return Ok(StreamMode::AppendOnly);
+                }
+
+                let table = self.source_table(ctx.get_default_catalog()?).await?;
+                let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+                let latest_snapshot = fuse_table.read_table_snapshot().await?;
+                if latest_snapshot.is_none() {
+                    return Ok(StreamMode::Standard);
+                }
+                let latest_snapshot = latest_snapshot.unwrap();
+                let latest_segments: HashSet<&Location> =
+                    HashSet::from_iter(&latest_snapshot.segments);
+
+                let (base_snapshot, _) = SnapshotsIO::read_snapshot(
+                    self.snapshot_location.clone().unwrap(),
+                    fuse_table.get_operator(),
+                )
+                .await?;
+                let base_segments = HashSet::from_iter(&base_snapshot.segments);
+
+                // If the base segments are a subset of the latest segments,
+                // then the stream is treated as append only.
+                if base_segments.is_subset(&latest_segments) {
+                    Ok(StreamMode::AppendOnly)
+                } else {
+                    Ok(StreamMode::Standard)
+                }
+            }
+        }
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn read_partitions(
@@ -362,15 +402,11 @@ impl Table for StreamTable {
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
+        change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         let table = self.source_table(ctx.get_default_catalog()?).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-        let latest_summary = if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
-            snapshot.summary.clone()
-        } else {
-            return Ok(None);
-        };
+        let change_type = change_type.unwrap_or(ChangeType::Append);
 
         let base_summary = if let Some(snapshot_location) = &self.snapshot_location {
             let (base_snapshot, _) =
@@ -378,7 +414,13 @@ impl Table for StreamTable {
                     .await?;
             base_snapshot.summary.clone()
         } else {
-            return fuse_table.table_statistics(ctx).await;
+            return fuse_table.table_statistics(ctx, None).await;
+        };
+
+        let latest_summary = if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
+            snapshot.summary.clone()
+        } else {
+            return Ok(None);
         };
 
         let num_rows = latest_summary.row_count.abs_diff(base_summary.row_count);
@@ -392,15 +434,50 @@ impl Table for StreamTable {
         let number_of_blocks = latest_summary
             .block_count
             .abs_diff(base_summary.block_count);
+        let max_stats = || {
+            Some(TableStatistics {
+                num_rows: Some(num_rows),
+                data_size: Some(data_size),
+                data_size_compressed: Some(data_size_compressed),
+                index_size: Some(index_size),
+                number_of_blocks: Some(number_of_blocks),
+                number_of_segments: None,
+            })
+        };
+        // The following statistics are predicted, which may have a large bias;
+        // mainly used to determine the join order
+        let min_stats = || {
+            Some(TableStatistics {
+                num_rows: Some(num_rows / 2),
+                data_size: Some(data_size / 2),
+                data_size_compressed: Some(data_size_compressed / 2),
+                index_size: Some(index_size / 2),
+                number_of_blocks: Some(number_of_blocks / 2),
+                number_of_segments: None,
+            })
+        };
 
-        Ok(Some(TableStatistics {
-            num_rows: Some(num_rows),
-            data_size: Some(data_size),
-            data_size_compressed: Some(data_size_compressed),
-            index_size: Some(index_size),
-            number_of_blocks: Some(number_of_blocks),
-            number_of_segments: None,
-        }))
+        match change_type {
+            ChangeType::Append => Ok(max_stats()),
+            ChangeType::Insert => {
+                // If the number of rows is greater than the base,
+                // it means that the insertion is more than the deletion.
+                if latest_summary.row_count > base_summary.row_count {
+                    Ok(max_stats())
+                } else {
+                    Ok(min_stats())
+                }
+            }
+            ChangeType::Delete => {
+                // If the number of rows is less than the base,
+                // it means that the deletion is more than the insertion.
+                if latest_summary.row_count < base_summary.row_count {
+                    Ok(max_stats())
+                } else {
+                    Ok(min_stats())
+                }
+            }
+        }
     }
 
     #[async_backtrace::framed]

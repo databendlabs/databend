@@ -48,6 +48,7 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storage::ColumnNodes;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
+use databend_storages_common_table_meta::table::ChangeType;
 use opendal::Operator;
 
 use crate::parquet2::parquet_table::table::pread::FileMetaData;
@@ -118,6 +119,7 @@ impl Table for Parquet2Table {
     async fn table_statistics(
         &self,
         _ctx: Arc<dyn TableContext>,
+        _change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         let s = &self.table_info.meta.statistics;
         Ok(Some(TableStatistics {
