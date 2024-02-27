@@ -58,3 +58,25 @@ impl std::fmt::Display for StreamMode {
         })
     }
 }
+
+pub fn get_change_type(table_alias_name: &Option<String>) -> Option<ChangeType> {
+    let mut change_type = None;
+    if let Some(table_alias) = table_alias_name {
+        let alias_param = table_alias.split('$').collect::<Vec<_>>();
+        if alias_param.len() == 2 && alias_param[1].len() == 8 {
+            if let Ok(suffix) = i64::from_str_radix(alias_param[1], 16) {
+                // 2023-01-01 00:00:00.
+                let base_timestamp = 1672502400;
+                if suffix > base_timestamp {
+                    change_type = match alias_param[0] {
+                        "_change_append" => Some(ChangeType::Append),
+                        "_change_insert" => Some(ChangeType::Insert),
+                        "_change_delete" => Some(ChangeType::Delete),
+                        _ => None,
+                    };
+                }
+            }
+        }
+    }
+    change_type
+}

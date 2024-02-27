@@ -306,7 +306,7 @@ where TablesTable<T>: HistoryAware
         let mut index_size: Vec<Option<u64>> = Vec::new();
 
         for tbl in &database_tables {
-            let stats = match tbl.table_statistics(ctx.clone()).await {
+            let stats = match tbl.table_statistics(ctx.clone(), None).await {
                 Ok(stats) => stats,
                 Err(err) => {
                     let msg = format!(
