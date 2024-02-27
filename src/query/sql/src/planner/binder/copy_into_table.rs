@@ -48,6 +48,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
@@ -222,10 +223,21 @@ impl<'a> Binder {
             resolve_stage_location(self.ctx.as_ref(), &attachment.location[1..]).await?;
 
         if let Some(ref options) = attachment.file_format_options {
-            stage_info.file_format_params = FileFormatOptionsAst {
+            let mut params = FileFormatOptionsAst {
                 options: options.clone(),
             }
             .try_into()?;
+            if let FileFormatParams::Csv(ref mut fmt) = &mut params {
+                // TODO: remove this after 1. the old server is no longer supported 2. Driver add the option "EmptyFieldAs=FieldDefault"
+                // CSV attachment is mainly used in Drivers for insert.
+                // In the future, client should use EmptyFieldAs=STRING or FieldDefault to distinguish NULL and empty string.
+                // However, old server does not support `empty_field_as`, so client can not add the option directly at now.
+                // So we will get empty_field_as = NULL, which will raise error if there is empty string for non-nullable string field.
+                if fmt.empty_field_as == EmptyFieldAs::Null {
+                    fmt.empty_field_as = EmptyFieldAs::FieldDefault;
+                }
+            }
+            stage_info.file_format_params = params;
         }
         if let Some(ref options) = attachment.copy_options {
             stage_info.copy_options.apply(options, true)?;
