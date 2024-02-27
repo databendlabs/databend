@@ -103,17 +103,20 @@ impl SnapshotVersion {
 }
 
 impl Versioned<0> for v1::TableSnapshotStatistics {}
+impl Versioned<2> for v2::TableSnapshotStatistics {}
 
 impl Versioned<2> for DataBlock {}
 
 pub enum TableSnapshotStatisticsVersion {
     V0(PhantomData<v1::TableSnapshotStatistics>),
+    V2(PhantomData<v2::TableSnapshotStatistics>),
 }
 
 impl TableSnapshotStatisticsVersion {
     pub fn version(&self) -> u64 {
         match self {
             TableSnapshotStatisticsVersion::V0(a) => Self::ver(a),
+            TableSnapshotStatisticsVersion::V2(a) => Self::ver(a),
         }
     }
 
@@ -174,6 +177,9 @@ mod converters {
         fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
                 0 => Ok(TableSnapshotStatisticsVersion::V0(testify_version::<_, 0>(
+                    PhantomData,
+                ))),
+                2 => Ok(TableSnapshotStatisticsVersion::V2(testify_version::<_, 2>(
                     PhantomData,
                 ))),
                 _ => Err(ErrorCode::Internal(format!(

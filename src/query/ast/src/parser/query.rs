@@ -627,6 +627,7 @@ pub enum TableReferenceElement {
         table: Identifier,
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
+        since_point: Option<TimeTravelPoint>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
@@ -685,15 +686,16 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ (AT ~ ^#travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
+            #dot_separated_idents_1_to_3 ~ (AT ~ ^#travel_point)?  ~ (SINCE ~ ^#travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
-        |((catalog, database, table), travel_point_opt, alias, pivot, unpivot)| {
+        |((catalog, database, table), travel_point_opt, since_point_opt, alias, pivot, unpivot)| {
             TableReferenceElement::Table {
                 catalog,
                 database,
                 table,
                 alias,
                 travel_point: travel_point_opt.map(|p| p.1),
+                since_point: since_point_opt.map(|p| p.1),
                 pivot: pivot.map(Box::new),
                 unpivot: unpivot.map(Box::new),
             }
@@ -804,6 +806,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 travel_point,
+                since_point,
                 pivot,
                 unpivot,
             } => TableReference::Table {
@@ -813,6 +816,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 travel_point,
+                since_point,
                 pivot,
                 unpivot,
             },

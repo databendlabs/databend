@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -36,13 +37,17 @@ use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::Location;
 use log::debug;
 use log::info;
 use opendal::Operator;
 use sha2::Digest;
 use sha2::Sha256;
 
+use super::collect_incremental_blocks;
 use crate::fuse_part::FusePartInfo;
+use crate::io::SegmentsIO;
+use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::FuseLazyPartInfo;
@@ -76,6 +81,16 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
+                if let Some(c) = &self.since_table {
+                    return self
+                        .do_read_increment_partitions(
+                            ctx,
+                            push_downs.clone(),
+                            &c.snapshot_loc().await?,
+                        )
+                        .await;
+                }
+
                 if (!dry_run && snapshot.segments.len() > nodes_num) || is_lazy {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
@@ -97,14 +112,8 @@ impl FuseTable {
                 let snapshot_loc = Some(snapshot_loc);
                 let table_schema = self.schema_with_stream();
                 let summary = snapshot.summary.block_count as usize;
-                let mut segments_location = Vec::with_capacity(snapshot.segments.len());
-                for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                    segments_location.push(SegmentLocation {
-                        segment_idx: idx,
-                        location: segment_location.clone(),
-                        snapshot_loc: snapshot_loc.clone(),
-                    });
-                }
+                let segments_location =
+                    create_segment_location_vector(snapshot.segments.clone(), snapshot_loc);
 
                 self.prune_snapshot_blocks(
                     ctx.clone(),
@@ -118,6 +127,69 @@ impl FuseTable {
             }
             None => Ok((PartStatistics::default(), Partitions::default())),
         }
+    }
+
+    async fn do_read_increment_partitions(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        base_snapshot: &Option<String>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        let fuse_segment_io = SegmentsIO::create(ctx.clone(), self.get_operator(), self.schema());
+        let latest_snapshot = self.snapshot_loc().await?;
+
+        let (increment_segments, _, add_blocks) = collect_incremental_blocks(
+            ctx.clone(),
+            fuse_segment_io,
+            self.get_operator(),
+            &latest_snapshot,
+            base_snapshot,
+        )
+        .await?;
+
+        let table_schema = self.schema_with_stream();
+        let segments_location = create_segment_location_vector(increment_segments, None);
+
+        let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
+            FusePruner::create(
+                &ctx,
+                self.operator.clone(),
+                table_schema.clone(),
+                &push_downs,
+                self.bloom_index_cols(),
+            )?
+        } else {
+            let cluster_keys = self.cluster_keys(ctx.clone());
+            FusePruner::create_with_pages(
+                &ctx,
+                self.operator.clone(),
+                table_schema,
+                &push_downs,
+                self.cluster_key_meta.clone(),
+                cluster_keys,
+                self.bloom_index_cols(),
+            )?
+        };
+
+        let block_metas = pruner.read_pruning(segments_location).await?;
+        let pruning_stats = pruner.pruning_stats();
+        let add_blocks: HashSet<Location> = add_blocks.iter().map(|b| b.location.clone()).collect();
+        let block_metas = block_metas
+            .into_iter()
+            .filter(|(_, block_meta)| add_blocks.contains(&block_meta.location))
+            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
+            .collect::<Vec<_>>();
+
+        let (stats, parts) = self.read_partitions_with_metas(
+            ctx.clone(),
+            self.schema(),
+            None,
+            &block_metas,
+            block_metas.len(),
+            pruning_stats,
+        )?;
+
+        Ok((stats, parts))
     }
 
     #[minitrace::trace]

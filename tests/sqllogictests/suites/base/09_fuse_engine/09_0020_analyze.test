@@ -74,7 +74,7 @@ analyze table `t`
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,6);
+(0,3);
 
 statement ok
 optimize table t compact
@@ -87,7 +87,7 @@ select segment_count,block_count from fuse_snapshot('db_09_0020', 't') limit 1
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,6);
+(0,3);
 
 statement ok
 analyze table `t`
@@ -111,7 +111,7 @@ analyze table `t`
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,2);
+(0,3);
 
 statement ok
 DROP TABLE t

@@ -23,8 +23,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::borsh_deserialize_from_stream;
-use databend_common_io::prelude::borsh_serialize_into_buf;
 
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
@@ -160,10 +158,11 @@ pub fn borsh_serialize_state<W: std::io::Write, T: BorshSerialize>(
     writer: &mut W,
     value: &T,
 ) -> Result<()> {
-    borsh_serialize_into_buf(writer, value)
+    borsh::to_writer(writer, value)?;
+    Ok(())
 }
 
 #[inline]
 pub fn borsh_deserialize_state<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
-    borsh_deserialize_from_stream(slice)
+    Ok(T::deserialize(slice)?)
 }
