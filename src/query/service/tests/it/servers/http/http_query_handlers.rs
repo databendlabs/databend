@@ -1445,6 +1445,9 @@ async fn test_affect() -> Result<()> {
                     ("max_threads".to_string(), "1".to_string()),
                     ("timezone".to_string(), "Asia/Shanghai".to_string()),
                 ])),
+                txn_state: None,
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
         (
@@ -1464,6 +1467,9 @@ async fn test_affect() -> Result<()> {
                     "max_threads".to_string(),
                     "6".to_string(),
                 )])),
+                txn_state: None,
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
         (
@@ -1478,6 +1484,9 @@ async fn test_affect() -> Result<()> {
                     "max_threads".to_string(),
                     "6".to_string(),
                 )])),
+                txn_state: None,
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
         (
@@ -1494,6 +1503,9 @@ async fn test_affect() -> Result<()> {
                     "max_threads".to_string(),
                     "6".to_string(),
                 )])),
+                txn_state: None,
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
         (
@@ -1512,6 +1524,9 @@ async fn test_affect() -> Result<()> {
                     "timezone".to_string(),
                     "Asia/Shanghai".to_string(),
                 )])),
+                txn_state: None,
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
     ];
