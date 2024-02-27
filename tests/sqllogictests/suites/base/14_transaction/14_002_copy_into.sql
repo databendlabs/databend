@@ -12,7 +12,7 @@ statement ok
 CREATE TABLE t(c int);
 
 statement ok
-insert into t values (1);
+insert into t values (1478);
 
 statement ok
 DROP STAGE IF EXISTS s_txn_copy;
@@ -30,13 +30,18 @@ onlyif mysql
 statement ok
 begin;
 
+query I
+select * from @s_txn_copy;
+----
+1478
+
 statement ok
 copy into t1 from @s_txn_copy;
 
 query I
 select * from t1;
 ----
-1
+1478
 
 statement ok
 copy into t1 from @s_txn_copy;
@@ -44,7 +49,7 @@ copy into t1 from @s_txn_copy;
 query I
 select * from t1;
 ----
-1
+1478
 
 onlyif mysql
 statement ok
@@ -53,7 +58,7 @@ commit;
 query I
 select * from t1;
 ----
-1
+1478
 
 statement ok
 copy into t1 from @s_txn_copy;
@@ -61,7 +66,7 @@ copy into t1 from @s_txn_copy;
 query I
 select * from t1;
 ----
-1
+1478
 
 #################################################################################################################
 # test when txn is aborted, the stage files are not purged
@@ -77,7 +82,7 @@ statement ok
 CREATE TABLE t(c int);
 
 statement ok
-insert into t values (1);
+insert into t values (1478);
 
 statement ok
 DROP STAGE IF EXISTS s_txn_copy;
@@ -120,5 +125,5 @@ select count(*) from t1;
 query I
 select * from @s_txn_copy;
 ----
-1
+1478
 
