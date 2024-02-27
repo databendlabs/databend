@@ -16,6 +16,13 @@ runs:
   using: "composite"
   steps:
     - name: Setup Build Tool
+      if: endsWith(inputs.target, '-linux-gnu')
+      uses: ./.github/actions/setup_build_tool
+      with:
+        target: base
+        bypass_env_vars: RUSTFLAGS,RUST_LOG
+    - name: Setup Build Tool
+      if: endsWith(inputs.target, '-linux-musl')
       uses: ./.github/actions/setup_build_tool
       with:
         target: ${{ inputs.target }}
