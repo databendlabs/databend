@@ -158,7 +158,7 @@ impl Interpreter for ExplainInterpreter {
                 }
                 Plan::MergeInto(plan) => {
                     self.explain_analyze(
-                        &*plan.input,
+                        &plan.input,
                         &plan.meta_data,
                         *plan.columns_set.clone(),
                         true,
