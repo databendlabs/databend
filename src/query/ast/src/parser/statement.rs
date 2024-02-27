@@ -642,9 +642,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let describe_table = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ #dot_separated_idents_1_to_3
+            ( DESC | DESCRIBE ) ~ TABLE? ~ #dot_separated_idents_1_to_3
         },
-        |(_, (catalog, database, table))| {
+        |(_, _, (catalog, database, table))| {
             Statement::DescribeTable(DescribeTableStmt {
                 catalog,
                 database,
@@ -3471,6 +3471,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
                 columns: vec![],
             }),
             travel_point: None,
+            since_point: None,
             pivot: None,
             unpivot: None,
         },
@@ -3489,6 +3490,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             table,
             alias: None,
             travel_point: None,
+            since_point: None,
             pivot: None,
             unpivot: None,
         },

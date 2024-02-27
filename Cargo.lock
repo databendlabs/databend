@@ -4559,6 +4559,7 @@ dependencies = [
  "rmp-serde",
  "serde",
  "serde_json",
+ "simple_hll",
  "snap",
  "typetag",
  "zstd",

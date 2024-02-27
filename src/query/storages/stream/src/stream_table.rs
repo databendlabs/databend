@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -51,10 +49,9 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::SnapshotsIO;
+use databend_common_storages_fuse::operations::collect_incremental_blocks;
 use databend_common_storages_fuse::pruning::FusePruner;
 use databend_common_storages_fuse::FuseTable;
-use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
@@ -186,73 +183,6 @@ impl StreamTable {
         &self.table_database
     }
 
-    async fn collect_incremental_blocks(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        fuse_table: &FuseTable,
-    ) -> Result<(Vec<Arc<BlockMeta>>, Vec<Arc<BlockMeta>>)> {
-        let operator = fuse_table.get_operator();
-        let latest_segments = if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
-            HashSet::from_iter(snapshot.segments.clone())
-        } else {
-            HashSet::new()
-        };
-
-        let base_segments = if let Some(snapshot_location) = &self.snapshot_location {
-            let (base_snapshot, _) =
-                SnapshotsIO::read_snapshot(snapshot_location.clone(), operator.clone()).await?;
-            HashSet::from_iter(base_snapshot.segments.clone())
-        } else {
-            HashSet::new()
-        };
-
-        let fuse_segment_io =
-            SegmentsIO::create(ctx.clone(), operator.clone(), fuse_table.schema());
-        let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
-
-        let mut base_blocks = HashMap::new();
-        let diff_in_base = base_segments
-            .difference(&latest_segments)
-            .cloned()
-            .collect::<Vec<_>>();
-        for chunk in diff_in_base.chunks(chunk_size) {
-            let segments = fuse_segment_io
-                .read_segments::<SegmentInfo>(chunk, true)
-                .await?;
-            for segment in segments {
-                let segment = segment?;
-                segment.blocks.into_iter().for_each(|block| {
-                    base_blocks.insert(block.location.clone(), block);
-                })
-            }
-        }
-
-        let mut add_blocks = Vec::new();
-        let diff_in_latest = latest_segments
-            .difference(&base_segments)
-            .cloned()
-            .collect::<Vec<_>>();
-        for chunk in diff_in_latest.chunks(chunk_size) {
-            let segments = fuse_segment_io
-                .read_segments::<SegmentInfo>(chunk, true)
-                .await?;
-
-            for segment in segments {
-                let segment = segment?;
-                segment.blocks.into_iter().for_each(|block| {
-                    if base_blocks.contains_key(&block.location) {
-                        base_blocks.remove(&block.location);
-                    } else {
-                        add_blocks.push(block);
-                    }
-                });
-            }
-        }
-
-        let del_blocks = base_blocks.into_values().collect::<Vec<_>>();
-        Ok((del_blocks, add_blocks))
-    }
-
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,
@@ -263,9 +193,18 @@ impl StreamTable {
         let table = self.source_table(ctx.get_default_catalog()?).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-        let (del_blocks, add_blocks) = self
-            .collect_incremental_blocks(ctx.clone(), fuse_table)
-            .await?;
+        let fuse_segment_io =
+            SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), self.schema());
+
+        let latest_snapshot = fuse_table.snapshot_loc().await?;
+        let (_, del_blocks, add_blocks) = collect_incremental_blocks(
+            ctx.clone(),
+            fuse_segment_io,
+            fuse_table.get_operator(),
+            &latest_snapshot,
+            &self.snapshot_location,
+        )
+        .await?;
 
         let change_type = push_downs.as_ref().map_or(ChangeType::Append, |v| {
             v.change_type.clone().unwrap_or(ChangeType::Append)

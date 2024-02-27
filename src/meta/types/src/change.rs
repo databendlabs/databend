@@ -113,6 +113,21 @@ where
         // result could be None if it expired.
         Ok(result.seq())
     }
+
+    /// Assumes it is a state transition of a remove operation and return Ok if the succeeded.
+    /// Otherwise it returns an error that is built by provided function with the `prev` value as argument.
+    ///
+    /// Note that a success remove has a Some `prev`, and a None `result`.
+    pub fn removed_or_else<F, E>(self, make_err: F) -> Result<SeqV<T>, E>
+    where F: FnOnce(Option<SeqV<T>>) -> E {
+        let (prev, result) = self.unpack();
+        if result.is_none() {
+            if let Some(p) = prev {
+                return Ok(p);
+            }
+        }
+        Err(make_err(prev))
+    }
 }
 
 impl<T, ID> Display for Change<T, ID>

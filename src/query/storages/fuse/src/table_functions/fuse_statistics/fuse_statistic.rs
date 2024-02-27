@@ -61,7 +61,7 @@ impl<'a> FuseStatistic<'a> {
         let mut col_ndvs: Vec<String> = Vec::with_capacity(1);
         if let Some(table_statistics) = table_statistics {
             let mut ndvs: String = "".to_string();
-            for (i, n) in table_statistics.column_distinct_values.iter() {
+            for (i, n) in table_statistics.column_distinct_values().iter() {
                 ndvs.push_str(&format!("({},{});", *i, *n));
             }
             col_ndvs.push(ndvs);

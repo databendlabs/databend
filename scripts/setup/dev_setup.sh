@@ -206,6 +206,7 @@ function install_protobuf {
 		;;
 	*)
 		arch=$(uname -m)
+		arch=${arch/aarch64/aarch_64}
 		PB_REL="https://github.com/protocolbuffers/protobuf/releases"
 		curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-${arch}.zip
 		unzip protoc-3.15.8-linux-${arch}.zip -d protoc-3.15.8

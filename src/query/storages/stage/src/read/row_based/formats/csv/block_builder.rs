@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -83,8 +84,20 @@ impl CsvDecoder {
                             }
                             builder.push_default();
                         }
-                        EmptyFieldAs::String => {
-                            if !matches!(field.data_type.remove_nullable(), TableDataType::String) {
+                        EmptyFieldAs::String => match builder {
+                            ColumnBuilder::String(b) => {
+                                b.put_str("");
+                                b.commit_row();
+                            }
+                            ColumnBuilder::Nullable(box NullableColumnBuilder {
+                                builder: ColumnBuilder::String(b),
+                                validity,
+                            }) => {
+                                b.put_str("");
+                                b.commit_row();
+                                validity.push(true);
+                            }
+                            _ => {
                                 let field = &self.load_context.schema.fields()[column_index];
                                 return Err(FileParseError::ColumnEmptyError {
                                     column_index,
@@ -95,9 +108,7 @@ impl CsvDecoder {
                                         .to_string(),
                                 });
                             }
-
-                            builder.push_default();
-                        }
+                        },
                     }
                 }
             }

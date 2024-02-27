@@ -2925,6 +2925,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 table,
                 alias,
                 travel_point,
+                since_point,
                 pivot,
                 unpivot,
             } => {
@@ -2952,6 +2953,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
                 let mut children = Vec::new();
                 if let Some(travel_point) = travel_point {
+                    self.visit_time_travel_point(travel_point);
+                    children.push(self.children.pop().unwrap());
+                }
+
+                if let Some(travel_point) = since_point {
                     self.visit_time_travel_point(travel_point);
                     children.push(self.children.pop().unwrap());
                 }

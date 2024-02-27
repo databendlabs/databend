@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(impl_trait_in_assoc_type)]
+#![feature(box_patterns)]
 #![allow(clippy::uninlined_format_args)]
 
 mod append;
