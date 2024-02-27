@@ -22,15 +22,7 @@ ontime_200.csv
 === Test create or replace external stage ===
 === List files in external stage ===
 dir/ontime_200.csv
-dir/ontime_200.csv.gz
-dir/ontime_200.csv.zst
 ontime_200.csv
-ontime_200.csv.gz
-ontime_200.csv.zst
 === After create or replace List files in external stage again ===
 dir/ontime_200.csv
-dir/ontime_200.csv.gz
-dir/ontime_200.csv.zst
 ontime_200.csv
-ontime_200.csv.gz
-ontime_200.csv.zst
