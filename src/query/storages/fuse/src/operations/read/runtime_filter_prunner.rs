@@ -61,6 +61,7 @@ pub fn runtime_filter_pruner(
         if let Some(stats) = &part.columns_stat {
             let column_ids = table_schema.leaf_columns_of(name);
             if column_ids.len() != 1 {
+                info!("cloumns ids len is not 1 for {}", name);
                 return false;
             }
             debug_assert!(column_ids.len() == 1);
@@ -79,10 +80,14 @@ pub fn runtime_filter_pruner(
                     func_ctx,
                     &BUILTIN_FUNCTIONS,
                 );
-                return matches!(new_expr, Expr::Constant {
+                let res = matches!(new_expr, Expr::Constant {
                     scalar: Scalar::Boolean(false),
                     ..
                 });
+                if res {
+                    info!("pruned by name {}", name);
+                }
+                return res;
             }
         }
         false
