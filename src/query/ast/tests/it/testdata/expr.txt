@@ -228,22 +228,14 @@ Literal {
 ---------- Input ----------
 $$ab123c$$
 ---------- Output ---------
-$$ab123c$$
+'ab123c'
 ---------- AST ------------
-ColumnRef {
+Literal {
     span: Some(
         0..10,
     ),
-    database: None,
-    table: None,
-    column: Name(
-        Identifier {
-            name: "$$ab123c$$",
-            quote: None,
-            span: Some(
-                0..10,
-            ),
-        },
+    lit: String(
+        "ab123c",
     ),
 }
 

@@ -2163,6 +2163,42 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     AstFormatContext::new(format!("UdfServerAddress {address}"));
                 children.push(FormatTreeNode::new(address_format_ctx));
             }
+            UDFDefinition::UDFInterpreter {
+                arg_types,
+                return_type,
+                code,
+                handler,
+                language,
+            } => {
+                if !arg_types.is_empty() {
+                    let mut arg_types_children = Vec::with_capacity(arg_types.len());
+                    for arg_type in arg_types.iter() {
+                        let type_format_ctx = AstFormatContext::new(format!("DataType {arg_type}"));
+                        arg_types_children.push(FormatTreeNode::new(type_format_ctx));
+                    }
+                    let arg_format_ctx = AstFormatContext::with_children(
+                        "UdfArgTypes".to_string(),
+                        arg_types_children.len(),
+                    );
+                    children.push(FormatTreeNode::with_children(
+                        arg_format_ctx,
+                        arg_types_children,
+                    ));
+                }
+
+                let return_type_format_ctx =
+                    AstFormatContext::new(format!("UdfReturnType {return_type}"));
+                children.push(FormatTreeNode::new(return_type_format_ctx));
+
+                let handler_format_ctx = AstFormatContext::new(format!("UdfHandler {handler}"));
+                children.push(FormatTreeNode::new(handler_format_ctx));
+
+                let language_format_ctx = AstFormatContext::new(format!("UdfLanguage {language}"));
+                children.push(FormatTreeNode::new(language_format_ctx));
+
+                let address_format_ctx = AstFormatContext::new(format!("UdfCode {code}"));
+                children.push(FormatTreeNode::new(address_format_ctx));
+            }
         }
 
         if let Some(description) = &stmt.description {
@@ -2257,6 +2293,43 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
                 let address_format_ctx =
                     AstFormatContext::new(format!("UdfServerAddress {address}"));
+                children.push(FormatTreeNode::new(address_format_ctx));
+            }
+
+            UDFDefinition::UDFInterpreter {
+                arg_types,
+                return_type,
+                code,
+                handler,
+                language,
+            } => {
+                if !arg_types.is_empty() {
+                    let mut arg_types_children = Vec::with_capacity(arg_types.len());
+                    for arg_type in arg_types.iter() {
+                        let type_format_ctx = AstFormatContext::new(format!("DataType {arg_type}"));
+                        arg_types_children.push(FormatTreeNode::new(type_format_ctx));
+                    }
+                    let arg_format_ctx = AstFormatContext::with_children(
+                        "UdfArgTypes".to_string(),
+                        arg_types_children.len(),
+                    );
+                    children.push(FormatTreeNode::with_children(
+                        arg_format_ctx,
+                        arg_types_children,
+                    ));
+                }
+
+                let return_type_format_ctx =
+                    AstFormatContext::new(format!("UdfReturnType {return_type}"));
+                children.push(FormatTreeNode::new(return_type_format_ctx));
+
+                let handler_format_ctx = AstFormatContext::new(format!("UdfHandler {handler}"));
+                children.push(FormatTreeNode::new(handler_format_ctx));
+
+                let language_format_ctx = AstFormatContext::new(format!("UdfLanguage {language}"));
+                children.push(FormatTreeNode::new(language_format_ctx));
+
+                let address_format_ctx = AstFormatContext::new(format!("UdfCode {code}"));
                 children.push(FormatTreeNode::new(address_format_ctx));
             }
         }
