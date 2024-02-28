@@ -16320,6 +16320,50 @@ CreateUDF(
 
 
 ---------- Input ----------
+create or replace function addone(int)
+returns int
+language python
+handler = 'addone_py'
+as
+$$
+def addone_py(i):
+  return i+1
+$$;
+---------- Output ---------
+CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = addone_py AS $$
+def addone_py(i):
+  return i+1
+$$
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateOrReplace,
+        udf_name: Identifier {
+            name: "addone",
+            quote: None,
+            span: Some(
+                27..33,
+            ),
+        },
+        description: None,
+        definition: UDFInterpreter {
+            arg_types: [
+                Nullable(
+                    Int32,
+                ),
+            ],
+            return_type: Nullable(
+                Int32,
+            ),
+            code: "\ndef addone_py(i):\n  return i+1\n",
+            handler: "addone_py",
+            language: "python",
+        },
+    },
+)
+
+
+---------- Input ----------
 DROP FUNCTION binary_reverse;
 ---------- Output ---------
 DROP FUNCTION binary_reverse
