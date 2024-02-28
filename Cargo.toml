@@ -186,19 +186,19 @@ anyhow = { version = "1.0.65" }
 thiserror = { version = "1" }
 
 # Crates from arrow-rs
-arrow = { version = "50" }
-arrow-array = { version = "50" }
-arrow-buffer = { version = "50" }
-arrow-cast = { version = "50", features = ["prettyprint"] }
-arrow-data = { version = "50" }
-arrow-flight = { version = "50", features = ["flight-sql-experimental", "tls"] }
+arrow = { version = "47.0.0" }
+arrow-array = { version = "47.0.0" }
+arrow-buffer = { version = "47.0.0" }
+arrow-cast = { version = "47.0.0", features = ["prettyprint"] }
+arrow-data = { version = "47.0.0" }
+arrow-flight = { version = "47.0.0", features = ["flight-sql-experimental", "tls"] }
 arrow-format = { version = "0.8.1", features = ["flight-data", "flight-service", "ipc"] }
-arrow-ipc = { version = "50" }
-arrow-ord = { version = "50" }
-arrow-schema = { version = "50", features = ["serde"] }
-arrow-select = { version = "50" }
-parquet = { version = "50", features = ["async"] }
-parquet_rs = { package = "parquet", version = "50" }
+arrow-ipc = { version = "47.0.0" }
+arrow-ord = { version = "47.0.0" }
+arrow-schema = { version = "47.0.0", features = ["serde"] }
+arrow-select = { version = "47.0.0" }
+parquet = { version = "47.0.0", features = ["async"] }
+parquet_rs = { package = "parquet", version = "47.0.0" }
 
 # Serialization
 prost = { version = "0.12.1" }

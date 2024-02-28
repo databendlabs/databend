@@ -30,10 +30,14 @@ use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
-
 pub struct TransformUdfInterpreter {
     func_ctx: FunctionContext,
     funcs: Vec<UdfFunctionDesc>,
+    pyruntime: Runtime,
+}
+
+impl TransformUdfInterpreter {
+    pub fn new(func_ctx: FunctionContext, funcs: Vec<UdfFunctionDesc>) -> Self {}
 }
 
 impl TransformUdfInterpreter {

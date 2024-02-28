@@ -98,6 +98,9 @@ jsonb = { workspace = true }
 # GitHub dependencies
 
 # Crates.io dependencies
+arrow-udf-python = {package = "arrow-udf-python", git = "https://github.com/sundy-li/arrow-udf", rev = "0ec0878" }
+arrow-udf-js = {package = "arrow-udf-js", git = "https://github.com/sundy-li/arrow-udf", rev = "0ec0878" }
+
 arrow-array = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-ipc = { workspace = true }
