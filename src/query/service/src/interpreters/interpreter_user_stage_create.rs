@@ -82,20 +82,30 @@ impl Interpreter for CreateUserStageInterpreter {
             )));
         };
 
-        // when create or replace stage, if old stage is not External stage, remove stage files
-        if let CreateOption::CreateOrReplace = plan.create_option {
-            if let Ok(stage) = user_mgr
+        let old_stage = match plan.create_option {
+            CreateOption::CreateOrReplace => user_mgr
                 .get_stage(&plan.tenant, &user_stage.stage_name)
                 .await
-            {
-                if stage.stage_type != StageType::External {
-                    let op = StageTable::get_op(&stage)?;
-                    op.remove_all("/").await?;
-                    info!(
-                        "create or replace stage {:?} with all objects removed in stage",
-                        user_stage.stage_name
-                    );
-                }
+                .ok(),
+            _ => None,
+        };
+
+        let mut user_stage = user_stage;
+        user_stage.creator = Some(self.ctx.get_current_user()?.identity());
+        user_stage.created_on = Utc::now();
+        let _ = user_mgr
+            .add_stage(&plan.tenant, user_stage.clone(), &plan.create_option)
+            .await?;
+
+        // when create or replace stage success, if old stage is not External stage, remove stage files
+        if let Some(stage) = old_stage {
+            if stage.stage_type != StageType::External {
+                let op = StageTable::get_op(&stage)?;
+                op.remove_all("/").await?;
+                info!(
+                    "create or replace stage {:?} with all objects removed in stage",
+                    user_stage.stage_name
+                );
             }
         }
 
@@ -104,13 +114,6 @@ impl Interpreter for CreateUserStageInterpreter {
             let op = self.ctx.get_data_operator()?.operator();
             op.create_dir(&user_stage.stage_prefix()).await?
         }
-
-        let mut user_stage = user_stage;
-        user_stage.creator = Some(self.ctx.get_current_user()?.identity());
-        user_stage.created_on = Utc::now();
-        let _ = user_mgr
-            .add_stage(&plan.tenant, user_stage, &plan.create_option)
-            .await?;
 
         // Grant ownership as the current role
         let tenant = self.ctx.get_tenant();

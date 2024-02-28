@@ -27,13 +27,6 @@ runs:
   using: "composite"
   steps:
     - name: Setup Build Tool
-      if: endsWith(inputs.target, '-linux-gnu')
-      uses: ./.github/actions/setup_build_tool
-      with:
-        target: base
-        bypass_env_vars: RUSTFLAGS,RUST_LOG
-    - name: Setup Build Tool
-      if: endsWith(inputs.target, '-linux-musl')
       uses: ./.github/actions/setup_build_tool
       with:
         target: ${{ inputs.target }}
@@ -53,13 +46,13 @@ runs:
             flags="-C target-feature=+sse4.2"
             ;;
           x86_64-unknown-linux-musl)
-            flags="-C target-feature=+sse4.2"
+            flags="-C target-feature=+sse4.2 -C link-arg=--max-memory=4294967296"
             ;;
           aarch64-unknown-linux-gnu)
             flags=""
             ;;
           aarch64-unknown-linux-musl)
-            flags=""
+            flags="-C link-arg=--max-memory=4294967296"
             ;;
           *)
             flags=""

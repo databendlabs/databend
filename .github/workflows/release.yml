@@ -150,19 +150,16 @@ jobs:
           delete-branch: true
 
   linux:
-    runs-on: [self-hosted, X64, Linux, 16c32g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
     needs: create_release
     env:
       RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
-        arch:
-          - x86_64
-          - aarch64
-        libc:
-          - gnu
-          - musl
+        include:
+          - {arch: x86_64, libc: gnu, runner: X64}
+          - {arch: aarch64, libc: gnu, runner: ARM64}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
