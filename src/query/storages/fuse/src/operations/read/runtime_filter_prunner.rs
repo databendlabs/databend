@@ -49,6 +49,7 @@ pub fn runtime_filter_pruner(
     filters: &[Expr<String>],
     func_ctx: &FunctionContext,
 ) -> Result<bool> {
+    info!("filters len: {}", filters.len());
     if filters.is_empty() {
         return Ok(false);
     }

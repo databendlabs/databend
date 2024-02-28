@@ -31,6 +31,7 @@ use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
 use log::debug;
+use log::info;
 
 use super::parquet_data_source::ParquetDataSource;
 use crate::fuse_part::FusePartInfo;
@@ -118,6 +119,7 @@ impl SyncSource for ReadParquetDataSource<true> {
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => {
+                info!("generate a part info");
                 let mut filters = self
                     .partitions
                     .ctx
@@ -230,7 +232,7 @@ impl Processor for ReadParquetDataSource<false> {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         let parts = self.partitions.steal(self.id, self.batch_size);
-
+        info!("parts len: {}", parts.len());
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
             let mut filters = self
@@ -243,6 +245,7 @@ impl Processor for ReadParquetDataSource<false> {
                     .get_min_max_runtime_filter_with_id(self.table_index),
             );
             let mut fuse_part_infos = Vec::with_capacity(parts.len());
+            info!("filters len: {}", filters.len());
             for part in parts.into_iter() {
                 if runtime_filter_pruner(
                     self.table_schema.clone(),
