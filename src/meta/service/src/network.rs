@@ -27,6 +27,7 @@ use databend_common_base::future::TimingFutureExt;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::error::PayloadTooLarge;
 use databend_common_meta_sled_store::openraft::error::Unreachable;
+use databend_common_meta_sled_store::openraft::network::RPCOption;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
 use databend_common_meta_types::protobuf::RaftRequest;
@@ -290,9 +291,10 @@ impl NetworkConnection {
 impl RaftNetwork<TypeConfig> for NetworkConnection {
     #[logcall::logcall(err = "debug")]
     #[minitrace::trace]
-    async fn send_append_entries(
+    async fn append_entries(
         &mut self,
         rpc: AppendEntriesRequest,
+        _option: RPCOption,
     ) -> Result<AppendEntriesResponse, RPCError<RaftError>> {
         debug!(
             id = self.id,
@@ -328,9 +330,10 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
 
     #[logcall::logcall(err = "debug")]
     #[minitrace::trace]
-    async fn send_install_snapshot(
+    async fn install_snapshot(
         &mut self,
         rpc: InstallSnapshotRequest,
+        _option: RPCOption,
     ) -> Result<InstallSnapshotResponse, RPCError<RaftError<InstallSnapshotError>>> {
         info!(
             id = self.id,
@@ -407,7 +410,11 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
 
     #[logcall::logcall(err = "debug")]
     #[minitrace::trace]
-    async fn send_vote(&mut self, rpc: VoteRequest) -> Result<VoteResponse, RPCError<RaftError>> {
+    async fn vote(
+        &mut self,
+        rpc: VoteRequest,
+        _option: RPCOption,
+    ) -> Result<VoteResponse, RPCError<RaftError>> {
         info!(id = self.id, target = self.target, rpc = rpc.summary(); "send_vote");
 
         let mut client = self.make_client().await?;

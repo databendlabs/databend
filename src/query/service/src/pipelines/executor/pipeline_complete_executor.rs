@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::Thread;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -23,6 +24,8 @@ use minitrace::prelude::*;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::QueriesPipelineExecutor;
+use crate::pipelines::executor::QueryPipelineExecutor;
 
 pub struct PipelineCompleteExecutor {
     executor: Arc<PipelineExecutor>,
@@ -39,9 +42,19 @@ impl PipelineCompleteExecutor {
                 "Logical error, PipelineCompleteExecutor can only work on complete pipeline.",
             ));
         }
+        let executor = if settings.enable_new_executor {
+            PipelineExecutor::QueriesPipelineExecutor(QueriesPipelineExecutor::create(
+                pipeline, settings,
+            )?)
+        } else {
+            PipelineExecutor::QueryPipelineExecutor(QueryPipelineExecutor::create(
+                pipeline, settings,
+            )?)
+        };
 
-        let executor = PipelineExecutor::create(pipeline, settings)?;
-        Ok(PipelineCompleteExecutor { executor })
+        Ok(PipelineCompleteExecutor {
+            executor: Arc::new(executor),
+        })
     }
 
     pub fn from_pipelines(
@@ -55,9 +68,18 @@ impl PipelineCompleteExecutor {
                 ));
             }
         }
-
-        let executor = PipelineExecutor::from_pipelines(pipelines, settings)?;
-        Ok(Arc::new(PipelineCompleteExecutor { executor }))
+        let executor = if settings.enable_new_executor {
+            PipelineExecutor::QueriesPipelineExecutor(QueriesPipelineExecutor::from_pipelines(
+                pipelines, settings,
+            )?)
+        } else {
+            PipelineExecutor::QueryPipelineExecutor(QueryPipelineExecutor::from_pipelines(
+                pipelines, settings,
+            )?)
+        };
+        Ok(Arc::new(PipelineCompleteExecutor {
+            executor: Arc::new(executor),
+        }))
     }
 
     pub fn get_inner(&self) -> Arc<PipelineExecutor> {
@@ -91,6 +113,8 @@ impl PipelineCompleteExecutor {
 
 impl Drop for PipelineCompleteExecutor {
     fn drop(&mut self) {
-        self.finish(None);
+        drop_guard(move || {
+            self.finish(None);
+        })
     }
 }

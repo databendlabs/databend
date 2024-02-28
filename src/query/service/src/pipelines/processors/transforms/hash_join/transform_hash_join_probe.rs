@@ -22,9 +22,10 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::JoinType;
+use log::info;
 
+use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillHandler;
 use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillState;
-use crate::pipelines::processors::transforms::hash_join::probe_spill::SpillHandler;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::Event;
@@ -63,7 +64,7 @@ pub struct TransformHashJoinProbe {
     pub(crate) outer_scan_finished: bool,
     pub(crate) processor_id: usize,
 
-    pub(crate) spill_handler: SpillHandler,
+    pub(crate) spill_handler: ProbeSpillHandler,
 }
 
 impl TransformHashJoinProbe {
@@ -86,7 +87,7 @@ impl TransformHashJoinProbe {
             .hash_join_desc
             .other_predicate
             .clone();
-        let spill_handler = SpillHandler::new(probe_spill_state);
+        let spill_handler = ProbeSpillHandler::new(probe_spill_state);
         Ok(Box::new(TransformHashJoinProbe {
             input_port,
             output_port,
@@ -168,7 +169,12 @@ impl TransformHashJoinProbe {
     // Probe with hashtable
     pub(crate) fn probe(&mut self, block: DataBlock) -> Result<()> {
         self.probe_state.clear();
+        info!("Start to probe with {:?} rows", block.num_rows());
         let data_blocks = self.join_probe_state.probe(block, &mut self.probe_state)?;
+        let res_rows = data_blocks
+            .iter()
+            .fold(0, |acc, data| acc + data.num_rows());
+        info!("Finish probing with {:?} rows", res_rows);
         if !data_blocks.is_empty() {
             self.output_data_blocks.extend(data_blocks);
         }
@@ -215,6 +221,16 @@ impl TransformHashJoinProbe {
             }
         }
         fast_return
+    }
+
+    // Check if probe side needs to probe
+    fn need_spill(&self) -> bool {
+        let build_spilled_partitions = self
+            .join_probe_state
+            .hash_join_state
+            .build_spilled_partitions
+            .read();
+        self.spill_handler.is_spill_enabled() && !build_spilled_partitions.is_empty()
     }
 }
 
@@ -267,7 +283,7 @@ impl TransformHashJoinProbe {
             if let Some(remain) = remain_block {
                 self.input_data.push_back(remain);
             }
-            if self.spill_handler.is_spill_enabled() {
+            if self.need_spill() {
                 return self.set_spill_step();
             }
             return Ok(Event::Sync);
@@ -279,7 +295,7 @@ impl TransformHashJoinProbe {
         }
 
         // Input port is finished, make spilling finished
-        if self.join_probe_state.hash_join_state.enable_spill && !self.spill_handler.spill_done() {
+        if self.need_spill() && !self.spill_handler.spill_done() {
             return self.spill_finished();
         }
 

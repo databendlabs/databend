@@ -128,7 +128,8 @@ impl Binder {
         bind_context: &mut BindContext,
         show_options: &Option<ShowOptions>,
     ) -> Result<Plan> {
-        let (show_limit, limit_str) = get_show_options(show_options, Some("engine".to_string()));
+        let (show_limit, limit_str) =
+            get_show_options(show_options, Some("\"Engine\"".to_string()));
         let query = format!(
             "SELECT \"Engine\", \"Comment\" FROM system.engines {} ORDER BY \"Engine\" ASC {}",
             show_limit, limit_str,

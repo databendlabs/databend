@@ -23,10 +23,12 @@ use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::RoleIdent;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::TenantOwnershipObject;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
@@ -46,8 +48,6 @@ use crate::role::role_api::RoleApi;
 use crate::serde::check_and_upgrade_to_pb;
 use crate::serialize_struct;
 
-static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
-
 static TXN_MAX_RETRY_TIMES: u32 = 5;
 
 static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
@@ -55,7 +55,6 @@ static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     tenant: NonEmptyString,
-    role_prefix: String,
 }
 
 impl RoleMgr {
@@ -63,11 +62,9 @@ impl RoleMgr {
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
         tenant: NonEmptyStr,
     ) -> Self {
-        let t = tenant.get();
         RoleMgr {
             kv_api,
             tenant: tenant.into(),
-            role_prefix: format!("{}/{}", ROLE_API_KEY_PREFIX, t),
         }
     }
 
@@ -77,7 +74,7 @@ impl RoleMgr {
         role_info: &RoleInfo,
         seq: MatchSeq,
     ) -> Result<u64, ErrorCode> {
-        let key = self.make_role_key(role_info.identity());
+        let key = self.role_key(role_info.identity());
         let value = serialize_struct(role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let res = self
@@ -100,8 +97,7 @@ impl RoleMgr {
         value: Vec<u8>,
         seq: MatchSeq,
     ) -> Result<UpsertKVReply, MetaError> {
-        let kv_api = self.kv_api.clone();
-        kv_api
+        self.kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Update(value), None))
             .await
     }
@@ -123,8 +119,14 @@ impl RoleMgr {
         grantee.tenant_prefix()
     }
 
-    fn make_role_key(&self, role: &str) -> String {
-        format!("{}/{}", self.role_prefix, role)
+    fn role_key(&self, role: &str) -> String {
+        let r = RoleIdent::new(Tenant::new(self.tenant.as_str()), role.to_string());
+        r.to_string_key()
+    }
+
+    fn role_prefix(&self) -> String {
+        let r = RoleIdent::new(Tenant::new(self.tenant.as_str()), "dummy".to_string());
+        r.tenant_prefix()
     }
 }
 
@@ -134,7 +136,7 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn add_role(&self, role_info: RoleInfo) -> databend_common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
-        let key = self.make_role_key(role_info.identity());
+        let key = self.role_key(role_info.identity());
         let value = serialize_struct(&role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let upsert_kv = self.kv_api.upsert_kv(UpsertKVReq::new(
@@ -154,7 +156,7 @@ impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>, ErrorCode> {
-        let key = self.make_role_key(role);
+        let key = self.role_key(role);
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownRole(format!("Role '{}' does not exist.", role)))?;
@@ -183,7 +185,7 @@ impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
-        let role_prefix = self.role_prefix.clone();
+        let role_prefix = self.role_prefix();
         let values = self.kv_api.prefix_list_kv(role_prefix.as_str()).await?;
 
         let mut r = vec![];
@@ -207,8 +209,10 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
         let object_owner_prefix = self.ownership_object_prefix();
-        let kv_api = self.kv_api.clone();
-        let values = kv_api.prefix_list_kv(object_owner_prefix.as_str()).await?;
+        let values = self
+            .kv_api
+            .prefix_list_kv(object_owner_prefix.as_str())
+            .await?;
 
         let mut r = vec![];
         for (key, val) in values {
@@ -284,7 +288,7 @@ impl RoleApi for RoleMgr {
         if let Some(old_role) = old_role {
             // BUILTIN role or Dropped role may get err, no need to revoke
             if let Ok(seqv) = self.get_role(&old_role.to_owned(), MatchSeq::GE(1)).await {
-                let old_key = self.make_role_key(&old_role);
+                let old_key = self.role_key(&old_role);
                 let old_seq = seqv.seq;
                 let mut old_role_info = seqv.data;
                 old_role_info.grants.revoke_privileges(
@@ -301,7 +305,7 @@ impl RoleApi for RoleMgr {
 
         // account_admin has all privilege, no need to grant ownership.
         if new_role != BUILTIN_ROLE_ACCOUNT_ADMIN {
-            let new_key = self.make_role_key(new_role);
+            let new_key = self.role_key(new_role);
             let SeqV {
                 seq: new_seq,
                 data: mut new_role_info,
@@ -383,7 +387,7 @@ impl RoleApi for RoleMgr {
 
         if let Some(role) = role {
             if let Ok(seqv) = self.get_role(&role.to_owned(), MatchSeq::GE(1)).await {
-                let old_key = self.make_role_key(&role);
+                let old_key = self.role_key(&role);
                 let grant_object = convert_to_grant_obj(object);
                 let old_seq = seqv.seq;
                 let mut old_role_info = seqv.data;
@@ -425,7 +429,7 @@ impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<(), ErrorCode> {
-        let key = self.make_role_key(&role);
+        let key = self.role_key(&role);
 
         let res = self
             .kv_api

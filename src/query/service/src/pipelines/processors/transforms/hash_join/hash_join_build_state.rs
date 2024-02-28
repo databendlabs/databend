@@ -109,10 +109,16 @@ pub struct HashJoinBuildState {
     pub(crate) mutex: Mutex<()>,
 
     /// Spill related states
-    /// `send_val` is the message which will be send into `build_done_watcher` channel.
+    /// `send_val` is the message which will be sent into `build_done_watcher` channel.
     pub(crate) send_val: AtomicU8,
     /// Wait all processors finish read spilled data, then go to new round build
     pub(crate) restore_barrier: Barrier,
+    // Max memory usage for join
+    pub max_memory_usage: usize,
+    // Spilling threshold for each processor
+    pub spilling_threshold_per_proc: usize,
+
+    /// Runtime filter related states
     pub(crate) enable_inlist_runtime_filter: bool,
     pub(crate) enable_min_max_runtime_filter: bool,
     /// Need to open runtime filter setting.
@@ -127,8 +133,7 @@ impl HashJoinBuildState {
         build_keys: &[RemoteExpr],
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
-        barrier: Barrier,
-        restore_barrier: Barrier,
+        num_threads: usize,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -144,7 +149,7 @@ impl HashJoinBuildState {
         let mut enable_inlist_runtime_filter = false;
         let mut enable_min_max_runtime_filter = false;
         if supported_join_type_for_runtime_filter(&hash_join_state.hash_join_desc.join_type)
-            && ctx.get_settings().get_join_spilling_threshold()? == 0
+            && ctx.get_settings().get_join_spilling_memory_ratio()? == 0
         {
             let is_cluster = !ctx.get_cluster().is_empty();
             // For cluster, only support runtime filter for broadcast join.
@@ -157,14 +162,16 @@ impl HashJoinBuildState {
             }
         }
         let chunk_size_limit = ctx.get_settings().get_max_block_size()? as usize * 16;
-
+        let (max_memory_usage, spilling_threshold_per_proc) =
+            Self::max_memory_usage(ctx.clone(), num_threads)?;
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             func_ctx,
             hash_join_state,
             chunk_size_limit,
-            barrier,
-            restore_barrier,
+            barrier: Barrier::new(num_threads),
+            restore_barrier: Barrier::new(num_threads),
+            max_memory_usage,
             row_space_builders: Default::default(),
             method,
             entry_size: Default::default(),
@@ -177,7 +184,33 @@ impl HashJoinBuildState {
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter,
             enable_min_max_runtime_filter,
+            spilling_threshold_per_proc,
         }))
+    }
+
+    // Get max memory usage for settings
+    fn max_memory_usage(ctx: Arc<QueryContext>, num_threads: usize) -> Result<(usize, usize)> {
+        debug_assert!(num_threads != 0);
+        let settings = ctx.get_settings();
+        let spilling_threshold_per_proc = settings.get_join_spilling_bytes_threshold_per_proc()?;
+        let mut memory_ratio = settings.get_join_spilling_memory_ratio()? as f64 / 100_f64;
+        if memory_ratio > 1_f64 {
+            memory_ratio = 1_f64;
+        }
+        let max_memory_usage = match settings.get_max_memory_usage()? {
+            0 => usize::MAX,
+            max_memory_usage => match memory_ratio {
+                mr if mr == 0_f64 => usize::MAX,
+                mr => (max_memory_usage as f64 * mr) as usize,
+            },
+        };
+
+        let spilling_threshold_per_proc = match spilling_threshold_per_proc {
+            0 => max_memory_usage / num_threads,
+            bytes => bytes,
+        };
+
+        Ok((max_memory_usage, spilling_threshold_per_proc))
     }
 
     /// Add input `DataBlock` to `hash_join_state.row_space`.
@@ -304,7 +337,7 @@ impl HashJoinBuildState {
                     JoinType::LeftMark | JoinType::RightMark
                 )
                 && self.ctx.get_cluster().is_empty()
-                && self.ctx.get_settings().get_join_spilling_threshold()? == 0
+                && self.ctx.get_settings().get_join_spilling_memory_ratio()? == 0
             {
                 self.hash_join_state
                     .fast_return

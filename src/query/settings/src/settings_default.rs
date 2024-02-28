@@ -265,9 +265,15 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("join_spilling_threshold", DefaultSettingValue {
+                ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Maximum amount of memory can use for hash join, 0 is unlimited.",
+                    desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
+                ("join_spilling_bytes_threshold_per_proc", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum amount of memory in bytes that one join processor can use before spilling data to storage during query execution, 0 is unlimited.",
                     mode: SettingMode::Both,
                     range: None,
                 }),
@@ -684,7 +690,13 @@ impl DefaultSettings {
                     desc: "Create and alter table with geometry type",
                     mode:SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1))
-                })
+                }),
+                ("enable_experimental_new_executor", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental new executor",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

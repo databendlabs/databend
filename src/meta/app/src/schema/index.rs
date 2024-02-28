@@ -21,18 +21,20 @@ use chrono::Utc;
 use databend_common_meta_types::MetaId;
 
 use super::CreateOption;
+use crate::tenant::Tenant;
+use crate::KeyWithTenant;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IndexNameIdent {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub index_name: String,
 }
 
 impl IndexNameIdent {
-    pub fn new(tenant: impl Into<String>, index_name: impl Into<String>) -> IndexNameIdent {
+    pub fn new(tenant: Tenant, index_name: impl ToString) -> IndexNameIdent {
         IndexNameIdent {
-            tenant: tenant.into(),
-            index_name: index_name.into(),
+            tenant,
+            index_name: index_name.to_string(),
         }
     }
 
@@ -43,7 +45,7 @@ impl IndexNameIdent {
 
 impl Display for IndexNameIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "'{}'.'{}'", self.tenant, self.index_name)
+        write!(f, "'{}'.'{}'", self.tenant_name(), self.index_name)
     }
 }
 
@@ -131,7 +133,7 @@ impl Default for IndexMeta {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateIndexReq {
     pub create_option: CreateOption,
     pub name_ident: IndexNameIdent,
@@ -144,13 +146,16 @@ impl Display for CreateIndexReq {
             write!(
                 f,
                 "create_index(if_not_exists={}):{}={:?}",
-                if_not_exists, self.name_ident.tenant, self.meta
+                if_not_exists,
+                self.name_ident.tenant_name(),
+                self.meta
             )
         } else {
             write!(
                 f,
                 "create_or_replace_index:{}={:?}",
-                self.name_ident.tenant, self.meta
+                self.name_ident.tenant_name(),
+                self.meta
             )
         }
     }
@@ -161,7 +166,7 @@ pub struct CreateIndexReply {
     pub index_id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropIndexReq {
     pub if_exists: bool,
     pub name_ident: IndexNameIdent,
@@ -172,7 +177,9 @@ impl Display for DropIndexReq {
         write!(
             f,
             "drop_index(if_exists={}):{}/{}",
-            self.if_exists, self.name_ident.tenant, self.name_ident.index_name
+            self.if_exists,
+            self.name_ident.tenant_name(),
+            self.name_ident.index_name
         )
     }
 }
@@ -180,7 +187,7 @@ impl Display for DropIndexReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropIndexReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetIndexReq {
     pub name_ident: IndexNameIdent,
 }
@@ -190,7 +197,8 @@ impl Display for GetIndexReq {
         write!(
             f,
             "get_index:{}/{}",
-            self.name_ident.tenant, self.name_ident.index_name
+            self.name_ident.tenant_name(),
+            self.name_ident.index_name
         )
     }
 }
@@ -250,6 +258,7 @@ mod kvapi_key_impl {
     use crate::schema::IndexMeta;
     use crate::schema::IndexNameIdent;
     use crate::tenant::Tenant;
+    use crate::KeyWithTenant;
 
     /// <prefix>/<tenant>/<index_name> -> <index_id>
     impl kvapi::Key for IndexNameIdent {
@@ -258,12 +267,12 @@ mod kvapi_key_impl {
         type ValueType = IndexId;
 
         fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
+            Some(self.tenant.to_string_key())
         }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
+                .push_str(self.tenant_name())
                 .push_str(&self.index_name)
                 .done()
         }
@@ -271,11 +280,20 @@ mod kvapi_key_impl {
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let tenant = p.next_str()?;
+            let tenant = p.next_nonempty()?;
             let index_name = p.next_str()?;
             p.done()?;
 
-            Ok(IndexNameIdent { tenant, index_name })
+            Ok(IndexNameIdent::new(
+                Tenant::new_nonempty(tenant),
+                index_name,
+            ))
+        }
+    }
+
+    impl KeyWithTenant for IndexNameIdent {
+        fn tenant(&self) -> &Tenant {
+            &self.tenant
         }
     }
 

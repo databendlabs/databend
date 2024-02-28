@@ -18,6 +18,8 @@
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
@@ -38,8 +40,11 @@ impl FromToProto for mt::IndexNameIdent {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
+        let non_empty = NonEmptyString::new(p.tenant).map_err(|_| Incompatible {
+            reason: "IndexNameIdent.tenant can not be empty".to_string(),
+        })?;
         let v = Self {
-            tenant: p.tenant,
+            tenant: Tenant::new_nonempty(non_empty),
             index_name: p.index_name,
         };
         Ok(v)
@@ -49,7 +54,7 @@ impl FromToProto for mt::IndexNameIdent {
         let p = pb::IndexNameIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            tenant: self.tenant.clone(),
+            tenant: self.tenant.name().to_string(),
             index_name: self.index_name.clone(),
         };
         Ok(p)

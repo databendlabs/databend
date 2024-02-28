@@ -14,6 +14,8 @@
 
 use std::str::Split;
 
+use databend_common_meta_types::NonEmptyString;
+
 use crate::kvapi::helper::decode_id;
 use crate::kvapi::helper::unescape;
 use crate::kvapi::KeyError;
@@ -77,6 +79,14 @@ impl<'s> KeyParser<'s> {
         }
     }
 
+    /// Pop the next non-empty element and unescape it.
+    pub fn next_nonempty(&mut self) -> Result<NonEmptyString, KeyError> {
+        let elt = self.next_raw()?;
+        let s = unescape(elt)?;
+        let x = NonEmptyString::new(s).map_err(|_| KeyError::EmptySegment { i: self.i - 1 })?;
+        Ok(x)
+    }
+
     /// Pop the next element and unescape it.
     pub fn next_str(&mut self) -> Result<String, KeyError> {
         let elt = self.next_raw()?;
@@ -134,6 +144,7 @@ impl<'s> KeyParser<'s> {
 #[cfg(test)]
 mod tests {
     use crate::kvapi::key_parser::KeyParser;
+    use crate::kvapi::KeyError;
 
     #[test]
     fn test_key_parser_new_prefixed() -> anyhow::Result<()> {
@@ -161,6 +172,24 @@ mod tests {
         assert_eq!(Ok("bar%20-"), kp.next_raw());
         assert_eq!(Ok("123"), kp.next_raw());
         assert!(kp.next_raw().is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_key_parser_next_nonempty() -> anyhow::Result<()> {
+        let s = "_foo/bar%21-//123";
+
+        let mut kp = KeyParser::new(s);
+        assert_eq!(
+            Ok("_foo".to_string()),
+            kp.next_nonempty().map(|x| x.to_string())
+        );
+        assert_eq!(
+            Ok("bar!-".to_string()),
+            kp.next_nonempty().map(|x| x.to_string())
+        );
+        assert_eq!(Err(KeyError::EmptySegment { i: 2 }), kp.next_nonempty());
 
         Ok(())
     }

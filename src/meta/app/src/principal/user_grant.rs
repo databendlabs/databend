@@ -17,7 +17,6 @@ use std::fmt;
 use std::ops;
 
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::Key;
 use enumflags2::BitFlags;
 
 use crate::principal::UserPrivilegeSet;
@@ -191,20 +190,6 @@ impl TenantOwnershipObject {
 
     pub(crate) fn new_unchecked(tenant: Tenant, object: OwnershipObject) -> Self {
         TenantOwnershipObject { tenant, object }
-    }
-
-    /// Return a encoded key prefix for listing keys belongs to the tenant.
-    ///
-    /// It is in form of `__fd_object_owners/<tenant>/`.
-    /// The trailing `/` is important for exclude tenants with prefix same as this tenant.
-    pub fn tenant_prefix(&self) -> String {
-        kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-            .push_str(&self.tenant.tenant)
-            .done()
-    }
-
-    pub fn tenant(&self) -> &Tenant {
-        &self.tenant
     }
 
     // Because the encoded string key does not contain all of the field:
@@ -491,6 +476,7 @@ mod kvapi_key_impl {
     use crate::principal::OwnershipInfo;
     use crate::principal::OwnershipObject;
     use crate::tenant::Tenant;
+    use crate::KeyWithTenant;
 
     impl kvapi::Key for TenantOwnershipObject {
         const PREFIX: &'static str = "__fd_object_owners";
@@ -524,6 +510,12 @@ mod kvapi_key_impl {
             []
         }
     }
+
+    impl KeyWithTenant for TenantOwnershipObject {
+        fn tenant(&self) -> &Tenant {
+            &self.tenant
+        }
+    }
 }
 
 #[cfg(test)]
@@ -533,6 +525,17 @@ mod tests {
     use crate::principal::user_grant::TenantOwnershipObject;
     use crate::principal::OwnershipObject;
     use crate::tenant::Tenant;
+    use crate::KeyWithTenant;
+
+    #[test]
+    fn test_tenant_ownership_object_tenant_prefix() {
+        let r = TenantOwnershipObject::new(Tenant::new("tenant"), OwnershipObject::Database {
+            catalog_name: "cat".to_string(),
+            db_id: 1,
+        });
+
+        assert_eq!("__fd_object_owners/tenant/", r.tenant_prefix());
+    }
 
     #[test]
     fn test_role_grantee_as_kvapi_key() {

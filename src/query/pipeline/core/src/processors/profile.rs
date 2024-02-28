@@ -16,6 +16,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileLabel;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -33,11 +34,13 @@ impl PlanScopeGuard {
 
 impl Drop for PlanScopeGuard {
     fn drop(&mut self) {
-        if self.scope_size.fetch_sub(1, Ordering::SeqCst) != self.idx + 1
-            && !std::thread::panicking()
-        {
-            panic!("Broken pipeline scope stack.");
-        }
+        drop_guard(move || {
+            if self.scope_size.fetch_sub(1, Ordering::SeqCst) != self.idx + 1
+                && !std::thread::panicking()
+            {
+                panic!("Broken pipeline scope stack.");
+            }
+        })
     }
 }
 

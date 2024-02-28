@@ -19,3 +19,10 @@ ontime_200.csv
 ontime_200.csv.zst
 dir/ontime_200.csv
 ontime_200.csv
+=== Test create or replace external stage ===
+=== List files in external stage ===
+dir/ontime_200.csv
+ontime_200.csv
+=== After create or replace List files in external stage again ===
+dir/ontime_200.csv
+ontime_200.csv
