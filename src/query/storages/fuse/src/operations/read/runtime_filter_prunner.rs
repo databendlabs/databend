@@ -86,10 +86,17 @@ pub fn runtime_filter_pruner(
                     func_ctx,
                     &BUILTIN_FUNCTIONS,
                 );
-                return matches!(new_expr, Expr::Constant {
+                let pruned_ = matches!(new_expr, Expr::Constant {
                     scalar: Scalar::Boolean(false),
                     ..
                 });
+                if pruned_ {
+                    if let Domain::Date(x) = domain {
+                        info!("pruned_ domain date: {:?}", x)
+                    }
+                    info!("pruned_ filter expr:{:?}", filter);
+                }
+                return pruned_;
             }
         }
         false
