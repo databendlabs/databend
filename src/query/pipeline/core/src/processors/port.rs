@@ -16,6 +16,7 @@ use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
@@ -42,13 +43,13 @@ unsafe impl Send for SharedStatus {}
 
 impl Drop for SharedStatus {
     fn drop(&mut self) {
-        unsafe {
+        drop_guard(move || unsafe {
             let address = self.swap(std::ptr::null_mut(), 0, HAS_DATA);
 
             if !address.is_null() {
                 drop(Box::from_raw(address));
             }
-        }
+        })
     }
 }
 

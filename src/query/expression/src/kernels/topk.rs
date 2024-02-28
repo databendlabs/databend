@@ -19,6 +19,7 @@ use std::mem;
 use std::ptr;
 
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_base::runtime::drop_guard;
 
 use crate::types::*;
 use crate::with_number_mapped_type;
@@ -285,14 +286,16 @@ where F: FnMut(&T, &T) -> bool {
 
     impl<T> Drop for InsertionHole<T> {
         fn drop(&mut self) {
-            // SAFETY:
-            // we ensure src/dest point to a properly initialized value of type T
-            // src is valid for reads of `count * size_of::()` bytes.
-            // dest is valid for reads of `count * size_of::()` bytes.
-            // Both `src` and `dst` are properly aligned.
-            unsafe {
-                ptr::copy_nonoverlapping(self.src, self.dest, 1);
-            }
+            drop_guard(move || {
+                // SAFETY:
+                // we ensure src/dest point to a properly initialized value of type T
+                // src is valid for reads of `count * size_of::()` bytes.
+                // dest is valid for reads of `count * size_of::()` bytes.
+                // Both `src` and `dst` are properly aligned.
+                unsafe {
+                    ptr::copy_nonoverlapping(self.src, self.dest, 1);
+                }
+            })
         }
     }
 }

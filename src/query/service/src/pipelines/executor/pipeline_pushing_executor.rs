@@ -18,6 +18,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::Thread;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -174,15 +175,17 @@ impl PipelinePushingExecutor {
 
 impl Drop for PipelinePushingExecutor {
     fn drop(&mut self) {
-        if !self.state.finished.load(Ordering::Relaxed)
-            && !self.state.has_throw_error.load(Ordering::Relaxed)
-        {
-            self.finish(None);
-        }
+        drop_guard(move || {
+            if !self.state.finished.load(Ordering::Relaxed)
+                && !self.state.has_throw_error.load(Ordering::Relaxed)
+            {
+                self.finish(None);
+            }
 
-        if let Err(cause) = self.sender.send(None) {
-            warn!("Executor send last data is failure {:?}", cause);
-        }
+            if let Err(cause) = self.sender.send(None) {
+                warn!("Executor send last data is failure {:?}", cause);
+            }
+        })
     }
 }
 
