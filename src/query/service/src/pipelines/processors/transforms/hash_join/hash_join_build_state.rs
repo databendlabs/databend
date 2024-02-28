@@ -900,6 +900,7 @@ impl HashJoinBuildState {
     ) -> Result<()> {
         if !build_key.data_type().remove_nullable().is_numeric()
             && !build_key.data_type().remove_nullable().is_string()
+            && !build_key.data_type().is_date()
         {
             return Ok(());
         }
