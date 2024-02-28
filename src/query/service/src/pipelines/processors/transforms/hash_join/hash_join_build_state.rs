@@ -931,10 +931,7 @@ impl HashJoinBuildState {
         build_key: &Expr,
         probe_key: &Expr<String>,
     ) -> Result<()> {
-        if !build_key.data_type().remove_nullable().is_numeric()
-            && !build_key.data_type().remove_nullable().is_string()
-            && !build_key.data_type().is_date()
-        {
+        if !build_key.runtime_filter_surported_types() {
             return Ok(());
         }
         if let Expr::ColumnRef { .. } = probe_key {
