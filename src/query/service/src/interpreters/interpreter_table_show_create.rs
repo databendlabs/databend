@@ -176,6 +176,12 @@ impl ShowCreateTableInterpreter {
             });
         }
 
+        if engine != "ICEBERG" && engine != "DELTA" {
+            if let Some(sp) = &table_info.meta.storage_params {
+                table_create_sql.push_str(format!(" LOCATION = '{}'", sp).as_str());
+            }
+        }
+
         if !table_info.meta.comment.is_empty() {
             table_create_sql.push_str(format!(" COMMENT = '{}'", table_info.meta.comment).as_str());
         }
