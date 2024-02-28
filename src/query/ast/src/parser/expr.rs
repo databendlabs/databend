@@ -1346,11 +1346,13 @@ pub fn json_op(i: Input) -> IResult<JsonOperator> {
 
 pub fn literal(i: Input) -> IResult<Literal> {
     let string = map(literal_string, Literal::String);
+    let code_string = map(code_string, Literal::String);
     let boolean = map(literal_bool, Literal::Boolean);
     let null = value(Literal::Null, rule! { NULL });
 
     rule!(
         #string
+        | #code_string
         | #boolean
         | #literal_number
         | #null
@@ -1468,6 +1470,13 @@ pub fn at_string(i: Input) -> IResult<String> {
     map_res(rule! { AtString }, |token| {
         let path = token.text()[1..token.text().len()].to_string();
         Ok(unescape_at_string(&path))
+    })(i)
+}
+
+pub fn code_string(i: Input) -> IResult<String> {
+    map_res(rule! { CodeString }, |token| {
+        let path = &token.text()[2..token.text().len() - 2];
+        Ok(path.to_string())
     })(i)
 }
 

@@ -151,6 +151,9 @@ pub enum TokenKind {
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
     QuotedString,
 
+    #[regex(r#"\$\$([^\$]|(\$[^\$]))*\$\$"#)]
+    CodeString,
+
     #[regex(r#"@([^\s`;'"()]|\\\s|\\'|\\"|\\\\)+"#)]
     AtString,
 
@@ -1181,7 +1184,12 @@ impl TokenKind {
     pub fn is_literal(&self) -> bool {
         matches!(
             self,
-            LiteralInteger | LiteralFloat | QuotedString | PGLiteralHex | MySQLLiteralHex
+            LiteralInteger
+                | LiteralFloat
+                | QuotedString
+                | CodeString
+                | PGLiteralHex
+                | MySQLLiteralHex
         )
     }
 
@@ -1190,6 +1198,7 @@ impl TokenKind {
             self,
             Ident
                 | QuotedString
+                | CodeString
                 | PGLiteralHex
                 | MySQLLiteralHex
                 | LiteralInteger
