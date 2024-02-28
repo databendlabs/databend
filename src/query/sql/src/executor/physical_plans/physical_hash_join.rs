@@ -27,6 +27,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::ROW_NUMBER_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
@@ -533,8 +534,10 @@ async fn adjust_bloom_runtime_filter(
         return Ok(false);
     }
     if let Some(table_index) = table_index {
-        let table = metadata.read().table(table_index).table();
-        if let Some(stats) = table.table_statistics(ctx.clone()).await? {
+        let table_entry = metadata.read().table(table_index).clone();
+        let change_type = get_change_type(table_entry.alias_name());
+        let table = table_entry.table();
+        if let Some(stats) = table.table_statistics(ctx.clone(), change_type).await? {
             if let Some(num_rows) = stats.num_rows {
                 let join_cardinality = RelExpr::with_s_expr(s_expr)
                     .derive_cardinality()?

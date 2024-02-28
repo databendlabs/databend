@@ -221,6 +221,10 @@ impl HashJoinState {
         matches!(self.hash_join_desc.join_type, JoinType::LeftMark)
     }
 
+    pub fn need_final_scan(&self) -> bool {
+        self.need_outer_scan() || self.need_mark_scan()
+    }
+
     pub fn set_spilled_partition(&self, partitions: &HashSet<u8>) {
         let mut spill_partition = self.build_spilled_partitions.write();
         spill_partition.extend(partitions);

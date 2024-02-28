@@ -475,6 +475,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             alias: None,
             // TODO
             travel_point: None,
+            since_point: None,
             // TODO
             pivot: None,
             // TODO

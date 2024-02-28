@@ -123,7 +123,8 @@ impl UserApiProvider {
     }
 
     pub fn get_role_api_client(&self, tenant: &str) -> Result<Arc<impl RoleApi>> {
-        Ok(Arc::new(RoleMgr::create(self.client.clone(), tenant)?))
+        let role_mgr = self.for_tenant(tenant)?.role_api();
+        Ok(Arc::new(role_mgr))
     }
 
     pub fn get_stage_api_client(&self, tenant: &str) -> Result<Arc<dyn StageApi>> {
@@ -208,5 +209,9 @@ pub struct ForTenant<'a> {
 impl<'a> ForTenant<'a> {
     pub fn udf_api(&self) -> UdfMgr {
         UdfMgr::create(self.user_api.client.clone(), self.tenant)
+    }
+
+    pub fn role_api(&self) -> RoleMgr {
+        RoleMgr::create(self.user_api.client.clone(), self.tenant)
     }
 }

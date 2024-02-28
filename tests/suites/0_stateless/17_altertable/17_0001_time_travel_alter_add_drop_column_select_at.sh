@@ -30,17 +30,17 @@ echo "select count(*) from t12_0005 at (snapshot => '$SNAPSHOT_ID')" | $BENDSQL_
 echo "select the data set of first insertion, which should contain 2 rows"
 echo "select * from t12_0005 at (snapshot => '$SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT
 
-echo "planner_v2: counting the data set of first insertion, which should contain 2 rows"
+echo "counting the data set of first insertion, which should contain 2 rows"
 echo "select count(t.c) from t12_0005 at (snapshot => '$SNAPSHOT_ID') as t" | $BENDSQL_CLIENT_CONNECT
 
 
 # Get a time point at/after the first insertion.
 TIMEPOINT=$(echo "select timestamp from fuse_snapshot('default', 't12_0005') where row_count=2" | $BENDSQL_CLIENT_CONNECT)
 
-echo "planner_v2: counting the data set of first insertion by timestamp, which should contains 2 rows"
+echo "counting the data set of first insertion by timestamp, which should contains 2 rows"
 echo "select count(t.c) from t12_0005 at (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP) as t" | $BENDSQL_CLIENT_CONNECT
 
-echo "planner_v2: select the data set of first insertion by timestamp, which should contains 2 rows"
+echo "select the data set of first insertion by timestamp, which should contains 2 rows"
 echo "select * from t12_0005 at (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP) as t" | $BENDSQL_CLIENT_CONNECT
 
 # alter table drop a column
@@ -57,17 +57,17 @@ echo "select count(*) from t12_0005 at (snapshot => '$SNAPSHOT_ID')" | $BENDSQL_
 echo "select the data set of first insertion, which should contain 2 rows"
 echo "select * from t12_0005 at (snapshot => '$SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT
 
-echo "planner_v2: counting the data set of first insertion, which should contain 2 rows"
+echo "counting the data set of first insertion, which should contain 2 rows"
 echo "select count(t.c) from t12_0005 at (snapshot => '$SNAPSHOT_ID') as t" | $BENDSQL_CLIENT_CONNECT
 
 
 # Get a time point at/after the first insertion.
 TIMEPOINT=$(echo "select timestamp from fuse_snapshot('default', 't12_0005') where row_count=2 limit 1" | $BENDSQL_CLIENT_CONNECT)
 
-echo "planner_v2: counting the data set of first insertion by timestamp, which should contains 2 rows"
+echo "counting the data set of first insertion by timestamp, which should contains 2 rows"
 echo "select count(t.c) from t12_0005 at (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP) as t" | $BENDSQL_CLIENT_CONNECT
 
-echo "planner_v2: select the data set of first insertion by timestamp, which should contains 2 rows"
+echo "select the data set of first insertion by timestamp, which should contains 2 rows"
 echo "select * from t12_0005 at (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP) as t" | $BENDSQL_CLIENT_CONNECT
 
 ## Drop table.

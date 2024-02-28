@@ -36,6 +36,8 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::StreamMode;
 
 use crate::catalog::Catalog;
 use crate::lock::Lock;
@@ -128,6 +130,14 @@ pub trait Table: Sync + Send {
             fields,
             ..self.schema().as_ref().clone()
         })
+    }
+
+    async fn get_stream_mode(&self, ctx: Arc<dyn TableContext>) -> Result<StreamMode> {
+        let _ = ctx;
+        Err(ErrorCode::UnsupportedEngineParams(format!(
+            "Stream mode is not supported for the '{}' engine.",
+            self.engine()
+        )))
     }
 
     /// Whether the table engine supports prewhere optimization.
@@ -265,18 +275,12 @@ pub trait Table: Sync + Send {
         Ok(None)
     }
 
-    #[async_backtrace::framed]
-    async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        let _ = ctx;
-
-        Ok(())
-    }
-
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
+        change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
-        let _ = ctx;
+        let (_, _) = (ctx, change_type);
 
         Ok(None)
     }
@@ -292,8 +296,13 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn navigate_to(&self, instant: &NavigationPoint) -> Result<Arc<dyn Table>> {
-        let _ = instant;
+    async fn navigate_since_to(
+        &self,
+        since_point: &Option<NavigationPoint>,
+        to_point: &Option<NavigationPoint>,
+    ) -> Result<Arc<dyn Table>> {
+        let _ = since_point;
+        let _ = to_point;
 
         Err(ErrorCode::Unimplemented(format!(
             "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",
@@ -447,6 +456,26 @@ pub struct TableStatistics {
     pub index_size: Option<u64>,
     pub number_of_blocks: Option<u64>,
     pub number_of_segments: Option<u64>,
+}
+
+fn merge(a: Option<u64>, b: Option<u64>) -> Option<u64> {
+    match (a, b) {
+        (Some(a), Some(b)) if a > b => Some(a - b),
+        _ => None,
+    }
+}
+
+impl TableStatistics {
+    pub fn increment_since_from(&self, other: &TableStatistics) -> Self {
+        TableStatistics {
+            num_rows: merge(self.num_rows, other.num_rows),
+            data_size: merge(self.data_size, other.data_size),
+            data_size_compressed: merge(self.data_size_compressed, other.data_size_compressed),
+            index_size: None,
+            number_of_blocks: merge(self.number_of_blocks, other.number_of_blocks),
+            number_of_segments: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

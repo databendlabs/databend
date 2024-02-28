@@ -7,6 +7,9 @@ statement ok
 set join_spilling_threshold = 1;
 
 statement ok
+drop table if exists t3;
+
+statement ok
 create table t3(a int);
 
 query I
@@ -110,6 +113,9 @@ statement ok
 set max_block_size = 512;
 
 statement ok
+set join_spilling_threshold = 200 * 1024 * 1024 * 1;
+
+statement ok
 drop table if exists t1;
 
 statement ok
@@ -121,8 +127,10 @@ create table t1 as select number as a from numbers(100000);
 statement ok
 create table t2 as select number as a from numbers(100000);
 
-statement ok
-select * from t1, t2 where t1.a = t2.a;
+query I
+select count(*) from t1, t2 where t1.a = t2.a;
+----
+100000
 
 statement ok
 drop table if exists t1;
@@ -135,3 +143,4 @@ set max_block_size = 65536;
 
 statement ok
 set join_spilling_threshold = 0;
+
