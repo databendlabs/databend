@@ -23,6 +23,11 @@ pub trait KeyWithTenant: kvapi::Key {
     /// Return the tenant this key belongs to.
     fn tenant(&self) -> &Tenant;
 
+    /// Return the name of the embedded tenant.
+    fn tenant_name(&self) -> &str {
+        self.tenant().name()
+    }
+
     /// Return a encoded key prefix for listing keys of this kind that belong to the tenant.
     ///
     /// It is in form of `<__PREFIX>/<tenant>/`.

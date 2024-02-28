@@ -33,6 +33,8 @@ use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NonEmptyString;
 use databend_storages_common_table_meta::meta::Location;
 
 use crate::binder::Binder;
@@ -251,11 +253,19 @@ impl Binder {
             .ctx
             .get_catalog(&self.ctx.get_current_catalog())
             .await?;
+
+        let tenant_name = self.ctx.get_tenant();
+
+        let non_empty = NonEmptyString::new(tenant_name.to_string()).map_err(|_| {
+            ErrorCode::TenantIsEmpty(
+                "Tenant is empty(when Binder::build_refresh_index()".to_string(),
+            )
+        })?;
+
+        let tenant = Tenant::new_nonempty(non_empty);
+
         let get_index_req = GetIndexReq {
-            name_ident: IndexNameIdent {
-                tenant: self.ctx.get_tenant(),
-                index_name: index_name.clone(),
-            },
+            name_ident: IndexNameIdent::new(tenant, &index_name),
         };
 
         let res = catalog.get_index(get_index_req).await?;
