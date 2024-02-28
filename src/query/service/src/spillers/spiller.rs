@@ -75,7 +75,7 @@ pub struct Spiller {
     config: SpillerConfig,
     spiller_type: SpillerType,
     /// Partition set, which records there are how many partitions.
-    /// Currently it's fixed, in the future we can make it configurable.
+    /// Currently, it's fixed, in the future we can make it configurable.
     pub partition_set: Vec<u8>,
     /// Spilled partition set, after one partition is spilled, it will be added to this set.
     pub spilled_partition_set: HashSet<u8>,

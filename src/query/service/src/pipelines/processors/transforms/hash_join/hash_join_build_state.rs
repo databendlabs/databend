@@ -109,7 +109,7 @@ pub struct HashJoinBuildState {
     pub(crate) mutex: Mutex<()>,
 
     /// Spill related states
-    /// `send_val` is the message which will be send into `build_done_watcher` channel.
+    /// `send_val` is the message which will be sent into `build_done_watcher` channel.
     pub(crate) send_val: AtomicU8,
     /// Wait all processors finish read spilled data, then go to new round build
     pub(crate) restore_barrier: Barrier,
