@@ -46,6 +46,7 @@ pub struct BuildSpillCoordinator {
     /// If there is the last active processor, send true to watcher channel
     pub(crate) ready_spill_watcher: Sender<bool>,
     pub(crate) dummy_ready_spill_receiver: Receiver<bool>,
+    pub(crate) mutex: Mutex<()>,
 }
 
 impl BuildSpillCoordinator {
@@ -59,6 +60,7 @@ impl BuildSpillCoordinator {
             non_spill_processors: Default::default(),
             ready_spill_watcher,
             dummy_ready_spill_receiver,
+            mutex: Default::default(),
         })
     }
 
@@ -70,6 +72,7 @@ impl BuildSpillCoordinator {
 
     // If current waiting spilling builder is the last one, then spill all builders.
     pub(crate) fn wait_spill(&self) -> Result<bool> {
+        let _lock = self.mutex.lock();
         if *self.dummy_ready_spill_receiver.borrow() {
             self.ready_spill_watcher
                 .send(false)
