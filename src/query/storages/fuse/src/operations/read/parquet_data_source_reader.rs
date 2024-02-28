@@ -119,7 +119,6 @@ impl SyncSource for ReadParquetDataSource<true> {
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => {
-                info!("generate a part info");
                 let mut filters = self
                     .partitions
                     .ctx
