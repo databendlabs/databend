@@ -32,7 +32,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::SyncSenderSink;
 use databend_common_pipeline_sources::SyncReceiverSource;
 use databend_query::pipelines::executor::ExecutorSettings;
-use databend_query::pipelines::executor::PipelineExecutor;
+use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 
@@ -43,12 +43,13 @@ async fn test_always_call_on_finished() -> Result<()> {
     let settings = ExecutorSettings {
         query_id: Arc::new("".to_string()),
         max_execute_time_in_seconds: Default::default(),
+        enable_new_executor: false,
     };
 
     {
         let (called_finished, pipeline) = create_pipeline();
 
-        match PipelineExecutor::create(pipeline, settings.clone()) {
+        match QueryPipelineExecutor::create(pipeline, settings.clone()) {
             Ok(_) => unreachable!(),
             Err(error) => {
                 assert_eq!(error.code(), 1001);
@@ -70,7 +71,7 @@ async fn test_always_call_on_finished() -> Result<()> {
         pipeline.add_pipe(sink_pipe);
         pipeline.set_max_threads(1);
 
-        let executor = PipelineExecutor::create(pipeline, settings.clone())?;
+        let executor = QueryPipelineExecutor::create(pipeline, settings.clone())?;
 
         match executor.execute() {
             Ok(_) => unreachable!(),

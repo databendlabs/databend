@@ -38,6 +38,8 @@ use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::QueriesPipelineExecutor;
+use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::ProcessorPtr;
 use crate::pipelines::PipelineBuildResult;
@@ -150,11 +152,19 @@ impl PipelinePullingExecutor {
             sender,
             tracking_payload.mem_stat.clone().unwrap(),
         )?;
+        let executor = if settings.enable_new_executor {
+            PipelineExecutor::QueriesPipelineExecutor(QueriesPipelineExecutor::create(
+                pipeline, settings,
+            )?)
+        } else {
+            PipelineExecutor::QueryPipelineExecutor(QueryPipelineExecutor::create(
+                pipeline, settings,
+            )?)
+        };
 
-        let executor = PipelineExecutor::create(pipeline, settings)?;
         Ok(PipelinePullingExecutor {
             receiver,
-            executor,
+            executor: Arc::new(executor),
             state: State::create(),
             tracking_payload,
         })
@@ -178,12 +188,20 @@ impl PipelinePullingExecutor {
 
         let mut pipelines = build_res.sources_pipelines;
         pipelines.push(main_pipeline);
-
+        let executor = if settings.enable_new_executor {
+            PipelineExecutor::QueriesPipelineExecutor(QueriesPipelineExecutor::from_pipelines(
+                pipelines, settings,
+            )?)
+        } else {
+            PipelineExecutor::QueryPipelineExecutor(QueryPipelineExecutor::from_pipelines(
+                pipelines, settings,
+            )?)
+        };
         Ok(PipelinePullingExecutor {
             receiver,
             state: State::create(),
-            executor: PipelineExecutor::from_pipelines(pipelines, settings)?,
             tracking_payload,
+            executor: Arc::new(executor),
         })
     }
 
