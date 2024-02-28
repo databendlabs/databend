@@ -21,6 +21,8 @@ use std::ops::DerefMut;
 use std::ptr::null_mut;
 use std::ptr::NonNull;
 
+use databend_common_base::runtime::drop_guard;
+
 /// # Safety
 ///
 /// Any foreign type shouldn't implement this trait.
@@ -220,13 +222,15 @@ unsafe impl<T, const N: usize, A: Allocator + Clone> Container for StackContaine
 
 impl<T, const N: usize, A: Allocator> Drop for StackContainer<T, N, A> {
     fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe {
-                self.allocator.deallocate(
-                    NonNull::new(self.ptr).unwrap().cast(),
-                    Layout::array::<T>(self.len).unwrap(),
-                );
+        drop_guard(move || {
+            if !self.ptr.is_null() {
+                unsafe {
+                    self.allocator.deallocate(
+                        NonNull::new(self.ptr).unwrap().cast(),
+                        Layout::array::<T>(self.len).unwrap(),
+                    );
+                }
             }
-        }
+        })
     }
 }

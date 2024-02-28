@@ -15,6 +15,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -317,7 +318,9 @@ impl Session {
 
 impl Drop for Session {
     fn drop(&mut self) {
-        debug!("Drop session {}", self.id.clone());
-        SessionManager::instance().destroy_session(&self.id.clone());
+        drop_guard(move || {
+            debug!("Drop session {}", self.id.clone());
+            SessionManager::instance().destroy_session(&self.id.clone());
+        })
     }
 }

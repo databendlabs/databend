@@ -12,6 +12,7 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 databend-common-arrow = { path = "../../common/arrow" }
+databend-common-base = { path = "../../common/base" }
 databend-common-datavalues = { path = "../datavalues" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-hashtable = { path = "../../common/hashtable" }

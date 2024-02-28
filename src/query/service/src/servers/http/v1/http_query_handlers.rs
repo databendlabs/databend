@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_base::base::mask_connection_info;
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
@@ -485,15 +486,17 @@ impl SlowRequestLogTracker {
 
 impl Drop for SlowRequestLogTracker {
     fn drop(&mut self) {
-        let elapsed = self.started_at.elapsed();
-        if elapsed.as_secs_f64() > 60.0 {
-            warn!(
-                "{}: slow http query request on {} {}, elapsed: {:.2}s",
-                self.query_id,
-                self.method,
-                self.uri,
-                elapsed.as_secs_f64()
-            );
-        }
+        drop_guard(move || {
+            let elapsed = self.started_at.elapsed();
+            if elapsed.as_secs_f64() > 60.0 {
+                warn!(
+                    "{}: slow http query request on {} {}, elapsed: {:.2}s",
+                    self.query_id,
+                    self.method,
+                    self.uri,
+                    elapsed.as_secs_f64()
+                );
+            }
+        })
     }
 }

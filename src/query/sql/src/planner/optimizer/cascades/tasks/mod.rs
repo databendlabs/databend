@@ -15,6 +15,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 
 pub use self::apply_rule::ApplyRuleTask;
@@ -62,11 +63,13 @@ impl Clone for SharedCounter {
 
 impl Drop for SharedCounter {
     fn drop(&mut self) {
-        if self.count.get() == 0 {
-            debug_assert_eq!(Rc::strong_count(&self.count), 1);
-            return;
-        }
-        self.count.set(self.count.get() - 1);
+        drop_guard(move || {
+            if self.count.get() == 0 {
+                debug_assert_eq!(Rc::strong_count(&self.count), 1);
+                return;
+            }
+            self.count.set(self.count.get() - 1);
+        })
     }
 }
 

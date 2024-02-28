@@ -17,6 +17,8 @@ use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::ops::DerefMut;
 
+use databend_common_base::runtime::drop_guard;
+
 use super::table0::Entry;
 use super::traits::Keyable;
 
@@ -78,11 +80,13 @@ impl<K, V> DerefMut for ZeroEntry<K, V> {
 
 impl<K, V> Drop for ZeroEntry<K, V> {
     fn drop(&mut self) {
-        if let Some(e) = self.0.as_mut() {
-            unsafe {
-                e.val.assume_init_drop();
+        drop_guard(move || {
+            if let Some(e) = self.0.as_mut() {
+                unsafe {
+                    e.val.assume_init_drop();
+                }
             }
-        }
+        })
     }
 }
 

@@ -17,6 +17,7 @@ use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 use bumpalo::Bump;
+use databend_common_base::runtime::drop_guard;
 
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
@@ -336,24 +337,26 @@ impl Payload {
 
 impl Drop for Payload {
     fn drop(&mut self) {
-        // drop states
-        if !self.state_move_out {
-            for (aggr, addr_offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
-                if aggr.need_manual_drop_state() {
-                    for page in self.pages.iter() {
-                        for row in 0..page.rows {
-                            unsafe {
-                                let state_place = StateAddr::new(core::ptr::read::<u64>(
-                                    self.data_ptr(page, row).add(self.state_offset) as _,
-                                )
-                                    as usize);
+        drop_guard(move || {
+            // drop states
+            if !self.state_move_out {
+                for (aggr, addr_offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
+                    if aggr.need_manual_drop_state() {
+                        for page in self.pages.iter() {
+                            for row in 0..page.rows {
+                                unsafe {
+                                    let state_place = StateAddr::new(core::ptr::read::<u64>(
+                                        self.data_ptr(page, row).add(self.state_offset) as _,
+                                    )
+                                        as usize);
 
-                                aggr.drop_state(state_place.next(*addr_offset));
+                                    aggr.drop_state(state_place.next(*addr_offset));
+                                }
                             }
                         }
                     }
                 }
             }
-        }
+        })
     }
 }

@@ -22,6 +22,25 @@ use databend_common_exception::Result;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 
+pub fn drop_guard<F: FnOnce() -> R, R>(f: F) -> R {
+    let panicking = std::thread::panicking();
+    #[expect(clippy::disallowed_methods)]
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(res) => res,
+        Err(panic) => {
+            if panicking {
+                eprintln!("double panic");
+
+                let backtrace = std::backtrace::Backtrace::force_capture();
+                eprintln!("double panic {:?}", backtrace);
+                log::error!("double panic {:?}", backtrace);
+            }
+
+            std::panic::resume_unwind(panic)
+        }
+    }
+}
+
 pub fn catch_unwind<F: FnOnce() -> R, R>(f: F) -> Result<R> {
     #[expect(clippy::disallowed_methods)]
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
