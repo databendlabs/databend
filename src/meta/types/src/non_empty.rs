@@ -32,7 +32,7 @@ impl<'a> NonEmptyStr<'a> {
 }
 
 /// A container contains non-empty String
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NonEmptyString {
     non_empty: String,
 }

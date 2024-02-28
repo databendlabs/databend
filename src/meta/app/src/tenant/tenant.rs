@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_types::NonEmptyString;
+
 /// Tenant is not stored directly in meta-store.
 ///
 /// It is just a type for use on the client side.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, derive_more::Display)]
+#[display(fmt = "Tenant{{{tenant}}}")]
 pub struct Tenant {
     // TODO: consider using NonEmptyString?
     pub tenant: String,
@@ -25,6 +28,12 @@ impl Tenant {
     pub fn new(tenant: impl ToString) -> Self {
         Self {
             tenant: tenant.to_string(),
+        }
+    }
+
+    pub fn new_nonempty(tenant: NonEmptyString) -> Self {
+        Self {
+            tenant: tenant.as_str().to_string(),
         }
     }
 

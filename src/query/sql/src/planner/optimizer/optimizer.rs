@@ -418,7 +418,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         && opt_ctx
             .table_ctx
             .get_settings()
-            .get_join_spilling_threshold()?
+            .get_join_spilling_memory_ratio()?
             == 0
         && flag
     {
@@ -455,7 +455,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         let (optimized_distributed_merge_into_join_sexpr, distributed) = if opt_ctx
             .table_ctx
             .get_settings()
-            .get_join_spilling_threshold()?
+            .get_join_spilling_memory_ratio()?
             == 0
             && !change_join_order
             && merge_source_optimizer
