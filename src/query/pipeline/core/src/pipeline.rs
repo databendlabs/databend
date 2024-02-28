@@ -18,6 +18,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -476,14 +477,16 @@ impl Pipeline {
 
 impl Drop for Pipeline {
     fn drop(&mut self) {
-        // An error may have occurred before the executor was created.
-        if let Some(on_finished) = self.on_finished.take() {
-            let cause = Err(ErrorCode::Internal(
-                "Pipeline illegal state: not successfully shutdown.",
-            ));
+        drop_guard(move || {
+            // An error may have occurred before the executor was created.
+            if let Some(on_finished) = self.on_finished.take() {
+                let cause = Err(ErrorCode::Internal(
+                    "Pipeline illegal state: not successfully shutdown.",
+                ));
 
-            let _ = (on_finished)(&cause);
-        }
+                let _ = (on_finished)(&cause);
+            }
+        })
     }
 }
 

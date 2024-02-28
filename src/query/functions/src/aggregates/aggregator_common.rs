@@ -17,6 +17,7 @@ use std::fmt::Display;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use bumpalo::Bump;
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -125,11 +126,13 @@ impl EvalAggr {
 
 impl Drop for EvalAggr {
     fn drop(&mut self) {
-        if self.func.need_manual_drop_state() {
-            unsafe {
-                self.func.drop_state(self.addr);
+        drop_guard(move || {
+            if self.func.need_manual_drop_state() {
+                unsafe {
+                    self.func.drop_state(self.addr);
+                }
             }
-        }
+        })
     }
 }
 

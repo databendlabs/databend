@@ -20,6 +20,7 @@ use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::Thread;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -250,7 +251,9 @@ impl PipelinePullingExecutor {
 
 impl Drop for PipelinePullingExecutor {
     fn drop(&mut self) {
-        self.finish(None);
+        drop_guard(move || {
+            self.finish(None);
+        })
     }
 }
 

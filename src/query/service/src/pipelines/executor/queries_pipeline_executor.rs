@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::catch_unwind;
+use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
@@ -446,18 +447,24 @@ impl QueriesPipelineExecutor {
 
 impl Drop for QueriesPipelineExecutor {
     fn drop(&mut self) {
-        self.finish(None);
+        drop_guard(move || {
+            self.finish(None);
 
-        let mut guard = self.on_finished_callback.lock();
-        if let Some(on_finished_callback) = guard.take() {
-            drop(guard);
-            let cause = match self.finished_error.lock().as_ref() {
-                Some(cause) => cause.clone(),
-                None => ErrorCode::Internal("Pipeline illegal state: not successfully shutdown."),
-            };
-            if let Err(cause) = catch_unwind(move || on_finished_callback(&Err(cause))).flatten() {
-                warn!("Pipeline executor shutdown failure, {:?}", cause);
+            let mut guard = self.on_finished_callback.lock();
+            if let Some(on_finished_callback) = guard.take() {
+                drop(guard);
+                let cause = match self.finished_error.lock().as_ref() {
+                    Some(cause) => cause.clone(),
+                    None => {
+                        ErrorCode::Internal("Pipeline illegal state: not successfully shutdown.")
+                    }
+                };
+                if let Err(cause) =
+                    catch_unwind(move || on_finished_callback(&Err(cause))).flatten()
+                {
+                    warn!("Pipeline executor shutdown failure, {:?}", cause);
+                }
             }
-        }
+        })
     }
 }

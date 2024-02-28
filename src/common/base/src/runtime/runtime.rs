@@ -31,6 +31,7 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 use crate::runtime::catch_unwind::CatchUnwindFuture;
+use crate::runtime::drop_guard;
 use crate::runtime::memory::MemStat;
 use crate::runtime::Thread;
 use crate::runtime::ThreadJoinHandle;
@@ -323,24 +324,26 @@ pub struct Dropper {
 
 impl Drop for Dropper {
     fn drop(&mut self) {
-        // Send a signal to say i am dropping.
-        if let Some(close_sender) = self.close.take() {
-            if close_sender.send(()).is_ok() {
-                match self.join_handler.take().unwrap().join() {
-                    Err(e) => warn!("Runtime dropper panic, {:?}", e),
-                    Ok(true) => {
-                        // When the runtime shutdown is blocked for more than 3 seconds,
-                        // we will print the backtrace in the warn log, which will help us debug.
-                        warn!(
-                            "Runtime dropper is blocked 3 seconds, runtime name: {:?}, drop backtrace: {:?}",
-                            self.name,
-                            Backtrace::capture()
-                        );
-                    }
-                    _ => {}
-                };
+        drop_guard(move || {
+            // Send a signal to say i am dropping.
+            if let Some(close_sender) = self.close.take() {
+                if close_sender.send(()).is_ok() {
+                    match self.join_handler.take().unwrap().join() {
+                        Err(e) => warn!("Runtime dropper panic, {:?}", e),
+                        Ok(true) => {
+                            // When the runtime shutdown is blocked for more than 3 seconds,
+                            // we will print the backtrace in the warn log, which will help us debug.
+                            warn!(
+                                "Runtime dropper is blocked 3 seconds, runtime name: {:?}, drop backtrace: {:?}",
+                                self.name,
+                                Backtrace::capture()
+                            );
+                        }
+                        _ => {}
+                    };
+                }
             }
-        }
+        })
     }
 }
 
