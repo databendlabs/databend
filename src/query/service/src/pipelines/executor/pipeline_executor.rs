@@ -61,18 +61,4 @@ impl PipelineExecutor {
             PipelineExecutor::QueriesPipelineExecutor(executor) => executor.get_profiles(),
         }
     }
-
-    /// # Safety
-    ///
-    /// Method is thread unsafe and require thread safe call
-    pub unsafe fn execute_single_thread(self, thread_num: usize) -> Result<()> {
-        match self {
-            PipelineExecutor::QueryPipelineExecutor(executor) => {
-                executor.execute_single_thread(thread_num)
-            }
-            PipelineExecutor::QueriesPipelineExecutor(executor) => {
-                executor.execute_single_thread(thread_num)
-            }
-        }
-    }
 }
