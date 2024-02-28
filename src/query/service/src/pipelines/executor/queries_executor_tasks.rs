@@ -198,19 +198,11 @@ impl QueriesExecutorTasksQueue {
             - workers_tasks.workers_waiting_status.waiting_size()
     }
 
-    pub fn push_tasks_to_next_queue(&self, worker_id: usize, mut tasks: VecDeque<ExecutorTask>) {
-        let mut workers_tasks = self.workers_tasks.lock();
-
-        while let Some(task) = tasks.pop_front() {
-            workers_tasks.next_tasks.push_task(worker_id, task);
-        }
-    }
-
     pub fn push_tasks(
         &self,
         worker_id: usize,
         current_tasks: Option<VecDeque<ExecutorTask>>,
-        next_tasks: Option<VecDeque<ExecutorTask>>,
+        mut next_tasks: VecDeque<ExecutorTask>,
     ) {
         let mut workers_tasks = self.workers_tasks.lock();
 
@@ -219,10 +211,8 @@ impl QueriesExecutorTasksQueue {
                 workers_tasks.current_tasks.push_task(worker_id, task);
             }
         }
-        if let Some(mut tasks) = next_tasks {
-            while let Some(task) = tasks.pop_front() {
-                workers_tasks.next_tasks.push_task(worker_id, task);
-            }
+        while let Some(task) = next_tasks.pop_front() {
+            workers_tasks.next_tasks.push_task(worker_id, task);
         }
     }
 }

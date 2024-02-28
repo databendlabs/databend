@@ -524,7 +524,7 @@ impl ScheduleQueue {
             } else {
                 let mut tasks = VecDeque::with_capacity(1);
                 tasks.push_back(ExecutorTask::Async(processor));
-                global.push_tasks(context.get_worker_id(), None, Some(tasks));
+                global.push_tasks(context.get_worker_id(), None, tasks);
             }
         }
 
@@ -539,7 +539,7 @@ impl ScheduleQueue {
                 } else {
                     let mut tasks = VecDeque::with_capacity(1);
                     tasks.push_back(ExecutorTask::Sync(processor));
-                    global.push_tasks(context.get_worker_id(), None, Some(tasks));
+                    global.push_tasks(context.get_worker_id(), None, tasks);
                 }
             }
         }
@@ -558,7 +558,7 @@ impl ScheduleQueue {
                 }
             }
             let worker_id = context.get_worker_id();
-            global.push_tasks(worker_id, Some(current_tasks), Some(next_tasks));
+            global.push_tasks(worker_id, Some(current_tasks), next_tasks);
         }
     }
 

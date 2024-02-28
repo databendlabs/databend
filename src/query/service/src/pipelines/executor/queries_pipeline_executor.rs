@@ -301,7 +301,7 @@ impl QueriesPipelineExecutor {
                 let mut tasks = VecDeque::with_capacity(1);
                 tasks.push_back(ExecutorTask::Async(proc));
                 self.global_tasks_queue
-                    .push_tasks(wakeup_worker_id, None, Some(tasks));
+                    .push_tasks(wakeup_worker_id, None, tasks);
 
                 wakeup_worker_id += 1;
                 if wakeup_worker_id == self.threads_num {
