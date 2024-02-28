@@ -982,6 +982,11 @@ impl HashJoinBuildState {
                     let max = Scalar::String(domain.max.unwrap());
                     min_max_filter(min, max, probe_key)?
                 }
+                Domain::Date(date_domain) => {
+                    let min = Scalar::Date(date_domain.min);
+                    let max = Scalar::Date(date_domain.max);
+                    min_max_filter(min, max, probe_key)?
+                }
                 _ => unreachable!(),
             };
             if let Some(min_max_filter) = min_max_filter {
