@@ -17,6 +17,7 @@ use std::time::Instant;
 
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::catch_unwind;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
@@ -36,7 +37,6 @@ use minitrace::full_name;
 use minitrace::prelude::*;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
-use databend_common_base::runtime::profile::Profile;
 
 use crate::pipelines::executor::executor_graph::ScheduleQueue;
 use crate::pipelines::executor::ExecutorSettings;
