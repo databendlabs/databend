@@ -931,7 +931,7 @@ impl HashJoinBuildState {
         build_key: &Expr,
         probe_key: &Expr<String>,
     ) -> Result<()> {
-        if !build_key.runtime_filter_surported_types() {
+        if !build_key.runtime_filter_supported_types() {
             return Ok(());
         }
         if let Expr::ColumnRef { .. } = probe_key {

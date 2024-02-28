@@ -262,7 +262,7 @@ impl<Index: ColumnIndex> Expr<Index> {
         }
     }
 
-    pub fn runtime_filter_surported_types(&self) -> bool {
+    pub fn runtime_filter_supported_types(&self) -> bool {
         if self.data_type().remove_nullable().is_numeric()
             || self.data_type().remove_nullable().is_string()
             || self.data_type().remove_nullable().is_date()
