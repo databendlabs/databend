@@ -72,13 +72,9 @@ pub fn runtime_filter_pruner(
                 debug_assert_eq!(stat.min().as_ref().infer_data_type(), ty.remove_nullable());
                 let stats = vec![stat];
                 let domain = statistics_to_domain(stats, ty);
-                if let Domain::Date(x) = domain.clone() {
-                    info!("domain date: {:?}", x)
-                }
+
                 let mut input_domains = HashMap::new();
                 input_domains.insert(name.to_string(), domain.clone());
-
-                info!("filter expr:{:?}", filter);
 
                 let (new_expr, _) = ConstantFolder::fold_with_domain(
                     filter,
@@ -86,17 +82,10 @@ pub fn runtime_filter_pruner(
                     func_ctx,
                     &BUILTIN_FUNCTIONS,
                 );
-                let pruned_ = matches!(new_expr, Expr::Constant {
+                return matches!(new_expr, Expr::Constant {
                     scalar: Scalar::Boolean(false),
                     ..
                 });
-                if pruned_ {
-                    if let Domain::Date(x) = domain.clone() {
-                        info!("pruned_ domain date: {:?}", x)
-                    }
-                    info!("pruned_ filter expr:{:?}", filter);
-                }
-                return pruned_;
             }
         }
         false
