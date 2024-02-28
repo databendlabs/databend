@@ -146,7 +146,7 @@ impl HashJoinState {
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
         let mut enable_spill = false;
         if hash_join_desc.join_type == JoinType::Inner
-            && ctx.get_settings().get_join_spilling_threshold()? != 0
+            && ctx.get_settings().get_join_spilling_memory_ratio()? != 0
         {
             enable_spill = true;
         }
