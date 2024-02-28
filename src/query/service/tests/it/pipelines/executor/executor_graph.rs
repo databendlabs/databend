@@ -394,7 +394,7 @@ fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.add_pipe(create_transform_pipe(1)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline)
+    RunningGraph::create(pipeline, 1)
 }
 
 fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -406,7 +406,7 @@ fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<Running
     pipeline.add_pipe(create_transform_pipe(2)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline)
+    RunningGraph::create(pipeline, 1)
 }
 
 fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -422,7 +422,7 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.try_resize(2)?;
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline)
+    RunningGraph::create(pipeline, 1)
 }
 
 fn create_source_pipe(
@@ -497,6 +497,7 @@ async fn create_executor_with_simple_pipeline(
     let settings = ExecutorSettings {
         query_id: Arc::new("".to_string()),
         max_execute_time_in_seconds: Default::default(),
+        enable_new_executor: false,
     };
     QueryPipelineExecutor::create(pipeline, settings)
 }

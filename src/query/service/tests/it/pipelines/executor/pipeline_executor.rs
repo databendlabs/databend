@@ -43,6 +43,7 @@ async fn test_always_call_on_finished() -> Result<()> {
     let settings = ExecutorSettings {
         query_id: Arc::new("".to_string()),
         max_execute_time_in_seconds: Default::default(),
+        enable_new_executor: false,
     };
 
     {
