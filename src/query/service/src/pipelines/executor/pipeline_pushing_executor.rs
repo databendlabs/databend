@@ -33,6 +33,8 @@ use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::QueriesPipelineExecutor;
+use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::QueryContext;
@@ -97,11 +99,19 @@ impl PipelinePushingExecutor {
     ) -> Result<PipelinePushingExecutor> {
         let state = State::create();
         let sender = Self::wrap_pipeline(ctx, &mut pipeline)?;
-        let executor = PipelineExecutor::create(pipeline, settings)?;
+        let executor = if settings.enable_new_executor {
+            PipelineExecutor::QueriesPipelineExecutor(QueriesPipelineExecutor::create(
+                pipeline, settings,
+            )?)
+        } else {
+            PipelineExecutor::QueryPipelineExecutor(QueryPipelineExecutor::create(
+                pipeline, settings,
+            )?)
+        };
         Ok(PipelinePushingExecutor {
             state,
             sender,
-            executor,
+            executor: Arc::new(executor),
         })
     }
 

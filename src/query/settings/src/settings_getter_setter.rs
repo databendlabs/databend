@@ -610,4 +610,8 @@ impl Settings {
     pub fn set_enable_geo_create_table(&self, val: bool) -> Result<()> {
         self.try_set_u64("enable_geo_create_table", u64::from(val))
     }
+
+    pub fn get_enable_experimental_new_executor(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_new_executor")? == 1)
+    }
 }
