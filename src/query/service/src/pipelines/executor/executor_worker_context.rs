@@ -25,15 +25,37 @@ use databend_common_exception::Result;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::executor_graph::ProcessorWrapper;
-use crate::pipelines::executor::CompletedAsyncTask;
-use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
 
 pub enum ExecutorTask {
     None,
     Sync(ProcessorWrapper),
+    Async(ProcessorWrapper),
     AsyncCompleted(CompletedAsyncTask),
+}
+
+pub struct CompletedAsyncTask {
+    pub id: NodeIndex,
+    pub worker_id: usize,
+    pub res: Result<()>,
+    pub graph: Arc<RunningGraph>,
+}
+
+impl CompletedAsyncTask {
+    pub fn create(
+        id: NodeIndex,
+        worker_id: usize,
+        res: Result<()>,
+        graph: Arc<RunningGraph>,
+    ) -> Self {
+        CompletedAsyncTask {
+            id,
+            worker_id,
+            res,
+            graph,
+        }
+    }
 }
 
 pub struct ExecutorWorkerContext {
@@ -74,10 +96,7 @@ impl ExecutorWorkerContext {
     }
 
     /// # Safety
-    pub unsafe fn execute_task(
-        &mut self,
-        _: &Arc<PipelineExecutor>,
-    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
+    pub unsafe fn execute_task(&mut self) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
             ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
@@ -85,6 +104,7 @@ impl ExecutorWorkerContext {
                 Ok(_) => Ok(Some((task.id, task.graph))),
                 Err(cause) => Err(cause),
             },
+            ExecutorTask::Async(_) => unreachable!("used for new executor"),
         }
     }
 
@@ -118,6 +138,12 @@ impl Debug for ExecutorTask {
                 ExecutorTask::Sync(p) => write!(
                     f,
                     "ExecutorTask::Sync {{ id: {}, name: {}}}",
+                    p.processor.id().index(),
+                    p.processor.name()
+                ),
+                ExecutorTask::Async(p) => write!(
+                    f,
+                    "ExecutorTask::Async {{ id: {}, name: {}}}",
                     p.processor.id().index(),
                     p.processor.name()
                 ),
