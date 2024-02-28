@@ -31,7 +31,6 @@ use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
 use log::debug;
-use log::info;
 
 use super::parquet_data_source::ParquetDataSource;
 use crate::fuse_part::FusePartInfo;
