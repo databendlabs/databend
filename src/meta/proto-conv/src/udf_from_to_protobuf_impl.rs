@@ -106,6 +106,64 @@ impl FromToProto for mt::UDFServer {
     }
 }
 
+impl FromToProto for mt::UDFInterpreter {
+    type PB = pb::UdfInterpreter;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::UdfInterpreter) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let mut arg_types = Vec::with_capacity(p.arg_types.len());
+        for arg_type in p.arg_types {
+            let arg_type = DataType::from(&TableDataType::from_pb(arg_type)?);
+            arg_types.push(arg_type);
+        }
+        let return_type = DataType::from(&TableDataType::from_pb(p.return_type.ok_or_else(
+            || Incompatible {
+                reason: "UdfInterpreter.return_type can not be None".to_string(),
+            },
+        )?)?);
+
+        Ok(mt::UDFInterpreter {
+            code: p.code,
+            arg_types,
+            return_type,
+            handler: p.handler,
+            language: p.language,
+            runtime_version: p.runtime_version,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::UdfInterpreter, Incompatible> {
+        let mut arg_types = Vec::with_capacity(self.arg_types.len());
+        for arg_type in self.arg_types.iter() {
+            let arg_type = infer_schema_type(arg_type)
+                .map_err(|e| Incompatible {
+                    reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+                })?
+                .to_pb()?;
+            arg_types.push(arg_type);
+        }
+        let return_type = infer_schema_type(&self.return_type)
+            .map_err(|e| Incompatible {
+                reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+            })?
+            .to_pb()?;
+
+        Ok(pb::UdfInterpreter {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            code: self.code.clone(),
+            handler: self.handler.clone(),
+            language: self.language.clone(),
+            arg_types,
+            return_type: Some(return_type),
+            runtime_version: self.runtime_version.clone(),
+        })
+    }
+}
+
 impl FromToProto for mt::UserDefinedFunction {
     type PB = pb::UserDefinedFunction;
     fn get_pb_ver(p: &Self::PB) -> u64 {
@@ -119,6 +177,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             Some(pb::user_defined_function::Definition::UdfServer(udf_server)) => {
                 mt::UDFDefinition::UDFServer(mt::UDFServer::from_pb(udf_server)?)
+            }
+            Some(pb::user_defined_function::Definition::UdfInterpreter(udf_interpreter)) => {
+                mt::UDFDefinition::UDFInterpreter(mt::UDFInterpreter::from_pb(udf_interpreter)?)
             }
             None => {
                 return Err(Incompatible {
@@ -145,6 +206,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             mt::UDFDefinition::UDFServer(udf_server) => {
                 pb::user_defined_function::Definition::UdfServer(udf_server.to_pb()?)
+            }
+            mt::UDFDefinition::UDFInterpreter(udf_interpreter) => {
+                pb::user_defined_function::Definition::UdfInterpreter(udf_interpreter.to_pb()?)
             }
         };
 

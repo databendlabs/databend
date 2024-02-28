@@ -3561,6 +3561,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                 code,
                 handler,
                 language: language.to_string(),
+                // TODO inject runtime_version by user
+                // Now we use fixed runtime version
+                runtime_version: "".to_string(),
             }
         },
     );

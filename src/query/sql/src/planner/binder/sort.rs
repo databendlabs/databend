@@ -40,7 +40,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
 use crate::plans::SortItem;
-use crate::plans::UDFServerCall;
+use crate::plans::UDFCall;
 use crate::plans::VisitorMut as _;
 use crate::BindContext;
 use crate::IndexType;
@@ -382,7 +382,7 @@ impl Binder {
                         target_type: target_type.clone(),
                     }))
                 }
-                ScalarExpr::UDFServerCall(udf) => {
+                ScalarExpr::UDFCall(udf) => {
                     let new_args = udf
                         .arguments
                         .iter()
@@ -390,12 +390,12 @@ impl Binder {
                             self.rewrite_scalar_with_replacement(bind_context, arg, replacement_fn)
                         })
                         .collect::<Result<Vec<_>>>()?;
-                    Ok(UDFServerCall {
+                    Ok(UDFCall {
                         span: udf.span,
                         name: udf.name.clone(),
                         func_name: udf.func_name.clone(),
                         display_name: udf.display_name.clone(),
-                        server_addr: udf.server_addr.clone(),
+                        udf_type: udf.udf_type.clone(),
                         arg_types: udf.arg_types.clone(),
                         return_type: udf.return_type.clone(),
                         arguments: new_args,

@@ -52,6 +52,11 @@ fn encode_arguments(udf_definition: &UDFDefinition) -> jsonb::Value {
             "return_type": &x.return_type.to_string(),
         }))
             .into(),
+         UDFDefinition::UDFInterpreter(x) => (&json!({
+            "arg_types": &x.arg_types.clone().into_iter().map(|dt| dt.to_string()).collect::<Vec<String>>(),
+            "return_type": &x.return_type.to_string(),
+        }))
+            .into(),
     }
 }
 
@@ -98,6 +103,7 @@ impl AsyncSystemTable for UserFunctionsTable {
                 udfs.get(i).map_or("", |udf| match &udf.definition {
                     UDFDefinition::LambdaUDF(_) => "SQL",
                     UDFDefinition::UDFServer(x) => &x.language,
+                    UDFDefinition::UDFInterpreter(x) => &x.language,
                 })
             })
             .collect();

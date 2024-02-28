@@ -23,13 +23,24 @@ impl PipelineBuilder {
     pub(crate) fn build_udf(&mut self, udf: &Udf) -> Result<()> {
         self.build_pipeline(&udf.input)?;
 
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformUdf::try_create(
-                self.func_ctx.clone(),
-                udf.udf_funcs.clone(),
-                input,
-                output,
-            )?))
-        })
+        if udf.interpreter_udf {
+            self.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(TransformUdf::try_create(
+                    self.func_ctx.clone(),
+                    udf.udf_funcs.clone(),
+                    input,
+                    output,
+                )?))
+            })
+        } else {
+            self.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(TransformUdf::try_create(
+                    self.func_ctx.clone(),
+                    udf.udf_funcs.clone(),
+                    input,
+                    output,
+                )?))
+            })
+        }
     }
 }

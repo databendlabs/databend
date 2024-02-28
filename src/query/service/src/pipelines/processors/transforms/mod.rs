@@ -35,6 +35,7 @@ mod transform_runtime_cast_schema;
 mod transform_sort_spill;
 mod transform_srf;
 mod transform_udf;
+mod transform_udf_interpreter;
 mod window;
 
 pub use hash_join::*;

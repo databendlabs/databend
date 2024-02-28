@@ -26,7 +26,7 @@ use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
-use crate::plans::UDFServerCall;
+use crate::plans::UDFCall;
 use crate::plans::Udf;
 use crate::plans::VisitorMut;
 use crate::ColumnBindingBuilder;
@@ -46,16 +46,18 @@ pub(crate) struct UdfRewriter {
     /// Mapping: (udf function display name) -> (derived index)
     /// This is used to reuse already generated derived columns
     udf_functions_index_map: HashMap<String, IndexType>,
+    interpreter_udf: bool,
 }
 
 impl UdfRewriter {
-    pub(crate) fn new(metadata: MetadataRef) -> Self {
+    pub(crate) fn new(metadata: MetadataRef, interpreter_udf: bool) -> Self {
         Self {
             metadata,
             udf_arguments: Default::default(),
             udf_functions: Default::default(),
             udf_functions_map: Default::default(),
             udf_functions_index_map: Default::default(),
+            interpreter_udf,
         }
     }
 
@@ -74,7 +76,7 @@ impl UdfRewriter {
             RelOperator::EvalScalar(mut plan) => {
                 for item in &plan.items {
                     // The index of Udf item can be reused.
-                    if let ScalarExpr::UDFServerCall(udf) = &item.scalar {
+                    if let ScalarExpr::UDFCall(udf) = &item.scalar {
                         self.udf_functions_index_map
                             .insert(udf.display_name.clone(), item.index);
                     }
@@ -115,6 +117,7 @@ impl UdfRewriter {
 
             let udf_plan = Udf {
                 items: mem::take(&mut self.udf_functions),
+                interpreter_udf: self.interpreter_udf,
             };
             Arc::new(SExpr::create_unary(Arc::new(udf_plan.into()), child_expr))
         } else {
@@ -127,7 +130,7 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
         walk_expr_mut(self, expr)?;
         // replace udf with derived column
-        if let ScalarExpr::UDFServerCall(udf) = expr {
+        if let ScalarExpr::UDFCall(udf) = expr {
             if let Some(column_ref) = self.udf_functions_map.get(&udf.display_name) {
                 *expr = ScalarExpr::BoundColumnRef(column_ref.clone());
             } else {
@@ -137,9 +140,13 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
         Ok(())
     }
 
-    fn visit_udf_server_call(&mut self, udf: &'a mut UDFServerCall) -> Result<()> {
+    fn visit_udf_call(&mut self, udf: &'a mut UDFCall) -> Result<()> {
+        if udf.udf_type.as_interepter().is_some() && !self.interpreter_udf {
+            return Ok(());
+        }
+
         for (i, arg) in udf.arguments.iter_mut().enumerate() {
-            if let ScalarExpr::UDFServerCall(_) = arg {
+            if let ScalarExpr::UDFCall(_) = arg {
                 return Err(ErrorCode::InvalidArgument(
                     "the argument of UDF server call can't be a UDF server call",
                 ));

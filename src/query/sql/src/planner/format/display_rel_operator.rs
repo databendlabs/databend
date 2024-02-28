@@ -92,7 +92,7 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
             )
         }
         ScalarExpr::SubqueryExpr(_) => "SUBQUERY".to_string(),
-        ScalarExpr::UDFServerCall(udf) => {
+        ScalarExpr::UDFCall(udf) => {
             format!(
                 "{}({})",
                 &udf.func_name,

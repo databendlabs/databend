@@ -42,6 +42,7 @@ pub enum UDFDefinition {
         code: String,
         handler: String,
         language: String,
+        runtime_version: String,
     },
 }
 
@@ -91,12 +92,13 @@ impl Display for UDFDefinition {
                 code,
                 handler,
                 language,
+                runtime_version,
             } => {
                 write!(f, "(")?;
                 write_comma_separated_list(f, arg_types)?;
                 write!(
                     f,
-                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler} AS $${code}$$"
+                    ") RETURNS {return_type} LANGUAGE {language} runtime_version = {runtime_version} HANDLER = {handler} AS $${code}$$"
                 )?;
             }
         }

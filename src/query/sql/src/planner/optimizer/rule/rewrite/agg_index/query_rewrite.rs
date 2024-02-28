@@ -39,7 +39,7 @@ use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::SortItem;
-use crate::plans::UDFServerCall;
+use crate::plans::UDFCall;
 use crate::plans::VisitorMut;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -823,7 +823,7 @@ impl RewriteInfomartion<'_> {
                         .join(", ")
                 )
             }
-            ScalarExpr::UDFServerCall(udf) => format!(
+            ScalarExpr::UDFCall(udf) => format!(
                 "{}({})",
                 &udf.func_name,
                 udf.arguments
@@ -832,6 +832,7 @@ impl RewriteInfomartion<'_> {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
+
             _ => unreachable!(), // Window function and subquery will not appear in index.
         }
     }
@@ -1124,19 +1125,19 @@ fn rewrite_query_item(
                 .into(),
             )
         }
-        ScalarExpr::UDFServerCall(udf) => {
+        ScalarExpr::UDFCall(udf) => {
             let mut new_args = Vec::with_capacity(udf.arguments.len());
             for arg in udf.arguments.iter() {
                 let new_arg = rewrite_by_selection(query_info, arg, index_selection)?;
                 new_args.push(new_arg);
             }
             Some(
-                UDFServerCall {
+                UDFCall {
                     span: udf.span,
                     name: udf.name.clone(),
                     func_name: udf.func_name.clone(),
                     display_name: udf.display_name.clone(),
-                    server_addr: udf.server_addr.clone(),
+                    udf_type: udf.udf_type.clone(),
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),
                     arguments: new_args,
@@ -1144,6 +1145,7 @@ fn rewrite_query_item(
                 .into(),
             )
         }
+        // TODO UDF interpreter
         ScalarExpr::AggregateFunction(_) => None, /* Aggregate function must appear in index selection. */
         _ => unreachable!(), // Window function and subquery will not appear in index.
     }

@@ -495,6 +495,7 @@ pub trait PhysicalPlanReplacer {
             input: Box::new(input),
             udf_funcs: plan.udf_funcs.clone(),
             stat_info: plan.stat_info.clone(),
+            interpreter_udf: plan.interpreter_udf,
         }))
     }
 }

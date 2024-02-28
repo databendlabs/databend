@@ -31,6 +31,7 @@ use crate::plans::ScalarItem;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Udf {
     pub items: Vec<ScalarItem>,
+    pub interpreter_udf: bool,
 }
 
 impl Udf {

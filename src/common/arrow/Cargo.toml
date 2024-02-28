@@ -112,7 +112,7 @@ ethnum = { workspace = true }
 simdutf8 = "0.1.4"
 
 # A Rust port of SwissTable
-hashbrown = { version = "0.14", default-features = false, features = ["ahash"] }
+hashbrown = {  workspace = true , features = ["ahash"] }
 
 # for timezone support
 chrono-tz = { workspace = true, optional = true }

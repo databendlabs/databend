@@ -687,7 +687,7 @@ impl<'a> Binder {
                 scalar,
                 ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::UDFServerCall(_)
+                    | ScalarExpr::UDFCall(_)
                     | ScalarExpr::SubqueryExpr(_)
             )
         };
@@ -698,7 +698,7 @@ impl<'a> Binder {
 
     // add check for SExpr to disable invalid source for copy/insert/merge/replace
     pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr) -> Result<bool> {
-        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFServerCall(_));
+        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFCall(_));
         let mut finder = Finder::new(&f);
         Self::check_sexpr(s_expr, &mut finder)
     }
@@ -810,7 +810,7 @@ impl<'a> Binder {
                 scalar,
                 ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::UDFServerCall(_)
+                    | ScalarExpr::UDFCall(_)
             )
         };
         let mut finder = Finder::new(&f);

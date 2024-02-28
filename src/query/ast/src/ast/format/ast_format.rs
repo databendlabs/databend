@@ -2169,6 +2169,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 code,
                 handler,
                 language,
+                runtime_version,
             } => {
                 if !arg_types.is_empty() {
                     let mut arg_types_children = Vec::with_capacity(arg_types.len());
@@ -2196,8 +2197,12 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let language_format_ctx = AstFormatContext::new(format!("UdfLanguage {language}"));
                 children.push(FormatTreeNode::new(language_format_ctx));
 
-                let address_format_ctx = AstFormatContext::new(format!("UdfCode {code}"));
-                children.push(FormatTreeNode::new(address_format_ctx));
+                let code_format_ctx = AstFormatContext::new(format!("UdfCode {code}"));
+                children.push(FormatTreeNode::new(code_format_ctx));
+
+                let runtime_format_ctx: AstFormatContext =
+                    AstFormatContext::new(format!("RuntimeVersion {runtime_version}"));
+                children.push(FormatTreeNode::new(runtime_format_ctx));
             }
         }
 
@@ -2302,6 +2307,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 code,
                 handler,
                 language,
+                runtime_version,
             } => {
                 if !arg_types.is_empty() {
                     let mut arg_types_children = Vec::with_capacity(arg_types.len());
@@ -2329,8 +2335,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let language_format_ctx = AstFormatContext::new(format!("UdfLanguage {language}"));
                 children.push(FormatTreeNode::new(language_format_ctx));
 
-                let address_format_ctx = AstFormatContext::new(format!("UdfCode {code}"));
-                children.push(FormatTreeNode::new(address_format_ctx));
+                let code_format_ctx = AstFormatContext::new(format!("UdfCode {code}"));
+                children.push(FormatTreeNode::new(code_format_ctx));
+
+                let c = AstFormatContext::new(format!("RuntimeVersion {runtime_version}"));
+                children.push(FormatTreeNode::new(c));
             }
         }
 

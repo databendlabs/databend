@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::variant_transform::contains_variant;
 use databend_common_expression::variant_transform::transform_variant;
 use databend_common_expression::BlockEntry;
@@ -32,12 +31,12 @@ use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
 
-pub struct TransformUdf {
+pub struct TransformUdfInterpreter {
     func_ctx: FunctionContext,
     funcs: Vec<UdfFunctionDesc>,
 }
 
-impl TransformUdf {
+impl TransformUdfInterpreter {
     pub fn try_create(
         func_ctx: FunctionContext,
         funcs: Vec<UdfFunctionDesc>,
@@ -52,17 +51,16 @@ impl TransformUdf {
 }
 
 #[async_trait::async_trait]
-impl AsyncTransform for TransformUdf {
-    const NAME: &'static str = "UdfTransform";
+impl AsyncTransform for TransformUdfInterpreter {
+    const NAME: &'static str = "UdfInterpreterTransform";
 
     #[async_backtrace::framed]
     async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
-        let connect_timeout = self.func_ctx.external_server_connect_timeout_secs;
-        let request_timeout = self.func_ctx.external_server_request_timeout_secs;
+        let num_rows = data_block.num_rows();
         for func in &self.funcs {
-            let server_addr = func.udf_type.as_server().unwrap();
+            let (lang, version, code) = func.udf_type.as_interepter().unwrap();
+
             // construct input record_batch
-            let num_rows = data_block.num_rows();
             let block_entries = func
                 .arg_indices
                 .iter()
@@ -91,51 +89,7 @@ impl AsyncTransform for TransformUdf {
                 .to_record_batch(&data_schema)
                 .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
-            let mut client =
-                UDFFlightClient::connect(server_addr, connect_timeout, request_timeout).await?;
-            let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
-
-            let schema = DataSchema::try_from(&(*result_batch.schema()))?;
-            let (result_block, result_schema) =
-                DataBlock::from_record_batch(&schema, &result_batch).map_err(|err| {
-                    ErrorCode::UDFDataError(format!(
-                        "Cannot convert arrow record batch to data block: {err}"
-                    ))
-                })?;
-
-            let result_fields = result_schema.fields();
-            if result_fields.is_empty() || result_block.is_empty() {
-                return Err(ErrorCode::EmptyDataFromServer(
-                    "Get empty data from UDF Server",
-                ));
-            }
-
-            if result_fields[0].data_type() != &*func.data_type {
-                return Err(ErrorCode::UDFSchemaMismatch(format!(
-                    "UDF server return incorrect type, expected: {}, but got: {}",
-                    func.data_type,
-                    result_fields[0].data_type()
-                )));
-            }
-            if result_block.num_rows() != num_rows {
-                return Err(ErrorCode::UDFDataError(format!(
-                    "UDF server should return {} rows, but it returned {} rows",
-                    num_rows,
-                    result_block.num_rows()
-                )));
-            }
-
-            let col = if contains_variant(&func.data_type) {
-                let value = transform_variant(&result_block.get_by_offset(0).value, false)?;
-                BlockEntry {
-                    data_type: result_fields[0].data_type().clone(),
-                    value,
-                }
-            } else {
-                result_block.get_by_offset(0).clone()
-            };
-
-            data_block.add_column(col);
+            todo!()
         }
         Ok(data_block)
     }

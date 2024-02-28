@@ -24,6 +24,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
+use databend_common_meta_app::principal::UDFInterpreter;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 
@@ -87,9 +88,9 @@ impl Binder {
 
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                 for arg_type in arg_types {
-                    arg_datatypes.push(DataType::from(&resolve_type_name(arg_type, true)?));
+                    arg_datatypes.push(DataType::from(&resolve_type_name(arg_type, false)?));
                 }
-                let return_type = DataType::from(&resolve_type_name(return_type, true)?);
+                let return_type = DataType::from(&resolve_type_name(return_type, false)?);
 
                 let mut client = UDFFlightClient::connect(
                     address,
@@ -114,6 +115,45 @@ impl Binder {
                         return_type,
                         handler: handler.clone(),
                         language: language.clone(),
+                    }),
+                    created_on: Utc::now(),
+                })
+            }
+            UDFDefinition::UDFInterpreter {
+                arg_types,
+                return_type,
+                code,
+                handler,
+                language,
+                runtime_version,
+            } => {
+                let mut arg_datatypes = Vec::with_capacity(arg_types.len());
+                for arg_type in arg_types {
+                    arg_datatypes.push(DataType::from(&resolve_type_name(arg_type, false)?));
+                }
+                let return_type = DataType::from(&resolve_type_name(return_type, false)?);
+
+                if !["python", "javascript"].contains(&language.to_lowercase().as_str()) {
+                    return Err(ErrorCode::InvalidArgument(format!(
+                        "Unallowed UDF language '{language}', must be python or javascript"
+                    )));
+                }
+
+                let mut runtime_version = runtime_version.to_string();
+                if runtime_version.is_empty() && language.to_lowercase() == "python" {
+                    runtime_version = "3.12.0".to_string();
+                }
+
+                Ok(UserDefinedFunction {
+                    name: udf_name.to_string(),
+                    description: udf_description.clone().unwrap_or_default(),
+                    definition: PlanUDFDefinition::UDFInterpreter(UDFInterpreter {
+                        code: code.clone(),
+                        arg_types: arg_datatypes,
+                        return_type,
+                        handler: handler.clone(),
+                        language: language.clone(),
+                        runtime_version,
                     }),
                     created_on: Utc::now(),
                 })

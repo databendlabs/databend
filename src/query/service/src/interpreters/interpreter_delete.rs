@@ -414,7 +414,7 @@ fn do_replace_subquery(
                 }
             }
         }
-        ScalarExpr::UDFServerCall(udf) => {
+        ScalarExpr::UDFCall(udf) => {
             for arg in &mut udf.arguments {
                 if !do_replace_subquery(filters, arg)? {
                     replace_selection_with_filter = Some(filters.pop_back().unwrap());
@@ -422,6 +422,7 @@ fn do_replace_subquery(
                 }
             }
         }
+
         ScalarExpr::SubqueryExpr { .. } => {
             if data_type == DataType::Nullable(Box::new(DataType::Boolean)) {
                 let filter = filters.pop_back().unwrap();
