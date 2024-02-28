@@ -232,7 +232,6 @@ impl Processor for ReadParquetDataSource<false> {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         let parts = self.partitions.steal(self.id, self.batch_size);
-        info!("parts len: {}", parts.len());
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
             let mut filters = self
@@ -245,7 +244,6 @@ impl Processor for ReadParquetDataSource<false> {
                     .get_min_max_runtime_filter_with_id(self.table_index),
             );
             let mut fuse_part_infos = Vec::with_capacity(parts.len());
-            info!("filters len: {}", filters.len());
             for part in parts.into_iter() {
                 if runtime_filter_pruner(
                     self.table_schema.clone(),
