@@ -27,6 +27,10 @@ impl Tenant {
             tenant: tenant.to_string(),
         }
     }
+
+    pub fn name(&self) -> &str {
+        &self.tenant
+    }
 }
 
 mod kvapi_key_impl {

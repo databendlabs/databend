@@ -120,6 +120,9 @@ function install_ziglang {
 	brew)
 		install_pkg zig "$PACKAGE_MANAGER"
 		;;
+	apk)
+		echo "TODO: install ziglang for alpine"
+		;;
 	*)
 		echo "Unable to install ziglang with package manager: $PACKAGE_MANAGER"
 		exit 1
@@ -201,7 +204,7 @@ function install_protobuf {
 	echo "==> installing protobuf compiler..."
 
 	case "$PACKAGE_MANAGER" in
-	brew)
+	brew | apk)
 		install_pkg protobuf "$PACKAGE_MANAGER"
 		;;
 	*)
@@ -343,7 +346,6 @@ function install_sqlite3 {
 		;;
 	apk)
 		install_pkg sqlite-dev "$PACKAGE_MANAGER"
-		install_pkg sqlite "$PACKAGE_MANAGER"
 		;;
 	yum | dnf)
 		install_pkg sqlite-devel "$PACKAGE_MANAGER"

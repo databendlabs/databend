@@ -20,6 +20,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::time::Duration;
+use std::time::SystemTime;
 
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
@@ -308,6 +309,7 @@ impl SessionManager {
 
         let mut running_queries_count = 0;
         let mut active_sessions_count = 0;
+        let mut max_running_query_execute_time = 0;
 
         let active_sessions = self.active_sessions.read();
         for session in active_sessions.values() {
@@ -318,12 +320,21 @@ impl SessionManager {
                 active_sessions_count += 1;
                 if session_ref.process_info().state == ProcessInfoState::Query {
                     running_queries_count += 1;
+                    if let Some(shared) = session_ref.session_ctx.get_query_context_shared() {
+                        let executed_time =
+                            shared.get_created_time().duration_since(SystemTime::now());
+                        let execute_time_seconds = executed_time.map(|x| x.as_secs()).unwrap_or(0);
+
+                        max_running_query_execute_time =
+                            std::cmp::max(max_running_query_execute_time, execute_time_seconds);
+                    }
                 }
             }
         }
 
         status_t.running_queries_count = running_queries_count;
         status_t.active_sessions_count = active_sessions_count;
+        status_t.max_running_query_execute_time = max_running_query_execute_time;
         status_t
     }
 
