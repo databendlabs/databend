@@ -311,6 +311,7 @@ impl SessionManager {
         let mut active_sessions_count = 0;
         let mut max_running_query_execute_time = 0;
 
+        let now = SystemTime::now();
         let active_sessions = self.active_sessions.read();
         for session in active_sessions.values() {
             if let Some(session_ref) = session.upgrade() {
@@ -318,16 +319,15 @@ impl SessionManager {
                     continue;
                 }
                 active_sessions_count += 1;
-                if session_ref.process_info().state == ProcessInfoState::Query {
+                let process_info = session_ref.process_info();
+                if process_info.state == ProcessInfoState::Query {
                     running_queries_count += 1;
-                    if let Some(shared) = session_ref.session_ctx.get_query_context_shared() {
-                        let executed_time =
-                            shared.get_created_time().duration_since(SystemTime::now());
-                        let execute_time_seconds = executed_time.map(|x| x.as_secs()).unwrap_or(0);
 
-                        max_running_query_execute_time =
-                            std::cmp::max(max_running_query_execute_time, execute_time_seconds);
-                    }
+                    let executed_time = process_info.created_time.duration_since(now);
+                    let execute_time_seconds = executed_time.map(|x| x.as_secs()).unwrap_or(0);
+
+                    max_running_query_execute_time =
+                        std::cmp::max(max_running_query_execute_time, execute_time_seconds);
                 }
             }
         }

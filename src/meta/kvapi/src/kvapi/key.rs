@@ -35,6 +35,9 @@ pub enum KeyError {
         got: String,
     },
 
+    #[error("Expect {i}-th segment to be non-empty")]
+    EmptySegment { i: usize },
+
     #[error("Expect {expect} segments, but: '{got}'")]
     WrongNumberOfSegments { expect: usize, got: String },
 

@@ -269,8 +269,12 @@ impl Settings {
         Ok(self.unchecked_try_get_u64("disable_join_reorder")? != 0)
     }
 
-    pub fn get_join_spilling_threshold(&self) -> Result<usize> {
-        Ok(self.try_get_u64("join_spilling_threshold")? as usize)
+    pub fn get_join_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_memory_ratio")? as usize)
+    }
+
+    pub fn get_join_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_bytes_threshold_per_proc")? as usize)
     }
 
     pub fn get_bloom_runtime_filter(&self) -> Result<bool> {

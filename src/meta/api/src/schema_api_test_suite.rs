@@ -118,6 +118,7 @@ use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
@@ -3600,12 +3601,13 @@ impl SchemaApiTestSuite {
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant = "db_table_gc_out_of_retention_time";
+        let tenant_name = "db_table_gc_out_of_retention_time";
+        let tenant = Tenant::new(tenant_name);
         let db1_name = "db1";
         let tb1_name = "tb1";
         let idx1_name = "idx1";
         let tbl_name_ident = TableNameIdent {
-            tenant: tenant.to_string(),
+            tenant: tenant_name.to_string(),
             db_name: db1_name.to_string(),
             table_name: tb1_name.to_string(),
         };
@@ -3613,7 +3615,7 @@ impl SchemaApiTestSuite {
         let plan = CreateDatabaseReq {
             create_option: CreateOption::CreateIfNotExists(false),
             name_ident: DatabaseNameIdent {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 db_name: db1_name.to_string(),
             },
             meta: DatabaseMeta {
@@ -3688,7 +3690,7 @@ impl SchemaApiTestSuite {
         let agg_index_create_req = CreateIndexReq {
             create_option: CreateOption::CreateIfNotExists(true),
             name_ident: IndexNameIdent {
-                tenant: tenant.to_string(),
+                tenant: tenant.clone(),
                 index_name: idx1_name.to_string(),
             },
             meta: IndexMeta {
@@ -3718,7 +3720,7 @@ impl SchemaApiTestSuite {
         upsert_test_data(mt.as_kv_api(), &id_key, data).await?;
 
         let dbid_idlist1 = DbIdListKey {
-            tenant: tenant.to_string(),
+            tenant: tenant_name.to_string(),
             db_name: db1_name.to_string(),
         };
         let old_id_list: DbIdList = get_kv_data(mt.as_kv_api(), &dbid_idlist1).await?;
@@ -3738,7 +3740,7 @@ impl SchemaApiTestSuite {
         {
             let req = ListDroppedTableReq {
                 inner: DatabaseNameIdent {
-                    tenant: tenant.to_string(),
+                    tenant: tenant_name.to_string(),
                     db_name: "".to_string(),
                 },
                 filter: TableInfoFilter::AllDroppedTables(None),
@@ -3747,7 +3749,7 @@ impl SchemaApiTestSuite {
             let resp = mt.get_drop_table_infos(req).await?;
 
             let req = GcDroppedTableReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 drop_ids: resp.drop_ids.clone(),
             };
             let _resp = mt.gc_drop_tables(req).await?;
@@ -5727,9 +5729,10 @@ impl SchemaApiTestSuite {
     #[minitrace::trace]
     async fn index_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
-        let tenant = "tenant1";
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new(tenant_name);
 
-        let mut util = Util::new(mt, tenant, "db1", "tb1", "eng1");
+        let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;
         let index_id;
 
@@ -5767,19 +5770,19 @@ impl SchemaApiTestSuite {
         };
 
         let name_ident_1 = IndexNameIdent {
-            tenant: tenant.to_string(),
+            tenant: tenant.clone(),
             index_name: index_name_1.to_string(),
         };
 
         let name_ident_2 = IndexNameIdent {
-            tenant: tenant.to_string(),
+            tenant: tenant.clone(),
             index_name: index_name_2.to_string(),
         };
 
         {
             info!("--- list index with no create before");
             let req = ListIndexesReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 table_id: Some(table_id),
             };
 
@@ -5837,7 +5840,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- list index");
             let req = ListIndexesReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 table_id: None,
             };
 
@@ -5845,7 +5848,7 @@ impl SchemaApiTestSuite {
             assert_eq!(2, res.len());
 
             let req = ListIndexesReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 table_id: Some(u64::MAX),
             };
 
@@ -5856,7 +5859,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- list indexes by table id");
             let req = ListIndexesByIdReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 table_id,
             };
 
@@ -5878,7 +5881,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- list index after drop one");
             let req = ListIndexesReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 table_id: Some(table_id),
             };
 
@@ -5889,7 +5892,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- check list index content");
             let req = ListIndexesReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 table_id: Some(table_id),
             };
 
@@ -5912,7 +5915,7 @@ impl SchemaApiTestSuite {
             assert!(res.is_ok());
 
             let req = ListIndexesReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 table_id: Some(table_id),
             };
 
@@ -5947,7 +5950,7 @@ impl SchemaApiTestSuite {
             info!("--- create or replace index");
             let replace_index_name = "replace_idx";
             let replace_name_ident = IndexNameIdent {
-                tenant: tenant.to_string(),
+                tenant: tenant.clone(),
                 index_name: replace_index_name.to_string(),
             };
             let req = CreateIndexReq {
