@@ -24,6 +24,7 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Domain;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
@@ -71,8 +72,13 @@ pub fn runtime_filter_pruner(
                 debug_assert_eq!(stat.min().as_ref().infer_data_type(), ty.remove_nullable());
                 let stats = vec![stat];
                 let domain = statistics_to_domain(stats, ty);
+                if let Domain::Date(x) = domain {
+                    info!("domain date: {:?}", x)
+                }
                 let mut input_domains = HashMap::new();
                 input_domains.insert(name.to_string(), domain);
+                info!("filter expr:{:?}", filter);
+
                 let (new_expr, _) = ConstantFolder::fold_with_domain(
                     filter,
                     &input_domains,
