@@ -16,4 +16,4 @@ mod probe_spill_state;
 mod transform_probe_spill;
 
 pub use probe_spill_state::ProbeSpillState;
-pub use transform_probe_spill::SpillHandler;
+pub use transform_probe_spill::ProbeSpillHandler;

@@ -120,7 +120,7 @@ opendal = { version = "0.45.0", features = [
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 # openraft for debugging
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.9.0-alpha.5", features = [
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.9.0-alpha.6", features = [
     "compat-07",
     "tracing-log",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.

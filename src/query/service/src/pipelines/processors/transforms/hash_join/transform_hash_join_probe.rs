@@ -24,8 +24,8 @@ use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::JoinType;
 use log::info;
 
+use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillHandler;
 use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillState;
-use crate::pipelines::processors::transforms::hash_join::probe_spill::SpillHandler;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::Event;
@@ -64,7 +64,7 @@ pub struct TransformHashJoinProbe {
     pub(crate) outer_scan_finished: bool,
     pub(crate) processor_id: usize,
 
-    pub(crate) spill_handler: SpillHandler,
+    pub(crate) spill_handler: ProbeSpillHandler,
 }
 
 impl TransformHashJoinProbe {
@@ -87,7 +87,7 @@ impl TransformHashJoinProbe {
             .hash_join_desc
             .other_predicate
             .clone();
-        let spill_handler = SpillHandler::new(probe_spill_state);
+        let spill_handler = ProbeSpillHandler::new(probe_spill_state);
         Ok(Box::new(TransformHashJoinProbe {
             input_port,
             output_port,

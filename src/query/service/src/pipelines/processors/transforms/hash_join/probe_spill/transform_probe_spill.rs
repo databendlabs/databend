@@ -23,14 +23,14 @@ use crate::pipelines::processors::transforms::hash_join::transform_hash_join_pro
 use crate::pipelines::processors::transforms::ProbeSpillState;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
 
-pub struct SpillHandler {
+pub struct ProbeSpillHandler {
     // If `spill_state` is `None`, it means spilling isn't enabled.
     spill_state: Option<Box<ProbeSpillState>>,
     // If the processor has finished spill, set it to true.
     spill_done: bool,
 }
 
-impl SpillHandler {
+impl ProbeSpillHandler {
     pub fn new(spill_state: Option<Box<ProbeSpillState>>) -> Self {
         Self {
             spill_state,

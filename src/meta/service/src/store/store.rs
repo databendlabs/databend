@@ -89,7 +89,7 @@ impl Deref for RaftStore {
 
 impl RaftLogReader<TypeConfig> for RaftStore {
     #[minitrace::trace]
-    async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send + Sync>(
+    async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send>(
         &mut self,
         range: RB,
     ) -> Result<Vec<Entry>, StorageError> {
