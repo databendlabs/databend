@@ -24,7 +24,6 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Domain;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
