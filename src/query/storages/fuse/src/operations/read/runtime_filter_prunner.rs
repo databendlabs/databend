@@ -72,11 +72,11 @@ pub fn runtime_filter_pruner(
                 debug_assert_eq!(stat.min().as_ref().infer_data_type(), ty.remove_nullable());
                 let stats = vec![stat];
                 let domain = statistics_to_domain(stats, ty);
-                if let Domain::Date(x) = domain {
+                if let Domain::Date(x) = domain.clone() {
                     info!("domain date: {:?}", x)
                 }
                 let mut input_domains = HashMap::new();
-                input_domains.insert(name.to_string(), domain);
+                input_domains.insert(name.to_string(), domain.clone());
                 info!("filter expr:{:?}", filter);
 
                 let (new_expr, _) = ConstantFolder::fold_with_domain(
