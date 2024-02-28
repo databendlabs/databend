@@ -7,6 +7,9 @@ statement ok
 set join_spilling_threshold = 1;
 
 statement ok
+drop table if exists t3;
+
+statement ok
 create table t3(a int);
 
 query I
