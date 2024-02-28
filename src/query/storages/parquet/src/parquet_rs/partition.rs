@@ -24,13 +24,13 @@ use parquet::format::SchemaElement;
 use parquet::schema::types::from_thrift;
 use parquet::schema::types::to_thrift;
 use parquet::schema::types::SchemaDescriptor;
+use parquet::thrift::TSerializable;
 use serde::Deserialize;
 use thrift::protocol::TCompactInputProtocol;
 use thrift::protocol::TCompactOutputProtocol;
 use thrift::protocol::TInputProtocol;
 use thrift::protocol::TListIdentifier;
 use thrift::protocol::TOutputProtocol;
-use thrift::protocol::TSerializable;
 use thrift::protocol::TType;
 
 /// Serializable row selector.

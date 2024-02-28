@@ -105,26 +105,18 @@ pub fn str_to_scalar(value: &str, data_type: &DataType) -> Result<Scalar> {
 }
 
 pub fn get_partition_values(add: &Add, fields: &[&TableField]) -> Result<Vec<Scalar>> {
-    match &add.partition_values_parsed {
-        Some(row) => row
-            .get_column_iter()
-            .map(|(_, field)| field_to_value(field))
-            .collect(),
-        None => {
-            let mut values = Vec::with_capacity(fields.len());
-            for f in fields {
-                match add.partition_values.get(&f.name) {
-                    Some(Some(v)) => values.push(str_to_scalar(v, &f.data_type().into())?),
-                    Some(None) => values.push(Scalar::Null),
-                    None => {
-                        return Err(ErrorCode::BadArguments(format!(
-                            "partition value for column {} not found",
-                            &f.name
-                        )));
-                    }
-                }
+    let mut values = Vec::with_capacity(fields.len());
+    for f in fields {
+        match add.partition_values.get(&f.name) {
+            Some(Some(v)) => values.push(str_to_scalar(v, &f.data_type().into())?),
+            Some(None) => values.push(Scalar::Null),
+            None => {
+                return Err(ErrorCode::BadArguments(format!(
+                    "partition value for column {} not found",
+                    &f.name
+                )));
             }
-            Ok(values)
         }
     }
+    Ok(values)
 }
