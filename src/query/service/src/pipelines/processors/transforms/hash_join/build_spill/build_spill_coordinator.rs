@@ -72,7 +72,7 @@ impl BuildSpillCoordinator {
 
     // If current waiting spilling builder is the last one, then spill all builders.
     pub(crate) fn wait_spill(&self) -> Result<bool> {
-        let _ = self.mutex.lock();
+        let _lock = self.mutex.lock();
         if *self.dummy_ready_spill_receiver.borrow() {
             self.ready_spill_watcher
                 .send(false)
