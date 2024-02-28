@@ -73,7 +73,7 @@ pub fn runtime_filter_pruner(
                 let stats = vec![stat];
                 let domain = statistics_to_domain(stats, ty);
                 let mut input_domains = HashMap::new();
-                input_domains.insert(name.to_string(), domain.clone());
+                input_domains.insert(name.to_string(), domain);
 
                 let (new_expr, _) = ConstantFolder::fold_with_domain(
                     filter,
