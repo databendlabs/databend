@@ -30,7 +30,7 @@ use databend_common_pipeline_sources::BlocksSource;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::ExecutorWorkerContext;
-use databend_query::pipelines::executor::PipelineExecutor;
+use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::executor::WorkersCondvar;
 use databend_query::pipelines::processors::InputPort;
@@ -486,7 +486,7 @@ fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pi
 async fn create_executor_with_simple_pipeline(
     ctx: Arc<QueryContext>,
     size: usize,
-) -> Result<Arc<PipelineExecutor>> {
+) -> Result<Arc<QueryPipelineExecutor>> {
     let (_rx, sink_pipe) = create_sink_pipe(size)?;
     let (_tx, source_pipe) = create_source_pipe(ctx, size)?;
     let mut pipeline = Pipeline::create();
@@ -498,5 +498,5 @@ async fn create_executor_with_simple_pipeline(
         query_id: Arc::new("".to_string()),
         max_execute_time_in_seconds: Default::default(),
     };
-    PipelineExecutor::create(pipeline, settings)
+    QueryPipelineExecutor::create(pipeline, settings)
 }

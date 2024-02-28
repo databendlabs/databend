@@ -17,27 +17,25 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_exception::Result;
 use parking_lot::Mutex;
-use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::executor_graph::ProcessorWrapper;
+use crate::pipelines::executor::executor_worker_context::CompletedAsyncTask;
 use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
-use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::WorkersWaitingStatus;
 
-pub struct ExecutorTasksQueue {
+pub struct QueryExecutorTasksQueue {
     finished: Arc<AtomicBool>,
     finished_notify: Arc<WatchNotify>,
     workers_tasks: Mutex<ExecutorTasks>,
 }
 
-impl ExecutorTasksQueue {
-    pub fn create(workers_size: usize) -> Arc<ExecutorTasksQueue> {
-        Arc::new(ExecutorTasksQueue {
+impl QueryExecutorTasksQueue {
+    pub fn create(workers_size: usize) -> Arc<QueryExecutorTasksQueue> {
+        Arc::new(QueryExecutorTasksQueue {
             finished: Arc::new(AtomicBool::new(false)),
             finished_notify: Arc::new(WatchNotify::new()),
             workers_tasks: Mutex::new(ExecutorTasks::create(workers_size)),
@@ -194,29 +192,6 @@ impl ExecutorTasksQueue {
     }
 }
 
-pub struct CompletedAsyncTask {
-    pub id: NodeIndex,
-    pub worker_id: usize,
-    pub res: Result<()>,
-    pub graph: Arc<RunningGraph>,
-}
-
-impl CompletedAsyncTask {
-    pub fn create(
-        id: NodeIndex,
-        worker_id: usize,
-        res: Result<()>,
-        graph: Arc<RunningGraph>,
-    ) -> Self {
-        CompletedAsyncTask {
-            id,
-            worker_id,
-            res,
-            graph,
-        }
-    }
-}
-
 struct ExecutorTasks {
     tasks_size: usize,
     workers_waiting_status: WorkersWaitingStatus,
@@ -314,6 +289,7 @@ impl ExecutorTasks {
         match task {
             ExecutorTask::None => unreachable!(),
             ExecutorTask::Sync(processor) => sync_queue.push_back(processor),
+            ExecutorTask::Async(_) => unreachable!("used for new executor"),
             ExecutorTask::AsyncCompleted(task) => completed_queue.push_back(task),
         }
     }
