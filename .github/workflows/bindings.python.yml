@@ -46,15 +46,15 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        target:
-          - aarch64-apple-darwin
+        arch:
+          - aarch64
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: ./.github/actions/build_bindings_python
         with:
-          target: ${{ matrix.target }}
+          target: ${{ matrix.arch }}-apple-darwin
           version: ${{ inputs.tag }}
       - name: upload
         if: inputs.tag

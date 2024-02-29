@@ -59,7 +59,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { target: x86_64-unknown-linux-gnu, runner: X64 }
+          - { arch: x86_64, runner: X64 }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,7 +69,7 @@ jobs:
         timeout-minutes: 60
         with:
           sha: ${{ github.sha }}
-          target: ${{ matrix.target }}
+          target: ${{ matrix.arch }}-unknown-linux-gnu
           artifacts: all
 
   build_address_sanitizer:
@@ -78,7 +78,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { target: aarch64-unknown-linux-gnu, runner: ARM64 }
+          - { arch: aarch64, runner: ARM64 }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -87,7 +87,7 @@ jobs:
       - uses: ./.github/actions/build_linux_sanitizer
         timeout-minutes: 60
         with:
-          target: ${{ matrix.target }}
+          target: ${{ matrix.arch }}-unknown-linux-gnu
           artifacts: query
 
   build_musl:
