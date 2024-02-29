@@ -680,8 +680,10 @@ impl RunningGraph {
                     .as_ref()
                     .zip(x.tracking_payload.mem_stat.as_ref())
                 {
-                    profile.statistics[ProfileStatisticsName::MemoryUsage as usize]
-                        .fetch_add(mem_stat.get_memory_usage() as usize, Ordering::Relaxed);
+                    profile.statistics[ProfileStatisticsName::MemoryUsage as usize].fetch_add(
+                        std::cmp::max(0, mem_stat.get_memory_usage()) as usize,
+                        Ordering::Relaxed,
+                    );
                 }
 
                 Arc::new(new_profile.unwrap())
