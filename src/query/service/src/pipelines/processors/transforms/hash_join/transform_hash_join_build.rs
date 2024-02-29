@@ -152,7 +152,12 @@ impl Processor for TransformHashJoinBuild {
             HashJoinBuildStep::Finalize => match self.finalize_finished {
                 false => Ok(Event::Sync),
                 true => {
-                    // If join spill is enabled and build has spilled data really, we should wait probe to spill.
+<<<<<<< Updated upstream
+                    // If join spill is enabled, we should wait probe to spill.
+=======
+                    // If join spill is enabled, we should wait probe to spill even if the processor didn't spill really.
+                    // It needs to consume the barrier in next steps.
+>>>>>>> Stashed changes
                     // Then restore data from disk and build hash table, util all spilled data are processed.
                     if self.spill_handler.need_to_wait_probe() {
                         self.step = HashJoinBuildStep::WaitProbe;
