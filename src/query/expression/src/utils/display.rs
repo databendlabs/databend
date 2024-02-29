@@ -255,7 +255,7 @@ impl<'a> Display for ScalarRef<'a> {
             }
             ScalarRef::Geometry(s) => {
                 let geom = Ewkb(s.to_vec()).to_ewkt(None).unwrap();
-                write!(f, "'{geom:?}'")
+                write!(f, "'{geom}'")
             }
         }
     }
