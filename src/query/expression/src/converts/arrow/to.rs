@@ -118,7 +118,7 @@ impl DataBlock {
                 let array = array.as_ref().as_struct();
                 let array =
                     StructArray::new(fs.clone(), array.columns().clone(), array.nulls().cloned());
-                arrays.push(array);
+                arrays.push(Arc::new(array));
             } else {
                 arrays.push(array);
             }
