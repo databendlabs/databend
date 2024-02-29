@@ -71,17 +71,6 @@ impl BuildSpillHandler {
         &mut self.spill_data
     }
 
-    pub(crate) fn need_to_wait_probe(&self) -> bool {
-        if !self.enabled_spill() {
-            return false;
-        }
-        // Spilling actually didn't happen.
-        if self.spill_state().spiller.spilled_partition_set.is_empty() {
-            return false;
-        }
-        true
-    }
-
     // Get `spilled_partition_set` from spiller and set `sent_partition_set` to true
     pub(crate) fn spilled_partition_set(&mut self) -> Option<HashSet<u8>> {
         if !self.enabled_spill() {
