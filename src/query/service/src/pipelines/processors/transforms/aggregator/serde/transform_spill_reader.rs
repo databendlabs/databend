@@ -137,6 +137,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::Spilled(_) => unreachable!(),
                 AggregateMeta::Spilling(_) => unreachable!(),
                 AggregateMeta::AggregateHashTable(_) => unreachable!(),
+                AggregateMeta::AggregatePayload(_) => unreachable!(),
                 AggregateMeta::HashTable(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
@@ -179,6 +180,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::Spilling(_) => unreachable!(),
                 AggregateMeta::HashTable(_) => unreachable!(),
                 AggregateMeta::AggregateHashTable(_) => unreachable!(),
+                AggregateMeta::AggregatePayload(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
                     let instant = Instant::now();

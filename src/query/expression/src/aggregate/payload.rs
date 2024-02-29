@@ -38,6 +38,7 @@ use crate::MAX_PAGE_SIZE;
 // [STATE_ADDRS] is the state_addrs of the aggregate functions, 8 bytes each
 pub struct Payload {
     pub arena: Arc<Bump>,
+    pub arenas: Vec<Arc<Bump>>,
     // if true, the states are moved out of the payload into other payload, and will not be dropped
     pub state_move_out: bool,
     pub group_types: Vec<DataType>,
@@ -120,7 +121,8 @@ impl Payload {
         let row_per_page = (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size).max(1);
 
         Self {
-            arena,
+            arena: arena.clone(),
+            arenas: vec![arena],
             state_move_out: false,
             pages: vec![],
             current_write_page: 0,

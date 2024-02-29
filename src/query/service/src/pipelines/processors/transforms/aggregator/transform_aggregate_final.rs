@@ -240,6 +240,7 @@ where Method: HashMethodBounds
                         }
                     },
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
+                    AggregateMeta::AggregatePayload(_) => unreachable!(),
                 }
             }
 
