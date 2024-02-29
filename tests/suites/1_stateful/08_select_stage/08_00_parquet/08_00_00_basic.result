@@ -1,4 +1,3 @@
-USE_PARQUET2=0
 --- named internal stage
 2	45	789
 1	2	3
