@@ -14,10 +14,13 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::DropRolePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -43,6 +46,10 @@ impl Interpreter for DropRoleInterpreter {
         "DropRoleInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -51,6 +58,13 @@ impl Interpreter for DropRoleInterpreter {
         // TODO: add privilege check about DROP role
         let plan = self.plan.clone();
         let role_name = plan.role_name.clone();
+        if role_name.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN
+            || role_name.to_lowercase() == BUILTIN_ROLE_PUBLIC
+        {
+            return Err(ErrorCode::IllegalRole(
+                "Illegal Drop Role command. Can not drop built-in role [ account_admin | public ]",
+            ));
+        }
         let tenant = self.ctx.get_tenant();
         UserApiProvider::instance()
             .drop_role(&tenant, plan.role_name, plan.if_exists)

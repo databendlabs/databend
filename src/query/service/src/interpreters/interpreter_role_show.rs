@@ -44,6 +44,10 @@ impl Interpreter for ShowRolesInterpreter {
         "ShowRolesInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -64,10 +68,7 @@ impl Interpreter for ShowRolesInterpreter {
             .cloned()
             .unwrap_or_default();
 
-        let names = roles
-            .iter()
-            .map(|x| x.name.as_bytes().to_vec())
-            .collect::<Vec<_>>();
+        let names = roles.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
         let inherited_roles: Vec<u64> = roles
             .iter()
             .map(|x| x.grants.roles().len() as u64)

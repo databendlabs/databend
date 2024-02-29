@@ -42,6 +42,10 @@ impl Interpreter for ShowNetworkPoliciesInterpreter {
         "ShowNetworkPoliciesInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
@@ -53,10 +57,10 @@ impl Interpreter for ShowNetworkPoliciesInterpreter {
         let mut blocked_ip_lists = Vec::with_capacity(network_policies.len());
         let mut comments = Vec::with_capacity(network_policies.len());
         for network_policy in network_policies {
-            names.push(network_policy.name.as_bytes().to_vec());
-            allowed_ip_lists.push(network_policy.allowed_ip_list.join(",").as_bytes().to_vec());
-            blocked_ip_lists.push(network_policy.blocked_ip_list.join(",").as_bytes().to_vec());
-            comments.push(network_policy.comment.as_bytes().to_vec());
+            names.push(network_policy.name.clone());
+            allowed_ip_lists.push(network_policy.allowed_ip_list.join(",").clone());
+            blocked_ip_lists.push(network_policy.blocked_ip_list.join(",").clone());
+            comments.push(network_policy.comment.clone());
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

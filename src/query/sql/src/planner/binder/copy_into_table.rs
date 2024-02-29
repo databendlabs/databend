@@ -21,7 +21,10 @@ use databend_common_ast::ast::CopyIntoTableSource;
 use databend_common_ast::ast::CopyIntoTableStmt;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
+use databend_common_ast::ast::Hint;
+use databend_common_ast::ast::HintItem;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
@@ -31,7 +34,6 @@ use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parser_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Visitor;
-use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
@@ -45,17 +47,17 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_users::UserApiProvider;
 use indexmap::IndexMap;
 use log::debug;
+use log::warn;
 use parking_lot::RwLock;
 
 use crate::binder::location::parse_uri_location;
@@ -177,56 +179,27 @@ impl<'a> Binder {
         bind_ctx: &BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
-        if let FileFormatParams::Parquet(fmt) = &plan.stage_table_info.stage_info.file_format_params && fmt.missing_field_as == NullAs::Error {
-            let table_ctx = self.ctx.clone();
-            let stage_info = plan.stage_table_info.stage_info.clone();
-            let files_info = plan.stage_table_info.files_info.clone();
-            let read_options = ParquetReadOptions::default();
-            let table =
-                ParquetRSTable::create(table_ctx, stage_info, files_info, read_options, None)
-                    .await?;
-            let table_info = table.get_table_info();
-            let table_schema = table_info.schema();
-
+        if let FileFormatParams::Parquet(fmt) = &plan.stage_table_info.stage_info.file_format_params
+            && fmt.missing_field_as == NullAs::Error
+        {
             let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
             for dest_field in plan.required_source_schema.fields().iter() {
                 let column = Expr::ColumnRef {
                     span: None,
                     database: None,
                     table: None,
-                    column: AstColumnID::Name(Identifier::from_name(
-                        dest_field.name().to_string(),
-                    )),
+                    column: AstColumnID::Name(Identifier::from_name(dest_field.name().to_string())),
                 };
-                let expr = match table_schema.field_with_name(dest_field.name()) {
-                    Ok(src_field) => {
-                        // parse string to JSON value, avoid cast string to JSON string
-                        if dest_field.data_type().remove_nullable() == DataType::Variant {
-                            if src_field.data_type().remove_nullable() == TableDataType::String {
-                                Expr::FunctionCall {
-                                    span: None,
-                                    distinct: false,
-                                    name: Identifier::from_name("parse_json".to_string()),
-                                    args: vec![column],
-                                    params: vec![],
-                                    window: None,
-                                    lambda: None,
-                                }
-                            } else {
-                                Expr::Cast {
-                                    span: None,
-                                    expr: Box::new(column),
-                                    target_type: TypeName::Variant,
-                                    pg_style: false,
-                                }
-                            }
-                        } else {
-                            column
-                        }
+                // cast types to variant, tuple will be rewrite as `json_object_keep_null`
+                let expr = if dest_field.data_type().remove_nullable() == DataType::Variant {
+                    Expr::Cast {
+                        span: None,
+                        expr: Box::new(column),
+                        target_type: TypeName::Variant,
+                        pg_style: false,
                     }
-                    Err(_) => {
-                        column
-                    }
+                } else {
+                    column
                 };
                 select_list.push(SelectTarget::AliasedExpr {
                     expr: Box::new(expr),
@@ -250,10 +223,21 @@ impl<'a> Binder {
             resolve_stage_location(self.ctx.as_ref(), &attachment.location[1..]).await?;
 
         if let Some(ref options) = attachment.file_format_options {
-            stage_info.file_format_params = FileFormatOptionsAst {
+            let mut params = FileFormatOptionsAst {
                 options: options.clone(),
             }
             .try_into()?;
+            if let FileFormatParams::Csv(ref mut fmt) = &mut params {
+                // TODO: remove this after 1. the old server is no longer supported 2. Driver add the option "EmptyFieldAs=FieldDefault"
+                // CSV attachment is mainly used in Drivers for insert.
+                // In the future, client should use EmptyFieldAs=STRING or FieldDefault to distinguish NULL and empty string.
+                // However, old server does not support `empty_field_as`, so client can not add the option directly at now.
+                // So we will get empty_field_as = NULL, which will raise error if there is empty string for non-nullable string field.
+                if fmt.empty_field_as == EmptyFieldAs::Null {
+                    fmt.empty_field_as = EmptyFieldAs::FieldDefault;
+                }
+            }
+            stage_info.file_format_params = params;
         }
         if let Some(ref options) = attachment.copy_options {
             stage_info.copy_options.apply(options, true)?;
@@ -391,6 +375,34 @@ impl<'a> Binder {
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
+
+        // disable variant check to allow copy invalid JSON into tables
+        let disable_variant_check = plan
+            .stage_table_info
+            .stage_info
+            .copy_options
+            .disable_variant_check;
+        if disable_variant_check {
+            let hints = Hint {
+                hints_list: vec![HintItem {
+                    name: Identifier::from_name("disable_variant_check"),
+                    expr: Expr::Literal {
+                        span: None,
+                        lit: Literal::UInt64(1),
+                    },
+                }],
+            };
+            if let Some(e) = self
+                .opt_hints_set_var(&mut output_context, &hints)
+                .await
+                .err()
+            {
+                warn!(
+                    "In COPY resolve optimize hints {:?} failed, err: {:?}",
+                    hints, e
+                );
+            }
+        }
 
         plan.query = Some(Box::new(Plan::Query {
             s_expr: Box::new(s_expr),
@@ -591,7 +603,7 @@ pub async fn resolve_file_location(
                     "copy from insecure storage is not allowed",
                 ))
             } else {
-                let stage_info = StageInfo::new_external_stage(storage_params, &path, true);
+                let stage_info = StageInfo::new_external_stage(storage_params, true);
                 Ok((stage_info, path))
             }
         }

@@ -59,7 +59,6 @@ fn new_db_meta_share() -> mt::DatabaseMeta {
             tenant: "tenant".to_string(),
             share_name: "share".to_string(),
         }),
-        owner: None,
     }
 }
 
@@ -74,7 +73,6 @@ fn new_db_meta() -> mt::DatabaseMeta {
         drop_on: None,
         shared_by: BTreeSet::from_iter(vec![1]),
         from_share: None,
-        owner: None,
     }
 }
 
@@ -193,6 +191,8 @@ fn new_table_meta() -> mt::TableMeta {
                 ce::TableField::new("variant_object", ce::TableDataType::Variant),
                 // NOTE: It is safe to convert Interval to NULL, because `Interval` is never really used.
                 ce::TableField::new("interval", ce::TableDataType::Null),
+                ce::TableField::new("bitmap", ce::TableDataType::Bitmap),
+                ce::TableField::new("geom", ce::TableDataType::Geometry),
             ],
             btreemap! {s("a") => s("b")},
         )),
@@ -213,7 +213,6 @@ fn new_table_meta() -> mt::TableMeta {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
-        owner: None,
     }
 }
 
@@ -259,6 +258,7 @@ pub(crate) fn new_latest_schema() -> TableSchema {
         ),
         TableField::new("empty_map", TableDataType::EmptyMap),
         TableField::new("bitmap", TableDataType::Bitmap),
+        TableField::new("geom", TableDataType::Geometry),
     ];
     TableSchema::new(fields)
 }
@@ -414,7 +414,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = db_meta.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
         println!("db:{:?}", buf);
     }
 
@@ -425,7 +425,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = tbl.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
         println!("table:{:?}", buf);
     }
 
@@ -436,7 +436,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = tbl.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
         println!("share:{:?}", buf);
     }
 
@@ -447,7 +447,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = share_account_meta.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
         println!("share account:{:?}", buf);
     }
 
@@ -457,7 +457,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = index.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
         println!("index meta:{buf:?}");
     }
 
@@ -467,7 +467,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = copied_file.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
         println!("copied_file:{:?}", buf);
     }
 
@@ -477,7 +477,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = empty_proto.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
         println!("empty_proto:{:?}", buf);
     }
 
@@ -487,7 +487,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = table_lock_meta.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
     }
 
     // schema
@@ -496,7 +496,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = schema.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
         println!("schema:{:?}", buf);
     }
 
@@ -506,7 +506,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = data_mask_meta.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
         println!("data mask:{:?}", buf);
     }
 
@@ -516,7 +516,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = table_statistics.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
         println!("table statistics:{:?}", buf);
     }
 
@@ -526,7 +526,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = catalog_meta.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
         println!("catalog catalog_meta:{:?}", buf);
     }
 
@@ -536,7 +536,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let p = lvt.to_pb()?;
 
         let mut buf = vec![];
-        databend_common_protos::prost::Message::encode(&p, &mut buf)?;
+        prost::Message::encode(&p, &mut buf)?;
         println!("lvt:{:?}", buf);
     }
 

@@ -23,10 +23,12 @@ use std::time::Instant;
 use chrono::Utc;
 use clap::Parser;
 use databend_common_base::base::tokio;
+use databend_common_base::runtime;
 use databend_common_meta_api::serialize_struct;
 use databend_common_meta_api::txn_op_put;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -89,6 +91,7 @@ async fn main() {
             dir: "./.databend/logs".to_string(),
             format: "text".to_string(),
             limit: 48,
+            prefix_filter: "databend_".to_string(),
         },
         stderr: StderrConfig {
             on: true,
@@ -119,7 +122,7 @@ async fn main() {
         let cmd = cmd_and_param[0].to_string();
         let param = cmd_and_param.get(1).unwrap_or(&"").to_string();
 
-        let handle = tokio::spawn(async move {
+        let handle = runtime::spawn(async move {
             let client =
                 MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None);
 
@@ -186,7 +189,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 
     let res = client
         .create_database(CreateDatabaseReq {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             name_ident: DatabaseNameIdent {
                 tenant: tenant(),
                 db_name: db_name(),
@@ -203,7 +206,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 
     let res = client
         .create_table(CreateTableReq {
-            if_not_exists: true,
+            create_option: CreateOption::CreateIfNotExists(true),
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
         })
@@ -243,7 +246,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 
     let res = client
         .create_table(CreateTableReq {
-            if_not_exists: true,
+            create_option: CreateOption::CreateIfNotExists(true),
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
         })

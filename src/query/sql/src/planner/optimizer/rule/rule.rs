@@ -20,25 +20,25 @@ use databend_common_exception::Result;
 use num_derive::FromPrimitive;
 use num_derive::ToPrimitive;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
 
 pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     vec![
-        RuleID::NormalizeDisjunctiveFilter,
         RuleID::NormalizeScalarFilter,
         RuleID::NormalizeAggregate,
         RuleID::EliminateFilter,
         RuleID::EliminateSort,
         RuleID::MergeFilter,
-        RuleID::InferFilter,
         RuleID::MergeEvalScalar,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
         RuleID::PushDownFilterWindow,
         RuleID::PushDownLimitUnion,
-        RuleID::PushDownLimitExpression,
+        RuleID::PushDownLimitEvalScalar,
         RuleID::PushDownLimitSort,
+        RuleID::PushDownLimitWindow,
         RuleID::PushDownLimitAggregate,
         RuleID::PushDownLimitOuterJoin,
         RuleID::PushDownLimitScan,
@@ -56,9 +56,6 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     ]
 });
 
-pub static RESIDUAL_RULES: LazyLock<Vec<RuleID>> =
-    LazyLock::new(|| vec![RuleID::EliminateEvalScalar, RuleID::CommuteJoin]);
-
 pub type RulePtr = Box<dyn Rule>;
 
 pub trait Rule {
@@ -66,7 +63,7 @@ pub trait Rule {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()>;
 
-    fn patterns(&self) -> &Vec<SExpr>;
+    fn matchers(&self) -> &[Matcher];
 
     fn transformation(&self) -> bool {
         true
@@ -80,8 +77,6 @@ pub enum RuleID {
     // Rewrite rules
     NormalizeAggregate,
     NormalizeScalarFilter,
-    NormalizeDisjunctiveFilter,
-    InferFilter,
     PushDownFilterAggregate,
     PushDownFilterEvalScalar,
     PushDownFilterUnion,
@@ -92,8 +87,9 @@ pub enum RuleID {
     PushDownFilterWindow,
     PushDownLimitUnion,
     PushDownLimitOuterJoin,
-    PushDownLimitExpression,
+    PushDownLimitEvalScalar,
     PushDownLimitSort,
+    PushDownLimitWindow,
     PushDownLimitAggregate,
     PushDownLimitScan,
     PushDownSortScan,
@@ -126,12 +122,13 @@ impl Display for RuleID {
             RuleID::PushDownFilterProjectSet => write!(f, "PushDownFilterProjectSet"),
             RuleID::PushDownLimitUnion => write!(f, "PushDownLimitUnion"),
             RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
-            RuleID::PushDownLimitExpression => write!(f, "PushDownLimitExpression"),
+            RuleID::PushDownLimitEvalScalar => write!(f, "PushDownLimitEvalScalar"),
             RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
             RuleID::PushDownLimitAggregate => write!(f, "PushDownLimitAggregate"),
             RuleID::PushDownFilterAggregate => write!(f, "PushDownFilterAggregate"),
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
+            RuleID::PushDownLimitWindow => write!(f, "PushDownLimitWindow"),
             RuleID::PushDownFilterWindow => write!(f, "PushDownFilterWindow"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
             RuleID::EliminateFilter => write!(f, "EliminateFilter"),
@@ -141,8 +138,6 @@ impl Display for RuleID {
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
             RuleID::NormalizeAggregate => write!(f, "NormalizeAggregate"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
-            RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
-            RuleID::InferFilter => write!(f, "InferFilter"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
 

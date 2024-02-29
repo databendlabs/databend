@@ -14,22 +14,48 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::intrinsics::assume;
 use std::sync::Arc;
-use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::CompletedAsyncTask;
+use crate::pipelines::executor::executor_graph::ProcessorWrapper;
+use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
-use crate::pipelines::processors::ProcessorPtr;
 
 pub enum ExecutorTask {
     None,
-    Sync(ProcessorPtr),
+    Sync(ProcessorWrapper),
+    Async(ProcessorWrapper),
     AsyncCompleted(CompletedAsyncTask),
+}
+
+pub struct CompletedAsyncTask {
+    pub id: NodeIndex,
+    pub worker_id: usize,
+    pub res: Result<()>,
+    pub graph: Arc<RunningGraph>,
+}
+
+impl CompletedAsyncTask {
+    pub fn create(
+        id: NodeIndex,
+        worker_id: usize,
+        res: Result<()>,
+        graph: Arc<RunningGraph>,
+    ) -> Self {
+        CompletedAsyncTask {
+            id,
+            worker_id,
+            res,
+            graph,
+        }
+    }
 }
 
 pub struct ExecutorWorkerContext {
@@ -70,35 +96,33 @@ impl ExecutorWorkerContext {
     }
 
     /// # Safety
-    pub unsafe fn execute_task<const ENABLE_PROFILING: bool>(
-        &mut self,
-    ) -> Result<(NodeIndex, bool, Option<Duration>)> {
+    pub unsafe fn execute_task(&mut self) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
-            ExecutorTask::Sync(processor) => self.execute_sync_task::<ENABLE_PROFILING>(processor),
+            ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
             ExecutorTask::AsyncCompleted(task) => match task.res {
-                Ok(_) => Ok((task.id, true, task.elapsed)),
+                Ok(_) => Ok(Some((task.id, task.graph))),
                 Err(cause) => Err(cause),
             },
+            ExecutorTask::Async(_) => unreachable!("used for new executor"),
         }
     }
 
     /// # Safety
-    unsafe fn execute_sync_task<const ENABLE_PROFILING: bool>(
+    unsafe fn execute_sync_task(
         &mut self,
-        proc: ProcessorPtr,
-    ) -> Result<(NodeIndex, bool, Option<Duration>)> {
-        match ENABLE_PROFILING {
-            true => {
-                let instant = Instant::now();
-                proc.process()?;
-                Ok((proc.id(), false, Some(instant.elapsed())))
-            }
-            false => {
-                proc.process()?;
-                Ok((proc.id(), false, None))
-            }
-        }
+        proc: ProcessorWrapper,
+    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
+        Profile::track_profile(proc.graph.get_node_profile(proc.processor.id()));
+
+        let instant = Instant::now();
+
+        proc.processor.process()?;
+
+        let nanos = instant.elapsed().as_nanos();
+        assume(nanos < 18446744073709551615_u128);
+        Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
+        Ok(Some((proc.processor.id(), proc.graph)))
     }
 
     pub fn get_workers_condvar(&self) -> &Arc<WorkersCondvar> {
@@ -114,8 +138,14 @@ impl Debug for ExecutorTask {
                 ExecutorTask::Sync(p) => write!(
                     f,
                     "ExecutorTask::Sync {{ id: {}, name: {}}}",
-                    p.id().index(),
-                    p.name()
+                    p.processor.id().index(),
+                    p.processor.name()
+                ),
+                ExecutorTask::Async(p) => write!(
+                    f,
+                    "ExecutorTask::Async {{ id: {}, name: {}}}",
+                    p.processor.id().index(),
+                    p.processor.name()
                 ),
                 ExecutorTask::AsyncCompleted(_) => write!(f, "ExecutorTask::CompletedAsync"),
             }

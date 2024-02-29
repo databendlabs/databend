@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use chrono_tz::Tz;
+use databend_common_meta_app::principal::BinaryFormat;
 
 #[derive(Clone)]
 pub struct InputCommonSettings {
@@ -23,6 +24,8 @@ pub struct InputCommonSettings {
     pub inf_bytes: Vec<u8>,
     pub timezone: Tz,
     pub disable_variant_check: bool,
+    pub binary_format: BinaryFormat,
+    pub is_rounding_mode: bool,
 }
 
 #[derive(Clone)]
@@ -33,4 +36,5 @@ pub struct OutputCommonSettings {
     pub nan_bytes: Vec<u8>,
     pub inf_bytes: Vec<u8>,
     pub timezone: Tz,
+    pub binary_format: BinaryFormat,
 }

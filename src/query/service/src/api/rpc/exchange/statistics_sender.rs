@@ -20,12 +20,12 @@ use std::time::Duration;
 use async_channel::Sender;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
-use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_storage::MergeStatus;
 use futures_util::future::Either;
 use log::warn;
@@ -197,6 +197,16 @@ impl StatisticsSender {
         }
 
         Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn send_scan_cache_metrics(
+        ctx: &Arc<QueryContext>,
+        flight_sender: &FlightSender,
+    ) -> Result<()> {
+        let data_cache_metrics = ctx.get_data_cache_metrics();
+        let data_packet = DataPacket::DataCacheMetrics(data_cache_metrics.as_values());
+        flight_sender.send(data_packet).await
     }
 
     fn fetch_progress(ctx: &Arc<QueryContext>) -> Result<Vec<ProgressInfo>> {

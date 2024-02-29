@@ -242,7 +242,7 @@ impl PhysicalPlanBuilder {
             Some(project_internal_columns)
         };
         Ok(PhysicalPlan::TableScan(TableScan {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             name_mapping,
             source: Box::new(source),
             table_index: scan.table_index,
@@ -254,7 +254,7 @@ impl PhysicalPlanBuilder {
     pub(crate) async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {
         let catalogs = CatalogManager::instance();
         let table = catalogs
-            .get_default_catalog()?
+            .get_default_catalog(self.ctx.txn_mgr())?
             .get_table(self.ctx.get_tenant().as_str(), "system", "one")
             .await?;
 
@@ -272,7 +272,7 @@ impl PhysicalPlanBuilder {
             )
             .await?;
         Ok(PhysicalPlan::TableScan(TableScan {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
             source: Box::new(source),
             table_index: DUMMY_TABLE_INDEX,
@@ -484,6 +484,7 @@ impl PhysicalPlanBuilder {
             virtual_columns,
             lazy_materialization: !metadata.lazy_columns().is_empty(),
             agg_index: None,
+            change_type: scan.change_type.clone(),
         })
     }
 

@@ -17,15 +17,16 @@ use std::str;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
+use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table::AppendMode;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::number::Int32Type;
 use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
@@ -48,6 +49,7 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -110,7 +112,11 @@ impl TestGuard {
 impl Drop for TestGuard {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
-        databend_common_base::base::GlobalInstance::drop_testing(&self._thread_name);
+        {
+            drop_guard(move || {
+                databend_common_base::base::GlobalInstance::drop_testing(&self._thread_name);
+            })
+        }
     }
 }
 
@@ -174,11 +180,6 @@ impl TestFixture {
         user_info.grants.grant_privileges(
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
-        );
-
-        user_info.grants.grant_privileges(
-            &GrantObject::Global,
-            UserPrivilegeSet::available_privileges_on_stage(),
         );
 
         let dummy_session = SessionManager::instance()
@@ -300,7 +301,7 @@ impl TestFixture {
 
     pub fn default_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -325,7 +326,7 @@ impl TestFixture {
     // create a normal table without cluster key.
     pub fn normal_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -361,7 +362,7 @@ impl TestFixture {
     // create a variant table
     pub fn variant_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -406,7 +407,7 @@ impl TestFixture {
     // create a table with computed column
     pub fn computed_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -432,7 +433,7 @@ impl TestFixture {
         let create_table_plan = self.default_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -440,7 +441,7 @@ impl TestFixture {
         let create_table_plan = self.normal_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -448,7 +449,7 @@ impl TestFixture {
         let create_table_plan = self.variant_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -459,7 +460,7 @@ impl TestFixture {
         let plan = CreateDatabasePlan {
             catalog: "default".to_owned(),
             tenant,
-            if_not_exists: false,
+            create_option: CreateOption::CreateIfNotExists(false),
             database: db_name,
             meta: DatabaseMeta {
                 engine: "".to_string(),
@@ -481,7 +482,7 @@ impl TestFixture {
         let create_table_plan = self.computed_create_table_plan();
         let interpreter =
             CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
-        interpreter.execute(self.default_ctx.clone()).await?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
         Ok(())
     }
 
@@ -586,7 +587,7 @@ impl TestFixture {
                     );
 
                     let mut builder =
-                        StringColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
+                        BinaryColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
                     for i in 0..rows_per_block {
                         let mut obj = JsonbObject::new();
                         obj.insert(
@@ -638,7 +639,7 @@ impl TestFixture {
                     let mut d_values = Vec::with_capacity(rows_per_block);
                     for i in 0..rows_per_block {
                         id_values.push(i as i32 + start * 3);
-                        c_values.push(format!("s-{}-{}", start, i).as_bytes().to_vec());
+                        c_values.push(format!("s-{}-{}", start, i));
                         d_values.push(i as i64 + (start * 10) as i64);
                     }
                     let column0 = Int32Type::from_data(id_values);
@@ -691,7 +692,7 @@ impl TestFixture {
         )?;
 
         let data_schema: DataSchemaRef = Arc::new(source_schema.into());
-        PipelineBuilder::build_fill_missing_columns_pipeline(
+        PipelineBuilder::fill_and_reorder_columns(
             ctx.clone(),
             &mut build_res.main_pipeline,
             table.clone(),

@@ -29,6 +29,7 @@ use databend_common_pipeline_core::PipeItem;
 use super::processor_merge_into_matched_and_split::SourceFullMatched;
 use crate::operations::merge_into::processors::RowIdKind;
 
+// for distributed merge into (source as build and it will be broadcast)
 pub struct RowNumberAndLogSplitProcessor {
     input_port: Arc<InputPort>,
     output_port_row_number: Arc<OutputPort>,

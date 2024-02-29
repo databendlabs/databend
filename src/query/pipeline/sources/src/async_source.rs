@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -114,12 +116,18 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
         match self.inner.generate().await? {
             None => self.is_finish = true,
             Some(data_block) => {
-                if !data_block.is_empty() {
+                // Don't need to record the scan progress of `MaterializedCteSource`
+                // Because it reads data from memory.
+                if !data_block.is_empty() && self.name() != "MaterializedCteSource" {
                     let progress_values = ProgressValues {
                         rows: data_block.num_rows(),
                         bytes: data_block.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::ScanBytes,
+                        data_block.memory_size(),
+                    );
                 }
 
                 if !T::SKIP_EMPTY_DATA_BLOCK || !data_block.is_empty() {

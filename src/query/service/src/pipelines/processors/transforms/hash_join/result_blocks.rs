@@ -37,7 +37,7 @@ impl HashJoinProbeState {
     ///    non-equi-condition is subquery's child expr with subquery's output column.
     ///    for example: select * from t1 where t1.a = ANY (select t2.a from t2 where t2.b = t1.b); [t1: a, b], [t2: a, b]
     ///    subquery's outer columns: t1.b, and it'll derive a new column: subquery_5 when subquery cross join t1;
-    ///    so equi-condition is t1.b = subquery_5, and non-equi-condition is t1.a = t2.a.
+    ///    so equi-condition is t2.b = subquery_5, and non-equi-condition is t1.a = t2.a.
     /// 3. Correlated Exists subquery： only have one kind of join condition, equi-condition.
     ///    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
     pub(crate) fn result_blocks<'a, H: HashJoinHashtableLike>(
@@ -56,10 +56,26 @@ impl HashJoinProbeState {
             .other_predicate
             .is_none();
         match self.hash_join_state.hash_join_desc.join_type {
-            JoinType::Inner => self.inner_join(input, keys, hash_table, probe_state),
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full => match has_other_predicate {
-                true => self.left_join(input, keys, hash_table, probe_state),
-                false => self.left_join_with_conjunct(input, keys, hash_table, probe_state),
+            JoinType::Inner => match self.hash_join_state.hash_join_desc.original_join_type {
+                Some(JoinType::LeftSingle) => {
+                    self.inner_join::<_, true, false>(input, keys, hash_table, probe_state)
+                }
+                Some(JoinType::RightSingle) => {
+                    self.inner_join::<_, false, true>(input, keys, hash_table, probe_state)
+                }
+                _ => self.inner_join::<_, false, false>(input, keys, hash_table, probe_state),
+            },
+            JoinType::Left | JoinType::Full => match has_other_predicate {
+                true => self.left_join::<_, false>(input, keys, hash_table, probe_state),
+                false => {
+                    self.left_join_with_conjunct::<_, false>(input, keys, hash_table, probe_state)
+                }
+            },
+            JoinType::LeftSingle => match has_other_predicate {
+                true => self.left_join::<_, true>(input, keys, hash_table, probe_state),
+                false => {
+                    self.left_join_with_conjunct::<_, true>(input, keys, hash_table, probe_state)
+                }
             },
             JoinType::LeftSemi => match has_other_predicate {
                 true => self.left_semi_join(input, keys, hash_table, probe_state),

@@ -23,10 +23,11 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DatamaskNameIdent;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
+use databend_common_meta_app::schema::CreateOption;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateDatamaskPolicyPlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub tenant: String,
     pub name: String,
     pub policy: DataMaskPolicy,
@@ -41,7 +42,7 @@ impl CreateDatamaskPolicyPlan {
 impl From<CreateDatamaskPolicyPlan> for CreateDatamaskReq {
     fn from(p: CreateDatamaskPolicyPlan) -> Self {
         CreateDatamaskReq {
-            if_not_exists: p.if_not_exists,
+            create_option: p.create_option,
             name: DatamaskNameIdent {
                 tenant: p.tenant.clone(),
                 name: p.name.clone(),

@@ -20,12 +20,10 @@ mod syntax;
 use std::fmt::Display;
 
 pub use ast_format::format_statement;
-pub use indent_format::*;
-pub use pretty_format::*;
 pub use syntax::pretty_statement;
 
 #[derive(Clone)]
-pub struct FormatTreeNode<T: Display + Clone> {
+pub struct FormatTreeNode<T: Display + Clone = String> {
     pub payload: T,
     pub children: Vec<Self>,
 }

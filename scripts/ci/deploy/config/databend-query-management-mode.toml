@@ -3,7 +3,7 @@
 
 [query]
 max_active_sessions = 256
-wait_timeout_mills = 5000
+shutdown_wait_timeout_ms = 5000
 
 # Databend Query http address.
 # For admin RESET API.

@@ -22,10 +22,13 @@ use std::time::SystemTime;
 
 use dashmap::DashMap;
 use databend_common_base::base::Progress;
+use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
@@ -34,7 +37,7 @@ use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
@@ -113,6 +116,11 @@ pub struct QueryContextShared {
     pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
 
     pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
+
+    pub(in crate::sessions) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
+
+    // Records query level data cache metrics
+    pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
 }
 
 impl QueryContextShared {
@@ -121,9 +129,9 @@ impl QueryContextShared {
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
+            catalog_manager: CatalogManager::instance(),
             session,
             cluster_cache,
-            catalog_manager: CatalogManager::instance(),
             data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             total_scan_values: Arc::new(Progress::create()),
@@ -156,8 +164,10 @@ impl QueryContextShared {
             join_spill_progress: Arc::new(Progress::create()),
             agg_spill_progress: Arc::new(Progress::create()),
             group_by_spill_progress: Arc::new(Progress::create()),
+            query_cache_metrics: DataCacheMetrics::new(),
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
+            merge_into_join: Default::default(),
         }))
     }
 
@@ -318,7 +328,10 @@ impl QueryContextShared {
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
-        let catalog = self.catalog_manager.get_catalog(&tenant, catalog).await?;
+        let catalog = self
+            .catalog_manager
+            .get_catalog(&tenant, catalog, self.session.session_ctx.txn_mgr())
+            .await?;
         let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();
@@ -334,6 +347,11 @@ impl QueryContextShared {
         let mut tables_refs = self.tables_refs.lock();
         tables_refs.remove(&table_meta_key);
         Ok(())
+    }
+
+    pub fn clear_tables_cache(&self) {
+        let mut tables_refs = self.tables_refs.lock();
+        tables_refs.clear();
     }
 
     /// Init runtime when first get
@@ -435,16 +453,22 @@ impl QueryContextShared {
         let tenant = self.get_tenant();
         user_mgr.get_connection(&tenant, name).await
     }
+
+    pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {
+        &self.query_cache_metrics
+    }
 }
 
 impl Drop for QueryContextShared {
     fn drop(&mut self) {
-        // last_query_id() should return the query_id of the last executed statement,
-        // so we set it when the current context drops
-        // to avoid returning the query_id of the current statement.
-        self.session
-            .session_ctx
-            .update_query_ids_results(self.init_query_id.read().clone(), None)
+        drop_guard(move || {
+            // last_query_id() should return the query_id of the last executed statement,
+            // so we set it when the current context drops
+            // to avoid returning the query_id of the current statement.
+            self.session
+                .session_ctx
+                .update_query_ids_results(self.init_query_id.read().clone(), None)
+        })
     }
 }
 

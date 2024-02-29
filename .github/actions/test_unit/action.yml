@@ -11,7 +11,7 @@ runs:
 
     - shell: bash
       run: |
-        cargo -Zgitoxide=fetch,shallow-index,shallow-deps nextest run --no-fail-fast --hide-progress-bar
+        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps nextest run --no-fail-fast --hide-progress-bar
       env:
         RUST_TEST_THREADS: "8"
         RUST_LOG: ERROR

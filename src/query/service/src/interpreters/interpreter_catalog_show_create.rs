@@ -47,6 +47,10 @@ impl Interpreter for ShowCreateCatalogInterpreter {
         "ShowCreateTableInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
@@ -72,18 +76,12 @@ impl Interpreter for ShowCreateCatalogInterpreter {
 
         let block = DataBlock::new(
             vec![
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(name))),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(name.into_bytes())),
+                    Value::Scalar(Scalar::String(catalog_type)),
                 ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(catalog_type.into_bytes())),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(option.into_bytes())),
-                ),
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(option))),
             ],
             1,
         );

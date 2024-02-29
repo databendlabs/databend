@@ -117,7 +117,7 @@ impl<'a> FuseEncoding<'a> {
                                 &read_settings,
                                 table.operator.clone(),
                                 &block.location.0,
-                                ranges,
+                                &ranges,
                                 true,
                             )
                             .await?;
@@ -177,15 +177,14 @@ impl<'a> FuseEncoding<'a> {
                 validity_size.reserve(num_row);
                 compressed_size.reserve(num_row);
                 uncompressed_size.reserve(num_row);
-                let tmp_table_name = StringColumnBuilder::repeat(table.as_bytes(), num_row);
-                let tmp_column_name =
-                    StringColumnBuilder::repeat(column_info.field.name.as_bytes(), num_row);
-                let tmp_column_type = StringColumnBuilder::repeat(type_str.as_bytes(), num_row);
+                let tmp_table_name = StringColumnBuilder::repeat(table, num_row);
+                let tmp_column_name = StringColumnBuilder::repeat(&column_info.field.name, num_row);
+                let tmp_column_type = StringColumnBuilder::repeat(type_str, num_row);
                 for p in pages_info {
                     validity_size.push(p.validity_size);
                     compressed_size.push(p.compressed_size);
                     uncompressed_size.push(p.uncompressed_size);
-                    l1.put_slice(encoding_to_string(&p.body).as_bytes());
+                    l1.put_str(&encoding_to_string(&p.body));
                     l1.commit_row();
                     let l2_encoding = match &p.body {
                         PageBody::Dict(dict) => Some(encoding_to_string(&dict.indices.body)),
@@ -196,7 +195,7 @@ impl<'a> FuseEncoding<'a> {
                         _ => None,
                     };
                     if let Some(l2_encoding) = l2_encoding {
-                        l2.push(l2_encoding.as_bytes());
+                        l2.push(&l2_encoding);
                     } else {
                         l2.push_null();
                     }

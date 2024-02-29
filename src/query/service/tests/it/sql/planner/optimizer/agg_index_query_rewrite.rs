@@ -26,6 +26,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::optimizer::agg_index;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::RecursiveOptimizer;
@@ -60,7 +61,7 @@ struct TestSuite {
 
 fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
     CreateTablePlan {
-        if_not_exists: false,
+        create_option: CreateOption::CreateIfNotExists(false),
         tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
         database: "default".to_string(),
@@ -488,7 +489,7 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let create_table_plan = create_table_plan(&fixture, format);
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
     let test_suites = get_test_suites();
     for suite in test_suites {

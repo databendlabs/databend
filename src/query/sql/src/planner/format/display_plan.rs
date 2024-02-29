@@ -23,9 +23,9 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use itertools::Itertools;
 
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::MergeIntoType;
 use crate::format_scalar;
 use crate::optimizer::SExpr;
-use crate::planner::format::display_rel_operator::FormatContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::CreateTablePlan;
 use crate::plans::DeletePlan;
@@ -44,7 +44,10 @@ impl Plan {
         match self {
             Plan::Query {
                 s_expr, metadata, ..
-            } => s_expr.to_format_tree(metadata).format_pretty(),
+            } => {
+                let metadata = &*metadata.read();
+                s_expr.to_format_tree(metadata).format_pretty()
+            }
             Plan::Explain { kind, plan } => {
                 let result = plan.format_indent()?;
                 Ok(format!("{:?}:\n{}", kind, result))
@@ -87,6 +90,7 @@ impl Plan {
             Plan::OptimizeTable(_) => Ok("OptimizeTable".to_string()),
             Plan::VacuumTable(_) => Ok("VacuumTable".to_string()),
             Plan::VacuumDropTable(_) => Ok("VacuumDropTable".to_string()),
+            Plan::VacuumTemporaryFiles(_) => Ok("VacuumTemporaryFiles".to_string()),
             Plan::AnalyzeTable(_) => Ok("AnalyzeTable".to_string()),
             Plan::ExistsTable(_) => Ok("ExistsTable".to_string()),
 
@@ -196,6 +200,9 @@ impl Plan {
             Plan::DescConnection(_) => Ok("DescConnection".to_string()),
             Plan::DropConnection(_) => Ok("DropConnection".to_string()),
             Plan::ShowConnections(_) => Ok("ShowConnections".to_string()),
+            Plan::Begin => Ok("Begin".to_string()),
+            Plan::Commit => Ok("commit".to_string()),
+            Plan::Abort => Ok("Abort".to_string()),
         }
     }
 }
@@ -241,6 +248,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
             order_by: None,
             prewhere: None,
             agg_index: None,
+            change_type: None,
             statistics: Default::default(),
         });
         let scan_expr = SExpr::create_leaf(Arc::new(scan));
@@ -251,7 +259,8 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
         let filter = RelOperator::Filter(Filter { predicates });
         SExpr::create_unary(Arc::new(filter), Arc::new(scan_expr))
     };
-    let res = s_expr.to_format_tree(&delete.metadata).format_pretty()?;
+    let metadata = &*delete.metadata.read();
+    let res = s_expr.to_format_tree(metadata).format_pretty()?;
     Ok(format!("DeletePlan:\n{res}"))
 }
 
@@ -261,12 +270,10 @@ fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
             Plan::Query {
                 s_expr, metadata, ..
             } => {
+                let metadata = &*metadata.read();
                 let res = s_expr.to_format_tree(metadata);
-                FormatTreeNode::with_children(
-                    FormatContext::Text("CreateTableAsSelect".to_string()),
-                    vec![res],
-                )
-                .format_pretty()
+                FormatTreeNode::with_children("CreateTableAsSelect".to_string(), vec![res])
+                    .format_pretty()
             }
             _ => Err(ErrorCode::Internal("Invalid create table plan")),
         },
@@ -286,13 +293,25 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
         .unwrap();
 
     let table_entry = merge_into.meta_data.read().table(table_index).clone();
-    let target_table_format = FormatContext::Text(format!(
+    let target_table_format = format!(
         "target_table: {}.{}.{}",
         table_entry.catalog(),
         table_entry.database(),
         table_entry.name(),
-    ));
+    );
 
+    let target_build_optimization = matches!(merge_into.merge_type, MergeIntoType::FullOperation)
+        && !merge_into.columns_set.contains(&merge_into.row_id_index);
+    let target_build_optimization_format = FormatTreeNode::new(format!(
+        "target_build_optimization: {}",
+        target_build_optimization
+    ));
+    let distributed_format =
+        FormatTreeNode::new(format!("distributed: {}", merge_into.distributed));
+    let can_try_update_column_only_format = FormatTreeNode::new(format!(
+        "can_try_update_column_only: {}",
+        merge_into.can_try_update_column_only
+    ));
     // add macthed clauses
     let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len());
     let taregt_schema = table_entry.table().schema();
@@ -302,17 +321,19 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
             |predicate| format!("condition: {}", format_scalar(predicate)),
         );
         if evaluator.update.is_none() {
-            matched_children.push(FormatTreeNode::new(FormatContext::Text(format!(
+            matched_children.push(FormatTreeNode::new(format!(
                 "matched delete: [{}]",
                 condition_format
-            ))));
+            )));
         } else {
-            let update_format = evaluator
-                .update
-                .as_ref()
-                .unwrap()
+            let map = evaluator.update.as_ref().unwrap();
+            let mut field_indexes: Vec<usize> =
+                map.iter().map(|(field_idx, _)| *field_idx).collect();
+            field_indexes.sort();
+            let update_format = field_indexes
                 .iter()
-                .map(|(field_idx, expr)| {
+                .map(|field_idx| {
+                    let expr = map.get(field_idx).unwrap();
                     format!(
                         "{} = {}",
                         taregt_schema.field(*field_idx).name(),
@@ -320,10 +341,10 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
                     )
                 })
                 .join(",");
-            matched_children.push(FormatTreeNode::new(FormatContext::Text(format!(
+            matched_children.push(FormatTreeNode::new(format!(
                 "matched update: [{},update set {}]",
                 condition_format, update_format
-            ))));
+            )));
         }
     }
     // add unmacthed clauses
@@ -344,16 +365,22 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
             "insert into ({}) values({})",
             insert_schema_format, values_format
         );
-        unmatched_children.push(FormatTreeNode::new(FormatContext::Text(format!(
+        unmatched_children.push(FormatTreeNode::new(format!(
             "unmatched insert: [{},{}]",
             condition_format, unmatched_format
-        ))));
+        )));
     }
     let s_expr = merge_into.input.as_ref();
-    let input_format_child = s_expr.to_format_tree(&merge_into.meta_data);
-    let all_children = [matched_children, unmatched_children, vec![
-        input_format_child,
-    ]]
+    let metadata = &*merge_into.meta_data.read();
+    let input_format_child = s_expr.to_format_tree(metadata);
+    let all_children = [
+        vec![distributed_format],
+        vec![target_build_optimization_format],
+        vec![can_try_update_column_only_format],
+        matched_children,
+        unmatched_children,
+        vec![input_format_child],
+    ]
     .concat();
     let res = FormatTreeNode::with_children(target_table_format, all_children).format_pretty()?;
     Ok(format!("MergeInto:\n{res}"))

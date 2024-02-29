@@ -12,6 +12,7 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 databend-common-arrow = { path = "../../common/arrow" }
+databend-common-base = { path = "../../common/base" }
 databend-common-datavalues = { path = "../datavalues" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-hashtable = { path = "../../common/hashtable" }
@@ -36,6 +37,8 @@ educe = "0.4"
 enum-as-inner = "0.5"
 ethnum = { workspace = true, features = ["serde", "macros", "borsh"] }
 futures = { workspace = true }
+geo = { workspace = true }
+geozero = { workspace = true }
 hex = "0.4.3"
 itertools = { workspace = true }
 jsonb = { workspace = true }
@@ -62,3 +65,4 @@ databend-common-ast = { path = "../ast" }
 goldenfile = "1.4"
 pretty_assertions = "1.3.0"
 rand = { workspace = true }
+rmp-serde = "1.1.1"

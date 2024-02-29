@@ -15,16 +15,14 @@
 use std::cmp;
 use std::sync::Arc;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::Limit;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::RelOp::Aggregate as OpAggregate;
-use crate::plans::RelOp::Pattern;
 use crate::plans::RelOperator;
 
 /// Input:  Limit
@@ -40,32 +38,20 @@ use crate::plans::RelOperator;
 ///               *
 pub struct RulePushDownLimitAggregate {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
 }
 
 impl RulePushDownLimitAggregate {
     pub fn new() -> Self {
         Self {
             id: RuleID::PushDownLimitAggregate,
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Limit,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: OpAggregate,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan { plan_type: Pattern }.into(),
-                    ))),
-                )),
-            )],
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Limit,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Aggregate,
+                    children: vec![Matcher::Leaf],
+                }],
+            }],
         }
     }
 }
@@ -99,7 +85,7 @@ impl Rule for RulePushDownLimitAggregate {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }

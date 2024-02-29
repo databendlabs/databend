@@ -24,8 +24,10 @@ mod role;
 mod serde;
 mod setting;
 mod stage;
-mod udf;
+pub mod udf;
 mod user;
+
+pub mod errors;
 
 pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
@@ -41,13 +43,12 @@ pub use quota::QuotaApi;
 pub use quota::QuotaMgr;
 pub use role::RoleApi;
 pub use role::RoleMgr;
+pub use serde::check_and_upgrade_to_pb;
 pub use serde::deserialize_struct;
 pub use serde::serialize_struct;
 pub use setting::SettingApi;
 pub use setting::SettingMgr;
 pub use stage::StageApi;
 pub use stage::StageMgr;
-pub use udf::UdfApi;
-pub use udf::UdfMgr;
 pub use user::UserApi;
 pub use user::UserMgr;

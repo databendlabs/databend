@@ -428,7 +428,7 @@ impl ModifyTableColumnInterpreter {
                 cast_needed: true,
             }));
         let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &insert_plan, false).await?;
+            build_query_pipeline_without_render_result_set(&self.ctx, &insert_plan).await?;
 
         // 6. commit new meta schema and snapshots
         new_table.commit_insertion(
@@ -515,6 +515,10 @@ impl ModifyTableColumnInterpreter {
 impl Interpreter for ModifyTableColumnInterpreter {
     fn name(&self) -> &str {
         "ModifyTableColumnInterpreter"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
     }
 
     #[async_backtrace::framed]

@@ -808,3 +808,154 @@ query T
 select parse_json('{"a":1,"b":2,"d":10}') || parse_json('{"a":3,"b":4}');
 ----
 {"a":3,"b":4,"d":10}
+
+query T
+select parse_json('[1,2,3]') - NULL;
+----
+NULL
+
+query T
+select parse_json('[1,2,3]') - '1';
+----
+[1,2,3]
+
+query T
+select parse_json('["1","2","3"]') - '0';
+----
+["1","2","3"]
+
+query T
+select parse_json('["1","2","3"]') - '1';
+----
+["2","3"]
+
+query T
+select parse_json('["1","2","3",{"a":1,"b":2}]') - '1';
+----
+["2","3",{"a":1,"b":2}]
+
+query T
+select parse_json('{"a":1,"b":2}') - 'c';
+----
+{"a":1,"b":2}
+
+query T
+select parse_json('{"a":1,"b":2}') - 'a';
+----
+{"b":2}
+
+query T
+select parse_json('{"b":2}') - 'b';
+----
+{}
+
+query T
+select parse_json('[1,2,3]') - 0;
+----
+[2,3]
+
+query T
+select parse_json('[1,2,3]') - 1;
+----
+[1,3]
+
+query T
+select parse_json('[1,2,3]') - 2;
+----
+[1,2]
+
+query T
+select parse_json('[1,2,3]') - -1;
+----
+[1,2]
+
+query T
+select parse_json('[1,2,3]') - -2;
+----
+[1,3]
+
+query T
+select parse_json('[1,2,3]') - -3;
+----
+[2,3]
+
+query T
+select parse_json('[1,2,3]') - -4;
+----
+[1,2,3]
+
+query T
+select parse_json('[1,2,{"a":[1,2,3],"b":[40,50,60]}]') - 2;
+----
+[1,2]
+
+
+query T
+select parse_json('[1,2,3]') #- NULL
+----
+NULL
+
+query T
+select parse_json('[1,2,3]') #- '{}'
+----
+[1,2,3]
+
+query T
+select parse_json('[1,2,3]') #- '{0}'
+----
+[2,3]
+
+query T
+select parse_json('[1,2,3]') #- '{-1}'
+----
+[1,2]
+
+query T
+select parse_json('[1,2,3]') #- '{3}'
+----
+[1,2,3]
+
+query T
+select parse_json('{"a":1,"b":[1,2,3]}') #- '{b}'
+----
+{"a":1}
+
+query T
+select parse_json('{"a":1,"b":[1,2,3]}') #- '{c}'
+----
+{"a":1,"b":[1,2,3]}
+
+query T
+select parse_json('{"a":1,"b":[1,2,3]}') #- '{b,2}'
+----
+{"a":1,"b":[1,2]}
+
+query T
+select parse_json('{"a":1,"b":[1,2,3]}') #- '{b,-2}'
+----
+{"a":1,"b":[1,3]}
+
+query T
+select parse_json('{"a":1,"b":[{"c":1,"d":10},2,3]}') #- '{b,0,d}'
+----
+{"a":1,"b":[{"c":1},2,3]}
+
+statement ok
+DROP TABLE IF EXISTS t3
+
+statement ok
+CREATE TABLE t3(id Int, v Variant NULL, s String NULL);
+
+statement ok
+INSERT INTO t3(id, v, s) VALUES (1, parse_json('[1,2,3]'), '{0}'), (2, parse_json('{"a":1,"b":2,"c":3}'), '{b}'), (3, '[1,{"a":[1,2,3]},3]', '{1,a,-1}'), (4, NULL, NULL)
+
+query T
+select id, v #- s from t3 order by id
+----
+1 [2,3]
+2 {"a":1,"c":3}
+3 [1,{"a":[1,2]},3]
+4 NULL
+
+statement ok
+DROP TABLE IF EXISTS t3

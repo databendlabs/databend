@@ -21,6 +21,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_sql::plans::DropStagePlan;
 use databend_common_storages_stage::StageTable;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 use log::info;
@@ -46,6 +47,10 @@ impl DropUserStageInterpreter {
 impl Interpreter for DropUserStageInterpreter {
     fn name(&self) -> &str {
         "DropUserStageInterpreter"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
     }
 
     #[minitrace::trace]
@@ -78,6 +83,7 @@ impl Interpreter for DropUserStageInterpreter {
             };
 
             role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
 
             if !matches!(&stage.stage_type, StageType::External) {
                 let op = StageTable::get_op(&stage)?;

@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
@@ -81,25 +82,31 @@ impl UserMgr {
 impl UserApi for UserMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_user(&self, user_info: UserInfo) -> databend_common_exception::Result<u64> {
-        let match_seq = MatchSeq::Exact(0);
+    async fn add_user(
+        &self,
+        user_info: UserInfo,
+        create_option: &CreateOption,
+    ) -> databend_common_exception::Result<()> {
         let user_key = format_user_key(&user_info.name, &user_info.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
-        let kv_api = self.kv_api.clone();
-        let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(
-            &key,
-            match_seq,
-            Operation::Update(value),
-            None,
-        ));
+        let kv_api = &self.kv_api;
+        let seq = MatchSeq::from(*create_option);
+        let res = kv_api
+            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Update(value), None))
+            .await?;
 
-        let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
-            ErrorCode::UserAlreadyExists(format!("User {} already exists.", user_key))
-        })?;
+        if let CreateOption::CreateIfNotExists(false) = create_option {
+            if res.prev.is_some() {
+                return Err(ErrorCode::UserAlreadyExists(format!(
+                    "User {} already exists.",
+                    user_key
+                )));
+            }
+        }
 
-        Ok(res_seq)
+        Ok(())
     }
 
     #[async_backtrace::framed]

@@ -91,12 +91,12 @@ impl PageIndex {
             Some(stats) => stats,
             None => return Ok((true, None)),
         };
-        let min_values = match stats.pages {
-            Some(ref pages) => pages,
+        let min_values: Vec<Scalar> = match stats.pages {
+            Some(ref pages) => pages.clone(),
             None => return Ok((true, None)),
         };
 
-        let max_value = Scalar::Tuple(stats.max());
+        let max_value = Scalar::Tuple(stats.max().clone());
 
         if self.cluster_key_id != stats.cluster_key_id {
             return Ok((true, None));

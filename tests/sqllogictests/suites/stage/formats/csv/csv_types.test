@@ -35,7 +35,7 @@ csv/invalid_variant.csv 2 0 NULL NULL
 query IT
 select * from iv
 ----
-1 invalidvariant
+1 null
 2 {"k":"v"}
 
 statement ok
@@ -90,7 +90,7 @@ statement ok
 drop file format if exists csv_raw
 
 statement ok
-create file format csv_raw type = 'csv' field_delimiter='#' quote= '&'
+create file format csv_raw type = 'csv' field_delimiter='#' quote= '`'
 
 
 query

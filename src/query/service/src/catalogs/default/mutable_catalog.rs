@@ -30,6 +30,7 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
@@ -84,6 +85,7 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -146,7 +148,7 @@ impl MutableCatalog {
 
         // Create default database.
         let req = CreateDatabaseReq {
-            if_not_exists: true,
+            create_option: CreateOption::CreateIfNotExists(true),
             name_ident: DatabaseNameIdent {
                 tenant,
                 db_name: "default".to_string(),
@@ -247,7 +249,10 @@ impl Catalog for MutableCatalog {
         });
         let database = self.build_db_instance(&db_info)?;
         database.init_database(&req.name_ident.tenant).await?;
-        Ok(CreateDatabaseReply { db_id: res.db_id })
+        Ok(CreateDatabaseReply {
+            db_id: res.db_id,
+            spec_vec: None,
+        })
     }
 
     #[async_backtrace::framed]
@@ -488,6 +493,11 @@ impl Catalog for MutableCatalog {
                 db.update_table_meta(req).await
             }
         }
+    }
+
+    #[async_backtrace::framed]
+    async fn update_multi_table_meta(&self, reqs: UpdateMultiTableMetaReq) -> Result<()> {
+        Ok(self.ctx.meta.update_multi_table_meta(reqs).await?)
     }
 
     async fn set_table_column_mask_policy(

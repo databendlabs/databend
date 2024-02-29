@@ -13,8 +13,18 @@
                     ],
                     [
                         {
+                            "tag": "a",
+                            "href": $link,
+                            "text": "Workflow Details"
+                        },
+                        {
                             "tag": "text",
-                            "text": $link
+                            "text": " | "
+                        },
+                        {
+                            "tag": "a",
+                            "href": $page,
+                            "text": "Release Notes"
                         }
                     ]
                 ]

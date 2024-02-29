@@ -18,13 +18,13 @@ use ahash::HashMap;
 use databend_common_exception::Result;
 
 use crate::binder::ColumnBindingBuilder;
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::UnionAll;
@@ -40,7 +40,7 @@ use crate::Visibility;
 // So it'll be efficient to push down `filter` to `union`, reduce the size of data to pull from table.
 pub struct RulePushDownFilterUnion {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
 }
 
 impl RulePushDownFilterUnion {
@@ -52,34 +52,13 @@ impl RulePushDownFilterUnion {
             //   UnionAll
             //     /  \
             //   ...   ...
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Filter,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_binary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::UnionAll,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ))),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ))),
-                )),
-            )],
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Filter,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::UnionAll,
+                    children: vec![Matcher::Leaf, Matcher::Leaf],
+                }],
+            }],
         }
     }
 }
@@ -124,8 +103,8 @@ impl Rule for RulePushDownFilterUnion {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }
 

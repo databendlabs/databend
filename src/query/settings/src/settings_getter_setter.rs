@@ -41,7 +41,10 @@ impl Settings {
     unsafe fn unchecked_try_get_u64(&self, key: &str) -> Result<u64> {
         match self.changes.get(key) {
             Some(v) => v.value.as_u64(),
-            None => DefaultSettings::try_get_u64(key),
+            None => match self.configs.get(key) {
+                Some(v) => v.as_u64(),
+                None => DefaultSettings::try_get_u64(key),
+            },
         }
     }
 
@@ -54,7 +57,10 @@ impl Settings {
     unsafe fn unchecked_try_get_string(&self, key: &str) -> Result<String, ErrorCode> {
         match self.changes.get(key) {
             Some(v) => Ok(v.value.as_string()),
-            None => DefaultSettings::try_get_string(key),
+            None => match self.configs.get(key) {
+                Some(v) => Ok(v.as_string()),
+                None => DefaultSettings::try_get_string(key),
+            },
         }
     }
 
@@ -109,6 +115,11 @@ impl Settings {
 
     unsafe fn unchecked_set_setting(&self, k: String, v: String) -> Result<()> {
         let (key, value) = DefaultSettings::convert_value(k.clone(), v)?;
+
+        if key == "sandbox_tenant" {
+            log::info!("switch sandbox tenant to {}", value);
+        }
+
         self.changes.insert(key, ChangeValue {
             value,
             level: ScopeLevel::Session,
@@ -163,12 +174,12 @@ impl Settings {
         self.try_set_u64("max_memory_usage", val)
     }
 
-    pub fn set_retention_period(&self, hours: u64) -> Result<()> {
-        self.try_set_u64("retention_period", hours)
+    pub fn set_data_retention_time_in_days(&self, days: u64) -> Result<()> {
+        self.try_set_u64("data_retention_time_in_days", days)
     }
 
-    pub fn get_retention_period(&self) -> Result<u64> {
-        self.try_get_u64("retention_period")
+    pub fn get_data_retention_time_in_days(&self) -> Result<u64> {
+        self.try_get_u64("data_retention_time_in_days")
     }
 
     pub fn get_max_storage_io_requests(&self) -> Result<u64> {
@@ -210,6 +221,10 @@ impl Settings {
 
     pub fn get_input_read_buffer_size(&self) -> Result<u64> {
         self.try_get_u64("input_read_buffer_size")
+    }
+
+    pub fn get_enable_new_copy_for_text_formats(&self) -> Result<u64> {
+        self.try_get_u64("enable_new_copy_for_text_formats")
     }
 
     pub fn get_enable_bushy_join(&self) -> Result<u64> {
@@ -254,16 +269,24 @@ impl Settings {
         Ok(self.unchecked_try_get_u64("disable_join_reorder")? != 0)
     }
 
-    pub fn get_join_spilling_threshold(&self) -> Result<usize> {
-        Ok(self.try_get_u64("join_spilling_threshold")? as usize)
+    pub fn get_join_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_memory_ratio")? as usize)
     }
 
-    pub fn get_runtime_filter(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_runtime_filter")? != 0)
+    pub fn get_join_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_bytes_threshold_per_proc")? as usize)
+    }
+
+    pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_bloom_runtime_filter")? != 0)
     }
 
     pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("prefer_broadcast_join")? != 0)
+    }
+
+    pub fn get_enforce_broadcast_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enforce_broadcast_join")? != 0)
     }
 
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
@@ -344,6 +367,10 @@ impl Settings {
 
     pub fn get_efficiently_memory_group_by(&self) -> Result<bool> {
         Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
+    }
+
+    pub fn get_enable_experimental_aggregate_hashtable(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_aggregate_hashtable")? == 1)
     }
 
     pub fn get_lazy_read_threshold(&self) -> Result<u64> {
@@ -443,6 +470,22 @@ impl Settings {
         self.try_set_u64("use_parquet2", u64::from(val))
     }
 
+    pub fn get_fuse_write_use_parquet2(&self) -> Result<bool> {
+        Ok(self.try_get_u64("fuse_write_use_parquet2")? == 1)
+    }
+
+    pub fn set_fuse_write_use_parquet2(&self, val: bool) -> Result<()> {
+        self.try_set_u64("fuse_write_use_parquet2", u64::from(val))
+    }
+
+    pub fn get_fuse_read_use_parquet2(&self) -> Result<bool> {
+        Ok(self.try_get_u64("fuse_read_use_parquet2")? != 0)
+    }
+
+    pub fn set_fuse_read_use_parquet2(&self, val: bool) -> Result<()> {
+        self.try_set_u64("fuse_read_use_parquet2", u64::from(val))
+    }
+
     pub fn get_enable_replace_into_partitioning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_replace_into_partitioning")? != 0)
     }
@@ -477,7 +520,7 @@ impl Settings {
     }
 
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {
-        Ok(self.try_get_u64("ddl_column_type_nullable")? == 1)
+        Ok(self.try_get_u64("ddl_column_type_nullable")? != 0)
     }
 
     pub fn get_enable_query_profiling(&self) -> Result<bool> {
@@ -542,5 +585,37 @@ impl Settings {
             "enable_refresh_aggregating_index_after_write",
             u64::from(val),
         )
+    }
+
+    pub fn get_disable_variant_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64("disable_variant_check")? != 0)
+    }
+
+    pub fn set_disable_variant_check(&self, val: bool) -> Result<()> {
+        self.try_set_u64("disable_variant_check", u64::from(val))
+    }
+
+    pub fn get_cost_factor_hash_table_per_row(&self) -> Result<u64> {
+        self.try_get_u64("cost_factor_hash_table_per_row")
+    }
+
+    pub fn get_cost_factor_aggregate_per_row(&self) -> Result<u64> {
+        self.try_get_u64("cost_factor_aggregate_per_row")
+    }
+
+    pub fn get_cost_factor_network_per_row(&self) -> Result<u64> {
+        self.try_get_u64("cost_factor_network_per_row")
+    }
+
+    pub fn get_enable_geo_create_table(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_geo_create_table")? != 0)
+    }
+
+    pub fn set_enable_geo_create_table(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_geo_create_table", u64::from(val))
+    }
+
+    pub fn get_enable_experimental_new_executor(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_new_executor")? == 1)
     }
 }

@@ -22,7 +22,6 @@ use crate::meta::v0;
 use crate::meta::v1;
 use crate::meta::v3;
 use crate::meta::v4;
-use crate::meta::v5;
 
 // Here versions of meta are tagged with numeric values
 //
@@ -48,7 +47,6 @@ impl Versioned<1> for v1::SegmentInfo {}
 impl Versioned<2> for v2::SegmentInfo {}
 impl Versioned<3> for v3::SegmentInfo {}
 impl Versioned<4> for v4::SegmentInfo {}
-impl Versioned<5> for v5::SegmentInfo {}
 
 pub enum SegmentInfoVersion {
     V0(PhantomData<v0::SegmentInfo>),
@@ -56,7 +54,6 @@ pub enum SegmentInfoVersion {
     V2(PhantomData<v2::SegmentInfo>),
     V3(PhantomData<v3::SegmentInfo>),
     V4(PhantomData<v4::SegmentInfo>),
-    V5(PhantomData<v5::SegmentInfo>),
 }
 
 impl SegmentInfoVersion {
@@ -67,7 +64,6 @@ impl SegmentInfoVersion {
             SegmentInfoVersion::V2(a) => Self::ver(a),
             SegmentInfoVersion::V3(a) => Self::ver(a),
             SegmentInfoVersion::V4(a) => Self::ver(a),
-            SegmentInfoVersion::V5(a) => Self::ver(a),
         }
     }
 
@@ -81,7 +77,6 @@ impl Versioned<1> for v1::TableSnapshot {}
 impl Versioned<2> for v2::TableSnapshot {}
 impl Versioned<3> for v3::TableSnapshot {}
 impl Versioned<4> for v4::TableSnapshot {}
-impl Versioned<5> for v5::TableSnapshot {}
 
 pub enum SnapshotVersion {
     V0(PhantomData<v0::TableSnapshot>),
@@ -89,7 +84,6 @@ pub enum SnapshotVersion {
     V2(PhantomData<v2::TableSnapshot>),
     V3(PhantomData<v3::TableSnapshot>),
     V4(PhantomData<v4::TableSnapshot>),
-    V5(PhantomData<v5::TableSnapshot>),
 }
 
 impl SnapshotVersion {
@@ -100,7 +94,6 @@ impl SnapshotVersion {
             SnapshotVersion::V2(a) => Self::ver(a),
             SnapshotVersion::V3(a) => Self::ver(a),
             SnapshotVersion::V4(a) => Self::ver(a),
-            SnapshotVersion::V5(a) => Self::ver(a),
         }
     }
 
@@ -110,17 +103,20 @@ impl SnapshotVersion {
 }
 
 impl Versioned<0> for v1::TableSnapshotStatistics {}
+impl Versioned<2> for v2::TableSnapshotStatistics {}
 
 impl Versioned<2> for DataBlock {}
 
 pub enum TableSnapshotStatisticsVersion {
     V0(PhantomData<v1::TableSnapshotStatistics>),
+    V2(PhantomData<v2::TableSnapshotStatistics>),
 }
 
 impl TableSnapshotStatisticsVersion {
     pub fn version(&self) -> u64 {
         match self {
             TableSnapshotStatisticsVersion::V0(a) => Self::ver(a),
+            TableSnapshotStatisticsVersion::V2(a) => Self::ver(a),
         }
     }
 
@@ -181,6 +177,9 @@ mod converters {
         fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
                 0 => Ok(TableSnapshotStatisticsVersion::V0(testify_version::<_, 0>(
+                    PhantomData,
+                ))),
+                2 => Ok(TableSnapshotStatisticsVersion::V2(testify_version::<_, 2>(
                     PhantomData,
                 ))),
                 _ => Err(ErrorCode::Internal(format!(

@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -106,6 +108,10 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
                     bytes: data_block.memory_size(),
                 };
                 self.scan_progress.incr(&progress_values);
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::ScanBytes,
+                    data_block.memory_size(),
+                );
                 self.generated_data = Some(data_block)
             }
         };

@@ -18,6 +18,7 @@
 use std::str::FromStr;
 
 use databend_common_meta_app as mt;
+use databend_common_meta_app::principal::BinaryFormat;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_protos::pb;
@@ -25,16 +26,14 @@ use num::FromPrimitive;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
+use crate::FromToProtoEnum;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
 
-impl FromToProto for mt::principal::StageFileFormatType {
-    type PB = pb::StageFileFormatType;
-    fn get_pb_ver(_p: &Self::PB) -> u64 {
-        0
-    }
-    fn from_pb(p: pb::StageFileFormatType) -> Result<Self, Incompatible>
+impl FromToProtoEnum for mt::principal::StageFileFormatType {
+    type PBEnum = pb::StageFileFormatType;
+    fn from_pb_enum(p: pb::StageFileFormatType) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
             pb::StageFileFormatType::Csv => Ok(mt::principal::StageFileFormatType::Csv),
@@ -48,7 +47,7 @@ impl FromToProto for mt::principal::StageFileFormatType {
         }
     }
 
-    fn to_pb(&self) -> Result<pb::StageFileFormatType, Incompatible> {
+    fn to_pb_enum(&self) -> Result<pb::StageFileFormatType, Incompatible> {
         match *self {
             mt::principal::StageFileFormatType::Csv => Ok(pb::StageFileFormatType::Csv),
             mt::principal::StageFileFormatType::Tsv => Ok(pb::StageFileFormatType::Tsv),
@@ -65,12 +64,9 @@ impl FromToProto for mt::principal::StageFileFormatType {
     }
 }
 
-impl FromToProto for mt::principal::StageFileCompression {
-    type PB = pb::StageFileCompression;
-    fn get_pb_ver(_p: &Self::PB) -> u64 {
-        0
-    }
-    fn from_pb(p: pb::StageFileCompression) -> Result<Self, Incompatible>
+impl FromToProtoEnum for mt::principal::StageFileCompression {
+    type PBEnum = pb::StageFileCompression;
+    fn from_pb_enum(p: pb::StageFileCompression) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
             pb::StageFileCompression::Auto => Ok(mt::principal::StageFileCompression::Auto),
@@ -89,7 +85,7 @@ impl FromToProto for mt::principal::StageFileCompression {
         }
     }
 
-    fn to_pb(&self) -> Result<pb::StageFileCompression, Incompatible> {
+    fn to_pb_enum(&self) -> Result<pb::StageFileCompression, Incompatible> {
         match *self {
             mt::principal::StageFileCompression::Auto => Ok(pb::StageFileCompression::Auto),
             mt::principal::StageFileCompression::Gzip => Ok(pb::StageFileCompression::Gzip),
@@ -117,13 +113,13 @@ impl FromToProto for mt::principal::FileFormatOptions {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let format = mt::principal::StageFileFormatType::from_pb(
+        let format = mt::principal::StageFileFormatType::from_pb_enum(
             FromPrimitive::from_i32(p.format).ok_or_else(|| Incompatible {
                 reason: format!("invalid StageFileFormatType: {}", p.format),
             })?,
         )?;
 
-        let compression = mt::principal::StageFileCompression::from_pb(
+        let compression = mt::principal::StageFileCompression::from_pb_enum(
             FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
                 reason: format!("invalid StageFileCompression: {}", p.compression),
             })?,
@@ -150,8 +146,9 @@ impl FromToProto for mt::principal::FileFormatOptions {
     }
 
     fn to_pb(&self) -> Result<pb::FileFormatOptions, Incompatible> {
-        let format = mt::principal::StageFileFormatType::to_pb(&self.format)? as i32;
-        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
+        let format = mt::principal::StageFileFormatType::to_pb_enum(&self.format)? as i32;
+        let compression =
+            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
         Ok(pb::FileFormatOptions {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -320,7 +317,7 @@ impl FromToProto for mt::principal::NdJsonFileFormatParams {
     fn from_pb(p: pb::NdJsonFileFormatParams) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        let compression = mt::principal::StageFileCompression::from_pb(
+        let compression = mt::principal::StageFileCompression::from_pb_enum(
             FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
                 reason: format!("invalid StageFileCompression: {}", p.compression),
             })?,
@@ -337,7 +334,8 @@ impl FromToProto for mt::principal::NdJsonFileFormatParams {
     }
 
     fn to_pb(&self) -> Result<pb::NdJsonFileFormatParams, Incompatible> {
-        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
+        let compression =
+            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
         Ok(pb::NdJsonFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -357,7 +355,7 @@ impl FromToProto for mt::principal::JsonFileFormatParams {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        let compression = mt::principal::StageFileCompression::from_pb(
+        let compression = mt::principal::StageFileCompression::from_pb_enum(
             FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
                 reason: format!("invalid StageFileCompression: {}", p.compression),
             })?,
@@ -366,7 +364,8 @@ impl FromToProto for mt::principal::JsonFileFormatParams {
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
+        let compression =
+            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
         Ok(Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -384,7 +383,7 @@ impl FromToProto for mt::principal::XmlFileFormatParams {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        let compression = mt::principal::StageFileCompression::from_pb(
+        let compression = mt::principal::StageFileCompression::from_pb_enum(
             FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
                 reason: format!("invalid StageFileCompression: {}", p.compression),
             })?,
@@ -396,7 +395,8 @@ impl FromToProto for mt::principal::XmlFileFormatParams {
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
+        let compression =
+            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
         Ok(Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -415,7 +415,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        let compression = mt::principal::StageFileCompression::from_pb(
+        let compression = mt::principal::StageFileCompression::from_pb_enum(
             FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
                 reason: format!("invalid StageFileCompression: {}", p.compression),
             })?,
@@ -435,6 +435,16 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             })
             .transpose()?
             .unwrap_or_default();
+
+        let binary_format = p
+            .binary_format
+            .map(|s| BinaryFormat::from_str(&s))
+            .transpose()
+            .map_err(|e| Incompatible {
+                reason: format!("{:?}", e),
+            })?
+            .unwrap_or_default();
+
         Ok(Self {
             compression,
             headers: p.headers,
@@ -446,11 +456,14 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             null_display,
             error_on_column_count_mismatch: !p.allow_column_count_mismatch,
             empty_field_as,
+            binary_format,
+            output_header: p.output_header,
         })
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
+        let compression =
+            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
         Ok(Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -464,6 +477,8 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             null_display: self.null_display.clone(),
             allow_column_count_mismatch: !self.error_on_column_count_mismatch,
             empty_field_as: Some(self.empty_field_as.to_string()),
+            binary_format: Some(self.binary_format.to_string()),
+            output_header: self.output_header,
         })
     }
 }
@@ -477,7 +492,7 @@ impl FromToProto for mt::principal::TsvFileFormatParams {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        let compression = mt::principal::StageFileCompression::from_pb(
+        let compression = mt::principal::StageFileCompression::from_pb_enum(
             FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
                 reason: format!("invalid StageFileCompression: {}", p.compression),
             })?,
@@ -494,7 +509,8 @@ impl FromToProto for mt::principal::TsvFileFormatParams {
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
+        let compression =
+            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
         Ok(Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,

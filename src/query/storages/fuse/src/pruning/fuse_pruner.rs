@@ -329,7 +329,7 @@ impl FusePruner {
                                                     block_pruner
                                                         .pruning(
                                                             segment_location.clone(),
-                                                            compact_segment_info,
+                                                            compact_segment_info.block_metas()?,
                                                         )
                                                         .await?,
                                                 );
@@ -340,7 +340,7 @@ impl FusePruner {
                                                 block_pruner
                                                     .pruning(
                                                         segment_location.clone(),
-                                                        compact_segment_info,
+                                                        compact_segment_info.block_metas()?,
                                                     )
                                                     .await?,
                                             );
@@ -349,7 +349,8 @@ impl FusePruner {
                                 }
                             } else {
                                 for (location, info) in pruned_segments {
-                                    res.extend(block_pruner.pruning(location, &info).await?);
+                                    let block_metas = info.block_metas()?;
+                                    res.extend(block_pruner.pruning(location, block_metas).await?);
                                 }
                             }
                             Result::<_, ErrorCode>::Ok((res, deleted_segments))
@@ -378,6 +379,68 @@ impl FusePruner {
                     // TopN pruner.
                     self.topn_pruning(metas)
                 }
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn stream_pruning(
+        &mut self,
+        mut block_metas: Vec<Arc<BlockMeta>>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let mut remain = block_metas.len() % self.max_concurrency;
+        let batch_size = block_metas.len() / self.max_concurrency;
+        let mut works = Vec::with_capacity(self.max_concurrency);
+        let block_pruner = Arc::new(BlockPruner::create(self.pruning_ctx.clone())?);
+        let mut segment_idx = 0;
+
+        while !block_metas.is_empty() {
+            let gap_size = std::cmp::min(1, remain);
+            let batch_size = batch_size + gap_size;
+            remain -= gap_size;
+
+            let batch = block_metas.drain(0..batch_size).collect::<Vec<_>>();
+            works.push(
+                self.pruning_ctx
+                    .pruning_runtime
+                    .spawn(self.pruning_ctx.ctx.get_id(), {
+                        let block_pruner = block_pruner.clone();
+                        async move {
+                            // Build pruning tasks.
+                            let res = block_pruner
+                                .pruning(
+                                    // unused segment location.
+                                    SegmentLocation {
+                                        segment_idx,
+                                        location: ("".to_string(), 0),
+                                        snapshot_loc: None,
+                                    },
+                                    batch,
+                                )
+                                .await?;
+
+                            Result::<_, ErrorCode>::Ok(res)
+                        }
+                    }),
+            );
+            segment_idx += 1;
+        }
+
+        match futures::future::try_join_all(works).await {
+            Err(e) => Err(ErrorCode::StorageOther(format!(
+                "segment pruning failure, {}",
+                e
+            ))),
+            Ok(workers) => {
+                let mut metas = vec![];
+                for worker in workers {
+                    let res = worker?;
+                    metas.extend(res);
+                }
+                // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
+                // will get here, we can prevent other mutations like update and so on.
+                // TopN pruner.
+                self.topn_pruning(metas)
             }
         }
     }

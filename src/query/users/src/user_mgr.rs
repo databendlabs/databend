@@ -26,6 +26,7 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
 
 use crate::role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
@@ -40,14 +41,6 @@ impl UserApiProvider {
             user_info.grants.grant_privileges(
                 &GrantObject::Global,
                 UserPrivilegeSet::available_privileges_on_global(),
-            );
-            user_info.grants.grant_privileges(
-                &GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_stage(),
-            );
-            user_info.grants.grant_privileges(
-                &GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_udf(),
             );
             // Grant admin role to all configured users.
             user_info
@@ -136,8 +129,8 @@ impl UserApiProvider {
         &self,
         tenant: &str,
         user_info: UserInfo,
-        if_not_exists: bool,
-    ) -> Result<u64> {
+        create_option: &CreateOption,
+    ) -> Result<()> {
         if let Some(name) = user_info.option.network_policy() {
             if self.get_network_policy(tenant, name).await.is_err() {
                 return Err(ErrorCode::UnknownNetworkPolicy(format!(
@@ -161,17 +154,7 @@ impl UserApiProvider {
             )));
         }
         let client = self.get_user_api_client(tenant)?;
-        let add_user = client.add_user(user_info);
-        match add_user.await {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                if if_not_exists && e.code() == ErrorCode::USER_ALREADY_EXISTS {
-                    Ok(0)
-                } else {
-                    Err(e.add_message_back("(while add user)"))
-                }
-            }
-        }
+        client.add_user(user_info, create_option).await
     }
 
     #[async_backtrace::framed]

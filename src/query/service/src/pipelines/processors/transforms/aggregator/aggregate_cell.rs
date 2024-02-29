@@ -16,6 +16,7 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_functions::aggregates::StateAddr;
 use databend_common_hashtable::HashtableEntryRefLike;
 use databend_common_hashtable::HashtableLike;
@@ -41,9 +42,11 @@ unsafe impl<T: HashMethodBounds, V: Send + Sync + 'static> Sync for HashTableCel
 
 impl<T: HashMethodBounds, V: Send + Sync + 'static> Drop for HashTableCell<T, V> {
     fn drop(&mut self) {
-        if let Some(dropper) = self._dropper.take() {
-            dropper.destroy(&mut self.hashtable);
-        }
+        drop_guard(move || {
+            if let Some(dropper) = self._dropper.take() {
+                dropper.destroy(&mut self.hashtable);
+            }
+        })
     }
 }
 

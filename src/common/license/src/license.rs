@@ -17,8 +17,11 @@ use std::fmt::Formatter;
 
 use serde::Deserialize;
 use serde::Serialize;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 // All enterprise features are defined here.
+#[derive(Debug, PartialEq, EnumIter)]
 pub enum Feature {
     LicenseInfo,
     Vacuum,
@@ -76,4 +79,24 @@ pub struct LicenseInfo {
     pub org: Option<String>,
     pub tenants: Option<Vec<String>>,
     pub features: Option<Vec<String>>,
+}
+
+impl LicenseInfo {
+    pub fn display_features(&self) -> String {
+        // sort all features in alphabet order and ignore test feature
+        let mut binding = self.features.clone().unwrap_or_default();
+        if binding.is_empty() {
+            binding = Feature::iter().map(|f| f.to_string()).collect::<Vec<_>>();
+        }
+        let mut features = binding
+            .iter()
+            .filter(|f| *f != &Feature::Test.to_string())
+            .collect::<Vec<_>>();
+        features.sort();
+        features
+            .iter()
+            .map(|f| f.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    }
 }

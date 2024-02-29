@@ -159,7 +159,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let latest = table.refresh(ctx.as_ref()).await?;
     let latest_fuse_table = FuseTable::try_from_table(latest.as_ref())?;
     let table_statistics = latest_fuse_table
-        .table_statistics(ctx.clone())
+        .table_statistics(ctx.clone(), None)
         .await?
         .unwrap();
 
@@ -765,8 +765,9 @@ impl CompactSegmentTestFixture {
                     };
 
                     let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-                    let (file_size, col_metas) =
-                        serialize_block(&write_settings, &schema, block, &mut buf)?;
+                    let col_metas =
+                        serialize_block(&write_settings, &schema, block, &mut buf, false)?;
+                    let file_size = buf.len() as u64;
 
                     data_accessor.write(&location.0, buf).await?;
 

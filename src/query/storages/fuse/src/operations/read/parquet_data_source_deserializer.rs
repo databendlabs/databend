@@ -21,6 +21,8 @@ use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -44,6 +46,8 @@ use xorf::BinaryFuse16;
 
 use super::fuse_source::fill_internal_column_meta;
 use super::parquet_data_source::ParquetDataSource;
+use super::util::add_row_prefix_meta;
+use super::util::need_reserve_block_info;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -72,6 +76,8 @@ pub struct DeserializeDataTransform {
 
     base_block_ids: Option<Scalar>,
     cached_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
+    // for merge_into target build.
+    need_reserve_block_info: bool,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -105,7 +111,7 @@ impl DeserializeDataTransform {
         let mut output_schema = plan.schema().as_ref().clone();
         output_schema.remove_internal_fields();
         let output_schema: DataSchema = (&output_schema).into();
-
+        let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             ctx,
             table_index: plan.table_index,
@@ -123,6 +129,7 @@ impl DeserializeDataTransform {
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
             cached_runtime_filter: None,
+            need_reserve_block_info,
         })))
     }
 
@@ -246,6 +253,10 @@ impl Processor for DeserializeDataTransform {
                         bytes: block.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::ScanBytes,
+                        block.memory_size(),
+                    );
 
                     self.output_data = Some(block);
                 }
@@ -294,6 +305,10 @@ impl Processor for DeserializeDataTransform {
                         bytes: data_block.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::ScanBytes,
+                        data_block.memory_size(),
+                    );
 
                     let mut data_block =
                         data_block.resort(&self.src_schema, &self.output_schema)?;
@@ -314,11 +329,16 @@ impl Processor for DeserializeDataTransform {
                         )?;
                     }
 
+                    // we will do recluster for stream here.
                     if self.block_reader.update_stream_columns() {
                         let inner_meta = data_block.take_meta();
                         let meta = gen_mutation_stream_meta(inner_meta, &part.location)?;
                         data_block = data_block.add_meta(Some(Box::new(meta)))?;
                     }
+
+                    // for merge into target build
+                    data_block =
+                        add_row_prefix_meta(self.need_reserve_block_info, part, data_block)?;
 
                     self.output_data = Some(data_block);
                 }

@@ -24,9 +24,9 @@ use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_stream::stream_table::StreamTable;
-use databend_common_storages_stream::stream_table::OPT_KEY_TABLE_VER;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 use crate::sessions::QueryContext;
 
@@ -48,7 +48,7 @@ pub async fn build_update_stream_meta_seq(
     for table in tables.into_iter() {
         let stream = StreamTable::try_from_table(table.as_ref())?;
         let stream_info = stream.get_table_info();
-        let source_table = stream.source_table(ctx.clone()).await?;
+        let source_table = stream.source_table(ctx.get_default_catalog()?).await?;
         let inner_fuse = FuseTable::try_from_table(source_table.as_ref())?;
 
         let table_version = inner_fuse.get_table_info().ident.seq;

@@ -206,13 +206,13 @@ impl CopyIntoTableInterpreter {
         for entry in results {
             let status = entry.value();
             if let Some(err) = &status.error {
-                files.push(entry.key().as_bytes().to_vec());
+                files.push(entry.key().clone());
                 rows_loaded.push(status.num_rows_loaded as i32);
                 errors_seen.push(err.num_errors as i32);
-                first_error.push(Some(err.first_error.error.to_string().as_bytes().to_vec()));
+                first_error.push(Some(err.first_error.error.to_string().clone()));
                 first_error_line.push(Some(err.first_error.line as i32 + 1));
             } else if return_all {
-                files.push(entry.key().as_bytes().to_vec());
+                files.push(entry.key().clone());
                 rows_loaded.push(status.num_rows_loaded as i32);
                 errors_seen.push(0);
                 first_error.push(None);
@@ -289,6 +289,10 @@ impl Interpreter for CopyIntoTableInterpreter {
         "CopyIntoTableInterpreterV2"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -304,8 +308,7 @@ impl Interpreter for CopyIntoTableInterpreter {
         let (physical_plan, files, update_stream_meta) =
             self.build_physical_plan(&self.plan).await?;
         let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                .await?;
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // Build commit insertion pipeline.
         {

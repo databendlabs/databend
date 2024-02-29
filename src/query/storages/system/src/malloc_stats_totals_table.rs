@@ -41,7 +41,7 @@ macro_rules! set_value {
     ($stat:ident, $names:expr, $values:expr) => {
         let mib = $stat::mib()?;
         let value = mib.read()?;
-        $names.put_slice($stat::name().as_bytes());
+        $names.put_str(&String::from_utf8_lossy($stat::name().as_bytes()));
         $names.commit_row();
         $values.push(value as u64);
     };

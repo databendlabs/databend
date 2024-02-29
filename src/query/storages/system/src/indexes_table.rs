@@ -68,10 +68,10 @@ impl AsyncSystemTable for IndexesTable {
         let mut updated_on = Vec::with_capacity(indexes.len());
 
         for (_, name, index) in indexes {
-            names.push(name.as_bytes().to_vec());
-            types.push(index.index_type.to_string().as_bytes().to_vec());
-            originals.push(index.original_query.as_bytes().to_vec());
-            defs.push(index.query.as_bytes().to_vec());
+            names.push(name.clone());
+            types.push(index.index_type.to_string());
+            originals.push(index.original_query.clone());
+            defs.push(index.query.clone());
             created_on.push(index.created_on.timestamp_micros());
             updated_on.push(index.updated_on.map(|u| u.timestamp_micros()));
         }

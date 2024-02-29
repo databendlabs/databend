@@ -26,6 +26,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_settings::ScopeLevel;
 use log::info;
 use log::warn;
 use minitrace::prelude::*;
@@ -220,11 +221,10 @@ impl HttpQuery {
                         return Err(ErrorCode::BadArguments(
                             "last query on the session not finished",
                         ));
-                    } else {
-                        let _ = http_query_manager
-                            .remove_query(&query_id, RemoveReason::Canceled)
-                            .await;
                     }
+                    let _ = http_query_manager
+                        .remove_query(&query_id, RemoveReason::Canceled)
+                        .await;
                 }
                 // wait for Arc<QueryContextShared> to drop and detach itself from session
                 // should not take too long
@@ -289,6 +289,7 @@ impl HttpQuery {
         let deduplicate_label = &ctx.deduplicate_label;
         let user_agent = &ctx.user_agent;
         let query_id = ctx.query_id.clone();
+        let http_ctx = ctx;
         let ctx = session.create_query_context().await?;
 
         // Deduplicate label is used on the DML queries which may be retried by the client.
@@ -317,7 +318,11 @@ impl HttpQuery {
         match &request.stage_attachment {
             Some(attachment) => ctx.attach_stage(StageAttachment {
                 location: attachment.location.clone(),
-                file_format_options: attachment.file_format_options.clone(),
+                file_format_options: attachment.file_format_options.as_ref().map(|v| {
+                    v.iter()
+                        .map(|(k, v)| (k.to_lowercase(), v.to_owned()))
+                        .collect::<BTreeMap<_, _>>()
+                }),
                 copy_options: attachment.copy_options.clone(),
             }),
             None => {}
@@ -339,6 +344,7 @@ impl HttpQuery {
 
         let span = if let Some(parent) = SpanContext::current_local_parent() {
             Span::root(std::any::type_name::<ExecuteState>(), parent)
+                .with_properties(|| http_ctx.to_minitrace_properties())
         } else {
             Span::noop()
         };
@@ -467,7 +473,7 @@ impl HttpQuery {
             .settings
             .as_ref()
             .into_iter()
-            .filter(|item| item.default_value != item.user_value)
+            .filter(|item| matches!(item.level, ScopeLevel::Session))
             .map(|item| (item.name.to_string(), item.user_value.as_string()))
             .collect::<BTreeMap<_, _>>();
         let database = session_state.current_database.clone();

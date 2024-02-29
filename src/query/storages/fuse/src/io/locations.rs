@@ -41,6 +41,8 @@ static SNAPSHOT_V4: SnapshotVersion = SnapshotVersion::V4(PhantomData);
 
 static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V0(PhantomData);
+static SNAPSHOT_STATISTICS_V2: TableSnapshotStatisticsVersion =
+    TableSnapshotStatisticsVersion::V2(PhantomData);
 
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
@@ -135,16 +137,23 @@ impl TableMetaLocationGenerator {
         Ok(statistics_version.create(id, &self.prefix))
     }
 
-    pub fn snapshot_statistics_version(_location: impl AsRef<str>) -> u64 {
-        SNAPSHOT_STATISTICS_V0.version()
-    }
-
     pub fn gen_last_snapshot_hint_location(&self) -> String {
         format!("{}/{}", &self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT)
     }
 
     pub fn gen_virtual_block_location(location: &str) -> String {
         location.replace(FUSE_TBL_BLOCK_PREFIX, FUSE_TBL_VIRTUAL_BLOCK_PREFIX)
+    }
+
+    pub fn table_statistics_version(table_statistics_location: impl AsRef<str>) -> u64 {
+        if table_statistics_location
+            .as_ref()
+            .ends_with(SNAPSHOT_STATISTICS_V0.suffix().as_str())
+        {
+            SNAPSHOT_STATISTICS_V0.version()
+        } else {
+            SNAPSHOT_STATISTICS_V2.version()
+        }
     }
 
     pub fn gen_agg_index_location_from_block_location(loc: &str, index_id: u64) -> String {
@@ -179,7 +188,6 @@ impl SnapshotLocationCreator for SnapshotVersion {
             SnapshotVersion::V2(_) => "_v2.json".to_string(),
             SnapshotVersion::V3(_) => "_v3.bincode".to_string(),
             SnapshotVersion::V4(_) => "_v4.mpk".to_string(),
-            SnapshotVersion::V5(_) => "_v5.mpk".to_string(),
         }
     }
 }
@@ -198,6 +206,7 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
     fn suffix(&self) -> String {
         match self {
             TableSnapshotStatisticsVersion::V0(_) => "_ts_v0.json".to_string(),
+            TableSnapshotStatisticsVersion::V2(_) => "_ts_v2.json".to_string(),
         }
     }
 }

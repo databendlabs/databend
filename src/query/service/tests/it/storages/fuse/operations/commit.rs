@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -21,14 +20,17 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
@@ -105,9 +107,8 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::MetaId;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
-use databend_common_pipeline_core::processors::profile::Profile;
 use databend_common_pipeline_core::InputError;
+use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
@@ -125,6 +126,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_txn::TxnManagerRef;
 use futures::TryStreamExt;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -367,6 +369,10 @@ impl TableContext for CtxDelegation {
 
     fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         todo!()
+    }
+
+    fn txn_mgr(&self) -> TxnManagerRef {
+        self.ctx.txn_mgr()
     }
 
     fn incr_total_scan_value(&self, _value: ProgressValues) {
@@ -702,6 +708,15 @@ impl TableContext for CtxDelegation {
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
         todo!()
     }
+
+    fn set_merge_into_join(&self, _join: MergeIntoJoin) {
+        todo!()
+    }
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin {
+        todo!()
+    }
+
     fn set_runtime_filter(&self, _filters: (IndexType, RuntimeFilterInfo)) {
         todo!()
     }
@@ -719,6 +734,9 @@ impl TableContext for CtxDelegation {
     }
 
     fn has_bloom_runtime_filters(&self, _id: usize) -> bool {
+        todo!()
+    }
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
         todo!()
     }
 }

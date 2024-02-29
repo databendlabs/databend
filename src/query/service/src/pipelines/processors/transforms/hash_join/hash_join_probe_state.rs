@@ -39,6 +39,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::HashJoinHashtableLike;
+use databend_common_hashtable::Interval;
 use databend_common_sql::ColumnSet;
 use itertools::Itertools;
 use log::info;
@@ -56,6 +57,11 @@ use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sql::planner::plans::JoinType;
 
+// ({(Interval,prefix),(Interval,repfix),...},chunk_idx)
+// 1.The Interval is the partial unmodified interval offset in chunks.
+// 2.Prefix is segment_idx_block_id
+// 3.chunk_idx: the index of correlated chunk in chunks.
+pub type MergeIntoChunkPartialUnmodified = (Vec<(Interval, u64)>, u64);
 /// Define some shared states for all hash join probe threads.
 pub struct HashJoinProbeState {
     pub(crate) ctx: Arc<QueryContext>,
@@ -80,6 +86,9 @@ pub struct HashJoinProbeState {
     /// Todo(xudong): add more detailed comments for the following fields.
     /// Final scan tasks
     pub(crate) final_scan_tasks: RwLock<VecDeque<usize>>,
+    /// for merge into target as build side.
+    pub(crate) merge_into_final_partial_unmodified_scan_tasks:
+        RwLock<VecDeque<MergeIntoChunkPartialUnmodified>>,
     pub(crate) mark_scan_map_lock: Mutex<()>,
     /// Hash method
     pub(crate) hash_method: HashMethodKind,
@@ -138,6 +147,7 @@ impl HashJoinProbeState {
             probe_schema,
             probe_projections: probe_projections.clone(),
             final_scan_tasks: RwLock::new(VecDeque::new()),
+            merge_into_final_partial_unmodified_scan_tasks: RwLock::new(VecDeque::new()),
             mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
             spill_partitions: Default::default(),
@@ -166,7 +176,7 @@ impl HashJoinProbeState {
 
     pub fn probe_join(
         &self,
-        input: DataBlock,
+        mut input: DataBlock,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
         let input_num_rows = input.num_rows();
@@ -249,7 +259,9 @@ impl HashJoinProbeState {
             *ty = ty.remove_nullable();
         }
 
-        let input = input.project(&self.probe_projections);
+        if self.hash_join_state.hash_join_desc.join_type != JoinType::LeftMark {
+            input = input.project(&self.probe_projections);
+        }
         probe_state.generation_state.is_probe_projected = input.num_columns() > 0;
 
         if self.hash_join_state.fast_return.load(Ordering::Relaxed)
@@ -273,12 +285,13 @@ impl HashJoinProbeState {
         } else {
             input_num_rows as u64
         };
+        // We use the information from the probed data to predict the matching state of this probe.
         let prefer_early_filtering =
             (probe_state.num_keys_hash_matched as f64) / (probe_state.num_keys as f64) < 0.8;
 
         // Probe:
         // (1) INNER / RIGHT / RIGHT SINGLE / RIGHT SEMI / RIGHT ANTI / RIGHT MARK / LEFT SEMI / LEFT MARK
-        //        prefer_early_filtering is true  => early_filtering_probe_with_selection
+        //        prefer_early_filtering is true  => early_filtering_matched_probe
         //        prefer_early_filtering is false => probe
         // (2) LEFT / LEFT SINGLE / LEFT ANTI / FULL
         //        prefer_early_filtering is true  => early_filtering_probe
@@ -295,36 +308,42 @@ impl HashJoinProbeState {
                     .build_keys_accessor_and_hashes(keys_state, &mut probe_state.hashes)?;
 
                 // Perform a round of hash table probe.
-                if Self::check_for_selection(&self.hash_join_state.hash_join_desc.join_type) {
-                    probe_state.selection_count = if prefer_early_filtering {
+                probe_state.probe_with_selection = prefer_early_filtering;
+                probe_state.selection_count = if !Self::need_unmatched_selection(
+                    &self.hash_join_state.hash_join_desc.join_type,
+                    probe_state.with_conjunction,
+                ) {
+                    if prefer_early_filtering {
                         // Early filtering, use selection to get better performance.
-                        probe_state.probe_with_selection = true;
-
-                        table.hash_table.early_filtering_probe_with_selection(
+                        table.hash_table.early_filtering_matched_probe(
                             &mut probe_state.hashes,
                             valids,
                             &mut probe_state.selection,
                         )
                     } else {
                         // If don't do early filtering, don't use selection.
-                        probe_state.probe_with_selection = false;
-
                         table.hash_table.probe(&mut probe_state.hashes, valids)
-                    };
-                    probe_state.num_keys_hash_matched += probe_state.selection_count as u64;
+                    }
                 } else {
-                    // For left join, left single join, full join and left anti join, don't use selection.
-                    probe_state.probe_with_selection = false;
-
-                    let count = if prefer_early_filtering {
-                        table
-                            .hash_table
-                            .early_filtering_probe(&mut probe_state.hashes, valids)
+                    if prefer_early_filtering {
+                        // Early filtering, use matched selection and unmatched selection to get better performance.
+                        let unmatched_selection =
+                            probe_state.probe_unmatched_indexes.as_mut().unwrap();
+                        let (matched_count, unmatched_count) =
+                            table.hash_table.early_filtering_probe(
+                                &mut probe_state.hashes,
+                                valids,
+                                &mut probe_state.selection,
+                                unmatched_selection,
+                            );
+                        probe_state.probe_unmatched_indexes_count = unmatched_count;
+                        matched_count
                     } else {
+                        // If don't do early filtering, don't use selection.
                         table.hash_table.probe(&mut probe_state.hashes, valids)
-                    };
-                    probe_state.num_keys_hash_matched += count as u64;
-                }
+                    }
+                };
+                probe_state.num_keys_hash_matched += probe_state.selection_count as u64;
 
                 // Continue to probe hash table and process data blocks.
                 self.result_blocks(&input, keys, &table.hash_table, probe_state)
@@ -356,24 +375,22 @@ impl HashJoinProbeState {
         )
     }
 
-    /// Checks if a join type can use selection.
-    pub fn check_for_selection(join_type: &JoinType) -> bool {
+    /// Checks if the join type need to use unmatched selection.
+    pub fn need_unmatched_selection(join_type: &JoinType, with_conjunction: bool) -> bool {
         matches!(
             join_type,
-            JoinType::Inner
-                | JoinType::Right
-                | JoinType::RightSingle
-                | JoinType::RightSemi
-                | JoinType::RightAnti
-                | JoinType::RightMark
-                | JoinType::LeftSemi
-                | JoinType::LeftMark
-        )
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
+        ) && !with_conjunction
     }
 
     pub fn probe_attach(&self) -> Result<usize> {
         let mut worker_id = 0;
-        if self.hash_join_state.need_outer_scan() || self.hash_join_state.need_mark_scan() {
+        if self.hash_join_state.need_outer_scan()
+            || self.hash_join_state.need_mark_scan()
+            || self
+                .hash_join_state
+                .merge_into_need_target_partial_modified_scan()
+        {
             worker_id = self.probe_workers.fetch_add(1, Ordering::Relaxed);
         }
         if self.hash_join_state.enable_spill {

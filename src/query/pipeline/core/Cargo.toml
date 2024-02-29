@@ -12,6 +12,7 @@ doctest = false
 test = false
 
 [dependencies]
+databend-common-base = { path = "../../../common/base" }
 databend-common-exception = { path = "../../../common/exception" }
 databend-common-expression = { path = "../../expression" }
 

@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnFilter;
+use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
@@ -130,6 +131,7 @@ impl Binder {
                         projection_index: Some(column_binding.index),
                         data_type,
                         outer_columns,
+                        contain_agg: None,
                     })
                 } else {
                     item.scalar.clone()
@@ -255,9 +257,18 @@ impl Binder {
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
-                    let expr_name = match alias {
-                        Some(alias) => normalize_identifier(alias, &self.name_resolution_ctx).name,
-                        None => {
+                    let expr_name = match (expr.as_ref(), alias) {
+                        (
+                            Expr::ColumnRef {
+                                column: ColumnID::Name(column),
+                                ..
+                            },
+                            None,
+                        ) => normalize_identifier(column, &self.name_resolution_ctx).name,
+                        (_, Some(alias)) => {
+                            normalize_identifier(alias, &self.name_resolution_ctx).name
+                        }
+                        _ => {
                             let mut expr = expr.clone();
                             let mut remove_quote_visitor = RemoveIdentifierQuote;
                             walk_expr_mut(&mut remove_quote_visitor, &mut expr);

@@ -14,22 +14,22 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::fmt;
 use std::io::Write;
 use std::time::Duration;
-use std::time::SystemTime;
 
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
-use fern::FormatCallback;
+use databend_common_base::runtime::Thread;
 use log::LevelFilter;
 use log::Log;
 use minitrace::prelude::*;
-use serde_json::Map;
+use opentelemetry_otlp::WithExportConfig;
 
+use crate::loggers::formatter;
 use crate::loggers::new_file_log_writer;
 use crate::loggers::MinitraceLogger;
 use crate::loggers::OpenTelemetryLogger;
+use crate::structlog::StructLogReporter;
 use crate::Config;
 
 const HEADER_TRACE_PARENT: &str = "traceparent";
@@ -98,7 +98,7 @@ pub fn init_logging(
     if cfg.tracing.on {
         let otlp_endpoint = cfg.tracing.otlp_endpoint.clone();
 
-        let (reporter_rt, otlp_reporter) = std::thread::spawn(|| {
+        let (reporter_rt, otlp_reporter) = Thread::spawn(|| {
             // Init runtime with 2 threads.
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
@@ -107,19 +107,17 @@ pub fn init_logging(
                 .unwrap();
             let reporter = rt.block_on(async {
                 minitrace_opentelemetry::OpenTelemetryReporter::new(
-                    opentelemetry_otlp::SpanExporter::new_tonic(
-                        opentelemetry_otlp::ExportConfig {
-                            endpoint: otlp_endpoint,
-                            protocol: opentelemetry_otlp::Protocol::Grpc,
-                            timeout: Duration::from_secs(
-                                opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
-                            ),
-                        },
-                        opentelemetry_otlp::TonicConfig::default(),
-                    )
-                    .expect("initialize otlp exporter"),
+                    opentelemetry_otlp::new_exporter()
+                        .tonic()
+                        .with_endpoint(otlp_endpoint)
+                        .with_protocol(opentelemetry_otlp::Protocol::Grpc)
+                        .with_timeout(Duration::from_secs(
+                            opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
+                        ))
+                        .build_span_exporter()
+                        .expect("initialize oltp exporter"),
                     opentelemetry::trace::SpanKind::Server,
-                    Cow::Owned(opentelemetry::sdk::Resource::new([
+                    Cow::Owned(opentelemetry_sdk::Resource::new([
                         opentelemetry::KeyValue::new("service.name", trace_name.clone()),
                     ])),
                     opentelemetry::InstrumentationLibrary::new(
@@ -135,20 +133,30 @@ pub fn init_logging(
         .join()
         .unwrap();
 
-        minitrace::set_reporter(otlp_reporter, minitrace::collector::Config::default());
+        if cfg.structlog.on {
+            let reporter = StructLogReporter::wrap(otlp_reporter);
+            minitrace::set_reporter(reporter, minitrace::collector::Config::default());
+        } else {
+            minitrace::set_reporter(otlp_reporter, minitrace::collector::Config::default());
+        }
 
         guards.push(Box::new(defer::defer(minitrace::flush)));
         guards.push(Box::new(defer::defer(|| {
-            std::thread::spawn(move || std::mem::drop(reporter_rt))
+            Thread::spawn(move || std::mem::drop(reporter_rt))
                 .join()
                 .unwrap()
         })));
+    } else if cfg.structlog.on {
+        let reporter = StructLogReporter::new();
+        minitrace::set_reporter(reporter, minitrace::collector::Config::default());
+        guards.push(Box::new(defer::defer(minitrace::flush)));
     }
 
     // Initialize logging
     let mut normal_logger = fern::Dispatch::new();
     let mut query_logger = fern::Dispatch::new();
     let mut profile_logger = fern::Dispatch::new();
+    let mut structlog_logger = fern::Dispatch::new();
 
     // File logger
     if cfg.file.on {
@@ -185,7 +193,7 @@ pub fn init_logging(
     }
 
     // Log to minitrace
-    if cfg.tracing.on {
+    if cfg.tracing.on || cfg.structlog.on {
         let level = cfg
             .tracing
             .capture_log_level
@@ -234,16 +242,29 @@ pub fn init_logging(
         }
     }
 
+    // Error logger
+    if cfg.structlog.on && !cfg.structlog.dir.is_empty() {
+        let (structlog_log_file, flush_guard) =
+            new_file_log_writer(&cfg.structlog.dir, log_name, cfg.file.limit);
+        guards.push(Box::new(flush_guard));
+        structlog_logger =
+            structlog_logger.chain(Box::new(structlog_log_file) as Box<dyn Write + Send>);
+    }
+
     let logger = fern::Dispatch::new()
         .chain(
             fern::Dispatch::new()
                 .level_for("databend::log::query", LevelFilter::Off)
                 .level_for("databend::log::profile", LevelFilter::Off)
-                .filter(|meta| {
-                    if meta.target().starts_with("databend_") {
-                        true
-                    } else {
-                        meta.level() <= LevelFilter::Error
+                .level_for("databend::log::structlog", LevelFilter::Off)
+                .filter({
+                    let prefix_filter = cfg.file.prefix_filter.clone();
+                    move |meta| {
+                        if prefix_filter.is_empty() || meta.target().starts_with(&prefix_filter) {
+                            true
+                        } else {
+                            meta.level() <= LevelFilter::Error
+                        }
                     }
                 })
                 .chain(normal_logger),
@@ -259,6 +280,12 @@ pub fn init_logging(
                 .level(LevelFilter::Off)
                 .level_for("databend::log::profile", LevelFilter::Info)
                 .chain(profile_logger),
+        )
+        .chain(
+            fern::Dispatch::new()
+                .level(LevelFilter::Off)
+                .level_for("databend::log::structlog", LevelFilter::Info)
+                .chain(structlog_logger),
         );
 
     // Set global logger
@@ -280,88 +307,4 @@ fn init_tokio_console() {
     let subscriber = tracing_subscriber::registry::Registry::default();
     let subscriber = subscriber.with(console_subscriber::spawn());
     tracing::subscriber::set_global_default(subscriber).ok();
-}
-
-fn formatter(
-    format: &str,
-) -> fn(out: FormatCallback, message: &fmt::Arguments, record: &log::Record) {
-    match format {
-        "text" => format_text_log,
-        "json" => format_json_log,
-        _ => unreachable!("file logging format {format} is not supported"),
-    }
-}
-
-fn format_text_log(out: FormatCallback, message: &fmt::Arguments, record: &log::Record) {
-    out.finish(format_args!(
-        "{} {:>5} {}: {}:{} {}{}",
-        humantime::format_rfc3339_micros(SystemTime::now()),
-        record.level(),
-        record.module_path().unwrap_or(""),
-        record.file().unwrap_or(""),
-        record.line().unwrap_or(0),
-        message,
-        KvDisplay {
-            kv: record.key_values()
-        }
-    ));
-
-    struct KvDisplay<'kvs> {
-        kv: &'kvs dyn log::kv::Source,
-    }
-
-    impl fmt::Display for KvDisplay<'_> {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            let mut visitor = KvWriter { writer: f };
-            self.kv.visit(&mut visitor).ok();
-            Ok(())
-        }
-    }
-
-    struct KvWriter<'a, 'kvs> {
-        writer: &'kvs mut fmt::Formatter<'a>,
-    }
-
-    impl<'a, 'kvs> log::kv::Visitor<'kvs> for KvWriter<'a, 'kvs> {
-        fn visit_pair(
-            &mut self,
-            key: log::kv::Key<'kvs>,
-            value: log::kv::Value<'kvs>,
-        ) -> Result<(), log::kv::Error> {
-            write!(self.writer, " {key}={value}")?;
-            Ok(())
-        }
-    }
-}
-
-fn format_json_log(out: FormatCallback, message: &fmt::Arguments, record: &log::Record) {
-    let mut fields = Map::new();
-    fields.insert("message".to_string(), format!("{}", message).into());
-    let mut visitor = KvCollector {
-        fields: &mut fields,
-    };
-    record.key_values().visit(&mut visitor).ok();
-
-    out.finish(format_args!(
-        r#"{{"timestamp":"{}","level":"{}","fields":{}}}"#,
-        humantime::format_rfc3339_micros(SystemTime::now()),
-        record.level(),
-        serde_json::to_string(&fields).unwrap_or_default(),
-    ));
-
-    struct KvCollector<'a> {
-        fields: &'a mut Map<String, serde_json::Value>,
-    }
-
-    impl<'a, 'kvs> log::kv::Visitor<'kvs> for KvCollector<'a> {
-        fn visit_pair(
-            &mut self,
-            key: log::kv::Key<'kvs>,
-            value: log::kv::Value<'kvs>,
-        ) -> Result<(), log::kv::Error> {
-            self.fields
-                .insert(key.as_str().to_string(), value.to_string().into());
-            Ok(())
-        }
-    }
 }

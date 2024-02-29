@@ -30,6 +30,8 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::TransformPipeBuilder;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
+use databend_common_pipeline_transforms::processors::BlockCompactor;
+use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_sql::binder::MergeIntoType;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
@@ -134,6 +136,7 @@ impl PipelineBuilder {
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
+
         // case 1
         if !*change_join_order {
             if let MergeIntoType::MatechedOnly = merge_type {
@@ -141,7 +144,7 @@ impl PipelineBuilder {
                 return Ok(());
             }
             assert!(self.join_state.is_some());
-            assert!(self.probe_data_fields.is_some());
+            assert!(self.merge_into_probe_data_fields.is_some());
 
             let join_state = self.join_state.clone().unwrap();
             // split row_number and log
@@ -160,7 +163,7 @@ impl PipelineBuilder {
             let pipe_items = vec![
                 ExtractHashTableByRowNumber::create(
                     join_state,
-                    self.probe_data_fields.clone().unwrap(),
+                    self.merge_into_probe_data_fields.clone().unwrap(),
                     merge_type.clone(),
                 )?
                 .into_pipe_item(),
@@ -195,7 +198,9 @@ impl PipelineBuilder {
                         transform_input_port,
                         transform_output_port,
                         Arc::new(DataSchema::from(table_default_schema)),
+                        unmatched.clone(),
                         tbl.clone(),
+                        Arc::new(DataSchema::from(tbl.schema())),
                     )
                 },
                 1,
@@ -224,9 +229,23 @@ impl PipelineBuilder {
                 self.main_pipeline.add_pipe(builder.finalize());
             }
 
-            // 3. cluster sort
-
+            // 3. we should avoid too much little block write, because for s3 write, there are too many
+            // little blocks, it will cause high latency.
             let block_thresholds = table.get_block_thresholds();
+            let mut builder = self.main_pipeline.add_transform_with_specified_len(
+                |transform_input_port, transform_output_port| {
+                    Ok(ProcessorPtr::create(TransformCompact::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        BlockCompactor::new(block_thresholds),
+                    )?))
+                },
+                1,
+            )?;
+            builder.add_items(vec![create_dummy_item()]);
+            self.main_pipeline.add_pipe(builder.finalize());
+
+            // 4. cluster sort
             table.cluster_gen_for_append_with_specified_len(
                 self.ctx.clone(),
                 &mut self.main_pipeline,
@@ -235,7 +254,7 @@ impl PipelineBuilder {
                 1,
             )?;
 
-            // 4. serialize block
+            // 5. serialize block
             let cluster_stats_gen =
                 table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
             let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -253,7 +272,7 @@ impl PipelineBuilder {
             ];
             self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
-            // 5. serialize segment
+            // 6. serialize segment
             let serialize_segment_transform = TransformSerializeSegment::new(
                 self.ctx.clone(),
                 InputPort::create(),
@@ -308,6 +327,7 @@ impl PipelineBuilder {
                     block_builder,
                     io_request_semaphore,
                     segments.clone(),
+                    false, // we don't support for distributed mode.
                 )?,
                 create_dummy_item(),
             ]));
@@ -318,17 +338,21 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    // Optimization Todo(@JackTan25): If insert only, we can reduce the target columns after join.
     pub(crate) fn build_merge_into_source(
         &mut self,
         merge_into_source: &MergeIntoSource,
     ) -> Result<()> {
         let MergeIntoSource {
             input,
-            row_id_idx,
             merge_type,
+            merge_into_split_idx,
+            ..
         } = merge_into_source;
 
         self.build_pipeline(input)?;
+        self.main_pipeline
+            .try_resize(self.ctx.get_settings().get_max_threads()? as usize)?;
         // 1. if matchedOnly, we will use inner join
         // 2. if insert Only, we will use right anti join
         // 3. other cases, we use right outer join
@@ -340,7 +364,7 @@ impl PipelineBuilder {
             let output_len = self.main_pipeline.output_len();
             for _ in 0..output_len {
                 let merge_into_split_processor =
-                    MergeIntoSplitProcessor::create(*row_id_idx, false)?;
+                    MergeIntoSplitProcessor::create(*merge_into_split_idx, false)?;
                 items.push(merge_into_split_processor.into_pipe_item());
             }
 
@@ -375,6 +399,7 @@ impl PipelineBuilder {
     }
 
     // build merge into pipeline.
+    // the block rows is limitd by join (65536 rows), but we don't promise the block size.
     pub(crate) fn build_merge_into(&mut self, merge_into: &MergeInto) -> Result<()> {
         let MergeInto {
             input,
@@ -388,6 +413,7 @@ impl PipelineBuilder {
             distributed,
             merge_type,
             change_join_order,
+            can_try_update_column_only,
             ..
         } = merge_into;
 
@@ -467,6 +493,8 @@ impl PipelineBuilder {
                     field_index_of_input_schema.clone(),
                     input.output_schema()?,
                     Arc::new(DataSchema::from(tbl.schema())),
+                    merge_into.target_build_optimization,
+                    *can_try_update_column_only,
                 )?;
                 pipe_items.push(matched_split_processor.into_pipe_item());
             }
@@ -656,7 +684,9 @@ impl PipelineBuilder {
                     transform_input_port,
                     transform_output_port,
                     Arc::new(DataSchema::from(table_default_schema)),
+                    unmatched.clone(),
                     tbl.clone(),
+                    Arc::new(DataSchema::from(table.schema())),
                 )
             },
             fill_default_len,
@@ -717,6 +747,28 @@ impl PipelineBuilder {
                 output_lens
             };
 
+            // we should avoid too much little block write, because for s3 write, there are too many
+            // little blocks, it will cause high latency.
+            let mut builder = self.main_pipeline.add_transform_with_specified_len(
+                |transform_input_port, transform_output_port| {
+                    Ok(ProcessorPtr::create(TransformCompact::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        BlockCompactor::new(block_thresholds),
+                    )?))
+                },
+                mid_len,
+            )?;
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
+
+            // need to receive row_number, we should give a dummy item here.
+            if *distributed && need_unmatch && !*change_join_order {
+                builder.add_items(vec![create_dummy_item()]);
+            }
+            self.main_pipeline.add_pipe(builder.finalize());
+
             table.cluster_gen_for_append_with_specified_len(
                 self.ctx.clone(),
                 &mut self.main_pipeline,
@@ -746,6 +798,29 @@ impl PipelineBuilder {
                 // arrive the same result (that's appending only one dummy item)
                 (output_lens - 1, 0)
             };
+
+            // we should avoid too much little block write, because for s3 write, there are too many
+            // little blocks, it will cause high latency.
+            let mut builder = self.main_pipeline.add_transform_with_specified_len(
+                |transform_input_port, transform_output_port| {
+                    Ok(ProcessorPtr::create(TransformCompact::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        BlockCompactor::new(block_thresholds),
+                    )?))
+                },
+                mid_len,
+            )?;
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
+
+            // need to receive row_number, we should give a dummy item here.
+            if *distributed && need_unmatch && !*change_join_order {
+                builder.add_items(vec![create_dummy_item()]);
+            }
+            self.main_pipeline.add_pipe(builder.finalize());
+
             table.cluster_gen_for_append_with_specified_len(
                 self.ctx.clone(),
                 &mut self.main_pipeline,
@@ -767,6 +842,7 @@ impl PipelineBuilder {
                     block_builder,
                     io_request_semaphore,
                     segments.clone(),
+                    merge_into.target_build_optimization,
                 )?);
             }
         }

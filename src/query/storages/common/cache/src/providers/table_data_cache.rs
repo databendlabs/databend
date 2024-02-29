@@ -18,6 +18,8 @@ use std::thread::JoinHandle;
 
 use bytes::Bytes;
 use crossbeam_channel::TrySendError;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_cache::Count;
 use databend_common_cache::DefaultHashBuilder;
 use databend_common_exception::ErrorCode;
@@ -77,12 +79,12 @@ impl TableDataCacheBuilder {
         disk_cache_bytes_size: u64,
     ) -> Result<TableDataCache<LruDiskCacheHolder>> {
         let disk_cache = LruDiskCacheBuilder::new_disk_cache(path, disk_cache_bytes_size)?;
-        let (rx, tx) = crossbeam_channel::bounded(population_queue_size as usize);
+        let (tx, rx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;
         Ok(TableDataCache {
             external_cache: disk_cache.clone(),
-            population_queue: rx,
-            _cache_populator: DiskCachePopulator::new(tx, disk_cache, num_population_thread)?,
+            population_queue: tx,
+            _cache_populator: DiskCachePopulator::new(rx, disk_cache, num_population_thread)?,
         })
     }
 }
@@ -93,6 +95,7 @@ impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache 
         let k = k.as_ref();
         if let Some(item) = self.external_cache.get(k) {
             metrics_inc_cache_hit_count(1, TABLE_DATA_CACHE_NAME);
+            Profile::record_usize_profile(ProfileStatisticsName::ScanCacheBytes, item.len());
             Some(item)
         } else {
             metrics_inc_cache_miss_count(1, TABLE_DATA_CACHE_NAME);
@@ -101,9 +104,9 @@ impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache 
     }
 
     fn put(&self, k: String, v: Arc<Bytes>) {
-        // check if external(disk/redis) already have it.
+        // check if already cached
         if !self.external_cache.contains_key(&k) {
-            // populate the cache to external cache(disk/redis) asyncly
+            // populate the cache is necessary
             let msg = CacheItem { key: k, value: v };
             match self.population_queue.try_send(msg) {
                 Ok(_) => {

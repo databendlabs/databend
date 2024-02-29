@@ -43,6 +43,7 @@ use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::plans::SrfItem;
 use crate::plans::UnionAll;
+use crate::plans::Window;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
@@ -83,7 +84,7 @@ impl SubqueryRewriter {
                     metadata.add_derived_column(name.to_string(), data_type),
                 );
             }
-            let logical_get = SExpr::create_leaf(Arc::new(
+            let mut logical_get = SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
                     columns: self.derived_columns.values().cloned().collect(),
@@ -91,38 +92,40 @@ impl SubqueryRewriter {
                 }
                 .into(),
             ));
-            // Wrap logical get with distinct to eliminate duplicates rows.
-            let mut group_items = Vec::with_capacity(self.derived_columns.len());
-            for (index, column_index) in self.derived_columns.values().cloned().enumerate() {
-                group_items.push(ScalarItem {
-                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: ColumnBindingBuilder::new(
-                            "".to_string(),
-                            column_index,
-                            Box::new(data_types[index].clone()),
-                            Visibility::Visible,
-                        )
-                        .table_index(Some(table_index))
-                        .build(),
-                    }),
-                    index: column_index,
-                });
+            if self.ctx.get_cluster().is_empty() {
+                // Wrap logical get with distinct to eliminate duplicates rows.
+                let mut group_items = Vec::with_capacity(self.derived_columns.len());
+                for (index, column_index) in self.derived_columns.values().cloned().enumerate() {
+                    group_items.push(ScalarItem {
+                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: None,
+                            column: ColumnBindingBuilder::new(
+                                "".to_string(),
+                                column_index,
+                                Box::new(data_types[index].clone()),
+                                Visibility::Visible,
+                            )
+                            .table_index(Some(table_index))
+                            .build(),
+                        }),
+                        index: column_index,
+                    });
+                }
+                logical_get = SExpr::create_unary(
+                    Arc::new(
+                        Aggregate {
+                            mode: AggregateMode::Initial,
+                            group_items,
+                            aggregate_functions: vec![],
+                            from_distinct: false,
+                            limit: None,
+                            grouping_sets: None,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(logical_get),
+                );
             }
-            let duplicate_delete_get = SExpr::create_unary(
-                Arc::new(
-                    Aggregate {
-                        mode: AggregateMode::Initial,
-                        group_items,
-                        aggregate_functions: vec![],
-                        from_distinct: false,
-                        limit: None,
-                        grouping_sets: None,
-                    }
-                    .into(),
-                ),
-                Arc::new(logical_get),
-            );
 
             let cross_join = Join {
                 left_conditions: vec![],
@@ -132,13 +135,14 @@ impl SubqueryRewriter {
                 marker_index: None,
                 from_correlated_subquery: false,
                 need_hold_hash_table: false,
-                broadcast: false,
+                is_lateral: false,
+                original_join_type: None,
             }
             .into();
 
             return Ok(SExpr::create_binary(
                 Arc::new(cross_join),
-                Arc::new(duplicate_delete_get),
+                Arc::new(logical_get),
                 Arc::new(plan.clone()),
             ));
         }
@@ -189,6 +193,10 @@ impl SubqueryRewriter {
 
             RelOperator::UnionAll(op) => {
                 self.flatten_union_all(op, plan, correlated_columns, flatten_info, need_cross_join)
+            }
+
+            RelOperator::Window(op) => {
+                self.flatten_window(plan, op, correlated_columns, flatten_info)
             }
 
             _ => Err(ErrorCode::Internal(
@@ -460,7 +468,8 @@ impl SubqueryRewriter {
                     marker_index: join.marker_index,
                     from_correlated_subquery: false,
                     need_hold_hash_table: false,
-                    broadcast: false,
+                    is_lateral: false,
+                    original_join_type: None,
                 }
                 .into(),
             ),
@@ -616,6 +625,77 @@ impl SubqueryRewriter {
         )?;
         Ok(SExpr::create_unary(
             Arc::new(plan.plan().clone()),
+            Arc::new(flatten_plan),
+        ))
+    }
+
+    fn flatten_window(
+        &mut self,
+        plan: &SExpr,
+        op: &Window,
+        correlated_columns: &ColumnSet,
+        flatten_info: &mut FlattenInfo,
+    ) -> Result<SExpr> {
+        if op
+            .used_columns()?
+            .iter()
+            .any(|index| correlated_columns.contains(index))
+        {
+            return Err(ErrorCode::Internal(
+                "correlated columns in window functions not supported",
+            ));
+        }
+        let flatten_plan =
+            self.flatten_plan(plan.child(0)?, correlated_columns, flatten_info, true)?;
+        let mut partition_by = op.partition_by.clone();
+        for derived_column in self.derived_columns.values() {
+            let column_binding = {
+                let metadata = self.metadata.read();
+                let column_entry = metadata.column(*derived_column);
+                let data_type = match column_entry {
+                    ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
+                        DataType::from(data_type)
+                    }
+                    ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => {
+                        data_type.clone()
+                    }
+                    ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column, ..
+                    }) => internal_column.data_type(),
+                    ColumnEntry::VirtualColumn(VirtualColumn { data_type, .. }) => {
+                        DataType::from(data_type)
+                    }
+                };
+                ColumnBindingBuilder::new(
+                    format!("subquery_{}", derived_column),
+                    *derived_column,
+                    Box::from(data_type.clone()),
+                    Visibility::Visible,
+                )
+                .build()
+            };
+            partition_by.push(ScalarItem {
+                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: column_binding,
+                }),
+                index: *derived_column,
+            });
+        }
+        Ok(SExpr::create_unary(
+            Arc::new(
+                Window {
+                    span: op.span,
+                    index: op.index,
+                    function: op.function.clone(),
+                    arguments: op.arguments.clone(),
+                    partition_by,
+                    order_by: op.order_by.clone(),
+                    frame: op.frame.clone(),
+                    limit: op.limit,
+                }
+                .into(),
+            ),
             Arc::new(flatten_plan),
         ))
     }

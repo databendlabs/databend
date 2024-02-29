@@ -74,6 +74,7 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -252,6 +253,12 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply>;
 
+    async fn update_multi_table_meta(&self, _req: UpdateMultiTableMetaReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(
+            "'update_multi_table_meta' not implemented",
+        ))
+    }
+
     async fn set_table_column_mask_policy(
         &self,
         req: SetTableColumnMaskPolicyReq,
@@ -309,5 +316,17 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         unimplemented!()
+    }
+
+    async fn stream_source_table(
+        &self,
+        _stream_desc: &str,
+        _tenant: &str,
+        _db_name: &str,
+        _source_table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::Unimplemented(
+            "'stream_source_table' not implemented",
+        ))
     }
 }

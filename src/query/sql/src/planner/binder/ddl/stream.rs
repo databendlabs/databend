@@ -40,13 +40,14 @@ impl Binder {
         stmt: &CreateStreamStmt,
     ) -> Result<Plan> {
         let CreateStreamStmt {
-            if_not_exists,
+            create_option,
             catalog,
             database,
             stream,
             table_database,
             table,
             stream_point,
+            append_only,
             comment,
         } = stmt;
 
@@ -72,7 +73,7 @@ impl Binder {
         });
 
         let plan = CreateStreamPlan {
-            if_not_exists: *if_not_exists,
+            create_option: *create_option,
             tenant,
             catalog,
             database,
@@ -80,6 +81,7 @@ impl Binder {
             table_database,
             table_name,
             navigation,
+            append_only: *append_only,
             comment: comment.clone(),
         };
         Ok(Plan::CreateStream(plan.into()))

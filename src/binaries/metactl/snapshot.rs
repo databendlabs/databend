@@ -34,8 +34,6 @@ use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntryCompat;
 use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::ondisk::OnDisk;
-use databend_common_meta_raft_store::ondisk::DATA_VERSION;
-use databend_common_meta_raft_store::ondisk::TREE_HEADER;
 use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::sm_v002::SnapshotStoreV002;
 use databend_common_meta_raft_store::state::RaftState;
@@ -62,6 +60,7 @@ use tokio::net::TcpSocket;
 use url::Url;
 
 use crate::export_meta;
+use crate::reading;
 use crate::Config;
 
 pub async fn export_data(config: &Config) -> anyhow::Result<()> {
@@ -101,28 +100,7 @@ async fn import_lines<B: BufRead + 'static>(
 ) -> anyhow::Result<Option<LogId>> {
     #[allow(clippy::useless_conversion)]
     let mut it = lines.into_iter().peekable();
-    let first = it
-        .peek()
-        .ok_or_else(|| anyhow::anyhow!("no data to import"))?;
-
-    let first_line = match first {
-        Ok(l) => l,
-        Err(e) => {
-            return Err(anyhow::anyhow!("{}", e));
-        }
-    };
-
-    // First line is the data header that containing version.
-    let version = read_version(first_line)?;
-
-    if !DATA_VERSION.is_compatible(version) {
-        return Err(anyhow!(
-            "invalid data version: {:?}, This program version is {:?}; The latest compatible program version is: {:?}",
-            version,
-            DATA_VERSION,
-            version.max_compatible_working_version(),
-        ));
-    }
+    let version = reading::validate_version(&mut it)?;
 
     let max_log_id = match version {
         DataVersion::V0 => import_v0_or_v001(config, it)?,
@@ -131,27 +109,6 @@ async fn import_lines<B: BufRead + 'static>(
     };
 
     Ok(max_log_id)
-}
-
-fn read_version(first_line: &str) -> anyhow::Result<DataVersion> {
-    let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(first_line)?;
-
-    let kv_entry = kv_entry.upgrade();
-
-    let version = if tree_name == TREE_HEADER {
-        // There is a explicit header.
-        if let RaftStoreEntry::DataHeader { key, value } = &kv_entry {
-            assert_eq!(key, "header", "The key can only be 'header'");
-            value.version
-        } else {
-            unreachable!("The header tree can only contain DataHeader");
-        }
-    } else {
-        // Without header, the data version is V0 by default.
-        DataVersion::V0
-    };
-
-    Ok(version)
 }
 
 /// Import serialized lines for `DataVersion::V0` and `DataVersion::V001`
@@ -506,7 +463,12 @@ async fn export_from_running_node(config: &Config) -> Result<(), anyhow::Error> 
 
     let grpc_api_addr = get_available_socket_addr(&config.grpc_api_address).await?;
 
-    export_meta(grpc_api_addr.to_string().as_str(), config.db.clone()).await?;
+    export_meta(
+        grpc_api_addr.to_string().as_str(),
+        config.db.clone(),
+        config.export_chunk_size,
+    )
+    .await?;
     Ok(())
 }
 

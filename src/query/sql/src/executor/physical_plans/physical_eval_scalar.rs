@@ -158,7 +158,7 @@ impl PhysicalPlanBuilder {
             }
         }
         Ok(PhysicalPlan::EvalScalar(EvalScalar {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             projections,
             input: Box::new(input),
             exprs,

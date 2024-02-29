@@ -29,7 +29,7 @@ echo "alter table add a column"
 echo "alter table t17_0002 add column a float default 1.01" | $BENDSQL_CLIENT_CONNECT
 
 ## verify
-echo "set retention_period=0; optimize table t17_0002 purge before (snapshot => '$SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT
+echo "set data_retention_time_in_days=0; optimize table t17_0002 purge before (snapshot => '$SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after purge (by snapshot id) there should be 3 snapshots left"
 echo "select count(*)=3  from fuse_snapshot('default', 't17_0002')" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after purge (by snapshot id) there should be 4 rows left"
@@ -41,7 +41,7 @@ echo "alter table drop a column"
 echo "alter table t17_0002 drop column c" | $BENDSQL_CLIENT_CONNECT
 
 ## verify
-echo "set retention_period=0; optimize table t17_0002 purge before (snapshot => '$SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT
+echo "set data_retention_time_in_days=0; optimize table t17_0002 purge before (snapshot => '$SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after purge (by snapshot id) there should be 4 snapshots left"
 echo "select count(*)=4  from fuse_snapshot('default', 't17_0002')" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after purge (by snapshot id) there should be 4 rows left"
@@ -74,7 +74,7 @@ echo "alter table add a column"
 echo "alter table t17_0002 add column a float default 1.01" | $BENDSQL_CLIENT_CONNECT
 
 ## verify
-echo "set retention_period=0; optimize table t17_0002 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $BENDSQL_CLIENT_CONNECT
+echo "set data_retention_time_in_days=0; optimize table t17_0002 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after purge (by timestamp) there should be at least 2 snapshots left"
 echo "select count(*)>=2  from fuse_snapshot('default', 't17_0002')" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after purge (by timestamp) there should be 5 rows left"
@@ -85,7 +85,7 @@ echo "alter table drop a column"
 echo "alter table t17_0002 drop column a" | $BENDSQL_CLIENT_CONNECT
 
 ## verify
-echo "set retention_period=0; optimize table t17_0002 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $BENDSQL_CLIENT_CONNECT
+echo "set data_retention_time_in_days=0; optimize table t17_0002 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after purge (by timestamp) there should be at least 2 snapshots left"
 echo "select count(*)>=2  from fuse_snapshot('default', 't17_0002')" | $BENDSQL_CLIENT_CONNECT
 echo "checking that after purge (by timestamp) there should be 5 rows left"

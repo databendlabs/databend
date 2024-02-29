@@ -2,8 +2,8 @@ onlyif mysql
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
 ----
-sql_dialect PostgreSQL PostgreSQL SESSION
-timezone UTC UTC SESSION
+sql_dialect PostgreSQL PostgreSQL DEFAULT
+timezone UTC UTC DEFAULT
 
 onlyif mysql
 statement ok
@@ -26,6 +26,9 @@ UNSET (timezone)
 
 onlyif mysql
 statement error 2801
+SET stl_dialect='MySQL'
+
+statement ok
 UNSET stl_dialect
 
 onlyif mysql
@@ -36,5 +39,5 @@ onlyif mysql
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
 ----
-sql_dialect PostgreSQL PostgreSQL SESSION
-timezone                       UTC         UTC         SESSION
+sql_dialect PostgreSQL PostgreSQL DEFAULT
+timezone UTC UTC DEFAULT

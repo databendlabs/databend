@@ -277,7 +277,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 18, "{:?}", result);
+    assert_eq!(result.schema.len(), 19, "{:?}", result);
 
     // get state
     let uri = make_state_uri(query_id);
@@ -1493,6 +1493,24 @@ async fn test_affect() -> Result<()> {
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
                     "6".to_string(),
+                )])),
+            }),
+        ),
+        (
+            serde_json::json!({"sql": "set global max_threads=2", "session": {"settings": {"max_threads": "4", "timezone": "Asia/Shanghai"}}}),
+            Some(QueryAffect::ChangeSettings {
+                keys: vec!["max_threads".to_string()],
+                values: vec!["2".to_string()],
+                is_globals: vec![true],
+            }),
+            Some(HttpSessionConf {
+                database: Some("default".to_string()),
+                role: Some("account_admin".to_string()),
+                secondary_roles: None,
+                keep_server_session_secs: None,
+                settings: Some(BTreeMap::from([(
+                    "timezone".to_string(),
+                    "Asia/Shanghai".to_string(),
                 )])),
             }),
         ),

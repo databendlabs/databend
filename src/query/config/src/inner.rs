@@ -26,6 +26,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
+use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
@@ -189,7 +190,8 @@ pub struct QueryConfig {
     pub rpc_client_timeout_secs: u64,
     /// Table engine memory enabled
     pub table_engine_memory_enabled: bool,
-    pub wait_timeout_mills: u64,
+    /// Graceful shutdown timeout
+    pub shutdown_wait_timeout_ms: u64,
     pub max_query_log_size: usize,
     pub databend_enterprise_license: Option<String>,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
@@ -211,6 +213,9 @@ pub struct QueryConfig {
     /// Disable some system load(For example system.configs) for cloud security.
     pub disable_system_table_load: bool,
 
+    /// Max data retention time in days.
+    pub data_retention_time_in_days_max: u64,
+
     /// (azure) openai
     pub openai_api_key: String,
     pub openai_api_version: String,
@@ -223,6 +228,8 @@ pub struct QueryConfig {
     pub udf_server_allow_list: Vec<String>,
 
     pub cloud_control_grpc_server_address: Option<String>,
+    pub cloud_control_grpc_timeout: u64,
+    pub settings: HashMap<String, UserSettingValue>,
 }
 
 impl Default for QueryConfig {
@@ -263,7 +270,7 @@ impl Default for QueryConfig {
             rpc_tls_query_service_domain_name: "localhost".to_string(),
             rpc_client_timeout_secs: 0,
             table_engine_memory_enabled: true,
-            wait_timeout_mills: 5000,
+            shutdown_wait_timeout_ms: 5000,
             max_query_log_size: 10_000,
             databend_enterprise_license: None,
             management_mode: false,
@@ -290,6 +297,9 @@ impl Default for QueryConfig {
             enable_udf_server: false,
             udf_server_allow_list: Vec::new(),
             cloud_control_grpc_server_address: None,
+            cloud_control_grpc_timeout: 0,
+            data_retention_time_in_days_max: 90,
+            settings: HashMap::new(),
         }
     }
 }

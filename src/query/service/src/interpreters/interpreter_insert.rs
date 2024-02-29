@@ -78,6 +78,10 @@ impl Interpreter for InsertInterpreter {
         "InsertIntoInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if check_deduplicate_label(self.ctx.clone()).await? {
@@ -230,12 +234,9 @@ impl Interpreter for InsertInterpreter {
                     }
                 };
 
-                let mut build_res = build_query_pipeline_without_render_result_set(
-                    &self.ctx,
-                    &insert_select_plan,
-                    false,
-                )
-                .await?;
+                let mut build_res =
+                    build_query_pipeline_without_render_result_set(&self.ctx, &insert_select_plan)
+                        .await?;
 
                 table.commit_insertion(
                     self.ctx.clone(),

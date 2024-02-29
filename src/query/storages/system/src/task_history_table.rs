@@ -31,6 +31,7 @@ use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_meta_app::schema::TableIdent;
@@ -42,46 +43,46 @@ use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 
 pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock> {
-    let mut name: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
+    let mut name: Vec<String> = Vec::with_capacity(task_runs.len());
     let mut id: Vec<u64> = Vec::with_capacity(task_runs.len());
-    let mut owner: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
-    let mut definition: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
-    let mut condition_text: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
-    let mut comment: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
-    let mut schedule: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
-    let mut warehouse: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
-    let mut state: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
-    let mut exception_text: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
+    let mut owner: Vec<String> = Vec::with_capacity(task_runs.len());
+    let mut definition: Vec<String> = Vec::with_capacity(task_runs.len());
+    let mut condition_text: Vec<String> = Vec::with_capacity(task_runs.len());
+    let mut comment: Vec<Option<String>> = Vec::with_capacity(task_runs.len());
+    let mut schedule: Vec<Option<String>> = Vec::with_capacity(task_runs.len());
+    let mut warehouse: Vec<Option<String>> = Vec::with_capacity(task_runs.len());
+    let mut state: Vec<String> = Vec::with_capacity(task_runs.len());
+    let mut exception_text: Vec<Option<String>> = Vec::with_capacity(task_runs.len());
     let mut exception_code: Vec<i64> = Vec::with_capacity(task_runs.len());
-    let mut run_id: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
-    let mut query_id: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
+    let mut run_id: Vec<String> = Vec::with_capacity(task_runs.len());
+    let mut query_id: Vec<String> = Vec::with_capacity(task_runs.len());
     let mut attempt_number: Vec<i32> = Vec::with_capacity(task_runs.len());
     let mut scheduled_time: Vec<i64> = Vec::with_capacity(task_runs.len());
     let mut completed_time: Vec<Option<i64>> = Vec::with_capacity(task_runs.len());
-    let mut root_task_id: Vec<Vec<u8>> = Vec::with_capacity(task_runs.len());
+    let mut root_task_id: Vec<String> = Vec::with_capacity(task_runs.len());
+    let mut session_params: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
 
     for task_run in task_runs {
         let tr: databend_common_cloud_control::task_utils::TaskRun = task_run.try_into()?;
-        name.push(tr.task_name.into_bytes());
+        name.push(tr.task_name);
         id.push(tr.task_id);
-        owner.push(tr.owner.into_bytes());
-        comment.push(tr.comment.map(|s| s.into_bytes()));
-        schedule.push(tr.schedule_options.map(|s| s.into_bytes()));
-        warehouse.push(
-            tr.warehouse_options
-                .and_then(|s| s.warehouse.map(|v| v.into_bytes())),
-        );
-        state.push(tr.state.to_string().into_bytes());
+        owner.push(tr.owner);
+        comment.push(tr.comment);
+        schedule.push(tr.schedule_options);
+        warehouse.push(tr.warehouse_options.and_then(|s| s.warehouse));
+        state.push(tr.state.to_string());
         exception_code.push(tr.error_code);
-        exception_text.push(tr.error_message.map(|s| s.into_bytes()));
-        definition.push(tr.query_text.into_bytes());
-        condition_text.push(tr.condition_text.into_bytes());
-        run_id.push(tr.run_id.into_bytes());
-        query_id.push(tr.query_id.into_bytes());
+        exception_text.push(tr.error_message);
+        definition.push(tr.query_text);
+        condition_text.push(tr.condition_text);
+        run_id.push(tr.run_id);
+        query_id.push(tr.query_id);
         attempt_number.push(tr.attempt_number);
         completed_time.push(tr.completed_at.map(|t| t.timestamp_micros()));
         scheduled_time.push(tr.scheduled_at.timestamp_micros());
-        root_task_id.push(tr.root_task_id.into_bytes());
+        root_task_id.push(tr.root_task_id);
+        let serialized_params = serde_json::to_vec(&tr.session_params).unwrap();
+        session_params.push(Some(serialized_params));
     }
     Ok(DataBlock::new_from_columns(vec![
         StringType::from_data(name),
@@ -101,6 +102,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
         TimestampType::from_opt_data(completed_time),
         TimestampType::from_data(scheduled_time),
         StringType::from_data(root_task_id),
+        VariantType::from_opt_data(session_params),
     ]))
 }
 
@@ -149,7 +151,7 @@ impl AsyncSystemTable for TaskHistoryTable {
 
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
-        let config = build_client_config(tenant, user, query_id);
+        let config = build_client_config(tenant, user, query_id, cloud_api.get_timeout());
         let req = make_request(req, config);
 
         let resp = task_client.show_task_runs(req).await?;

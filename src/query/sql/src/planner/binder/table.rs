@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::default::Default;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -44,7 +43,6 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::StageTableInfo;
-use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
@@ -64,9 +62,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
-use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
-use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
@@ -84,11 +79,13 @@ use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::get_change_type;
+use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::StreamMode;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use log::info;
 use parking_lot::RwLock;
 
-use super::InternalColumnBinding;
-use super::INTERNAL_COLUMN_FACTORY;
 use crate::binder::copy_into_table::resolve_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
@@ -101,11 +98,9 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::BoundColumnRef;
-use crate::plans::ConstantExpr;
 use crate::plans::CteScan;
+use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
-use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
@@ -140,24 +135,11 @@ impl Binder {
                 }
             }
         }
-        let catalog = CATALOG_DEFAULT;
-        let database = "system";
-        let tenant = self.ctx.get_tenant();
-        let table_meta = self
-            .resolve_data_source(tenant.as_str(), catalog, database, "one", &None)
-            .await?;
-        let table_index = self.metadata.write().add_table(
-            CATALOG_DEFAULT.to_owned(),
-            database.to_string(),
-            table_meta,
-            None,
-            false,
-            false,
-            false,
-        );
-
-        self.bind_base_table(bind_context, database, table_index)
-            .await
+        let bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        Ok((
+            SExpr::create_leaf(Arc::new(DummyTableScan.into())),
+            bind_context,
+        ))
     }
 
     fn check_view_dep(bind_context: &BindContext, database: &str, view_name: &str) -> Result<()> {
@@ -192,6 +174,7 @@ impl Binder {
         table: &Identifier,
         alias: &Option<TableAlias>,
         travel_point: &Option<TimeTravelPoint>,
+        since_point: &Option<TimeTravelPoint>,
     ) -> Result<(SExpr, BindContext)> {
         let (catalog, database, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);
@@ -229,6 +212,11 @@ impl Binder {
             None => None,
         };
 
+        let since_point = match since_point {
+            Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp).await?),
+            None => None,
+        };
+
         // Resolve table with catalog
         let table_meta = match self
             .resolve_data_source(
@@ -237,6 +225,7 @@ impl Binder {
                 database.as_str(),
                 table_name.as_str(),
                 &navigation_point,
+                &since_point,
             )
             .await
         {
@@ -316,6 +305,139 @@ impl Binder {
                     )
                 }
             }
+            "STREAM" => {
+                let change_type = get_change_type(&table_alias_name);
+                if change_type.is_some() {
+                    let table_index = self.metadata.write().add_table(
+                        catalog,
+                        database.clone(),
+                        table_meta,
+                        table_alias_name,
+                        bind_context.view_info.is_some(),
+                        bind_context.planning_agg_index,
+                        false,
+                    );
+                    let (s_expr, mut bind_context) = self
+                        .bind_base_table(bind_context, database.as_str(), table_index, change_type)
+                        .await?;
+
+                    if let Some(alias) = alias {
+                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    }
+                    return Ok((s_expr, bind_context));
+                }
+
+                let mode = table_meta.get_stream_mode(self.ctx.clone()).await?;
+                let table_version = table_meta
+                    .options()
+                    .get(OPT_KEY_TABLE_VER)
+                    .ok_or_else(|| ErrorCode::Internal("table version must be set in stream"))?
+                    .parse::<u64>()?;
+
+                let cols = table_meta
+                    .schema()
+                    .fields()
+                    .iter()
+                    .map(|f| f.name().clone())
+                    .collect::<Vec<_>>();
+
+                let suffix = format!("{:08x}", Utc::now().timestamp());
+                let query = match mode {
+                    StreamMode::AppendOnly => {
+                        let append_alias = format!("_change_append${}", suffix);
+                        format!(
+                            "select *, \
+                                    'INSERT' as change$action, \
+                                    false as change$is_update, \
+                                    if(is_not_null(_origin_block_id), \
+                                       concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                       {append_alias}._base_row_id \
+                                    ) as change$row_id \
+                             from {database}.{table_name} as {append_alias} \
+                             where not(is_not_null(_origin_version) and \
+                                       (_origin_version < {table_version} or \
+                                        contains({append_alias}._base_block_ids, _origin_block_id)))",
+                        )
+                    }
+                    StreamMode::Standard => {
+                        let a_table_alias = format!("_change_insert${}", suffix);
+                        let a_cols = cols.join(", ");
+
+                        let d_table_alias = format!("_change_delete${}", suffix);
+                        let d_cols = cols
+                            .iter()
+                            .map(|s| format!("d_{}", s))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+
+                        format!(
+                            "with _change({a_cols}, change$action, change$row_id, \
+                                          {d_cols}, d_change$action, d_change$row_id) as materialized \
+                            ( \
+                                select * \
+                                from ( \
+                                    select *, \
+                                           _row_version, \
+                                           'INSERT' as change$action, \
+                                           if(is_not_null(_origin_block_id), \
+                                              concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                              {a_table_alias}._base_row_id \
+                                           ) as change$row_id \
+                                    from {database}.{table_name} as {a_table_alias} \
+                                ) as A \
+                                FULL OUTER JOIN ( \
+                                    select *, \
+                                           _row_version, \
+                                           'DELETE' as change$action, \
+                                           if(is_not_null(_origin_block_id), \
+                                              concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
+                                              {d_table_alias}._base_row_id \
+                                           ) as change$row_id \
+                                    from {database}.{table_name} as {d_table_alias} \
+                                ) as D \
+                                on A.change$row_id = D.change$row_id \
+                                where A.change$row_id is null or D.change$row_id is null or A._row_version > D._row_version \
+                            ) \
+                            select {a_cols}, \
+                                   change$action, \
+                                   change$row_id, \
+                                   d_change$action is not null as change$is_update \
+                            from _change \
+                            where change$action is not null \
+                            union all \
+                            select {d_cols}, \
+                                   d_change$action, \
+                                   d_change$row_id, \
+                                   change$action is not null as change$is_update \
+                            from _change \
+                            where d_change$action is not null",
+                        )
+                    }
+                };
+                let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+                let tokens = tokenize_sql(query.as_str())?;
+                let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+                if let Statement::Query(query) = &stmt {
+                    let (s_expr, mut new_bind_context) =
+                        self.bind_query(&mut new_bind_context, query).await?;
+
+                    for (index, column_name) in cols.iter().enumerate() {
+                        new_bind_context.columns[index].column_name = column_name.clone();
+                    }
+                    if let Some(alias) = alias {
+                        new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    } else {
+                        for column in new_bind_context.columns.iter_mut() {
+                            column.database_name = None;
+                            column.table_name = Some(table_name.clone());
+                        }
+                    }
+                    new_bind_context.parent = Some(Box::new(bind_context.clone()));
+                    Ok((s_expr, new_bind_context))
+                } else {
+                    unreachable!()
+                }
+            }
             _ => {
                 let table_index = self.metadata.write().add_table(
                     catalog,
@@ -328,7 +450,7 @@ impl Binder {
                 );
 
                 let (s_expr, mut bind_context) = self
-                    .bind_base_table(bind_context, database.as_str(), table_index)
+                    .bind_base_table(bind_context, database.as_str(), table_index, None)
                     .await?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
@@ -539,8 +661,8 @@ impl Binder {
         bind_context: &mut BindContext,
         span: &Span,
         name: &Identifier,
-        params: &Vec<Expr>,
-        named_params: &Vec<(String, Expr)>,
+        params: &[Expr],
+        named_params: &[(String, Expr)],
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
         let func_name = normalize_identifier(name, &self.name_resolution_ctx);
@@ -656,7 +778,7 @@ impl Binder {
             );
 
             let (s_expr, mut bind_context) = self
-                .bind_base_table(bind_context, "system", table_index)
+                .bind_base_table(bind_context, "system", table_index, None)
                 .await?;
             if let Some(alias) = alias {
                 bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
@@ -666,7 +788,7 @@ impl Binder {
             // Other table functions always reside is default catalog
             let table_meta: Arc<dyn TableFunction> = self
                 .catalogs
-                .get_default_catalog()?
+                .get_default_catalog(self.ctx.txn_mgr())?
                 .get_table_function(&func_name.name, table_args)?;
             let table = table_meta.as_table();
             let table_alias_name = if let Some(table_alias) = alias {
@@ -685,7 +807,7 @@ impl Binder {
             );
 
             let (s_expr, mut bind_context) = self
-                .bind_base_table(bind_context, "system", table_index)
+                .bind_base_table(bind_context, "system", table_index, None)
                 .await?;
             if let Some(alias) = alias {
                 bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
@@ -779,6 +901,7 @@ impl Binder {
                 table,
                 alias,
                 travel_point,
+                since_point,
                 pivot: _,
                 unpivot: _,
             } => {
@@ -790,6 +913,7 @@ impl Binder {
                     table,
                     alias,
                     travel_point,
+                    since_point,
                 )
                 .await
             }
@@ -954,7 +1078,7 @@ impl Binder {
         );
 
         let (s_expr, mut bind_context) = self
-            .bind_base_table(bind_context, "system", table_index)
+            .bind_base_table(bind_context, "system", table_index, None)
             .await?;
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
@@ -1198,6 +1322,7 @@ impl Binder {
         bind_context: &BindContext,
         database_name: &str,
         table_index: IndexType,
+        change_type: Option<ChangeType>,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
 
@@ -1205,21 +1330,9 @@ impl Binder {
         let table_name = table.name();
         let table = table.table();
         let statistics_provider = table.column_statistics_provider(self.ctx.clone()).await?;
-        let table_version = if table.engine() == "STREAM" {
-            let options = table.options();
-            let table_version = options
-                .get("table_version")
-                .ok_or_else(|| ErrorCode::Internal("table version must be set in stream"))?
-                .parse::<u64>()?;
-            Some(table_version)
-        } else {
-            None
-        };
 
-        let mut col_stats: HashMap<IndexType, Option<BasicColumnStatistics>> = HashMap::new();
-        let mut predicates = Vec::new();
+        let mut col_stats = HashMap::new();
         let columns = self.metadata.read().columns_by_table_index(table_index);
-        let mut origin_block_id = None;
         for column in columns.iter() {
             match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -1250,46 +1363,6 @@ impl Binder {
                     .virtual_computed_expr(virtual_computed_expr.clone())
                     .build();
 
-                    // For select stream.
-                    if let Some(table_version) = table_version {
-                        match column_name.to_lowercase().as_str() {
-                            ORIGIN_VERSION_COL_NAME => {
-                                let predicate = ScalarExpr::FunctionCall(FunctionCall {
-                                    span: None,
-                                    func_name: "is_not_null".to_string(),
-                                    params: vec![],
-                                    arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                        span: None,
-                                        column: column_binding.clone(),
-                                    })],
-                                });
-                                predicates.push(predicate);
-
-                                let predicate = ScalarExpr::FunctionCall(FunctionCall {
-                                    span: None,
-                                    func_name: "lt".to_string(),
-                                    params: vec![],
-                                    arguments: vec![
-                                        ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                            span: None,
-                                            column: column_binding.clone(),
-                                        }),
-                                        ScalarExpr::ConstantExpr(ConstantExpr {
-                                            span: None,
-                                            value: Scalar::Number(NumberScalar::UInt64(
-                                                table_version,
-                                            )),
-                                        }),
-                                    ],
-                                });
-                                predicates.push(predicate);
-                            }
-                            ORIGIN_BLOCK_ID_COL_NAME => {
-                                origin_block_id = Some(column_binding.clone());
-                            }
-                            _ => {}
-                        }
-                    }
                     bind_context.add_column_binding(column_binding);
                     if path_indices.is_none() && virtual_computed_expr.is_none() {
                         if let Some(col_id) = *leaf_index {
@@ -1309,88 +1382,26 @@ impl Binder {
             }
         }
 
-        let mut columns = columns
-            .into_iter()
-            .map(|col| col.index())
-            .collect::<HashSet<_>>();
-        if let Some(origin_block_id) = origin_block_id {
-            let base_block_ids = bind_context.add_internal_column_binding(
-                &InternalColumnBinding {
-                    database_name: Some(database_name.to_string()),
-                    table_name: Some(table_name.to_string()),
-                    internal_column: INTERNAL_COLUMN_FACTORY
-                        .get_internal_column(BASE_BLOCK_IDS_COL_NAME)
-                        .unwrap(),
-                },
-                self.metadata.clone(),
-                false,
-            )?;
-            columns.insert(base_block_ids.index);
+        let stat = table
+            .table_statistics(self.ctx.clone(), change_type.clone())
+            .await?;
 
-            let predicate = ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "contains".to_string(),
-                params: vec![],
-                arguments: vec![
-                    ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: base_block_ids,
-                    }),
-                    ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: origin_block_id,
-                    }),
-                ],
-            });
-            predicates.push(predicate);
-        }
-
-        let stat = table.table_statistics(self.ctx.clone()).await?;
-        let scan = SExpr::create_leaf(Arc::new(
-            Scan {
-                table_index,
-                columns,
-                statistics: Statistics {
-                    statistics: stat,
-                    col_stats,
-                },
-                ..Default::default()
-            }
-            .into(),
-        ));
-
-        // not(is_not_null(_origin_version) and (contains(_base_block_ids, _origin_block_id)
-        //  or _origin_version<base_table_version))
-        let s_expr = if !predicates.is_empty() {
-            assert!(predicates.len() == 3);
-            let filter_plan = Filter {
-                predicates: vec![ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "not".to_string(),
-                    params: vec![],
-                    arguments: vec![ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "and".to_string(),
-                        params: vec![],
-                        arguments: vec![
-                            predicates[0].clone(),
-                            ScalarExpr::FunctionCall(FunctionCall {
-                                span: None,
-                                func_name: "or".to_string(),
-                                params: vec![],
-                                arguments: vec![predicates[1].clone(), predicates[2].clone()],
-                            }),
-                        ],
-                    })],
-                })],
-            };
-
-            SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(scan))
-        } else {
-            scan
-        };
-
-        Ok((s_expr, bind_context))
+        Ok((
+            SExpr::create_leaf(Arc::new(
+                Scan {
+                    table_index,
+                    columns: columns.into_iter().map(|col| col.index()).collect(),
+                    statistics: Statistics {
+                        statistics: stat,
+                        col_stats,
+                    },
+                    change_type,
+                    ..Default::default()
+                }
+                .into(),
+            )),
+            bind_context,
+        ))
     }
 
     #[async_backtrace::framed]
@@ -1401,6 +1412,7 @@ impl Binder {
         database_name: &str,
         table_name: &str,
         travel_point: &Option<NavigationPoint>,
+        since_point: &Option<NavigationPoint>,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with ctx
         // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
@@ -1411,8 +1423,10 @@ impl Binder {
             .get_table(catalog_name, database_name, table_name)
             .await?;
 
-        if let Some(tp) = travel_point {
-            table_meta = table_meta.navigate_to(tp).await?;
+        if travel_point.is_some() || since_point.is_some() {
+            table_meta = table_meta
+                .navigate_since_to(since_point, travel_point)
+                .await?;
         }
         Ok(table_meta)
     }
@@ -1471,7 +1485,10 @@ impl Binder {
         catalog_name: &str,
         table_id: MetaId,
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        let catalog = self.catalogs.get_catalog(tenant, catalog_name).await?;
+        let catalog = self
+            .catalogs
+            .get_catalog(tenant, catalog_name, self.ctx.txn_mgr())
+            .await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
             .await?;
@@ -1483,8 +1500,7 @@ impl Binder {
 // copy from common-storages-fuse to avoid cyclic dependency.
 fn string_value(value: &Scalar) -> Result<String> {
     match value {
-        Scalar::String(val) => String::from_utf8(val.clone())
-            .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e))),
+        Scalar::String(val) => Ok(val.clone()),
         other => Err(ErrorCode::BadArguments(format!(
             "Expected a string value, but found a '{}'.",
             other
@@ -1502,8 +1518,8 @@ pub fn parse_result_scan_args(table_args: &TableArgs) -> Result<String> {
 fn parse_table_function_args(
     span: &Span,
     func_name: &Identifier,
-    params: &Vec<Expr>,
-    named_params: &Vec<(String, Expr)>,
+    params: &[Expr],
+    named_params: &[(String, Expr)],
 ) -> Result<Vec<Expr>> {
     if func_name.name.eq_ignore_ascii_case("flatten") {
         // build flatten function arguments.
@@ -1536,7 +1552,7 @@ fn parse_table_function_args(
         }
 
         if !params.is_empty() {
-            args.extend(params.clone());
+            args.extend(params.iter().cloned());
         }
         Ok(args)
     } else {
@@ -1553,6 +1569,6 @@ fn parse_table_function_args(
             .set_span(*span));
         }
 
-        Ok(params.clone())
+        Ok(params.to_vec())
     }
 }

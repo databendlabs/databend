@@ -71,13 +71,17 @@ struct AggregationContext {
     block_reader: Arc<BlockReader>,
 }
 
+type UpdateOffset = HashSet<usize>;
+type DeleteOffset = HashSet<usize>;
 pub struct MatchedAggregator {
     ctx: Arc<dyn TableContext>,
     io_request_semaphore: Arc<Semaphore>,
     segment_reader: CompactSegmentInfoReader,
     segment_locations: AHashMap<SegmentIndex, Location>,
-    block_mutation_row_offset: HashMap<u64, (HashSet<usize>, HashSet<usize>)>,
+    block_mutation_row_offset: HashMap<u64, (UpdateOffset, DeleteOffset)>,
     aggregation_ctx: Arc<AggregationContext>,
+    target_build_optimization: bool,
+    meta_indexes: HashSet<(SegmentIndex, BlockIndex)>,
 }
 
 impl MatchedAggregator {
@@ -91,6 +95,7 @@ impl MatchedAggregator {
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
+        target_build_optimization: bool,
     ) -> Result<Self> {
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
@@ -123,11 +128,35 @@ impl MatchedAggregator {
             block_mutation_row_offset: HashMap::new(),
             segment_locations: AHashMap::from_iter(segment_locations),
             ctx: ctx.clone(),
+            target_build_optimization,
+            meta_indexes: HashSet::new(),
         })
     }
 
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
+        // An optimization: If we use target table as build side, the deduplicate will be done
+        // in hashtable probe phase.In this case, We don't support delete for now, so we
+        // don't to add MergeStatus here.
+        if data_block.get_meta().is_some() && data_block.is_empty() {
+            let meta_index = BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap());
+            if meta_index.is_some() {
+                let meta_index = meta_index.unwrap();
+                if !self
+                    .meta_indexes
+                    .insert((meta_index.segment_idx, meta_index.block_idx))
+                {
+                    // we can get duplicated partial unmodified blocks,this is not an error
+                    // |----------------------------block----------------------------------------|
+                    // |----partial-unmodified----|-----macthed------|----partial-unmodified-----|
+                    info!(
+                        "duplicated block: segment_idx: {}, block_idx: {}",
+                        meta_index.segment_idx, meta_index.block_idx
+                    );
+                }
+            }
+            return Ok(());
+        }
         if data_block.is_empty() {
             return Ok(());
         }
@@ -192,10 +221,23 @@ impl MatchedAggregator {
         let start = Instant::now();
         // 1.get modified segments
         let mut segment_infos = HashMap::<SegmentIndex, SegmentInfo>::new();
+        let segment_indexes = if self.target_build_optimization {
+            let mut vecs = Vec::with_capacity(self.meta_indexes.len());
+            for prefix in &self.meta_indexes {
+                vecs.push(prefix.0);
+            }
+            vecs
+        } else {
+            let mut vecs = Vec::with_capacity(self.block_mutation_row_offset.len());
+            for prefix in self.block_mutation_row_offset.keys() {
+                let (segment_idx, _) = split_prefix(*prefix);
+                let segment_idx = segment_idx as usize;
+                vecs.push(segment_idx);
+            }
+            vecs
+        };
 
-        for prefix in self.block_mutation_row_offset.keys() {
-            let (segment_idx, _) = split_prefix(*prefix);
-            let segment_idx = segment_idx as usize;
+        for segment_idx in segment_indexes {
             if let Entry::Vacant(e) = segment_infos.entry(segment_idx) {
                 let (path, ver) = self.segment_locations.get(&segment_idx).ok_or_else(|| {
                     ErrorCode::Internal(format!(
@@ -220,6 +262,30 @@ impl MatchedAggregator {
             }
         }
 
+        if self.target_build_optimization {
+            let mut mutation_logs = Vec::with_capacity(self.meta_indexes.len());
+            for item in &self.meta_indexes {
+                let segment_idx = item.0;
+                let block_idx = item.1;
+                let segment_info = segment_infos.get(&item.0).unwrap();
+                let block_idx = segment_info.blocks.len() - block_idx - 1;
+                info!(
+                    "target_build_optimization, merge into apply: segment_idx:{},blk_idx:{}",
+                    segment_idx, block_idx
+                );
+                mutation_logs.push(MutationLogEntry::DeletedBlock {
+                    index: BlockMetaIndex {
+                        segment_idx,
+                        block_idx,
+                        inner: None,
+                    },
+                })
+            }
+            return Ok(Some(MutationLogs {
+                entries: mutation_logs,
+            }));
+        }
+
         let io_runtime = GlobalIORuntime::instance();
         let mut mutation_log_handlers = Vec::with_capacity(self.block_mutation_row_offset.len());
 
@@ -229,12 +295,12 @@ impl MatchedAggregator {
             let permit = acquire_task_permit(self.io_request_semaphore.clone()).await?;
             let aggregation_ctx = self.aggregation_ctx.clone();
             let segment_info = segment_infos.get(&segment_idx).unwrap();
+            let block_idx = segment_info.blocks.len() - block_idx as usize - 1;
+            assert!(block_idx < segment_info.blocks.len());
             info!(
                 "merge into apply: segment_idx:{},blk_idx:{}",
                 segment_idx, block_idx
             );
-            let block_idx = segment_info.blocks.len() - block_idx as usize - 1;
-            assert!(block_idx < segment_info.blocks.len());
             // the row_id is generated by block_id, not block_idx,reference to fill_internal_column_meta()
             let block_meta = segment_info.blocks[block_idx].clone();
 
@@ -273,8 +339,10 @@ impl MatchedAggregator {
         let log_entries = futures::future::try_join_all(mutation_log_handlers)
             .await
             .map_err(|e| {
-                ErrorCode::Internal("unexpected, failed to join apply-deletion tasks.")
-                    .add_message_back(e.to_string())
+                ErrorCode::Internal(
+                    "unexpected, failed to join apply update and delete tasks for merge into.",
+                )
+                .add_message_back(e.to_string())
             })?;
         let mut mutation_logs = Vec::new();
         for maybe_log_entry in log_entries {
@@ -313,6 +381,7 @@ impl AggregationContext {
             &self.block_reader,
             block_meta,
             &self.read_settings,
+            self.ctx.get_id(),
         )
         .await?;
         let origin_num_rows = origin_data_block.num_rows();
@@ -334,6 +403,7 @@ impl AggregationContext {
                 index: BlockMetaIndex {
                     segment_idx,
                     block_idx,
+                    inner: None,
                 },
             }));
         }
@@ -342,8 +412,9 @@ impl AggregationContext {
         // and wait (asyncly, which will NOT block the executor thread)
         let block_builder = self.block_builder.clone();
         let origin_stats = block_meta.cluster_stats.clone();
+
         let serialized = GlobalIORuntime::instance()
-            .spawn_blocking(move || {
+            .spawn(self.ctx.get_id(), async move {
                 block_builder.build(res_block, |block, generator| {
                     let cluster_stats =
                         generator.gen_with_origin_stats(&block, origin_stats.clone())?;
@@ -354,7 +425,13 @@ impl AggregationContext {
                     Ok((cluster_stats, block))
                 })
             })
-            .await?;
+            .await
+            .map_err(|e| {
+                ErrorCode::Internal(
+                    "unexpected, failed to serialize block when apply update and delete to data block for merge into",
+                )
+                .add_message_back(e.to_string())
+            })??;
 
         // persistent data
         let new_block_meta = serialized.block_meta;
@@ -370,6 +447,7 @@ impl AggregationContext {
             index: BlockMetaIndex {
                 segment_idx,
                 block_idx,
+                inner: None,
             },
             block_meta: Arc::new(new_block_meta),
         };

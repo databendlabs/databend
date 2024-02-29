@@ -68,6 +68,8 @@ impl AlterTaskInterpreter {
             when_condition: None,
             add_after: vec![],
             remove_after: vec![],
+            set_session_parameters: false,
+            session_parameters: Default::default(),
         };
         match plan.alter_options {
             AlterTaskOptions::Resume => {
@@ -81,6 +83,7 @@ impl AlterTaskInterpreter {
                 comments,
                 warehouse,
                 suspend_task_after_num_failures,
+                session_parameters,
             } => {
                 req.alter_task_type = AlterTaskType::Set as i32;
                 req.schedule_options = schedule.map(make_schedule_options);
@@ -91,6 +94,10 @@ impl AlterTaskInterpreter {
                 });
                 req.suspend_task_after_num_failures =
                     suspend_task_after_num_failures.map(|i| i as i32);
+                if let Some(session_parameters) = session_parameters {
+                    req.set_session_parameters = true;
+                    req.session_parameters = session_parameters;
+                }
             }
             AlterTaskOptions::Unset { .. } => {
                 todo!()
@@ -122,6 +129,10 @@ impl Interpreter for AlterTaskInterpreter {
         "AlterTaskInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -134,7 +145,7 @@ impl Interpreter for AlterTaskInterpreter {
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
         let req = self.build_request();
-        let config = get_client_config(self.ctx.clone())?;
+        let config = get_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);
         task_client.alter_task(req).await?;
         Ok(PipelineBuildResult::create())

@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use enum_as_inner::EnumAsInner;
+use itertools::Itertools;
 
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -54,7 +58,6 @@ use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
-use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum PhysicalPlan {
@@ -119,6 +122,190 @@ pub enum PhysicalPlan {
 }
 
 impl PhysicalPlan {
+    /// Adjust the plan_id of the physical plan.
+    /// This function will assign a unique plan_id to each physical plan node in a top-down manner.
+    /// Which means the plan_id of a node is always greater than the plan_id of its parent node.
+    pub fn adjust_plan_id(&mut self, next_id: &mut u32) {
+        match self {
+            PhysicalPlan::TableScan(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::Filter(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::Project(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::EvalScalar(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ProjectSet(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::AggregateExpand(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::AggregatePartial(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::AggregateFinal(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::Window(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::Sort(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::Limit(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::RowFetch(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::HashJoin(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.probe.adjust_plan_id(next_id);
+                plan.build.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::RangeJoin(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.left.adjust_plan_id(next_id);
+                plan.right.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::Exchange(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::UnionAll(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.left.adjust_plan_id(next_id);
+                plan.right.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::CteScan(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::MaterializedCte(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ConstantTableScan(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::Udf(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::DistributedInsertSelect(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ExchangeSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ExchangeSink(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::CopyIntoTable(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::DeleteSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ReplaceInto(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeInto(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeIntoAddRowNumber(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeIntoSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::CommitSink(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ReplaceAsyncSourcer(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ReplaceDeduplicate(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::CompactSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ReclusterSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ReclusterSink(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::UpdateSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+        }
+    }
+
     /// Get the id of the plan node
     pub fn get_id(&self) -> u32 {
         match self {
@@ -145,20 +332,20 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(v) => v.plan_id,
             PhysicalPlan::ConstantTableScan(v) => v.plan_id,
             PhysicalPlan::Udf(v) => v.plan_id,
-            PhysicalPlan::DeleteSource(_)
-            | PhysicalPlan::MergeInto(_)
-            | PhysicalPlan::MergeIntoAddRowNumber(_)
-            | PhysicalPlan::MergeIntoSource(_)
-            | PhysicalPlan::MergeIntoAppendNotMatched(_)
-            | PhysicalPlan::CommitSink(_)
-            | PhysicalPlan::CopyIntoTable(_)
-            | PhysicalPlan::ReplaceAsyncSourcer(_)
-            | PhysicalPlan::ReplaceDeduplicate(_)
-            | PhysicalPlan::ReplaceInto(_)
-            | PhysicalPlan::CompactSource(_)
-            | PhysicalPlan::ReclusterSource(_)
-            | PhysicalPlan::ReclusterSink(_)
-            | PhysicalPlan::UpdateSource(_) => u32::MAX,
+            PhysicalPlan::DeleteSource(v) => v.plan_id,
+            PhysicalPlan::MergeInto(v) => v.plan_id,
+            PhysicalPlan::MergeIntoAddRowNumber(v) => v.plan_id,
+            PhysicalPlan::MergeIntoSource(v) => v.plan_id,
+            PhysicalPlan::MergeIntoAppendNotMatched(v) => v.plan_id,
+            PhysicalPlan::CommitSink(v) => v.plan_id,
+            PhysicalPlan::CopyIntoTable(v) => v.plan_id,
+            PhysicalPlan::ReplaceAsyncSourcer(v) => v.plan_id,
+            PhysicalPlan::ReplaceDeduplicate(v) => v.plan_id,
+            PhysicalPlan::ReplaceInto(v) => v.plan_id,
+            PhysicalPlan::CompactSource(v) => v.plan_id,
+            PhysicalPlan::ReclusterSource(v) => v.plan_id,
+            PhysicalPlan::ReclusterSink(v) => v.plan_id,
+            PhysicalPlan::UpdateSource(v) => v.plan_id,
         }
     }
 
@@ -355,46 +542,283 @@ impl PhysicalPlan {
             )
     }
 
-    pub fn get_table_index(&self) -> IndexType {
+    pub fn get_desc(&self) -> Result<String> {
+        Ok(match self {
+            PhysicalPlan::TableScan(v) => format!(
+                "{}.{}",
+                v.source.catalog_info.name_ident.catalog_name,
+                v.source.source_info.desc()
+            ),
+            PhysicalPlan::Filter(v) => match v.predicates.is_empty() {
+                true => String::new(),
+                false => v.predicates[0].as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+            },
+            PhysicalPlan::AggregatePartial(v) => {
+                v.agg_funcs.iter().map(|x| x.display.clone()).join(", ")
+            }
+            PhysicalPlan::AggregateFinal(v) => {
+                v.agg_funcs.iter().map(|x| x.display.clone()).join(", ")
+            }
+            PhysicalPlan::Sort(v) => v
+                .order_by
+                .iter()
+                .map(|x| {
+                    format!(
+                        "{}{}{}",
+                        x.display_name,
+                        if x.asc { "" } else { " DESC" },
+                        if x.nulls_first { " NULLS FIRST" } else { "" },
+                    )
+                })
+                .join(", "),
+            PhysicalPlan::Limit(v) => match v.limit {
+                Some(limit) => format!("LIMIT {} OFFSET {}", limit, v.offset),
+                None => format!("OFFSET {}", v.offset),
+            },
+            PhysicalPlan::Project(v) => v
+                .output_schema()?
+                .fields
+                .iter()
+                .map(|x| x.name())
+                .join(", "),
+            PhysicalPlan::EvalScalar(v) => v
+                .exprs
+                .iter()
+                .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(", "),
+            PhysicalPlan::HashJoin(v) => {
+                let mut conditions = v
+                    .build_keys
+                    .iter()
+                    .zip(v.probe_keys.iter())
+                    .map(|(l, r)| {
+                        format!(
+                            "({} = {})",
+                            l.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                            r.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                        )
+                    })
+                    .collect::<Vec<_>>();
+
+                conditions.extend(
+                    v.non_equi_conditions
+                        .iter()
+                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display()),
+                );
+
+                conditions.join(" AND ")
+            }
+            PhysicalPlan::ProjectSet(v) => v
+                .srf_exprs
+                .iter()
+                .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(", "),
+            PhysicalPlan::AggregateExpand(v) => v
+                .grouping_sets
+                .sets
+                .iter()
+                .map(|set| {
+                    set.iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .map(|s| format!("({})", s))
+                .collect::<Vec<_>>()
+                .join(", "),
+            PhysicalPlan::Window(v) => {
+                let partition_by = v
+                    .partition_by
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let order_by = v
+                    .order_by
+                    .iter()
+                    .map(|x| {
+                        format!(
+                            "{}{}{}",
+                            x.display_name,
+                            if x.asc { "" } else { " DESC" },
+                            if x.nulls_first { " NULLS FIRST" } else { "" },
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                format!("partition by {}, order by {}", partition_by, order_by)
+            }
+            PhysicalPlan::RowFetch(v) => {
+                let table_schema = v.source.source_info.schema();
+                let projected_schema = v.cols_to_fetch.project_schema(&table_schema);
+                projected_schema.fields.iter().map(|f| f.name()).join(", ")
+            }
+            PhysicalPlan::RangeJoin(v) => {
+                let mut condition = v
+                    .conditions
+                    .iter()
+                    .map(|condition| {
+                        let left = condition
+                            .left_expr
+                            .as_expr(&BUILTIN_FUNCTIONS)
+                            .sql_display();
+                        let right = condition
+                            .right_expr
+                            .as_expr(&BUILTIN_FUNCTIONS)
+                            .sql_display();
+                        format!("{left} {:?} {right}", condition.operator)
+                    })
+                    .collect::<Vec<_>>();
+
+                condition.extend(
+                    v.other_conditions
+                        .iter()
+                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display()),
+                );
+
+                condition.join(" AND ")
+            }
+            PhysicalPlan::Udf(v) => v
+                .udf_funcs
+                .iter()
+                .map(|x| format!("{}({})", x.func_name, x.arg_exprs.join(", ")))
+                .join(", "),
+            PhysicalPlan::CteScan(v) => {
+                format!("CTE index: {}, sub index: {}", v.cte_idx.0, v.cte_idx.1)
+            }
+            PhysicalPlan::UnionAll(v) => v
+                .pairs
+                .iter()
+                .map(|(l, r)| format!("#{} <- #{}", l, r))
+                .join(", "),
+            _ => String::new(),
+        })
+    }
+
+    pub fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        let mut labels = HashMap::with_capacity(16);
+
         match self {
-            PhysicalPlan::TableScan(scan) => scan.table_index,
-            PhysicalPlan::Filter(plan) => plan.input.get_table_index(),
-            PhysicalPlan::Project(plan) => plan.input.get_table_index(),
-            PhysicalPlan::EvalScalar(plan) => plan.input.get_table_index(),
-            PhysicalPlan::ProjectSet(plan) => plan.input.get_table_index(),
-            PhysicalPlan::AggregateExpand(plan) => plan.input.get_table_index(),
-            PhysicalPlan::AggregatePartial(plan) => plan.input.get_table_index(),
-            PhysicalPlan::AggregateFinal(plan) => plan.input.get_table_index(),
-            PhysicalPlan::Window(plan) => plan.input.get_table_index(),
-            PhysicalPlan::Sort(plan) => plan.input.get_table_index(),
-            PhysicalPlan::Limit(plan) => plan.input.get_table_index(),
-            PhysicalPlan::RowFetch(plan) => plan.input.get_table_index(),
-            PhysicalPlan::HashJoin(plan) => plan.probe.get_table_index(),
-            PhysicalPlan::Exchange(plan) => plan.input.get_table_index(),
-            PhysicalPlan::ExchangeSink(plan) => plan.input.get_table_index(),
-            PhysicalPlan::ExchangeSource(plan) => plan.table_index,
-            PhysicalPlan::DistributedInsertSelect(plan) => plan.input.get_table_index(),
-            PhysicalPlan::MaterializedCte(_) |
-            // Todo: support union and range join return valid table index by join probe keys
-            PhysicalPlan::UnionAll(_) |
-            PhysicalPlan::RangeJoin(_)|
-            PhysicalPlan::ConstantTableScan(_)
-            |PhysicalPlan::CteScan(_)
-            | PhysicalPlan::Udf(_)
-            | PhysicalPlan::DeleteSource(_)
-            | PhysicalPlan::CopyIntoTable(_)
-            | PhysicalPlan::ReplaceAsyncSourcer(_)
-            | PhysicalPlan::ReplaceDeduplicate(_)
-            | PhysicalPlan::ReplaceInto(_)
-            | PhysicalPlan::MergeIntoSource(_)
-            | PhysicalPlan::MergeInto(_)
-            | PhysicalPlan::MergeIntoAppendNotMatched(_)
-            | PhysicalPlan::MergeIntoAddRowNumber(_)
-            | PhysicalPlan::CompactSource(_)
-            | PhysicalPlan::CommitSink(_)
-            | PhysicalPlan::ReclusterSource(_)
-            | PhysicalPlan::ReclusterSink(_)
-            | PhysicalPlan::UpdateSource(_) => usize::MAX,
-        }
+            PhysicalPlan::TableScan(v) => {
+                labels.insert(String::from("Full table name"), vec![format!(
+                    "{}.{}",
+                    v.source.catalog_info.name_ident.catalog_name,
+                    v.source.source_info.desc()
+                )]);
+
+                labels.insert(
+                    format!(
+                        "Columns ({} / {})",
+                        v.output_schema()?.num_fields(),
+                        std::cmp::max(
+                            v.output_schema()?.num_fields(),
+                            v.source.source_info.schema().num_fields()
+                        )
+                    ),
+                    v.name_mapping.keys().cloned().collect(),
+                );
+                labels.insert(String::from("Total partitions"), vec![
+                    v.source.statistics.partitions_total.to_string(),
+                ]);
+            }
+            PhysicalPlan::Filter(v) => {
+                labels.insert(
+                    String::from("Filter condition"),
+                    v.predicates
+                        .iter()
+                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                        .collect(),
+                );
+            }
+            PhysicalPlan::Limit(v) => {
+                labels.insert(String::from("Offset"), vec![v.offset.to_string()]);
+
+                if let Some(limit) = v.limit {
+                    labels.insert(String::from("Number of rows"), vec![limit.to_string()]);
+                }
+            }
+            PhysicalPlan::EvalScalar(v) => {
+                labels.insert(
+                    String::from("List of Expressions"),
+                    v.exprs
+                        .iter()
+                        .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                        .collect(),
+                );
+            }
+            PhysicalPlan::Project(v) => {
+                labels.insert(
+                    String::from("List of Expressions"),
+                    v.output_schema()?
+                        .fields
+                        .iter()
+                        .map(|x| x.name())
+                        .cloned()
+                        .collect(),
+                );
+            }
+            PhysicalPlan::AggregatePartial(v) => {
+                if !v.group_by_display.is_empty() {
+                    labels.insert(String::from("Grouping keys"), v.group_by_display.clone());
+                }
+
+                if !v.agg_funcs.is_empty() {
+                    labels.insert(
+                        String::from("Aggregate Functions"),
+                        v.agg_funcs.iter().map(|x| x.display.clone()).collect(),
+                    );
+                }
+            }
+            PhysicalPlan::AggregateFinal(v) => {
+                if !v.group_by_display.is_empty() {
+                    labels.insert(String::from("Grouping keys"), v.group_by_display.clone());
+                }
+
+                if !v.agg_funcs.is_empty() {
+                    labels.insert(
+                        String::from("Aggregate Functions"),
+                        v.agg_funcs.iter().map(|x| x.display.clone()).collect(),
+                    );
+                }
+            }
+            PhysicalPlan::HashJoin(v) => {
+                labels.insert(String::from("Join Type"), vec![v.join_type.to_string()]);
+
+                if !v.build_keys.is_empty() {
+                    labels.insert(
+                        String::from("Join Build Side Keys"),
+                        v.build_keys
+                            .iter()
+                            .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                            .collect(),
+                    );
+                }
+
+                if !v.probe_keys.is_empty() {
+                    labels.insert(
+                        String::from("Join Probe Side Keys"),
+                        v.probe_keys
+                            .iter()
+                            .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                            .collect(),
+                    );
+                }
+
+                if !v.non_equi_conditions.is_empty() {
+                    labels.insert(
+                        String::from("Join Conditions"),
+                        v.non_equi_conditions
+                            .iter()
+                            .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                            .collect(),
+                    );
+                }
+            }
+            _ => {}
+        };
+
+        Ok(labels)
     }
 }

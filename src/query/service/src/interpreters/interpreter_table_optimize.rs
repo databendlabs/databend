@@ -17,7 +17,6 @@ use std::time::SystemTime;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::Catalog;
-use databend_common_catalog::lock::LockExt;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::CompactTarget;
 use databend_common_catalog::table::Table;
@@ -42,6 +41,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::locks::LockExt;
 use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -65,6 +65,10 @@ impl OptimizeTableInterpreter {
 impl Interpreter for OptimizeTableInterpreter {
     fn name(&self) -> &str {
         "OptimizeTableInterpreter"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
     }
 
     #[async_backtrace::framed]
@@ -116,6 +120,7 @@ impl OptimizeTableInterpreter {
             table_info: table_info.clone(),
             catalog_info: catalog_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
+            plan_id: u32::MAX,
         }));
 
         if is_distributed {
@@ -139,6 +144,7 @@ impl OptimizeTableInterpreter {
             merge_meta,
             need_lock,
             deduplicated_label: None,
+            plan_id: u32::MAX,
         })))
     }
 
@@ -154,7 +160,7 @@ impl OptimizeTableInterpreter {
 
         // check if the table is locked.
         let table_lock = LockManager::create_table_lock(table_info.clone())?;
-        if self.plan.need_lock && table_lock.check_lock(catalog.clone()).await? {
+        if self.plan.need_lock && !table_lock.wait_lock_expired(catalog.clone()).await? {
             return Err(ErrorCode::TableAlreadyLocked(format!(
                 "table '{}' is locked, please retry compaction later",
                 self.plan.table
@@ -188,8 +194,7 @@ impl OptimizeTableInterpreter {
             )?;
 
             let build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                    .await?;
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
             build_res.main_pipeline
         } else {
             Pipeline::create()
@@ -237,12 +242,9 @@ impl OptimizeTableInterpreter {
                         mutator.removed_segment_summary,
                     )?;
 
-                    build_res = build_query_pipeline_without_render_result_set(
-                        &self.ctx,
-                        &physical_plan,
-                        false,
-                    )
-                    .await?;
+                    build_res =
+                        build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)
+                            .await?;
 
                     let ctx = self.ctx.clone();
                     let plan = self.plan.clone();

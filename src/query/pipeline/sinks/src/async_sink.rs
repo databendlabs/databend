@@ -17,12 +17,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
+use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::profile::Profile;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -47,8 +47,6 @@ pub trait AsyncSink: Send {
     fn details_status(&self) -> Option<String> {
         None
     }
-
-    fn record_profile(&self, _profile: &Profile) {}
 }
 
 pub struct AsyncSinker<T: AsyncSink + 'static> {
@@ -81,23 +79,25 @@ impl<T: AsyncSink + 'static> AsyncSinker<T> {
 
 impl<T: AsyncSink + 'static> Drop for AsyncSinker<T> {
     fn drop(&mut self) {
-        if !self.called_on_start || !self.called_on_finish {
-            if let Some(mut inner) = self.inner.take() {
-                GlobalIORuntime::instance().spawn(self.query_id.clone(), {
-                    let called_on_start = self.called_on_start;
-                    let called_on_finish = self.called_on_finish;
-                    async move {
-                        if !called_on_start {
-                            let _ = inner.on_start().await;
-                        }
+        drop_guard(move || {
+            if !self.called_on_start || !self.called_on_finish {
+                if let Some(mut inner) = self.inner.take() {
+                    GlobalIORuntime::instance().spawn(self.query_id.clone(), {
+                        let called_on_start = self.called_on_start;
+                        let called_on_finish = self.called_on_finish;
+                        async move {
+                            if !called_on_start {
+                                let _ = inner.on_start().await;
+                            }
 
-                        if !called_on_finish {
-                            let _ = inner.on_finish().await;
+                            if !called_on_finish {
+                                let _ = inner.on_finish().await;
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }
-        }
+        })
     }
 }
 
@@ -172,9 +172,5 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
 
     fn details_status(&self) -> Option<String> {
         self.inner.as_ref().and_then(|x| x.details_status())
-    }
-
-    fn record_profile(&self, profile: &Profile) {
-        self.inner.as_ref().unwrap().record_profile(profile);
     }
 }

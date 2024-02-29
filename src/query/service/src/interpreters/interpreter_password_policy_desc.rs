@@ -54,6 +54,10 @@ impl Interpreter for DescPasswordPolicyInterpreter {
         "DescPasswordPolicyInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
@@ -64,19 +68,19 @@ impl Interpreter for DescPasswordPolicyInterpreter {
             .await?;
 
         let properties = vec![
-            "NAME".as_bytes().to_vec(),
-            "COMMENT".as_bytes().to_vec(),
-            "PASSWORD_MIN_LENGTH".as_bytes().to_vec(),
-            "PASSWORD_MAX_LENGTH".as_bytes().to_vec(),
-            "PASSWORD_MIN_UPPER_CASE_CHARS".as_bytes().to_vec(),
-            "PASSWORD_MIN_LOWER_CASE_CHARS".as_bytes().to_vec(),
-            "PASSWORD_MIN_NUMERIC_CHARS".as_bytes().to_vec(),
-            "PASSWORD_MIN_SPECIAL_CHARS".as_bytes().to_vec(),
-            "PASSWORD_MIN_AGE_DAYS".as_bytes().to_vec(),
-            "PASSWORD_MAX_AGE_DAYS".as_bytes().to_vec(),
-            "PASSWORD_MAX_RETRIES".as_bytes().to_vec(),
-            "PASSWORD_LOCKOUT_TIME_MINS".as_bytes().to_vec(),
-            "PASSWORD_HISTORY".as_bytes().to_vec(),
+            "NAME".to_string(),
+            "COMMENT".to_string(),
+            "PASSWORD_MIN_LENGTH".to_string(),
+            "PASSWORD_MAX_LENGTH".to_string(),
+            "PASSWORD_MIN_UPPER_CASE_CHARS".to_string(),
+            "PASSWORD_MIN_LOWER_CASE_CHARS".to_string(),
+            "PASSWORD_MIN_NUMERIC_CHARS".to_string(),
+            "PASSWORD_MIN_SPECIAL_CHARS".to_string(),
+            "PASSWORD_MIN_AGE_DAYS".to_string(),
+            "PASSWORD_MAX_AGE_DAYS".to_string(),
+            "PASSWORD_MAX_RETRIES".to_string(),
+            "PASSWORD_LOCKOUT_TIME_MINS".to_string(),
+            "PASSWORD_HISTORY".to_string(),
         ];
 
         let min_length = format!("{}", password_policy.min_length);
@@ -92,19 +96,19 @@ impl Interpreter for DescPasswordPolicyInterpreter {
         let history = format!("{}", password_policy.history);
 
         let values = vec![
-            password_policy.name.as_bytes().to_vec(),
-            password_policy.comment.as_bytes().to_vec(),
-            min_length.as_bytes().to_vec(),
-            max_length.as_bytes().to_vec(),
-            min_upper_case_chars.as_bytes().to_vec(),
-            min_lower_case_chars.as_bytes().to_vec(),
-            min_numeric_chars.as_bytes().to_vec(),
-            min_special_chars.as_bytes().to_vec(),
-            min_age_days.as_bytes().to_vec(),
-            max_age_days.as_bytes().to_vec(),
-            max_retries.as_bytes().to_vec(),
-            lockout_time_mins.as_bytes().to_vec(),
-            history.as_bytes().to_vec(),
+            password_policy.name.clone(),
+            password_policy.comment.clone(),
+            min_length.clone(),
+            max_length.clone(),
+            min_upper_case_chars.clone(),
+            min_lower_case_chars.clone(),
+            min_numeric_chars.clone(),
+            min_special_chars.clone(),
+            min_age_days.clone(),
+            max_age_days.clone(),
+            max_retries.clone(),
+            lockout_time_mins.clone(),
+            history.clone(),
         ];
 
         let defaults = vec![
@@ -124,19 +128,19 @@ impl Interpreter for DescPasswordPolicyInterpreter {
         ];
 
         let descriptions = vec![
-            "Name of password policy.".as_bytes().to_vec(),
-            "Comment of password policy.".as_bytes().to_vec(),
-            "Minimum length of new password.".as_bytes().to_vec(),
-            "Maximum length of new password.".as_bytes().to_vec(),
-            "Minimum number of uppercase characters in new password.".as_bytes().to_vec(),
-            "Minimum number of lowercase characters in new password.".as_bytes().to_vec(),
-            "Minimum number of numeric characters in new password.".as_bytes().to_vec(),
-            "Minimum number of special characters in new password.".as_bytes().to_vec(),
-            "Period after a password is changed during which a password cannot be changed again, in days.".as_bytes().to_vec(),
-            "Period after which password must be changed, in days.".as_bytes().to_vec(),
-            "Number of attempts users have to enter the correct password before their account is locked.".as_bytes().to_vec(),
-            "Period of time for which users will be locked after entering their password incorrectly many times (specified by MAX_RETRIES), in minutes.".as_bytes().to_vec(),
-            "Number of most recent passwords that may not be repeated by the user.".as_bytes().to_vec(),
+            "Name of password policy.".to_string(),
+            "Comment of password policy.".to_string(),
+            "Minimum length of new password.".to_string(),
+            "Maximum length of new password.".to_string(),
+            "Minimum number of uppercase characters in new password.".to_string(),
+            "Minimum number of lowercase characters in new password.".to_string(),
+            "Minimum number of numeric characters in new password.".to_string(),
+            "Minimum number of special characters in new password.".to_string(),
+            "Period after a password is changed during which a password cannot be changed again, in days.".to_string(),
+            "Period after which password must be changed, in days.".to_string(),
+            "Number of attempts users have to enter the correct password before their account is locked.".to_string(),
+            "Period of time for which users will be locked after entering their password incorrectly many times (specified by MAX_RETRIES), in minutes.".to_string(),
+            "Number of most recent passwords that may not be repeated by the user.".to_string(),
         ];
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

@@ -14,6 +14,8 @@
 
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::time::Duration;
+use std::time::SystemTime;
 
 use num_traits::FromPrimitive;
 
@@ -144,13 +146,13 @@ impl Display for TxnGetRequest {
 
 impl Display for TxnPutRequest {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Put key={}, need prev_value: {}",
-            self.key, self.prev_value
-        )?;
+        write!(f, "Put key={}", self.key)?;
         if let Some(expire_at) = self.expire_at {
-            write!(f, " expire at: {}", expire_at)?;
+            let t = SystemTime::UNIX_EPOCH + Duration::from_millis(expire_at);
+            write!(f, " expire_at: {:?}", t)?;
+        }
+        if let Some(ttl_ms) = self.ttl_ms {
+            write!(f, "  ttl: {:?}", Duration::from_millis(ttl_ms))?;
         }
         Ok(())
     }

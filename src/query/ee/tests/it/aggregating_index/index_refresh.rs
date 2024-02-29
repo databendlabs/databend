@@ -33,6 +33,8 @@ use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::IndexType;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::AggregatingIndexRewriter;
 use databend_common_sql::Planner;
@@ -423,7 +425,7 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     }
 
     // Insert more data with insert into ... select ...
-    fixture
+    let _ = fixture
         .execute_query("INSERT INTO t0 SELECT * FROM t0")
         .await?;
 
@@ -462,7 +464,7 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
     let index_id0 = create_index(ctx, index_name, original_query, query.as_str(), true).await?;
 
     // Copy into data
-    fixture.execute_query(
+    let _ =fixture.execute_query(
         "COPY INTO books FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV);",
     )
         .await?;
@@ -544,12 +546,18 @@ async fn create_index(
 
     if let Plan::CreateIndex(plan) = plan {
         let catalog = ctx.get_catalog("default").await?;
+
+        let tenant_name = ctx.get_tenant();
+
+        let non_empty = NonEmptyString::new(tenant_name.to_string()).map_err(|_| {
+            ErrorCode::TenantIsEmpty("Tenant is empty(when create_index)".to_string())
+        })?;
+
+        let tenant = Tenant::new_nonempty(non_empty);
+
         let create_index_req = CreateIndexReq {
-            if_not_exists: plan.if_not_exists,
-            name_ident: IndexNameIdent {
-                tenant: ctx.get_tenant(),
-                index_name: index_name.to_string(),
-            },
+            create_option: plan.create_option,
+            name_ident: IndexNameIdent::new(tenant, index_name),
             meta: IndexMeta {
                 table_id: plan.table_id,
                 index_type: IndexType::AGGREGATING,
@@ -580,7 +588,7 @@ async fn refresh_index(
         Some(l) => format!("REFRESH AGGREGATING INDEX {index_name} LIMIT {l}"),
         None => format!("REFRESH AGGREGATING INDEX {index_name}"),
     };
-    execute_sql(ctx, &sql).await?;
+    let _ = execute_sql(ctx, &sql).await?;
 
     Ok(())
 }

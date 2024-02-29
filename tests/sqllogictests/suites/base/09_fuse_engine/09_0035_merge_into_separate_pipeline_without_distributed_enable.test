@@ -139,6 +139,11 @@ merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t
 ----
 2 4
 
+query T
+select count(*) from fuse_block('default','t1_separate');
+----
+1
+
 ## we will do compact
 query TTT
 select * from t1_separate;

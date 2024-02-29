@@ -44,6 +44,10 @@ impl Interpreter for CreateNetworkPolicyInterpreter {
         "CreateNetworkPolicyInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -62,7 +66,7 @@ impl Interpreter for CreateNetworkPolicyInterpreter {
             update_on: None,
         };
         user_mgr
-            .add_network_policy(&tenant, network_policy, plan.if_not_exists)
+            .add_network_policy(&tenant, network_policy, &plan.create_option)
             .await?;
 
         Ok(PipelineBuildResult::create())

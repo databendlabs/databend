@@ -1,0 +1,67 @@
+statement ok
+drop table if exists b1
+
+statement ok
+create table b1 (a binary);
+
+statement ok
+drop stage if exists s1
+
+statement ok
+create stage s1;
+
+statement ok
+remove @s1;
+
+# create file
+query III
+copy into @s1 from (select '61626364') file_format = (type = csv);
+----
+1 11 11
+
+# load
+statement ok
+copy into b1 from @s1 file_format = (type = 'csv') ;
+
+query 
+select a from b1;
+----
+61626364
+
+query 
+select hex(a) from b1;
+----
+61626364
+
+query 
+copy into @s1 from b1 file_format = (type = csv);
+----
+1 9 9
+
+query 
+select $1 from @s1(file_format => 'csv');
+----
+61626364
+61626364
+
+statement ok
+remove @s1;
+
+query 
+copy into @s1 from b1 file_format = (type = 'csv' binary_format = BASE64);
+----
+1 9 9
+
+query 
+select $1 from @s1 (file_format => 'csv');
+----
+YWJjZA==
+
+statement ok
+copy into b1 from @s1 file_format = (type = 'csv' binary_format = BASE64);
+
+query 
+select * from b1;
+----
+61626364
+61626364

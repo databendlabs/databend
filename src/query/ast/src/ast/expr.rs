@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_io::display_decimal_256;
 use databend_common_io::escape_string_with_quote;
 use enum_as_inner::EnumAsInner;
@@ -322,7 +323,9 @@ pub enum TypeName {
         fields_type: Vec<TypeName>,
     },
     Variant,
+    Geometry,
     Nullable(Box<TypeName>),
+    NotNull(Box<TypeName>),
 }
 
 impl TypeName {
@@ -335,6 +338,13 @@ impl TypeName {
             Self::Nullable(Box::new(self))
         } else {
             self
+        }
+    }
+
+    pub fn wrap_not_null(self) -> Self {
+        match self {
+            Self::NotNull(_) => self,
+            _ => Self::NotNull(Box::new(self)),
         }
     }
 }
@@ -498,6 +508,8 @@ pub enum JsonOperator {
     AtQuestion,
     /// @@ Returns the result of a JSON path predicate check for the specified JSON value.
     AtAt,
+    /// #- Deletes the field or array element at the specified keypath.
+    HashMinus,
 }
 
 impl JsonOperator {
@@ -514,6 +526,7 @@ impl JsonOperator {
             JsonOperator::ArrowAt => "json_contains_in_right".to_string(),
             JsonOperator::AtQuestion => "json_path_exists".to_string(),
             JsonOperator::AtAt => "json_path_match".to_string(),
+            JsonOperator::HashMinus => "delete_by_keypath".to_string(),
         }
     }
 }
@@ -790,6 +803,9 @@ impl Display for JsonOperator {
             JsonOperator::AtAt => {
                 write!(f, "@@")
             }
+            JsonOperator::HashMinus => {
+                write!(f, "#-")
+            }
         }
     }
 }
@@ -885,8 +901,14 @@ impl Display for TypeName {
             TypeName::Variant => {
                 write!(f, "VARIANT")?;
             }
+            TypeName::Geometry => {
+                write!(f, "GEOMETRY")?;
+            }
             TypeName::Nullable(ty) => {
                 write!(f, "{} NULL", ty)?;
+            }
+            TypeName::NotNull(ty) => {
+                write!(f, "{} NOT NULL", ty)?;
             }
         }
         Ok(())
@@ -1327,5 +1349,92 @@ pub fn split_equivalent_predicate_expr(expr: &Expr) -> Option<(Expr, Expr)> {
             op, left, right, ..
         } if op == &BinaryOperator::Eq => Some((*left.clone(), *right.clone())),
         _ => None,
+    }
+}
+
+// If contain agg function in Expr
+pub fn contain_agg_func(expr: &Expr) -> bool {
+    match expr {
+        Expr::ColumnRef { .. } => false,
+        Expr::IsNull { expr, .. } => contain_agg_func(expr),
+        Expr::IsDistinctFrom { left, right, .. } => {
+            contain_agg_func(left) || contain_agg_func(right)
+        }
+        Expr::InList { expr, list, .. } => {
+            contain_agg_func(expr) || list.iter().any(contain_agg_func)
+        }
+        Expr::InSubquery { expr, .. } => contain_agg_func(expr),
+        Expr::Between {
+            expr, low, high, ..
+        } => contain_agg_func(expr) || contain_agg_func(low) || contain_agg_func(high),
+        Expr::BinaryOp { left, right, .. } => contain_agg_func(left) || contain_agg_func(right),
+        Expr::JsonOp { left, right, .. } => contain_agg_func(left) || contain_agg_func(right),
+        Expr::UnaryOp { expr, .. } => contain_agg_func(expr),
+        Expr::Cast { expr, .. } => contain_agg_func(expr),
+        Expr::TryCast { expr, .. } => contain_agg_func(expr),
+        Expr::Extract { expr, .. } => contain_agg_func(expr),
+        Expr::DatePart { expr, .. } => contain_agg_func(expr),
+        Expr::Position {
+            substr_expr,
+            str_expr,
+            ..
+        } => contain_agg_func(substr_expr) || contain_agg_func(str_expr),
+        Expr::Substring {
+            expr,
+            substring_for,
+            substring_from,
+            ..
+        } => {
+            if let Some(substring_for) = substring_for {
+                contain_agg_func(expr) || contain_agg_func(substring_for)
+            } else {
+                contain_agg_func(expr) || contain_agg_func(substring_from)
+            }
+        }
+        Expr::Trim { expr, .. } => contain_agg_func(expr),
+        Expr::Literal { .. } => false,
+        Expr::CountAll { .. } => false,
+        Expr::Tuple { exprs, .. } => exprs.iter().any(contain_agg_func),
+        Expr::FunctionCall { name, .. } => {
+            AggregateFunctionFactory::instance().contains(name.to_string())
+        }
+        Expr::Case {
+            operand,
+            conditions,
+            results,
+            else_result,
+            ..
+        } => {
+            if let Some(operand) = operand {
+                if contain_agg_func(operand) {
+                    return true;
+                }
+            }
+            if conditions.iter().any(contain_agg_func) {
+                return true;
+            }
+            if results.iter().any(contain_agg_func) {
+                return true;
+            }
+            if let Some(else_result) = else_result {
+                if contain_agg_func(else_result) {
+                    return true;
+                }
+            }
+            false
+        }
+        Expr::Exists { .. } => false,
+        Expr::Subquery { .. } => false,
+        Expr::MapAccess { expr, .. } => contain_agg_func(expr),
+        Expr::Array { exprs, .. } => exprs.iter().any(contain_agg_func),
+        Expr::Map { kvs, .. } => kvs.iter().any(|(_, v)| contain_agg_func(v)),
+        Expr::Interval { expr, .. } => contain_agg_func(expr),
+        Expr::DateAdd { interval, date, .. } => {
+            contain_agg_func(interval) || contain_agg_func(date)
+        }
+        Expr::DateSub { interval, date, .. } => {
+            contain_agg_func(interval) || contain_agg_func(date)
+        }
+        Expr::DateTrunc { date, .. } => contain_agg_func(date),
     }
 }

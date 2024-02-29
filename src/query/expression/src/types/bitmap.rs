@@ -14,12 +14,13 @@
 
 use std::ops::Range;
 
+use super::binary::BinaryColumn;
+use super::binary::BinaryColumnBuilder;
+use super::binary::BinaryIterator;
 use crate::property::Domain;
-use crate::types::string::StringColumn;
-use crate::types::string::StringColumnBuilder;
-use crate::types::string::StringIterator;
 use crate::types::ArgType;
 use crate::types::DataType;
+use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::values::Column;
@@ -33,10 +34,10 @@ pub struct BitmapType;
 impl ValueType for BitmapType {
     type Scalar = Vec<u8>;
     type ScalarRef<'a> = &'a [u8];
-    type Column = StringColumn;
+    type Column = BinaryColumn;
     type Domain = ();
-    type ColumnIterator<'a> = StringIterator<'a>;
-    type ColumnBuilder = StringColumnBuilder;
+    type ColumnIterator<'a> = BinaryIterator<'a>;
+    type ColumnBuilder = BinaryColumnBuilder;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
@@ -73,7 +74,10 @@ impl ValueType for BitmapType {
         }
     }
 
-    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
         Some(ColumnBuilder::Bitmap(builder))
     }
 
@@ -119,7 +123,7 @@ impl ValueType for BitmapType {
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        StringColumnBuilder::from_column(col)
+        BinaryColumnBuilder::from_column(col)
     }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
@@ -164,6 +168,6 @@ impl ArgType for BitmapType {
     fn full_domain() -> Self::Domain {}
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
-        StringColumnBuilder::with_capacity(capacity, 0)
+        BinaryColumnBuilder::with_capacity(capacity, 0)
     }
 }

@@ -69,6 +69,7 @@ impl LicenseInfoTable {
             TableField::new("expire_at", TableDataType::Timestamp),
             // formatted string calculate the available time from now to expiry of license
             TableField::new("available_time_until_expiry", TableDataType::String),
+            TableField::new("features", TableDataType::String),
         ])
     }
 
@@ -156,38 +157,26 @@ impl LicenseInfoSource {
         let available_time = info.expires_at.unwrap_or_default().sub(now).as_micros();
         let human_readable_available_time =
             HumanDuration::from(Duration::from_micros(available_time)).to_string();
+
+        let feature_str = info.custom.display_features();
         Ok(DataBlock::new(
             vec![
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(
-                        info.issuer
-                            .clone()
-                            .unwrap_or("".to_string())
-                            .into_bytes()
-                            .to_vec(),
+                        info.issuer.clone().unwrap_or("".to_string()),
                     )),
                 ),
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(
-                        info.custom
-                            .r#type
-                            .clone()
-                            .unwrap_or("".to_string())
-                            .into_bytes()
-                            .to_vec(),
+                        info.custom.r#type.clone().unwrap_or("".to_string()),
                     )),
                 ),
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(
-                        info.custom
-                            .org
-                            .clone()
-                            .unwrap_or("".to_string())
-                            .into_bytes()
-                            .to_vec(),
+                        info.custom.org.clone().unwrap_or("".to_string()),
                     )),
                 ),
                 BlockEntry::new(
@@ -204,10 +193,9 @@ impl LicenseInfoSource {
                 ),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(
-                        human_readable_available_time.into_bytes().to_vec(),
-                    )),
+                    Value::Scalar(Scalar::String(human_readable_available_time)),
                 ),
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(feature_str))),
             ],
             1,
         ))

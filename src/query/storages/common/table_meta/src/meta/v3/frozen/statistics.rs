@@ -14,10 +14,9 @@
 
 use std::collections::HashMap;
 
-use databend_common_expression::converts::bincode::LegacyScalar;
+use databend_common_expression::converts::meta::LegacyScalar;
 use databend_common_expression::ColumnId;
-
-use crate::meta::MinMax;
+use databend_common_expression::Scalar;
 
 // the following types are supposed to be frozen
 
@@ -32,25 +31,6 @@ pub struct Statistics {
     pub index_size: u64,
 
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
-}
-
-impl From<Statistics> for crate::meta::v5::Statistics {
-    fn from(value: Statistics) -> Self {
-        Self {
-            row_count: value.row_count,
-            block_count: value.block_count,
-            perfect_block_count: value.perfect_block_count,
-            uncompressed_byte_size: value.uncompressed_byte_size,
-            compressed_byte_size: value.compressed_byte_size,
-            index_size: value.index_size,
-            col_stats: value
-                .col_stats
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-            cluster_stats: None,
-        }
-    }
 }
 
 impl From<Statistics> for crate::meta::Statistics {
@@ -84,20 +64,12 @@ pub struct ColumnStatistics {
 
 impl From<ColumnStatistics> for crate::meta::ColumnStatistics {
     fn from(value: ColumnStatistics) -> Self {
-        Self {
-            min: value.min.into(),
-            max: value.max.into(),
-            null_count: value.null_count,
-            in_memory_size: value.in_memory_size,
-            distinct_of_values: value.distinct_of_values,
-        }
-    }
-}
+        let min: Scalar = value.min.into();
+        let max: Scalar = value.max.into();
 
-impl From<ColumnStatistics> for crate::meta::v5::ColumnStatistics {
-    fn from(value: ColumnStatistics) -> Self {
         Self {
-            minmax: MinMax::new(value.min.into(), value.max.into()),
+            min,
+            max,
             null_count: value.null_count,
             in_memory_size: value.in_memory_size,
             distinct_of_values: value.distinct_of_values,

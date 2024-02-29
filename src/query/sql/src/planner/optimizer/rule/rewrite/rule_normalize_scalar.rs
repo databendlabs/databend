@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::constant::is_falsy;
 use crate::optimizer::rule::constant::is_true;
 use crate::optimizer::rule::Rule;
@@ -24,7 +25,6 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
@@ -58,7 +58,7 @@ fn normalize_falsy_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
 /// whole filter with FALSE
 pub struct RuleNormalizeScalarFilter {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
 }
 
 impl RuleNormalizeScalarFilter {
@@ -68,20 +68,10 @@ impl RuleNormalizeScalarFilter {
             // Filter
             //  \
             //   *
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Filter,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_leaf(Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Pattern,
-                    }
-                    .into(),
-                ))),
-            )],
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Filter,
+                children: vec![Matcher::Leaf],
+            }],
         }
     }
 }
@@ -114,7 +104,7 @@ impl Rule for RuleNormalizeScalarFilter {
         }
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }

@@ -21,12 +21,13 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserOptionFlag;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::schema::CreateOption;
 
 use crate::ast::write_comma_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateUserStmt {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub user: UserIdentity,
     pub auth_option: AuthOption,
     pub user_options: Vec<UserOptionItem>,
@@ -34,9 +35,15 @@ pub struct CreateUserStmt {
 
 impl Display for CreateUserStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CREATE USER")?;
-        if self.if_not_exists {
-            write!(f, " IF NOT EXISTS")?;
+        write!(f, "CREATE")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " USER")?;
+        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
+            if if_not_exists {
+                write!(f, " IF NOT EXISTS")?;
+            }
         }
         write!(f, " {} IDENTIFIED", self.user)?;
         write!(f, " {}", self.auth_option)?;

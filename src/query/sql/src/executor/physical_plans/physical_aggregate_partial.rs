@@ -32,6 +32,8 @@ pub struct AggregatePartial {
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
 
+    pub group_by_display: Vec<String>,
+
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }

@@ -23,9 +23,9 @@ use databend_common_arrow::arrow::offset::OffsetsBuffer;
 use super::ARROW_EXT_TYPE_BITMAP;
 use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
+use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::decimal::DecimalColumn;
-use crate::types::string::CheckUTF8;
 use crate::types::DecimalDataType;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
@@ -63,9 +63,14 @@ impl From<&DataSchema> for ArrowSchema {
 
 impl From<&TableField> for ArrowField {
     fn from(f: &TableField) -> Self {
-        let ty = table_type_to_arrow_type(&f.data_type, false);
+        let ty = table_type_to_arrow_type(&f.data_type, false, false);
         ArrowField::new(f.name(), ty, f.is_nullable())
     }
+}
+
+pub fn table_field_to_arrow2_field_ignore_inside_nullable(f: &TableField) -> ArrowField {
+    let ty = table_type_to_arrow_type(&f.data_type, false, true);
+    ArrowField::new(f.name(), ty, f.is_nullable())
 }
 
 impl From<&DataField> for ArrowField {
@@ -76,7 +81,11 @@ impl From<&DataField> for ArrowField {
 
 // Note: Arrow's data type is not nullable, so we need to explicitly
 // add nullable information to Arrow's field afterwards.
-fn table_type_to_arrow_type(ty: &TableDataType, inside_nullable: bool) -> ArrowDataType {
+fn table_type_to_arrow_type(
+    ty: &TableDataType,
+    inside_nullable: bool,
+    ignore_inside_nullable: bool,
+) -> ArrowDataType {
     match ty {
         TableDataType::Null => ArrowDataType::Null,
         TableDataType::EmptyArray => ArrowDataType::Extension(
@@ -103,9 +112,12 @@ fn table_type_to_arrow_type(ty: &TableDataType, inside_nullable: bool) -> ArrowD
         }
         TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
         TableDataType::Date => ArrowDataType::Date32,
-        TableDataType::Nullable(ty) => table_type_to_arrow_type(ty.as_ref(), true),
+        TableDataType::Nullable(ty) => {
+            table_type_to_arrow_type(ty.as_ref(), true, ignore_inside_nullable)
+        }
         TableDataType::Array(ty) => {
-            let arrow_ty = table_type_to_arrow_type(ty.as_ref(), inside_nullable);
+            let arrow_ty =
+                table_type_to_arrow_type(ty.as_ref(), inside_nullable, ignore_inside_nullable);
             ArrowDataType::LargeList(Box::new(ArrowField::new(
                 "_array",
                 arrow_ty,
@@ -118,8 +130,16 @@ fn table_type_to_arrow_type(ty: &TableDataType, inside_nullable: bool) -> ArrowD
                     fields_name: _fields_name,
                     fields_type,
                 } => {
-                    let key_ty = table_type_to_arrow_type(&fields_type[0], inside_nullable);
-                    let val_ty = table_type_to_arrow_type(&fields_type[1], inside_nullable);
+                    let key_ty = table_type_to_arrow_type(
+                        &fields_type[0],
+                        inside_nullable,
+                        ignore_inside_nullable,
+                    );
+                    let val_ty = table_type_to_arrow_type(
+                        &fields_type[1],
+                        inside_nullable,
+                        ignore_inside_nullable,
+                    );
                     let key_field = ArrowField::new("key", key_ty, fields_type[0].is_nullable());
                     let val_field = ArrowField::new("value", val_ty, fields_type[1].is_nullable());
                     ArrowDataType::Struct(vec![key_field, val_field])
@@ -146,8 +166,8 @@ fn table_type_to_arrow_type(ty: &TableDataType, inside_nullable: bool) -> ArrowD
                 .map(|(name, ty)| {
                     ArrowField::new(
                         name.as_str(),
-                        table_type_to_arrow_type(ty, inside_nullable),
-                        ty.is_nullable() || inside_nullable,
+                        table_type_to_arrow_type(ty, inside_nullable, ignore_inside_nullable),
+                        ty.is_nullable() || (inside_nullable && !ignore_inside_nullable),
                     )
                 })
                 .collect();
@@ -155,6 +175,11 @@ fn table_type_to_arrow_type(ty: &TableDataType, inside_nullable: bool) -> ArrowD
         }
         TableDataType::Variant => ArrowDataType::Extension(
             ARROW_EXT_TYPE_VARIANT.to_string(),
+            Box::new(ArrowDataType::LargeBinary),
+            None,
+        ),
+        TableDataType::Geometry => ArrowDataType::Extension(
+            ARROW_EXT_TYPE_GEOMETRY.to_string(),
             Box::new(ArrowDataType::LargeBinary),
             None,
         ),
@@ -301,25 +326,17 @@ impl Column {
                 )
             }
             Column::String(col) => {
-                // todo!("new string")
-                // always check utf8 until we can guarantee the correctness of data in string column
-                // #[cfg(debug_assertions)]
-                col.check_utf8().unwrap();
-
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
-
-                unsafe {
-                    Box::new(
-                        databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new_unchecked(
-                            arrow_type,
-                            OffsetsBuffer::new_unchecked(offsets),
-                            col.data().clone(),
-                            None,
-                        )
-                        .unwrap(),
+                Box::new(
+                    databend_common_arrow::arrow::array::Utf8Array::<i64>::try_new(
+                        arrow_type,
+                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
+                        col.data().clone(),
+                        None,
                     )
-                }
+                    .unwrap(),
+                )
             }
             Column::Timestamp(col) => Box::new(
                 databend_common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
@@ -377,19 +394,6 @@ impl Column {
                     .unwrap(),
                 )
             }
-            Column::Bitmap(col) => {
-                let offsets: Buffer<i64> =
-                    col.offsets().iter().map(|offset| *offset as i64).collect();
-                Box::new(
-                    databend_common_arrow::arrow::array::BinaryArray::<i64>::try_new(
-                        arrow_type,
-                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.data().clone(),
-                        None,
-                    )
-                    .unwrap(),
-                )
-            }
             Column::Nullable(col) => {
                 let arrow_array = col.column.as_arrow();
                 set_validities(arrow_array.clone(), &col.validity)
@@ -402,7 +406,7 @@ impl Column {
                 )
                 .unwrap(),
             ),
-            Column::Variant(col) => {
+            Column::Bitmap(col) | Column::Variant(col) | Column::Geometry(col) => {
                 let offsets: Buffer<i64> =
                     col.offsets().iter().map(|offset| *offset as i64).collect();
                 Box::new(

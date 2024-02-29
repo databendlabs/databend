@@ -21,6 +21,8 @@ use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
+use geozero::wkb::Ewkb;
+use geozero::ToWkt;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
 use roaring::RoaringTreemap;
@@ -34,6 +36,7 @@ use crate::function::Function;
 use crate::function::FunctionSignature;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
+use crate::types::binary::BinaryColumn;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::date_to_string;
 use crate::types::decimal::DecimalColumn;
@@ -120,15 +123,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 }
                 Ok(())
             }
-            ScalarRef::String(s) => match std::str::from_utf8(s) {
-                Ok(v) => write!(f, "{:?}", v),
-                Err(_e) => {
-                    for c in *s {
-                        write!(f, "{c:02X}")?;
-                    }
-                    Ok(())
-                }
-            },
+            ScalarRef::String(s) => write!(f, "{s:?}"),
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
@@ -169,6 +164,10 @@ impl<'a> Debug for ScalarRef<'a> {
                 }
                 Ok(())
             }
+            ScalarRef::Geometry(s) => {
+                let geom = Ewkb(s.to_vec()).to_ewkt(None).unwrap();
+                write!(f, "{geom:?}")
+            }
         }
     }
 }
@@ -192,6 +191,7 @@ impl Debug for Column {
             Column::Nullable(col) => write!(f, "{col:?}"),
             Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => write!(f, "{col:?}"),
+            Column::Geometry(col) => write!(f, "{col:?}"),
         }
     }
 }
@@ -211,15 +211,7 @@ impl<'a> Display for ScalarRef<'a> {
                 }
                 Ok(())
             }
-            ScalarRef::String(s) => match std::str::from_utf8(s) {
-                Ok(v) => write!(f, "'{}'", v),
-                Err(_e) => {
-                    for c in *s {
-                        write!(f, "{c:02X}")?;
-                    }
-                    Ok(())
-                }
-            },
+            ScalarRef::String(s) => write!(f, "'{s}'"),
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, Tz::UTC)),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, Tz::UTC)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
@@ -237,11 +229,12 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                if !bits.is_empty() {
-                    let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
-                    write!(f, "{rb:?}")?;
-                }
-                Ok(())
+                let rb = if !bits.is_empty() {
+                    RoaringTreemap::deserialize_from(*bits).unwrap()
+                } else {
+                    RoaringTreemap::new()
+                };
+                write!(f, "'{}'", rb.into_iter().join(","))
             }
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
@@ -258,7 +251,11 @@ impl<'a> Display for ScalarRef<'a> {
             }
             ScalarRef::Variant(s) => {
                 let value = jsonb::to_string(s);
-                write!(f, "{value}")
+                write!(f, "'{value}'")
+            }
+            ScalarRef::Geometry(s) => {
+                let geom = Ewkb(s.to_vec()).to_ewkt(None).unwrap();
+                write!(f, "'{geom}'")
             }
         }
     }
@@ -396,6 +393,18 @@ impl Debug for DecimalColumn {
     }
 }
 
+impl Debug for BinaryColumn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BinaryColumn")
+            .field(
+                "data",
+                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
+            )
+            .field("offsets", &self.offsets())
+            .finish()
+    }
+}
+
 impl Debug for StringColumn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StringColumn")
@@ -512,6 +521,7 @@ impl Display for DataType {
                 write!(f, ")")
             }
             DataType::Variant => write!(f, "Variant"),
+            DataType::Geometry => write!(f, "Geometry"),
             DataType::Generic(index) => write!(f, "T{index}"),
         }
     }
@@ -559,6 +569,7 @@ impl Display for TableDataType {
                 write!(f, ")")
             }
             TableDataType::Variant => write!(f, "Variant"),
+            TableDataType::Geometry => write!(f, "Geometry"),
         }
     }
 }
@@ -942,14 +953,9 @@ impl Display for BooleanDomain {
 impl Display for StringDomain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(max) = &self.max {
-            write!(
-                f,
-                "{{{:?}..={:?}}}",
-                String::from_utf8_lossy(&self.min),
-                String::from_utf8_lossy(max)
-            )
+            write!(f, "{{{:?}..={:?}}}", &self.min, max)
         } else {
-            write!(f, "{{{:?}..}}", String::from_utf8_lossy(&self.min))
+            write!(f, "{{{:?}..}}", &self.min)
         }
     }
 }
@@ -1018,7 +1024,10 @@ impl Display for Domain {
                 write!(f, ")")
             }
             Domain::Map(None) => write!(f, "{{}}"),
-            Domain::Map(Some((key_domain, val_domain))) => {
+            Domain::Map(Some(domain)) => {
+                let inner_domain = domain.as_tuple().unwrap();
+                let key_domain = &inner_domain[0];
+                let val_domain = &inner_domain[1];
                 write!(f, "{{[{key_domain}], [{val_domain}]}}")
             }
             Domain::Undefined => write!(f, "Undefined"),

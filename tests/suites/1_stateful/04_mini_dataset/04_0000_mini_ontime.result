@@ -1,3 +1,4 @@
+dataset/stateful/ontime_2006_100000.csv	99999	0	NULL	NULL
 1	16773
 2	16651
 7	15551
@@ -34,6 +35,7 @@ NW	11370.336373327018
 OH	12599.259602036094
 2006	12.16979169791698
 99999
+2006	1
 San Diego, CA	Los Angeles, CA	622
 Los Angeles, CA	San Diego, CA	619
 Kahului, HI	Honolulu, HI	605

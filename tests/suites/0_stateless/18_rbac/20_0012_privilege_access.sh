@@ -5,6 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export RM_UUID="sed -E ""s/[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}/UUID/g"""
 
 echo "set global enable_experimental_rbac_check=1" | $BENDSQL_CLIENT_CONNECT
 
@@ -18,6 +19,7 @@ echo "create user 'test-user' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $BENDSQL_CL
 echo 'create role `test-role1`' | $BENDSQL_CLIENT_CONNECT
 echo 'create role `test-role2`' | $BENDSQL_CLIENT_CONNECT
 ## create table
+echo "drop table if exists t20_0012" | $BENDSQL_CLIENT_CONNECT
 echo "create table t20_0012(c int not null)" | $BENDSQL_CLIENT_CONNECT
 
 ## show tables
@@ -62,7 +64,7 @@ echo "optimize table t20_0012 all" | $TEST_USER_CONNECT
 ## grant user privilege
 echo "GRANT Super ON *.* TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 ## optimize table
-echo "set retention_period=0; optimize table t20_0012 all" | $TEST_USER_CONNECT
+echo "set data_retention_time_in_days=0; optimize table t20_0012 all" | $TEST_USER_CONNECT
 ## verify
 echo "select count(*)>=1 from fuse_snapshot('default', 't20_0012')" | $TEST_USER_CONNECT
 
@@ -93,8 +95,8 @@ echo "create database default2" | $BENDSQL_CLIENT_CONNECT
 
 echo "create view default2.v_t20_0012 as select * from default.t20_0012_a" | $BENDSQL_CLIENT_CONNECT
 echo "select * from default2.v_t20_0012" | $TEST_USER_CONNECT
-## Only grant privilege for view table, now this user can access the view under default2 db, 
-## but can not access the tables under the `default` database, stil raises permission error 
+## Only grant privilege for view table, now this user can access the view under default2 db,
+## but can not access the tables under the `default` database, stil raises permission error
 ## on SELECT default2.v_t20_0012
 echo "GRANT SELECT ON default2.v_t20_0012 TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "REVOKE SELECT ON default.t20_0012_a FROM 'test-user'" | $BENDSQL_CLIENT_CONNECT
@@ -159,10 +161,6 @@ echo "show tables from nogrant" | $USER_A_CONNECT
 
 echo "select count(1) from information_schema.columns where table_schema in ('grant_db');" | $USER_A_CONNECT
 echo "select count(1) from information_schema.columns where table_schema in ('nogrant');" | $USER_A_CONNECT
-echo "select count(1) from information_schema.columns where table_schema in ('information_schema', 'system');" | $USER_A_CONNECT
-echo "select count(1) from information_schema.tables where table_schema in ('information_schema', 'system');;" | $USER_A_CONNECT
-echo "select count(1) from information_schema.tables where table_schema in ('grant_db');" | $USER_A_CONNECT
-echo "select count(1) from information_schema.tables where table_schema in ('nogrant');" | $USER_A_CONNECT
 
 #DML privilege check
 export USER_B_CONNECT="bendsql --user=b --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
@@ -189,14 +187,14 @@ echo "grant insert, delete on default.t to b" | $BENDSQL_CLIENT_CONNECT
 echo "grant select on system.* to b" | $BENDSQL_CLIENT_CONNECT
 
 echo "create stage s3;" | $BENDSQL_CLIENT_CONNECT
-echo "copy into '@s3/a b' from (select 2);" | $BENDSQL_CLIENT_CONNECT
+echo "copy into '@s3/a b' from (select 2);" | $BENDSQL_CLIENT_CONNECT | $RM_UUID
 
 # need err
 echo "insert into t select * from t1" | $USER_B_CONNECT
 echo "insert into t select * from @s3" | $USER_B_CONNECT
 echo "create table t2 as select * from t" | $USER_B_CONNECT
 echo "create table t2 as select * from @s3" | $USER_B_CONNECT
-echo "copy into t from (select * from @s3);" | $USER_B_CONNECT
+echo "copy into t from (select * from @s3);" | $USER_B_CONNECT | $RM_UUID
 echo "replace into t on(id) select * from t1;" | $USER_B_CONNECT
 
 echo "grant select on default.t to b" | $BENDSQL_CLIENT_CONNECT
@@ -208,7 +206,7 @@ echo "insert into t select * from @s3" | $USER_B_CONNECT
 echo "create table t2 as select * from t" | $USER_B_CONNECT
 echo "drop table t2" | $BENDSQL_CLIENT_CONNECT
 echo "create table t2 as select * from @s3" | $USER_B_CONNECT
-echo "copy into t from (select * from @s3);" | $USER_B_CONNECT
+echo "copy into t from (select * from @s3);" | $USER_B_CONNECT | $RM_UUID
 echo "replace into t on(id) select * from t1;" | $USER_B_CONNECT
 
 ## check after alter table/db name, table id and db id is normal.
@@ -234,13 +232,23 @@ echo "insert into d.t1 values(3)" | $USER_B_CONNECT
 echo "select * from d.t1 order by id" | $USER_B_CONNECT
 
 ## Drop user
+echo "drop database if exists no_grant" | $BENDSQL_CLIENT_CONNECT
+echo "grant drop on d.* to b" | $BENDSQL_CLIENT_CONNECT
+echo "grant drop on *.* to a" | $BENDSQL_CLIENT_CONNECT
+echo "drop database grant_db" | $USER_A_CONNECT
+echo "drop database d" | $USER_B_CONNECT
 echo "drop user a" | $BENDSQL_CLIENT_CONNECT
 echo "drop user b" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists no_grant" | $BENDSQL_CLIENT_CONNECT
-echo "drop database grant_db" | $BENDSQL_CLIENT_CONNECT
-echo "drop database d" | $BENDSQL_CLIENT_CONNECT
 
-echo "drop table if exists t" | $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists c" | $BENDSQL_CLIENT_CONNECT
+echo "create user c identified by '123'" | $BENDSQL_CLIENT_CONNECT
+echo "grant drop on default.t to c" | $BENDSQL_CLIENT_CONNECT
+export USER_C_CONNECT="bendsql --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+
+echo "drop table if exists t" | $USER_C_CONNECT
+echo "drop table if exists unknown_t" | $USER_C_CONNECT
+echo "drop database if exists unknown_db" | $USER_C_CONNECT
+
 echo "drop table if exists t1" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t2" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage if exists s3;" | $BENDSQL_CLIENT_CONNECT

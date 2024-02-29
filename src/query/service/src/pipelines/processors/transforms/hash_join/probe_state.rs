@@ -13,7 +13,11 @@
 // limitations under the License.
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_expression::filter::build_select_expr;
+use databend_common_expression::filter::FilterExecutor;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::RowPtr;
 
 use super::desc::MARKER_KIND_FALSE;
@@ -41,18 +45,25 @@ pub struct ProbeState {
     pub(crate) probe_unmatched_indexes: Option<Vec<u32>>,
     // The `markers` is used for right mark join.
     pub(crate) markers: Option<Vec<u8>>,
+    // If hash join other condition is not empty.
+    pub(crate) with_conjunction: bool,
 
     // Early filtering.
     // 1.The `selection` is used to store the indexes of input which matched by hash.
     pub(crate) selection: Vec<u32>,
     // 2.The indexes of [0, selection_count) in `selection` are valid.
     pub(crate) selection_count: usize,
-    // 3.Statistics for **adaptive** early filtering, the `num_keys` indicates the number of valid keys in probe side,
-    // the `num_keys_hash_matched` indicates the number of keys which matched by hash.
+    // 3.Statistics for **adaptive** early filtering, the `num_keys` indicates the number of valid keys
+    // in probe side, the `num_keys_hash_matched` indicates the number of keys which matched by hash.
     pub(crate) num_keys: u64,
     pub(crate) num_keys_hash_matched: u64,
     // 4.Whether to probe with selection.
     pub(crate) probe_with_selection: bool,
+    // 5.If join type is LEFT / LEFT SINGLE / LEFT ANTI / FULL, we use it to store unmatched indexes
+    // count during early filtering.
+    pub(crate) probe_unmatched_indexes_count: usize,
+
+    pub(crate) filter_executor: Option<FilterExecutor>,
 }
 
 impl ProbeState {
@@ -64,30 +75,51 @@ impl ProbeState {
     pub fn create(
         max_block_size: usize,
         join_type: &JoinType,
-        with_conjunct: bool,
+        with_conjunction: bool,
         has_string_column: bool,
         func_ctx: FunctionContext,
+        other_predicate: Option<Expr>,
     ) -> Self {
-        let (row_state, row_state_indexes, probe_unmatched_indexes) = match &join_type {
+        let (row_state, row_state_indexes) = match &join_type {
             JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
-                if with_conjunct {
-                    (
-                        Some(vec![0; max_block_size]),
-                        Some(vec![0; max_block_size]),
-                        None,
-                    )
+                if with_conjunction {
+                    (Some(vec![0; max_block_size]), Some(vec![0; max_block_size]))
                 } else {
-                    (
-                        Some(vec![0; max_block_size]),
-                        None,
-                        Some(vec![0; max_block_size]),
-                    )
+                    (Some(vec![0; max_block_size]), None)
                 }
             }
-            _ => (None, None, None),
+            _ => (None, None),
+        };
+        let probe_unmatched_indexes = if matches!(
+            &join_type,
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
+        ) && !with_conjunction
+        {
+            Some(vec![0; max_block_size])
+        } else {
+            None
         };
         let markers = if matches!(&join_type, JoinType::RightMark) {
             Some(vec![MARKER_KIND_FALSE; max_block_size])
+        } else {
+            None
+        };
+        let filter_executor = if !matches!(
+            &join_type,
+            JoinType::LeftMark | JoinType::RightMark | JoinType::Cross
+        ) && let Some(predicate) = other_predicate
+        {
+            let (select_expr, has_or) = build_select_expr(&predicate).into();
+            let filter_executor = FilterExecutor::new(
+                select_expr,
+                func_ctx.clone(),
+                has_or,
+                max_block_size,
+                None,
+                &BUILTIN_FUNCTIONS,
+                false,
+            );
+            Some(filter_executor)
         } else {
             None
         };
@@ -106,6 +138,9 @@ impl ProbeState {
             row_state_indexes,
             probe_unmatched_indexes,
             markers,
+            probe_unmatched_indexes_count: 0,
+            with_conjunction,
+            filter_executor,
         }
     }
 
@@ -138,8 +173,11 @@ impl MutableIndexes {
 }
 
 pub struct ProbeBlockGenerationState {
+    // The is_probe_projected means whether we need to output probe columns.
     pub(crate) is_probe_projected: bool,
+    // When we need a bitmap that is all true, we can directly slice it to reduce memory usage.
     pub(crate) true_validity: Bitmap,
+    // The string_items_buf is used as a buffer to reduce memory allocation when taking [u8] Columns.
     pub(crate) string_items_buf: Option<Vec<(u64, usize)>>,
 }
 

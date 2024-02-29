@@ -29,16 +29,17 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
-use databend_common_expression::HashMethodSingleString;
+use databend_common_expression::HashMethodSingleBinary;
+use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::HashtableKeyable;
-use databend_common_hashtable::StringHashJoinHashMap;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use ethnum::U256;
 use parking_lot::RwLock;
 
+use super::merge_into_hash_join_optimization::MergeIntoState;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
@@ -46,13 +47,13 @@ use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 
 pub struct SerializerHashJoinHashTable {
-    pub(crate) hash_table: StringHashJoinHashMap,
+    pub(crate) hash_table: BinaryHashJoinHashMap,
     pub(crate) hash_method: HashMethodSerializer,
 }
 
-pub struct SingleStringHashJoinHashTable {
-    pub(crate) hash_table: StringHashJoinHashMap,
-    pub(crate) hash_method: HashMethodSingleString,
+pub struct SingleBinaryHashJoinHashTable {
+    pub(crate) hash_table: BinaryHashJoinHashMap,
+    pub(crate) hash_method: HashMethodSingleBinary,
 }
 
 pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable> {
@@ -63,7 +64,7 @@ pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable> {
 pub enum HashJoinHashTable {
     Null,
     Serializer(SerializerHashJoinHashTable),
-    SingleString(SingleStringHashJoinHashTable),
+    SingleBinary(SingleBinaryHashJoinHashTable),
     KeysU8(FixedKeyHashJoinHashTable<u8>),
     KeysU16(FixedKeyHashJoinHashTable<u16>),
     KeysU32(FixedKeyHashJoinHashTable<u32>),
@@ -119,8 +120,7 @@ pub struct HashJoinState {
     pub(crate) partition_id: AtomicI8,
     pub(crate) enable_spill: bool,
 
-    /// If the join node generate runtime filters, the scan node will use it to do prune.
-    pub(crate) table_index: IndexType,
+    pub(crate) merge_into_state: Option<SyncUnsafeCell<MergeIntoState>>,
 }
 
 impl HashJoinState {
@@ -130,7 +130,8 @@ impl HashJoinState {
         build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
         probe_to_build: &[(usize, (bool, bool))],
-        table_index: IndexType,
+        merge_into_target_table_index: IndexType,
+        merge_into_is_distributed: bool,
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -145,7 +146,7 @@ impl HashJoinState {
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
         let mut enable_spill = false;
         if hash_join_desc.join_type == JoinType::Inner
-            && ctx.get_settings().get_join_spilling_threshold()? != 0
+            && ctx.get_settings().get_join_spilling_memory_ratio()? != 0
         {
             enable_spill = true;
         }
@@ -165,7 +166,10 @@ impl HashJoinState {
             _continue_build_dummy_receiver,
             partition_id: AtomicI8::new(-2),
             enable_spill,
-            table_index,
+            merge_into_state: MergeIntoState::try_create_merge_into_state(
+                merge_into_target_table_index,
+                merge_into_is_distributed,
+            ),
         }))
     }
 
@@ -215,6 +219,10 @@ impl HashJoinState {
 
     pub fn need_mark_scan(&self) -> bool {
         matches!(self.hash_join_desc.join_type, JoinType::LeftMark)
+    }
+
+    pub fn need_final_scan(&self) -> bool {
+        self.need_outer_scan() || self.need_mark_scan()
     }
 
     pub fn set_spilled_partition(&self, partitions: &HashSet<u8>) {

@@ -24,15 +24,16 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager() -> Result<()> {
     let conf = RpcClientConf::default();
-    let user_mgr = UserApiProvider::try_create_simple(conf).await?;
-
     let tenant = "test";
+
+    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
     let username = "test-user1";
     let hostname = "%";
     let pwd = "test-pwd";
@@ -45,13 +46,17 @@ async fn test_user_manager() -> Result<()> {
     // add user hostname.
     {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
-        user_mgr.add_user(tenant, user_info, false).await?;
+        user_mgr
+            .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(false))
+            .await?;
     }
 
     // add user hostname again, error.
     {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
-        let res = user_mgr.add_user(tenant, user_info, false).await;
+        let res = user_mgr
+            .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(false))
+            .await;
         assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::USER_ALREADY_EXISTS);
     }
@@ -59,7 +64,9 @@ async fn test_user_manager() -> Result<()> {
     // add user hostname again, ok.
     {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
-        user_mgr.add_user(tenant, user_info, true).await?;
+        user_mgr
+            .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(true))
+            .await?;
     }
 
     // get all users.
@@ -106,7 +113,13 @@ async fn test_user_manager() -> Result<()> {
     // grant privileges
     {
         let user_info: UserInfo = UserInfo::new(username, hostname, auth_info.clone());
-        user_mgr.add_user(tenant, user_info.clone(), false).await?;
+        user_mgr
+            .add_user(
+                tenant,
+                user_info.clone(),
+                &CreateOption::CreateIfNotExists(false),
+            )
+            .await?;
         let old_user = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(old_user.grants, UserGrantSet::empty());
 
@@ -134,7 +147,13 @@ async fn test_user_manager() -> Result<()> {
     // revoke privileges
     {
         let user_info: UserInfo = UserInfo::new(username, hostname, auth_info.clone());
-        user_mgr.add_user(tenant, user_info.clone(), false).await?;
+        user_mgr
+            .add_user(
+                tenant,
+                user_info.clone(),
+                &CreateOption::CreateIfNotExists(false),
+            )
+            .await?;
         user_mgr
             .grant_privileges_to_user(
                 tenant,
@@ -171,7 +190,13 @@ async fn test_user_manager() -> Result<()> {
             hash_method: PasswordHashMethod::Sha256,
         };
         let user_info: UserInfo = UserInfo::new(user, hostname, auth_info.clone());
-        user_mgr.add_user(tenant, user_info.clone(), false).await?;
+        user_mgr
+            .add_user(
+                tenant,
+                user_info.clone(),
+                &CreateOption::CreateIfNotExists(false),
+            )
+            .await?;
 
         let old_user = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(old_user.auth_info.get_password().unwrap(), Vec::from(pwd));

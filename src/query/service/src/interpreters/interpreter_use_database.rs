@@ -41,6 +41,10 @@ impl Interpreter for UseDatabaseInterpreter {
         "UseDatabaseInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if self.plan.database.trim().is_empty() {

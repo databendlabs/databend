@@ -60,6 +60,9 @@ fn test_variant() {
     test_json_path_match_op(file);
     test_json_path_exists_op(file);
     test_concat_op(file);
+    test_delete_by_name_op(file);
+    test_delete_by_index_op(file);
+    test_delete_by_keypath_op(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -1168,6 +1171,8 @@ fn test_get_by_keypath_op(file: &mut impl Write) {
     run_ast(file, r#"parse_json('[10, 20, 30]') #> '{1}'"#, &[]);
     run_ast(file, r#"parse_json('[10, 20, 30]') #> '{3}'"#, &[]);
     run_ast(file, r#"parse_json('[10, 20, 30]') #> '{a}'"#, &[]);
+    run_ast(file, r#"parse_json('{"k": null}') #> '{k}'"#, &[]);
+    run_ast(file, r#"parse_json('[10, 20, null]') #> '{2}'"#, &[]);
     run_ast(
         file,
         r#"parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #> '{1, a, k1}'"#,
@@ -1214,6 +1219,8 @@ fn test_get_by_keypath_string_op(file: &mut impl Write) {
     run_ast(file, r#"parse_json('[10, 20, 30]') #>> '{1}'"#, &[]);
     run_ast(file, r#"parse_json('[10, 20, 30]') #>> '{3}'"#, &[]);
     run_ast(file, r#"parse_json('[10, 20, 30]') #>> '{a}'"#, &[]);
+    run_ast(file, r#"parse_json('{"k": null}') #>> '{k}'"#, &[]);
+    run_ast(file, r#"parse_json('[10, 20, null]') #>> '{2}'"#, &[]);
     run_ast(
         file,
         r#"parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #>> '{1, a, k1}'"#,
@@ -1481,4 +1488,84 @@ fn test_concat_op(file: &mut impl Write) {
         r#"parse_json('{"a":1,"b":2,"d":10}') || parse_json('{"a":3,"b":4}')"#,
         &[],
     );
+}
+
+fn test_delete_by_name_op(file: &mut impl Write) {
+    run_ast(file, "parse_json('true') - '1'", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - '1'", &[]);
+    run_ast(file, r#"parse_json('["1","2","3"]') - '0'"#, &[]);
+    run_ast(file, r#"parse_json('["1","2","3"]') - '1'"#, &[]);
+    run_ast(
+        file,
+        r#"parse_json('["1","2","3",{"a":1,"b":2}]') - '1'"#,
+        &[],
+    );
+    run_ast(file, r#"parse_json('{"a":1,"b":2}') - 'c'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":2}') - 'a'"#, &[]);
+    run_ast(file, r#"parse_json('{"b":2}') - 'b'"#, &[]);
+}
+
+fn test_delete_by_index_op(file: &mut impl Write) {
+    run_ast(file, "parse_json('true') - 1", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - 0", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - 1", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - 2", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - -1", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - -2", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - -3", &[]);
+    run_ast(file, "parse_json('[1,2,3]') - -4", &[]);
+    run_ast(
+        file,
+        r#"parse_json('[1,2,{"a":[1,2,3],"b":[40,50,60]}]') - 2"#,
+        &[],
+    );
+}
+
+fn test_delete_by_keypath_op(file: &mut impl Write) {
+    run_ast(file, "parse_json('[1,2,3]') #- NULL", &[]);
+    run_ast(file, "parse_json('[1,2,3]') #- '{}'", &[]);
+    run_ast(file, "parse_json('[1,2,3]') #- '{0}'", &[]);
+    run_ast(file, "parse_json('[1,2,3]') #- '{-1}'", &[]);
+    run_ast(file, "parse_json('[1,2,3]') #- '{3}'", &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b}'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{c}'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b,2}'"#, &[]);
+    run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b,-2}'"#, &[
+    ]);
+    run_ast(file, r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b,20}'"#, &[
+    ]);
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[1,2,3]}') #- '{b,20,c,e}'"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"parse_json('{"a":1,"b":[{"c":1,"d":10},2,3]}') #- '{b,0,d}'"#,
+        &[],
+    );
+
+    run_ast(file, "parse_json(s) #- '{0,a}'", &[(
+        "s",
+        StringType::from_data_with_validity(
+            vec![r#"[{"a":1},2,3]"#, r#"[1,2,3]"#, "", r#"{"a":"b"}"#],
+            vec![true, true, false, true],
+        ),
+    )]);
+
+    run_ast(file, "parse_json(s) #- k", &[
+        (
+            "s",
+            StringType::from_data_with_validity(
+                vec![r#"[1,{"a":2},3]"#, r#"{"k":[1,2,3]}"#, "", r#"{"a":"b"}"#],
+                vec![true, true, false, true],
+            ),
+        ),
+        (
+            "k",
+            StringType::from_data_with_validity(vec!["{1,a}", "{k,-1}", "{k}", "{c}"], vec![
+                true, true, false, true,
+            ]),
+        ),
+    ]);
 }

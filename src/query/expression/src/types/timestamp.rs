@@ -27,6 +27,7 @@ use super::number::SimpleDomain;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
+use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::utils::arrow::buffer_into_mut;
@@ -98,7 +99,7 @@ impl ValueType for TimestampType {
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<SimpleDomain<i64>> {
-        domain.as_timestamp().map(SimpleDomain::clone)
+        domain.as_timestamp().cloned()
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
@@ -115,7 +116,10 @@ impl ValueType for TimestampType {
         }
     }
 
-    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
         Some(ColumnBuilder::Timestamp(builder))
     }
 
@@ -141,6 +145,8 @@ impl ValueType for TimestampType {
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        debug_assert!(index < col.len());
+
         *col.get_unchecked(index)
     }
 

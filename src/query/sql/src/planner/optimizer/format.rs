@@ -12,25 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
+use itertools::Itertools;
 
-use super::cost::CostContext;
 use crate::optimizer::group::Group;
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
+use crate::plans::Exchange;
 use crate::plans::RelOperator;
-use crate::IndexType;
 
-pub fn display_memo(memo: &Memo, cost_map: &HashMap<IndexType, CostContext>) -> Result<String> {
-    Ok(memo
-        .groups
-        .iter()
-        .map(|grp| group_to_format_tree(grp, cost_map.get(&grp.group_index)).format_pretty())
-        .collect::<Result<Vec<_>>>()?
-        .join("\n"))
+pub fn display_memo(memo: &Memo) -> Result<String> {
+    let mut children = vec![
+        FormatTreeNode::new(format!("root group: #{}", memo.root.unwrap_or(0))),
+        FormatTreeNode::new(format!("estimated memory: {} bytes", memo.mem_size())),
+    ];
+
+    children.extend(memo.groups.iter().map(group_to_format_tree));
+
+    let root = FormatTreeNode::with_children("Memo".to_string(), children);
+
+    root.format_pretty()
 }
 
 pub fn display_rel_op(rel_op: &RelOperator) -> String {
@@ -43,8 +45,21 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::Sort(_) => "Sort".to_string(),
         RelOperator::Limit(_) => "Limit".to_string(),
         RelOperator::UnionAll(_) => "UnionAll".to_string(),
-        RelOperator::Exchange(_) => "Exchange".to_string(),
-        RelOperator::Pattern(_) => "Pattern".to_string(),
+        RelOperator::Exchange(op) => {
+            format!("Exchange: ({})", match op {
+                Exchange::Hash(scalars) => format!(
+                    "Hash({})",
+                    scalars
+                        .iter()
+                        .map(|s| s.as_raw_expr().to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ),
+                Exchange::Broadcast => "Broadcast".to_string(),
+                Exchange::Merge => "Merge".to_string(),
+                Exchange::MergeSort => "MergeSort".to_string(),
+            })
+        }
         RelOperator::DummyTableScan(_) => "DummyTableScan".to_string(),
         RelOperator::ProjectSet(_) => "ProjectSet".to_string(),
         RelOperator::Window(_) => "WindowFunc".to_string(),
@@ -56,21 +71,32 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
     }
 }
 
-fn group_to_format_tree(
-    group: &Group,
-    cost_context: Option<&CostContext>,
-) -> FormatTreeNode<String> {
+fn group_to_format_tree(group: &Group) -> FormatTreeNode<String> {
     FormatTreeNode::with_children(
         format!("Group #{}", group.group_index),
         [
-            if let Some(cost_context) = cost_context {
-                vec![FormatTreeNode::new(format!(
-                    "best cost: [#{}] {}",
-                    cost_context.expr_index, cost_context.cost
-                ))]
-            } else {
-                vec![]
-            },
+            vec![FormatTreeNode::with_children(
+                "Best properties".to_string(),
+                group
+                    .best_props
+                    .iter()
+                    .map(|(prop, ccx)| {
+                        format!(
+                            "{}: expr: #{}, cost: {}, children: [{}]",
+                            prop,
+                            ccx.expr_index,
+                            ccx.cost,
+                            ccx.children_required_props
+                                .iter()
+                                .map(ToString::to_string)
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        )
+                    })
+                    .sorted()
+                    .map(FormatTreeNode::new)
+                    .collect::<Vec<_>>(),
+            )],
             group.m_exprs.iter().map(m_expr_to_format_tree).collect(),
         ]
         .concat(),
@@ -79,7 +105,8 @@ fn group_to_format_tree(
 
 fn m_expr_to_format_tree(m_expr: &MExpr) -> FormatTreeNode<String> {
     FormatTreeNode::new(format!(
-        "{} [{}]",
+        "#{} {} [{}]",
+        m_expr.index,
         display_rel_op(&m_expr.plan),
         m_expr
             .children

@@ -95,6 +95,7 @@ use crate::grpc_action::RequestFor;
 use crate::grpc_metrics;
 use crate::message;
 use crate::to_digit_ver;
+use crate::ClientWorkerRequest;
 use crate::MetaGrpcReadReq;
 use crate::MetaGrpcReq;
 use crate::METACLI_COMMIT_SEMVER;
@@ -450,116 +451,120 @@ impl MetaGrpcClient {
         info!("MetaGrpcClient::worker spawned");
 
         loop {
-            let t = req_rx.recv().await;
-            let req = match t {
+            let recv_res = req_rx.recv().await;
+            let worker_request = match recv_res {
                 None => {
-                    info!("MetaGrpcClient handle closed. worker quit");
+                    warn!("MetaGrpcClient handle closed. worker quit");
                     return;
                 }
                 Some(x) => x,
             };
 
-            let span = Span::enter_with_parent(full_name!(), &req.span);
+            debug!(worker_request = as_debug!(&worker_request); "MetaGrpcClient worker handle request");
 
-            if req.resp_tx.is_closed() {
-                debug!(
-                    req = as_debug!(&req);
+            let span = Span::enter_with_parent(full_name!(), &worker_request.span);
+
+            if worker_request.resp_tx.is_closed() {
+                info!(
+                    req = as_debug!(&worker_request.req);
                     "MetaGrpcClient request.resp_tx is closed, cancel handling this request"
                 );
                 continue;
             }
 
-            let request_id = req.request_id;
-            let resp_tx = req.resp_tx;
-            let req = req.req;
-            let req_name = req.name();
-            let req_str = format!("{:?}", req);
-
             // Deal with non-RPC request
             #[allow(clippy::single_match)]
-            match req {
+            match worker_request.req {
                 message::Request::GetEndpoints(_) => {
                     let endpoints = self.get_all_endpoints();
                     let resp = message::Response::GetEndpoints(Ok(endpoints));
-                    Self::send_response(resp_tx, request_id, resp);
+                    Self::send_response(worker_request.resp_tx, worker_request.request_id, resp);
                     continue;
                 }
                 _ => {}
             }
 
-            async {
-                debug!(req = as_debug!(&req); "MetaGrpcClient recv request");
-
-                // Deal with remote RPC request
-
-                let start = Instant::now();
-                let resp = match req {
-                    message::Request::StreamMGet(r) => {
-                        let strm = self
-                            .kv_read_v1(MetaGrpcReadReq::MGetKV(r.into_inner()))
-                            .timed_ge(
-                                threshold(),
-                                info_spent("MetaGrpcClient::kv_read_v1(MGetKV)"),
-                            )
-                            .await;
-                        message::Response::StreamMGet(strm)
-                    }
-                    message::Request::StreamList(r) => {
-                        let strm = self
-                            .kv_read_v1(MetaGrpcReadReq::ListKV(r.into_inner()))
-                            .timed_ge(
-                                threshold(),
-                                info_spent("MetaGrpcClient::kv_read_v1(ListKV)"),
-                            )
-                            .await;
-                        message::Response::StreamMGet(strm)
-                    }
-                    message::Request::Upsert(r) => {
-                        let resp = self
-                            .kv_api(r)
-                            .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
-                            .await;
-                        message::Response::Upsert(resp)
-                    }
-                    message::Request::Txn(r) => {
-                        let resp = self
-                            .transaction(r)
-                            .timed_ge(threshold(), info_spent("MetaGrpcClient::transaction"))
-                            .await;
-                        message::Response::Txn(resp)
-                    }
-                    message::Request::Watch(r) => {
-                        let resp = self.watch(r).await;
-                        message::Response::Watch(resp)
-                    }
-                    message::Request::Export(r) => {
-                        let resp = self.export(r).await;
-                        message::Response::Export(resp)
-                    }
-                    message::Request::MakeEstablishedClient(_) => {
-                        let resp = self.make_established_client().await;
-                        message::Response::MakeEstablishedClient(resp)
-                    }
-                    message::Request::GetEndpoints(_) => {
-                        unreachable!("handled above");
-                    }
-                    message::Request::GetClusterStatus(_) => {
-                        let resp = self.get_cluster_status().await;
-                        message::Response::GetClusterStatus(resp)
-                    }
-                    message::Request::GetClientInfo(_) => {
-                        let resp = self.get_client_info().await;
-                        message::Response::GetClientInfo(resp)
-                    }
-                };
-
-                self.update_rpc_metrics(req_name, &req_str, request_id, start, resp.err());
-
-                Self::send_response(resp_tx, request_id, resp);
-            }
-            .in_span(span)
-            .await
+            databend_common_base::runtime::spawn(
+                self.clone()
+                    .handle_rpc_request(worker_request)
+                    .in_span(span),
+            );
         }
+    }
+
+    /// Handle a RPC request in a separate task.
+    #[minitrace::trace]
+    async fn handle_rpc_request(self: Arc<Self>, worker_request: ClientWorkerRequest) {
+        let request_id = worker_request.request_id;
+        let resp_tx = worker_request.resp_tx;
+        let req = worker_request.req;
+        let req_name = req.name();
+        let req_str = format!("{:?}", req);
+
+        let start = Instant::now();
+        let resp = match req {
+            message::Request::StreamMGet(r) => {
+                let strm = self
+                    .kv_read_v1(MetaGrpcReadReq::MGetKV(r.into_inner()))
+                    .timed_ge(
+                        threshold(),
+                        info_spent("MetaGrpcClient::kv_read_v1(MGetKV)"),
+                    )
+                    .await;
+                message::Response::StreamMGet(strm)
+            }
+            message::Request::StreamList(r) => {
+                let strm = self
+                    .kv_read_v1(MetaGrpcReadReq::ListKV(r.into_inner()))
+                    .timed_ge(
+                        threshold(),
+                        info_spent("MetaGrpcClient::kv_read_v1(ListKV)"),
+                    )
+                    .await;
+                message::Response::StreamMGet(strm)
+            }
+            message::Request::Upsert(r) => {
+                let resp = self
+                    .kv_api(r)
+                    .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
+                    .await;
+                message::Response::Upsert(resp)
+            }
+            message::Request::Txn(r) => {
+                let resp = self
+                    .transaction(r)
+                    .timed_ge(threshold(), info_spent("MetaGrpcClient::transaction"))
+                    .await;
+                message::Response::Txn(resp)
+            }
+            message::Request::Watch(r) => {
+                let resp = self.watch(r).await;
+                message::Response::Watch(resp)
+            }
+            message::Request::Export(r) => {
+                let resp = self.export(r).await;
+                message::Response::Export(resp)
+            }
+            message::Request::MakeEstablishedClient(_) => {
+                let resp = self.make_established_client().await;
+                message::Response::MakeEstablishedClient(resp)
+            }
+            message::Request::GetEndpoints(_) => {
+                unreachable!("handled above");
+            }
+            message::Request::GetClusterStatus(_) => {
+                let resp = self.get_cluster_status().await;
+                message::Response::GetClusterStatus(resp)
+            }
+            message::Request::GetClientInfo(_) => {
+                let resp = self.get_client_info().await;
+                message::Response::GetClientInfo(resp)
+            }
+        };
+
+        self.update_rpc_metrics(req_name, &req_str, request_id, start, resp.err());
+
+        Self::send_response(resp_tx, request_id, resp);
     }
 
     fn send_response(tx: OneSend<message::Response>, request_id: u64, resp: message::Response) {
@@ -901,7 +906,16 @@ impl MetaGrpcClient {
         );
 
         let mut client = self.make_established_client().await?;
-        let res = client.export(Empty {}).await?;
+        // TODO: since 1.2.315, export_v1() is added, via which chunk size can be specified.
+        let res = if client.server_protocol_version() >= 1002315 {
+            client
+                .export_v1(pb::ExportRequest {
+                    chunk_size: export_request.chunk_size,
+                })
+                .await?
+        } else {
+            client.export(Empty {}).await?
+        };
         Ok(res.into_inner())
     }
 

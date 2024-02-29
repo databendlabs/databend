@@ -28,6 +28,7 @@ pub struct ReclusterTask {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReclusterSource {
+    pub plan_id: u32,
     pub tasks: Vec<ReclusterTask>,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,

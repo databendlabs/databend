@@ -27,6 +27,7 @@ use crate::kernels::utils::store_advance_aligned;
 use crate::kernels::utils::BitChunks;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -123,7 +124,7 @@ impl Column {
                 Column::Boolean(column)
             }
             Column::Binary(column) => {
-                let column = Self::filter_string_scalars(column, filter);
+                let column = Self::filter_binary_scalars(column, filter);
                 Column::Binary(column)
             }
             Column::String(column) => {
@@ -164,7 +165,7 @@ impl Column {
                 Self::filter_scalar_types::<MapType<AnyType, AnyType>>(&column, builder, filter)
             }
             Column::Bitmap(column) => {
-                let column = Self::filter_string_scalars(column, filter);
+                let column = Self::filter_binary_scalars(column, filter);
                 Column::Bitmap(column)
             }
 
@@ -178,8 +179,12 @@ impl Column {
                 Column::Tuple(fields)
             }
             Column::Variant(column) => {
-                let column = Self::filter_string_scalars(column, filter);
+                let column = Self::filter_binary_scalars(column, filter);
                 Column::Variant(column)
+            }
+            Column::Geometry(column) => {
+                let column = Self::filter_binary_scalars(column, filter);
+                Column::Geometry(column)
             }
         }
     }
@@ -315,19 +320,19 @@ impl Column {
     }
 
     /// low-level API using unsafe to improve performance.
-    fn filter_string_scalars(values: &StringColumn, filter: &Bitmap) -> StringColumn {
+    fn filter_binary_scalars(values: &BinaryColumn, filter: &Bitmap) -> BinaryColumn {
         debug_assert_eq!(values.len(), filter.len());
         let num_rows = filter.len() - filter.unset_bits();
         if num_rows == values.len() {
             return values.clone();
         } else if num_rows == 0 {
-            return StringColumn::new(vec![].into(), vec![0].into());
+            return BinaryColumn::new(vec![].into(), vec![0].into());
         }
 
         // Each element of `items` is (string pointer(u64), string length).
         let mut items: Vec<(u64, usize)> = Vec::with_capacity(num_rows);
-        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+        // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
         let values_offset = values.offsets().as_slice();
         let values_data_ptr = values.data().as_slice().as_ptr();
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
@@ -442,7 +447,16 @@ impl Column {
             set_vec_len_by_ptr(&mut data, data_ptr);
         }
 
-        StringColumn::new(data.into(), offsets.into())
+        BinaryColumn::new(data.into(), offsets.into())
+    }
+
+    fn filter_string_scalars(values: &StringColumn, filter: &Bitmap) -> StringColumn {
+        unsafe {
+            StringColumn::from_binary_unchecked(Self::filter_binary_scalars(
+                &values.clone().into(),
+                filter,
+            ))
+        }
     }
 
     /// # Safety

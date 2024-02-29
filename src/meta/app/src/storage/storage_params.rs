@@ -40,6 +40,7 @@ pub enum StorageParams {
     S3(StorageS3Config),
     Webhdfs(StorageWebhdfsConfig),
     Cos(StorageCosConfig),
+    Huggingface(StorageHuggingfaceConfig),
 
     /// None means this storage type is none.
     ///
@@ -73,6 +74,7 @@ impl StorageParams {
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Webhdfs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Cos(v) => v.endpoint_url.starts_with("https://"),
+            StorageParams::Huggingface(_) => true,
             StorageParams::None => false,
         }
     }
@@ -94,6 +96,7 @@ impl StorageParams {
             StorageParams::Gcs(v) => v.root = f(&v.root),
             StorageParams::Webhdfs(v) => v.root = f(&v.root),
             StorageParams::Cos(v) => v.root = f(&v.root),
+            StorageParams::Huggingface(v) => v.root = f(&v.root),
             StorageParams::None => {}
         };
 
@@ -213,6 +216,13 @@ impl Display for StorageParams {
             }
             StorageParams::Webhdfs(v) => {
                 write!(f, "webhdfs | root={},endpoint={}", v.root, v.endpoint_url)
+            }
+            StorageParams::Huggingface(v) => {
+                write!(
+                    f,
+                    "huggingface | repo_type={}, repo_id={}, root={}",
+                    v.repo_type, v.repo_id, v.root
+                )
             }
             StorageParams::None => {
                 write!(f, "none",)
@@ -366,8 +376,6 @@ pub struct StorageS3Config {
     pub role_arn: String,
     /// The ExternalId that used for AssumeRole.
     pub external_id: String,
-    /// Allow anonymous access to S3 if credential not loaded.
-    pub allow_anonymous: bool,
 }
 
 impl Default for StorageS3Config {
@@ -385,7 +393,6 @@ impl Default for StorageS3Config {
             enable_virtual_host_style: false,
             role_arn: "".to_string(),
             external_id: "".to_string(),
-            allow_anonymous: false,
         }
     }
 }
@@ -408,7 +415,6 @@ impl Debug for StorageS3Config {
             )
             .field("security_token", &mask_string(&self.security_token, 3))
             .field("master_key", &mask_string(&self.master_key, 3))
-            .field("allow_anonymous", &self.allow_anonymous)
             .finish()
     }
 }
@@ -557,6 +563,41 @@ impl Debug for StorageCosConfig {
         ds.field("root", &self.root);
         ds.field("secret_id", &mask_string(&self.secret_id, 3));
         ds.field("secret_key", &mask_string(&self.secret_key, 3));
+
+        ds.finish()
+    }
+}
+
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageHuggingfaceConfig {
+    /// repo_id for huggingface repo, looks like `opendal/huggingface-testdata`
+    pub repo_id: String,
+    /// repo_type for huggingface repo
+    ///
+    /// available value: `dataset`, `model`
+    /// default value: `dataset`
+    pub repo_type: String,
+    /// revision for huggingface repo
+    ///
+    /// available value: branches, tags or commits in the repo.
+    /// default value: `main`
+    pub revision: String,
+    /// token for huggingface
+    ///
+    /// Only needed for private repo.
+    pub token: String,
+    pub root: String,
+}
+
+impl Debug for StorageHuggingfaceConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut ds = f.debug_struct("StorageHuggingFaceConfig");
+
+        ds.field("repo_id", &self.repo_id);
+        ds.field("repo_type", &self.repo_type);
+        ds.field("revision", &self.revision);
+        ds.field("root", &self.root);
+        ds.field("token", &mask_string(&self.token, 3));
 
         ds.finish()
     }

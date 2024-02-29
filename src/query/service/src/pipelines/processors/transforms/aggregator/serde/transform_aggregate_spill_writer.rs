@@ -18,6 +18,8 @@ use std::time::Instant;
 
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -258,6 +260,13 @@ pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
             metrics_inc_aggregate_spill_write_count();
             metrics_inc_aggregate_spill_write_bytes(write_bytes as u64);
             metrics_inc_aggregate_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+
+            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
+            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+            Profile::record_usize_profile(
+                ProfileStatisticsName::SpillWriteTime,
+                instant.elapsed().as_millis() as usize,
+            );
         }
 
         {

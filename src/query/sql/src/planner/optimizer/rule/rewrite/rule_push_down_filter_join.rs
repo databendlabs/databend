@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::constant::false_constant;
 use crate::optimizer::rule::constant::is_falsy;
 use crate::optimizer::rule::rewrite::filter_join::convert_mark_to_semi_join;
@@ -28,23 +29,21 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::PatternPlan;
+use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
-use crate::MetadataRef;
 
 pub struct RulePushDownFilterJoin {
     id: RuleID,
-    patterns: Vec<SExpr>,
-    _metadata: MetadataRef,
+    matchers: Vec<Matcher>,
+    after_join_reorder: bool,
 }
 
 impl RulePushDownFilterJoin {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new(after_join_reorder: bool) -> Self {
         Self {
             id: RuleID::PushDownFilterJoin,
             // Filter
@@ -53,36 +52,18 @@ impl RulePushDownFilterJoin {
             //   | \
             //   |  *
             //   *
-            patterns: vec![SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::Filter,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_binary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Join,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ))),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ))),
-                )),
-            )],
-            _metadata: metadata,
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Filter,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Join,
+                    children: vec![Matcher::Leaf, Matcher::Leaf],
+                }],
+            }],
+            after_join_reorder,
         }
+    }
+    fn after_join_reorder(&self) -> bool {
+        self.after_join_reorder
     }
 }
 
@@ -93,9 +74,20 @@ impl Rule for RulePushDownFilterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
-        let mut s_expr = outer_to_inner(s_expr)?;
+        let (s_expr, outer_to_inner) = outer_to_inner(self.after_join_reorder(), s_expr)?;
+        if self.after_join_reorder {
+            // Don't need to continue
+            if outer_to_inner {
+                state.add_result(s_expr);
+            }
+            return Ok(());
+        }
         // Second, check if can convert mark join to semi join
-        s_expr = convert_mark_to_semi_join(&s_expr)?;
+        let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr)?;
+        if s_expr.plan().rel_op() != RelOp::Filter {
+            state.add_result(s_expr);
+            return Ok(());
+        }
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.predicates.is_empty() {
             state.add_result(s_expr);
@@ -107,7 +99,7 @@ impl Rule for RulePushDownFilterJoin {
         // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
         let predicates = rewrite_predicates(&s_expr)?;
         let (need_push, mut result) = try_push_down_filter_join(&s_expr, predicates)?;
-        if !need_push {
+        if !need_push && !outer_to_inner && !mark_to_semi {
             return Ok(());
         }
         result.set_applied_rule(&self.id);
@@ -116,8 +108,8 @@ impl Rule for RulePushDownFilterJoin {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }
 
@@ -153,7 +145,10 @@ pub fn try_push_down_filter_join(
                 right_push_down.push(predicate.clone());
             }
             JoinPredicate::Left(_) => {
-                if matches!(join.join_type, JoinType::Right) {
+                if matches!(
+                    join.join_type,
+                    JoinType::Right | JoinType::RightSingle | JoinType::Full
+                ) {
                     original_predicates.push(predicate);
                     continue;
                 }
@@ -161,7 +156,10 @@ pub fn try_push_down_filter_join(
                 left_push_down.push(predicate);
             }
             JoinPredicate::Right(_) => {
-                if matches!(join.join_type, JoinType::Left) {
+                if matches!(
+                    join.join_type,
+                    JoinType::Left | JoinType::LeftSingle | JoinType::Full
+                ) {
                     original_predicates.push(predicate);
                     continue;
                 }
@@ -170,8 +168,12 @@ pub fn try_push_down_filter_join(
             }
             JoinPredicate::Other(_) => original_predicates.push(predicate),
 
-            JoinPredicate::Both { left, right, op } => {
-                if op == ComparisonOp::Equal {
+            JoinPredicate::Both {
+                left,
+                right,
+                is_equal_op,
+            } => {
+                if is_equal_op {
                     if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
                         join.join_type = JoinType::Inner;
                         join.left_conditions.push(left.clone());

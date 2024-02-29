@@ -1,3 +1,4 @@
+2	10	382
 expects .stats.write_progress.rows be 2
 expects .error be null
 2

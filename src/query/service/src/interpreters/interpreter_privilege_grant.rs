@@ -167,6 +167,10 @@ impl Interpreter for GrantPrivilegeInterpreter {
         "GrantPrivilegeInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -190,7 +194,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
                     .await?;
             }
             PrincipalIdentity::Role(role) => {
-                if plan.priv_types.has_privilege(Ownership) {
+                if plan.priv_types.has_privilege(Ownership) && plan.priv_types.len() == 1 {
                     let owner_object = self
                         .convert_to_ownerobject(&tenant, &plan.on, plan.on.catalog())
                         .await?;
@@ -219,7 +223,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
 /// Some global privileges can not be granted to a database or table, for example,
 /// a KILL statement is meaningless for a table.
 pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilegeSet) -> Result<()> {
-    let available_privileges = object.available_privileges();
+    let available_privileges = object.available_privileges(true);
     let ok = privileges
         .iter()
         .all(|p| available_privileges.has_privilege(p));

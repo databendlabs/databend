@@ -14,6 +14,8 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::len_without_is_empty)]
+#![allow(clippy::arc_with_non_send_sync)]
+#![allow(internal_features)]
 // FIXME: we should avoid this by implementing Ord correctly.
 #![allow(clippy::non_canonical_partial_ord_impl)]
 #![allow(incomplete_features)]
@@ -35,8 +37,8 @@
 #![feature(trusted_len)]
 #![feature(iter_order_by)]
 #![feature(int_roundings)]
-#![feature(trait_upcasting)]
 #![feature(lazy_cell)]
+#![feature(try_blocks)]
 
 #[allow(dead_code)]
 mod block;

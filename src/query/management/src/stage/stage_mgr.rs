@@ -24,14 +24,13 @@ use databend_common_meta_api::txn_op_put;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::principal::StageFile;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 
@@ -69,32 +68,41 @@ impl StageMgr {
 impl StageApi for StageMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_stage(&self, info: StageInfo) -> Result<u64> {
-        let seq = MatchSeq::Exact(0);
-        let val = Operation::Update(serialize_struct(
-            &info,
-            ErrorCode::IllegalUserStageFormat,
-            || "",
-        )?);
+    async fn add_stage(&self, info: StageInfo, create_option: &CreateOption) -> Result<()> {
         let key = format!(
             "{}/{}",
             self.stage_prefix,
             escape_for_key(&info.stage_name)?
         );
-        let upsert_info = self
+
+        let val = Operation::Update(serialize_struct(
+            &info,
+            ErrorCode::IllegalUserStageFormat,
+            || "",
+        )?);
+
+        let seq = MatchSeq::from(*create_option);
+
+        let res = self
             .kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
+            .upsert_kv(UpsertKVReq::new(&key, seq, val, None))
+            .await?;
 
-        let res_seq = upsert_info.await?.added_seq_or_else(|_v| {
-            ErrorCode::StageAlreadyExists(format!("Stage '{}' already exists.", info.stage_name))
-        })?;
+        if let CreateOption::CreateIfNotExists(false) = create_option {
+            if res.prev.is_some() {
+                return Err(ErrorCode::StageAlreadyExists(format!(
+                    "Stage '{}' already exists.",
+                    info.stage_name
+                )));
+            }
+        }
 
-        Ok(res_seq)
+        Ok(())
     }
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_stage(&self, name: &str, seq: MatchSeq) -> Result<SeqV<StageInfo>> {
+    async fn get_stage(&self, name: &str) -> Result<StageInfo> {
         let key = format!("{}/{}", self.stage_prefix, escape_for_key(name)?);
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
@@ -102,16 +110,11 @@ impl StageApi for StageMgr {
         let seq_value = res
             .ok_or_else(|| ErrorCode::UnknownStage(format!("Stage '{}' does not exist.", name)))?;
 
-        match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(SeqV::new(
-                seq_value.seq,
-                deserialize_struct(&seq_value.data, ErrorCode::IllegalUserStageFormat, || "")?,
-            )),
-            Err(_) => Err(ErrorCode::UnknownStage(format!(
-                "Stage '{}' does not exist.",
-                name
-            ))),
-        }
+        Ok(deserialize_struct(
+            &seq_value.data,
+            ErrorCode::IllegalUserStageFormat,
+            || "",
+        )?)
     }
 
     #[async_backtrace::framed]

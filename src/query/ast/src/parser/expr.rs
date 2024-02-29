@@ -1340,6 +1340,7 @@ pub fn json_op(i: Input) -> IResult<JsonOperator> {
         value(JsonOperator::ArrowAt, rule! { "<@" }),
         value(JsonOperator::AtQuestion, rule! { "@?" }),
         value(JsonOperator::AtAt, rule! { "@@" }),
+        value(JsonOperator::HashMinus, rule! { "#-" }),
     ))(i)
 }
 
@@ -1470,24 +1471,35 @@ pub fn at_string(i: Input) -> IResult<String> {
     })(i)
 }
 
+pub fn nullable(i: Input) -> IResult<bool> {
+    alt((
+        value(true, rule! { NULL }),
+        value(false, rule! { NOT ~ NULL }),
+    ))(i)
+}
+
 pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN | BOOL });
-    let ty_uint8 = value(
-        TypeName::UInt8,
-        rule! { ( UINT8 | #map(rule! { TINYINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )?  },
-    );
-    let ty_uint16 = value(
-        TypeName::UInt16,
-        rule! { ( UINT16 | #map(rule! { SMALLINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
-    let ty_uint32 = value(
-        TypeName::UInt32,
-        rule! { ( UINT32 | #map(rule! { ( INT | INTEGER ) ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
-    let ty_uint64 = value(
-        TypeName::UInt64,
-        rule! { ( UINT64 | UNSIGNED | #map(rule! { BIGINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
+    let ty_uint8 = value(TypeName::UInt8, rule! { (
+            #map(rule! { UINT8 ~ ( "(" ~ ^#literal_u64 ~ ^")" )? }, |(t, _)| t) |
+            #map(rule! { TINYINT ~ ( "(" ~ ^#literal_u64 ~ ^")" )? ~ UNSIGNED }, |(t, _, _)| t)
+        )
+    });
+    let ty_uint16 = value(TypeName::UInt16, rule! { (
+            #map(rule! { UINT16 ~ ( "(" ~ ^#literal_u64 ~ ^")" )? }, |(t, _)| t) |
+            #map(rule! { SMALLINT ~ ( "(" ~ ^#literal_u64 ~ ^")" )? ~ UNSIGNED }, |(t, _, _)| t)
+        )
+    });
+    let ty_uint32 = value(TypeName::UInt32, rule! { (
+            #map(rule! { UINT32 ~ ( "(" ~ ^#literal_u64 ~ ^")" )? }, |(t, _)| t) |
+            #map(rule! { ( INT | INTEGER ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? ~ UNSIGNED }, |(t, _, _)| t)
+        )
+    });
+    let ty_uint64 = value(TypeName::UInt64, rule! { (
+            #map(rule! { ( UINT64 | UNSIGNED) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? }, |(t, _)| t) |
+            #map(rule! { BIGINT ~ ( "(" ~ ^#literal_u64 ~ ^")" )? ~ UNSIGNED }, |(t, _, _)| t)
+        )
+    });
     let ty_int8 = value(
         TypeName::Int8,
         rule! { ( INT8 | TINYINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
@@ -1567,14 +1579,15 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_binary = value(
         TypeName::Binary,
-        rule! { ( BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        rule! { ( BINARY | VARBINARY | LONGBLOB | MEDIUMBLOB |  TINYBLOB| BLOB ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_string = value(
         TypeName::String,
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
-    map(
+    let ty_geometry = value(TypeName::Geometry, rule! { GEOMETRY });
+    map_res(
         alt((
             rule! {
             ( #ty_boolean
@@ -1594,7 +1607,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_bitmap
             | #ty_tuple : "TUPLE(<type>, ...)"
             | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            ) ~ NULL? : "type name"
+            ) ~ #nullable? : "type name"
             },
             rule! {
             ( #ty_date
@@ -1602,15 +1615,22 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_binary
             | #ty_string
             | #ty_variant
+            | #ty_geometry
             | #ty_nullable
-            ) ~ NULL? : "type name" },
+            ) ~ #nullable? : "type name" },
         )),
-        |(ty, opt_null)| {
-            if opt_null.is_some() {
-                ty.wrap_nullable()
-            } else {
-                ty
+        |(ty, opt_nullable)| match opt_nullable {
+            Some(true) => Ok(ty.wrap_nullable()),
+            Some(false) => {
+                if matches!(ty, TypeName::Nullable(_)) {
+                    Err(nom::Err::Failure(ErrorKind::Other(
+                        "ambiguous NOT NULL constraint",
+                    )))
+                } else {
+                    Ok(ty.wrap_not_null())
+                }
             }
+            None => Ok(ty),
         },
     )(i)
 }

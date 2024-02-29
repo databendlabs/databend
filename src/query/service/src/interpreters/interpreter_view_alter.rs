@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::TableMeta;
@@ -45,6 +46,10 @@ impl AlterViewInterpreter {
 impl Interpreter for AlterViewInterpreter {
     fn name(&self) -> &str {
         "AlterViewInterpreter"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
     }
 
     #[async_backtrace::framed]
@@ -92,7 +97,7 @@ impl Interpreter for AlterViewInterpreter {
             options.insert("query".to_string(), subquery);
 
             let plan = CreateTableReq {
-                if_not_exists: true,
+                create_option: CreateOption::CreateIfNotExists(true),
                 name_ident: TableNameIdent {
                     tenant: self.plan.tenant.clone(),
                     db_name: self.plan.database.clone(),

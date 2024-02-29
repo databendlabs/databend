@@ -172,7 +172,7 @@ impl MergeIntoStmt {
         (match_clauses, unmatch_clauses)
     }
 
-    pub fn check_multi_match_clauses_semantic(clauses: &Vec<MatchedClause>) -> Result<()> {
+    pub fn check_multi_match_clauses_semantic(clauses: &[MatchedClause]) -> Result<()> {
         // check match_clauses
         if clauses.len() > 1 {
             for (idx, clause) in clauses.iter().enumerate() {
@@ -186,7 +186,7 @@ impl MergeIntoStmt {
         Ok(())
     }
 
-    pub fn check_multi_unmatch_clauses_semantic(clauses: &Vec<UnmatchedClause>) -> Result<()> {
+    pub fn check_multi_unmatch_clauses_semantic(clauses: &[UnmatchedClause]) -> Result<()> {
         // check unmatch_clauses
         if clauses.len() > 1 {
             for (idx, clause) in clauses.iter().enumerate() {
@@ -258,6 +258,7 @@ impl MergeSource {
                 table: table.clone(),
                 alias: alias.clone(),
                 travel_point: None,
+                since_point: None,
                 pivot: None,
                 unpivot: None,
             },

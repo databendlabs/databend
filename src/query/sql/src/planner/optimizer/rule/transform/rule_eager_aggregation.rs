@@ -22,6 +22,7 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::ColumnSet;
@@ -36,7 +37,6 @@ use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
@@ -128,7 +128,7 @@ use crate::Visibility;
 
 pub struct RuleEagerAggregation {
     id: RuleID,
-    patterns: Vec<SExpr>,
+    matchers: Vec<Matcher>,
     metadata: MetadataRef,
 }
 
@@ -142,7 +142,7 @@ impl RuleEagerAggregation {
             // Expression
             //     |
             //     *
-            patterns: vec![
+            matchers: vec![
                 //     Expression
                 //         |
                 //  Aggregate(final)
@@ -152,40 +152,19 @@ impl RuleEagerAggregation {
                 //        Join
                 //       /    \
                 //      *      *
-                SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::EvalScalar,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Aggregate,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(
-                                PatternPlan {
-                                    plan_type: RelOp::Aggregate,
-                                }
-                                .into(),
-                            ),
-                            Arc::new(SExpr::create_binary(
-                                Arc::new(
-                                    PatternPlan {
-                                        plan_type: RelOp::Join,
-                                    }
-                                    .into(),
-                                ),
-                                Arc::new(SExpr::create_pattern_leaf()),
-                                Arc::new(SExpr::create_pattern_leaf()),
-                            )),
-                        )),
-                    )),
-                ),
+                Matcher::MatchOp {
+                    op_type: RelOp::EvalScalar,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Aggregate,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Aggregate,
+                            children: vec![Matcher::MatchOp {
+                                op_type: RelOp::Join,
+                                children: vec![Matcher::Leaf, Matcher::Leaf],
+                            }],
+                        }],
+                    }],
+                },
                 //     Expression
                 //         |
                 //  Aggregate(final)
@@ -197,48 +176,22 @@ impl RuleEagerAggregation {
                 //        Join
                 //       /    \
                 //      *      *
-                SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::EvalScalar,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Aggregate,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(
-                                PatternPlan {
-                                    plan_type: RelOp::Aggregate,
-                                }
-                                .into(),
-                            ),
-                            Arc::new(SExpr::create_unary(
-                                Arc::new(
-                                    PatternPlan {
-                                        plan_type: RelOp::EvalScalar,
-                                    }
-                                    .into(),
-                                ),
-                                Arc::new(SExpr::create_binary(
-                                    Arc::new(
-                                        PatternPlan {
-                                            plan_type: RelOp::Join,
-                                        }
-                                        .into(),
-                                    ),
-                                    Arc::new(SExpr::create_pattern_leaf()),
-                                    Arc::new(SExpr::create_pattern_leaf()),
-                                )),
-                            )),
-                        )),
-                    )),
-                ),
+                Matcher::MatchOp {
+                    op_type: RelOp::EvalScalar,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Aggregate,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Aggregate,
+                            children: vec![Matcher::MatchOp {
+                                op_type: RelOp::EvalScalar,
+                                children: vec![Matcher::MatchOp {
+                                    op_type: RelOp::Join,
+                                    children: vec![Matcher::Leaf, Matcher::Leaf],
+                                }],
+                            }],
+                        }],
+                    }],
+                },
                 //     Expression
                 //         |
                 //        Sort
@@ -250,48 +203,22 @@ impl RuleEagerAggregation {
                 //        Join
                 //       /    \
                 //      *      *
-                SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::EvalScalar,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Sort,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(
-                                PatternPlan {
-                                    plan_type: RelOp::Aggregate,
-                                }
-                                .into(),
-                            ),
-                            Arc::new(SExpr::create_unary(
-                                Arc::new(
-                                    PatternPlan {
-                                        plan_type: RelOp::Aggregate,
-                                    }
-                                    .into(),
-                                ),
-                                Arc::new(SExpr::create_binary(
-                                    Arc::new(
-                                        PatternPlan {
-                                            plan_type: RelOp::Join,
-                                        }
-                                        .into(),
-                                    ),
-                                    Arc::new(SExpr::create_pattern_leaf()),
-                                    Arc::new(SExpr::create_pattern_leaf()),
-                                )),
-                            )),
-                        )),
-                    )),
-                ),
+                Matcher::MatchOp {
+                    op_type: RelOp::EvalScalar,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Sort,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Aggregate,
+                            children: vec![Matcher::MatchOp {
+                                op_type: RelOp::Aggregate,
+                                children: vec![Matcher::MatchOp {
+                                    op_type: RelOp::Join,
+                                    children: vec![Matcher::Leaf, Matcher::Leaf],
+                                }],
+                            }],
+                        }],
+                    }],
+                },
                 //     Expression
                 //         |
                 //        Sort
@@ -305,56 +232,25 @@ impl RuleEagerAggregation {
                 //        Join
                 //       /    \
                 //      *      *
-                SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::EvalScalar,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Sort,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(
-                                PatternPlan {
-                                    plan_type: RelOp::Aggregate,
-                                }
-                                .into(),
-                            ),
-                            Arc::new(SExpr::create_unary(
-                                Arc::new(
-                                    PatternPlan {
-                                        plan_type: RelOp::Aggregate,
-                                    }
-                                    .into(),
-                                ),
-                                Arc::new(SExpr::create_unary(
-                                    Arc::new(
-                                        PatternPlan {
-                                            plan_type: RelOp::EvalScalar,
-                                        }
-                                        .into(),
-                                    ),
-                                    Arc::new(SExpr::create_binary(
-                                        Arc::new(
-                                            PatternPlan {
-                                                plan_type: RelOp::Join,
-                                            }
-                                            .into(),
-                                        ),
-                                        Arc::new(SExpr::create_pattern_leaf()),
-                                        Arc::new(SExpr::create_pattern_leaf()),
-                                    )),
-                                )),
-                            )),
-                        )),
-                    )),
-                ),
+                Matcher::MatchOp {
+                    op_type: RelOp::EvalScalar,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Sort,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Aggregate,
+                            children: vec![Matcher::MatchOp {
+                                op_type: RelOp::Aggregate,
+                                children: vec![Matcher::MatchOp {
+                                    op_type: RelOp::EvalScalar,
+                                    children: vec![Matcher::MatchOp {
+                                        op_type: RelOp::Join,
+                                        children: vec![Matcher::Leaf, Matcher::Leaf],
+                                    }],
+                                }],
+                            }],
+                        }],
+                    }],
+                },
             ],
             metadata,
         }
@@ -368,12 +264,12 @@ impl Rule for RuleEagerAggregation {
 
     fn apply(
         &self,
-        a_expr: &SExpr,
+        s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
         let mut matched_idx = 0;
-        for (idx, pattern) in self.patterns.iter().enumerate() {
-            if a_expr.match_pattern(pattern) {
+        for (idx, matcher) in self.matchers.iter().enumerate() {
+            if matcher.matches(s_expr) {
                 matched_idx = idx + 1;
                 break;
             }
@@ -390,7 +286,7 @@ impl Rule for RuleEagerAggregation {
             _ => unreachable!(),
         };
 
-        let eval_scalar_expr = a_expr;
+        let eval_scalar_expr = s_expr;
         let sort_expr = eval_scalar_expr.child(0)?;
         let final_agg_expr = match has_sort {
             true => sort_expr.child(0)?,
@@ -809,7 +705,7 @@ impl Rule for RuleEagerAggregation {
                         )),
                         Arc::new(join_expr.child(1)?.clone()),
                     ]))])
-                    .replace_plan(Arc::new(eager_groupby_count_count_sum.try_into()?))
+                    .replace_plan(Arc::new(eager_groupby_count_count_sum.into()))
             } else {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(join_expr.replace_children(vec![
@@ -833,7 +729,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                         )),
                     ]))])
-                    .replace_plan(Arc::new(eager_groupby_count_count_sum.try_into()?))
+                    .replace_plan(Arc::new(eager_groupby_count_count_sum.into()))
             });
 
             // Apply eager split on d and d^1.
@@ -895,7 +791,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                         )),
                     ]))])
-                    .replace_plan(Arc::new(eager_split_count_sum.try_into()?)),
+                    .replace_plan(Arc::new(eager_split_count_sum.into())),
             );
         } else if can_push_down[d] && eager_aggregations[d ^ 1].is_empty() {
             // (1) Try to apply eager group-by on d.
@@ -1127,7 +1023,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(Arc::new(eager_count_sum.try_into()?))
+                        .replace_plan(Arc::new(eager_count_sum.into()))
                 } else {
                     eval_scalar_expr
                         .replace_children(vec![Arc::new(join_expr.replace_children(vec![
@@ -1140,7 +1036,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                             Arc::new(join_expr.child(1)?.clone()),
                         ]))])
-                        .replace_plan(Arc::new(eager_count_sum.try_into()?))
+                        .replace_plan(Arc::new(eager_count_sum.into()))
                 });
 
                 // Apply double eager on d and d^1.
@@ -1182,7 +1078,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(Arc::new(double_eager_count_sum.try_into()?))
+                        .replace_plan(Arc::new(double_eager_count_sum.into()))
                 } else {
                     eval_scalar_expr
                         .replace_children(vec![Arc::new(join_expr.replace_children(vec![
@@ -1210,7 +1106,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(Arc::new(double_eager_count_sum.try_into()?))
+                        .replace_plan(Arc::new(double_eager_count_sum.into()))
                 });
             }
         }
@@ -1233,19 +1129,19 @@ impl Rule for RuleEagerAggregation {
                 .replace_children(vec![Arc::new(
                     final_agg_partial_expr
                         .replace_children(vec![Arc::new(join_exprs[idx].clone())])
-                        .replace_plan(Arc::new(final_agg_partials[idx].clone().try_into()?)),
+                        .replace_plan(Arc::new(final_agg_partials[idx].clone().into())),
                 )])
-                .replace_plan(Arc::new(final_agg_finals[idx].clone().try_into()?));
+                .replace_plan(Arc::new(final_agg_finals[idx].clone().into()));
             let mut result = if has_sort {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(
                         sort_expr.replace_children(vec![Arc::new(temp_final_agg_expr)]),
                     )])
-                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().try_into()?))
+                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().into()))
             } else {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(temp_final_agg_expr)])
-                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().try_into()?))
+                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().into()))
             };
             result.set_applied_rule(&self.id);
             state.add_result(result);
@@ -1254,8 +1150,12 @@ impl Rule for RuleEagerAggregation {
         Ok(())
     }
 
-    fn patterns(&self) -> &Vec<SExpr> {
-        &self.patterns
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
+    }
+
+    fn transformation(&self) -> bool {
+        false
     }
 }
 
@@ -1267,7 +1167,7 @@ impl Rule for RuleEagerAggregation {
 // (4) The data type of the aggregate column is either Number or Nullable(Number).
 // Return the (Vec index, func index, func_name) for each eager aggregation function.
 fn get_eager_aggregation_functions(
-    idx: usize,
+    _idx: usize,
     agg_final: &Aggregate,
     columns_set: &ColumnSet,
     eval_scalar_items: &HashMap<usize, Vec<usize>>,
@@ -1299,12 +1199,6 @@ fn get_eager_aggregation_functions(
                             }
                         }
                     }
-                } else if idx == 1
-                    && aggregate_function.args.is_empty()
-                    && aggregate_function.func_name.as_str() == "count"
-                {
-                    // count(*) does not belong to the left or right child, so we push it down to the probe side.
-                    valid = true;
                 }
                 if valid {
                     return Some((
@@ -1535,7 +1429,9 @@ fn update_aggregate_and_eval(
 
     let mut success = false;
     // Modify the eval scalars of all aggregate functions that are not AVG components.
-    if let Some(indexes) = eval_scalar_items.get(&old_index) && !avg_components.contains_key(&old_index) {
+    if let Some(indexes) = eval_scalar_items.get(&old_index)
+        && !avg_components.contains_key(&old_index)
+    {
         for eval_scalar in eval_scalars {
             for item_idx in indexes {
                 let eval_scalar_item = &mut (eval_scalar).items[*item_idx];
@@ -1546,7 +1442,10 @@ fn update_aggregate_and_eval(
                         column_binding.data_type = Box::new(DataType::Nullable(Box::new(
                             DataType::Number(NumberDataType::UInt64),
                         )));
-                        eval_scalar_item.scalar = wrap_cast(&eval_scalar_item.scalar, &DataType::Number(NumberDataType::UInt64));
+                        eval_scalar_item.scalar = wrap_cast(
+                            &eval_scalar_item.scalar,
+                            &DataType::Number(NumberDataType::UInt64),
+                        );
                     }
                     success = true;
                 }

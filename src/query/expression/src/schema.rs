@@ -44,9 +44,6 @@ pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
 // internal stream column id.
 pub const BASE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 5;
 pub const BASE_BLOCK_IDS_COLUMN_ID: u32 = u32::MAX - 6;
-pub const CHANGE_ACTION_COLUMN_ID: u32 = u32::MAX - 7;
-pub const CHANGE_IS_UPDATE_COLUMN_ID: u32 = u32::MAX - 8;
-pub const CHANGE_ROW_ID_COLUMN_ID: u32 = u32::MAX - 9;
 
 // internal column name.
 pub const ROW_ID_COL_NAME: &str = "_row_id";
@@ -67,14 +64,16 @@ pub const PREDICATE_COLUMN_NAME: &str = "_predicate";
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
 pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 11;
 pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
+pub const ROW_VERSION_COLUMN_ID: u32 = u32::MAX - 13;
 // stream column name.
 pub const ORIGIN_VERSION_COL_NAME: &str = "_origin_version";
 pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
 pub const ORIGIN_BLOCK_ROW_NUM_COL_NAME: &str = "_origin_block_row_num";
+pub const ROW_VERSION_COL_NAME: &str = "_row_version";
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
-    column_id >= CHANGE_ROW_ID_COLUMN_ID
+    column_id >= BASE_BLOCK_IDS_COLUMN_ID
 }
 
 #[inline]
@@ -91,7 +90,7 @@ pub fn is_internal_column(column_name: &str) -> bool {
             | CHANGE_ACTION_COL_NAME
             | CHANGE_IS_UPDATE_COL_NAME
             | CHANGE_ROW_ID_COL_NAME
-            // change$row_id might be expended 
+            // change$row_id might be expended
             // to the computation of the two following internal columns
             | ORIGIN_BLOCK_ROW_NUM_COL_NAME
             | BASE_ROW_ID_COL_NAME
@@ -100,14 +99,17 @@ pub fn is_internal_column(column_name: &str) -> bool {
 
 #[inline]
 pub fn is_stream_column_id(column_id: ColumnId) -> bool {
-    (ORIGIN_VERSION_COLUMN_ID..=ORIGIN_BLOCK_ROW_NUM_COLUMN_ID).contains(&column_id)
+    (ROW_VERSION_COLUMN_ID..=ORIGIN_BLOCK_ROW_NUM_COLUMN_ID).contains(&column_id)
 }
 
 #[inline]
 pub fn is_stream_column(column_name: &str) -> bool {
     matches!(
         column_name,
-        ORIGIN_VERSION_COL_NAME | ORIGIN_BLOCK_ID_COL_NAME | ORIGIN_BLOCK_ROW_NUM_COL_NAME
+        ORIGIN_VERSION_COL_NAME
+            | ORIGIN_BLOCK_ID_COL_NAME
+            | ORIGIN_BLOCK_ROW_NUM_COL_NAME
+            | ROW_VERSION_COL_NAME
     )
 }
 
@@ -187,6 +189,7 @@ pub enum TableDataType {
         fields_type: Vec<TableDataType>,
     },
     Variant,
+    Geometry,
 }
 
 impl DataSchema {
@@ -555,7 +558,9 @@ impl TableSchema {
                         )
                     });
                 }
+                Scalar::Map(_) | Scalar::Array(_) => {}
                 _ => {
+                    debug_assert!(!default_value.is_nested_scalar());
                     leaf_default_values.insert(column_ids[*index], default_value.to_owned());
                     *index += 1;
                 }
@@ -671,11 +676,10 @@ impl TableSchema {
     pub fn inner_project(&self, path_indices: &BTreeMap<FieldIndex, Vec<FieldIndex>>) -> Self {
         let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
         let schema_fields = self.fields();
-        let column_ids = self.to_column_ids();
 
         let fields = paths
             .iter()
-            .map(|path| Self::traverse_paths(schema_fields, path, &column_ids).unwrap())
+            .map(|path| Self::traverse_paths(schema_fields, path).unwrap())
             .collect();
 
         Self {
@@ -756,11 +760,7 @@ impl TableSchema {
         column_ids
     }
 
-    fn traverse_paths(
-        fields: &[TableField],
-        path: &[FieldIndex],
-        column_ids: &[ColumnId],
-    ) -> Result<TableField> {
+    fn traverse_paths(fields: &[TableField], path: &[FieldIndex]) -> Result<TableField> {
         if path.is_empty() {
             return Err(ErrorCode::BadArguments(
                 "path should not be empty".to_string(),
@@ -790,7 +790,7 @@ impl TableSchema {
         } = &field.data_type.remove_nullable()
         {
             let field_name = field.name();
-            let mut next_column_id = column_ids[1 + index];
+            let mut next_column_id = field.column_id;
             let fields = fields_name
                 .iter()
                 .zip(fields_type)
@@ -800,7 +800,7 @@ impl TableSchema {
                     field.build_column_id(&mut next_column_id)
                 })
                 .collect::<Vec<_>>();
-            return Self::traverse_paths(&fields, &path[1..], &column_ids[index + 1..]);
+            return Self::traverse_paths(&fields, &path[1..]);
         }
         let valid_fields: Vec<String> = fields.iter().map(|f| f.name.clone()).collect();
         Err(ErrorCode::BadArguments(format!(
@@ -1160,6 +1160,7 @@ impl From<&TableDataType> for DataType {
                 DataType::Tuple(fields_type.iter().map(Into::into).collect())
             }
             TableDataType::Variant => DataType::Variant,
+            TableDataType::Geometry => DataType::Geometry,
         }
     }
 }
@@ -1283,6 +1284,22 @@ impl TableDataType {
     }
 }
 
+// for merge into not matched clauses, when there are multi inserts, they maybe
+// have different source schemas.
+pub type SourceSchemaIndex = usize;
+
+#[typetag::serde(name = "source_schema_index")]
+impl BlockMetaInfo for SourceSchemaIndex {
+    #[allow(clippy::borrowed_box)]
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        SourceSchemaIndex::downcast_ref_from(info).is_some_and(|other| other == self)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(*self)
+    }
+}
+
 pub type DataSchemaRef = Arc<DataSchema>;
 pub type TableSchemaRef = Arc<TableSchema>;
 
@@ -1382,6 +1399,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         }
         DataType::Bitmap => Ok(TableDataType::Bitmap),
         DataType::Variant => Ok(TableDataType::Variant),
+        DataType::Geometry => Ok(TableDataType::Geometry),
         DataType::Tuple(fields) => {
             let fields_type = fields
                 .iter()

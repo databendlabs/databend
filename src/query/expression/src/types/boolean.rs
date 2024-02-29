@@ -20,6 +20,7 @@ use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
+use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::utils::arrow::bitmap_into_mut;
@@ -80,12 +81,15 @@ impl ValueType for BooleanType {
         }
     }
 
-    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
         Some(ColumnBuilder::Boolean(builder))
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_boolean().map(BooleanDomain::clone)
+        domain.as_boolean().cloned()
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -110,6 +114,8 @@ impl ValueType for BooleanType {
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        debug_assert!(index < col.len());
+
         col.get_bit_unchecked(index)
     }
 

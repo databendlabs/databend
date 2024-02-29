@@ -110,7 +110,8 @@ jobs:
             gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --latest
           else
             echo "Nightly release"
-            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --prerelease
+            previous=$(gh release list --limit 1 | cut -f 1)
+            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --prerelease
           fi
 
   changelog:
@@ -148,121 +149,41 @@ jobs:
           branch-suffix: random
           delete-branch: true
 
-  macos:
-    runs-on: macos-latest
-    needs: create_release
-    env:
-      RUNNER_PROVIDER: github
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - x86_64
-          - aarch64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ needs.create_release.outputs.version }}
-      - name: Get target
-        id: target
-        run: echo 'target=${{ matrix.arch }}-apple-darwin' >> $GITHUB_OUTPUT
-      - name: Install coreutils for macOS sha256sum
-        run: brew install coreutils
-      - name: Build Release
-        uses: ./.github/actions/build_macos
-        with:
-          target: ${{ steps.target.outputs.target }}
-          artifacts: sqllogictests,metactl,meta,query
-          upload: false
-      - name: Basic Sqllogic Test
-        if: matrix.arch == 'x86_64'
-        shell: bash
-        env:
-          TEST_HANDLERS: http
-        run: |
-          mkdir -p target/release
-          cp ./target/${{ steps.target.outputs.target }}/release/databend-{meta,metactl,query,sqllogictests} ./target/release/
-          bash ./scripts/ci/ci-run-sqllogic-tests.sh base
-      - name: Pack binaries
-        run: |
-          brew install gnu-tar
-          sudo /usr/sbin/purge
-          target=${{ steps.target.outputs.target }}
-          version=${{ needs.create_release.outputs.version }}
-          mkdir -p release/${target}/{bin,configs,scripts}
-          cp ./target/${target}/release/databend-* release/${target}/bin/
-          rm -f release/${target}/bin/*.d
-          cp ./scripts/distribution/configs/databend-* release/${target}/configs/
-          cp ./scripts/distribution/release-readme.txt release/${target}/readme.txt
-          cp -r ./scripts/distribution/local-scripts/* release/${target}/scripts/
-          gtar -C ./release/${target} -czvf databend-${version}-${target}.tar.gz bin configs scripts readme.txt
-      - name: generate sha256sums
-        run: |
-          target=${{ steps.target.outputs.target }}
-          version=${{ needs.create_release.outputs.version }}
-          sha256sum databend-${version}-${target}.tar.gz >> sha256-${version}-${target}.txt
-      - name: post sha256
-        uses: actions/upload-artifact@v3
-        with:
-          name: sha256sums
-          path: sha256-${{ needs.create_release.outputs.version }}-${{ steps.target.outputs.target }}.txt
-          retention-days: 1
-      - name: Publish Binaries
-        uses: ./.github/actions/publish_binary
-        env:
-          GH_TOKEN: ${{ github.token }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
-        with:
-          version: ${{ needs.create_release.outputs.version }}
-          target: ${{ steps.target.outputs.target }}
-
   linux:
-    runs-on: [self-hosted, X64, Linux, 16c32g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
     needs: create_release
     env:
       RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
-        arch:
-          - x86_64
-          - aarch64
-        libc:
-          - gnu
-          - musl
+        include:
+          - {target: x86_64-unknown-linux-gnu, runner: X64}
+          - {target: aarch64-unknown-linux-gnu, runner: ARM64}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ needs.create_release.outputs.version }}
-      - name: Get target
-        id: target
-        run: echo 'target=${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}' >> $GITHUB_OUTPUT
       - name: Build Release
         uses: ./.github/actions/build_linux
         with:
           sha: ${{ github.sha }}
-          target: ${{ steps.target.outputs.target }}
+          target: ${{ matrix.target }}
           artifacts: sqllogictests,sqlsmith,metactl,meta,query
           upload: false
       - name: Basic Sqllogic Test
-        if: matrix.arch == 'x86_64'
         shell: bash
         env:
           TEST_HANDLERS: http
         run: |
           mkdir -p target/release
-          cp ./target/${{ steps.target.outputs.target }}/release/databend-{meta,query,sqllogictests} ./target/release/
+          cp ./target/${{ matrix.target }}/release/databend-{meta,query,sqllogictests} ./target/release/
           bash ./scripts/ci/ci-run-sqllogic-tests.sh base
       - name: Pack Binaries
         run: |
-          target=${{ steps.target.outputs.target }}
+          target=${{ matrix.target }}
           version=${{ needs.create_release.outputs.version }}
           mkdir -p release/${target}/{bin,configs,systemd,scripts}
           cp ./target/${target}/release/databend-{query,meta,metactl} release/${target}/bin/
@@ -275,9 +196,9 @@ jobs:
           tar -C ./release/${target} -czvf databend-${version}-${target}.tar.gz bin configs systemd scripts readme.txt
           sha256sum databend-${version}-${target}.tar.gz >> sha256-${version}-${target}.txt
       - name: Pack Testsuite
-        if: steps.target.outputs.target == 'x86_64-unknown-linux-gnu'
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
-          target=${{ steps.target.outputs.target }}
+          target=${{ matrix.target }}
           version=${{ needs.create_release.outputs.version }}
           mkdir -p release/testsuite/bin
           cp -r ./tests/sqllogictests/suites ./release/testsuite/
@@ -300,15 +221,15 @@ jobs:
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         with:
           version: ${{ needs.create_release.outputs.version }}
-          target: ${{ steps.target.outputs.target }}
+          target: ${{ matrix.target }}
       - name: Publish Testsuite
-        if: steps.target.outputs.target == 'x86_64-unknown-linux-gnu'
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         uses: ./.github/actions/publish_binary
         env:
           GH_TOKEN: ${{ github.token }}
         with:
           version: ${{ needs.create_release.outputs.version }}
-          target: ${{ steps.target.outputs.target }}
+          target: ${{ matrix.target }}
           category: testsuite
 
   hdfs:
@@ -437,7 +358,7 @@ jobs:
             core.setOutput('tags', tags.join(','));
       - name: Build and push
         id: docker_build
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
@@ -526,7 +447,7 @@ jobs:
             }
             core.setOutput('tags', tags.join(','));
       - name: push service image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
@@ -615,7 +536,7 @@ jobs:
           gpg_signing_key: ${{ secrets.GPG_KEY_DEB }}
 
   sha256sums:
-    needs: [create_release, linux, macos, distribution]
+    needs: [create_release, linux, distribution]
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -650,7 +571,8 @@ jobs:
       source: release
       source_id: ${{ needs.create_release.outputs.version }}
       version: ${{ needs.create_release.outputs.version }}
-      runner_provider: github
+      runner_provider: gcp
+      target: all
 
   sqlsmith:
     needs: [create_release, linux]
@@ -710,6 +632,7 @@ jobs:
             --arg title "[Release] ${{ needs.create_release.outputs.version }}" \
             --arg content "Build result: ${status}" \
             --arg link "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --arg page "https://github.com/datafuselabs/databend/releases/tag/${{ needs.create_release.outputs.version }}" \
             > /tmp/release-report.json
           curl -X POST "${{ secrets.RELEASE_REPORT_WEBHOOK }}" \
             -H 'Content-Type: application/json' \

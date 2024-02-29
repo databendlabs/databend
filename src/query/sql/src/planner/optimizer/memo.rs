@@ -77,9 +77,9 @@ impl Memo {
 
     pub fn insert(&mut self, target_group: Option<IndexType>, s_expr: SExpr) -> Result<IndexType> {
         let mut children_group = vec![];
-        for expr in s_expr.children() {
+        for child in s_expr.children() {
             // Insert children expressions recursively and collect their group indices
-            let group = self.insert(None, (**expr).clone())?;
+            let group = self.insert(None, child.clone())?;
             children_group.push(group);
         }
 
@@ -107,7 +107,7 @@ impl Memo {
             }
         };
 
-        let m_expr = MExpr::create(
+        let m_expr = MExpr::new(
             group_index,
             self.group(group_index)?.num_exprs(),
             s_expr.plan,

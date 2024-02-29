@@ -15,20 +15,23 @@
 use core::cmp::Ordering;
 use std::ops::Range;
 
+use geozero::wkb::Ewkb;
+use geozero::ToJson;
 use roaring::RoaringTreemap;
 
+use super::binary::BinaryColumn;
+use super::binary::BinaryColumnBuilder;
+use super::binary::BinaryIterator;
 use super::date::date_to_string;
 use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
 use crate::date_helper::TzLUT;
 use crate::property::Domain;
 use crate::types::map::KvPair;
-use crate::types::string::StringColumn;
-use crate::types::string::StringColumnBuilder;
-use crate::types::string::StringIterator;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::DataType;
+use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::values::Column;
@@ -45,10 +48,10 @@ pub struct VariantType;
 impl ValueType for VariantType {
     type Scalar = Vec<u8>;
     type ScalarRef<'a> = &'a [u8];
-    type Column = StringColumn;
+    type Column = BinaryColumn;
     type Domain = ();
-    type ColumnIterator<'a> = StringIterator<'a>;
-    type ColumnBuilder = StringColumnBuilder;
+    type ColumnIterator<'a> = BinaryIterator<'a>;
+    type ColumnBuilder = BinaryColumnBuilder;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: &'long [u8]) -> &'short [u8] {
@@ -93,7 +96,10 @@ impl ValueType for VariantType {
         }
     }
 
-    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder> {
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        _decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder> {
         Some(ColumnBuilder::Variant(builder))
     }
 
@@ -131,7 +137,7 @@ impl ValueType for VariantType {
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        StringColumnBuilder::from_column(col)
+        BinaryColumnBuilder::from_column(col)
     }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
@@ -182,7 +188,7 @@ impl ArgType for VariantType {
     fn full_domain() -> Self::Domain {}
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
-        StringColumnBuilder::with_capacity(capacity, 0)
+        BinaryColumnBuilder::with_capacity(capacity, 0)
     }
 }
 
@@ -207,7 +213,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         ScalarRef::Decimal(x) => x.to_float64().into(),
         ScalarRef::Boolean(b) => jsonb::Value::Bool(b),
         ScalarRef::Binary(s) => jsonb::Value::String(hex::encode_upper(s).into()),
-        ScalarRef::String(s) => jsonb::Value::String(String::from_utf8_lossy(s)),
+        ScalarRef::String(s) => jsonb::Value::String(s.into()),
         ScalarRef::Timestamp(ts) => timestamp_to_string(ts, inner_tz).to_string().into(),
         ScalarRef::Date(d) => date_to_string(d, inner_tz).to_string().into(),
         ScalarRef::Array(col) => {
@@ -221,7 +227,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
                 .iter()
                 .map(|(k, v)| {
                     let key = match k {
-                        ScalarRef::String(v) => unsafe { String::from_utf8_unchecked(v.to_vec()) },
+                        ScalarRef::String(v) => v.to_string(),
                         ScalarRef::Number(v) => v.to_string(),
                         ScalarRef::Decimal(v) => v.to_string(),
                         ScalarRef::Boolean(v) => v.to_string(),
@@ -265,6 +271,15 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
             buf.extend_from_slice(bytes);
             return;
         }
+        ScalarRef::Geometry(bytes) => {
+            let geom = Ewkb(bytes.to_vec())
+                .to_json()
+                .expect("failed to decode wkb data");
+            jsonb::parse_value(geom.as_bytes())
+                .expect("failed to parse geojson to json value")
+                .write_to_vec(buf);
+            return;
+        }
     };
     value.write_to_vec(buf);
 }
@@ -272,9 +287,9 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
 pub fn cast_scalars_to_variants(
     scalars: impl IntoIterator<Item = ScalarRef>,
     tz: TzLUT,
-) -> StringColumn {
+) -> BinaryColumn {
     let iter = scalars.into_iter();
-    let mut builder = StringColumnBuilder::with_capacity(iter.size_hint().0, 0);
+    let mut builder = BinaryColumnBuilder::with_capacity(iter.size_hint().0, 0);
     for scalar in iter {
         cast_scalar_to_variant(scalar, tz, &mut builder.data);
         builder.commit_row();

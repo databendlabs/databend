@@ -1,4 +1,5 @@
 information_schema
+system
 test -- insert
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Insert] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public]
 1
@@ -31,6 +32,7 @@ GRANT SELECT ON 'default'.'grant_db'.'t' TO 'a'@'%'
 default
 grant_db
 information_schema
+system
 test -- show tables from system
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'system'
 test -- show tables from grant_db
@@ -43,16 +45,14 @@ Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does n
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
 1
 0
-92
-7
-1
-0
+1	64	373
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'default'.'t' for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
+a b/data_UUID_0000_00000000.parquet	1	0	NULL	NULL
 === check db/table_id ===
 GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
 GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
@@ -60,6 +60,7 @@ GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
 GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 GRANT Read ON STAGE s3 TO 'b'@'%'
 GRANT SELECT,INSERT ON 'default'.'c'.'t' TO 'b'@'%'
+GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
 GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
 GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
@@ -67,6 +68,7 @@ GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
 GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 GRANT Read ON STAGE s3 TO 'b'@'%'
 GRANT SELECT,INSERT ON 'default'.'c'.'t1' TO 'b'@'%'
+GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
 2
 GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
@@ -75,6 +77,7 @@ GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
 GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 GRANT Read ON STAGE s3 TO 'b'@'%'
 GRANT SELECT,INSERT ON 'default'.'d'.'t1' TO 'b'@'%'
+GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
 2
 3

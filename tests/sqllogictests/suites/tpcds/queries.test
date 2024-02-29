@@ -2,9 +2,6 @@ statement ok
 set sandbox_tenant = 'test_tenant';
 
 statement ok
-set enable_runtime_filter = 1;
-
-statement ok
 use tpcds;
 
 # Q1

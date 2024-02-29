@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
@@ -136,6 +138,10 @@ impl Processor for ParquetSource {
                     bytes: data_block.memory_size(),
                 };
                 self.scan_progress.incr(&progress_values);
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::ScanBytes,
+                    data_block.memory_size(),
+                );
                 self.output.push_data(Ok(data_block));
                 Ok(Event::NeedConsume)
             }

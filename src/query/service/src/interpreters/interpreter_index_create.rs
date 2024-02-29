@@ -23,6 +23,8 @@ use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::IndexType;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::CreateIndexPlan;
 use databend_enterprise_aggregating_index::get_agg_index_handler;
 
@@ -48,9 +50,20 @@ impl Interpreter for CreateIndexInterpreter {
         "CreateIndexInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
+        let tenant_name = self.ctx.get_tenant();
+
+        let non_empty = NonEmptyString::new(tenant_name).map_err(|_| {
+            ErrorCode::TenantIsEmpty("tenant is empty(when create index)".to_string())
+        })?;
+
+        let tenant = Tenant::new_nonempty(non_empty);
+
         let license_manager = get_license_manager();
         license_manager
             .manager
@@ -67,8 +80,8 @@ impl Interpreter for CreateIndexInterpreter {
         let catalog = self.ctx.get_catalog(&catalog).await?;
 
         let create_index_req = CreateIndexReq {
-            if_not_exists: self.plan.if_not_exists,
-            name_ident: IndexNameIdent { tenant, index_name },
+            create_option: self.plan.create_option,
+            name_ident: IndexNameIdent::new(tenant, &index_name),
             meta: IndexMeta {
                 table_id: self.plan.table_id,
                 index_type: IndexType::AGGREGATING,

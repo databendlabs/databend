@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::CreateUDFPlan;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
@@ -44,6 +45,10 @@ impl Interpreter for CreateUserUDFInterpreter {
         "CreateUserUDFInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -53,7 +58,7 @@ impl Interpreter for CreateUserUDFInterpreter {
         let tenant = self.ctx.get_tenant();
         let udf = plan.udf;
         let _ = UserApiProvider::instance()
-            .add_udf(&tenant, udf, plan.if_not_exists)
+            .add_udf(&tenant, udf, &plan.create_option)
             .await?;
 
         // Grant ownership as the current role
@@ -67,6 +72,7 @@ impl Interpreter for CreateUserUDFInterpreter {
                     &current_role.name,
                 )
                 .await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         Ok(PipelineBuildResult::create())

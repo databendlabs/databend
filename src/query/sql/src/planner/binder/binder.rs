@@ -161,7 +161,7 @@ impl<'a> Binder {
                 ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             match new_expr {
                 Expr::Constant { scalar, .. } => {
-                    let value = String::from_utf8(scalar.into_string().unwrap())?;
+                    let value = scalar.into_string().unwrap();
                     if variable.to_lowercase().as_str() == "timezone" {
                         let tz = value.trim_matches(|c| c == '\'' || c == '\"');
                         tz.parse::<Tz>().map_err(|_| {
@@ -234,6 +234,10 @@ impl<'a> Binder {
                 self.bind_show_functions(bind_context, show_options).await?
             }
 
+            Statement::ShowUserFunctions { show_options } => {
+                self.bind_show_user_functions(bind_context, show_options).await?
+            }
+
             Statement::ShowTableFunctions { show_options } => {
                 self.bind_show_table_functions(bind_context, show_options).await?
             }
@@ -303,6 +307,7 @@ impl<'a> Binder {
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(bind_context, stmt).await?,
             Statement::VacuumTable(stmt) => self.bind_vacuum_table(bind_context, stmt).await?,
             Statement::VacuumDropTable(stmt) => self.bind_vacuum_drop_table(bind_context, stmt).await?,
+            Statement::VacuumTemporaryFiles(stmt) => self.bind_vacuum_temporary_files(bind_context, stmt).await?,
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
@@ -421,14 +426,14 @@ impl<'a> Binder {
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             // File Formats
-            Statement::CreateFileFormat { if_not_exists, name, file_format_options } => {
+            Statement::CreateFileFormat { create_option, name, file_format_options } => {
                 if StageFileFormatType::from_str(name).is_ok() {
                     return Err(ErrorCode::SyntaxException(format!(
                         "File format {name} is reserved"
                     )));
                 }
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
-                    if_not_exists: *if_not_exists,
+                    create_option: *create_option,
                     name: name.clone(),
                     file_format_params: file_format_options.clone().try_into()?,
                 }))
@@ -607,6 +612,9 @@ impl<'a> Binder {
             Statement::DropPipe(_) => {
                 todo!()
             }
+            Statement::Begin=> Plan::Begin,
+            Statement::Commit=>Plan::Commit,
+            Statement::Abort=>Plan::Abort,
         };
         Ok(plan)
     }

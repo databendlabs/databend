@@ -24,6 +24,11 @@ select number from numbers_mt(10) where number not between 4 + 0.1  and 8 - 0.1 
 8
 9
 
+query III
+select 1 = '1', 1::Int16 = '1', number from numbers(10) where number = '1'
+----
+1 1 1
+
 query I
 select number from numbers_mt(10) where number between 4 + 0.1  and 8 - 0.1  order by number
 ----
@@ -728,9 +733,8 @@ select to_varchar(3 + 4) = '7'
 
 
 
-statement error 1065
+statement error 1006
 select '123 ab' = 123
-
 
 
 query B

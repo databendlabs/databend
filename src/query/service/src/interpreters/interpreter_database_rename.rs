@@ -41,6 +41,10 @@ impl Interpreter for RenameDatabaseInterpreter {
         "RenameDatabaseInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         for entity in &self.plan.entities {

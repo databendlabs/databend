@@ -15,6 +15,7 @@
 //! Schema types
 
 mod catalog;
+mod create_option;
 mod database;
 mod index;
 mod least_visible_time;
@@ -23,6 +24,7 @@ mod ownership;
 mod table;
 mod virtual_column;
 pub use catalog::*;
+pub use create_option::CreateOption;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseId;
@@ -86,7 +88,6 @@ pub use table::SetTableColumnMaskPolicyAction;
 pub use table::SetTableColumnMaskPolicyReply;
 pub use table::SetTableColumnMaskPolicyReq;
 pub use table::TableCopiedFileInfo;
-pub use table::TableCopiedFileLockKey;
 pub use table::TableCopiedFileNameIdent;
 pub use table::TableId;
 pub use table::TableIdList;
@@ -102,6 +103,7 @@ pub use table::TruncateTableReply;
 pub use table::TruncateTableReq;
 pub use table::UndropTableReply;
 pub use table::UndropTableReq;
+pub use table::UpdateMultiTableMetaReq;
 pub use table::UpdateStreamMetaReq;
 pub use table::UpdateTableMetaReply;
 pub use table::UpdateTableMetaReq;
@@ -118,26 +120,3 @@ pub use virtual_column::UpdateVirtualColumnReply;
 pub use virtual_column::UpdateVirtualColumnReq;
 pub use virtual_column::VirtualColumnMeta;
 pub use virtual_column::VirtualColumnNameIdent;
-
-const PREFIX_CATALOG: &str = "__fd_catalog";
-const PREFIX_CATALOG_BY_ID: &str = "__fd_catalog_by_id";
-const PREFIX_CATALOG_ID_TO_NAME: &str = "__fd_catalog_id_to_name";
-
-const PREFIX_DB_ID_LIST: &str = "__fd_db_id_list";
-const PREFIX_DATABASE: &str = "__fd_database";
-const PREFIX_DATABASE_BY_ID: &str = "__fd_database_by_id";
-const PREFIX_DATABASE_ID_TO_NAME: &str = "__fd_database_id_to_name";
-
-const PREFIX_TABLE: &str = "__fd_table";
-const PREFIX_TABLE_BY_ID: &str = "__fd_table_by_id";
-const PREFIX_TABLE_ID_LIST: &str = "__fd_table_id_list";
-const PREFIX_TABLE_COUNT: &str = "__fd_table_count";
-const PREFIX_TABLE_ID_TO_NAME: &str = "__fd_table_id_to_name";
-const PREFIX_TABLE_COPIED_FILES: &str = "__fd_table_copied_files";
-const PREFIX_TABLE_COPIED_FILES_LOCK: &str = "__fd_table_copied_file_lock";
-const PREFIX_INDEX: &str = "__fd_index";
-const PREFIX_INDEX_ID_TO_NAME: &str = "__fd_index_id_to_name";
-const PREFIX_INDEX_BY_ID: &str = "__fd_index_by_id";
-const PREFIX_TABLE_LOCK: &str = "__fd_table_lock";
-const PREFIX_TABLE_LVT: &str = "__fd_table_lvt";
-const PREFIX_VIRTUAL_COLUMN: &str = "__fd_virtual_column";

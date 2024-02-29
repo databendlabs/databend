@@ -50,16 +50,6 @@ select array_concat(col1::Array(VARIANT), col5::Array(VARIANT)) from t
 ['1','2','3','3','[1,2]','[]','[null]']
 
 query T
-select array_concat(col1::Array(VARIANT), col2::Array(VARIANT)) from t;
-----
-['1','2','3','3','"x"','"x"','"y"','"z"']
-
-query T
-select array_concat(col5::Array(VARIANT), col2::Array(VARIANT)) from t;
-----
-['[1,2]','[]','[null]','"x"','"x"','"y"','"z"']
-
-query T
 select array_concat(col4, col3) from t;
 ----
 ['2023-01-01 02:00:01.000000','2022-02-02 00:00:00.000000']

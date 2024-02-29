@@ -17,11 +17,12 @@ env:
   RUNNER_PROVIDER: gcp
 
 jobs:
-  build:
-    if: contains(github.event.pull_request.labels.*.name, 'ci-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
-    runs-on: [self-hosted, X64, Linux, 16c32g, gcp]
+  info:
+    if: contains(github.event.pull_request.labels.*.name, 'ci-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark-local')
+    runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.sha.outputs.sha }}
+      target: ${{ steps.sha.outputs.target }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,32 +33,57 @@ jobs:
         id: sha
         run: |
           echo "sha=$(git rev-parse --verify HEAD)" > $GITHUB_OUTPUT
+          if ${{ contains(github.event.pull_request.labels.*.name, 'ci-benchmark') }}; then
+            echo "target=all" >> $GITHUB_OUTPUT
+          elif ${{ contains(github.event.pull_request.labels.*.name, 'ci-benchmark-cloud') }}; then
+            echo "target=cloud" >> $GITHUB_OUTPUT
+          elif ${{ contains(github.event.pull_request.labels.*.name, 'ci-benchmark-local') }}; then
+            echo "target=local" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: info
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
+    strategy:
+      matrix:
+        include:
+          - {target: x86_64-unknown-linux-gnu, runner: X64}
+          - {target: aarch64-unknown-linux-gnu, runner: ARM64}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: "refs/pull/${{ github.event.number }}/merge"
       - name: Build Release
         uses: ./.github/actions/build_linux
         timeout-minutes: 60
         with:
-          sha: ${{ steps.sha.outputs.sha }}
-          target: x86_64-unknown-linux-gnu
+          sha: ${{ needs.info.outputs.sha }}
+          target: ${{ matrix.target }}
           artifacts: meta,query
 
   docker:
-    needs: build
+    needs: [info, build]
     timeout-minutes: 10
     runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-      - name: Download artifact
+      - name: Download artifact for x86_64
         uses: ./.github/actions/artifact_download
         with:
-          sha: ${{ needs.build.outputs.sha }}
+          sha: ${{ needs.info.outputs.sha }}
           target: x86_64-unknown-linux-gnu
+          path: ./target/x86_64-unknown-linux-gnu/release
           artifacts: meta,query
-      - name: Prepare docker build
-        run: |
-          mkdir -p ./distro/linux/amd64
-          cp ./target/release/databend-* ./distro/linux/amd64
+      - name: Download artifact for aarch64
+        uses: ./.github/actions/artifact_download
+        with:
+          sha: ${{ needs.info.outputs.sha }}
+          target: aarch64-unknown-linux-gnu
+          path: ./target/aarch64-unknown-linux-gnu/release
+          artifacts: meta,query
       - uses: ./.github/actions/setup_docker
         id: login
         with:
@@ -66,16 +92,17 @@ jobs:
       - name: Prepare for docker
         id: prepare
         run: |
-          mkdir -p ./distro/linux/amd64
-          cp ./target/release/databend-query ./distro/linux/amd64/databend-query
-          short_sha=$(echo "${{ needs.build.outputs.sha }}" | cut -c1-7)
+          mkdir -p ./distro/linux/{amd64,arm64}
+          cp ./target/x86_64-unknown-linux-gnu/release/databend-query ./distro/linux/amd64/
+          cp ./target/aarch64-unknown-linux-gnu/release/databend-query ./distro/linux/arm64/
+          short_sha=$(echo "${{ needs.info.outputs.sha }}" | cut -c1-7)
           echo "tag=pr-${{ github.event.pull_request.number }}-${short_sha}" >> $GITHUB_OUTPUT
       - name: push service image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           push: true
           tags: ${{ steps.login.outputs.ecr_repo }}:${{ steps.prepare.outputs.tag }}
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/debian/query.Dockerfile
       - name: Comment on PR
@@ -91,14 +118,15 @@ jobs:
             > please check the [internal doc](https://datafuselabs.feishu.cn/wiki/Hk7iwYsnWi3wsXkpbW5c9apTn0b) for more details.
 
   benchmark:
-    if: contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
-    needs: [build, docker]
+    if: needs.info.outputs.target
+    needs: [info, build, docker]
     uses: ./.github/workflows/reuse.benchmark.yml
     secrets: inherit
     with:
-      sha: ${{ needs.build.outputs.sha }}
+      sha: ${{ needs.info.outputs.sha }}
       run_id: ${{ github.run_id }}
       source: pr
       source_id: ${{ github.event.pull_request.number }}
       version: ${{ needs.docker.outputs.tag }}
-      runner_provider: github
+      runner_provider: gcp
+      target: ${{ needs.info.outputs.target }}

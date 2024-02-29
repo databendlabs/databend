@@ -374,6 +374,9 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::ShowMetrics { show_options } => visitor.visit_show_metrics(show_options),
         Statement::ShowEngines { show_options } => visitor.visit_show_engines(show_options),
         Statement::ShowFunctions { show_options } => visitor.visit_show_functions(show_options),
+        Statement::ShowUserFunctions { show_options } => {
+            visitor.visit_show_user_functions(show_options)
+        }
         Statement::ShowTableFunctions { show_options } => {
             visitor.visit_show_table_functions(show_options)
         }
@@ -420,6 +423,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::OptimizeTable(stmt) => visitor.visit_optimize_table(stmt),
         Statement::VacuumTable(stmt) => visitor.visit_vacuum_table(stmt),
         Statement::VacuumDropTable(stmt) => visitor.visit_vacuum_drop_table(stmt),
+        Statement::VacuumTemporaryFiles(stmt) => visitor.visit_vacuum_temporary_files(stmt),
         Statement::AnalyzeTable(stmt) => visitor.visit_analyze_table(stmt),
         Statement::ExistsTable(stmt) => visitor.visit_exists_table(stmt),
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
@@ -470,10 +474,10 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             visitor.visit_remove_stage(location, pattern)
         }
         Statement::CreateFileFormat {
-            if_not_exists,
+            create_option,
             name,
             file_format_options,
-        } => visitor.visit_create_file_format(*if_not_exists, name, file_format_options),
+        } => visitor.visit_create_file_format(create_option, name, file_format_options),
         Statement::DropFileFormat { if_exists, name } => {
             visitor.visit_drop_file_format(*if_exists, name)
         }
@@ -525,5 +529,8 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::AlterPipe(_) => todo!(),
         Statement::DropPipe(_) => todo!(),
         Statement::DescribePipe(_) => todo!(),
+        Statement::Begin => {}
+        Statement::Commit => {}
+        Statement::Abort => {}
     }
 }

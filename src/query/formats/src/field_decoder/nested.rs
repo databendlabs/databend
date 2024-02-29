@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
@@ -49,9 +50,11 @@ use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
 use databend_common_io::parse_bitmap;
+use databend_common_io::parse_to_ewkb;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 
+use crate::binary::decode_binary;
 use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
 
@@ -79,6 +82,8 @@ impl NestedValues {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
+                binary_format: Default::default(),
+                is_rounding_mode: options_ext.is_rounding_mode,
             },
         }
     }
@@ -125,14 +130,20 @@ impl NestedValues {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, reader),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader),
-            ColumnBuilder::Binary(_c) => todo!("new string"),
+            ColumnBuilder::Binary(c) => self.read_binary(c, reader),
             ColumnBuilder::String(c) => self.read_string(c, reader),
             ColumnBuilder::Array(c) => self.read_array(c, reader),
             ColumnBuilder::Map(c) => self.read_map(c, reader),
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, reader),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader),
-            _ => unimplemented!(),
+            ColumnBuilder::Geometry(c) => self.read_geometry(c, reader),
+            ColumnBuilder::EmptyArray { .. } => {
+                unreachable!("EmptyArray")
+            }
+            ColumnBuilder::EmptyMap { .. } => {
+                unreachable!("EmptyMap")
+            }
         }
     }
 
@@ -187,6 +198,19 @@ impl NestedValues {
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         reader.read_quoted_text(&mut column.data, b'\'')?;
+        column.commit_row();
+        Ok(())
+    }
+
+    fn read_binary<R: AsRef<[u8]>>(
+        &self,
+        column: &mut BinaryColumnBuilder,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        reader.read_quoted_text(&mut buf, b'\'')?;
+        let decoded = decode_binary(&buf, self.common_settings.binary_format)?;
+        column.put_slice(&decoded);
         column.commit_row();
         Ok(())
     }
@@ -263,7 +287,7 @@ impl NestedValues {
 
     fn read_bitmap<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringColumnBuilder,
+        column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let mut buf = Vec::new();
@@ -276,7 +300,7 @@ impl NestedValues {
 
     fn read_variant<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringColumnBuilder,
+        column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let mut buf = Vec::new();
@@ -288,13 +312,25 @@ impl NestedValues {
             }
             Err(e) => {
                 if self.common_settings().disable_variant_check {
-                    column.put_slice(&buf);
                     column.commit_row();
                 } else {
                     return Err(ErrorCode::BadBytes(e.to_string()));
                 }
             }
         }
+        Ok(())
+    }
+
+    fn read_geometry<R: AsRef<[u8]>>(
+        &self,
+        column: &mut BinaryColumnBuilder,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf)?;
+        let geom = parse_to_ewkb(&buf, None)?;
+        column.put_slice(geom.as_bytes());
+        column.commit_row();
         Ok(())
     }
 

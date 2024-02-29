@@ -20,8 +20,6 @@ runs:
     - name: Test compatibility
       shell: bash
       run: |
-          bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.150 base
-          bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.151 base
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.0.56 base
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.0.56 01_meta_compression 01_flashback
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.1.30 base
@@ -29,6 +27,10 @@ runs:
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.1.38 base
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.1.39 base
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.1.46 base
+          bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.241 revoke
+          bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.306 rbac
+          bash ./tests/fuse-compat/test-fuse-forward-compat.sh 1.2.307 rbac
+          bash ./tests/fuse-compat/test-fuse-forward-compat.sh 1.2.318 rbac
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure

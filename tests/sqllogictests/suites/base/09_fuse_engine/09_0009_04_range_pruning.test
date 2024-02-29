@@ -44,7 +44,6 @@ select max(a) from range_test_t where a >= 4000 and a <= 5000;
 ----
 5000
 
-
 statement ok
 drop table range_test_t
 

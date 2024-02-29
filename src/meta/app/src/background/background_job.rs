@@ -379,15 +379,23 @@ impl Display for ListBackgroundJobsReq {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::background::background_job::BackgroundJobId;
     use crate::background::background_job::BackgroundJobIdent;
-    const PREFIX_BACKGROUND_JOB: &str = "__fd_background_job";
-    const PREFIX_BACKGROUND_JOB_BY_ID: &str = "__fd_background_job_by_id";
+    use crate::background::BackgroundJobInfo;
+    use crate::tenant::Tenant;
 
     /// <prefix>/<tenant>/<background_job_ident> -> <id>
     impl kvapi::Key for BackgroundJobIdent {
-        const PREFIX: &'static str = PREFIX_BACKGROUND_JOB;
+        const PREFIX: &'static str = "__fd_background_job";
+
+        type ValueType = BackgroundJobId;
+
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -408,7 +416,13 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::Key for BackgroundJobId {
-        const PREFIX: &'static str = PREFIX_BACKGROUND_JOB_BY_ID;
+        const PREFIX: &'static str = "__fd_background_job_by_id";
+
+        type ValueType = BackgroundJobInfo;
+
+        fn parent(&self) -> Option<String> {
+            None
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -423,6 +437,18 @@ mod kvapi_key_impl {
             p.done()?;
 
             Ok(BackgroundJobId { id })
+        }
+    }
+
+    impl kvapi::Value for BackgroundJobId {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
+
+    impl kvapi::Value for BackgroundJobInfo {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
         }
     }
 }

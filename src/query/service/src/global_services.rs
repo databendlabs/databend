@@ -25,7 +25,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogType;
-use databend_common_profile::QueryProfileManager;
 use databend_common_sharing::ShareEndpointManager;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
@@ -110,7 +109,6 @@ impl GlobalServices {
         .await?;
         RoleCacheManager::init()?;
         ShareEndpointManager::init()?;
-        QueryProfileManager::init();
 
         DataOperator::init(&config.storage).await?;
         ShareTableConfig::init(
@@ -121,7 +119,7 @@ impl GlobalServices {
         CacheManager::init(&config.cache, &config.query.tenant_id)?;
 
         if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
-            CloudControlApiProvider::init(addr).await?;
+            CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;
         }
 
         Ok(())

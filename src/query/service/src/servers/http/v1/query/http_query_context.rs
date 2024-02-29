@@ -63,6 +63,26 @@ impl HttpQueryContext {
             })?;
         Ok(self.session.clone())
     }
+
+    pub fn to_minitrace_properties(&self) -> Vec<(&'static str, String)> {
+        let mut properties = self.session.to_minitrace_properties();
+        properties.extend([
+            ("query_id", self.query_id.clone()),
+            ("node_id", self.node_id.clone()),
+            (
+                "deduplicate_label",
+                self.deduplicate_label.clone().unwrap_or_default(),
+            ),
+            ("user_agent", self.user_agent.clone().unwrap_or_default()),
+            ("http_method", self.http_method.clone()),
+            ("uri", self.uri.clone()),
+        ]);
+        properties
+    }
+
+    pub fn set_fail(&self) {
+        self.session.txn_mgr().lock().set_fail();
+    }
 }
 
 #[async_trait::async_trait]

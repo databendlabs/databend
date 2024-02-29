@@ -152,7 +152,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
         if let Plan::OptimizeTable(plan) = compact_plan {
             let optimize_interpreter =
                 OptimizeTableInterpreter::try_create(ctx.clone(), *plan.clone())?;
-            optimize_interpreter.execute(ctx).await?;
+            let _ = optimize_interpreter.execute(ctx).await?;
         }
         Ok::<(), ErrorCode>(())
     };

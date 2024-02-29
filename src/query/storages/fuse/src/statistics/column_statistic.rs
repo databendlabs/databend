@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
@@ -29,8 +31,19 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
+// Don't change this value
+// 0.04f--> 10 buckets
+const DISTINCT_ERROR_RATE: f64 = 0.04;
+
 pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<u64> {
-    let distinct_values = eval_aggr("approx_count_distinct", vec![], &[column.clone()], rows)?;
+    let distinct_values = eval_aggr(
+        "approx_count_distinct",
+        vec![Scalar::Number(NumberScalar::Float64(
+            DISTINCT_ERROR_RATE.into(),
+        ))],
+        &[column.clone()],
+        rows,
+    )?;
     let col = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap();
     Ok(col[0])
 }
@@ -130,6 +143,19 @@ pub fn gen_columns_statistics(
     Ok(statistics)
 }
 
+pub fn scalar_min_max(data_type: &DataType, scalar: Scalar) -> Option<(Scalar, Scalar)> {
+    if RangeIndex::supported_type(data_type) {
+        if let Some((min, Some(max))) = scalar
+            .clone()
+            .trim_min(STATS_STRING_PREFIX_LEN)
+            .map(|min| (min, scalar.trim_max(STATS_STRING_PREFIX_LEN)))
+        {
+            return Some((min, max));
+        }
+    }
+    None
+}
+
 pub mod traverse {
     use databend_common_expression::types::map::KvPair;
     use databend_common_expression::types::AnyType;
@@ -222,86 +248,74 @@ pub const STATS_STRING_PREFIX_LEN: usize = 16;
 impl Trim for Scalar {
     fn trim_min(self, trim_len: usize) -> Option<Self> {
         match self {
-            Scalar::String(bytes) => match String::from_utf8(bytes) {
-                Ok(mut v) => {
-                    if v.len() <= trim_len {
-                        Some(Scalar::String(v.into_bytes()))
-                    } else {
-                        // find the character boundary to prevent String::truncate from panic
-                        let vs = v.as_str();
-                        let slice = match vs.char_indices().nth(trim_len) {
-                            None => vs,
-                            Some((idx, _)) => &vs[..idx],
-                        };
+            Scalar::String(mut s) => {
+                if s.len() <= trim_len {
+                    Some(Scalar::String(s))
+                } else {
+                    // find the character boundary to prevent String::truncate from panic
+                    let vs = s.as_str();
+                    let slice = match vs.char_indices().nth(trim_len) {
+                        None => vs,
+                        Some((idx, _)) => &vs[..idx],
+                    };
 
-                        // do truncate
-                        Some(Scalar::String({
-                            v.truncate(slice.len());
-                            v.into_bytes()
-                        }))
-                    }
+                    // do truncate
+                    Some(Scalar::String({
+                        s.truncate(slice.len());
+                        s
+                    }))
                 }
-                Err(_) => {
-                    // if failed to convert the bytes into (utf-8)string, just ignore it.
-                    None
-                }
-            },
+            }
             v => Some(v),
         }
     }
 
     fn trim_max(self, trim_len: usize) -> Option<Self> {
         match self {
-            Scalar::String(bytes) => match String::from_utf8(bytes) {
-                Ok(v) => {
-                    if v.len() <= trim_len {
-                        // if number of bytes is lesser, just return
-                        Some(Scalar::String(v.into_bytes()))
-                    } else {
-                        // no need to trim, less than STRING_PREFIX_LEN chars
-                        let number_of_chars = v.as_str().chars().count();
-                        if number_of_chars <= trim_len {
-                            return Some(Scalar::String(v.into_bytes()));
-                        }
-
-                        // slice the input (at the boundary of chars), takes at most STRING_PREFIX_LEN chars
-                        let vs = v.as_str();
-                        let sliced = match vs.char_indices().nth(trim_len) {
-                            None => vs,
-                            Some((idx, _)) => &vs[..idx],
-                        };
-
-                        // find the position to replace the char with REPLACEMENT_CHAR
-                        // in reversed order, break at the first one we met
-                        let mut idx = None;
-                        for (i, c) in sliced.char_indices().rev() {
-                            if c < STATS_REPLACEMENT_CHAR {
-                                idx = Some(i);
-                                break;
-                            }
-                        }
-
-                        // grab the replacement_point
-                        let replacement_point = idx?;
-
-                        // rebuild the string (since the len of result string is rather small)
-                        let mut r = String::with_capacity(trim_len);
-                        for (i, c) in sliced.char_indices() {
-                            if i < replacement_point {
-                                r.push(c)
-                            } else {
-                                r.push(STATS_REPLACEMENT_CHAR);
-                            }
-                        }
-
-                        Some(Scalar::String(r.into_bytes()))
+            Scalar::String(v) => {
+                if v.len() <= trim_len {
+                    // if number of bytes is lesser, just return
+                    Some(Scalar::String(v))
+                } else {
+                    // no need to trim, less than STRING_PREFIX_LEN chars
+                    let number_of_chars = v.as_str().chars().count();
+                    if number_of_chars <= trim_len {
+                        return Some(Scalar::String(v));
                     }
+
+                    // slice the input (at the boundary of chars), takes at most STRING_PREFIX_LEN chars
+                    let vs = v.as_str();
+                    let sliced = match vs.char_indices().nth(trim_len) {
+                        None => vs,
+                        Some((idx, _)) => &vs[..idx],
+                    };
+
+                    // find the position to replace the char with REPLACEMENT_CHAR
+                    // in reversed order, break at the first one we met
+                    let mut idx = None;
+                    for (i, c) in sliced.char_indices().rev() {
+                        if c < STATS_REPLACEMENT_CHAR {
+                            idx = Some(i);
+                            break;
+                        }
+                    }
+
+                    // grab the replacement_point
+                    let replacement_point = idx?;
+
+                    // rebuild the string (since the len of result string is rather small)
+                    let mut r = String::with_capacity(trim_len);
+                    for (i, c) in sliced.char_indices() {
+                        if i < replacement_point {
+                            r.push(c)
+                        } else {
+                            r.push(STATS_REPLACEMENT_CHAR);
+                        }
+                    }
+
+                    Some(Scalar::String(r))
                 }
-                Err(_) => {
-                    // if failed to convert the bytes into (utf-8)string, just ignore it.
-                    None
-                }
-            },
+            }
             v => Some(v),
         }
     }

@@ -28,6 +28,7 @@ use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
@@ -54,6 +55,7 @@ use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
 use databend_common_io::parse_bitmap;
+use databend_common_io::parse_to_ewkb;
 use databend_common_io::prelude::FormatSettings;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
@@ -66,7 +68,6 @@ use crate::InputCommonSettings;
 #[derive(Clone)]
 pub struct FastFieldDecoderValues {
     common_settings: InputCommonSettings,
-    rounding_mode: bool,
 }
 
 impl FieldDecoder for FastFieldDecoderValues {
@@ -76,7 +77,7 @@ impl FieldDecoder for FastFieldDecoderValues {
 }
 
 impl FastFieldDecoderValues {
-    pub fn create_for_insert(format: FormatSettings, rounding_mode: bool) -> Self {
+    pub fn create_for_insert(format: FormatSettings, is_rounding_mode: bool) -> Self {
         FastFieldDecoderValues {
             common_settings: InputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
@@ -89,8 +90,9 @@ impl FastFieldDecoderValues {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: format.timezone,
                 disable_variant_check: false,
+                binary_format: Default::default(),
+                is_rounding_mode,
             },
-            rounding_mode,
         }
     }
 
@@ -143,14 +145,17 @@ impl FastFieldDecoderValues {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, reader, positions),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, positions),
-            ColumnBuilder::Binary(_c) => todo!("new string"),
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, reader, positions),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, positions),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, positions),
-            _ => unimplemented!(),
+            ColumnBuilder::Geometry(c) => self.read_geometry(c, reader, positions),
+            ColumnBuilder::Binary(_) => Err(ErrorCode::Unimplemented("binary literal")),
+            ColumnBuilder::EmptyArray { .. } | ColumnBuilder::EmptyMap { .. } => {
+                Err(ErrorCode::Unimplemented("empty array/map literal"))
+            }
         }
     }
 
@@ -206,7 +211,7 @@ impl FastFieldDecoderValues {
             Err(_) => {
                 // cast float value to integer value
                 let val: f64 = reader.read_float_text()?;
-                let new_val: Option<T::Native> = if self.rounding_mode {
+                let new_val: Option<T::Native> = if self.common_settings.is_rounding_mode {
                     num_traits::cast::cast(val.round())
                 } else {
                     num_traits::cast::cast(val)
@@ -437,7 +442,7 @@ impl FastFieldDecoderValues {
 
     fn read_bitmap<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringColumnBuilder,
+        column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
@@ -451,7 +456,7 @@ impl FastFieldDecoderValues {
 
     fn read_variant<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringColumnBuilder,
+        column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
@@ -464,7 +469,6 @@ impl FastFieldDecoderValues {
             }
             Err(_) => {
                 if self.common_settings().disable_variant_check {
-                    column.put_slice(&buf);
                     column.commit_row();
                 } else {
                     return Err(ErrorCode::BadBytes(format!(
@@ -474,6 +478,20 @@ impl FastFieldDecoderValues {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn read_geometry<R: AsRef<[u8]>>(
+        &self,
+        column: &mut BinaryColumnBuilder,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        let geom = parse_to_ewkb(&buf, None)?;
+        column.put_slice(geom.as_bytes());
+        column.commit_row();
         Ok(())
     }
 }

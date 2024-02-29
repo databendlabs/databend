@@ -32,10 +32,13 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::UserApiProvider;
+use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -102,7 +105,7 @@ where TablesTable<T>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let catalogs = catalog_mgr.list_catalogs(&tenant).await?;
+        let catalogs = catalog_mgr.list_catalogs(&tenant, ctx.txn_mgr()).await?;
         let visibility_checker = ctx.get_visibility_checker().await?;
 
         Ok(self
@@ -158,6 +161,7 @@ where TablesTable<T>: HistoryAware
                 "owner",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
+            TableField::new("comment", TableDataType::String),
         ])
     }
 
@@ -180,29 +184,33 @@ where TablesTable<T>: HistoryAware
         let mut databases = vec![];
 
         let mut database_tables = vec![];
+        let mut owner: Vec<Option<String>> = Vec::new();
+        let user_api = UserApiProvider::instance();
 
         for (ctl_name, ctl) in ctls.into_iter() {
             let mut dbs = Vec::new();
             if let Some(push_downs) = &push_downs {
-                let mut db_name = Vec::new();
+                let mut db_name: Vec<String> = Vec::new();
                 if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                     let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                     find_eq_filter(&expr, &mut |col_name, scalar| {
                         if col_name == "database" {
-                            if let Scalar::String(s) = scalar {
-                                if let Ok(database) = String::from_utf8(s.clone()) {
-                                    if !db_name.contains(&database) {
-                                        db_name.push(database);
-                                    }
+                            if let Scalar::String(database) = scalar {
+                                if !db_name.contains(database) {
+                                    db_name.push(database.clone());
                                 }
                             }
                         }
                     });
                     for db in db_name {
-                        if let Ok(database) = ctl.get_database(tenant.as_str(), db.as_str()).await {
-                            dbs.push(database);
+                        match ctl.get_database(tenant.as_str(), db.as_str()).await {
+                            Ok(database) => dbs.push(database),
+                            Err(err) => {
+                                let msg = format!("Failed to get database: {}, {}", db, err);
+                                warn!("{}", msg);
+                                ctx.push_warning(msg);
+                            }
                         }
-                        ctx.push_warning(format!("get database failed: {}", db))
                     }
                 }
             }
@@ -211,11 +219,11 @@ where TablesTable<T>: HistoryAware
                 dbs = match ctl.list_databases(tenant.as_str()).await {
                     Ok(dbs) => dbs,
                     Err(err) => {
-                        ctx.push_warning(format!(
-                            "list databases failed on catalog {}: {}",
-                            ctl.name(),
-                            err
-                        ));
+                        let msg =
+                            format!("List databases failed on catalog {}: {}", ctl.name(), err);
+                        warn!("{}", msg);
+                        ctx.push_warning(msg);
+
                         vec![]
                     }
                 }
@@ -232,6 +240,8 @@ where TablesTable<T>: HistoryAware
                     )
                 })
                 .collect::<Vec<_>>();
+
+            let ownership = user_api.get_ownerships(&tenant).await.unwrap_or_default();
             for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
                 let db_id = db.get_db_info().ident.db_id;
@@ -246,16 +256,17 @@ where TablesTable<T>: HistoryAware
                         // - iceberg database
                         // - others
                         // TODO(liyz): return the warnings in the HTTP query protocol.
-                        ctx.push_warning(format!(
-                            "list tables failed on db {}: {}",
-                            db.name(),
-                            err
-                        ));
+                        let msg =
+                            format!("Failed to list tables in database: {}, {}", db.name(), err);
+                        warn!("{}", msg);
+                        ctx.push_warning(msg);
+
                         continue;
                     }
                 };
 
                 for table in tables {
+                    let table_id = table.get_id();
                     // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
                     // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
                     if visibility_checker.check_table_visibility(
@@ -263,19 +274,31 @@ where TablesTable<T>: HistoryAware
                         db.name(),
                         table.name(),
                         db_id,
-                        table.get_id(),
+                        table_id,
                     ) && table.engine() != "STREAM"
                     {
-                        catalogs.push(ctl_name.as_bytes().to_vec());
-                        databases.push(name.as_bytes().to_vec());
+                        catalogs.push(ctl_name);
+                        databases.push(name);
                         database_tables.push(table);
+                        if ownership.is_empty() {
+                            owner.push(None);
+                        } else {
+                            owner.push(
+                                ownership
+                                    .get(&OwnershipObject::Table {
+                                        catalog_name: ctl_name.to_string(),
+                                        db_id,
+                                        table_id,
+                                    })
+                                    .map(|role| role.to_string()),
+                            );
+                        }
                     }
                 }
             }
         }
 
         let mut number_of_blocks: Vec<Option<u64>> = Vec::new();
-        let mut owner: Vec<Option<Vec<u8>>> = Vec::new();
         let mut number_of_segments: Vec<Option<u64>> = Vec::new();
         let mut num_rows: Vec<Option<u64>> = Vec::new();
         let mut data_size: Vec<Option<u64>> = Vec::new();
@@ -283,21 +306,17 @@ where TablesTable<T>: HistoryAware
         let mut index_size: Vec<Option<u64>> = Vec::new();
 
         for tbl in &database_tables {
-            owner.push(
-                tbl.get_table_info()
-                    .meta
-                    .owner
-                    .as_ref()
-                    .map(|v| v.owner_role_name.as_bytes().to_vec()),
-            );
-            let stats = match tbl.table_statistics(ctx.clone()).await {
+            let stats = match tbl.table_statistics(ctx.clone(), None).await {
                 Ok(stats) => stats,
                 Err(err) => {
-                    ctx.push_warning(format!(
-                        "get table statistics failed on table {}: {}",
+                    let msg = format!(
+                        "Unable to get table statistics on table {}: {}",
                         tbl.name(),
                         err
-                    ));
+                    );
+                    warn!("{}", msg);
+                    ctx.push_warning(msg);
+
                     None
                 }
             };
@@ -309,19 +328,19 @@ where TablesTable<T>: HistoryAware
             index_size.push(stats.as_ref().and_then(|v| v.index_size));
         }
 
-        let names: Vec<Vec<u8>> = database_tables
+        let names: Vec<String> = database_tables
             .iter()
-            .map(|v| v.name().as_bytes().to_vec())
+            .map(|v| v.name().to_string())
             .collect();
         let table_id: Vec<u64> = database_tables
             .iter()
             .map(|v| v.get_table_info().ident.table_id)
             .collect();
-        let engines: Vec<Vec<u8>> = database_tables
+        let engines: Vec<String> = database_tables
             .iter()
-            .map(|v| v.engine().as_bytes().to_vec())
+            .map(|v| v.engine().to_string())
             .collect();
-        let engines_full: Vec<Vec<u8>> = engines.clone();
+        let engines_full: Vec<String> = engines.clone();
         let created_on: Vec<i64> = database_tables
             .iter()
             .map(|v| v.get_table_info().meta.created_on.timestamp_micros())
@@ -350,17 +369,21 @@ where TablesTable<T>: HistoryAware
                     .unwrap_or_else(|| "".to_owned())
             })
             .collect();
-        let cluster_bys: Vec<Vec<u8>> = cluster_bys.iter().map(|s| s.as_bytes().to_vec()).collect();
-        let is_transient: Vec<Vec<u8>> = database_tables
+        let is_transient: Vec<String> = database_tables
             .iter()
             .map(|v| {
                 if v.options().contains_key("TRANSIENT") {
-                    "TRANSIENT".as_bytes().to_vec()
+                    "TRANSIENT".to_string()
                 } else {
-                    vec![]
+                    "".to_string()
                 }
             })
             .collect();
+        let comment: Vec<String> = database_tables
+            .iter()
+            .map(|v| v.get_table_info().meta.comment.clone())
+            .collect();
+
         DataBlock::new_from_columns(vec![
             StringType::from_data(catalogs),
             StringType::from_data(databases),
@@ -380,6 +403,7 @@ where TablesTable<T>: HistoryAware
             UInt64Type::from_opt_data(number_of_segments),
             UInt64Type::from_opt_data(number_of_blocks),
             StringType::from_opt_data(owner),
+            StringType::from_data(comment),
         ])
     }
 

@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Join;
 use databend_common_ast::ast::JoinCondition;
 use databend_common_ast::ast::JoinOperator;
@@ -38,15 +39,17 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
 use parking_lot::RwLock;
 
-use super::wrap_cast_scalar;
+use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::MatchedEvaluator;
+use crate::plans::MaterializedCte;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
+use crate::plans::RelOperator;
 use crate::plans::UnmatchedEvaluator;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -57,6 +60,7 @@ use crate::Metadata;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
+use crate::DUMMY_COLUMN_INDEX;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MergeIntoType {
@@ -73,8 +77,6 @@ pub enum MergeIntoType {
 //      right outer
 // 3. matched only:
 //      inner join
-// we will import optimizer for these join type in the future.
-
 impl Binder {
     #[allow(warnings)]
     #[async_backtrace::framed]
@@ -137,6 +139,27 @@ impl Binder {
         Ok(Plan::MergeInto(Box::new(plan)))
     }
 
+    fn can_try_update_column_only(&self, matched_clauses: &[MatchedClause]) -> bool {
+        if matched_clauses.len() == 1 {
+            let matched_clause = &matched_clauses[0];
+            if matched_clause.selection.is_none() {
+                if let MatchOperation::Update {
+                    update_list,
+                    is_star,
+                } = &matched_clause.operation
+                {
+                    let mut is_column_only = true;
+                    for update_expr in update_list {
+                        is_column_only =
+                            is_column_only && matches!(update_expr.expr, Expr::ColumnRef { .. });
+                    }
+                    return is_column_only || *is_star;
+                }
+            }
+        }
+        false
+    }
+
     async fn bind_merge_into_with_join_type(
         &mut self,
         bind_context: &mut BindContext,
@@ -188,6 +211,7 @@ impl Binder {
             table: table_ident.clone(),
             alias: target_alias.clone(),
             travel_point: None,
+            since_point: None,
             pivot: None,
             unpivot: None,
         };
@@ -196,9 +220,24 @@ impl Binder {
         let source_data = source.transform_table_reference();
 
         // bind source data
-        let (source_expr, mut source_context) =
+        let (mut source_expr, mut source_context) =
             self.bind_single_table(bind_context, &source_data).await?;
-
+        // Wrap `LogicalMaterializedCte` to `source_expr`
+        for (_, cte_info) in self.ctes_map.iter().rev() {
+            if !cte_info.materialized || cte_info.used_count == 0 {
+                continue;
+            }
+            let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
+            let left_output_columns = cte_info.columns.clone();
+            source_expr = SExpr::create_binary(
+                Arc::new(RelOperator::MaterializedCte(MaterializedCte {
+                    left_output_columns,
+                    cte_idx: cte_info.cte_idx,
+                })),
+                Arc::new(cte_s_expr.clone()),
+                Arc::new(source_expr),
+            );
+        }
         if !self.check_sexpr_top(&source_expr)? {
             return Err(ErrorCode::SemanticError(
                 "replace source can't contain udf functions".to_string(),
@@ -391,6 +430,18 @@ impl Binder {
                 .await?,
             );
         }
+        let mut split_idx = DUMMY_COLUMN_INDEX;
+        // find any target table column index for merge_into_split
+        for column in self.metadata.read().columns() {
+            if column.table_index().is_some()
+                && *column.table_index().as_ref().unwrap() == table_index
+                && column.index() != column_binding.index
+            {
+                split_idx = column.index();
+                break;
+            }
+        }
+        assert!(split_idx != DUMMY_COLUMN_INDEX);
 
         Ok(MergeInto {
             catalog: catalog_name.to_string(),
@@ -409,6 +460,9 @@ impl Binder {
             merge_type,
             distributed: false,
             change_join_order: false,
+            row_id_index: column_binding.index,
+            split_idx,
+            can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
         })
     }
 
@@ -539,11 +593,10 @@ impl Binder {
             for idx in 0..default_schema.num_fields() {
                 let scalar = update_columns_star.get(&idx).unwrap().clone();
                 // cast expr
-                values.push(wrap_cast_scalar(
+                values.push(wrap_cast(
                     &scalar,
-                    &scalar.data_type()?,
                     &DataType::from(default_schema.field(idx).data_type()),
-                )?);
+                ));
             }
 
             Ok(UnmatchedEvaluator {
@@ -580,11 +633,10 @@ impl Binder {
                     .set_span(scalar_expr.span()));
                 }
                 // type cast
-                scalar_expr = wrap_cast_scalar(
+                scalar_expr = wrap_cast(
                     &scalar_expr,
-                    &scalar_expr.data_type()?,
                     &DataType::from(source_schema.field(idx).data_type()),
-                )?;
+                );
 
                 values.push(scalar_expr.clone());
                 for idx in scalar_expr.used_columns() {

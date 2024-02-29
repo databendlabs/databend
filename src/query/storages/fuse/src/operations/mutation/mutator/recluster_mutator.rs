@@ -110,10 +110,11 @@ impl ReclusterMutator {
         let recluster_block_size = self.ctx.get_settings().get_recluster_block_size()? as usize;
         let memory_threshold = recluster_block_size.min(mem_info.avail as usize * 1024 * 40 / 100);
 
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let max_blocks_num = std::cmp::max(
             memory_threshold / self.block_thresholds.max_bytes_per_block,
-            max_threads,
+            // specify a rather small value, so that setting `recluster_block_size`
+            // might be tuned to lower value.
+            2,
         ) * self.max_tasks;
 
         let arrow_schema = self.schema.as_ref().into();
@@ -134,11 +135,11 @@ impl ReclusterMutator {
             for (i, meta) in block_metas.iter().enumerate() {
                 if let Some(stats) = &meta.cluster_stats {
                     points_map
-                        .entry(stats.min())
+                        .entry(stats.min().clone())
                         .and_modify(|v| v.0.push(i))
                         .or_insert((vec![i], vec![]));
                     points_map
-                        .entry(stats.max())
+                        .entry(stats.max().clone())
                         .and_modify(|v| v.1.push(i))
                         .or_insert((vec![], vec![i]));
                 }
@@ -189,7 +190,7 @@ impl ReclusterMutator {
 
                 let block_size = block_meta.block_size as usize;
                 let row_count = block_meta.row_count as usize;
-                if task_bytes + block_size > memory_threshold {
+                if task_bytes + block_size > memory_threshold && selected_blocks.len() > 1 {
                     self.generate_task(
                         &selected_blocks,
                         &column_nodes,
@@ -287,11 +288,11 @@ impl ReclusterMutator {
                 blocks_num += compact_segment.summary.block_count as usize;
                 indices.insert(i);
                 points_map
-                    .entry(stats.min())
+                    .entry(stats.min().clone())
                     .and_modify(|v| v.0.push(i))
                     .or_insert((vec![i], vec![]));
                 points_map
-                    .entry(stats.max())
+                    .entry(stats.max().clone())
                     .and_modify(|v| v.1.push(i))
                     .or_insert((vec![], vec![i]));
             }
@@ -311,7 +312,7 @@ impl ReclusterMutator {
     ) -> bool {
         if let Some(stats) = &summary.cluster_stats {
             stats.cluster_key_id == cluster_key_id
-                && (stats.level >= 0 || (summary.block_count as usize) >= block_per_seg)
+                && (stats.level >= 0 || (summary.block_count as usize) < block_per_seg)
         } else {
             false
         }

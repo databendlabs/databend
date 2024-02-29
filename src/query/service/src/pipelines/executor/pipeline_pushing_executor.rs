@@ -18,6 +18,8 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::Thread;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -32,6 +34,8 @@ use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::QueriesPipelineExecutor;
+use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::QueryContext;
@@ -96,11 +100,19 @@ impl PipelinePushingExecutor {
     ) -> Result<PipelinePushingExecutor> {
         let state = State::create();
         let sender = Self::wrap_pipeline(ctx, &mut pipeline)?;
-        let executor = PipelineExecutor::create(pipeline, settings)?;
+        let executor = if settings.enable_new_executor {
+            PipelineExecutor::QueriesPipelineExecutor(QueriesPipelineExecutor::create(
+                pipeline, settings,
+            )?)
+        } else {
+            PipelineExecutor::QueryPipelineExecutor(QueryPipelineExecutor::create(
+                pipeline, settings,
+            )?)
+        };
         Ok(PipelinePushingExecutor {
             state,
             sender,
-            executor,
+            executor: Arc::new(executor),
         })
     }
 
@@ -109,7 +121,7 @@ impl PipelinePushingExecutor {
         let state = self.state.clone();
         let threads_executor = self.executor.clone();
         let thread_function = Self::thread_function(state, threads_executor);
-        std::thread::spawn(thread_function);
+        Thread::spawn(thread_function);
     }
 
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
@@ -163,15 +175,17 @@ impl PipelinePushingExecutor {
 
 impl Drop for PipelinePushingExecutor {
     fn drop(&mut self) {
-        if !self.state.finished.load(Ordering::Relaxed)
-            && !self.state.has_throw_error.load(Ordering::Relaxed)
-        {
-            self.finish(None);
-        }
+        drop_guard(move || {
+            if !self.state.finished.load(Ordering::Relaxed)
+                && !self.state.has_throw_error.load(Ordering::Relaxed)
+            {
+                self.finish(None);
+            }
 
-        if let Err(cause) = self.sender.send(None) {
-            warn!("Executor send last data is failure {:?}", cause);
-        }
+            if let Err(cause) = self.sender.send(None) {
+                warn!("Executor send last data is failure {:?}", cause);
+            }
+        })
     }
 }
 

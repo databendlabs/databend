@@ -179,7 +179,7 @@ statement error 1065
 alter table db2.test6 add column b timestamp default now()
 
 statement ok
-create table db2.test7(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(INT) not null, tup TUPLE(INT, BOOL) not null, map MAP(INT, STRING) not null, variant VARIANT not null)
+create table db2.test7(tiny TINYINT(10) not null, tiny_unsigned TINYINT(10) UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT32(15) not null, int_unsigned UINT32(15) not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(INT) not null, tup TUPLE(INT, BOOL) not null, map MAP(INT, STRING) not null, bitmap BITMAP not null, variant VARIANT not null)
 
 query TTTTT
 desc db2.test7
@@ -200,12 +200,13 @@ ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
 str VARCHAR NO '3' (empty)
 bool BOOLEAN NO false (empty)
 arr ARRAY(INT32) NO [] (empty)
-tup TUPLE(1 INT32, 2 BOOLEAN) NO (0, false) (empty)
+tup TUPLE(1 INT32, 2 BOOLEAN) NO (NULL, NULL) (empty)
 map MAP(INT32, STRING) NO {} (empty)
-variant VARIANT NO null (empty)
+bitmap BITMAP NO '' (empty)
+variant VARIANT NO 'null' (empty)
 
 statement ok
-create transient table db2.test8(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(VARCHAR) not null, tup TUPLE(DOUBLE, INT) not null, map MAP(STRING, Date) not null, variant VARIANT not null)
+create transient table db2.test8(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(VARCHAR) not null, tup TUPLE(DOUBLE, INT) not null, map MAP(STRING, Date) not null, bitmap BITMAP not null, variant VARIANT not null)
 
 query TTTTT
 desc db2.test8
@@ -226,9 +227,10 @@ ts TIMESTAMP NO '1970-01-01 00:00:00.000000' (empty)
 str VARCHAR NO '3' (empty)
 bool BOOLEAN NO false (empty)
 arr ARRAY(STRING) NO [] (empty)
-tup TUPLE(1 FLOAT64, 2 INT32) NO (0, 0) (empty)
+tup TUPLE(1 FLOAT64, 2 INT32) NO (NULL, NULL) (empty)
 map MAP(STRING, DATE) NO {} (empty)
-variant VARIANT NO null (empty)
+bitmap BITMAP NO '' (empty)
+variant VARIANT NO 'null' (empty)
 
 
 statement ok
@@ -372,3 +374,83 @@ alter table t_row_per_block set options(row_per_block = 100000000000);
 
 statement ok
 alter table t_row_per_block set options(row_per_block = 100000);
+
+statement ok
+drop table if exists t_nested
+
+statement ok
+create table t_nested(a int, b array(int not null), c array(int null), d map(string, int null), e map(string, string not null), f tuple(int null, string not null, array(int null), array(string not null)))
+
+query TTTTT
+desc t_nested
+----
+a INT YES NULL (empty)
+b ARRAY(INT32) YES NULL (empty)
+c ARRAY(INT32) YES NULL (empty)
+d MAP(STRING, INT32) YES NULL (empty)
+e MAP(STRING, STRING) YES NULL (empty)
+f TUPLE(1 INT32, 2 STRING, 3 ARRAY(INT32), 4 ARRAY(STRING)) YES NULL (empty)
+
+statement ok
+create table replace_test(a int);
+
+statement ok
+insert into replace_test values(1);
+
+query I
+select a from replace_test;
+----
+1
+
+statement error 1005
+create or replace table IF NOT EXISTS replace_test(b int);
+
+statement ok
+create or replace table replace_test(b int);
+
+statement error 1065
+select a from replace_test;
+
+statement ok
+drop table if exists t_default
+
+statement ok
+create table t_default(a int, b bitmap not null default '1,2', c variant not null default '{"k":"v"}')
+
+query TTTTT
+desc t_default
+----
+a INT YES NULL (empty)
+b BITMAP NO '1,2' (empty)
+c VARIANT NO '{"k":"v"}' (empty)
+
+statement ok
+insert into t_default (a) values(1),(2)
+
+query ITT
+select a, to_string(b), c from t_default
+----
+1 1,2 {"k":"v"}
+2 1,2 {"k":"v"}
+
+statement ok
+drop table if exists crt1
+
+statement ok
+create or replace table crt1 as select * from numbers(10);
+
+query I
+select count(*) from crt1;
+----
+10
+
+statement ok
+create or replace table crt1 as select * from numbers(10);
+
+query I
+select count(*) from crt1;
+----
+10
+
+statement ok
+drop table if exists crt1

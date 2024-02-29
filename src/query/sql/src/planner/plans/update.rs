@@ -19,18 +19,18 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_cast;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::PREDICATE_COLUMN_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::binder::wrap_cast_scalar;
+use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
@@ -81,7 +81,11 @@ impl UpdatePlan {
                 let field = schema.field(*index);
                 let data_type = scalar.data_type()?;
                 let target_type = field.data_type();
-                let left = wrap_cast_scalar(scalar, &data_type, target_type)?;
+                let left = if data_type != *target_type {
+                    wrap_cast(scalar, target_type)
+                } else {
+                    scalar.clone()
+                };
 
                 let scalar = if col_indices.is_empty() {
                     // The condition is always true.
@@ -147,15 +151,8 @@ impl UpdatePlan {
         let mut remote_exprs = BTreeMap::new();
         for (i, f) in schema.fields().iter().enumerate() {
             if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
-                let mut expr = parse_computed_expr(ctx.clone(), schema.clone(), stored_expr)?;
-                if expr.data_type() != f.data_type() {
-                    expr = Expr::Cast {
-                        span: None,
-                        is_try: f.data_type().is_nullable(),
-                        expr: Box::new(expr),
-                        dest_type: f.data_type().clone(),
-                    };
-                }
+                let expr = parse_computed_expr(ctx.clone(), schema.clone(), stored_expr)?;
+                let expr = check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?;
 
                 // If related column has updated, the stored computed column need to regenerate.
                 let mut need_update = false;

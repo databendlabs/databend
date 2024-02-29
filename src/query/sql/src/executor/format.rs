@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_profile::SharedProcessorProfiles;
+use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
@@ -60,10 +63,10 @@ impl PhysicalPlan {
     pub fn format(
         &self,
         metadata: MetadataRef,
-        prof_span_set: SharedProcessorProfiles,
+        profs: HashMap<u32, PlanProfile>,
     ) -> Result<FormatTreeNode<String>> {
         let metadata = metadata.read().clone();
-        to_format_tree(self, &metadata, &prof_span_set)
+        to_format_tree(self, &metadata, &profs)
     }
 
     pub fn format_join(&self, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
@@ -81,8 +84,8 @@ impl PhysicalPlan {
 
                 Ok(FormatTreeNode::with_children(
                     format!(
-                        "Scan: {} (read rows: {})",
-                        table_name, plan.source.statistics.read_rows
+                        "Scan: {} (#{}) (read rows: {})",
+                        table_name, plan.table_index, plan.source.statistics.read_rows
                     ),
                     vec![],
                 ))
@@ -127,13 +130,7 @@ impl PhysicalPlan {
                     children,
                 ))
             }
-            PhysicalPlan::CteScan(cte_scan) => Ok(FormatTreeNode::with_children(
-                format!(
-                    "CteScan: {}, sub index: {}",
-                    cte_scan.cte_idx.0, cte_scan.cte_idx.1
-                ),
-                vec![],
-            )),
+            PhysicalPlan::CteScan(cte_scan) => cte_scan_to_format_tree(cte_scan),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
                 let left_child = materialized_cte.left.format_join(metadata)?;
                 let right_child = materialized_cte.right.format_join(metadata)?;
@@ -182,7 +179,7 @@ impl PhysicalPlan {
 fn to_format_tree(
     plan: &PhysicalPlan,
     metadata: &Metadata,
-    profs: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     match plan {
         PhysicalPlan::TableScan(plan) => table_scan_to_format_tree(plan, metadata, profs),
@@ -244,26 +241,19 @@ fn to_format_tree(
 /// Helper function to add profile info to the format tree.
 fn append_profile_info(
     children: &mut Vec<FormatTreeNode<String>>,
-    profs: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
     plan_id: u32,
 ) {
-    if let Some(prof) = profs.lock().unwrap().get(&plan_id) {
-        children.push(FormatTreeNode::new(format!(
-            "output rows: {}",
-            prof.output_rows,
-        )));
-        children.push(FormatTreeNode::new(format!(
-            "output bytes: {}",
-            prof.output_bytes,
-        )));
-        children.push(FormatTreeNode::new(format!(
-            "total cpu time: {:.3}ms",
-            prof.cpu_time.as_secs_f64() * 1000.0
-        )));
-        children.push(FormatTreeNode::new(format!(
-            "total wait time: {:.3}ms",
-            prof.wait_time.as_secs_f64() * 1000.0
-        )));
+    if let Some(prof) = profs.get(&plan_id) {
+        for (_, desc) in get_statistics_desc().iter() {
+            if prof.statistics[desc.index] != 0 {
+                children.push(FormatTreeNode::new(format!(
+                    "{}: {}",
+                    desc.display_name.to_lowercase(),
+                    desc.human_format(prof.statistics[desc.index])
+                )));
+            }
+        }
     }
 }
 
@@ -277,7 +267,7 @@ fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
 fn table_scan_to_format_tree(
     plan: &TableScan,
     metadata: &Metadata,
-    profs: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     if plan.table_index == DUMMY_TABLE_INDEX {
         return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
@@ -386,13 +376,17 @@ fn table_scan_to_format_tree(
 }
 
 fn cte_scan_to_format_tree(plan: &CteScan) -> Result<FormatTreeNode<String>> {
-    let cte_idx = FormatTreeNode::new(format!(
+    let mut children = vec![FormatTreeNode::new(format!(
         "CTE index: {}, sub index: {}",
         plan.cte_idx.0, plan.cte_idx.1
-    ));
-    Ok(FormatTreeNode::with_children("CTEScan".to_string(), vec![
-        cte_idx,
-    ]))
+    ))];
+    let items = plan_stats_info_to_format_tree(&plan.stat);
+    children.extend(items);
+
+    Ok(FormatTreeNode::with_children(
+        "CTEScan".to_string(),
+        children,
+    ))
 }
 
 fn constant_table_scan_to_format_tree(
@@ -417,7 +411,7 @@ fn constant_table_scan_to_format_tree(
 fn filter_to_format_tree(
     plan: &Filter,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let filter = plan
         .predicates
@@ -437,9 +431,9 @@ fn filter_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
-    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
 
     Ok(FormatTreeNode::with_children(
         "Filter".to_string(),
@@ -450,7 +444,7 @@ fn filter_to_format_tree(
 fn project_to_format_tree(
     plan: &Project,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![FormatTreeNode::new(format!(
         "output columns: [{}]",
@@ -462,9 +456,9 @@ fn project_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
-    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
 
     Ok(FormatTreeNode::with_children(
         "Project".to_string(),
@@ -475,10 +469,10 @@ fn project_to_format_tree(
 fn eval_scalar_to_format_tree(
     plan: &EvalScalar,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     if plan.exprs.is_empty() {
-        return to_format_tree(&plan.input, metadata, prof_span_set);
+        return to_format_tree(&plan.input, metadata, profs);
     }
     let scalars = plan
         .exprs
@@ -499,9 +493,9 @@ fn eval_scalar_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
-    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
 
     Ok(FormatTreeNode::with_children(
         "EvalScalar".to_string(),
@@ -524,7 +518,7 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
 fn aggregate_expand_to_format_tree(
     plan: &AggregateExpand,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let sets = plan
         .grouping_sets
@@ -553,9 +547,9 @@ fn aggregate_expand_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
-    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
 
     Ok(FormatTreeNode::with_children(
         "AggregateExpand".to_string(),
@@ -566,7 +560,7 @@ fn aggregate_expand_to_format_tree(
 fn aggregate_partial_to_format_tree(
     plan: &AggregatePartial,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let group_by = plan
         .group_by
@@ -594,9 +588,9 @@ fn aggregate_partial_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
-    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
 
     Ok(FormatTreeNode::with_children(
         "AggregatePartial".to_string(),
@@ -607,7 +601,7 @@ fn aggregate_partial_to_format_tree(
 fn aggregate_final_to_format_tree(
     plan: &AggregateFinal,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let group_by = plan
         .group_by
@@ -645,9 +639,9 @@ fn aggregate_final_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
-    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
 
     Ok(FormatTreeNode::with_children(
         "AggregateFinal".to_string(),
@@ -658,7 +652,7 @@ fn aggregate_final_to_format_tree(
 fn window_to_format_tree(
     plan: &Window,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let partition_by = plan
         .partition_by
@@ -673,11 +667,8 @@ fn window_to_format_tree(
     let order_by = plan
         .order_by
         .iter()
-        .map(|v| {
-            let name = metadata.column(v.order_by).name();
-            Ok(name)
-        })
-        .collect::<Result<Vec<_>>>()?
+        .map(|v| v.display_name.clone())
+        .collect::<Vec<_>>()
         .join(", ");
 
     let frame = plan.window_frame.to_string();
@@ -698,12 +689,16 @@ fn window_to_format_tree(
         FormatTreeNode::new(format!("frame: [{frame}]")),
     ];
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    if let Some(limit) = plan.limit {
+        children.push(FormatTreeNode::new(format!("limit: [{limit}]")))
+    }
 
-    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+    append_profile_info(&mut children, profs, plan.plan_id);
+
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
 
     Ok(FormatTreeNode::with_children(
-        "Window".to_string(), // todo(ariesdevil): show full window expression.
+        "Window".to_string(),
         children,
     ))
 }
@@ -711,16 +706,15 @@ fn window_to_format_tree(
 fn sort_to_format_tree(
     plan: &Sort,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    prof_span_set: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let sort_keys = plan
         .order_by
         .iter()
         .map(|sort_key| {
-            let index = sort_key.order_by;
             Ok(format!(
                 "{} {} {}",
-                metadata.column(index).name(),
+                sort_key.display_name,
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {
                     "NULLS FIRST"
@@ -755,7 +749,7 @@ fn sort_to_format_tree(
 fn limit_to_format_tree(
     plan: &Limit,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![
         FormatTreeNode::new(format!(
@@ -775,9 +769,9 @@ fn limit_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
-    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
 
     Ok(FormatTreeNode::with_children("Limit".to_string(), children))
 }
@@ -785,7 +779,7 @@ fn limit_to_format_tree(
 fn row_fetch_to_format_tree(
     plan: &RowFetch,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let table_schema = plan.source.source_info.schema();
     let projected_schema = plan.cols_to_fetch.project_schema(&table_schema);
@@ -807,9 +801,9 @@ fn row_fetch_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
-    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
 
     Ok(FormatTreeNode::with_children(
         "RowFetch".to_string(),
@@ -820,7 +814,7 @@ fn row_fetch_to_format_tree(
 fn range_join_to_format_tree(
     plan: &RangeJoin,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let range_join_conditions = plan
         .conditions
@@ -845,8 +839,8 @@ fn range_join_to_format_tree(
         .collect::<Vec<_>>()
         .join(", ");
 
-    let mut left_child = to_format_tree(&plan.left, metadata, prof_span_set)?;
-    let mut right_child = to_format_tree(&plan.right, metadata, prof_span_set)?;
+    let mut left_child = to_format_tree(&plan.left, metadata, profs)?;
+    let mut right_child = to_format_tree(&plan.right, metadata, profs)?;
 
     left_child.payload = format!("{}(Left)", left_child.payload);
     right_child.payload = format!("{}(Right)", right_child.payload);
@@ -866,7 +860,7 @@ fn range_join_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
     children.push(left_child);
     children.push(right_child);
@@ -883,7 +877,7 @@ fn range_join_to_format_tree(
 fn hash_join_to_format_tree(
     plan: &HashJoin,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let build_keys = plan
         .build_keys
@@ -904,8 +898,8 @@ fn hash_join_to_format_tree(
         .collect::<Vec<_>>()
         .join(", ");
 
-    let mut build_child = to_format_tree(&plan.build, metadata, prof_span_set)?;
-    let mut probe_child = to_format_tree(&plan.probe, metadata, prof_span_set)?;
+    let mut build_child = to_format_tree(&plan.build, metadata, profs)?;
+    let mut probe_child = to_format_tree(&plan.probe, metadata, profs)?;
 
     build_child.payload = format!("{}(Build)", build_child.payload);
     probe_child.payload = format!("{}(Probe)", probe_child.payload);
@@ -926,7 +920,7 @@ fn hash_join_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
     children.push(build_child);
     children.push(probe_child);
@@ -940,7 +934,7 @@ fn hash_join_to_format_tree(
 fn exchange_to_format_tree(
     plan: &Exchange,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::with_children("Exchange".to_string(), vec![
         FormatTreeNode::new(format!(
@@ -960,14 +954,14 @@ fn exchange_to_format_tree(
             FragmentKind::Expansive => "Broadcast".to_string(),
             FragmentKind::Merge => "Merge".to_string(),
         })),
-        to_format_tree(&plan.input, metadata, prof_span_set)?,
+        to_format_tree(&plan.input, metadata, profs)?,
     ]))
 }
 
 fn union_all_to_format_tree(
     plan: &UnionAll,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![FormatTreeNode::new(format!(
         "output columns: [{}]",
@@ -979,11 +973,11 @@ fn union_all_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
     children.extend(vec![
-        to_format_tree(&plan.left, metadata, prof_span_set)?,
-        to_format_tree(&plan.right, metadata, prof_span_set)?,
+        to_format_tree(&plan.left, metadata, profs)?,
+        to_format_tree(&plan.right, metadata, profs)?,
     ]);
 
     Ok(FormatTreeNode::with_children(
@@ -1045,7 +1039,7 @@ fn exchange_source_to_format_tree(
 fn exchange_sink_to_format_tree(
     plan: &ExchangeSink,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![FormatTreeNode::new(format!(
         "output columns: [{}]",
@@ -1057,7 +1051,7 @@ fn exchange_sink_to_format_tree(
         plan.destination_fragment_id
     )));
 
-    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+    children.push(to_format_tree(&plan.input, metadata, profs)?);
 
     Ok(FormatTreeNode::with_children(
         "ExchangeSink".to_string(),
@@ -1068,9 +1062,9 @@ fn exchange_sink_to_format_tree(
 fn distributed_insert_to_format_tree(
     plan: &DistributedInsertSelect,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
+    let children = vec![to_format_tree(&plan.input, metadata, profs)?];
 
     Ok(FormatTreeNode::with_children(
         "DistributedInsertSelect".to_string(),
@@ -1081,9 +1075,9 @@ fn distributed_insert_to_format_tree(
 fn recluster_sink_to_format_tree(
     plan: &ReclusterSink,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
+    let children = vec![to_format_tree(&plan.input, metadata, profs)?];
     Ok(FormatTreeNode::with_children(
         "ReclusterSink".to_string(),
         children,
@@ -1093,9 +1087,9 @@ fn recluster_sink_to_format_tree(
 fn commit_sink_to_format_tree(
     plan: &CommitSink,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
+    let children = vec![to_format_tree(&plan.input, metadata, profs)?];
     Ok(FormatTreeNode::with_children(
         "CommitSink".to_string(),
         children,
@@ -1105,7 +1099,7 @@ fn commit_sink_to_format_tree(
 fn project_set_to_format_tree(
     plan: &ProjectSet,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![FormatTreeNode::new(format!(
         "output columns: [{}]",
@@ -1117,7 +1111,7 @@ fn project_set_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
     children.extend(vec![FormatTreeNode::new(format!(
         "set returning functions: {}",
@@ -1128,7 +1122,7 @@ fn project_set_to_format_tree(
             .join(", ")
     ))]);
 
-    children.extend(vec![to_format_tree(&plan.input, metadata, prof_span_set)?]);
+    children.extend(vec![to_format_tree(&plan.input, metadata, profs)?]);
 
     Ok(FormatTreeNode::with_children(
         "ProjectSet".to_string(),
@@ -1139,7 +1133,7 @@ fn project_set_to_format_tree(
 fn udf_to_format_tree(
     plan: &Udf,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![FormatTreeNode::new(format!(
         "output columns: [{}]",
@@ -1151,7 +1145,7 @@ fn udf_to_format_tree(
         children.extend(items);
     }
 
-    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+    append_profile_info(&mut children, profs, plan.plan_id);
 
     children.extend(vec![FormatTreeNode::new(format!(
         "udf functions: {}",
@@ -1165,7 +1159,7 @@ fn udf_to_format_tree(
             .join(", ")
     ))]);
 
-    children.extend(vec![to_format_tree(&plan.input, metadata, prof_span_set)?]);
+    children.extend(vec![to_format_tree(&plan.input, metadata, profs)?]);
 
     Ok(FormatTreeNode::with_children("Udf".to_string(), children))
 }
@@ -1173,15 +1167,15 @@ fn udf_to_format_tree(
 fn materialized_cte_to_format_tree(
     plan: &MaterializedCte,
     metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let children = vec![
         FormatTreeNode::new(format!(
             "output columns: [{}]",
             format_output_columns(plan.output_schema()?, metadata, true)
         )),
-        to_format_tree(&plan.left, metadata, prof_span_set)?,
-        to_format_tree(&plan.right, metadata, prof_span_set)?,
+        to_format_tree(&plan.left, metadata, profs)?,
+        to_format_tree(&plan.right, metadata, profs)?,
     ];
     Ok(FormatTreeNode::with_children(
         "MaterializedCTE".to_string(),

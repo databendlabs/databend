@@ -115,6 +115,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
 
 impl<R: Rows> TransformSortMergeLimit<R> {
     pub fn create(block_size: usize, limit: usize) -> Self {
+        debug_assert!(limit <= 10000, "Too large sort merge limit: {}", limit);
         TransformSortMergeLimit {
             heap: FixedHeap::new(limit),
             buffer: HashMap::with_capacity(limit),

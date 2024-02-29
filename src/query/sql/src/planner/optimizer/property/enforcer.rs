@@ -19,10 +19,53 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::optimizer::property::Distribution;
+use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
 use crate::plans::Exchange;
+use crate::plans::RelOperator;
+
+/// Enforcer is a trait that can enforce the physical property
+pub trait Enforcer: std::fmt::Debug + Send + Sync {
+    /// Check if necessary to enforce the physical property
+    fn check_enforce(&self, input_prop: &PhysicalProperty) -> bool;
+
+    /// Enforce the physical property
+    fn enforce(&self) -> Result<RelOperator>;
+}
+
+#[derive(Debug)]
+pub struct DistributionEnforcer(Distribution);
+
+impl DistributionEnforcer {
+    pub fn into_inner(self) -> Distribution {
+        self.0
+    }
+}
+
+impl From<Distribution> for DistributionEnforcer {
+    fn from(distribution: Distribution) -> Self {
+        DistributionEnforcer(distribution)
+    }
+}
+
+impl Enforcer for DistributionEnforcer {
+    fn check_enforce(&self, input_prop: &PhysicalProperty) -> bool {
+        !self.0.satisfied_by(&input_prop.distribution)
+    }
+
+    fn enforce(&self) -> Result<RelOperator> {
+        match self.0 {
+            Distribution::Serial => Ok(Exchange::Merge.into()),
+            Distribution::Broadcast => Ok(Exchange::Broadcast.into()),
+            Distribution::Hash(ref hash_keys) => Ok(Exchange::Hash(hash_keys.clone()).into()),
+            Distribution::Random | Distribution::Any => Err(ErrorCode::Internal(
+                "Cannot enforce random or any distribution",
+            )),
+        }
+    }
+}
 
 /// Require and enforce physical property from a physical `SExpr`
 pub fn require_property(
@@ -33,7 +76,6 @@ pub fn require_property(
     // First, we will require the child SExpr with input `RequiredProperty`
     let optimized_children = s_expr
         .children()
-        .iter()
         .map(|child| Ok(Arc::new(require_property(ctx.clone(), required, child)?)))
         .collect::<Result<Vec<_>>>()?;
     let optimized_expr = SExpr::create(

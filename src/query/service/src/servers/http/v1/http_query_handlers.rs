@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_base::base::mask_connection_info;
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
@@ -232,7 +233,8 @@ async fn query_final_handler(
     let root = Span::root(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
-    );
+    )
+    .with_properties(|| ctx.to_minitrace_properties());
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
@@ -273,7 +275,8 @@ async fn query_cancel_handler(
     let root = Span::root(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
-    );
+    )
+    .with_properties(|| ctx.to_minitrace_properties());
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
@@ -308,7 +311,8 @@ async fn query_state_handler(
     let root = Span::root(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
-    );
+    )
+    .with_properties(|| ctx.to_minitrace_properties());
 
     async {
         let http_query_manager = HttpQueryManager::instance();
@@ -337,7 +341,8 @@ async fn query_page_handler(
     let root = Span::root(
         full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
-    );
+    )
+    .with_properties(|| ctx.to_minitrace_properties());
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
@@ -369,7 +374,8 @@ pub(crate) async fn query_handler(
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
     let trace_id = query_id_to_trace_id(&ctx.query_id);
-    let root = Span::root(full_name!(), SpanContext::new(trace_id, SpanId::default()));
+    let root = Span::root(full_name!(), SpanContext::new(trace_id, SpanId::default()))
+        .with_properties(|| ctx.to_minitrace_properties());
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
@@ -389,6 +395,9 @@ pub(crate) async fn query_handler(
                     .await
                     .map_err(|err| err.display_with_sql(&sql))
                     .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
+                if matches!(resp.state.state,ExecuteStateKind::Failed) {
+                    ctx.set_fail();
+                }
                 let (rows, next_page) = match &resp.data {
                     None => (0, None),
                     Some(p) => (p.page.data.num_rows(), p.next_page_no),
@@ -402,6 +411,7 @@ pub(crate) async fn query_handler(
             }
             Err(e) => {
                 error!("{}: http query fail to start sql, error: {:?}", &ctx.query_id, e);
+                ctx.set_fail();
                 Ok(QueryResponse::fail_to_start_sql(&e).into_response())
             }
         }
@@ -476,15 +486,17 @@ impl SlowRequestLogTracker {
 
 impl Drop for SlowRequestLogTracker {
     fn drop(&mut self) {
-        let elapsed = self.started_at.elapsed();
-        if elapsed.as_secs_f64() > 60.0 {
-            warn!(
-                "{}: slow http query request on {} {}, elapsed: {:.2}s",
-                self.query_id,
-                self.method,
-                self.uri,
-                elapsed.as_secs_f64()
-            );
-        }
+        drop_guard(move || {
+            let elapsed = self.started_at.elapsed();
+            if elapsed.as_secs_f64() > 60.0 {
+                warn!(
+                    "{}: slow http query request on {} {}, elapsed: {:.2}s",
+                    self.query_id,
+                    self.method,
+                    self.uri,
+                    elapsed.as_secs_f64()
+                );
+            }
+        })
     }
 }

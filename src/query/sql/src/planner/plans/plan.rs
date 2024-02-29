@@ -135,6 +135,7 @@ use crate::plans::UpdatePlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
+use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
 use crate::MetadataRef;
 
@@ -203,6 +204,7 @@ pub enum Plan {
     OptimizeTable(Box<OptimizeTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),
     VacuumDropTable(Box<VacuumDropTablePlan>),
+    VacuumTemporaryFiles(Box<VacuumTemporaryFilesPlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
     SetOptions(Box<SetOptionsPlan>),
@@ -318,6 +320,11 @@ pub enum Plan {
     DescribeTask(Box<DescribeTaskPlan>),
     ShowTasks(Box<ShowTasksPlan>),
     ExecuteTask(Box<ExecuteTaskPlan>),
+
+    // Txn
+    Begin,
+    Commit,
+    Abort,
 }
 
 #[derive(Clone, Debug)]
@@ -340,6 +347,7 @@ pub enum RewriteKind {
     ShowStreams(String),
 
     ShowFunctions,
+    ShowUserFunctions,
     ShowTableFunctions,
 
     ShowUsers,
@@ -402,6 +410,7 @@ impl Plan {
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
             Plan::VacuumDropTable(plan) => plan.schema(),
+            Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
@@ -422,6 +431,7 @@ impl Plan {
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
             Plan::DescPasswordPolicy(plan) => plan.schema(),
             Plan::CopyIntoTable(plan) => plan.schema(),
+            Plan::CopyIntoLocation(plan) => plan.schema(),
             Plan::MergeInto(plan) => plan.schema(),
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),
@@ -466,6 +476,7 @@ impl Plan {
                 | Plan::ShowNetworkPolicies(_)
                 | Plan::DescPasswordPolicy(_)
                 | Plan::CopyIntoTable(_)
+                | Plan::CopyIntoLocation(_)
                 | Plan::ShowTasks(_)
                 | Plan::DescribeTask(_)
                 | Plan::DescConnection(_)

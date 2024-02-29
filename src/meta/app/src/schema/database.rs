@@ -22,7 +22,7 @@ use std::ops::Deref;
 use chrono::DateTime;
 use chrono::Utc;
 
-use crate::schema::Ownership;
+use super::CreateOption;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
 
@@ -60,9 +60,23 @@ pub struct DatabaseIdent {
     pub seq: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord,
+)]
 pub struct DatabaseId {
     pub db_id: u64,
+}
+
+impl DatabaseId {
+    pub fn new(db_id: u64) -> Self {
+        DatabaseId { db_id }
+    }
+}
+
+impl From<u64> for DatabaseId {
+    fn from(db_id: u64) -> Self {
+        DatabaseId { db_id }
+    }
 }
 
 impl Display for DatabaseId {
@@ -114,8 +128,6 @@ pub struct DatabaseMeta {
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
     pub from_share: Option<ShareNameIdent>,
-
-    pub owner: Option<Ownership>,
 }
 
 impl Default for DatabaseMeta {
@@ -130,7 +142,6 @@ impl Default for DatabaseMeta {
             drop_on: None,
             shared_by: BTreeSet::new(),
             from_share: None,
-            owner: None,
         }
     }
 }
@@ -195,24 +206,36 @@ impl Display for DbIdList {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabaseReq {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name_ident: DatabaseNameIdent,
     pub meta: DatabaseMeta,
 }
 
 impl Display for CreateDatabaseReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "create_db(if_not_exists={}):{}/{}={:?}",
-            self.if_not_exists, self.name_ident.tenant, self.name_ident.db_name, self.meta
-        )
+        match self.create_option {
+            CreateOption::CreateIfNotExists(if_not_exists) => {
+                write!(
+                    f,
+                    "create_db(if_not_exists={}):{}/{}={:?}",
+                    if_not_exists, self.name_ident.tenant, self.name_ident.db_name, self.meta
+                )
+            }
+            CreateOption::CreateOrReplace => {
+                write!(
+                    f,
+                    "create_or_replace_db:{}/{}={:?}",
+                    self.name_ident.tenant, self.name_ident.db_name, self.meta
+                )
+            }
+        }
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
     pub db_id: u64,
+    pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -321,19 +344,25 @@ pub struct ListDatabaseReq {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;
+    use crate::schema::DatabaseMeta;
     use crate::schema::DatabaseNameIdent;
+    use crate::schema::DbIdList;
     use crate::schema::DbIdListKey;
-    use crate::schema::PREFIX_DATABASE;
-    use crate::schema::PREFIX_DATABASE_BY_ID;
-    use crate::schema::PREFIX_DATABASE_ID_TO_NAME;
-    use crate::schema::PREFIX_DB_ID_LIST;
+    use crate::tenant::Tenant;
 
     /// __fd_database/<tenant>/<db_name> -> <db_id>
     impl kvapi::Key for DatabaseNameIdent {
-        const PREFIX: &'static str = PREFIX_DATABASE;
+        const PREFIX: &'static str = "__fd_database";
+
+        type ValueType = DatabaseId;
+
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -355,7 +384,13 @@ mod kvapi_key_impl {
 
     /// "__fd_database_by_id/<db_id>"
     impl kvapi::Key for DatabaseId {
-        const PREFIX: &'static str = PREFIX_DATABASE_BY_ID;
+        const PREFIX: &'static str = "__fd_database_by_id";
+
+        type ValueType = DatabaseMeta;
+
+        fn parent(&self) -> Option<String> {
+            None
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -375,7 +410,13 @@ mod kvapi_key_impl {
 
     /// "__fd_database_id_to_name/<db_id> -> DatabaseNameIdent"
     impl kvapi::Key for DatabaseIdToName {
-        const PREFIX: &'static str = PREFIX_DATABASE_ID_TO_NAME;
+        const PREFIX: &'static str = "__fd_database_id_to_name";
+
+        type ValueType = DatabaseNameIdent;
+
+        fn parent(&self) -> Option<String> {
+            Some(DatabaseId::new(self.db_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -395,7 +436,13 @@ mod kvapi_key_impl {
 
     /// "_fd_db_id_list/<tenant>/<db_name> -> db_id_list"
     impl kvapi::Key for DbIdListKey {
-        const PREFIX: &'static str = PREFIX_DB_ID_LIST;
+        const PREFIX: &'static str = "__fd_db_id_list";
+
+        type ValueType = DbIdList;
+
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -412,6 +459,32 @@ mod kvapi_key_impl {
             p.done()?;
 
             Ok(DbIdListKey { tenant, db_name })
+        }
+    }
+
+    impl kvapi::Value for DatabaseId {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
+
+    impl kvapi::Value for DatabaseMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
+
+    impl kvapi::Value for DatabaseNameIdent {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
+
+    impl kvapi::Value for DbIdList {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            self.id_list
+                .iter()
+                .map(|id| DatabaseId::new(*id).to_string_key())
         }
     }
 }

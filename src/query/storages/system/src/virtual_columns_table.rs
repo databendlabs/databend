@@ -65,7 +65,7 @@ impl AsyncSystemTable for VirtualColumnsTable {
             .await?;
 
         let mut database_names = Vec::with_capacity(virtual_column_metas.len());
-        let mut table_names = Vec::with_capacity(virtual_column_metas.len());
+        let mut table_names: Vec<String> = Vec::with_capacity(virtual_column_metas.len());
         let mut virtual_columns = Vec::with_capacity(virtual_column_metas.len());
         let mut created_on_columns = Vec::with_capacity(virtual_column_metas.len());
         let mut updated_on_columns = Vec::with_capacity(virtual_column_metas.len());
@@ -81,15 +81,9 @@ impl AsyncSystemTable for VirtualColumnsTable {
                 for table in tables {
                     let table_id = table.get_id();
                     if let Some(virtual_column_meta) = virtual_column_meta_map.remove(&table_id) {
-                        database_names.push(database.as_bytes().to_vec());
-                        table_names.push(table.name().as_bytes().to_vec());
-                        virtual_columns.push(
-                            virtual_column_meta
-                                .virtual_columns
-                                .join(", ")
-                                .as_bytes()
-                                .to_vec(),
-                        );
+                        database_names.push(database.clone());
+                        table_names.push(table.name().to_string());
+                        virtual_columns.push(virtual_column_meta.virtual_columns.join(", "));
                         created_on_columns.push(virtual_column_meta.created_on.timestamp_micros());
                         updated_on_columns
                             .push(virtual_column_meta.updated_on.map(|u| u.timestamp_micros()));

@@ -23,6 +23,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::PartitionedPayload;
+use databend_common_expression::PayloadFlushState;
 use databend_common_hashtable::hash2bucket;
 use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::Event;
@@ -33,11 +35,8 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::ProcessorProfileWrapper;
-use databend_common_pipeline_transforms::processors::ProfileStub;
-use databend_common_pipeline_transforms::processors::Transformer;
-use databend_common_profile::SharedProcessorProfiles;
 use databend_common_storage::DataOperator;
+use itertools::Itertools;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
@@ -68,7 +67,10 @@ pub struct TransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send + S
     pushing_bucket: isize,
     initialized_all_inputs: bool,
     buckets_blocks: BTreeMap<isize, Vec<DataBlock>>,
+    flush_state: PayloadFlushState,
+    partition_payloads: Vec<PartitionedPayload>,
     unsplitted_blocks: Vec<DataBlock>,
+    max_partition_count: usize,
     _phantom: PhantomData<V>,
 }
 
@@ -94,7 +96,10 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             output: OutputPort::create(),
             buckets_blocks: BTreeMap::new(),
             unsplitted_blocks: vec![],
+            flush_state: PayloadFlushState::default(),
+            partition_payloads: vec![],
             initialized_all_inputs: false,
+            max_partition_count: 0,
             _phantom: Default::default(),
         })
     }
@@ -185,9 +190,15 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
                         unreachable!()
                     }
+                    AggregateMeta::AggregateHashTable(p) => {
+                        self.max_partition_count =
+                            self.max_partition_count.max(p.partition_count());
+
+                        (0, 0)
+                    }
                 };
 
-                if bucket > SINGLE_LEVEL_BUCKET_NUM {
+                if bucket > SINGLE_LEVEL_BUCKET_NUM && self.max_partition_count == 0 {
                     match self.buckets_blocks.entry(bucket) {
                         Entry::Vacant(v) => {
                             v.insert(vec![data_block]);
@@ -200,6 +211,16 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     return res;
                 }
             }
+        }
+
+        if self.max_partition_count > 0 {
+            let meta = data_block.take_meta().unwrap();
+            if let Some(AggregateMeta::AggregateHashTable(p)) =
+                AggregateMeta::<Method, V>::downcast_from(meta)
+            {
+                self.partition_payloads.push(p);
+            }
+            return 0;
         }
 
         self.unsplitted_blocks.push(data_block);
@@ -328,7 +349,9 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             return Ok(Event::NeedData);
         }
 
-        if !self.buckets_blocks.is_empty() && !self.unsplitted_blocks.is_empty() {
+        if self.partition_payloads.len() == self.inputs.len()
+            || (!self.buckets_blocks.is_empty() && !self.unsplitted_blocks.is_empty())
+        {
             // Split data blocks if it's unsplitted.
             return Ok(Event::Sync);
         }
@@ -400,6 +423,53 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
     }
 
     fn process(&mut self) -> Result<()> {
+        if !self.partition_payloads.is_empty() {
+            let mut payloads = Vec::with_capacity(self.partition_payloads.len());
+
+            for p in self.partition_payloads.drain(0..) {
+                if p.partition_count() != self.max_partition_count {
+                    let p = p.repartition(self.max_partition_count, &mut self.flush_state);
+                    payloads.push(p);
+                } else {
+                    payloads.push(p);
+                };
+            }
+
+            let group_types = payloads[0].group_types.clone();
+            let aggrs = payloads[0].aggrs.clone();
+
+            let mut payload_map = (0..self.max_partition_count).map(|_| vec![]).collect_vec();
+
+            // All arenas should be kept in the bucket partition payload
+            let mut arenas = vec![];
+
+            for mut payload in payloads.into_iter() {
+                for (bucket, p) in payload.payloads.into_iter().enumerate() {
+                    payload_map[bucket].push(p);
+                }
+                arenas.append(&mut payload.arenas);
+            }
+
+            for (bucket, mut payloads) in payload_map.into_iter().enumerate() {
+                let mut partition_payload =
+                    PartitionedPayload::new(group_types.clone(), aggrs.clone(), 1);
+
+                for payload in payloads.drain(0..) {
+                    partition_payload.combine_single(payload, &mut self.flush_state);
+                }
+
+                partition_payload.arenas.extend_from_slice(&arenas);
+
+                if partition_payload.len() != 0 {
+                    self.buckets_blocks
+                        .insert(bucket as isize, vec![DataBlock::empty_with_meta(
+                            AggregateMeta::<Method, V>::create_agg_hashtable(partition_payload),
+                        )]);
+                }
+            }
+            return Ok(());
+        }
+
         let block_meta = self
             .unsplitted_blocks
             .pop()
@@ -418,6 +488,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(payload) => self.partition_block(payload)?,
                     AggregateMeta::HashTable(payload) => self.partition_hashtable(payload)?,
+                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
                 };
 
                 for (bucket, block) in data_blocks.into_iter().enumerate() {
@@ -443,9 +514,6 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
-    enable_profiling: bool,
-    prof_id: u32,
-    proc_profs: SharedProcessorProfiles,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
     let transform = TransformPartitionBucket::<Method, V>::create(method.clone(), input_nums)?;
@@ -471,36 +539,23 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
     })?;
 
     pipeline.add_transform(|input, output| {
-        let transform = match params.aggregate_functions.is_empty() {
-            true => {
-                TransformFinalGroupBy::try_create(input, output, method.clone(), params.clone())?
-            }
-            false => {
-                TransformFinalAggregate::try_create(input, output, method.clone(), params.clone())?
-            }
-        };
-        if enable_profiling {
-            Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
-                transform,
-                prof_id,
-                proc_profs.clone(),
-            )))
-        } else {
-            Ok(ProcessorPtr::create(transform))
-        }
+        Ok(ProcessorPtr::create(
+            match params.aggregate_functions.is_empty() {
+                true => TransformFinalGroupBy::try_create(
+                    input,
+                    output,
+                    method.clone(),
+                    params.clone(),
+                )?,
+                false => TransformFinalAggregate::try_create(
+                    input,
+                    output,
+                    method.clone(),
+                    params.clone(),
+                )?,
+            },
+        ))
     })?;
-    // Append a profile stub to record the output rows and bytes
-    if enable_profiling {
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(Transformer::create(
-                input,
-                output,
-                ProfileStub::new(prof_id, proc_profs.clone())
-                    .accumulate_output_rows()
-                    .accumulate_output_bytes(),
-            )))
-        })?;
-    }
 
     Ok(())
 }

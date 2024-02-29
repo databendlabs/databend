@@ -43,6 +43,10 @@ impl Interpreter for ShowFileFormatsInterpreter {
         "ShowFileFormatsInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -54,14 +58,11 @@ impl Interpreter for ShowFileFormatsInterpreter {
 
         formats.sort_by(|a, b| a.name.cmp(&b.name));
 
-        let names = formats
-            .iter()
-            .map(|x| x.name.as_bytes().to_vec())
-            .collect::<Vec<_>>();
+        let names = formats.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
 
         let options = formats
             .iter()
-            .map(|x| x.file_format_params.to_string().as_bytes().to_vec())
+            .map(|x| x.file_format_params.to_string())
             .collect::<Vec<_>>();
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

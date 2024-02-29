@@ -13,14 +13,17 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::time::Duration;
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_storage::DataOperator;
 use databend_enterprise_query::storages::fuse::do_vacuum_drop_tables;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::do_vacuum_drop_table;
+use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use opendal::raw::Accessor;
@@ -38,7 +41,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     fixture
         .default_session()
         .get_settings()
-        .set_retention_period(0)?;
+        .set_data_retention_time_in_days(0)?;
 
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
@@ -101,6 +104,33 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
         )
         .await?;
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_do_vacuum_temporary_files() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let operator = DataOperator::instance().operator();
+    operator.write("test_dir/test1", vec![1, 2]).await?;
+    operator.write("test_dir/test2", vec![1, 2]).await?;
+    operator.write("test_dir/test3", vec![1, 2]).await?;
+
+    assert_eq!(3, operator.list("test_dir/").await?.len());
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    do_vacuum_temporary_files(
+        "test_dir/".to_string(),
+        Some(Duration::from_secs(2)),
+        Some(1),
+    )
+    .await?;
+
+    assert_eq!(2, operator.list("test_dir/").await?.len());
+
+    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(2)), None).await?;
+    assert_eq!(0, operator.list("test_dir/").await?.len());
 
     Ok(())
 }

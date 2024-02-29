@@ -15,10 +15,10 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::KeyAccessor;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
@@ -76,7 +76,7 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (mut match_count, mut incomplete_ptr) =
+                let (match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -99,19 +99,17 @@ impl HashJoinProbeState {
                         &build_state.generation_state,
                         outer_scan_map,
                         &mut right_single_scan_map,
+                        probe_state.filter_executor.as_mut(),
                     )?;
-                    matched_idx = 0;
-                    (match_count, incomplete_ptr) = hash_table.next_probe(
+                    (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
+                        hash_table,
                         key,
                         incomplete_ptr,
+                        *idx,
+                        probe_indexes,
                         build_indexes_ptr,
-                        matched_idx,
                         max_block_size,
-                    );
-                    for _ in 0..match_count {
-                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
-                        matched_idx += 1;
-                    }
+                    )?;
                 }
             }
         } else {
@@ -120,7 +118,7 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(idx) };
 
                 // Probe hash table and fill build_indexes.
-                let (mut match_count, mut incomplete_ptr) =
+                let (match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -143,19 +141,17 @@ impl HashJoinProbeState {
                         &build_state.generation_state,
                         outer_scan_map,
                         &mut right_single_scan_map,
+                        probe_state.filter_executor.as_mut(),
                     )?;
-                    matched_idx = 0;
-                    (match_count, incomplete_ptr) = hash_table.next_probe(
+                    (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
+                        hash_table,
                         key,
                         incomplete_ptr,
+                        idx as u32,
+                        probe_indexes,
                         build_indexes_ptr,
-                        matched_idx,
                         max_block_size,
-                    );
-                    for _ in 0..match_count {
-                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
-                        matched_idx += 1;
-                    }
+                    )?;
                 }
             }
         }
@@ -171,48 +167,68 @@ impl HashJoinProbeState {
                 &build_state.generation_state,
                 outer_scan_map,
                 &mut right_single_scan_map,
+                probe_state.filter_executor.as_mut(),
             )?;
         }
 
         Ok(result_blocks)
     }
 
-    fn update_right_single_scan_map(
+    pub(crate) fn update_right_single_scan_map(
         &self,
         build_indexes: &[RowPtr],
         right_single_scan_map: &[*mut AtomicBool],
-        bitmap: Option<&Bitmap>,
+        selection: Option<&[u32]>,
     ) -> Result<()> {
-        let dummy_bitmap = Bitmap::new();
-        let (has_bitmap, validity) = match bitmap {
-            Some(validity) => (true, validity),
-            None => (false, &dummy_bitmap),
-        };
-        for (idx, row_ptr) in build_indexes.iter().enumerate() {
-            if has_bitmap && unsafe { !validity.get_bit_unchecked(idx) } {
-                continue;
+        if let Some(selection) = selection {
+            for idx in selection {
+                let row_ptr = unsafe { build_indexes.get_unchecked(*idx as usize) };
+                let old = unsafe {
+                    (*right_single_scan_map[row_ptr.chunk_index as usize]
+                        .add(row_ptr.row_index as usize))
+                    .load(Ordering::SeqCst)
+                };
+                if old {
+                    return Err(ErrorCode::Internal(
+                        "Scalar subquery can't return more than one row",
+                    ));
+                }
+                let res = unsafe {
+                    (*right_single_scan_map[row_ptr.chunk_index as usize]
+                        .add(row_ptr.row_index as usize))
+                    .compare_exchange_weak(old, true, Ordering::SeqCst, Ordering::SeqCst)
+                };
+                if res.is_err() {
+                    return Err(ErrorCode::Internal(
+                        "Scalar subquery can't return more than one row",
+                    ));
+                }
             }
-            let old = unsafe {
-                (*right_single_scan_map[row_ptr.chunk_index as usize]
-                    .add(row_ptr.row_index as usize))
-                .load(Ordering::SeqCst)
-            };
-            if old {
-                return Err(ErrorCode::Internal(
-                    "Scalar subquery can't return more than one row",
-                ));
-            }
-            let res = unsafe {
-                (*right_single_scan_map[row_ptr.chunk_index as usize]
-                    .add(row_ptr.row_index as usize))
-                .compare_exchange_weak(old, true, Ordering::SeqCst, Ordering::SeqCst)
-            };
-            if res.is_err() {
-                return Err(ErrorCode::Internal(
-                    "Scalar subquery can't return more than one row",
-                ));
+        } else {
+            for row_ptr in build_indexes {
+                let old = unsafe {
+                    (*right_single_scan_map[row_ptr.chunk_index as usize]
+                        .add(row_ptr.row_index as usize))
+                    .load(Ordering::SeqCst)
+                };
+                if old {
+                    return Err(ErrorCode::Internal(
+                        "Scalar subquery can't return more than one row",
+                    ));
+                }
+                let res = unsafe {
+                    (*right_single_scan_map[row_ptr.chunk_index as usize]
+                        .add(row_ptr.row_index as usize))
+                    .compare_exchange_weak(old, true, Ordering::SeqCst, Ordering::SeqCst)
+                };
+                if res.is_err() {
+                    return Err(ErrorCode::Internal(
+                        "Scalar subquery can't return more than one row",
+                    ));
+                }
             }
         }
+
         Ok(())
     }
 
@@ -229,6 +245,7 @@ impl HashJoinProbeState {
         build_state: &BuildBlockGenerationState,
         outer_scan_map: &mut [Vec<bool>],
         right_single_scan_map: &mut [*mut AtomicBool],
+        filter_executor: Option<&mut FilterExecutor>,
     ) -> Result<()> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
@@ -268,39 +285,9 @@ impl HashJoinProbeState {
         let result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
 
         if !result_block.is_empty() {
-            if self
-                .hash_join_state
-                .hash_join_desc
-                .other_predicate
-                .is_none()
-            {
-                result_blocks.push(result_block);
-                if self.hash_join_state.hash_join_desc.join_type == JoinType::RightSingle {
-                    self.update_right_single_scan_map(
-                        &build_indexes[0..matched_idx],
-                        right_single_scan_map,
-                        None,
-                    )?;
-                } else {
-                    for row_ptr in &build_indexes[0..matched_idx] {
-                        unsafe {
-                            *outer_scan_map
-                                .get_unchecked_mut(row_ptr.chunk_index as usize)
-                                .get_unchecked_mut(row_ptr.row_index as usize) = true;
-                        };
-                    }
-                }
-            } else {
-                let (bm, all_true, all_false) = self.get_other_filters(
-                    &result_block,
-                    self.hash_join_state
-                        .hash_join_desc
-                        .other_predicate
-                        .as_ref()
-                        .unwrap(),
-                    &self.func_ctx,
-                )?;
-
+            if let Some(filter_executor) = filter_executor {
+                let (result_block, selection, all_true, all_false) =
+                    self.get_other_predicate_result_block(filter_executor, result_block)?;
                 if all_true {
                     result_blocks.push(result_block);
                     if self.hash_join_state.hash_join_desc.join_type == JoinType::RightSingle {
@@ -319,31 +306,41 @@ impl HashJoinProbeState {
                         }
                     }
                 } else if !all_false {
+                    result_blocks.push(result_block);
                     // Safe to unwrap.
-                    let validity = bm.unwrap();
                     if self.hash_join_state.hash_join_desc.join_type == JoinType::RightSingle {
                         self.update_right_single_scan_map(
                             &build_indexes[0..matched_idx],
                             right_single_scan_map,
-                            Some(&validity),
+                            Some(selection),
                         )?;
                     } else {
-                        let mut idx = 0;
-                        while idx < matched_idx {
+                        for idx in selection {
                             unsafe {
-                                let valid = validity.get_bit_unchecked(idx);
-                                if valid {
-                                    let row_ptr = build_indexes.get_unchecked(idx);
-                                    *outer_scan_map
-                                        .get_unchecked_mut(row_ptr.chunk_index as usize)
-                                        .get_unchecked_mut(row_ptr.row_index as usize) = true;
-                                }
+                                let row_ptr = build_indexes.get_unchecked(*idx as usize);
+                                *outer_scan_map
+                                    .get_unchecked_mut(row_ptr.chunk_index as usize)
+                                    .get_unchecked_mut(row_ptr.row_index as usize) = true;
                             }
-                            idx += 1;
                         }
                     }
-                    let filtered_block = DataBlock::filter_with_bitmap(result_block, &validity)?;
-                    result_blocks.push(filtered_block);
+                }
+            } else {
+                result_blocks.push(result_block);
+                if self.hash_join_state.hash_join_desc.join_type == JoinType::RightSingle {
+                    self.update_right_single_scan_map(
+                        &build_indexes[0..matched_idx],
+                        right_single_scan_map,
+                        None,
+                    )?;
+                } else {
+                    for row_ptr in &build_indexes[0..matched_idx] {
+                        unsafe {
+                            *outer_scan_map
+                                .get_unchecked_mut(row_ptr.chunk_index as usize)
+                                .get_unchecked_mut(row_ptr.row_index as usize) = true;
+                        };
+                    }
                 }
             }
         }

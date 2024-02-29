@@ -40,6 +40,7 @@ fn test_decode_v72_csv_file_format_params() -> anyhow::Result<()> {
         mt::principal::FileFormatParams::Csv(CsvFileFormatParams {
             compression: StageFileCompression::Gzip,
             headers: 1,
+            output_header: false,
             field_delimiter: "fd".to_string(),
             record_delimiter: "rd".to_string(),
             null_display: "Null".to_string(),
@@ -48,6 +49,7 @@ fn test_decode_v72_csv_file_format_params() -> anyhow::Result<()> {
             quote: "\'".to_string(),
             error_on_column_count_mismatch: false,
             empty_field_as: EmptyFieldAs::String,
+            binary_format: Default::default(),
         })
     };
     common::test_load_old(func_name!(), file_format_params_v72.as_slice(), 0, want())?;

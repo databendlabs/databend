@@ -47,6 +47,10 @@ impl Interpreter for ShowGrantsInterpreter {
         "ShowGrantsInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
@@ -81,7 +85,7 @@ impl Interpreter for ShowGrantsInterpreter {
             .fold(grant_set, |a, b| a | b)
             .entries();
 
-        let mut grant_list: Vec<Vec<u8>> = Vec::new();
+        let mut grant_list: Vec<String> = Vec::new();
         for grant_entry in grant_entries {
             let object = grant_entry.object();
             match object {
@@ -95,13 +99,10 @@ impl Interpreter for ShowGrantsInterpreter {
                     let catalog = self.ctx.get_catalog(catalog_name).await?;
                     let db_name = catalog.get_db_name_by_id(*db_id).await?;
                     let table_name = catalog.get_table_name_by_id(*table_id).await?;
-                    grant_list.push(
-                        format!(
-                            "GRANT {} ON '{}'.'{}'.'{}' TO {}",
-                            &privileges_str, catalog_name, db_name, table_name, identity
-                        )
-                        .into(),
-                    );
+                    grant_list.push(format!(
+                        "GRANT {} ON '{}'.'{}'.'{}' TO {}",
+                        &privileges_str, catalog_name, db_name, table_name, identity
+                    ));
                 }
                 GrantObject::DatabaseById(catalog_name, db_id) => {
                     let privileges_str = if grant_entry.has_all_available_privileges() {
@@ -112,21 +113,13 @@ impl Interpreter for ShowGrantsInterpreter {
                     };
                     let catalog = self.ctx.get_catalog(catalog_name).await?;
                     let db_name = catalog.get_db_name_by_id(*db_id).await?;
-                    grant_list.push(
-                        format!(
-                            "GRANT {} ON '{}'.'{}'.* TO {}",
-                            &privileges_str, catalog_name, db_name, identity
-                        )
-                        .as_bytes()
-                        .to_vec(),
-                    );
+                    grant_list.push(format!(
+                        "GRANT {} ON '{}'.'{}'.* TO {}",
+                        &privileges_str, catalog_name, db_name, identity
+                    ));
                 }
                 _ => {
-                    grant_list.push(
-                        format!("{} TO {}", grant_entry, identity)
-                            .as_bytes()
-                            .to_vec(),
-                    );
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
             }
         }

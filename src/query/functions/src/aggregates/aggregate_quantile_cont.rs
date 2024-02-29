@@ -20,6 +20,9 @@ use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
+use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::decimal::DecimalType;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
@@ -28,11 +31,10 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use ethnum::i256;
 use num_traits::AsPrimitive;
 use ordered_float::OrderedFloat;
 
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -143,14 +145,151 @@ where
         }
         Ok(())
     }
+}
 
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, self)
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct DecimalQuantileContState<T>
+where
+    T: ValueType,
+    T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
+{
+    pub value: Vec<T::Scalar>,
+}
+
+impl<T> Default for DecimalQuantileContState<T>
+where
+    T: ValueType,
+    T::Scalar: BorshDeserialize + BorshSerialize + Decimal,
+{
+    fn default() -> Self {
+        Self { value: vec![] }
+    }
+}
+
+impl<T> DecimalQuantileContState<T>
+where
+    T: ValueType,
+    T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
+{
+    fn compute_result(&mut self, whole: usize, frac: f64, value_len: usize) -> Result<T::Scalar> {
+        self.value.as_mut_slice().select_nth_unstable(whole);
+        let value = *self.value.get(whole).unwrap();
+        let value1 = if whole + 1 >= value_len {
+            value
+        } else {
+            self.value.as_mut_slice().select_nth_unstable(whole + 1);
+            *self.value.get(whole + 1).unwrap()
+        };
+
+        let result = value1
+            .checked_sub(value)
+            .and_then(|sub_result| sub_result.checked_mul(Decimal::from_float(frac)))
+            .and_then(|mul_result| value.checked_add(mul_result));
+
+        match result {
+            Some(r) => Ok(r),
+            None => Err(ErrorCode::Overflow("Decimal overflow when interpolate")),
+        }
+    }
+}
+
+impl<T> UnaryState<T, ArrayType<T>> for DecimalQuantileContState<T>
+where
+    T: ValueType,
+    T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
+{
+    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+        self.value.push(T::to_owned_scalar(other));
+        Ok(())
     }
 
-    fn deserialize(reader: &mut &[u8]) -> Result<Self>
-    where Self: Sized {
-        borsh_deserialize_state(reader)
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.value.extend(
+            rhs.value
+                .iter()
+                .map(|v| T::to_owned_scalar(T::to_scalar_ref(v))),
+        );
+        Ok(())
+    }
+
+    fn merge_result(
+        &mut self,
+        builder: &mut ArrayColumnBuilder<T>,
+        function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let value_len = self.value.len();
+        let quantile_cont_data = unsafe {
+            function_data
+                .unwrap()
+                .as_any()
+                .downcast_ref_unchecked::<QuantileData>()
+        };
+
+        if quantile_cont_data.levels.len() > 1 {
+            let indices = quantile_cont_data
+                .levels
+                .iter()
+                .map(|level| libm::modf((value_len - 1) as f64 * (*level)))
+                .collect::<Vec<(f64, f64)>>();
+
+            for (frac, whole) in indices {
+                let whole = whole as usize;
+                if whole >= value_len {
+                    builder.push_default();
+                } else {
+                    let n = self.compute_result(whole, frac, value_len)?;
+                    builder.put_item(T::to_scalar_ref(&n));
+                }
+            }
+            builder.commit_row();
+        }
+
+        Ok(())
+    }
+}
+
+impl<T> UnaryState<T, T> for DecimalQuantileContState<T>
+where
+    T: ValueType,
+    T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
+{
+    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+        self.value.push(T::to_owned_scalar(other));
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.value.extend(
+            rhs.value
+                .iter()
+                .map(|v| T::to_owned_scalar(T::to_scalar_ref(v))),
+        );
+        Ok(())
+    }
+
+    fn merge_result(
+        &mut self,
+        builder: &mut T::ColumnBuilder,
+        function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let value_len = self.value.len();
+        let quantile_cont_data = unsafe {
+            function_data
+                .unwrap()
+                .as_any()
+                .downcast_ref_unchecked::<QuantileData>()
+        };
+
+        let (frac, whole) = libm::modf((value_len - 1) as f64 * quantile_cont_data.levels[0]);
+        let whole = whole as usize;
+        if whole >= value_len {
+            T::push_default(builder);
+        } else {
+            let n = self.compute_result(whole, frac, value_len)?;
+            T::push_item(builder, T::to_scalar_ref(&n));
+        }
+
+        Ok(())
     }
 }
 
@@ -249,6 +388,73 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                 .with_function_data(Box::new(QuantileData { levels }))
                 .with_need_drop(true);
 
+                Ok(Arc::new(func))
+            }
+        }
+
+        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+            let decimal_size = DecimalSize {
+                precision: s.precision,
+                scale: s.scale,
+            };
+            let data_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+            if params.len() > 1 {
+                let func = AggregateUnaryFunction::<
+                    DecimalQuantileContState<DecimalType<i128>>,
+                    DecimalType<i128>,
+                    ArrayType<DecimalType<i128>>,
+                >::try_create(
+                    display_name,
+                    DataType::Array(Box::new(data_type)),
+                    params,
+                    arguments[0].clone(),
+                )
+                .with_function_data(Box::new(QuantileData { levels }))
+                .with_need_drop(true);
+                Ok(Arc::new(func))
+            } else {
+                let func = AggregateUnaryFunction::<
+                    DecimalQuantileContState<DecimalType<i128>>,
+                    DecimalType<i128>,
+                    DecimalType<i128>,
+                >::try_create(
+                    display_name, data_type, params, arguments[0].clone()
+                )
+                .with_function_data(Box::new(QuantileData { levels }))
+                .with_need_drop(true);
+                Ok(Arc::new(func))
+            }
+        }
+        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+            let decimal_size = DecimalSize {
+                precision: s.precision,
+                scale: s.scale,
+            };
+            let data_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+            if params.len() > 1 {
+                let func = AggregateUnaryFunction::<
+                    DecimalQuantileContState<DecimalType<i256>>,
+                    DecimalType<i256>,
+                    ArrayType<DecimalType<i256>>,
+                >::try_create(
+                    display_name,
+                    DataType::Array(Box::new(data_type)),
+                    params,
+                    arguments[0].clone(),
+                )
+                .with_function_data(Box::new(QuantileData { levels }))
+                .with_need_drop(true);
+                Ok(Arc::new(func))
+            } else {
+                let func = AggregateUnaryFunction::<
+                    DecimalQuantileContState<DecimalType<i256>>,
+                    DecimalType<i256>,
+                    DecimalType<i256>,
+                >::try_create(
+                    display_name, data_type, params, arguments[0].clone()
+                )
+                .with_function_data(Box::new(QuantileData { levels }))
+                .with_need_drop(true);
                 Ok(Arc::new(func))
             }
         }

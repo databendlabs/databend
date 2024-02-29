@@ -23,14 +23,15 @@ use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_users::UserApiProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_network_policy() -> Result<()> {
     let conf = RpcClientConf::default();
-    let user_mgr = UserApiProvider::try_create_simple(conf).await?;
-
     let tenant = "test";
+
+    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
     let username = "test-user1";
     let hostname = "%";
     let pwd = "test-pwd";
@@ -49,7 +50,11 @@ async fn test_network_policy() -> Result<()> {
         update_on: None,
     };
     user_mgr
-        .add_network_policy(tenant, network_policy, false)
+        .add_network_policy(
+            tenant,
+            network_policy,
+            &CreateOption::CreateIfNotExists(false),
+        )
         .await?;
 
     // add user
@@ -62,7 +67,9 @@ async fn test_network_policy() -> Result<()> {
     let mut option = UserOption::empty();
     option = option.with_network_policy(Some(policy_name.clone()));
     user_info.update_auth_option(None, Some(option));
-    user_mgr.add_user(tenant, user_info, false).await?;
+    user_mgr
+        .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(false))
+        .await?;
 
     let user = UserIdentity::new(username, hostname);
 

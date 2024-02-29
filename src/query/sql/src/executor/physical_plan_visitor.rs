@@ -179,6 +179,7 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             group_by: plan.group_by.clone(),
+            group_by_display: plan.group_by_display.clone(),
             agg_funcs: plan.agg_funcs.clone(),
             stat_info: plan.stat_info.clone(),
         }))
@@ -193,6 +194,7 @@ pub trait PhysicalPlanReplacer {
             before_group_by_schema: plan.before_group_by_schema.clone(),
             group_by: plan.group_by.clone(),
             agg_funcs: plan.agg_funcs.clone(),
+            group_by_display: plan.group_by_display.clone(),
             stat_info: plan.stat_info.clone(),
             limit: plan.limit,
         }))
@@ -209,6 +211,7 @@ pub trait PhysicalPlanReplacer {
             partition_by: plan.partition_by.clone(),
             order_by: plan.order_by.clone(),
             window_frame: plan.window_frame.clone(),
+            limit: plan.limit,
         }))
     }
 
@@ -234,7 +237,9 @@ pub trait PhysicalPlanReplacer {
             need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
             probe_keys_rt: plan.probe_keys_rt.clone(),
+            enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
             broadcast: plan.broadcast,
+            original_join_type: plan.original_join_type.clone(),
         }))
     }
 

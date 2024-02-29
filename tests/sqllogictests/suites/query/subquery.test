@@ -664,6 +664,9 @@ select * from t2 where t2.b < ANY(select NULL from t1 where t1.a = t1.a)
 ----
 
 statement ok
+drop table if exists t3
+
+statement ok
 create table t3(a int, b int);
 
 statement ok
@@ -683,3 +686,68 @@ drop table t2
 
 statement ok
 drop table t3
+
+# https://github.com/datafuselabs/databend/pull/14353
+statement ok
+CREATE TABLE property_records (
+  owner_id VARCHAR NULL,
+  property_id VARCHAR NULL
+) ;
+
+statement ok
+CREATE TABLE mortgage_records (
+  property_id VARCHAR NULL
+) ;
+
+statement ok
+CREATE TABLE transaction_history (
+  owner_id VARCHAR NULL,
+  property_id VARCHAR NULL
+) ;
+
+query I
+SELECT
+  (
+    SELECT
+      IF(COUNT(0) = 0, '0', '1')
+    FROM
+      property_records pr
+    WHERE
+      th.property_id = pr.property_id
+      AND th.owner_id = pr.owner_id
+  ) AS ownership_status,
+  (
+    SELECT
+      IF(COUNT(0) = 0, '0', '1')
+    FROM
+      mortgage_records mr
+    WHERE
+      th.property_id = mr.property_id
+  ) AS mortgage_status
+FROM
+  transaction_history th
+----
+
+statement ok
+drop table property_records;
+
+statement ok
+drop table mortgage_records;
+
+statement ok
+drop table transaction_history;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+create table t1(a int);
+
+statement ok
+insert into t1 values(1), (2), (3);
+
+query error 1001.*Scalar subquery can't return more than one row
+select (select sum(a) from t1 where t1.a >= t2.a group by t1.a) from t1 as t2;
+
+statement ok
+drop table t1;

@@ -106,9 +106,6 @@ impl InputFormatNDJson {
                                 column.push_default();
                             }
                         }
-                        NullAs::TypeDefault => {
-                            column.push_default();
-                        }
                     },
                     Some(serde_json::Value::Null) => match null_field_as {
                         NullAs::Error => unreachable!("null_field_as should be error"),
@@ -131,9 +128,6 @@ impl InputFormatNDJson {
                             } else {
                                 column.push_default();
                             }
-                        }
-                        NullAs::TypeDefault => {
-                            column.push_default();
                         }
                     },
                     Some(value) => {
@@ -175,9 +169,11 @@ impl InputFormatTextBase for InputFormatNDJson {
     fn create_field_decoder(
         _params: &FileFormatParams,
         options: &FileFormatOptionsExt,
-        rounding_mode: bool,
     ) -> Arc<dyn FieldDecoder> {
-        Arc::new(FieldJsonAstDecoder::create(options, rounding_mode))
+        Arc::new(FieldJsonAstDecoder::create(
+            options,
+            options.is_rounding_mode,
+        ))
     }
 
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {

@@ -53,6 +53,28 @@ impl FuseTable {
         .await
     }
 
+    #[minitrace::trace]
+    #[async_backtrace::framed]
+    pub async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<FuseTable>> {
+        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
+            loc
+        } else {
+            // not an error?
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "Empty Table has no historical data",
+            ));
+        };
+
+        match point {
+            NavigationPoint::SnapshotID(snapshot_id) => Ok(self
+                .navigate_to_snapshot(snapshot_location, snapshot_id.as_str())
+                .await?),
+            NavigationPoint::TimePoint(time_point) => Ok(self
+                .navigate_to_time_point(snapshot_location, *time_point)
+                .await?),
+        }
+    }
+
     #[async_backtrace::framed]
     pub async fn navigate_to_snapshot(
         &self,
@@ -143,7 +165,8 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
     ) -> Result<(Arc<FuseTable>, Vec<String>)> {
-        let retention = Duration::hours(ctx.get_settings().get_retention_period()? as i64);
+        let retention =
+            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
         let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
             snapshot
         } else {

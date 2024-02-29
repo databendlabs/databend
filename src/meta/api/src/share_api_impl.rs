@@ -24,6 +24,7 @@ use databend_common_meta_app::app_error::UnknownShareAccounts;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::WrongShare;
 use databend_common_meta_app::app_error::WrongShareObject;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdToName;
@@ -329,8 +330,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             let mut add_share_account_keys = vec![];
             for account in req.accounts.iter() {
                 if !share_meta.has_account(account) {
-                    add_share_account_keys.push(ShareAccountNameIdent {
-                        account: account.clone(),
+                    add_share_account_keys.push(ShareConsumer {
+                        tenant: account.clone(),
                         share_id,
                     });
                 }
@@ -361,7 +362,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     condition.push(txn_cond_seq(share_account_key, Eq, 0));
 
                     let share_account_meta = ShareAccountMeta::new(
-                        share_account_key.account.clone(),
+                        share_account_key.tenant.clone(),
                         share_id,
                         req.share_on,
                     );
@@ -371,7 +372,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         serialize_struct(&share_account_meta)?,
                     )); /* (account, share_id) -> share_account_meta */
 
-                    share_meta.add_account(share_account_key.account.clone());
+                    share_meta.add_account(share_account_key.tenant.clone());
                 }
                 if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
 
@@ -442,8 +443,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     continue;
                 }
                 if share_meta.has_account(account) {
-                    let share_account_key = ShareAccountNameIdent {
-                        account: account.clone(),
+                    let share_account_key = ShareConsumer {
+                        tenant: account.clone(),
                         share_id,
                     };
 
@@ -490,7 +491,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
                     if_then.push(txn_op_del(&share_account_key_and_seq.0)); // del (account, share_id)
 
-                    share_meta.del_account(&share_account_key_and_seq.0.account);
+                    share_meta.del_account(&share_account_key_and_seq.0.tenant);
                 }
                 if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
 
@@ -988,17 +989,33 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 "create_share_endpoint"
             );
 
+            let mut condition = vec![];
+            let mut if_then = vec![];
+
             if share_endpoint_id_seq > 0 {
-                return if req.if_not_exists {
-                    Ok(CreateShareEndpointReply { share_endpoint_id })
+                if let CreateOption::CreateIfNotExists(if_not_exists) = req.create_option {
+                    return if if_not_exists {
+                        Ok(CreateShareEndpointReply { share_endpoint_id })
+                    } else {
+                        Err(KVAppError::AppError(AppError::ShareEndpointAlreadyExists(
+                            ShareEndpointAlreadyExists::new(
+                                &name_key.endpoint,
+                                format!("create share endpoint: tenant: {}", name_key.tenant),
+                            ),
+                        )))
+                    };
                 } else {
-                    Err(KVAppError::AppError(AppError::ShareEndpointAlreadyExists(
-                        ShareEndpointAlreadyExists::new(
-                            &name_key.endpoint,
-                            format!("create share endpoint: tenant: {}", name_key.tenant),
-                        ),
-                    )))
-                };
+                    construct_drop_share_endpoint_txn_operations(
+                        self,
+                        name_key,
+                        false,
+                        false,
+                        func_name!(),
+                        &mut condition,
+                        &mut if_then,
+                    )
+                    .await?;
+                }
             }
 
             // Create share endpoint by inserting these record:
@@ -1019,16 +1036,19 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             // Create share endpoint by transaction.
             {
                 let share_endpoint_meta = ShareEndpointMeta::new(&req);
-                let txn_req = TxnRequest {
-                    condition: vec![
-                        txn_cond_seq(name_key, Eq, 0),
-                        txn_cond_seq(&id_to_name_key, Eq, 0),
-                    ],
-                    if_then: vec![
+                condition.extend(vec![
+                    txn_cond_seq(name_key, Eq, share_endpoint_id_seq),
+                    txn_cond_seq(&id_to_name_key, Eq, 0),
+                ]);
+                if_then.extend(vec![
                         txn_op_put(name_key, serialize_u64(share_endpoint_id)?), /* (tenant, share_endpoint_name) -> share_endpoint_id */
                         txn_op_put(&id_key, serialize_struct(&share_endpoint_meta)?), /* (share_endpoint_id) -> share_endpoint_meta */
                         txn_op_put(&id_to_name_key, serialize_struct(name_key)?), /* __fd_share_endpoint_id_to_name/<share_endpoint_id> -> (tenant,share_endpoint_name) */
-                    ],
+                    ]);
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
                     else_then: vec![],
                 };
 
@@ -1200,83 +1220,115 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let res = get_share_endpoint_or_err(
-                self,
-                name_key,
-                format!("drop_share_endpoint: {}", &name_key),
-            )
-            .await;
-
-            let (
-                share_endpoint_id_seq,
-                share_endpoint_id,
-                share_endpoint_meta_seq,
-                _share_endpoint_meta,
-            ) = match res {
-                Ok(x) => x,
-                Err(e) => {
-                    if let KVAppError::AppError(AppError::UnknownShareEndpoint(_)) = e {
-                        if req.if_exists {
-                            return Ok(DropShareEndpointReply {});
-                        }
-                    }
-
-                    return Err(e);
-                }
-            };
-            let (share_endpoint_name_seq, _share_endpoint) = get_share_endpoint_id_to_name_or_err(
-                self,
-                share_endpoint_id,
-                format!("drop_share_endpoint: {}", &name_key),
-            )
-            .await?;
-
-            // Delete share endpoint by these operations:
-            // del (tenant, share_endpoint)
-            // del share_endpoint_id
-            // del (share_endpoint_id) -> (tenant, share_endpoint)
-
             let mut condition = vec![];
             let mut if_then = vec![];
 
-            let share_id_key = ShareEndpointId { share_endpoint_id };
-            let id_name_key = ShareEndpointIdToName { share_endpoint_id };
+            let share_endpoint_id = if let Some(share_endpoint_id) =
+                construct_drop_share_endpoint_txn_operations(
+                    self,
+                    name_key,
+                    req.if_exists,
+                    true,
+                    func_name!(),
+                    &mut condition,
+                    &mut if_then,
+                )
+                .await?
+            {
+                share_endpoint_id
+            } else {
+                return Ok(DropShareEndpointReply {});
+            };
 
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            let share_id_key = ShareEndpointId { share_endpoint_id };
             debug!(
-                share_endpoint_id = share_endpoint_id,
-                name_key = as_debug!(name_key);
+                name = as_debug!(name_key) ,
+                id = as_debug!(&share_id_key),
+                succ = succ;
                 "drop_share_endpoint"
             );
 
-            {
-                condition.push(txn_cond_seq(name_key, Eq, share_endpoint_id_seq));
-                condition.push(txn_cond_seq(&share_id_key, Eq, share_endpoint_meta_seq));
-                condition.push(txn_cond_seq(&id_name_key, Eq, share_endpoint_name_seq));
-                if_then.push(txn_op_del(name_key)); // del (tenant, share_endpoint)
-                if_then.push(txn_op_del(&share_id_key)); // del share_endpoint_id
-                if_then.push(txn_op_del(&id_name_key)); // del (share_endpoint_id) -> (tenant, share_endpoint)
-
-                let txn_req = TxnRequest {
-                    condition,
-                    if_then,
-                    else_then: vec![],
-                };
-
-                let (succ, _responses) = send_txn(self, txn_req).await?;
-
-                debug!(
-                    name = as_debug!(name_key) ,
-                    id = as_debug!(&share_id_key),
-                    succ = succ;
-                    "drop_share_endpoint"
-                );
-
-                if succ {
-                    return Ok(DropShareEndpointReply {});
-                }
+            if succ {
+                return Ok(DropShareEndpointReply {});
             }
         }
     }
+}
+
+async fn construct_drop_share_endpoint_txn_operations(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    name_key: &ShareEndpointIdent,
+    drop_if_exists: bool,
+    if_delete: bool,
+    ctx: &str,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<Option<u64>, KVAppError> {
+    let res = get_share_endpoint_or_err(
+        kv_api,
+        name_key,
+        format!(
+            "construct_drop_share_endpoint_txn_operations: {}",
+            &name_key
+        ),
+    )
+    .await;
+
+    let (share_endpoint_id_seq, share_endpoint_id, share_endpoint_meta_seq, _share_endpoint_meta) =
+        match res {
+            Ok(x) => x,
+            Err(e) => {
+                if let KVAppError::AppError(AppError::UnknownShareEndpoint(_)) = e {
+                    if drop_if_exists {
+                        return Ok(None);
+                    }
+                }
+
+                return Err(e);
+            }
+        };
+    let (share_endpoint_name_seq, _share_endpoint) = get_share_endpoint_id_to_name_or_err(
+        kv_api,
+        share_endpoint_id,
+        format!(
+            "construct_drop_share_endpoint_txn_operations: {}",
+            &name_key
+        ),
+    )
+    .await?;
+
+    // Delete share endpoint by these operations:
+    // del (tenant, share_endpoint)
+    // del share_endpoint_id
+    // del (share_endpoint_id) -> (tenant, share_endpoint)
+    let share_id_key = ShareEndpointId { share_endpoint_id };
+    let id_name_key = ShareEndpointIdToName { share_endpoint_id };
+
+    debug!(
+        share_endpoint_id = share_endpoint_id,
+        name_key = as_debug!(name_key),
+        ctx = ctx;
+        "construct_drop_share_endpoint_txn_operations"
+    );
+
+    condition.push(txn_cond_seq(&share_id_key, Eq, share_endpoint_meta_seq));
+    condition.push(txn_cond_seq(&id_name_key, Eq, share_endpoint_name_seq));
+    if_then.push(txn_op_del(&share_id_key)); // del share_endpoint_id
+    if_then.push(txn_op_del(&id_name_key)); // del (share_endpoint_id) -> (tenant, share_endpoint)
+    if if_delete {
+        condition.push(txn_cond_seq(name_key, Eq, share_endpoint_id_seq));
+        if_then.push(txn_op_del(name_key)); // del (tenant, share_endpoint)
+    }
+
+    Ok(Some(share_endpoint_id))
 }
 
 async fn get_share_database_name(
@@ -1315,8 +1367,8 @@ async fn get_outbound_share_tenants_by_name(
 
     let mut accounts = vec![];
     for account in share_meta.get_accounts() {
-        let share_account_key = ShareAccountNameIdent {
-            account: account.clone(),
+        let share_account_key = ShareConsumer {
+            tenant: account.clone(),
             share_id,
         };
 
@@ -1612,8 +1664,8 @@ async fn drop_accounts_granted_from_share(
 ) -> Result<(), KVAppError> {
     // get all accounts seq from share_meta
     for account in share_meta.get_accounts() {
-        let share_account_key = ShareAccountNameIdent {
-            account: account.clone(),
+        let share_account_key = ShareConsumer {
+            tenant: account.clone(),
             share_id,
         };
         let ret = get_share_account_meta_or_err(

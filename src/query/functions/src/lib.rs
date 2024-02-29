@@ -14,12 +14,15 @@
 
 #![allow(clippy::arc_with_non_send_sync)]
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::ptr_arg)]
+#![allow(internal_features)]
 #![feature(core_intrinsics)]
 #![feature(box_patterns)]
 #![feature(type_ascription)]
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]
 #![feature(lazy_cell)]
+#![feature(str_internals)]
 
 use aggregates::AggregateFunctionFactory;
 use ctor::ctor;

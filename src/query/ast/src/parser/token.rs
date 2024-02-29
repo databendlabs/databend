@@ -304,6 +304,9 @@ pub enum TokenKind {
     /// Used as JSON operator.
     #[token("@@")]
     AtAt,
+    /// Used as JSON operator.
+    #[token("#-")]
+    HashMinus,
 
     // Keywords
     //
@@ -324,6 +327,8 @@ pub enum TokenKind {
     AGGREGATING,
     #[token("ANY", ignore(ascii_case))]
     ANY,
+    #[token("APPEND_ONLY", ignore(ascii_case))]
+    APPEND_ONLY,
     #[token("ARGS", ignore(ascii_case))]
     ARGS,
     #[token("AUTO", ignore(ascii_case))]
@@ -362,6 +367,16 @@ pub enum TokenKind {
     BIGINT,
     #[token("BINARY", ignore(ascii_case))]
     BINARY,
+    #[token("LONGBLOB", ignore(ascii_case))]
+    LONGBLOB,
+    #[token("MEDIUMBLOB", ignore(ascii_case))]
+    MEDIUMBLOB,
+    #[token("TINYBLOB", ignore(ascii_case))]
+    TINYBLOB,
+    #[token("BLOB", ignore(ascii_case))]
+    BLOB,
+    #[token("BINARY_FORMAT", ignore(ascii_case))]
+    BINARY_FORMAT,
     #[token("BITMAP", ignore(ascii_case))]
     BITMAP,
     #[token("BLOCKED_IP_LIST", ignore(ascii_case))]
@@ -466,6 +481,8 @@ pub enum TokenKind {
     DELETE,
     #[token("DESC", ignore(ascii_case))]
     DESC,
+    #[token("DETAILED_OUTPUT", ignore(ascii_case))]
+    DETAILED_OUTPUT,
     #[token("DESCRIBE", ignore(ascii_case))]
     DESCRIBE,
     #[token("DISABLE_VARIANT_CHECK", ignore(ascii_case))]
@@ -580,6 +597,8 @@ pub enum TokenKind {
     FUSE,
     #[token("GENERATED", ignore(ascii_case))]
     GENERATED,
+    #[token("GEOMETRY", ignore(ascii_case))]
+    GEOMETRY,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
@@ -739,6 +758,8 @@ pub enum TokenKind {
     OR,
     #[token("ORDER", ignore(ascii_case))]
     ORDER,
+    #[token("OUTPUT_HEADER", ignore(ascii_case))]
+    OUTPUT_HEADER,
     #[token("OUTER", ignore(ascii_case))]
     OUTER,
     #[token("ON_ERROR", ignore(ascii_case))]
@@ -901,6 +922,8 @@ pub enum TokenKind {
     SHA256_PASSWORD,
     #[token("SHOW", ignore(ascii_case))]
     SHOW,
+    #[token("SINCE", ignore(ascii_case))]
+    SINCE,
     #[token("SIGNED", ignore(ascii_case))]
     SIGNED,
     #[token("SINGLE", ignore(ascii_case))]
@@ -963,6 +986,12 @@ pub enum TokenKind {
     TABLES,
     #[token("TEXT", ignore(ascii_case))]
     TEXT,
+    #[token("LONGTEXT", ignore(ascii_case))]
+    LONGTEXT,
+    #[token("MEDIUMTEXT", ignore(ascii_case))]
+    MEDIUMTEXT,
+    #[token("TINYTEXT", ignore(ascii_case))]
+    TINYTEXT,
     #[token("TENANTSETTING", ignore(ascii_case))]
     TENANTSETTING,
     #[token("TENANTS", ignore(ascii_case))]
@@ -1131,6 +1160,20 @@ pub enum TokenKind {
     PREFIX,
     #[token("MODIFIED_AFTER", ignore(ascii_case))]
     MODIFIED_AFTER,
+    #[token("BEGIN", ignore(ascii_case))]
+    BEGIN,
+    #[token("COMMIT", ignore(ascii_case))]
+    COMMIT,
+    #[token("ABORT", ignore(ascii_case))]
+    ABORT,
+    #[token("ROLLBACK", ignore(ascii_case))]
+    ROLLBACK,
+    #[token("TEMPORARY", ignore(ascii_case))]
+    TEMPORARY,
+    #[token("SECONDS", ignore(ascii_case))]
+    SECONDS,
+    #[token("DAYS", ignore(ascii_case))]
+    DAYS,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

@@ -14,13 +14,18 @@
 
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait ConnectionApi: Sync + Send {
     // Add a connection info to /tenant/connection-name.
-    async fn add_connection(&self, connection: UserDefinedConnection) -> Result<u64>;
+    async fn add_connection(
+        &self,
+        connection: UserDefinedConnection,
+        create_option: &CreateOption,
+    ) -> Result<()>;
 
     async fn get_connection(
         &self,

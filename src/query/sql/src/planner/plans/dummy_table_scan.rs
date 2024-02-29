@@ -44,6 +44,10 @@ impl Operator for DummyTableScan {
         RelOp::DummyTableScan
     }
 
+    fn arity(&self) -> usize {
+        0
+    }
+
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         Ok(Arc::new(RelationalProperty {
             output_columns: ColumnSet::from([DUMMY_COLUMN_INDEX]),
@@ -76,17 +80,6 @@ impl Operator for DummyTableScan {
         _child_index: usize,
         _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        Err(ErrorCode::Internal(
-            "Cannot compute required property for DummyTableScan".to_string(),
-        ))
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _required: &RequiredProperty,
-    ) -> Result<Vec<Vec<RequiredProperty>>> {
         Err(ErrorCode::Internal(
             "Cannot compute required property for DummyTableScan".to_string(),
         ))

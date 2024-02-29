@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod access;
-mod common;
+pub(crate) mod common;
 mod hook;
 mod interpreter;
 mod interpreter_catalog_create;
@@ -110,6 +110,9 @@ mod interpreter_task_describe;
 mod interpreter_task_drop;
 mod interpreter_task_execute;
 mod interpreter_tasks_show;
+mod interpreter_txn_abort;
+mod interpreter_txn_begin;
+mod interpreter_txn_commit;
 mod interpreter_unsetting;
 mod interpreter_update;
 mod interpreter_use_database;
@@ -123,6 +126,7 @@ mod interpreter_user_udf_alter;
 mod interpreter_user_udf_create;
 mod interpreter_user_udf_drop;
 mod interpreter_vacuum_drop_tables;
+mod interpreter_vacuum_temporary_files;
 mod interpreter_view_alter;
 mod interpreter_view_create;
 mod interpreter_view_drop;
@@ -217,6 +221,7 @@ pub use interpreter_user_udf_alter::AlterUserUDFInterpreter;
 pub use interpreter_user_udf_create::CreateUserUDFInterpreter;
 pub use interpreter_user_udf_drop::DropUserUDFInterpreter;
 pub use interpreter_vacuum_drop_tables::VacuumDropTablesInterpreter;
+pub use interpreter_vacuum_temporary_files::VacuumTemporaryFilesInterpreter;
 pub use interpreter_view_alter::AlterViewInterpreter;
 pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;

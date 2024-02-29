@@ -19,6 +19,8 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -131,6 +133,10 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
                     self.state = None;
                     self.batch_rx = None;
                 }
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::ScanBytes,
+                    process_values.bytes,
+                );
                 self.ctx.scan_progress.incr(&process_values);
                 Ok(())
             }

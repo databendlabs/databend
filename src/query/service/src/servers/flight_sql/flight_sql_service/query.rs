@@ -134,7 +134,7 @@ impl FlightSqlServiceImpl {
             .await;
 
         let s1 = sender.clone();
-        tokio::spawn(async move {
+        databend_common_base::runtime::spawn(async move {
             let mut data_stream = data_stream;
 
             while let Some(block) = data_stream.next().await {
@@ -160,7 +160,7 @@ impl FlightSqlServiceImpl {
         });
 
         if is_native_client {
-            tokio::spawn(async move {
+            databend_common_base::runtime::spawn(async move {
                 let total_scan_value = context.get_total_scan_value();
                 let mut current_scan_value = context.get_scan_progress_value();
 

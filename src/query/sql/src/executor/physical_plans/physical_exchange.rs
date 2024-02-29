@@ -83,7 +83,7 @@ impl PhysicalPlanBuilder {
             }
         };
         Ok(PhysicalPlan::Exchange(Exchange {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             input,
             kind,
             keys,

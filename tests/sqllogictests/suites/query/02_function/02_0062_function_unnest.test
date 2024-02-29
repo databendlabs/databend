@@ -479,6 +479,19 @@ query T
 select unnest(parse_json('"a"'))
 ----
 
+query T
+select unnest([parse_json('{"tag":1, "val":10}'), parse_json('{"tag":12, "val":20, "foo":"bar"}')])
+----
+{"tag":1,"val":10}
+{"foo":"bar","tag":12,"val":20}
+
+query T
+select unnest([[parse_json('[1,2,3]'), parse_json('false')],[parse_json('{"k":"v"}')]]);
+----
+[1,2,3]
+false
+{"k":"v"}
+
 statement error 1065
 select unnest(max(11))
 

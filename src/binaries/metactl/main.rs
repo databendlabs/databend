@@ -17,6 +17,7 @@
 mod grpc;
 use grpc::export_meta;
 
+pub(crate) mod reading;
 mod snapshot;
 
 use std::collections::BTreeMap;
@@ -54,6 +55,15 @@ pub struct Config {
 
     #[clap(long)]
     pub export: bool,
+
+    /// The N.O. json strings in a export stream item.
+    ///
+    /// Set this to a smaller value if you get gRPC message body too large error.
+    /// This requires meta-service >= 1.2.315; For older version, this argument is ignored.
+    ///
+    /// By default it is 32.
+    #[clap(long)]
+    pub export_chunk_size: Option<u64>,
 
     #[clap(
         long,
@@ -118,6 +128,7 @@ async fn main() -> anyhow::Result<()> {
             dir: ".databend/logs".to_string(),
             format: "text".to_string(),
             limit: 48,
+            prefix_filter: "databend_".to_string(),
         },
         ..Default::default()
     };

@@ -39,7 +39,9 @@ pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
         Scalar::Timestamp(x) => DataValue::Int64(*x),
         Scalar::Date(x) => DataValue::Int64(*x as i64),
         Scalar::Boolean(x) => DataValue::Boolean(*x),
-        Scalar::String(x) | Scalar::Variant(x) => DataValue::String(x.clone()),
+        Scalar::Variant(x) => DataValue::String(x.clone()),
+        Scalar::Geometry(x) => DataValue::String(x.clone()),
+        Scalar::String(x) => DataValue::String(x.as_bytes().to_vec()),
         Scalar::Array(x) => {
             let values = (0..x.len())
                 .map(|idx| scalar_to_datavalue(&x.index(idx).unwrap().to_owned()))

@@ -19,6 +19,8 @@ use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
+use geozero::wkb::Ewkb;
+use geozero::ToJson;
 
 use crate::field_encoder::helpers::write_json_string;
 use crate::field_encoder::FieldEncoderValues;
@@ -42,6 +44,7 @@ impl FieldEncoderJSON {
                     inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options.timezone,
+                    binary_format: Default::default(),
                 },
                 quote_char: 0,
             },
@@ -62,7 +65,7 @@ impl FieldEncoderJSON {
             }
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
-                self.write_string(buf, out_buf);
+                self.write_string(buf.as_bytes(), out_buf);
             }
 
             Column::Date(..) | Column::Timestamp(..) | Column::Bitmap(..) => {
@@ -74,6 +77,10 @@ impl FieldEncoderJSON {
             Column::Variant(c) => {
                 let v = unsafe { c.index_unchecked(row_index) };
                 out_buf.extend_from_slice(jsonb::to_string(v).as_bytes());
+            }
+            Column::Geometry(c) => {
+                let v = unsafe { c.index_unchecked(row_index) };
+                out_buf.extend_from_slice(Ewkb(v.to_vec()).to_json().unwrap().as_bytes())
             }
 
             Column::Array(box c) => self.write_array(c, row_index, out_buf),

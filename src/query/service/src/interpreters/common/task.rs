@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::WarehouseOptions;
@@ -59,10 +60,10 @@ pub fn make_warehouse_options(
     ret
 }
 
-pub fn get_client_config(ctx: Arc<QueryContext>) -> Result<ClientConfig> {
+pub fn get_client_config(ctx: Arc<QueryContext>, timeout: Duration) -> Result<ClientConfig> {
     let tenant = ctx.get_tenant();
     let user = ctx.get_current_user()?.identity().to_string();
     let query_id = ctx.get_id();
 
-    Ok(build_client_config(tenant, user, query_id))
+    Ok(build_client_config(tenant, user, query_id, timeout))
 }

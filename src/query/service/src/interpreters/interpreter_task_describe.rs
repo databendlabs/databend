@@ -57,6 +57,10 @@ impl Interpreter for DescribeTaskInterpreter {
         "DescribeTaskInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -69,7 +73,7 @@ impl Interpreter for DescribeTaskInterpreter {
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
         let req = self.build_request();
-        let config = get_client_config(self.ctx.clone())?;
+        let config = get_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);
         let resp = task_client.describe_task(req).await?;
         if resp.task.is_none() {

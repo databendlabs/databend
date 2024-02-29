@@ -26,7 +26,9 @@ use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::store_advance_aligned;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
+use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
@@ -242,7 +244,7 @@ impl Column {
                 columns.map(|col| col.into_boolean().unwrap()),
                 capacity,
             )),
-            Column::Binary(_) => BinaryType::upcast_column(Self::concat_string_types(
+            Column::Binary(_) => BinaryType::upcast_column(Self::concat_binary_types(
                 columns.map(|col| col.into_binary().unwrap()),
                 capacity,
             )),
@@ -304,7 +306,7 @@ impl Column {
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::concat_value_types::<MapType<AnyType, AnyType>>(builder, columns)
             }
-            Column::Bitmap(_) => BitmapType::upcast_column(Self::concat_string_types(
+            Column::Bitmap(_) => BitmapType::upcast_column(Self::concat_binary_types(
                 columns.map(|col| col.into_bitmap().unwrap()),
                 capacity,
             )),
@@ -333,8 +335,12 @@ impl Column {
                     .collect::<Result<_>>()?;
                 Column::Tuple(fields)
             }
-            Column::Variant(_) => VariantType::upcast_column(Self::concat_string_types(
+            Column::Variant(_) => VariantType::upcast_column(Self::concat_binary_types(
                 columns.map(|col| col.into_variant().unwrap()),
+                capacity,
+            )),
+            Column::Geometry(_) => GeometryType::upcast_column(Self::concat_binary_types(
+                columns.map(|col| col.into_geometry().unwrap()),
                 capacity,
             )),
         };
@@ -355,12 +361,12 @@ impl Column {
         builder
     }
 
-    pub fn concat_string_types(
-        cols: impl Iterator<Item = StringColumn> + Clone,
+    pub fn concat_binary_types(
+        cols: impl Iterator<Item = BinaryColumn> + Clone,
         num_rows: usize,
-    ) -> StringColumn {
-        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+    ) -> BinaryColumn {
+        // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
         let mut offsets_len = 0;
         let mut data_size = 0;
@@ -395,7 +401,19 @@ impl Column {
             set_vec_len_by_ptr(&mut data, data_ptr);
         }
 
-        StringColumn::new(data.into(), offsets.into())
+        BinaryColumn::new(data.into(), offsets.into())
+    }
+
+    pub fn concat_string_types(
+        cols: impl Iterator<Item = StringColumn> + Clone,
+        num_rows: usize,
+    ) -> StringColumn {
+        unsafe {
+            StringColumn::from_binary_unchecked(Self::concat_binary_types(
+                cols.map(Into::into),
+                num_rows,
+            ))
+        }
     }
 
     pub fn concat_boolean_types(bitmaps: impl Iterator<Item = Bitmap>, num_rows: usize) -> Bitmap {

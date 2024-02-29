@@ -25,6 +25,13 @@ use once_cell::sync::OnceCell;
 
 static DEFAULT_SETTINGS: OnceCell<Arc<DefaultSettings>> = OnceCell::new();
 
+// Default value of cost factor settings
+#[allow(dead_code)]
+static COST_FACTOR_COMPUTE_PER_ROW: u64 = 1;
+static COST_FACTOR_HASH_TABLE_PER_ROW: u64 = 10;
+static COST_FACTOR_AGGREGATE_PER_ROW: u64 = 5;
+static COST_FACTOR_NETWORK_PER_ROW: u64 = 50;
+
 // Settings for readability and writability of tags.
 // we will not be able to safely get its value when set to only write.
 // we will not be able to safely set its value when set to only read.
@@ -110,6 +117,7 @@ impl DefaultSettings {
             let max_memory_usage = Self::max_memory_usage()?;
             let recluster_block_size = Self::recluster_block_size()?;
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
+            let data_retention_time_in_days_max= Self::data_retention_time_in_days_max();
             let global_conf = GlobalConfig::try_get_instance();
 
             let default_settings = HashMap::from([
@@ -123,13 +131,13 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the maximum byte size of a single data block that can be read.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("parquet_max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8192),
                     desc: "Max block size for parquet reader",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("max_threads", DefaultSettingValue {
                     value: UserSettingValue::UInt64(num_cpus),
@@ -143,12 +151,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("retention_period", DefaultSettingValue {
-                    // unit of retention_period is hour
-                    value: UserSettingValue::UInt64(12),
-                    desc: "Sets the retention period in hours.",
+                ("data_retention_time_in_days", DefaultSettingValue {
+                    // unit of retention_period is day
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Sets the data retention time in days.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=data_retention_time_in_days_max)),
                 }),
                 ("max_storage_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_storage_io_requests),
@@ -194,6 +202,12 @@ impl DefaultSettings {
                 ("input_read_buffer_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4 * 1024 * 1024),
                     desc: "Sets the memory size in bytes allocated to the buffer used by the buffered reader to read data from storage.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
+                ("enable_new_copy_for_text_formats", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Use new implementation for loading CSV files.",
                     mode: SettingMode::Both,
                     range: None,
                 }),
@@ -248,18 +262,23 @@ impl DefaultSettings {
                 ("disable_join_reorder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable join reorder optimization.",
-
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("join_spilling_threshold", DefaultSettingValue {
+                ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Maximum amount of memory can use for hash join, 0 is unlimited.",
+                    desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("enable_runtime_filter", DefaultSettingValue {
+                ("join_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum amount of memory in bytes that one join processor can use before spilling data to storage during query execution, 0 is unlimited.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
+                ("enable_bloom_runtime_filter", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables runtime filter optimization for JOIN.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -271,10 +290,10 @@ impl DefaultSettings {
                     range: None,
                 }),
                 ("collation", DefaultSettingValue {
-                    value: UserSettingValue::String("binary".to_owned()),
-                    desc: "Sets the character collation. Available values include \"binary\" and \"utf8\".",
+                    value: UserSettingValue::String("utf8".to_owned()),
+                    desc: "Sets the character collation. Available values include \"utf8\".",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::String(vec!["binary", "utf8"])),
+                    range: Some(SettingRange::String(vec!["utf8"])),
                 }),
                 ("max_result_rows", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -285,6 +304,12 @@ impl DefaultSettings {
                 ("prefer_broadcast_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables broadcast join.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
+                ("enforce_broadcast_join", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enforce broadcast join.",
                     mode: SettingMode::Both,
                     range: None,
                 }),
@@ -371,7 +396,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("sort_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -383,7 +408,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum memory ratio in bytes that a sorter can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
@@ -485,7 +510,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1000),
+                    value: UserSettingValue::UInt64(50),
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
                     mode: SettingMode::Both,
                     range: None,
@@ -493,6 +518,18 @@ impl DefaultSettings {
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "This setting is deprecated",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("fuse_write_use_parquet2", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Use parquet2 instead of parquet_rs when writing data with fuse engine.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("fuse_read_use_parquet2", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Use parquet2 instead of parquet_rs when reading data with fuse engine.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -581,6 +618,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(0),
+                        desc: "Enables experimental aggregate hashtable",
+                        mode: SettingMode::Both,
+                        range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("numeric_cast_option", DefaultSettingValue {
                     value: UserSettingValue::String("rounding".to_string()),
                     desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",
@@ -617,6 +660,43 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("disable_variant_check", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Disable variant check to allow insert invalid JSON values",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("cost_factor_hash_table_per_row", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(COST_FACTOR_HASH_TABLE_PER_ROW),
+                    desc: "Cost factor of building hash table for a data row",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("cost_factor_aggregate_per_row", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(COST_FACTOR_AGGREGATE_PER_ROW),
+                    desc: "Cost factor of grouping operation for a data row",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("cost_factor_network_per_row", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(COST_FACTOR_NETWORK_PER_ROW),
+                    desc: "Cost factor of transmit via network for a data row",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                // this setting will be removed when geometry type stable.
+                ("enable_geo_create_table", DefaultSettingValue{
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Create and alter table with geometry type",
+                    mode:SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1))
+                }),
+                ("enable_experimental_new_executor", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental new executor",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -633,6 +713,16 @@ impl DefaultSettings {
                 true => 48,
                 false => std::cmp::min(num_cpus, 64),
             },
+        }
+    }
+
+    /// The maximum number of days that data can be retained.
+    /// The max is read from the global config:data_retention_time_in_days_max
+    /// If the global config is not set, the default value is 90 days.
+    fn data_retention_time_in_days_max() -> u64 {
+        match GlobalConfig::try_get_instance() {
+            None => 90,
+            Some(conf) => conf.query.data_retention_time_in_days_max,
         }
     }
 
@@ -684,10 +774,6 @@ impl DefaultSettings {
         // so the block size is set relatively conservatively here.
         let recluster_block_size = max_memory_usage * 35 / 100;
         Ok(recluster_block_size)
-    }
-
-    pub fn has_setting(key: &str) -> Result<bool> {
-        Ok(Self::instance()?.settings.contains_key(key))
     }
 
     /// Converts and validates a setting value based on its key.

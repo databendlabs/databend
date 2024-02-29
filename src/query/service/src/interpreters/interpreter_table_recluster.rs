@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use databend_common_catalog::lock::LockExt;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::TableExt;
@@ -37,11 +36,11 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::error;
-use log::info;
 use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::locks::LockExt;
 use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -67,6 +66,10 @@ impl ReclusterTableInterpreter {
 impl Interpreter for ReclusterTableInterpreter {
     fn name(&self) -> &str {
         "ReclusterTableInterpreter"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
     }
 
     #[async_backtrace::framed]
@@ -128,18 +131,11 @@ impl Interpreter for ReclusterTableInterpreter {
 
             // check if the table is locked.
             let table_lock = LockManager::create_table_lock(table_info.clone())?;
-            if table_lock.check_lock(catalog.clone()).await? {
+            if !table_lock.wait_lock_expired(catalog.clone()).await? {
                 return Err(ErrorCode::TableAlreadyLocked(format!(
                     "table '{}' is locked, please retry recluster later",
                     self.plan.table
                 )));
-            }
-
-            // Status.
-            {
-                let status = "recluster: begin to run recluster";
-                ctx.set_status_info(status);
-                info!("{}", status);
             }
 
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -166,8 +162,7 @@ impl Interpreter for ReclusterTableInterpreter {
             )?;
 
             let mut build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                    .await?;
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
             assert!(build_res.main_pipeline.is_complete_pipeline()?);
             build_res.set_max_threads(max_threads);
 
@@ -194,7 +189,6 @@ impl Interpreter for ReclusterTableInterpreter {
                     elapsed_time.as_secs()
                 );
                 ctx.set_status_info(&status);
-                info!("{}", &status);
             }
 
             if !plan.is_final {
@@ -243,6 +237,7 @@ pub fn build_recluster_physical_plan(
         tasks,
         table_info: table_info.clone(),
         catalog_info: catalog_info.clone(),
+        plan_id: u32::MAX,
     }));
 
     if is_distributed {
@@ -255,8 +250,7 @@ pub fn build_recluster_physical_plan(
             ignore_exchange: false,
         });
     }
-
-    Ok(PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
+    let mut plan = PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
         input: Box::new(root),
         table_info,
         catalog_info,
@@ -264,5 +258,8 @@ pub fn build_recluster_physical_plan(
         remained_blocks,
         removed_segment_indexes,
         removed_segment_summary,
-    })))
+        plan_id: u32::MAX,
+    }));
+    plan.adjust_plan_id(&mut 0);
+    Ok(plan)
 }

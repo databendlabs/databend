@@ -57,21 +57,29 @@ echo "Waiting on databend-query 10 seconds..."
 export BENDSQL_DSN="databend://root:@localhost:8000/${BENCHMARK_DATASET}?sslmode=disable"
 echo "CREATE DATABASE ${BENCHMARK_DATASET};" | bendsql
 
-# Load the data
-echo "Creating table for benchmark with native storage format..."
-bendsql <"${BENCHMARK_DATASET}/create_local.sql"
+# Create table
+if [[ -f "${BENCHMARK_DATASET}/create_local.sql" ]]; then
+    echo "Creating table for benchmark with native storage format..."
+    bendsql <"${BENCHMARK_DATASET}/create_local.sql"
+fi
 
 # Detect instance type with AWS metadata
 token=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
 instance_type=$(curl -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/instance-type)
 echo "Instance type: ${instance_type}"
 
-echo "Loading data..."
-load_start=$(date +%s)
-bendsql <"${BENCHMARK_DATASET}/load.sql"
-load_end=$(date +%s)
-load_time=$(python3 -c "print($load_end - $load_start)")
-echo "Data loaded in ${load_time}s."
+# Load data
+if [ "${BENCHMARK_DATASET}" == "internal" ]; then
+    bash "${BENCHMARK_DATASET}"/load.sh
+    load_time=0
+else
+    echo "Loading data..."
+    load_start=$(date +%s)
+    bendsql <"${BENCHMARK_DATASET}/load.sql"
+    load_end=$(date +%s)
+    load_time=$(python3 -c "print($load_end - $load_start)")
+    echo "Data loaded in ${load_time}s."
+fi
 
 data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql -o tsv)
 

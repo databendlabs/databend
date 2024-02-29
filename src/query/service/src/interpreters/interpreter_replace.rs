@@ -75,6 +75,10 @@ impl Interpreter for ReplaceInterpreter {
         "ReplaceIntoInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if check_deduplicate_label(self.ctx.clone()).await? {
@@ -86,8 +90,7 @@ impl Interpreter for ReplaceInterpreter {
         // replace
         let (physical_plan, purge_info) = self.build_physical_plan().await?;
         let mut pipeline =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                .await?;
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // purge
         if let Some((files, stage_info)) = purge_info {
@@ -292,10 +295,11 @@ impl ReplaceInterpreter {
                 table_info: table_info.clone(),
                 catalog_info: catalog.info(),
                 select_ctx,
-                table_schema: plan.schema.clone(),
+                target_schema: plan.schema.clone(),
                 table_level_range_index,
                 need_insert: true,
                 delete_when,
+                plan_id: u32::MAX,
             },
         )));
         root = Box::new(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
@@ -313,6 +317,7 @@ impl ReplaceInterpreter {
                 .collect(),
             block_slots: None,
             need_insert: true,
+            plan_id: u32::MAX,
         })));
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
@@ -334,7 +339,9 @@ impl ReplaceInterpreter {
             merge_meta: false,
             need_lock: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+            plan_id: u32::MAX,
         })));
+        root.adjust_plan_id(&mut 0);
         Ok((root, purge_info))
     }
 
@@ -402,6 +409,7 @@ impl ReplaceInterpreter {
                 value_data: value_data.to_string(),
                 start: span_offset,
                 schema,
+                plan_id: u32::MAX,
             },
         )))
     }

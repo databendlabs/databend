@@ -128,7 +128,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
         for mn in all.iter() {
             mn.raft
                 .wait(timeout())
-                .members(btreeset! {0,2}, format!("node-2 is joined: {}", mn.sto.id))
+                .voter_ids(btreeset! {0,2}, format!("node-2 is joined: {}", mn.sto.id))
                 .await?;
         }
     }
@@ -159,7 +159,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     for mn in all.iter() {
         mn.raft
             .wait(timeout())
-            .members(
+            .voter_ids(
                 btreeset! {0,2,3},
                 format!("node-3 is joined: {}", mn.sto.id),
             )
@@ -179,14 +179,14 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let mn2 = MetaNode::open_create(&tc2.config.raft_config, Some(()), None).await?;
     let mn3 = MetaNode::open_create(&tc3.config.raft_config, Some(()), None).await?;
 
-    let all = vec![mn0, mn1, mn2, mn3];
+    let all = [mn0, mn1, mn2, mn3];
 
     info!("--- check reopened memberships");
 
     for mn in all.iter() {
         mn.raft
             .wait(timeout())
-            .members(btreeset! {0,2,3}, format!("node-{} membership", mn.sto.id))
+            .voter_ids(btreeset! {0,2,3}, format!("node-{} membership", mn.sto.id))
             .await?;
     }
 
@@ -230,7 +230,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
         for mn in all.iter() {
             mn.raft
                 .wait(timeout())
-                .members(btreeset! {0,1}, format!("node-1 is joined: {}", mn.sto.id))
+                .voter_ids(btreeset! {0,1}, format!("node-1 is joined: {}", mn.sto.id))
                 .await?;
         }
     }
@@ -270,7 +270,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     for mn in all.iter() {
         mn.raft
             .wait(timeout())
-            .members(
+            .voter_ids(
                 btreeset! {0,1,2},
                 format!("node-2 is joined: {}", mn.sto.id),
             )
@@ -324,7 +324,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     meta_node1
         .raft
         .wait(timeout())
-        .log(Some(log_index), "node-1 join cluster")
+        .applied_index(Some(log_index), "node-1 join cluster")
         .await?;
 
     info!("--- initialize store for node-2");
@@ -352,7 +352,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
         // membership and believes it has not yet joined into a cluster.
         n2.raft
             .wait(timeout())
-            .log(Some(log_index), "node-2 join cluster")
+            .applied_index(Some(log_index), "node-2 join cluster")
             .await?;
 
         n2.stop().await?;
@@ -411,13 +411,13 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
         leader
             .raft
             .wait(timeout())
-            .log(Some(log_index), "commit leave-request logs for node-1")
+            .applied_index(Some(log_index), "commit leave-request logs for node-1")
             .await?;
 
         leader
             .raft
             .wait(timeout())
-            .members(btreeset! {0,2}, "node-1 left the cluster")
+            .voter_ids(btreeset! {0,2}, "node-1 left the cluster")
             .await?;
     }
 
@@ -444,7 +444,7 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
         leader
             .raft
             .wait(timeout())
-            .log(Some(log_index), "commit leave-request logs for node-3")
+            .applied_index(Some(log_index), "commit leave-request logs for node-3")
             .await?;
     }
 
@@ -473,14 +473,14 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
     let mn0 = MetaNode::open_create(&tc0.config.raft_config, Some(()), None).await?;
     let mn2 = MetaNode::open_create(&tc2.config.raft_config, Some(()), None).await?;
 
-    let all = vec![mn0, mn2];
+    let all = [mn0, mn2];
 
     info!("--- check reopened memberships");
 
     for mn in all.iter() {
         mn.raft
             .wait(timeout())
-            .members(btreeset! {0,2}, format!("node-{} membership", mn.sto.id))
+            .voter_ids(btreeset! {0,2}, format!("node-{} membership", mn.sto.id))
             .await?;
     }
 
@@ -518,13 +518,13 @@ async fn test_meta_node_leave_last_not_allowed() -> anyhow::Result<()> {
         leader
             .raft
             .wait(timeout())
-            .log(Some(log_index), "no log committed")
+            .applied_index(Some(log_index), "no log committed")
             .await?;
 
         leader
             .raft
             .wait(timeout())
-            .members(btreeset! {0}, "no node leaves the cluster")
+            .voter_ids(btreeset! {0}, "no node leaves the cluster")
             .await?;
     }
 
@@ -640,7 +640,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
     mn0.raft
         .wait(timeout())
-        .log(Some(log_index), "node-0 recovered committed index")
+        .applied_index(Some(log_index), "node-0 recovered committed index")
         .await?;
 
     assert_upsert_kv_synced(meta_nodes.clone(), "key2").await?;
@@ -713,7 +713,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     leader
         .raft
         .wait(timeout())
-        .log(
+        .applied_index(
             Some(log_index),
             format!(
                 "reopened: applied index at {} for node-{}",
@@ -784,10 +784,10 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
     }
 
     // Assert applied index on every node
-    for (_i, mn) in meta_nodes.iter().enumerate() {
+    for mn in meta_nodes.iter() {
         mn.raft
             .wait(timeout())
-            .log(
+            .applied_index(
                 Some(last_applied.next_index()),
                 format!(
                     "check upsert-kv has applied index at {} for node-{}",

@@ -18,6 +18,8 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
+use databend_common_management::errors::TenantError;
+use databend_common_management::udf::UdfMgr;
 use databend_common_management::ConnectionApi;
 use databend_common_management::ConnectionMgr;
 use databend_common_management::FileFormatApi;
@@ -34,19 +36,20 @@ use databend_common_management::SettingApi;
 use databend_common_management::SettingMgr;
 use databend_common_management::StageApi;
 use databend_common_management::StageMgr;
-use databend_common_management::UdfApi;
-use databend_common_management::UdfMgr;
 use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::NonEmptyStr;
 
 use crate::idm_config::IDMConfig;
+use crate::BUILTIN_ROLE_PUBLIC;
 
 pub struct UserApiProvider {
     meta: MetaStore,
@@ -62,9 +65,10 @@ impl UserApiProvider {
         tenant: &str,
         quota: Option<TenantQuota>,
     ) -> Result<()> {
-        GlobalInstance::set(Self::try_create(conf, idm_config).await?);
+        GlobalInstance::set(Self::try_create(conf, idm_config, tenant).await?);
+        let user_mgr = UserApiProvider::instance();
         if let Some(q) = quota {
-            let i = UserApiProvider::instance().get_tenant_quota_api_client(tenant)?;
+            let i = user_mgr.get_tenant_quota_api_client(tenant)?;
             let res = i.get_quota(MatchSeq::GE(0)).await?;
             i.set_quota(&q, MatchSeq::Exact(res.seq)).await?;
         }
@@ -75,18 +79,39 @@ impl UserApiProvider {
     pub async fn try_create(
         conf: RpcClientConf,
         idm_config: IDMConfig,
+        tenant: &str,
     ) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).create_meta_store().await?;
-        Ok(Arc::new(UserApiProvider {
+        let user_mgr = UserApiProvider {
             meta: client.clone(),
             client: client.arc(),
             idm_config,
-        }))
+        };
+
+        // init built-in role
+        // Currently we have two builtin roles:
+        // 1. ACCOUNT_ADMIN, which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`,
+        //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
+        // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
+        //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
+        // But we only can set PUBLIC role into meta.
+        // Because the previous deserialization using from_bits caused forward compatibility issues after adding new privilege type
+        // Until we can confirm all product use https://github.com/datafuselabs/databend/releases/tag/v1.2.321-nightly or later,
+        // We can add account_admin into meta.
+        {
+            let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
+            user_mgr.add_role(tenant, public, true).await?;
+        }
+
+        Ok(Arc::new(user_mgr))
     }
 
     #[async_backtrace::framed]
-    pub async fn try_create_simple(conf: RpcClientConf) -> Result<Arc<UserApiProvider>> {
-        Self::try_create(conf, IDMConfig::default()).await
+    pub async fn try_create_simple(
+        conf: RpcClientConf,
+        tenant: &str,
+    ) -> Result<Arc<UserApiProvider>> {
+        Self::try_create(conf, IDMConfig::default(), tenant).await
     }
 
     pub fn instance() -> Arc<UserApiProvider> {
@@ -98,7 +123,8 @@ impl UserApiProvider {
     }
 
     pub fn get_role_api_client(&self, tenant: &str) -> Result<Arc<impl RoleApi>> {
-        Ok(Arc::new(RoleMgr::create(self.client.clone(), tenant)?))
+        let role_mgr = self.for_tenant(tenant)?.role_api();
+        Ok(Arc::new(role_mgr))
     }
 
     pub fn get_stage_api_client(&self, tenant: &str) -> Result<Arc<dyn StageApi>> {
@@ -117,10 +143,6 @@ impl UserApiProvider {
             self.client.clone(),
             tenant,
         )?))
-    }
-
-    pub fn get_udf_api_client(&self, tenant: &str) -> Result<Arc<dyn UdfApi>> {
-        Ok(Arc::new(UdfMgr::create(self.client.clone(), tenant)?))
     }
 
     pub fn get_tenant_quota_api_client(&self, tenant: &str) -> Result<Arc<dyn QuotaApi>> {
@@ -161,5 +183,35 @@ impl UserApiProvider {
 
     pub fn get_configured_users(&self) -> HashMap<String, AuthInfo> {
         self.idm_config.users.clone()
+    }
+
+    /// Create an API container for a specific tenant that is guaranteed to have a non-empty tenant
+    pub fn for_tenant<'a>(
+        &'a self,
+        tenant: &'a str,
+    ) -> std::result::Result<ForTenant<'a>, TenantError> {
+        let tenant = NonEmptyStr::new(tenant).map_err(|_e| TenantError::CanNotBeEmpty {
+            context: "".to_string(),
+        })?;
+        Ok(ForTenant {
+            tenant,
+            user_api: self,
+        })
+    }
+}
+
+/// A wrapped UserApiProvider that guarantees the tenant is not empty
+pub struct ForTenant<'a> {
+    tenant: NonEmptyStr<'a>,
+    user_api: &'a UserApiProvider,
+}
+
+impl<'a> ForTenant<'a> {
+    pub fn udf_api(&self) -> UdfMgr {
+        UdfMgr::create(self.user_api.client.clone(), self.tenant)
+    }
+
+    pub fn role_api(&self) -> RoleMgr {
+        RoleMgr::create(self.user_api.client.clone(), self.tenant)
     }
 }

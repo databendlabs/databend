@@ -16,6 +16,7 @@ use databend_common_exception::Span;
 use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::schema::CreateOption;
 
 use super::walk::walk_cte;
 use super::walk::walk_expr;
@@ -406,6 +407,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_functions(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
+    fn visit_show_user_functions(&mut self, _show_options: &'ast Option<ShowOptions>) {}
+
     fn visit_show_table_functions(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
     fn visit_show_options(&mut self, _show_options: &'ast Option<ShowOptions>, _name: String) {}
@@ -550,6 +553,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_vacuum_drop_table(&mut self, _stmt: &'ast VacuumDropTableStmt) {}
 
+    fn visit_vacuum_temporary_files(&mut self, _stmt: &'ast VacuumTemporaryFiles) {}
+
     fn visit_analyze_table(&mut self, _stmt: &'ast AnalyzeTableStmt) {}
 
     fn visit_exists_table(&mut self, _stmt: &'ast ExistsTableStmt) {}
@@ -623,7 +628,7 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_create_file_format(
         &mut self,
-        _if_not_exists: bool,
+        _create_option: &CreateOption,
         _name: &'ast str,
         _file_format_options: &'ast FileFormatOptionsAst,
     ) {

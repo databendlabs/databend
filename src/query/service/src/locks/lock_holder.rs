@@ -25,7 +25,6 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::lock::Lock;
-use databend_common_catalog::lock::LockExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DeleteLockRevReq;
@@ -36,6 +35,7 @@ use futures::future::Either;
 use rand::thread_rng;
 use rand::Rng;
 
+use crate::locks::LockExt;
 use crate::sessions::SessionManager;
 
 #[derive(Default)]

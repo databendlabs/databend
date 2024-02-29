@@ -22,6 +22,7 @@ pub mod decimal;
 pub mod empty_array;
 pub mod empty_map;
 pub mod generic;
+pub mod geometry;
 pub mod map;
 pub mod null;
 pub mod nullable;
@@ -64,7 +65,6 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
-use crate::SelectOp;
 
 pub type GenericMap = [DataType];
 
@@ -86,6 +86,7 @@ pub enum DataType {
     Bitmap,
     Tuple(Vec<DataType>),
     Variant,
+    Geometry,
 
     // Used internally for generic types
     Generic(usize),
@@ -127,22 +128,48 @@ impl DataType {
 
     pub fn has_generic(&self) -> bool {
         match self {
-            DataType::Generic(_) => true,
+            DataType::Null
+            | DataType::EmptyArray
+            | DataType::EmptyMap
+            | DataType::Boolean
+            | DataType::Binary
+            | DataType::String
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::Date
+            | DataType::Bitmap
+            | DataType::Variant
+            | DataType::Geometry => false,
             DataType::Nullable(ty) => ty.has_generic(),
             DataType::Array(ty) => ty.has_generic(),
             DataType::Map(ty) => ty.has_generic(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_generic()),
-            _ => false,
+            DataType::Generic(_) => true,
         }
     }
 
     pub fn has_nested_nullable(&self) -> bool {
         match self {
+            DataType::Null
+            | DataType::EmptyArray
+            | DataType::EmptyMap
+            | DataType::Boolean
+            | DataType::Binary
+            | DataType::String
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::Date
+            | DataType::Bitmap
+            | DataType::Variant
+            | DataType::Geometry
+            | DataType::Generic(_) => false,
             DataType::Nullable(box DataType::Nullable(_) | box DataType::Null) => true,
+            DataType::Nullable(ty) => ty.has_nested_nullable(),
             DataType::Array(ty) => ty.has_nested_nullable(),
             DataType::Map(ty) => ty.has_nested_nullable(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_nested_nullable()),
-            _ => false,
         }
     }
 
@@ -195,7 +222,7 @@ impl DataType {
     #[inline]
     pub fn is_string_column(&self) -> bool {
         match self {
-            DataType::String | DataType::Bitmap | DataType::Variant => true,
+            DataType::Binary | DataType::String | DataType::Bitmap | DataType::Variant => true,
             DataType::Nullable(ty) => ty.is_string_column(),
             _ => false,
         }
@@ -318,7 +345,10 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder>;
 
-    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder>;
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder>;
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;
@@ -354,19 +384,6 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     #[inline(always)]
     fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Option<Ordering> {
         None
-    }
-
-    /// Return the comparison function for the given select operation, some data types not support comparison.
-    #[inline(always)]
-    fn compare_operation(op: &SelectOp) -> fn(Self::ScalarRef<'_>, Self::ScalarRef<'_>) -> bool {
-        match op {
-            SelectOp::Equal => Self::equal,
-            SelectOp::NotEqual => Self::not_equal,
-            SelectOp::Gt => Self::greater_than,
-            SelectOp::Gte => Self::greater_than_equal,
-            SelectOp::Lt => Self::less_than,
-            SelectOp::Lte => Self::less_than_equal,
-        }
     }
 
     /// Equal comparison between two scalars, some data types not support comparison.

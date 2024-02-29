@@ -159,7 +159,7 @@ HashJoin
     └── estimated rows: 1.00
 
 query T
-explain select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)
+explain select t.number from numbers(2) as t where number = (select * from numbers(1) where number = 0)
 ----
 HashJoin
 ├── output columns: [t.number (#0)]
@@ -167,7 +167,7 @@ HashJoin
 ├── build keys: [_if_scalar_subquery (#4)]
 ├── probe keys: [CAST(t.number (#0) AS UInt64 NULL)]
 ├── filters: []
-├── estimated rows: 1.00
+├── estimated rows: 2.00
 ├── EvalScalar(Build)
 │   ├── output columns: [_if_scalar_subquery (#4)]
 │   ├── expressions: [if(CAST(_count_scalar_subquery (#2) = 0 AS Boolean NULL), NULL, _any_scalar_subquery (#3))]
@@ -204,12 +204,12 @@ HashJoin
 └── TableScan(Probe)
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
-    ├── read rows: 1
-    ├── read bytes: 8
+    ├── read rows: 2
+    ├── read bytes: 16
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 1.00
+    └── estimated rows: 2.00
 
 query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number)
@@ -332,7 +332,7 @@ HashJoin
         ├── read bytes: 8
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── push downs: [filters: [t.number (#0) < 10], limit: NONE]
+        ├── push downs: [filters: [numbers.number (#0) < 10], limit: NONE]
         └── estimated rows: 1.00
 
 query T
@@ -506,7 +506,7 @@ explain select * from (select number as a from numbers(10)) as t(b) where t.b > 
 ----
 Filter
 ├── output columns: [numbers.number (#0)]
-├── filters: [numbers.number (#0) > 5]
+├── filters: [t.b (#0) > 5]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers

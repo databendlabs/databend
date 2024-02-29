@@ -19,12 +19,13 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::Ownership;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sharing::ShareEndpointManager;
 use databend_common_sql::plans::CreateDatabasePlan;
+use databend_common_storages_share::save_share_spec;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
@@ -98,6 +99,10 @@ impl Interpreter for CreateDatabaseInterpreter {
         "CreateDatabaseInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -120,10 +125,7 @@ impl Interpreter for CreateDatabaseInterpreter {
                 .await?;
         }
 
-        let mut create_db_req: CreateDatabaseReq = self.plan.clone().into();
-        if let Some(role) = self.ctx.get_current_role() {
-            create_db_req.meta.owner = Some(Ownership::new(role.name))
-        }
+        let create_db_req: CreateDatabaseReq = self.plan.clone().into();
         let reply = catalog.create_database(create_db_req).await?;
 
         // Grant ownership as the current role. The above create_db_req.meta.owner could be removed in
@@ -139,6 +141,23 @@ impl Interpreter for CreateDatabaseInterpreter {
                     &current_role.name,
                 )
                 .await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
+
+        // handle share cleanups with the DropDatabaseReply
+        if let Some(spec_vec) = reply.spec_vec {
+            let mut share_table_into = Vec::with_capacity(spec_vec.len());
+            for share_spec in &spec_vec {
+                share_table_into.push((share_spec.name.clone(), None));
+            }
+
+            save_share_spec(
+                &self.ctx.get_tenant(),
+                self.ctx.get_data_operator()?.operator(),
+                Some(spec_vec),
+                Some(share_table_into),
+            )
+            .await?;
         }
 
         Ok(PipelineBuildResult::create())

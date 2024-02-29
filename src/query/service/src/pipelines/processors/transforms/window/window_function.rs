@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -85,11 +86,13 @@ impl WindowFuncAggImpl {
 
 impl Drop for WindowFuncAggImpl {
     fn drop(&mut self) {
-        if self.agg.need_manual_drop_state() {
-            unsafe {
-                self.agg.drop_state(self.place);
+        drop_guard(move || {
+            if self.agg.need_manual_drop_state() {
+                unsafe {
+                    self.agg.drop_state(self.place);
+                }
             }
-        }
+        })
     }
 }
 

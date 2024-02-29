@@ -75,6 +75,7 @@ impl Binder {
         select_builder.with_column(format!("name AS `databases_in_{ctl}`"));
         select_builder.with_order_by("catalog");
         select_builder.with_order_by("name");
+
         match limit {
             Some(ShowLimit::Like { pattern }) => {
                 select_builder.with_filter(format!("name LIKE '{pattern}'"));
@@ -206,7 +207,7 @@ impl Binder {
         stmt: &CreateDatabaseStmt,
     ) -> Result<Plan> {
         let CreateDatabaseStmt {
-            if_not_exists,
+            create_option,
             catalog,
             database,
             engine,
@@ -230,7 +231,7 @@ impl Binder {
         let meta = self.database_meta(engine, options, from_share)?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
-            if_not_exists: *if_not_exists,
+            create_option: *create_option,
             tenant,
             catalog,
             database,

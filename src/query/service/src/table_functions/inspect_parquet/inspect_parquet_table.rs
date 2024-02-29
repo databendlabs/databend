@@ -69,12 +69,10 @@ impl InspectParquetTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
-        let file_path = String::from_utf8(
-            args[0]
-                .clone()
-                .into_string()
-                .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
-        )?;
+        let file_path = args[0]
+            .clone()
+            .into_string()
+            .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?;
         if !file_path.starts_with('@') {
             return Err(ErrorCode::BadArguments(format!(
                 "stage path must start with @, but got {}",
@@ -265,7 +263,7 @@ impl AsyncSource for InspectParquetSource {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(StringType::upcast_scalar(created.into())),
+                    Value::Scalar(StringType::upcast_scalar(created)),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),

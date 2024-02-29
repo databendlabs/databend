@@ -66,7 +66,7 @@ impl TablesTable {
             NULL AS auto_increment,
             NULL AS table_collation,
             NULL AS data_free,
-            '' AS table_comment
+            comment AS table_comment
         FROM system.tables;";
 
         let mut options = BTreeMap::new();

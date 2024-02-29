@@ -28,8 +28,8 @@ use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::Ownership;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
@@ -45,6 +45,8 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
 use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
+use databend_common_storages_share::save_share_spec;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndex;
@@ -89,6 +91,10 @@ impl CreateTableInterpreter {
 impl Interpreter for CreateTableInterpreter {
     fn name(&self) -> &str {
         "CreateTableInterpreterV2"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
     }
 
     #[async_backtrace::framed]
@@ -164,7 +170,7 @@ impl CreateTableInterpreter {
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
         let reply = catalog.create_table(self.build_request(None)?).await?;
-        if !reply.new_table {
+        if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
         }
 
@@ -191,6 +197,7 @@ impl CreateTableInterpreter {
                     &current_role.name,
                 )
                 .await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
@@ -211,6 +218,17 @@ impl CreateTableInterpreter {
             overwrite: false,
             source: InsertInputSource::SelectPlan(select_plan),
         };
+
+        // update share spec if needed
+        if let Some((spec_vec, share_table_info)) = reply.spec_vec {
+            save_share_spec(
+                &tenant,
+                self.ctx.get_data_operator()?.operator(),
+                Some(spec_vec),
+                Some(share_table_info),
+            )
+            .await?;
+        }
 
         InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
             .execute2()
@@ -244,15 +262,11 @@ impl CreateTableInterpreter {
                 });
             }
         }
-        let mut req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
+        let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
             self.build_attach_request(storage_prefix).await
         } else {
             self.build_request(stat)
         }?;
-        // current role who created the table/database would be
-        if let Some(current_role) = self.ctx.get_current_role() {
-            req.table_meta.owner = Some(Ownership::new(current_role.name));
-        }
 
         let reply = catalog.create_table(req.clone()).await?;
 
@@ -275,6 +289,18 @@ impl CreateTableInterpreter {
                     &current_role.name,
                 )
                 .await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
+
+        // update share spec if needed
+        if let Some((spec_vec, share_table_info)) = reply.spec_vec {
+            save_share_spec(
+                &self.ctx.get_tenant(),
+                self.ctx.get_data_operator()?.operator(),
+                Some(spec_vec),
+                Some(share_table_info),
+            )
+            .await?;
         }
 
         Ok(PipelineBuildResult::create())
@@ -298,13 +324,15 @@ impl CreateTableInterpreter {
             self.plan.field_comments.clone()
         };
         let schema = TableSchemaRefExt::create(fields);
+        let mut options = self.plan.options.clone();
+        let comment = options.remove(OPT_KEY_COMMENT);
 
         let mut table_meta = TableMeta {
             schema: schema.clone(),
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
             part_prefix: self.plan.part_prefix.clone(),
-            options: self.plan.options.clone(),
+            options,
             engine_options: self.plan.engine_options.clone(),
             default_cluster_key: None,
             field_comments,
@@ -314,6 +342,7 @@ impl CreateTableInterpreter {
             } else {
                 Default::default()
             },
+            comment: comment.unwrap_or_default(),
             ..Default::default()
         };
 
@@ -338,7 +367,7 @@ impl CreateTableInterpreter {
         }
 
         let req = CreateTableReq {
-            if_not_exists: self.plan.if_not_exists,
+            create_option: self.plan.create_option,
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.to_string(),
                 db_name: self.plan.database.to_string(),
@@ -404,7 +433,7 @@ impl CreateTableInterpreter {
             ..Default::default()
         };
         let req = CreateTableReq {
-            if_not_exists: self.plan.if_not_exists,
+            create_option: self.plan.create_option,
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.to_string(),
                 db_name: self.plan.database.to_string(),

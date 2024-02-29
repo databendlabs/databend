@@ -21,22 +21,17 @@ chrono = { workspace = true }
 enum-as-inner = "0.5"
 futures = { workspace = true }
 futures-util = { workspace = true }
+parquet_rs = { workspace = true }
 rmp-serde = "1.1.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
+simple_hll = { version = "0.0.1", features = ["serde_borsh"] }
 snap = { version = "1.1.0", optional = true }
 typetag = { workspace = true }
 zstd = "0.12.3"
 
 [dev-dependencies]
-criterion = "0.4"
-databend-common-storages-fuse = { path = "../../fuse" }
 pot = "2.0.0"
 
 [features]
 dev = ["snap"]
-
-[[bench]]
-name = "bench"
-harness = false
-required-features = ["dev"]

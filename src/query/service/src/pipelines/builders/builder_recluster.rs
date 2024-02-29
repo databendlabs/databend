@@ -82,22 +82,27 @@ impl PipelineBuilder {
                     table_index: usize::MAX,
                 };
 
+                {
+                    metrics_inc_recluster_block_nums_to_read(recluster_block_nums as u64);
+                    metrics_inc_recluster_block_bytes_to_read(task.total_bytes as u64);
+                    metrics_inc_recluster_row_nums_to_read(task.total_rows as u64);
+
+                    log::info!(
+                        "Number of blocks scheduled for recluster: {}",
+                        recluster_block_nums
+                    );
+                }
+
                 self.ctx.set_partitions(plan.parts.clone())?;
 
                 // ReadDataKind to avoid OOM.
                 table.do_read_data(self.ctx.clone(), &plan, &mut self.main_pipeline, false)?;
 
-                {
-                    metrics_inc_recluster_block_nums_to_read(recluster_block_nums as u64);
-                    metrics_inc_recluster_block_bytes_to_read(task.total_bytes as u64);
-                    metrics_inc_recluster_row_nums_to_read(task.total_rows as u64);
-                }
-
                 let num_input_columns = schema.fields().len();
                 if table.change_tracking_enabled() {
                     let func_ctx = self.ctx.get_function_context()?;
                     let (stream, operators) =
-                        gen_mutation_stream_operator(schema, table_info.ident.seq)?;
+                        gen_mutation_stream_operator(schema, table_info.ident.seq, false)?;
                     self.main_pipeline.add_transform(
                         |transform_input_port, transform_output_port| {
                             TransformAddStreamColumns::try_create(
@@ -155,7 +160,7 @@ impl PipelineBuilder {
                 // construct output fields
                 let output_fields = cluster_stats_gen.out_fields.clone();
                 let schema = DataSchemaRefExt::create(output_fields);
-                let sort_descs: Vec<SortColumnDescription> = cluster_stats_gen
+                let sort_descs = cluster_stats_gen
                     .cluster_key_index
                     .iter()
                     .map(|offset| SortColumnDescription {

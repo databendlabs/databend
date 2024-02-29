@@ -20,17 +20,21 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_types::MetaId;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+use super::CreateOption;
+use crate::tenant::Tenant;
+use crate::KeyWithTenant;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IndexNameIdent {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub index_name: String,
 }
 
 impl IndexNameIdent {
-    pub fn new(tenant: impl Into<String>, index_name: impl Into<String>) -> IndexNameIdent {
+    pub fn new(tenant: Tenant, index_name: impl ToString) -> IndexNameIdent {
         IndexNameIdent {
-            tenant: tenant.into(),
-            index_name: index_name.into(),
+            tenant,
+            index_name: index_name.to_string(),
         }
     }
 
@@ -41,7 +45,7 @@ impl IndexNameIdent {
 
 impl Display for IndexNameIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "'{}'.'{}'", self.tenant, self.index_name)
+        write!(f, "'{}'.'{}'", self.tenant_name(), self.index_name)
     }
 }
 
@@ -59,6 +63,12 @@ impl Display for IndexIdToName {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct IndexId {
     pub index_id: u64,
+}
+
+impl IndexId {
+    pub fn new(index_id: u64) -> IndexId {
+        IndexId { index_id }
+    }
 }
 
 impl Display for IndexId {
@@ -123,20 +133,31 @@ impl Default for IndexMeta {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateIndexReq {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name_ident: IndexNameIdent,
     pub meta: IndexMeta,
 }
 
 impl Display for CreateIndexReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "create_index(if_not_exists={}):{}={:?}",
-            self.if_not_exists, self.name_ident.tenant, self.meta
-        )
+        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
+            write!(
+                f,
+                "create_index(if_not_exists={}):{}={:?}",
+                if_not_exists,
+                self.name_ident.tenant_name(),
+                self.meta
+            )
+        } else {
+            write!(
+                f,
+                "create_or_replace_index:{}={:?}",
+                self.name_ident.tenant_name(),
+                self.meta
+            )
+        }
     }
 }
 
@@ -145,7 +166,7 @@ pub struct CreateIndexReply {
     pub index_id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropIndexReq {
     pub if_exists: bool,
     pub name_ident: IndexNameIdent,
@@ -156,7 +177,9 @@ impl Display for DropIndexReq {
         write!(
             f,
             "drop_index(if_exists={}):{}/{}",
-            self.if_exists, self.name_ident.tenant, self.name_ident.index_name
+            self.if_exists,
+            self.name_ident.tenant_name(),
+            self.name_ident.index_name
         )
     }
 }
@@ -164,7 +187,7 @@ impl Display for DropIndexReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropIndexReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetIndexReq {
     pub name_ident: IndexNameIdent,
 }
@@ -174,7 +197,8 @@ impl Display for GetIndexReq {
         write!(
             f,
             "get_index:{}/{}",
-            self.name_ident.tenant, self.name_ident.index_name
+            self.name_ident.tenant_name(),
+            self.name_ident.index_name
         )
     }
 }
@@ -227,21 +251,28 @@ impl ListIndexesByIdReq {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::schema::IndexId;
     use crate::schema::IndexIdToName;
+    use crate::schema::IndexMeta;
     use crate::schema::IndexNameIdent;
-    use crate::schema::PREFIX_INDEX;
-    use crate::schema::PREFIX_INDEX_BY_ID;
-    use crate::schema::PREFIX_INDEX_ID_TO_NAME;
+    use crate::tenant::Tenant;
+    use crate::KeyWithTenant;
 
     /// <prefix>/<tenant>/<index_name> -> <index_id>
     impl kvapi::Key for IndexNameIdent {
-        const PREFIX: &'static str = PREFIX_INDEX;
+        const PREFIX: &'static str = "__fd_index";
+
+        type ValueType = IndexId;
+
+        fn parent(&self) -> Option<String> {
+            Some(self.tenant.to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
+                .push_str(self.tenant_name())
                 .push_str(&self.index_name)
                 .done()
         }
@@ -249,17 +280,32 @@ mod kvapi_key_impl {
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let tenant = p.next_str()?;
+            let tenant = p.next_nonempty()?;
             let index_name = p.next_str()?;
             p.done()?;
 
-            Ok(IndexNameIdent { tenant, index_name })
+            Ok(IndexNameIdent::new(
+                Tenant::new_nonempty(tenant),
+                index_name,
+            ))
+        }
+    }
+
+    impl KeyWithTenant for IndexNameIdent {
+        fn tenant(&self) -> &Tenant {
+            &self.tenant
         }
     }
 
     /// "<prefix>/<index_id>"
     impl kvapi::Key for IndexId {
-        const PREFIX: &'static str = PREFIX_INDEX_BY_ID;
+        const PREFIX: &'static str = "__fd_index_by_id";
+
+        type ValueType = IndexMeta;
+
+        fn parent(&self) -> Option<String> {
+            None
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -279,7 +325,13 @@ mod kvapi_key_impl {
 
     /// "<prefix>/<index_id> -> IndexNameIdent"
     impl kvapi::Key for IndexIdToName {
-        const PREFIX: &'static str = PREFIX_INDEX_ID_TO_NAME;
+        const PREFIX: &'static str = "__fd_index_id_to_name";
+
+        type ValueType = IndexNameIdent;
+
+        fn parent(&self) -> Option<String> {
+            Some(IndexId::new(self.index_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -294,6 +346,25 @@ mod kvapi_key_impl {
             p.done()?;
 
             Ok(IndexIdToName { index_id })
+        }
+    }
+
+    impl kvapi::Value for IndexId {
+        /// IndexId is id of the two level `name->id,id->value` mapping
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
+
+    impl kvapi::Value for IndexMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
+
+    impl kvapi::Value for IndexNameIdent {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
         }
     }
 }

@@ -112,7 +112,7 @@ HashJoin
         └── estimated rows: 1.00
 
 query T
-explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
+explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(2)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
 ----
 HashJoin
 ├── output columns: [a (#1)]
@@ -120,7 +120,7 @@ HashJoin
 ├── build keys: [_if_scalar_subquery (#15)]
 ├── probe keys: [CAST(t1.a (#1) AS UInt64 NULL)]
 ├── filters: []
-├── estimated rows: 1.00
+├── estimated rows: 2.00
 ├── EvalScalar(Build)
 │   ├── output columns: [_if_scalar_subquery (#15)]
 │   ├── expressions: [if(CAST(_count_scalar_subquery (#13) = 0 AS Boolean NULL), NULL, _any_scalar_subquery (#14))]
@@ -191,27 +191,27 @@ HashJoin
 └── EvalScalar(Probe)
     ├── output columns: [a (#1)]
     ├── expressions: [numbers.number (#0) + 1]
-    ├── estimated rows: 1.00
+    ├── estimated rows: 2.00
     └── TableScan
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
-        ├── read rows: 1
-        ├── read bytes: 8
+        ├── read rows: 2
+        ├── read bytes: 16
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 1.00
+        └── estimated rows: 2.00
 
 query T
 explain select name from system.functions order by example
 ----
 Sort
-├── output columns: [functions.name (#0), functions.example (#7)]
+├── output columns: [functions.name (#0), functions.example (#4)]
 ├── sort keys: [example ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.functions
-    ├── output columns: [name (#0), example (#7)]
+    ├── output columns: [name (#0), example (#4)]
     ├── read rows: 0
     ├── read bytes: 0
     ├── partitions total: 0
@@ -298,7 +298,7 @@ AggregateFinal
             ├── table: default.default.t
             ├── output columns: [b (#1)]
             ├── read rows: 2
-            ├── read bytes: 41
+            ├── read bytes: 40
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]

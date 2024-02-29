@@ -45,6 +45,10 @@ impl Interpreter for ExecuteTaskInterpreter {
         "ExecuteTaskInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -60,7 +64,7 @@ impl Interpreter for ExecuteTaskInterpreter {
             task_name: self.plan.task_name.clone(),
             tenant_id: self.plan.tenant.clone(),
         };
-        let config = get_client_config(self.ctx.clone())?;
+        let config = get_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);
 
         task_client.execute_task(req).await?;

@@ -15,15 +15,19 @@
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::Float32Type;
+use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::F32;
+use databend_common_expression::types::F64;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_openai::OpenAI;
 use databend_common_vector::cosine_distance;
+use databend_common_vector::cosine_distance_64;
 use databend_common_vector::l2_distance;
+use databend_common_vector::l2_distance_64;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // cosine_distance
@@ -33,12 +37,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>,  Float32Type>(
             |lhs, rhs, output, ctx| {
-                let l_f32=
+                let l=
                     unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(lhs) };
-                let r_f32=
+                let r =
                     unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(rhs) };
 
-                match cosine_distance(l_f32.as_slice(), r_f32.as_slice()) {
+                match cosine_distance(l.as_slice(), r .as_slice()) {
                     Ok(dist) => {
                         output.push(F32::from(dist));
                     }
@@ -59,18 +63,64 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>,  Float32Type>(
             |lhs, rhs, output, ctx| {
-                let l_f32=
+                let l=
                     unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(lhs) };
-                let r_f32=
+                let r =
                     unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(rhs) };
 
-                match l2_distance(l_f32.as_slice(), r_f32.as_slice()) {
+                match l2_distance(l.as_slice(), r .as_slice()) {
                     Ok(dist) => {
                         output.push(F32::from(dist));
                     }
                     Err(err) => {
                         ctx.set_error(output.len(), err.to_string());
                         output.push(F32::from(0.0));
+                    }
+                }
+            }
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<ArrayType<Float64Type>, ArrayType<Float64Type>, Float64Type, _, _>(
+        "cosine_distance",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<Float64Type>, ArrayType<Float64Type>,  Float64Type>(
+            |lhs, rhs, output, ctx| {
+                let l =
+                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(lhs) };
+                let r =
+                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(rhs) };
+
+                match cosine_distance_64(l.as_slice(), r .as_slice()) {
+                    Ok(dist) => {
+                        output.push(F64::from(dist));
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                        output.push(F64::from(0.0));
+                    }
+                }
+            }
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<ArrayType<Float64Type>, ArrayType<Float64Type>, Float64Type, _, _>(
+        "l2_distance",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<Float64Type>, ArrayType<Float64Type>,  Float64Type>(
+            |lhs, rhs, output, ctx| {
+                let l=
+                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(lhs) };
+                let r =
+                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(rhs) };
+
+                match l2_distance_64(l.as_slice(), r .as_slice()) {
+                    Ok(dist) => {
+                        output.push(F64::from(dist));
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                        output.push(F64::from(0.0));
                     }
                 }
             }
@@ -91,17 +141,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let data = match std::str::from_utf8(data) {
-                Ok(data) => data,
-                Err(_) => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("Invalid data: {:?}", String::from_utf8_lossy(data)),
-                    );
-                    output.push(vec![F32::from(0.0)].into());
-                    return;
-                }
-            };
             if ctx.func_ctx.openai_api_key.is_empty() {
                 ctx.set_error(output.len(), "openai_api_key is empty".to_string());
                 output.push(vec![F32::from(0.0)].into());
@@ -155,18 +194,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let data = match std::str::from_utf8(data) {
-                Ok(data) => data,
-                Err(_) => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("Invalid data: {:?}", String::from_utf8_lossy(data)),
-                    );
-                    output.put_str("");
-                    output.commit_row();
-                    return;
-                }
-            };
             if ctx.func_ctx.openai_api_key.is_empty() {
                 ctx.set_error(output.len(), "openai_api_key is empty".to_string());
                 output.put_str("");

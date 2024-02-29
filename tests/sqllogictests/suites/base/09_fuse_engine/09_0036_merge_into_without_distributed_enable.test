@@ -849,6 +849,8 @@ CREATE TABLE orders CLUSTER BY (to_yyyymmddhh(created_at), user_id) AS SELECT
     date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS updated_at
 FROM numbers(5000);
 
+### for now, we disable target_table_optimization for native. Native will
+### spilt one block into multi pages. We should fix this one in the future.
 statement ok
 MERGE INTO orders USING
 (
@@ -1088,6 +1090,251 @@ query TTT
 select * from tt1_;
 ----
 0 20 21
+
+## issue#14474
+statement ok
+create table target_tt1 (a bool not null default true, b int not null default 1);
+
+query T
+merge into target_tt1 using(select false, 10) as tt2(a, b) on (target_tt1.b = 1) when not matched then insert (b) values (20);
+----
+1
+
+query TT
+select * from target_tt1;
+----
+1 20
+
+## test multi insert clauses with specified default values
+statement ok
+create table target_default_values(a int default 12,b string default 'yes');
+
+statement ok
+create table source_default_values(a int default 12,b string default 'yes');
+
+statement ok
+insert into target_default_values values(1,'a');
+
+statement ok
+insert into target_default_values values(2,'b');
+
+statement ok
+insert into source_default_values values(1,'c');
+
+statement ok
+insert into source_default_values values(3,'d');
+
+statement ok
+insert into source_default_values values(2,'e');
+
+statement ok
+insert into source_default_values values(4,'f');
+
+query TTT
+merge into target_default_values as t1 using source_default_values as t2 on t1.a = t2.a when matched and t1.b = 'a' 
+then update set t1.b = t2.b when matched then delete when not matched and t2.b = 'd' then insert (a) values(t2.a) when not matched 
+then insert(b) values(t2.b);
+----
+2 1 1
+
+query TT
+select * from target_default_values order by a,b;
+----
+1 c
+3 yes
+12 f
+
+
+## test update column only optimization
+statement ok
+drop table if exists column_only_optimization_target;
+
+statement ok
+drop table if exists column_only_optimization_source;
+
+statement ok
+create table column_only_optimization_target(a int,b string);
+
+statement ok
+create table column_only_optimization_source(a int,b string);
+
+statement ok
+insert into column_only_optimization_target values(1,'a1'),(2,'a2');
+
+statement ok
+insert into column_only_optimization_target values(3,'a3'),(4,'a4');
+
+statement ok
+insert into column_only_optimization_target values(5,'a5'),(6,'a6');
+
+statement ok
+insert into column_only_optimization_target values(7,'a7'),(8,'a8');
+
+query TT
+select * from column_only_optimization_target order by a,b;
+----
+1 a1
+2 a2
+3 a3
+4 a4
+5 a5
+6 a6
+7 a7
+8 a8
+
+statement ok
+insert into column_only_optimization_source values(1,'b1'),(2,'b2');
+
+statement ok
+insert into column_only_optimization_source values(3,'b3'),(4,'b4');
+
+query TT
+select * from column_only_optimization_source order by a,b;
+----
+1 b1
+2 b2
+3 b3
+4 b4
+
+query TT
+merge into column_only_optimization_target as t1 using column_only_optimization_source as t2 on
+t1.a = t2.a when matched then update set t1.b = t2.b when not matched then insert *;
+----
+0 4
+
+query TT
+select * from column_only_optimization_target order by a,b;
+----
+1 b1
+2 b2
+3 b3
+4 b4
+5 a5
+6 a6
+7 a7
+8 a8
+
+## add more tests cases for distributed modes.
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_target_origin_200_blocks1 (
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) CLUSTER BY(l_shipdate, l_orderkey);
+
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_target_origin_400_blocks1 (
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) CLUSTER BY(l_shipdate, l_orderkey);
+
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_random(
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) engine = random;
+
+## add 4w rows
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+query T
+select count(*) from lineitem_target_origin_400_blocks1;
+----
+40000
+
+statement ok
+insert into lineitem_target_origin_200_blocks1 select * from lineitem_target_origin_400_blocks1;
+
+query T
+select count(*) from lineitem_target_origin_200_blocks1;
+----
+40000
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+query T
+select count(*) from lineitem_target_origin_400_blocks1;
+----
+45000
+
+## it maybe flaky test, but in most times, it's normal.
+query TT
+MERGE INTO lineitem_target_origin_400_blocks1 as t1 using lineitem_target_origin_200_blocks1 as t2 on      
+t1.l_orderkey = t2.l_orderkey and     
+t1.l_partkey = t2.l_partkey  
+and t1.l_suppkey = t2.l_suppkey and     
+t1.l_linenumber = t2.l_linenumber and      
+t1.l_quantity = t2.l_quantity and      
+t1.l_extendedprice = t2.l_extendedprice and     
+t1.l_discount = t2.l_discount     
+when matched then update *     
+when not matched then insert *;
+----
+0 40000
 
 statement ok
 set enable_experimental_merge_into = 0;

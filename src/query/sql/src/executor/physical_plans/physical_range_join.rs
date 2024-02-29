@@ -116,7 +116,7 @@ impl PhysicalPlanBuilder {
         );
 
         Ok(PhysicalPlan::RangeJoin(RangeJoin {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             left: Box::new(left_side),
             right: Box::new(right_side),
             conditions: range_conditions

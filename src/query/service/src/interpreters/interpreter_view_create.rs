@@ -48,6 +48,10 @@ impl Interpreter for CreateViewInterpreter {
         "CreateViewInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
@@ -103,7 +107,7 @@ impl Interpreter for CreateViewInterpreter {
         options.insert(QUERY.to_string(), subquery);
 
         let plan = CreateTableReq {
-            if_not_exists: self.plan.if_not_exists,
+            create_option: self.plan.create_option,
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.clone(),
                 db_name: self.plan.database.clone(),

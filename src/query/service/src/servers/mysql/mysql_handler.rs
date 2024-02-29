@@ -179,8 +179,8 @@ impl Server for MySQLHandler {
                 )?);
                 let (stream, listener) = Self::listener_tcp(listening).await?;
                 let stream = Abortable::new(stream, registration);
-                self.join_handle = Some(tokio::spawn(
-                    async_backtrace::location!().frame(self.listen_loop(stream, rejected_rt)),
+                self.join_handle = Some(databend_common_base::runtime::spawn(
+                    self.listen_loop(stream, rejected_rt),
                 ));
                 Ok(listener)
             }

@@ -17,6 +17,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::NetworkPolicyApi;
 use databend_common_meta_app::principal::NetworkPolicy;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
@@ -28,28 +29,12 @@ impl UserApiProvider {
         &self,
         tenant: &str,
         network_policy: NetworkPolicy,
-        if_not_exists: bool,
-    ) -> Result<u64> {
-        if if_not_exists
-            && self
-                .exists_network_policy(tenant, network_policy.name.as_str())
-                .await?
-        {
-            return Ok(0);
-        }
-
+        create_option: &CreateOption,
+    ) -> Result<()> {
         let client = self.get_network_policy_api_client(tenant)?;
-        let add_network_policy = client.add_network_policy(network_policy);
-        match add_network_policy.await {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                if if_not_exists && e.code() == ErrorCode::NETWORK_POLICY_ALREADY_EXISTS {
-                    Ok(0)
-                } else {
-                    Err(e.add_message_back("(while add network policy)"))
-                }
-            }
-        }
+        client
+            .add_network_policy(network_policy, create_option)
+            .await
     }
 
     // Update network policy.

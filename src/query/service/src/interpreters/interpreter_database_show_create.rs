@@ -45,6 +45,10 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
         "ShowCreateDatabaseInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
@@ -74,11 +78,11 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(name.to_string())),
                 ),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(info.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(info.clone())),
                 ),
             ],
             1,

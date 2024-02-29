@@ -19,13 +19,15 @@ use std::time::Instant;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::RawExpr;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
@@ -37,11 +39,13 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MatchExpr;
+use databend_common_sql::IndexType;
 use databend_common_storage::MergeStatus;
 
 use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
 use crate::operations::merge_into::mutator::UpdateByExprMutator;
+use crate::operations::BlockMetaIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct SourceFullMatched;
@@ -121,9 +125,59 @@ pub struct MatchedSplitProcessor {
     output_data_row_id_data: Vec<DataBlock>,
     output_data_updated_data: Option<DataBlock>,
     target_table_schema: DataSchemaRef,
+    target_build_optimization: bool,
+    enable_update_column_only: bool,
 }
 
 impl MatchedSplitProcessor {
+    pub fn try_update_column_only(
+        update_projections: &mut Vec<usize>,
+        matched: MatchExpr,
+        field_index_of_input_schema: HashMap<FieldIndex, usize>,
+    ) -> bool {
+        assert_eq!(matched.len(), 1);
+        let item = &matched[0];
+        // there is no condition
+        assert!(item.0.is_none());
+        // it's update not delete.
+        assert!(item.1.is_some());
+        let update_exprs = item.1.as_ref().unwrap();
+        let mut update_field_indexes: HashMap<FieldIndex, IndexType> =
+            HashMap::with_capacity(update_exprs.len());
+        for item in update_exprs.iter() {
+            let mut update_set_expr = if let RemoteExpr::FunctionCall { id, args, .. } = &item.1 {
+                assert_eq!(id.name(), "if");
+                // the predcate is always true.
+                &args[1]
+            } else {
+                unreachable!()
+            };
+            // in `generate_update_list` we will do `wrap_cast_expr` to cast `left` into dest_type,
+            // but after that, we will do a `type_check` in `scalar.as_expr`, if the cast's dest_type
+            // is the same, we will deref the `cast`.
+            if let RemoteExpr::Cast { expr, .. } = update_set_expr {
+                update_set_expr = expr.as_ref();
+            }
+
+            if let RemoteExpr::ColumnRef { id, .. } = update_set_expr {
+                // (field_index,project_idx)
+                update_field_indexes.insert(item.0, *id);
+            } else {
+                return false;
+            }
+        }
+
+        // `field_index_of_input_schema` contains all columns of target_table
+        for field_index in 0..field_index_of_input_schema.len() {
+            if update_field_indexes.contains_key(&field_index) {
+                update_projections.push(*update_field_indexes.get(&field_index).unwrap());
+            } else {
+                update_projections.push(*field_index_of_input_schema.get(&field_index).unwrap());
+            }
+        }
+        true
+    }
+
     pub fn create(
         ctx: Arc<dyn TableContext>,
         row_id_idx: usize,
@@ -131,42 +185,60 @@ impl MatchedSplitProcessor {
         field_index_of_input_schema: HashMap<FieldIndex, usize>,
         input_schema: DataSchemaRef,
         target_table_schema: DataSchemaRef,
+        target_build_optimization: bool,
+        can_try_update_column_only: bool,
     ) -> Result<Self> {
+        let mut update_projections = Vec::with_capacity(field_index_of_input_schema.len());
         let mut ops = Vec::<MutationKind>::new();
-        for item in matched.iter() {
-            // delete
-            if item.1.is_none() {
-                let filter = item.0.as_ref().map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS));
-                ops.push(MutationKind::Delete(DeleteDataBlockMutation {
-                    delete_mutator: DeleteByExprMutator::create(
-                        filter.clone(),
-                        ctx.get_function_context()?,
-                        row_id_idx,
-                        input_schema.num_fields(),
-                    ),
-                }))
-            } else {
-                let update_lists = item.1.as_ref().unwrap();
-                let filter = item
-                    .0
-                    .as_ref()
-                    .map(|condition| condition.as_expr(&BUILTIN_FUNCTIONS));
+        let mut enable_update_column_only = false;
 
-                ops.push(MutationKind::Update(UpdateDataBlockMutation {
-                    update_mutator: UpdateByExprMutator::create(
-                        filter,
-                        ctx.get_function_context()?,
-                        field_index_of_input_schema.clone(),
-                        update_lists.clone(),
-                        input_schema.num_fields(),
-                    ),
-                }))
+        if can_try_update_column_only {
+            enable_update_column_only = MatchedSplitProcessor::try_update_column_only(
+                &mut update_projections,
+                matched.clone(),
+                field_index_of_input_schema.clone(),
+            );
+        }
+
+        if !enable_update_column_only {
+            for item in matched.iter() {
+                // delete
+                if item.1.is_none() {
+                    let filter = item.0.as_ref().map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS));
+                    ops.push(MutationKind::Delete(DeleteDataBlockMutation {
+                        delete_mutator: DeleteByExprMutator::create(
+                            filter.clone(),
+                            ctx.get_function_context()?,
+                            row_id_idx,
+                            input_schema.num_fields(),
+                            target_build_optimization,
+                        ),
+                    }))
+                } else {
+                    let update_lists = item.1.as_ref().unwrap();
+                    let filter = item
+                        .0
+                        .as_ref()
+                        .map(|condition| condition.as_expr(&BUILTIN_FUNCTIONS));
+
+                    ops.push(MutationKind::Update(UpdateDataBlockMutation {
+                        update_mutator: UpdateByExprMutator::create(
+                            filter,
+                            ctx.get_function_context()?,
+                            field_index_of_input_schema.clone(),
+                            update_lists.clone(),
+                            input_schema.num_fields(),
+                        ),
+                    }))
+                }
+            }
+
+            // `field_index_of_input_schema` contains all columns of target_table
+            for field_index in 0..field_index_of_input_schema.len() {
+                update_projections.push(*field_index_of_input_schema.get(&field_index).unwrap());
             }
         }
-        let mut update_projections = Vec::with_capacity(field_index_of_input_schema.len());
-        for field_index in 0..field_index_of_input_schema.len() {
-            update_projections.push(*field_index_of_input_schema.get(&field_index).unwrap());
-        }
+
         let input_port = InputPort::create();
         let output_port_row_id = OutputPort::create();
         let output_port_updated = OutputPort::create();
@@ -182,6 +254,8 @@ impl MatchedSplitProcessor {
             row_id_idx,
             update_projections,
             target_table_schema,
+            target_build_optimization,
+            enable_update_column_only,
         })
     }
 
@@ -262,50 +336,62 @@ impl Processor for MatchedSplitProcessor {
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
+            //  we receive a partial unmodified block data meta.
+            if data_block.get_meta().is_some() && data_block.is_empty() {
+                assert!(self.target_build_optimization);
+                let meta_index = BlockMetaIndex::downcast_ref_from(data_block.get_meta().unwrap());
+                if meta_index.is_some() {
+                    self.output_data_row_id_data.push(data_block);
+                    return Ok(());
+                }
+            }
+
             if data_block.is_empty() {
                 return Ok(());
             }
             // insert-only, we need to remove this pipeline according to strategy.
-            if self.ops.is_empty() {
+            if self.ops.is_empty() && !self.enable_update_column_only {
                 return Ok(());
             }
             let start = Instant::now();
             let mut current_block = data_block;
-
-            for op in self.ops.iter() {
-                match op {
-                    MutationKind::Update(update_mutation) => {
-                        let stage_block = update_mutation
-                            .update_mutator
-                            .update_by_expr(current_block)?;
-                        current_block = stage_block;
-                    }
-
-                    MutationKind::Delete(delete_mutation) => {
-                        let (stage_block, mut row_ids) = delete_mutation
-                            .delete_mutator
-                            .delete_by_expr(current_block)?;
-
-                        // delete all
-                        if !row_ids.is_empty() {
-                            row_ids = row_ids.add_meta(Some(Box::new(RowIdKind::Delete)))?;
-                            self.output_data_row_id_data.push(row_ids);
+            if !self.enable_update_column_only {
+                for op in self.ops.iter() {
+                    match op {
+                        MutationKind::Update(update_mutation) => {
+                            let stage_block = update_mutation
+                                .update_mutator
+                                .update_by_expr(current_block)?;
+                            current_block = stage_block;
                         }
 
-                        if stage_block.is_empty() {
-                            return Ok(());
+                        MutationKind::Delete(delete_mutation) => {
+                            let (stage_block, mut row_ids) = delete_mutation
+                                .delete_mutator
+                                .delete_by_expr(current_block)?;
+
+                            // delete all
+                            if !row_ids.is_empty() {
+                                row_ids = row_ids.add_meta(Some(Box::new(RowIdKind::Delete)))?;
+                                self.output_data_row_id_data.push(row_ids);
+                            }
+
+                            if stage_block.is_empty() {
+                                return Ok(());
+                            }
+                            current_block = stage_block;
                         }
-                        current_block = stage_block;
                     }
                 }
+
+                let filter: Value<BooleanType> = current_block
+                    .get_by_offset(current_block.num_columns() - 1)
+                    .value
+                    .try_downcast()
+                    .unwrap();
+                current_block = current_block.filter_boolean_value(&filter)?;
             }
 
-            let filter: Value<BooleanType> = current_block
-                .get_by_offset(current_block.num_columns() - 1)
-                .value
-                .try_downcast()
-                .unwrap();
-            current_block = current_block.filter_boolean_value(&filter)?;
             if !current_block.is_empty() {
                 // add updated row_ids
                 self.ctx.add_merge_status(MergeStatus {
@@ -313,11 +399,16 @@ impl Processor for MatchedSplitProcessor {
                     update_rows: current_block.num_rows(),
                     deleted_rows: 0,
                 });
-                self.output_data_row_id_data.push(DataBlock::new_with_meta(
-                    vec![current_block.get_by_offset(self.row_id_idx).clone()],
-                    current_block.num_rows(),
-                    Some(Box::new(RowIdKind::Update)),
-                ));
+
+                // for target build optimization, there is only one matched clause without condition. we won't read rowid.
+                if !self.target_build_optimization {
+                    self.output_data_row_id_data.push(DataBlock::new_with_meta(
+                        vec![current_block.get_by_offset(self.row_id_idx).clone()],
+                        current_block.num_rows(),
+                        Some(Box::new(RowIdKind::Update)),
+                    ));
+                }
+
                 let op = BlockOperator::Project {
                     projection: self.update_projections.clone(),
                 };
@@ -327,9 +418,8 @@ impl Processor for MatchedSplitProcessor {
 
                 current_block = self.cast_data_type_for_merge(current_block)?;
 
-                current_block =
-                    current_block.add_meta(Some(Box::new(self.target_table_schema.clone())))?;
-
+                // no need to give source schema, the data block's schema is complete, so we won'f fill default
+                // field values.The computed field will be processed in `TransformResortAddOnWithoutSourceSchema`.
                 self.output_data_updated_data = Some(current_block);
             }
             let elapsed_time = start.elapsed().as_millis() as u64;
@@ -356,18 +446,23 @@ impl MatchedSplitProcessor {
         let cast_exprs = current_columns
             .iter()
             .enumerate()
-            .map(|(idx, col)| Expr::Cast {
-                span: None,
-                is_try: false,
-                expr: Box::new(Expr::ColumnRef {
-                    span: None,
-                    id: idx,
-                    data_type: col.data_type.clone(),
-                    display_name: "".to_string(),
-                }),
-                dest_type: self.target_table_schema.fields[idx].data_type().clone(),
+            .map(|(idx, col)| {
+                check(
+                    &RawExpr::Cast {
+                        span: None,
+                        is_try: false,
+                        expr: Box::new(RawExpr::ColumnRef {
+                            span: None,
+                            id: idx,
+                            data_type: col.data_type.clone(),
+                            display_name: "".to_string(),
+                        }),
+                        dest_type: self.target_table_schema.fields[idx].data_type().clone(),
+                    },
+                    &BUILTIN_FUNCTIONS,
+                )
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
         let cast_operator = BlockOperator::Map {
             exprs: cast_exprs,
             projections: Some((current_columns.len()..current_columns.len() * 2).collect()),

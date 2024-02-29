@@ -56,6 +56,10 @@ impl Interpreter for ShowCreateTableInterpreter {
         "ShowCreateTableInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
@@ -117,6 +121,7 @@ impl ShowCreateTableInterpreter {
                 let comment = if field_comments.len() == n_fields && !field_comments[idx].is_empty()
                 {
                     // make the display more readable.
+                    // can not use debug print, will add double quote
                     format!(
                         " COMMENT '{}'",
                         &field_comments[idx].as_str().replace('\'', "\\'")
@@ -171,15 +176,25 @@ impl ShowCreateTableInterpreter {
             });
         }
 
+        if engine != "ICEBERG" && engine != "DELTA" {
+            if let Some(sp) = &table_info.meta.storage_params {
+                table_create_sql.push_str(format!(" LOCATION = '{}'", sp).as_str());
+            }
+        }
+
+        if !table_info.meta.comment.is_empty() {
+            table_create_sql.push_str(format!(" COMMENT = '{}'", table_info.meta.comment).as_str());
+        }
+
         let block = DataBlock::new(
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(name.to_string())),
                 ),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(table_create_sql.into_bytes())),
+                    Value::Scalar(Scalar::String(table_create_sql)),
                 ),
             ],
             1,
@@ -200,11 +215,11 @@ impl ShowCreateTableInterpreter {
                 vec![
                     BlockEntry::new(
                         DataType::String,
-                        Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                        Value::Scalar(Scalar::String(name.to_string())),
                     ),
                     BlockEntry::new(
                         DataType::String,
-                        Value::Scalar(Scalar::String(view_create_sql.into_bytes())),
+                        Value::Scalar(Scalar::String(view_create_sql)),
                     ),
                 ],
                 1,
@@ -236,12 +251,9 @@ impl ShowCreateTableInterpreter {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(stream_table.name().as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(stream_table.name().to_string())),
                 ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(create_sql.into_bytes())),
-                ),
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(create_sql))),
             ],
             1,
         );
@@ -273,12 +285,9 @@ impl ShowCreateTableInterpreter {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(name.to_string())),
                 ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(ddl.into_bytes())),
-                ),
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(ddl))),
             ],
             1,
         );

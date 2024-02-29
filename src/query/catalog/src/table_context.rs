@@ -24,6 +24,7 @@ use std::time::SystemTime;
 use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -35,8 +36,7 @@ use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
-use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
 use databend_common_storage::CopyStatus;
@@ -47,16 +47,19 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
+use crate::merge_into_join::MergeIntoJoin;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
 use crate::runtime_filter_info::RuntimeFilterInfo;
+use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
 pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
@@ -130,7 +133,7 @@ pub trait TableContext: Send + Sync {
     fn get_result_progress_value(&self) -> ProgressValues;
     fn get_status_info(&self) -> String;
     fn set_status_info(&self, info: &str);
-
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics;
     fn get_partition(&self) -> Option<PartInfoPtr>;
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr>;
     fn partition_num(&self) -> usize {
@@ -244,6 +247,10 @@ pub trait TableContext: Send + Sync {
 
     fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
 
+    fn set_merge_into_join(&self, join: MergeIntoJoin);
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin;
+
     fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, BinaryFuse16)>;
 
     fn get_inlist_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
@@ -251,4 +258,5 @@ pub trait TableContext: Send + Sync {
     fn get_min_max_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
+    fn txn_mgr(&self) -> TxnManagerRef;
 }

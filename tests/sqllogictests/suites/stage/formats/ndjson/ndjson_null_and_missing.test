@@ -1,0 +1,64 @@
+statement ok
+drop table if exists t
+
+statement ok
+create table t(id string, a int default 2, b int not null default 2)
+
+query error 2004.*Invalid option value: NULL_FIELD_AS is set to ERROR. The valid values are NULL | FIELD_DEFAULT.
+copy into t from @data/ndjson/null.ndjson file_format = (type = NDJSON, null_field_as = ERROR) on_error = continue
+
+# default:  null_field_as = NULL missing_field_as = ERROR
+query 
+copy into t from @data/ndjson/null_and_missing/ file_format = (type = NDJSON) on_error = continue force=true
+----
+ndjson/null_and_missing/missing_a.ndjson 0 1 Missing value for column 1 (a Int32 NULL) 1
+ndjson/null_and_missing/missing_b.ndjson 0 1 Missing value for column 2 (b Int32) 1
+ndjson/null_and_missing/normal.ndjson 1 0 NULL NULL
+ndjson/null_and_missing/null_a.ndjson 1 0 NULL NULL
+ndjson/null_and_missing/null_b.ndjson 0 1 Invalid value 'null' for column 2 (b Int32): null value is not allowed for non-nullable field, when NULL_FIELDS_AS=NULL 1
+
+query 
+select * from t order by id;
+----
+normal 1 1
+null_a NULL 1
+
+statement ok
+truncate table t
+
+query 
+copy into t from @data/ndjson/null_and_missing/ file_format = (type = NDJSON, null_field_as = NULL, missing_field_as = NULL) on_error = continue force=true
+----
+ndjson/null_and_missing/missing_a.ndjson 1 0 NULL NULL
+ndjson/null_and_missing/missing_b.ndjson 0 1 Missing value for column 2 (b Int32) 1
+ndjson/null_and_missing/normal.ndjson 1 0 NULL NULL
+ndjson/null_and_missing/null_a.ndjson 1 0 NULL NULL
+ndjson/null_and_missing/null_b.ndjson 0 1 Invalid value 'null' for column 2 (b Int32): null value is not allowed for non-nullable field, when NULL_FIELDS_AS=NULL 1
+
+query 
+select * from t order by id;
+----
+missing_a NULL 1
+normal 1 1
+null_a NULL 1
+
+statement ok
+truncate table t
+
+query 
+copy into t from @data/ndjson/null_and_missing/ file_format = (type = NDJSON, null_field_as = FIELD_DEFAULT, missing_field_as = FIELD_DEFAULT) on_error = continue force=true
+----
+ndjson/null_and_missing/missing_a.ndjson 1 0 NULL NULL
+ndjson/null_and_missing/missing_b.ndjson 1 0 NULL NULL
+ndjson/null_and_missing/normal.ndjson 1 0 NULL NULL
+ndjson/null_and_missing/null_a.ndjson 1 0 NULL NULL
+ndjson/null_and_missing/null_b.ndjson 1 0 NULL NULL
+
+query 
+select * from t order by id;
+----
+missing_a 2 1
+missing_b 1 2
+normal 1 1
+null_a 2 1
+null_b 1 2

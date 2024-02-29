@@ -95,6 +95,16 @@ impl MetaService for GrpcServiceForTestImpl {
         unimplemented!()
     }
 
+    type ExportV1Stream =
+        Pin<Box<dyn Stream<Item = Result<ExportedChunk, tonic::Status>> + Send + 'static>>;
+
+    async fn export_v1(
+        &self,
+        _request: Request<databend_common_meta_types::protobuf::ExportRequest>,
+    ) -> Result<Response<Self::ExportStream>, Status> {
+        unimplemented!()
+    }
+
     type WatchStream =
         Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + 'static>>;
 
@@ -150,7 +160,7 @@ pub fn start_grpc_server_addr(addr: impl ToString) -> (oneshot::Sender<()>, Join
 
     let (tx, rx) = oneshot::channel::<()>();
 
-    let h = tokio::spawn(async move {
+    let h = databend_common_base::runtime::spawn(async move {
         Server::builder()
             .add_service(svc)
             .serve_with_shutdown(addr, async move {

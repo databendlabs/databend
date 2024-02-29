@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_meta_app::schema::CreateOption;
+
 use crate::ast::write_comma_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -37,7 +39,7 @@ pub enum UDFDefinition {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateUDFStmt {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub udf_name: Identifier,
     pub description: Option<String>,
     pub definition: UDFDefinition,
@@ -82,9 +84,15 @@ impl Display for UDFDefinition {
 
 impl Display for CreateUDFStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE FUNCTION")?;
-        if self.if_not_exists {
-            write!(f, " IF NOT EXISTS")?;
+        write!(f, "CREATE")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " FUNCTION")?;
+        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
+            if if_not_exists {
+                write!(f, " IF NOT EXISTS")?;
+            }
         }
         write!(f, " {} {}", self.udf_name, self.definition)?;
         if let Some(description) = &self.description {

@@ -89,6 +89,7 @@ struct AggregationContext {
     segment_reader: CompactSegmentInfoReader,
     block_builder: BlockBuilder,
     io_request_semaphore: Arc<Semaphore>,
+    query_id: String,
 }
 
 // Apply MergeIntoOperations to segments
@@ -166,7 +167,7 @@ impl MergeIntoOperationAggregator {
                 Some(reader)
             }
         };
-
+        let query_id = ctx.get_id();
         Ok(Self {
             ctx,
             deletion_accumulator,
@@ -184,6 +185,7 @@ impl MergeIntoOperationAggregator {
                 segment_reader,
                 block_builder,
                 io_request_semaphore,
+                query_id,
             }),
         })
     }
@@ -392,6 +394,7 @@ impl AggregationContext {
             &self.key_column_reader,
             block_meta,
             &self.read_settings,
+            self.query_id.clone(),
         )
         .await?;
 
@@ -458,6 +461,7 @@ impl AggregationContext {
                 index: BlockMetaIndex {
                     segment_idx: segment_index,
                     block_idx: block_index,
+                    inner: None,
                 },
             };
 
@@ -506,14 +510,20 @@ impl AggregationContext {
         let block_builder = self.block_builder.clone();
         let origin_stats = block_meta.cluster_stats.clone();
         let serialized = GlobalIORuntime::instance()
-            .spawn_blocking(move || {
+            .spawn(self.query_id.clone(), async move {
                 block_builder.build(new_block, |block, generator| {
                     let cluster_stats =
                         generator.gen_with_origin_stats(&block, origin_stats.clone())?;
                     Ok((cluster_stats, block))
                 })
             })
-            .await?;
+            .await
+            .map_err(|e| {
+                ErrorCode::Internal(
+                    "unexpected, failed to join apply delete tasks for replace into.",
+                )
+                .add_message_back(e.to_string())
+            })??;
 
         // persistent data
         let new_block_meta = serialized.block_meta;
@@ -534,6 +544,7 @@ impl AggregationContext {
             index: BlockMetaIndex {
                 segment_idx: segment_index,
                 block_idx: block_index,
+                inner: None,
             },
             block_meta: Arc::new(new_block_meta),
         };
@@ -574,7 +585,7 @@ impl AggregationContext {
         if let Some(stats) = column_stats {
             let max = stats.max();
             let min = stats.min();
-            std::cmp::min(key_max, max) >= std::cmp::max(key_min, min)
+            std::cmp::min(key_max, max) >= std::cmp::max(key_min,min)
                 || // coincide overlap
                 (max == key_max && min == key_min)
         } else {
@@ -598,7 +609,7 @@ impl AggregationContext {
         let block_meta_ptr = block_meta.clone();
         let reader = reader.clone();
         GlobalIORuntime::instance()
-            .spawn_blocking(move || {
+            .spawn(self.query_id.clone(), async move {
                 let column_chunks = merged_io_read_result.columns_chunks()?;
                 reader.deserialize_chunks(
                     block_meta_ptr.location.0.as_str(),
@@ -610,6 +621,12 @@ impl AggregationContext {
                 )
             })
             .await
+            .map_err(|e| {
+                ErrorCode::Internal(
+                    "unexpected, failed to join aggregation context read block tasks for replace into.",
+                )
+                .add_message_back(e.to_string())
+            })?
     }
 
     // return true if the block is pruned, otherwise false
@@ -786,8 +803,8 @@ mod tests {
             (
                 1,
                 range(
-                    Scalar::String("a".to_string().into_bytes()),
-                    Scalar::String("z".to_string().into_bytes()),
+                    Scalar::String("a".to_string()),
+                    Scalar::String("z".to_string()),
                 ),
             ),
             // range of xx_time [100, 200]
@@ -825,8 +842,8 @@ mod tests {
             ),
             // for xx_type column, overlaps
             (
-                Scalar::String("b".to_string().into_bytes()),
-                Scalar::String("y".to_string().into_bytes()),
+                Scalar::String("b".to_string()),
+                Scalar::String("y".to_string()),
             ),
             // for xx_time column, overlaps
             (
@@ -870,8 +887,8 @@ mod tests {
             ),
             // for xx_type column, overlaps
             (
-                Scalar::String("b".to_string().into_bytes()),
-                Scalar::String("b".to_string().into_bytes()),
+                Scalar::String("b".to_string()),
+                Scalar::String("b".to_string()),
             ),
             // for xx_time column, overlaps
             (

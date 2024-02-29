@@ -22,13 +22,17 @@ databend-common-meta-kvapi = { path = "../../meta/kvapi" }
 databend-common-meta-store = { path = "../../meta/store" }
 databend-common-meta-types = { path = "../../meta/types" }
 databend-common-proto-conv = { path = "../../meta/proto-conv" }
-databend-common-protos = { path = "../../meta/protos" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 enumflags2 = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
 minitrace = { workspace = true }
+prost = { workspace = true }
+serde = "1.0.150"
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 databend-common-expression = { path = "../../query/expression" }

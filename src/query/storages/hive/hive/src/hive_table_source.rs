@@ -20,6 +20,8 @@ use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::base::tokio::time::Duration;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -179,6 +181,7 @@ impl HiveTableSource {
             rows: prewhere_datablocks.iter().map(|x| x.num_rows()).sum(),
             bytes: prewhere_datablocks.iter().map(|x| x.memory_size()).sum(),
         };
+        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, progress_values.bytes);
         self.scan_progress.incr(&progress_values);
 
         if let Some(filter) = self.prewhere_filter.as_ref() {

@@ -77,7 +77,7 @@ NULL
 query T
 select parse_json('{"aa": 1, "aA": "text", "Aa": 3}')->>'aA'
 ----
-"text"
+text
 
 query T
 select parse_json('{"aa": 1, "aA": "text", "Aa": {"a":1}}')->>'Aa'
@@ -113,6 +113,11 @@ query T
 select parse_json('{"aa": 1, "aA": 2, "Aa": 3 }')['aa']
 ----
 1
+
+query T
+select '{"k1": 1, "k2": null}'::json['k2']
+----
+null
 
 query T
 select get_ignore_case(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'aA')
@@ -179,12 +184,12 @@ select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras"
 query T
 select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer.name')
 ----
-"databend"
+databend
 
 query T
 select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][0]')
 ----
-"ext"
+ext
 
 query T
 select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][2]')
@@ -248,6 +253,11 @@ select parse_json('[1, {"a": 1, "b": [100, 200, {"k1": 1, "k2": 2}]}, 3]')#>'{1,
 1
 
 query T
+select '[1, 2, 3, null]'::json#>'{3}'
+----
+null
+
+query T
 select NULL#>>'{0}'
 ----
 NULL
@@ -291,6 +301,11 @@ query I
 select parse_json('[1, {"a": 1, "b": [100, 200, {"k1": 1, "k2": 2}]}, 3]')#>>'{1, b, 2, k1}'
 ----
 1
+
+query T
+select '[1, 2, 3, null]'::json#>>'{3}'
+----
+null
 
 query T
 select [][0]
@@ -460,7 +475,7 @@ select id, json_extract_path_text(str, '[0]') from t3
 query IT
 select id, json_extract_path_text(str, '[3][0]') from t3
 ----
-1 "a"
+1 a
 2 NULL
 
 query IT
@@ -700,7 +715,7 @@ SELECT arr #>> '{3}' FROM t1;
 query T
 SELECT arr #>> '{3,1}' FROM t1;
 ----
-"b"
+b
 
 query I
 SELECT obj #>> '{a}' FROM t2;

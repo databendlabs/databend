@@ -63,6 +63,7 @@ impl Dataframe {
             catalog: None,
             alias: None,
             travel_point: None,
+            since_point: None,
             pivot: None,
             unpivot: None,
         };
@@ -85,7 +86,7 @@ impl Dataframe {
             let database = "system";
             let tenant = query_ctx.get_tenant();
             let table_meta: Arc<dyn Table> = binder
-                .resolve_data_source(tenant.as_str(), catalog, database, "one", &None)
+                .resolve_data_source(tenant.as_str(), catalog, database, "one", &None, &None)
                 .await?;
 
             let table_index = metadata.write().add_table(
@@ -99,7 +100,7 @@ impl Dataframe {
             );
 
             binder
-                .bind_base_table(&bind_context, database, table_index)
+                .bind_base_table(&bind_context, database, table_index, None)
                 .await
         } else {
             binder.bind_table_reference(&mut bind_context, &table).await
@@ -477,6 +478,7 @@ impl Dataframe {
                 catalog: None,
                 alias: None,
                 travel_point: None,
+                since_point: None,
                 pivot: None,
                 unpivot: None,
             };

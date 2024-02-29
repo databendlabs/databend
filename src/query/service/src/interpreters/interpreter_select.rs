@@ -26,7 +26,6 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformDummy;
-use databend_common_profile::SharedProcessorProfiles;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::parse_result_scan_args;
@@ -221,6 +220,10 @@ impl Interpreter for SelectInterpreter {
         "SelectInterpreterV2"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     #[minitrace::trace]
@@ -233,7 +236,7 @@ impl Interpreter for SelectInterpreter {
         // 0. Need to build physical plan first to get the partitions.
         let physical_plan = self.build_physical_plan().await?;
         let query_plan = physical_plan
-            .format(self.metadata.clone(), SharedProcessorProfiles::default())?
+            .format(self.metadata.clone(), Default::default())?
             .format_pretty()?;
         info!(
             "Query id: {}, query plan: \n{}",

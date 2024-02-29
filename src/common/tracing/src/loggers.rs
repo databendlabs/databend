@@ -12,17 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::fmt;
 use std::io::BufWriter;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use fern::FormatCallback;
 use opentelemetry::logs::AnyValue;
-use opentelemetry::logs::Logger;
-use opentelemetry::logs::LoggerProvider;
 use opentelemetry::logs::Severity;
+use opentelemetry::InstrumentationLibrary;
 use opentelemetry_otlp::WithExportConfig;
+use serde_json::Map;
 use tracing_appender::non_blocking::NonBlocking;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
@@ -62,43 +64,26 @@ impl log::Log for MinitraceLogger {
     }
 
     fn log(&self, record: &log::Record<'_>) {
-        if record.key_values().count() == 0 {
-            minitrace::Event::add_to_local_parent(record.level().as_str(), || {
-                [("message".into(), format!("{}", record.args()).into())]
-            });
-        } else {
-            minitrace::Event::add_to_local_parent(record.level().as_str(), || {
-                let mut pairs = Vec::with_capacity(record.key_values().count() + 1);
-                pairs.push(("message".into(), format!("{}", record.args()).into()));
-                let mut visitor = KvCollector { fields: &mut pairs };
-                record.key_values().visit(&mut visitor).ok();
-                pairs
-            });
+        let mut message = format!(
+            "{} {:>5} {}{}",
+            humantime::format_rfc3339_micros(SystemTime::now()),
+            record.level(),
+            record.args(),
+            KvDisplay::new(record.key_values()),
+        );
+        if message.contains('\n') {
+            // Align multi-line log messages with the first line after `level``.
+            message = message.replace('\n', "\n                                  ");
         }
-
-        struct KvCollector<'a> {
-            fields: &'a mut Vec<(Cow<'static, str>, Cow<'static, str>)>,
-        }
-
-        impl<'a, 'kvs> log::kv::Visitor<'kvs> for KvCollector<'a> {
-            fn visit_pair(
-                &mut self,
-                key: log::kv::Key<'kvs>,
-                value: log::kv::Value<'kvs>,
-            ) -> Result<(), log::kv::Error> {
-                self.fields
-                    .push((key.as_str().to_string().into(), value.to_string().into()));
-                Ok(())
-            }
-        }
+        minitrace::Event::add_to_local_parent(message, || []);
     }
 
     fn flush(&self) {}
 }
 
+#[derive(Debug)]
 pub(crate) struct OpenTelemetryLogger {
-    logger: opentelemetry_sdk::logs::Logger,
-    // keep provider alive
+    library: Arc<InstrumentationLibrary>,
     provider: opentelemetry_sdk::logs::LoggerProvider,
 }
 
@@ -126,14 +111,23 @@ impl OpenTelemetryLogger {
             .build_log_exporter()
             .expect("build log exporter");
         let provider = opentelemetry_sdk::logs::LoggerProvider::builder()
-            .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+            .with_simple_exporter(exporter)
             .with_config(
                 opentelemetry_sdk::logs::Config::default()
                     .with_resource(opentelemetry_sdk::Resource::new(kvs)),
             )
             .build();
-        let logger = provider.versioned_logger(name.to_string(), None, None, None);
-        Self { logger, provider }
+        let library = Arc::new(InstrumentationLibrary::new(
+            name.to_string(),
+            None::<&str>,
+            None::<&str>,
+            None,
+        ));
+        Self { library, provider }
+    }
+
+    pub fn instrumentation_library(&self) -> &InstrumentationLibrary {
+        &self.library
     }
 }
 
@@ -143,13 +137,24 @@ impl log::Log for OpenTelemetryLogger {
         true
     }
 
-    fn log(&self, record: &log::Record<'_>) {
+    fn log(&self, log_record: &log::Record<'_>) {
+        let provider = self.provider.clone();
+        let config = provider.config();
         let builder = opentelemetry::logs::LogRecord::builder()
             .with_observed_timestamp(SystemTime::now())
-            .with_severity_number(map_severity_to_otel_severity(record.level()))
-            .with_severity_text(record.level().as_str())
-            .with_body(AnyValue::from(record.args().to_string()));
-        self.logger.emit(builder.build())
+            .with_severity_number(map_severity_to_otel_severity(log_record.level()))
+            .with_severity_text(log_record.level().as_str())
+            .with_body(AnyValue::from(log_record.args().to_string()));
+        let record = builder.build();
+        for processor in provider.log_processors() {
+            let record = record.clone();
+            let data = opentelemetry_sdk::export::logs::LogData {
+                record,
+                resource: config.resource.clone(),
+                instrumentation: self.instrumentation_library().clone(),
+            };
+            processor.emit(data);
+        }
     }
 
     fn flush(&self) {
@@ -159,6 +164,94 @@ impl log::Log for OpenTelemetryLogger {
                 eprintln!("flush log failed: {}", e);
             }
         }
+    }
+}
+
+pub fn formatter(
+    format: &str,
+) -> fn(out: FormatCallback, message: &fmt::Arguments, record: &log::Record) {
+    match format {
+        "text" => format_text_log,
+        "json" => format_json_log,
+        _ => unreachable!("file logging format {format} is not supported"),
+    }
+}
+
+fn format_json_log(out: FormatCallback, message: &fmt::Arguments, record: &log::Record) {
+    let mut fields = Map::new();
+    fields.insert("message".to_string(), format!("{}", message).into());
+    let mut visitor = KvCollector {
+        fields: &mut fields,
+    };
+    record.key_values().visit(&mut visitor).ok();
+
+    out.finish(format_args!(
+        r#"{{"timestamp":"{}","level":"{}","fields":{}}}"#,
+        humantime::format_rfc3339_micros(SystemTime::now()),
+        record.level(),
+        serde_json::to_string(&fields).unwrap_or_default(),
+    ));
+
+    struct KvCollector<'a> {
+        fields: &'a mut Map<String, serde_json::Value>,
+    }
+
+    impl<'a, 'kvs> log::kv::Visitor<'kvs> for KvCollector<'a> {
+        fn visit_pair(
+            &mut self,
+            key: log::kv::Key<'kvs>,
+            value: log::kv::Value<'kvs>,
+        ) -> Result<(), log::kv::Error> {
+            self.fields
+                .insert(key.as_str().to_string(), value.to_string().into());
+            Ok(())
+        }
+    }
+}
+
+fn format_text_log(out: FormatCallback, message: &fmt::Arguments, record: &log::Record) {
+    out.finish(format_args!(
+        "{} {:>5} {}: {}:{} {}{}",
+        humantime::format_rfc3339_micros(SystemTime::now()),
+        record.level(),
+        record.module_path().unwrap_or(""),
+        record.file().unwrap_or(""),
+        record.line().unwrap_or(0),
+        message,
+        KvDisplay::new(record.key_values()),
+    ));
+}
+
+pub struct KvDisplay<'kvs> {
+    kv: &'kvs dyn log::kv::Source,
+}
+
+impl<'kvs> KvDisplay<'kvs> {
+    pub fn new(kv: &'kvs dyn log::kv::Source) -> Self {
+        Self { kv }
+    }
+}
+
+impl fmt::Display for KvDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut visitor = KvWriter { writer: f };
+        self.kv.visit(&mut visitor).ok();
+        Ok(())
+    }
+}
+
+struct KvWriter<'a, 'kvs> {
+    writer: &'kvs mut fmt::Formatter<'a>,
+}
+
+impl<'a, 'kvs> log::kv::Visitor<'kvs> for KvWriter<'a, 'kvs> {
+    fn visit_pair(
+        &mut self,
+        key: log::kv::Key<'kvs>,
+        value: log::kv::Value<'kvs>,
+    ) -> Result<(), log::kv::Error> {
+        write!(self.writer, " {key}={value}")?;
+        Ok(())
     }
 }
 

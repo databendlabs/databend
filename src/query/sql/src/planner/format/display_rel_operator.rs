@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
-
 use databend_common_ast::ast::FormatTreeNode;
 use itertools::Itertools;
 
 use crate::optimizer::SExpr;
+use crate::planner::format::display::DefaultOperatorHumanizer;
+use crate::planner::format::display::IdHumanizer;
+use crate::planner::format::display::TreeHumanizer;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::EvalScalar;
 use crate::plans::Exchange;
 use crate::plans::Filter;
-use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
@@ -32,57 +32,14 @@ use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::plans::Window;
-use crate::MetadataRef;
-
-#[derive(Clone)]
-pub enum FormatContext {
-    RelOp {
-        metadata: MetadataRef,
-        rel_operator: Box<RelOperator>,
-    },
-    Text(String),
-}
+use crate::IndexType;
 
 impl SExpr {
-    pub fn to_format_tree(&self, metadata: &MetadataRef) -> FormatTreeNode<FormatContext> {
-        let children: Vec<FormatTreeNode<FormatContext>> = self
-            .children()
-            .iter()
-            .map(|child| child.to_format_tree(metadata))
-            .collect();
-
-        to_format_tree(self.plan().clone(), metadata.clone(), children)
-    }
-}
-
-impl Display for FormatContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::RelOp {
-                metadata,
-                rel_operator,
-            } => match rel_operator.as_ref() {
-                RelOperator::Scan(_) => write!(f, "LogicalGet"),
-                RelOperator::Join(op) => format_join(f, metadata, op),
-                RelOperator::EvalScalar(_) => write!(f, "EvalScalar"),
-                RelOperator::Filter(_) => write!(f, "Filter"),
-                RelOperator::Aggregate(op) => format_aggregate(f, metadata, op),
-                RelOperator::Sort(_) => write!(f, "Sort"),
-                RelOperator::Limit(_) => write!(f, "Limit"),
-                RelOperator::Exchange(op) => format_exchange(f, metadata, op),
-                RelOperator::UnionAll(_) => write!(f, "Union"),
-                RelOperator::Pattern(_) => write!(f, "Pattern"),
-                RelOperator::DummyTableScan(_) => write!(f, "DummyTableScan"),
-                RelOperator::Window(_) => write!(f, "WindowFunc"),
-                RelOperator::ProjectSet(_) => write!(f, "ProjectSet"),
-                RelOperator::CteScan(_) => write!(f, "CteScan"),
-                RelOperator::MaterializedCte(_) => write!(f, "MaterializedCte"),
-                RelOperator::ConstantTableScan(_) => write!(f, "ConstantTableScan"),
-                RelOperator::AddRowNumber(_) => write!(f, "AddRowNumber"),
-                RelOperator::Udf(_) => write!(f, "Udf"),
-            },
-            Self::Text(text) => write!(f, "{}", text),
-        }
+    pub fn to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+        &self,
+        id_humanizer: &I,
+    ) -> FormatTreeNode {
+        TreeHumanizer::humanize_s_expr(id_humanizer, &DefaultOperatorHumanizer, self)
     }
 }
 
@@ -152,256 +109,107 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
     }
 }
 
-pub fn format_join(
-    f: &mut std::fmt::Formatter<'_>,
-    _metadata: &MetadataRef,
-    op: &Join,
-) -> std::fmt::Result {
-    match op.join_type {
-        JoinType::Cross => {
-            write!(f, "CrossJoin")
-        }
-        _ => {
-            write!(f, "HashJoin: {}", &op.join_type)
-        }
-    }
-}
-
-pub fn format_aggregate(
-    f: &mut std::fmt::Formatter<'_>,
-    _metadata: &MetadataRef,
-    op: &Aggregate,
-) -> std::fmt::Result {
-    write!(f, "Aggregate({})", match &op.mode {
+pub fn format_aggregate(op: &Aggregate) -> String {
+    format!("Aggregate({})", match &op.mode {
         AggregateMode::Partial => "Partial",
         AggregateMode::Final => "Final",
         AggregateMode::Initial => "Initial",
     })
 }
 
-pub fn format_exchange(
-    f: &mut std::fmt::Formatter<'_>,
-    _metadata: &MetadataRef,
-    op: &Exchange,
-) -> std::fmt::Result {
+pub fn format_exchange(op: &Exchange) -> String {
     match op {
-        Exchange::Hash(_) => {
-            write!(f, "Exchange(Hash)")
-        }
-        Exchange::Broadcast => {
-            write!(f, "Exchange(Broadcast)")
-        }
-        Exchange::Merge => {
-            write!(f, "Exchange(Merge)")
-        }
-        Exchange::MergeSort => {
-            write!(f, "Exchange(MergeSort)")
-        }
+        Exchange::Hash(_) => "Exchange(Hash)".to_string(),
+        Exchange::Broadcast => "Exchange(Broadcast)".to_string(),
+        Exchange::Merge => "Exchange(Merge)".to_string(),
+        Exchange::MergeSort => "Exchange(MergeSort)".to_string(),
     }
 }
 
 /// Build `FormatTreeNode` for a `RelOperator`, which may returns a tree structure instead of
 /// a single node.
-fn to_format_tree(
-    rel_operator: RelOperator,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
-    match &rel_operator {
-        RelOperator::Join(op) => logical_join_to_format_tree(op, metadata, children),
-        RelOperator::Scan(op) => logical_get_to_format_tree(op, metadata, children),
-        RelOperator::EvalScalar(op) => eval_scalar_to_format_tree(op, metadata, children),
-        RelOperator::Filter(op) => filter_to_format_tree(op, metadata, children),
-        RelOperator::Aggregate(op) => aggregate_to_format_tree(op, metadata, children),
-        RelOperator::Window(op) => window_to_format_tree(op, metadata, children),
-        RelOperator::Sort(op) => sort_to_format_tree(op, metadata, children),
-        RelOperator::Limit(op) => limit_to_format_tree(op, metadata, children),
-        RelOperator::Exchange(op) => exchange_to_format_tree(op, metadata, children),
+pub(super) fn to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    id_humanizer: &I,
+    op: &RelOperator,
+) -> FormatTreeNode {
+    match op {
+        RelOperator::Join(op) => join_to_format_tree(id_humanizer, op),
+        RelOperator::Scan(op) => scan_to_format_tree(id_humanizer, op),
+        RelOperator::EvalScalar(op) => eval_scalar_to_format_tree(id_humanizer, op),
+        RelOperator::Filter(op) => filter_to_format_tree(id_humanizer, op),
+        RelOperator::Aggregate(op) => aggregate_to_format_tree(id_humanizer, op),
+        RelOperator::Window(op) => window_to_format_tree(id_humanizer, op),
+        RelOperator::Sort(op) => sort_to_format_tree(id_humanizer, op),
+        RelOperator::Limit(op) => limit_to_format_tree(id_humanizer, op),
+        RelOperator::Exchange(op) => exchange_to_format_tree(id_humanizer, op),
 
-        _ => FormatTreeNode::with_children(
-            FormatContext::RelOp {
-                metadata,
-                rel_operator: Box::new(rel_operator),
-            },
-            children,
-        ),
+        _ => FormatTreeNode::with_children(format!("{:?}", op), vec![]),
     }
 }
 
-#[allow(unused)]
-fn scan_to_format_tree(
+fn scan_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    id_humanizer: &I,
     op: &Scan,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
-    let table = metadata.read().table(op.table_index).clone();
-    FormatTreeNode::with_children(
-        FormatContext::RelOp {
-            metadata: metadata.clone(),
-            rel_operator: Box::new(op.clone().into()),
-        },
-        [
-            vec![
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "table: {}.{}.{}",
-                    table.catalog(),
-                    table.database(),
-                    table.name(),
-                ))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "filters: [{}]",
-                    op.push_down_predicates.as_ref().map_or_else(
-                        || "".to_string(),
-                        |predicates| { predicates.iter().map(format_scalar).join(", ") },
-                    ),
-                ))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "order by: [{}]",
-                    op.order_by.as_ref().map_or_else(
-                        || "".to_string(),
-                        |items| items
-                            .iter()
-                            .map(|item| format!(
-                                "{} (#{}) {}",
-                                metadata.read().column(item.index).name(),
-                                item.index,
-                                if item.asc { "ASC" } else { "DESC" }
-                            ))
-                            .collect::<Vec<String>>()
-                            .join(", "),
-                    ),
-                ))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "limit: {}",
-                    op.limit.map_or("NONE".to_string(), |l| l.to_string())
-                ))),
-            ],
-            children,
-        ]
-        .concat(),
-    )
+) -> FormatTreeNode {
+    FormatTreeNode::with_children("Scan".to_string(), vec![
+        FormatTreeNode::new(format!(
+            "table: {}",
+            id_humanizer.humanize_table_id(op.table_index)
+        )),
+        FormatTreeNode::new(format!(
+            "filters: [{}]",
+            op.push_down_predicates.as_ref().map_or_else(
+                || "".to_string(),
+                |predicates| { predicates.iter().map(format_scalar).join(", ") },
+            ),
+        )),
+        FormatTreeNode::new(format!(
+            "order by: [{}]",
+            op.order_by.as_ref().map_or_else(
+                || "".to_string(),
+                |items| items
+                    .iter()
+                    .map(|item| format!(
+                        "{} (#{}) {}",
+                        id_humanizer.humanize_column_id(item.index),
+                        item.index,
+                        if item.asc { "ASC" } else { "DESC" }
+                    ))
+                    .collect::<Vec<String>>()
+                    .join(", "),
+            ),
+        )),
+        FormatTreeNode::new(format!(
+            "limit: {}",
+            op.limit.map_or("NONE".to_string(), |l| l.to_string())
+        )),
+    ])
 }
 
-fn logical_get_to_format_tree(
-    op: &Scan,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
-    let table = metadata.read().table(op.table_index).clone();
-    FormatTreeNode::with_children(
-        FormatContext::RelOp {
-            metadata: metadata.clone(),
-            rel_operator: Box::new(op.clone().into()),
-        },
-        [
-            vec![
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "table: {}.{}.{}",
-                    table.catalog(),
-                    table.database(),
-                    table.name(),
-                ))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "filters: [{}]",
-                    op.push_down_predicates.as_ref().map_or_else(
-                        || "".to_string(),
-                        |predicates| { predicates.iter().map(format_scalar).join(", ") },
-                    ),
-                ))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "order by: [{}]",
-                    op.order_by.as_ref().map_or_else(
-                        || "".to_string(),
-                        |items| items
-                            .iter()
-                            .map(|item| format!(
-                                "{} (#{}) {}",
-                                metadata.read().column(item.index).name(),
-                                item.index,
-                                if item.asc { "ASC" } else { "DESC" }
-                            ))
-                            .collect::<Vec<String>>()
-                            .join(", "),
-                    ),
-                ))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "limit: {}",
-                    op.limit.map_or("NONE".to_string(), |l| l.to_string())
-                ))),
-            ],
-            children,
-        ]
-        .concat(),
-    )
-}
-
-pub fn logical_join_to_format_tree(
-    op: &Join,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
-    let preds: Vec<ScalarExpr> = op
-        .left_conditions
-        .iter()
-        .zip(op.right_conditions.iter())
-        .map(|(left, right)| {
-            FunctionCall {
-                span: None,
-                func_name: "eq".to_string(),
-                params: vec![],
-                arguments: vec![left.clone(), right.clone()],
-            }
-            .into()
-        })
-        .collect();
-    let non_equi_conditions = op
-        .non_equi_conditions
-        .iter()
-        .map(format_scalar)
-        .collect::<Vec<String>>();
-
-    let equi_conditions = if !preds.is_empty() {
-        let pred = preds.iter().skip(1).fold(preds[0].clone(), |prev, next| {
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "and".to_string(),
-                params: vec![],
-                arguments: vec![prev, next.clone()],
-            })
-        });
-        format_scalar(&pred)
-    } else {
-        "".to_string()
+fn format_join(op: &Join) -> String {
+    let join_type = match op.join_type {
+        JoinType::Cross => "Cross".to_string(),
+        JoinType::Inner => "Inner".to_string(),
+        JoinType::Left => "Left".to_string(),
+        JoinType::Right => "Right".to_string(),
+        JoinType::Full => "Full".to_string(),
+        JoinType::LeftSemi => "LeftSemi".to_string(),
+        JoinType::RightSemi => "RightSemi".to_string(),
+        JoinType::LeftAnti => "LeftAnti".to_string(),
+        JoinType::RightAnti => "RightAnti".to_string(),
+        JoinType::LeftMark => "LeftMark".to_string(),
+        JoinType::RightMark => "RightMark".to_string(),
+        JoinType::LeftSingle => "LeftSingle".to_string(),
+        JoinType::RightSingle => "RightSingle".to_string(),
     };
 
-    FormatTreeNode::with_children(
-        FormatContext::RelOp {
-            metadata,
-            rel_operator: Box::new(op.clone().into()),
-        },
-        [
-            vec![
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "equi conditions: [{}]",
-                    equi_conditions
-                ))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "non-equi conditions: [{}]",
-                    non_equi_conditions.join(", ")
-                ))),
-            ],
-            children,
-        ]
-        .concat(),
-    )
+    format!("Join({})", join_type)
 }
 
-#[allow(unused)]
-fn join_to_format_tree(
+fn join_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    _id_humanizer: &I,
     op: &Join,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
+) -> FormatTreeNode {
     let build_keys = op
         .right_conditions
         .iter()
@@ -421,31 +229,17 @@ fn join_to_format_tree(
         .collect::<Vec<String>>()
         .join(", ");
 
-    FormatTreeNode::with_children(
-        FormatContext::RelOp {
-            metadata,
-            rel_operator: Box::new(op.clone().into()),
-        },
-        [
-            vec![
-                FormatTreeNode::new(FormatContext::Text(format!("build keys: [{}]", build_keys))),
-                FormatTreeNode::new(FormatContext::Text(format!("probe keys: [{}]", probe_keys))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "other filters: [{}]",
-                    join_filters
-                ))),
-            ],
-            children,
-        ]
-        .concat(),
-    )
+    FormatTreeNode::with_children(format_join(op), vec![
+        FormatTreeNode::new(format!("build keys: [{}]", build_keys)),
+        FormatTreeNode::new(format!("probe keys: [{}]", probe_keys)),
+        FormatTreeNode::new(format!("other filters: [{}]", join_filters)),
+    ])
 }
 
-fn aggregate_to_format_tree(
+fn aggregate_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    _id_humanizer: &I,
     op: &Aggregate,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
+) -> FormatTreeNode {
     let group_items = op
         .group_items
         .iter()
@@ -455,36 +249,19 @@ fn aggregate_to_format_tree(
     let agg_funcs = op
         .aggregate_functions
         .iter()
-        .map(|item| format_scalar(&item.scalar))
+        .map(|item| format!("{} (#{})", format_scalar(&item.scalar), item.index))
         .collect::<Vec<String>>()
         .join(", ");
-    FormatTreeNode::with_children(
-        FormatContext::RelOp {
-            metadata,
-            rel_operator: Box::new(op.clone().into()),
-        },
-        [
-            vec![
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "group items: [{}]",
-                    group_items
-                ))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "aggregate functions: [{}]",
-                    agg_funcs
-                ))),
-            ],
-            children,
-        ]
-        .concat(),
-    )
+    FormatTreeNode::with_children(format_aggregate(op), vec![
+        FormatTreeNode::new(format!("group items: [{}]", group_items)),
+        FormatTreeNode::new(format!("aggregate functions: [{}]", agg_funcs)),
+    ])
 }
 
-fn window_to_format_tree(
+fn window_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    _id_humanizer: &I,
     op: &Window,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
+) -> FormatTreeNode {
     let partition_by_items = op
         .partition_by
         .iter()
@@ -501,100 +278,57 @@ fn window_to_format_tree(
 
     let frame = op.frame.to_string();
 
-    FormatTreeNode::with_children(
-        FormatContext::RelOp {
-            metadata,
-            rel_operator: Box::new(op.clone().into()),
-        },
-        [
-            vec![
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "aggregate function: {}",
-                    op.function.func_name()
-                ))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "partition items: [{}]",
-                    partition_by_items
-                ))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "order by items: [{}]",
-                    order_by_items
-                ))),
-                FormatTreeNode::new(FormatContext::Text(format!("frame: [{}]", frame))),
-            ],
-            children,
-        ]
-        .concat(),
-    )
+    FormatTreeNode::with_children("Window".to_string(), vec![
+        FormatTreeNode::new(format!("aggregate function: {}", op.function.func_name())),
+        FormatTreeNode::new(format!("partition items: [{}]", partition_by_items)),
+        FormatTreeNode::new(format!("order by items: [{}]", order_by_items)),
+        FormatTreeNode::new(format!("frame: [{}]", frame)),
+    ])
 }
 
-fn filter_to_format_tree(
+fn filter_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    _id_humanizer: &I,
     op: &Filter,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
+) -> FormatTreeNode {
     let scalars = op
         .predicates
         .iter()
         .map(format_scalar)
         .collect::<Vec<String>>()
         .join(", ");
-    FormatTreeNode::with_children(
-        FormatContext::RelOp {
-            metadata,
-            rel_operator: Box::new(op.clone().into()),
-        },
-        [
-            vec![FormatTreeNode::new(FormatContext::Text(format!(
-                "filters: [{}]",
-                scalars
-            )))],
-            children,
-        ]
-        .concat(),
-    )
+    FormatTreeNode::with_children("Filter".to_string(), vec![FormatTreeNode::new(format!(
+        "filters: [{}]",
+        scalars
+    ))])
 }
 
-fn eval_scalar_to_format_tree(
+fn eval_scalar_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    _id_humanizer: &I,
     op: &EvalScalar,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
+) -> FormatTreeNode {
     let scalars = op
         .items
         .iter()
         .sorted_by(|a, b| a.index.cmp(&b.index))
-        .map(|item| format_scalar(&item.scalar))
+        .map(|item| format!("{} AS (#{})", format_scalar(&item.scalar), item.index))
         .collect::<Vec<String>>()
         .join(", ");
-    FormatTreeNode::with_children(
-        FormatContext::RelOp {
-            metadata,
-            rel_operator: Box::new(op.clone().into()),
-        },
-        [
-            vec![FormatTreeNode::new(FormatContext::Text(format!(
-                "scalars: [{}]",
-                scalars
-            )))],
-            children,
-        ]
-        .concat(),
-    )
+    FormatTreeNode::with_children("EvalScalar".to_string(), vec![FormatTreeNode::new(
+        format!("scalars: [{}]", scalars),
+    )])
 }
 
-fn sort_to_format_tree(
+fn sort_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    id_humanizer: &I,
     op: &Sort,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
+) -> FormatTreeNode {
     let scalars = op
         .items
         .iter()
         .map(|item| {
             format!(
                 "{} (#{}) {}",
-                metadata.read().column(item.index).name(),
+                id_humanizer.humanize_column_id(item.index),
                 item.index,
                 if item.asc { "ASC" } else { "DESC" }
             )
@@ -603,73 +337,37 @@ fn sort_to_format_tree(
         .join(", ");
     let limit = op.limit.map_or("NONE".to_string(), |l| l.to_string());
 
-    FormatTreeNode::with_children(
-        FormatContext::RelOp {
-            metadata,
-            rel_operator: Box::new(op.clone().into()),
-        },
-        [
-            vec![
-                FormatTreeNode::new(FormatContext::Text(format!("sort keys: [{}]", scalars))),
-                FormatTreeNode::new(FormatContext::Text(format!("limit: [{}]", limit))),
-            ],
-            children,
-        ]
-        .concat(),
-    )
+    FormatTreeNode::with_children("Sort".to_string(), vec![
+        FormatTreeNode::new(format!("sort keys: [{}]", scalars)),
+        FormatTreeNode::new(format!("limit: [{}]", limit)),
+    ])
 }
 
-fn limit_to_format_tree(
+fn limit_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    _id_humanizer: &I,
     op: &Limit,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
+) -> FormatTreeNode {
     let limit = if let Some(val) = op.limit { val } else { 0 };
-    FormatTreeNode::with_children(
-        FormatContext::RelOp {
-            metadata,
-            rel_operator: Box::new(op.clone().into()),
-        },
-        [
-            vec![
-                FormatTreeNode::new(FormatContext::Text(format!("limit: [{}]", limit))),
-                FormatTreeNode::new(FormatContext::Text(format!("offset: [{}]", op.offset))),
-            ],
-            children,
-        ]
-        .concat(),
-    )
+    FormatTreeNode::with_children("Limit".to_string(), vec![
+        FormatTreeNode::new(format!("limit: [{}]", limit)),
+        FormatTreeNode::new(format!("offset: [{}]", op.offset)),
+    ])
 }
 
-fn exchange_to_format_tree(
+fn exchange_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
+    _id_humanizer: &I,
     op: &Exchange,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
+) -> FormatTreeNode {
     match op {
-        Exchange::Hash(keys) => FormatTreeNode::with_children(
-            FormatContext::RelOp {
-                metadata,
-                rel_operator: Box::new(op.clone().into()),
-            },
-            [
-                vec![FormatTreeNode::new(FormatContext::Text(format!(
-                    "Exchange(Hash): keys: [{}]",
-                    keys.iter()
-                        .map(format_scalar)
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                )))],
-                children,
-            ]
-            .concat(),
-        ),
-        _ => FormatTreeNode::with_children(
-            FormatContext::RelOp {
-                metadata,
-                rel_operator: Box::new(op.clone().into()),
-            },
-            children,
-        ),
+        Exchange::Hash(keys) => {
+            FormatTreeNode::with_children(format_exchange(op), vec![FormatTreeNode::new(format!(
+                "Exchange(Hash): keys: [{}]",
+                keys.iter()
+                    .map(format_scalar)
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ))])
+        }
+        _ => FormatTreeNode::with_children(format_exchange(op), vec![]),
     }
 }

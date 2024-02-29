@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
+use databend_common_ast::ast::contain_agg_func;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::Expr;
@@ -26,6 +27,8 @@ use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::Query;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SubqueryModifier;
 use databend_common_ast::ast::TrimWhere;
 use databend_common_ast::ast::TypeName;
@@ -504,40 +507,37 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => {
                 if let Expr::Subquery {
-                    subquery, modifier, ..
+                    subquery,
+                    modifier: Some(subquery_modifier),
+                    ..
                 } = &**right
                 {
-                    if let Some(subquery_modifier) = modifier {
-                        match subquery_modifier {
-                            SubqueryModifier::Any | SubqueryModifier::Some => {
-                                let comparison_op = ComparisonOp::try_from(op)?;
-                                self.resolve_subquery(
-                                    SubqueryType::Any,
-                                    subquery,
-                                    Some(*left.clone()),
-                                    Some(comparison_op),
-                                )
-                                .await?
-                            }
-                            SubqueryModifier::All => {
-                                let contrary_op = op.to_contrary()?;
-                                let rewritten_subquery = Expr::Subquery {
-                                    span: right.span(),
-                                    modifier: Some(SubqueryModifier::Any),
-                                    subquery: (*subquery).clone(),
-                                };
-                                self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
-                                    span: *span,
-                                    op: contrary_op,
-                                    left: (*left).clone(),
-                                    right: Box::new(rewritten_subquery),
-                                })
-                                .await?
-                            }
-                        }
-                    } else {
-                        self.resolve_binary_op(*span, op, left.as_ref(), right.as_ref())
+                    match subquery_modifier {
+                        SubqueryModifier::Any | SubqueryModifier::Some => {
+                            let comparison_op = ComparisonOp::try_from(op)?;
+                            self.resolve_subquery(
+                                SubqueryType::Any,
+                                subquery,
+                                Some(*left.clone()),
+                                Some(comparison_op),
+                            )
                             .await?
+                        }
+                        SubqueryModifier::All => {
+                            let contrary_op = op.to_contrary()?;
+                            let rewritten_subquery = Expr::Subquery {
+                                span: right.span(),
+                                modifier: Some(SubqueryModifier::Any),
+                                subquery: (*subquery).clone(),
+                            };
+                            self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
+                                span: *span,
+                                op: contrary_op,
+                                left: (*left).clone(),
+                                right: Box::new(rewritten_subquery),
+                            })
+                            .await?
+                        }
                     }
                 } else {
                     self.resolve_binary_op(*span, op, left.as_ref(), right.as_ref())
@@ -1500,7 +1500,7 @@ impl<'a> TypeChecker<'a> {
         let cast_default = default.map(|d| {
             Box::new(ScalarExpr::CastExpr(CastExpr {
                 span: d.span(),
-                is_try: return_type.is_nullable(),
+                is_try: false,
                 argument: Box::new(d),
                 target_type: Box::new(return_type.clone()),
             }))
@@ -1994,16 +1994,7 @@ impl<'a> TypeChecker<'a> {
             )));
         }
 
-        // rewrite_collation
-        let func_name = if self.function_need_collation(func_name, &args)?
-            && self.ctx.get_settings().get_collation()? == "utf8"
-        {
-            format!("{func_name}_utf8")
-        } else {
-            func_name.to_owned()
-        };
-
-        self.resolve_scalar_function_call(span, &func_name, params, args)
+        self.resolve_scalar_function_call(span, func_name, params, args)
     }
 
     pub fn resolve_scalar_function_call(
@@ -2349,6 +2340,17 @@ impl<'a> TypeChecker<'a> {
             )));
         }
 
+        let mut contain_agg = None;
+        if let SetExpr::Select(select_stmt) = &subquery.body {
+            if typ == SubqueryType::Scalar {
+                let select = &select_stmt.select_list[0];
+                if let SelectTarget::AliasedExpr { expr, .. } = select {
+                    // Check if contain aggregation function
+                    contain_agg = Some(contain_agg_func(expr));
+                }
+            }
+        }
+
         let mut data_type = output_context.columns[0].data_type.clone();
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
@@ -2374,6 +2376,7 @@ impl<'a> TypeChecker<'a> {
             data_type: data_type.clone(),
             typ,
             outer_columns: rel_prop.outer_columns.clone(),
+            contain_agg,
         };
 
         let data_type = subquery_expr.data_type();
@@ -2394,6 +2397,8 @@ impl<'a> TypeChecker<'a> {
             "timezone",
             "nullif",
             "ifnull",
+            "nvl",
+            "nvl2",
             "is_null",
             "coalesce",
             "last_query_id",
@@ -2499,6 +2504,37 @@ impl<'a> TypeChecker<'a> {
                         },
                         arg_y,
                         arg_x,
+                    ])
+                    .await,
+                )
+            }
+            ("nvl", &[arg_x, arg_y]) => {
+                // Rewrite nvl(x, y) to if(is_not_null(x), x, y)
+                // nvl is essentially an alias for ifnull.
+                Some(
+                    self.resolve_function(span, "if", vec![], &[
+                        &Expr::IsNull {
+                            span,
+                            expr: Box::new(arg_x.clone()),
+                            not: true,
+                        },
+                        arg_x,
+                        arg_y,
+                    ])
+                    .await,
+                )
+            }
+            ("nvl2", &[arg_x, arg_y, arg_z]) => {
+                // Rewrite nvl2(x, y, z) to if(is_not_null(x), y, z)
+                Some(
+                    self.resolve_function(span, "if", vec![], &[
+                        &Expr::IsNull {
+                            span,
+                            expr: Box::new(arg_x.clone()),
+                            not: true,
+                        },
+                        arg_y,
+                        arg_z,
                     ])
                     .await,
                 )
@@ -2620,8 +2656,7 @@ impl<'a> TypeChecker<'a> {
                 if args.len() >= 2 {
                     let box (arg, _) = self.resolve(args[1]).await.ok()?;
                     if let Ok(arg) = ConstantExpr::try_from(arg) {
-                        if let Scalar::String(val) = arg.value {
-                            let sort_order = unsafe { std::str::from_utf8_unchecked(&val) };
+                        if let Scalar::String(sort_order) = arg.value {
                             if sort_order.eq_ignore_ascii_case("asc") {
                                 asc = true;
                             } else if sort_order.eq_ignore_ascii_case("desc") {
@@ -2645,8 +2680,7 @@ impl<'a> TypeChecker<'a> {
                 if args.len() == 3 {
                     let box (arg, _) = self.resolve(args[2]).await.ok()?;
                     if let Ok(arg) = ConstantExpr::try_from(arg) {
-                        if let Scalar::String(val) = arg.value {
-                            let nulls_order = unsafe { std::str::from_utf8_unchecked(&val) };
+                        if let Scalar::String(nulls_order) = arg.value {
                             if nulls_order.eq_ignore_ascii_case("nulls first") {
                                 nulls_first = true;
                             } else if nulls_order.eq_ignore_ascii_case("nulls last") {
@@ -2685,8 +2719,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 let box (arg, _) = self.resolve(args[1]).await.ok()?;
                 if let Ok(arg) = ConstantExpr::try_from(arg) {
-                    if let Scalar::String(arg) = arg.value {
-                        let aggr_func_name = unsafe { std::str::from_utf8_unchecked(&arg) };
+                    if let Scalar::String(aggr_func_name) = arg.value {
                         let func_name = format!("array_{}", aggr_func_name);
                         let args_ref: Vec<&Expr> = vec![args[0]];
                         return Some(
@@ -2754,7 +2787,7 @@ impl<'a> TypeChecker<'a> {
         } else {
             let trim_scalar = ConstantExpr {
                 span,
-                value: databend_common_expression::Scalar::String(" ".as_bytes().to_vec()),
+                value: databend_common_expression::Scalar::String(" ".to_string()),
             }
             .into();
             ("trim_both", trim_scalar, DataType::String)
@@ -2782,7 +2815,7 @@ impl<'a> TypeChecker<'a> {
                 scale: *scale,
             })),
             Literal::Float64(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
-            Literal::String(string) => Scalar::String(string.as_bytes().to_vec()),
+            Literal::String(string) => Scalar::String(string.clone()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
         };
@@ -2904,11 +2937,9 @@ impl<'a> TypeChecker<'a> {
 
         let udf = UserApiProvider::instance()
             .get_udf(self.ctx.get_tenant().as_str(), udf_name)
-            .await;
+            .await?;
 
-        let udf = if let Ok(udf) = udf {
-            udf
-        } else {
+        let Some(udf) = udf else {
             return Ok(None);
         };
 
@@ -3092,7 +3123,7 @@ impl<'a> TypeChecker<'a> {
                 {
                     let key = ConstantExpr {
                         span,
-                        value: Scalar::String(field_name.clone().into_bytes()),
+                        value: Scalar::String(field_name.clone()),
                     }
                     .into();
 
@@ -3411,6 +3442,7 @@ impl<'a> TypeChecker<'a> {
             data_type: data_type.clone(),
             typ: SubqueryType::Any,
             outer_columns: rel_prop.outer_columns.clone(),
+            contain_agg: None,
         };
         let data_type = subquery_expr.data_type();
         Ok(Box::new((subquery_expr.into(), data_type)))
@@ -3448,7 +3480,7 @@ impl<'a> TypeChecker<'a> {
         let keypaths_str = format!("{}", keypaths);
         let path_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
             span: None,
-            value: Scalar::String(keypaths_str.into_bytes()),
+            value: Scalar::String(keypaths_str),
         });
         let args = vec![scalar, path_scalar];
 
@@ -3739,15 +3771,6 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn function_need_collation(&self, name: &str, args: &[ScalarExpr]) -> Result<bool> {
-        let names = ["substr", "substring", "length"];
-        let result = !args.is_empty()
-            && matches!(args[0].data_type()?.remove_nullable(), DataType::String)
-            && self.ctx.get_settings().get_collation().unwrap() != "binary"
-            && names.contains(&name);
-        Ok(result)
-    }
-
     fn try_fold_constant<Index: ColumnIndex>(
         &self,
         expr: &databend_common_expression::Expr<Index>,
@@ -3785,22 +3808,6 @@ pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataT
 }
 
 pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDataType> {
-    let data_type = resolve_type_name_inner(type_name)?;
-    let data_type = match &data_type {
-        TableDataType::Nullable(_) => data_type,
-        _ => {
-            if not_null {
-                data_type
-            } else {
-                data_type.wrap_nullable()
-            }
-        }
-    };
-
-    Ok(data_type)
-}
-
-pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
     let data_type = match type_name {
         TypeName::Boolean => TableDataType::Boolean,
         TypeName::UInt8 => TableDataType::Number(NumberDataType::UInt8),
@@ -3824,10 +3831,10 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
         TypeName::Timestamp => TableDataType::Timestamp,
         TypeName::Date => TableDataType::Date,
         TypeName::Array(item_type) => {
-            TableDataType::Array(Box::new(resolve_type_name_inner(item_type)?))
+            TableDataType::Array(Box::new(resolve_type_name(item_type, not_null)?))
         }
         TypeName::Map { key_type, val_type } => {
-            let key_type = resolve_type_name_inner(key_type)?;
+            let key_type = resolve_type_name(key_type, true)?;
             match key_type {
                 TableDataType::Boolean
                 | TableDataType::String
@@ -3835,7 +3842,7 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
                 | TableDataType::Decimal(_)
                 | TableDataType::Timestamp
                 | TableDataType::Date => {
-                    let val_type = resolve_type_name_inner(val_type)?;
+                    let val_type = resolve_type_name(val_type, not_null)?;
                     let inner_type = TableDataType::Tuple {
                         fields_name: vec!["key".to_string(), "value".to_string()],
                         fields_type: vec![key_type, val_type],
@@ -3863,18 +3870,23 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
             },
             fields_type: fields_type
                 .iter()
-                .map(resolve_type_name_inner)
+                .map(|item_type| resolve_type_name(item_type, not_null))
                 .collect::<Result<Vec<_>>>()?,
         },
-        TypeName::Nullable(inner_type @ box TypeName::Nullable(_)) => {
-            resolve_type_name_inner(inner_type)?
-        }
         TypeName::Nullable(inner_type) => {
-            TableDataType::Nullable(Box::new(resolve_type_name_inner(inner_type)?))
+            let data_type = resolve_type_name(inner_type, not_null)?;
+            data_type.wrap_nullable()
         }
         TypeName::Variant => TableDataType::Variant,
+        TypeName::Geometry => TableDataType::Geometry,
+        TypeName::NotNull(inner_type) => {
+            let data_type = resolve_type_name(inner_type, not_null)?;
+            data_type.remove_nullable()
+        }
     };
-
+    if !matches!(type_name, TypeName::Nullable(_) | TypeName::NotNull(_)) && !not_null {
+        return Ok(data_type.wrap_nullable());
+    }
     Ok(data_type)
 }
 

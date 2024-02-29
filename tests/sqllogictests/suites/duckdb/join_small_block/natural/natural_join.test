@@ -142,7 +142,7 @@ DROP TABLE t1
 statement ok
 drop table if exists t0;
 
-statement ok
+statement error 1006
 CREATE TABLE t0(c0 DATE, c1 DATE DEFAULT('0.5868720116119102'), c2 INT);
 
 statement ok

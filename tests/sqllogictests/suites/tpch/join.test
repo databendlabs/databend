@@ -328,3 +328,28 @@ select l_orderkey from (select * from lineitem order by l_orderkey limit 5000) a
 3
 3
 3
+
+# LEFT OUTER / LEFT SINGEL / FULL
+query I
+select l_orderkey, o_orderdate, o_shippriority from lineitem left join orders on l_orderkey = o_orderkey  and o_orderdate < to_date('1995-03-15') order by o_orderdate, l_orderkey limit 5;
+----
+3271 1992-01-01 0
+3271 1992-01-01 0
+3271 1992-01-01 0
+3271 1992-01-01 0
+5607 1992-01-01 0
+
+# LEFT ANTI
+query I
+select o_custkey from orders where not exists (select * from customer where substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') and o_custkey = c_custkey) order by o_custkey limit 10;
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+4

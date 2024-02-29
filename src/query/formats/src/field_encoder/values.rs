@@ -16,6 +16,7 @@ use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_expression::types::array::ArrayColumn;
+use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -31,6 +32,9 @@ use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
+use geozero::wkb::FromWkb;
+use geozero::wkb::WkbDialect;
+use geozero::wkt::Ewkt;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
@@ -56,6 +60,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
+                binary_format: Default::default(),
             },
             quote_char: b'\'',
         }
@@ -70,6 +75,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone,
+                binary_format: Default::default(),
             },
             quote_char: b'\'',
         }
@@ -88,6 +94,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                 timezone,
+                binary_format: Default::default(),
             },
             quote_char: b'\'',
         }
@@ -127,6 +134,7 @@ impl FieldEncoderValues {
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, in_nested),
             Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, in_nested),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, in_nested),
+            Column::Geometry(c) => self.write_geometry(c, row_index, out_buf, in_nested),
 
             Column::Array(box c) => self.write_array(c, row_index, out_buf),
             Column::Map(box c) => self.write_map(c, row_index, out_buf),
@@ -215,7 +223,7 @@ impl FieldEncoderValues {
         out_buf.extend_from_slice(data.as_bytes());
     }
 
-    fn write_binary(&self, column: &StringColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+    fn write_binary(&self, column: &BinaryColumn, row_index: usize, out_buf: &mut Vec<u8>) {
         let v = unsafe { column.index_unchecked(row_index) };
         out_buf.extend_from_slice(hex::encode_upper(v).as_bytes());
     }
@@ -228,7 +236,7 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         self.write_string_inner(
-            unsafe { column.index_unchecked(row_index) },
+            unsafe { column.index_unchecked(row_index).as_bytes() },
             out_buf,
             in_nested,
         );
@@ -260,7 +268,7 @@ impl FieldEncoderValues {
 
     fn write_bitmap(
         &self,
-        _column: &StringColumn,
+        _column: &BinaryColumn,
         _row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,
@@ -271,7 +279,7 @@ impl FieldEncoderValues {
 
     fn write_variant(
         &self,
-        column: &StringColumn,
+        column: &BinaryColumn,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,
@@ -279,6 +287,18 @@ impl FieldEncoderValues {
         let v = unsafe { column.index_unchecked(row_index) };
         let s = jsonb::to_string(v);
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
+    }
+    fn write_geometry(
+        &self,
+        column: &BinaryColumn,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        in_nested: bool,
+    ) {
+        let v = unsafe { column.index_unchecked(row_index) };
+        let mut data_cursor = std::io::Cursor::new(v);
+        let s = Ewkt::from_wkb(&mut data_cursor, WkbDialect::Ewkb).unwrap();
+        self.write_string_inner(s.0.as_bytes(), out_buf, in_nested);
     }
 
     fn write_array<T: ValueType>(

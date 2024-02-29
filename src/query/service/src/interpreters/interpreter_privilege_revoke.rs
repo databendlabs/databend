@@ -14,10 +14,12 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_sql::plans::RevokePrivilegePlan;
 use databend_common_users::UserApiProvider;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use log::debug;
 
 use crate::interpreters::common::validate_grant_object_exists;
@@ -44,6 +46,10 @@ impl Interpreter for RevokePrivilegeInterpreter {
         "RevokePrivilegeInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -51,7 +57,9 @@ impl Interpreter for RevokePrivilegeInterpreter {
 
         let plan = self.plan.clone();
 
-        validate_grant_object_exists(&self.ctx, &plan.on).await?;
+        for object in &plan.on {
+            validate_grant_object_exists(&self.ctx, object).await?;
+        }
 
         // TODO: check user existence
         // TODO: check privilege on granting on the grant object
@@ -61,14 +69,23 @@ impl Interpreter for RevokePrivilegeInterpreter {
 
         match plan.principal {
             PrincipalIdentity::User(user) => {
-                user_mgr
-                    .revoke_privileges_from_user(&tenant, user, plan.on, plan.priv_types)
-                    .await?;
+                for object in plan.on {
+                    user_mgr
+                        .revoke_privileges_from_user(&tenant, user.clone(), object, plan.priv_types)
+                        .await?;
+                }
             }
             PrincipalIdentity::Role(role) => {
-                user_mgr
-                    .revoke_privileges_from_role(&tenant, &role, plan.on, plan.priv_types)
-                    .await?;
+                if role == BUILTIN_ROLE_ACCOUNT_ADMIN {
+                    return Err(ErrorCode::IllegalGrant(
+                        "Illegal REVOKE command. Can not revoke built-in role [ account_admin ]",
+                    ));
+                }
+                for object in plan.on {
+                    user_mgr
+                        .revoke_privileges_from_role(&tenant, &role, object, plan.priv_types)
+                        .await?;
+                }
             }
         }
 

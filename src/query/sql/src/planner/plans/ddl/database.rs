@@ -14,6 +14,7 @@
 
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropDatabaseReq;
@@ -22,7 +23,7 @@ use databend_common_meta_app::schema::UndropDatabaseReq;
 /// Create.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabasePlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub tenant: String,
     pub catalog: String,
     pub database: String,
@@ -32,7 +33,7 @@ pub struct CreateDatabasePlan {
 impl From<CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
-            if_not_exists: p.if_not_exists,
+            create_option: p.create_option,
             name_ident: DatabaseNameIdent {
                 tenant: p.tenant,
                 db_name: p.database,
@@ -45,7 +46,7 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
 impl From<&CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: &CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
-            if_not_exists: p.if_not_exists,
+            create_option: p.create_option,
             name_ident: DatabaseNameIdent {
                 tenant: p.tenant.clone(),
                 db_name: p.database.clone(),

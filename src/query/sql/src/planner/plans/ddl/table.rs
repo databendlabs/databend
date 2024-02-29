@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
 use databend_common_catalog::table::NavigationPoint;
@@ -26,6 +27,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
@@ -36,7 +38,7 @@ pub type TableOptions = BTreeMap<String, String>;
 
 #[derive(Clone, Debug)]
 pub struct CreateTablePlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub tenant: String,
     pub catalog: String,
     pub database: String,
@@ -138,16 +140,29 @@ impl VacuumDropTablePlan {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VacuumTemporaryFilesPlan {
+    pub limit: Option<u64>,
+    pub retain: Option<Duration>,
+}
+
+impl crate::plans::VacuumTemporaryFilesPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![DataField::new(
+            "Files",
+            DataType::String,
+        )]))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VacuumDropTableOption {
-    pub retain_hours: Option<usize>,
     pub dry_run: Option<()>,
     pub limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VacuumTableOption {
-    pub retain_hours: Option<usize>,
     pub dry_run: Option<()>,
 }
 

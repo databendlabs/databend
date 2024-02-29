@@ -102,6 +102,14 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (70, "2023-12-25: Add: datatype.proto Binary type", ),
     (71, "2024-01-02: Add: user.proto/password options", ),
     (72, "2024-01-09: Add: user.proto/CSVFileFormatParams add field `empty_field_as`", ),
+    (73, "2024-01-11: Add: config.proto/StorageConfig add HuggingfaceConfig", ),
+    (74, "2024-01-12: Remove: owner in DatabaseMeta and TableMeta", ),
+    (75, "2024-01-15: ADD: user.proto/CsvFileFormatParams add field `binary_format` and `output_header`", ),
+    (76, "2024-01-18: ADD: ownership.proto and role.proto", ),
+    (77, "2024-01-22: Remove: allow_anonymous in S3 Config", ),
+    (78, "2024-01-29: Refactor: GrantEntry::UserPrivilegeType and ShareGrantEntry::ShareGrantObjectPrivilege use from_bits_truncate deserialize", ),
+    (79, "2024-01-31: Add: udf.proto/UserDefinedFunction add created_on field", ),
+    (80, "2024-02-01: Add: Add: datatype.proto/DataType Geometry type")
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

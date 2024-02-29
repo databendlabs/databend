@@ -270,6 +270,7 @@ pub enum TableReference {
         table: Identifier,
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
+        since_point: Option<TimeTravelPoint>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
@@ -454,6 +455,7 @@ impl Display for TableReference {
                 table,
                 alias,
                 travel_point,
+                since_point,
                 pivot,
                 unpivot,
             } => {
@@ -468,6 +470,14 @@ impl Display for TableReference {
 
                 if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {
                     write!(f, " AT (TIMESTAMP => {ts})")?;
+                }
+
+                if let Some(TimeTravelPoint::Snapshot(sid)) = since_point {
+                    write!(f, " SINCE (SNAPSHOT => {sid})")?;
+                }
+
+                if let Some(TimeTravelPoint::Timestamp(ts)) = since_point {
+                    write!(f, " SINCE (TIMESTAMP => {ts})")?;
                 }
 
                 if let Some(alias) = alias {

@@ -17,7 +17,6 @@ use std::ops::Deref;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
@@ -88,10 +87,9 @@ impl Deref for RaftStore {
     }
 }
 
-#[async_trait]
 impl RaftLogReader<TypeConfig> for RaftStore {
     #[minitrace::trace]
-    async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send + Sync>(
+    async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send>(
         &mut self,
         range: RB,
     ) -> Result<Vec<Entry>, StorageError> {
@@ -107,7 +105,7 @@ impl RaftLogReader<TypeConfig> for RaftStore {
             .range_values(range)
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
         {
-            Ok(entries) => return Ok(entries),
+            Ok(entries) => Ok(entries),
             Err(err) => {
                 raft_metrics::storage::incr_raft_storage_fail("try_get_log_entries", false);
                 Err(err)
@@ -116,7 +114,6 @@ impl RaftLogReader<TypeConfig> for RaftStore {
     }
 }
 
-#[async_trait]
 impl RaftSnapshotBuilder<TypeConfig> for RaftStore {
     #[minitrace::trace]
     async fn build_snapshot(&mut self) -> Result<Snapshot, StorageError> {
@@ -124,7 +121,6 @@ impl RaftSnapshotBuilder<TypeConfig> for RaftStore {
     }
 }
 
-#[async_trait]
 impl RaftStorage<TypeConfig> for RaftStore {
     type LogReader = RaftStore;
     type SnapshotBuilder = RaftStore;
@@ -213,12 +209,10 @@ impl RaftStorage<TypeConfig> for RaftStore {
             .map_to_sto_err(ErrorSubject::Vote, ErrorVerb::Write)
         {
             Err(err) => {
-                return {
-                    raft_metrics::storage::incr_raft_storage_fail("save_vote", true);
-                    Err(err)
-                };
+                raft_metrics::storage::incr_raft_storage_fail("save_vote", true);
+                Err(err)
             }
-            Ok(_) => return Ok(()),
+            Ok(_) => Ok(()),
         }
     }
 
@@ -234,7 +228,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
             .await
             .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)
         {
-            Ok(_) => return Ok(()),
+            Ok(_) => Ok(()),
             Err(err) => {
                 raft_metrics::storage::incr_raft_storage_fail("delete_conflict_logs_since", true);
                 Err(err)
@@ -244,7 +238,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
     #[minitrace::trace]
     async fn purge_logs_upto(&mut self, log_id: LogId) -> Result<(), StorageError> {
-        info!(id = self.id, log_id = as_debug!(&log_id); "purge_logs_upto");
+        info!(id = self.id, log_id = as_debug!(&log_id); "purge_logs_upto: start");
 
         if let Err(err) = self
             .log
@@ -257,17 +251,34 @@ impl RaftStorage<TypeConfig> for RaftStore {
             raft_metrics::storage::incr_raft_storage_fail("purge_logs_upto", true);
             return Err(err);
         };
-        if let Err(err) = self
-            .log
-            .write()
-            .await
-            .range_remove(..=log_id.index)
-            .await
-            .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)
-        {
-            raft_metrics::storage::incr_raft_storage_fail("purge_logs_upto", true);
-            return Err(err);
-        }
+
+        info!(id = self.id, log_id = as_debug!(&log_id); "purge_logs_upto: Done: set_last_purged()");
+
+        let log = self.log.write().await.clone();
+
+        // Purge can be done in another task safely, because:
+        //
+        // - Next time when raft starts, it will read last_purged_log_id without examining the actual first log.
+        //   And junk can be removed next time purge_logs_upto() is called.
+        //
+        // - Purging operates the start of the logs, and only committed logs are purged;
+        //   while append and truncate operates on the end of the logs,
+        //   it is safe to run purge && (append || truncate) concurrently.
+        databend_common_base::runtime::spawn({
+            let id = self.id;
+            async move {
+                info!(id = id, log_id = as_debug!(&log_id); "purge_logs_upto: Start: asynchronous range_remove()");
+
+                let res = log.range_remove(..=log_id.index).await;
+
+                if let Err(err) = res {
+                    error!(id = id, log_id = as_debug!(&log_id); "purge_logs_upto: in asynchronous error: {}", err);
+                    raft_metrics::storage::incr_raft_storage_fail("purge_logs_upto", true);
+                }
+
+                info!(id = id, log_id = as_debug!(&log_id); "purge_logs_upto: Done: asynchronous range_remove()");
+            }
+        });
 
         Ok(())
     }
@@ -298,7 +309,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
                 raft_metrics::storage::incr_raft_storage_fail("append_to_log", true);
                 Err(err)
             }
-            Ok(_) => return Ok(()),
+            Ok(_) => Ok(()),
         }
     }
 
@@ -428,9 +439,9 @@ impl RaftStorage<TypeConfig> for RaftStore {
         {
             Err(err) => {
                 raft_metrics::storage::incr_raft_storage_fail("read_vote", false);
-                return Err(err);
+                Err(err)
             }
-            Ok(vote) => return Ok(vote),
+            Ok(vote) => Ok(vote),
         }
     }
 

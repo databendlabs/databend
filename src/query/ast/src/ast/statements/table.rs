@@ -16,6 +16,9 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::format;
+use std::time::Duration;
+
+use databend_common_meta_app::schema::CreateOption;
 
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
@@ -125,7 +128,7 @@ impl Display for ShowDropTablesStmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateTableStmt {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -141,12 +144,17 @@ pub struct CreateTableStmt {
 impl Display for CreateTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, "OR REPLACE ")?;
+        }
         if self.transient {
             write!(f, "TRANSIENT ")?;
         }
         write!(f, "TABLE ")?;
-        if self.if_not_exists {
-            write!(f, "IF NOT EXISTS ")?;
+        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
+            if if_not_exists {
+                write!(f, "IF NOT EXISTS ")?;
+            }
         }
         write_dot_separated_list(
             f,
@@ -543,6 +551,34 @@ impl Display for VacuumDropTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct VacuumTemporaryFiles {
+    pub limit: Option<u64>,
+    pub retain: Option<Duration>,
+}
+
+impl Display for crate::ast::VacuumTemporaryFiles {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM TEMPORARY FILES ")?;
+        if let Some(retain) = &self.retain {
+            let days = Duration::from_secs(60 * 60 * 24);
+            if retain >= &days {
+                let days = retain.as_secs() / (60 * 60 * 24);
+                write!(f, "RETAIN {days} DAYS ")?;
+            } else {
+                let seconds = retain.as_secs();
+                write!(f, "RETAIN {seconds} SECONDS ")?;
+            }
+        }
+
+        if let Some(limit) = &self.limit {
+            write!(f, " LIMIT {limit}")?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct OptimizeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -645,21 +681,13 @@ pub enum CompactTarget {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VacuumTableOption {
-    pub retain_hours: Option<Expr>,
     pub dry_run: Option<()>,
 }
 
 impl Display for VacuumTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if let Some(retain_hours) = &self.retain_hours {
-            write!(f, "RETAIN {} HOURS", retain_hours)?;
-        }
         if self.dry_run.is_some() {
-            if self.retain_hours.is_some() {
-                write!(f, " DRY RUN")?;
-            } else {
-                write!(f, "DRY RUN")?;
-            }
+            write!(f, "DRY RUN")?;
         }
         Ok(())
     }
@@ -667,22 +695,14 @@ impl Display for VacuumTableOption {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VacuumDropTableOption {
-    pub retain_hours: Option<Expr>,
     pub dry_run: Option<()>,
     pub limit: Option<usize>,
 }
 
 impl Display for VacuumDropTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if let Some(retain_hours) = &self.retain_hours {
-            write!(f, "RETAIN {} HOURS", retain_hours)?;
-        }
         if self.dry_run.is_some() {
-            if self.retain_hours.is_some() {
-                write!(f, " DRY RUN")?;
-            } else {
-                write!(f, "DRY RUN")?;
-            }
+            write!(f, "DRY RUN")?;
         }
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {}", limit)?;
@@ -760,20 +780,11 @@ pub struct ColumnDefinition {
     pub data_type: TypeName,
     pub expr: Option<ColumnExpr>,
     pub comment: Option<String>,
-    pub nullable_constraint: Option<NullableConstraint>,
 }
 
 impl Display for ColumnDefinition {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{} {}", self.name, self.data_type)?;
-
-        if let Some(constraint) = &self.nullable_constraint {
-            match constraint {
-                NullableConstraint::NotNull => write!(f, " NOT NULL")?,
-                NullableConstraint::Null => write!(f, " NULL")?,
-            }
-        }
-
         if let Some(expr) = &self.expr {
             write!(f, "{expr}")?;
         }

@@ -103,7 +103,7 @@ impl<'a> FuseBlock<'a> {
         let limit = self.limit.unwrap_or(usize::MAX);
         let len = std::cmp::min(snapshot.summary.block_count as usize, limit);
 
-        let snapshot_id = snapshot.snapshot_id.simple().to_string().into_bytes();
+        let snapshot_id = snapshot.snapshot_id.simple().to_string();
         let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
         let mut block_location = StringColumnBuilder::with_capacity(len, len);
         let mut block_size = Vec::with_capacity(len);
@@ -131,7 +131,7 @@ impl<'a> FuseBlock<'a> {
 
                 for block in segment.blocks.iter() {
                     let block = block.as_ref();
-                    block_location.put_slice(block.location.0.as_bytes());
+                    block_location.put_str(&block.location.0);
                     block_location.commit_row();
                     block_size.push(block.block_size);
                     file_size.push(block.file_size);
@@ -140,7 +140,7 @@ impl<'a> FuseBlock<'a> {
                         block
                             .bloom_filter_index_location
                             .as_ref()
-                            .map(|s| s.0.as_bytes().to_vec()),
+                            .map(|s| s.0.clone()),
                     );
                     bloom_filter_size.push(block.bloom_filter_index_size);
 
@@ -159,10 +159,7 @@ impl<'a> FuseBlock<'a> {
 
         Ok(DataBlock::new(
             vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(snapshot_id.to_vec())),
-                ),
+                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(snapshot_id))),
                 BlockEntry::new(
                     DataType::Timestamp,
                     Value::Scalar(Scalar::Timestamp(timestamp)),

@@ -79,6 +79,10 @@ impl Interpreter for UpdateInterpreter {
         "UpdateInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -108,8 +112,7 @@ impl Interpreter for UpdateInterpreter {
         let mut build_res = PipelineBuildResult::create();
         if let Some(physical_plan) = physical_plan {
             build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
-                    .await?;
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
             {
                 let hook_operator = HookOperator::create(
                     self.ctx.clone(),
@@ -117,7 +120,8 @@ impl Interpreter for UpdateInterpreter {
                     db_name.to_string(),
                     tbl_name.to_string(),
                     "update".to_string(),
-                    true,
+                    // table lock has been added, no need to check.
+                    false,
                 );
                 hook_operator
                     .execute_refresh(&mut build_res.main_pipeline)
@@ -215,7 +219,7 @@ impl UpdateInterpreter {
 
         let update_list = self.plan.generate_update_list(
             self.ctx.clone(),
-            tbl.schema().into(),
+            tbl.schema_with_stream().into(),
             col_indices.clone(),
             None,
             false,
@@ -303,6 +307,7 @@ impl UpdateInterpreter {
             query_row_id_col,
             update_list,
             computed_list,
+            plan_id: u32::MAX,
         }));
 
         if is_distributed {
@@ -315,8 +320,7 @@ impl UpdateInterpreter {
                 ignore_exchange: false,
             });
         }
-
-        Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
+        let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             snapshot,
             table_info,
@@ -326,6 +330,9 @@ impl UpdateInterpreter {
             merge_meta,
             need_lock: false,
             deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
-        })))
+            plan_id: u32::MAX,
+        }));
+        plan.adjust_plan_id(&mut 0);
+        Ok(plan)
     }
 }

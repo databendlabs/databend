@@ -22,6 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_storages_common_table_meta::table::ChangeType;
 use itertools::Itertools;
 
 use super::ScalarItem;
@@ -95,6 +96,7 @@ pub struct Scan {
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
     pub agg_index: Option<AggIndexInfo>,
+    pub change_type: Option<ChangeType>,
 
     pub statistics: Statistics,
 }
@@ -121,6 +123,7 @@ impl Scan {
             },
             prewhere,
             agg_index: self.agg_index.clone(),
+            change_type: self.change_type.clone(),
         }
     }
 
@@ -163,6 +166,10 @@ impl std::hash::Hash for Scan {
 impl Operator for Scan {
     fn rel_op(&self) -> RelOp {
         RelOp::Scan
+    }
+
+    fn arity(&self) -> usize {
+        0
     }
 
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -270,17 +277,6 @@ impl Operator for Scan {
         _child_index: usize,
         _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        Err(ErrorCode::Internal(
-            "Cannot compute required property for children of scan".to_string(),
-        ))
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _required: &RequiredProperty,
-    ) -> Result<Vec<Vec<RequiredProperty>>> {
         Err(ErrorCode::Internal(
             "Cannot compute required property for children of scan".to_string(),
         ))

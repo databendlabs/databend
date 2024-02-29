@@ -55,4 +55,4 @@ statement ok
 set enable_distributed_copy_into = 0;
 
 statement ok
-set auto_compaction_imperfect_blocks_threshold = 1000;
+set auto_compaction_imperfect_blocks_threshold = 50;

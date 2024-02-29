@@ -196,7 +196,10 @@ build_exceptions! {
     // Cloud control error codes
     CloudControlConnectError(1701),
     CloudControlNotEnabled(1702),
-    IllegalCloudControlMessageFormat(1703)
+    IllegalCloudControlMessageFormat(1703),
+
+    // Geometry errors.
+    GeometryError(1801)
 }
 
 // Meta service errors [2001, 3000].
@@ -232,6 +235,8 @@ build_exceptions! {
     IllegalPasswordPolicy(2213),
     PasswordPolicyIsUsedByUser(2214),
     InvalidPassword(2215),
+    RoleAlreadyExists(2216),
+    IllegalRole(2217),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
@@ -353,6 +358,9 @@ build_exceptions! {
     InvalidOperation(3905),
     StorageOther(4000),
     UnresolvableConflict(4001),
+
+    //transaction error codes
+    CurrentTransactionIsAborted(4002),
 }
 
 // Service errors [5001,6000].

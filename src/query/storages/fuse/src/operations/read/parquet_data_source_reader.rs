@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::table_context::TableContext;
@@ -31,6 +30,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
+use log::debug;
 
 use super::parquet_data_source::ParquetDataSource;
 use crate::fuse_part::FusePartInfo;
@@ -242,7 +242,6 @@ impl Processor for ReadParquetDataSource<false> {
                     .ctx
                     .get_min_max_runtime_filter_with_id(self.table_index),
             );
-
             let mut fuse_part_infos = Vec::with_capacity(parts.len());
             for part in parts.into_iter() {
                 if runtime_filter_pruner(
@@ -261,7 +260,7 @@ impl Processor for ReadParquetDataSource<false> {
                 let virtual_reader = self.virtual_reader.clone();
 
                 chunks.push(async move {
-                    tokio::spawn(async_backtrace::location!().frame(async move {
+                    databend_common_base::runtime::spawn(async move {
                         let part = FusePartInfo::from_part(&part)?;
 
                         if let Some(index_reader) = index_reader.as_ref() {
@@ -308,12 +307,13 @@ impl Processor for ReadParquetDataSource<false> {
                             .await?;
 
                         Ok(ParquetDataSource::Normal((source, virtual_source)))
-                    }))
+                    })
                     .await
                     .unwrap()
                 });
             }
 
+            debug!("ReadParquetDataSource parts: {}", chunks.len());
             self.output_data = Some((
                 fuse_part_infos,
                 futures::future::try_join_all(chunks).await?,

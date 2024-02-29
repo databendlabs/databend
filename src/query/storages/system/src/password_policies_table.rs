@@ -62,8 +62,8 @@ impl AsyncSystemTable for PasswordPoliciesTable {
         let mut created_on_columns = Vec::with_capacity(password_policies.len());
         let mut updated_on_columns = Vec::with_capacity(password_policies.len());
         for password_policy in password_policies {
-            names.push(password_policy.name.as_bytes().to_vec());
-            comments.push(password_policy.comment.as_bytes().to_vec());
+            names.push(password_policy.name.clone());
+            comments.push(password_policy.comment.clone());
 
             let values = vec![
                 format!("MIN_LENGTH={}", password_policy.min_length),
@@ -85,7 +85,7 @@ impl AsyncSystemTable for PasswordPoliciesTable {
                 format!("HISTORY={}", password_policy.history),
             ];
             let option = values.join(", ");
-            options.push(option.as_bytes().to_vec());
+            options.push(option);
 
             created_on_columns.push(password_policy.create_on.timestamp_micros());
             updated_on_columns.push(password_policy.update_on.map(|u| u.timestamp_micros()));

@@ -27,15 +27,15 @@ blake3 = "1.3.1"
 borsh = { workspace = true, features = ["derive"] }
 bstr = "1.0.1"
 bumpalo = { workspace = true }
-bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 crc32fast = "1.3.2"
 criterion = "0.4"
 ctor = "0.1.26"
 ethnum = { workspace = true }
-geo = "0.24.0"
+geo = { workspace = true }
 geohash = "0.13.0"
+geozero = { workspace = true }
 h3o = "0.4.0"
 hex = "0.4.3"
 itertools = { workspace = true }
@@ -51,15 +51,18 @@ ordered-float = { workspace = true, features = [
     "serde",
     "rand",
 ] }
+#proj = { version = "0.27.2", features = ["geo-types", "bundled_proj"] }
 rand = { workspace = true }
 regex = { workspace = true }
 roaring = "0.10.1"
+#scroll = "0.12.0"
 sha1 = "0.10.5"
 sha2 = "0.10.6"
 simdutf8 = "0.1.4"
+simple_hll = { version = "0.0.1", features = ["serde_borsh"] }
 siphasher = "0.3"
-streaming_algorithms = { git = "https://github.com/ariesdevil/streaming_algorithms", rev = "2839d5d" }
 strength_reduce = "0.2.3"
+stringslice = "0.2.0"
 twox-hash = "1.6.3"
 
 [dev-dependencies]

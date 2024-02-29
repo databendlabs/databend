@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::schema::CreateOption;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
@@ -59,6 +60,9 @@ pub enum Statement {
         show_options: Option<ShowOptions>,
     },
     ShowFunctions {
+        show_options: Option<ShowOptions>,
+    },
+    ShowUserFunctions {
         show_options: Option<ShowOptions>,
     },
     ShowTableFunctions {
@@ -131,6 +135,7 @@ pub enum Statement {
     OptimizeTable(OptimizeTableStmt),
     VacuumTable(VacuumTableStmt),
     VacuumDropTable(VacuumDropTableStmt),
+    VacuumTemporaryFiles(VacuumTemporaryFiles),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
     // Columns
@@ -216,7 +221,7 @@ pub enum Statement {
 
     // UserDefinedFileFormat
     CreateFileFormat {
-        if_not_exists: bool,
+        create_option: CreateOption,
         name: String,
         file_format_options: FileFormatOptionsAst,
     },
@@ -275,6 +280,11 @@ pub enum Statement {
     DescribePipe(DescribePipeStmt),
     DropPipe(DropPipeStmt),
     AlterPipe(AlterPipeStmt),
+
+    // Transactions
+    Begin,
+    Commit,
+    Abort,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -388,6 +398,12 @@ impl Display for Statement {
                     write!(f, " {show_options}")?;
                 }
             }
+            Statement::ShowUserFunctions { show_options } => {
+                write!(f, "SHOW USER FUNCTIONS")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
             Statement::ShowTableFunctions { show_options } => {
                 write!(f, "SHOW TABLE_FUNCTIONS")?;
                 if let Some(show_options) = show_options {
@@ -463,6 +479,7 @@ impl Display for Statement {
             Statement::OptimizeTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumDropTable(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumTemporaryFiles(stmt) => write!(f, "{stmt}")?,
             Statement::AnalyzeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ExistsTable(stmt) => write!(f, "{stmt}")?,
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
@@ -558,13 +575,19 @@ impl Display for Statement {
             }
             Statement::DescribeStage { stage_name } => write!(f, "DESC STAGE {stage_name}")?,
             Statement::CreateFileFormat {
-                if_not_exists,
+                create_option,
                 name,
                 file_format_options,
             } => {
-                write!(f, "CREATE FILE_FORMAT")?;
-                if *if_not_exists {
-                    write!(f, " IF NOT EXISTS")?;
+                write!(f, "CREATE")?;
+                if let CreateOption::CreateOrReplace = create_option {
+                    write!(f, " OR REPLACE")?;
+                }
+                write!(f, " FILE_FORMAT")?;
+                if let CreateOption::CreateIfNotExists(if_not_exists) = create_option {
+                    if *if_not_exists {
+                        write!(f, " IF NOT EXISTS")?;
+                    }
                 }
                 write!(f, " {name}")?;
                 write!(f, " {file_format_options}")?;
@@ -623,6 +646,9 @@ impl Display for Statement {
             Statement::DropConnection(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeConnection(stmt) => write!(f, "{stmt}")?,
             Statement::ShowConnections(stmt) => write!(f, "{stmt}")?,
+            Statement::Begin => write!(f, "BEGIN")?,
+            Statement::Commit => write!(f, "COMMIT")?,
+            Statement::Abort => write!(f, "ABORT")?,
         }
         Ok(())
     }

@@ -50,7 +50,7 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
     leader
         .raft
         .wait(timeout())
-        .log(Some(log_index), "leader log index")
+        .applied_index(Some(log_index), "leader log index")
         .await?;
 
     let key = "expire-kv";
@@ -102,7 +102,7 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
     learner
         .raft
         .wait(timeout())
-        .log(Some(log_index), "learner received all logs")
+        .applied_index(Some(log_index), "learner received all logs")
         .await?;
 
     // A learner should use the time embedded in raft-log to expire records.

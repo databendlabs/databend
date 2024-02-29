@@ -101,7 +101,7 @@ impl<'a> FuseSegment<'a> {
         let mut row_count: Vec<u64> = Vec::with_capacity(len);
         let mut compressed: Vec<u64> = Vec::with_capacity(len);
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
-        let mut file_location: Vec<Vec<u8>> = Vec::with_capacity(len);
+        let mut file_location: Vec<String> = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
@@ -125,7 +125,7 @@ impl<'a> FuseSegment<'a> {
                 row_count.push(segment.summary.row_count);
                 compressed.push(segment.summary.compressed_byte_size);
                 uncompressed.push(segment.summary.uncompressed_byte_size);
-                file_location.push(segment_locations[idx].0.clone().into_bytes());
+                file_location.push(segment_locations[idx].0.clone());
 
                 row_num += 1;
                 if row_num >= limit {

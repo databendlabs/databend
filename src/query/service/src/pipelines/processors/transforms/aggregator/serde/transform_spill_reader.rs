@@ -17,6 +17,8 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
@@ -134,6 +136,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
             match meta {
                 AggregateMeta::Spilled(_) => unreachable!(),
                 AggregateMeta::Spilling(_) => unreachable!(),
+                AggregateMeta::AggregateHashTable(_) => unreachable!(),
                 AggregateMeta::HashTable(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
@@ -175,6 +178,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::Spilled(_) => unreachable!(),
                 AggregateMeta::Spilling(_) => unreachable!(),
                 AggregateMeta::HashTable(_) => unreachable!(),
+                AggregateMeta::AggregateHashTable(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
                     let instant = Instant::now();
@@ -199,30 +203,40 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                             let location = payload.location.clone();
                             let operator = self.operator.clone();
                             let data_range = payload.data_range.clone();
-                            read_data.push(databend_common_base::base::tokio::spawn(
-                                async_backtrace::frame!(async move {
-                                    let instant = Instant::now();
-                                    let data =
-                                        operator.read_with(&location).range(data_range).await?;
+                            read_data.push(databend_common_base::runtime::spawn(async move {
+                                let instant = Instant::now();
+                                let data = operator.read_with(&location).range(data_range).await?;
 
-                                    // perf
-                                    {
-                                        metrics_inc_aggregate_spill_read_count();
-                                        metrics_inc_aggregate_spill_read_bytes(data.len() as u64);
-                                        metrics_inc_aggregate_spill_read_milliseconds(
-                                            instant.elapsed().as_millis() as u64,
-                                        );
-                                    }
-
-                                    info!(
-                                        "Read aggregate spill {} successfully, elapsed: {:?}",
-                                        location,
-                                        instant.elapsed()
+                                // perf
+                                {
+                                    metrics_inc_aggregate_spill_read_count();
+                                    metrics_inc_aggregate_spill_read_bytes(data.len() as u64);
+                                    metrics_inc_aggregate_spill_read_milliseconds(
+                                        instant.elapsed().as_millis() as u64,
                                     );
 
-                                    Ok(data)
-                                }),
-                            ));
+                                    Profile::record_usize_profile(
+                                        ProfileStatisticsName::SpillReadCount,
+                                        1,
+                                    );
+                                    Profile::record_usize_profile(
+                                        ProfileStatisticsName::SpillReadBytes,
+                                        data.len(),
+                                    );
+                                    Profile::record_usize_profile(
+                                        ProfileStatisticsName::SpillReadTime,
+                                        instant.elapsed().as_millis() as usize,
+                                    );
+                                }
+
+                                info!(
+                                    "Read aggregate spill {} successfully, elapsed: {:?}",
+                                    location,
+                                    instant.elapsed()
+                                );
+
+                                Ok(data)
+                            }));
                         }
                     }
 

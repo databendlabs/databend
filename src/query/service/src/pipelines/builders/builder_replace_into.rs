@@ -100,6 +100,7 @@ impl PipelineBuilder {
             segments,
             block_slots,
             need_insert,
+            ..
         } = replace;
         let max_threads = self.settings.get_max_threads()?;
         let segment_partition_num = std::cmp::min(segments.len(), max_threads as usize);
@@ -158,6 +159,7 @@ impl PipelineBuilder {
             return Ok(());
         }
 
+        // The Block Size and Rows is promised by DataSource by user.
         if segment_partition_num == 0 {
             let dummy_item = create_dummy_item();
             //                      ┌──────────────────────┐            ┌──────────────────┐
@@ -258,9 +260,10 @@ impl PipelineBuilder {
             catalog_info,
             select_ctx,
             table_level_range_index,
-            table_schema,
+            target_schema,
             need_insert,
             delete_when,
+            ..
         } = deduplicate;
 
         let tbl = self
@@ -283,7 +286,7 @@ impl PipelineBuilder {
                 false,
             )?;
 
-            let mut target_schema: DataSchema = table_schema.clone().into();
+            let mut target_schema: DataSchema = target_schema.clone().into();
             if let Some((_, delete_column)) = delete_when {
                 delete_column_idx = select_schema.index_of(delete_column.as_str())?;
                 let delete_column = select_schema.field(delete_column_idx).clone();
@@ -313,11 +316,11 @@ impl PipelineBuilder {
             }
         }
 
-        Self::build_fill_missing_columns_pipeline(
+        Self::fill_and_reorder_columns(
             self.ctx.clone(),
             &mut self.main_pipeline,
             tbl.clone(),
-            Arc::new(table_schema.clone().into()),
+            Arc::new(target_schema.clone().into()),
         )?;
 
         let _ = table.cluster_gen_for_append(
@@ -358,7 +361,7 @@ impl PipelineBuilder {
                 on_conflicts.clone(),
                 cluster_keys,
                 bloom_filter_column_indexes.clone(),
-                table_schema.as_ref(),
+                &table.schema(),
                 *table_is_empty,
                 table_level_range_index.clone(),
                 delete_when.map(|(expr, _)| (expr, delete_column_idx)),
@@ -371,7 +374,7 @@ impl PipelineBuilder {
                 on_conflicts.clone(),
                 cluster_keys,
                 bloom_filter_column_indexes.clone(),
-                table_schema.as_ref(),
+                &table.schema(),
                 *table_is_empty,
                 table_level_range_index.clone(),
                 delete_when.map(|_| delete_column_idx),

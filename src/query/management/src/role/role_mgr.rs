@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
-use databend_common_exception::ToErrorCode;
 use databend_common_meta_api::reply::txn_reply_to_api_result;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
@@ -24,52 +23,49 @@ use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::RoleIdent;
 use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::TenantOwnershipObject;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
-use databend_common_meta_types::IntoSeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::NonEmptyStr;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
 
 use crate::role::role_api::RoleApi;
-
-static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
-static OBJECT_OWNER_API_KEY_PREFIX: &str = "__fd_object_owners";
-
-static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
-static BUILTIN_ROLE_PUBLIC: &str = "public";
+use crate::serde::check_and_upgrade_to_pb;
+use crate::serialize_struct;
 
 static TXN_MAX_RETRY_TIMES: u32 = 5;
 
+static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
+
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
-    role_prefix: String,
-    object_owner_prefix: String,
+    tenant: NonEmptyString,
 }
 
 impl RoleMgr {
     pub fn create(
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
-        tenant: &str,
-    ) -> Result<Self, ErrorCode> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while role mgr create)",
-            ));
-        }
-        let tenant = tenant.to_string();
-        Ok(RoleMgr {
+        tenant: NonEmptyStr,
+    ) -> Self {
+        RoleMgr {
             kv_api,
-            role_prefix: format!("{}/{}", ROLE_API_KEY_PREFIX, tenant),
-            object_owner_prefix: format!("{}/{}", OBJECT_OWNER_API_KEY_PREFIX, tenant),
-        })
+            tenant: tenant.into(),
+        }
     }
 
     #[async_backtrace::framed]
@@ -78,11 +74,11 @@ impl RoleMgr {
         role_info: &RoleInfo,
         seq: MatchSeq,
     ) -> Result<u64, ErrorCode> {
-        let key = self.make_role_key(role_info.identity());
-        let value = serde_json::to_vec(&role_info)?;
+        let key = self.role_key(role_info.identity());
+        let value = serialize_struct(role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
-        let kv_api = self.kv_api.clone();
-        let res = kv_api
+        let res = self
+            .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Update(value), None))
             .await?;
         match res.result {
@@ -94,35 +90,43 @@ impl RoleMgr {
         }
     }
 
-    fn make_role_key(&self, role: &str) -> String {
-        format!("{}/{}", self.role_prefix, role)
+    #[async_backtrace::framed]
+    async fn upgrade_to_pb(
+        &self,
+        key: String,
+        value: Vec<u8>,
+        seq: MatchSeq,
+    ) -> Result<UpsertKVReply, MetaError> {
+        self.kv_api
+            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Update(value), None))
+            .await
     }
 
-    fn make_object_owner_key(&self, object: &OwnershipObject) -> String {
-        match object {
-            OwnershipObject::Database {
-                catalog_name: _,
-                db_id: database_id,
-            } => {
-                format!(
-                    "{}/database-by-id/{}",
-                    self.object_owner_prefix, database_id
-                )
-            }
-            OwnershipObject::Table {
-                catalog_name: _,
-                db_id: _,
-                table_id,
-            } => {
-                format!("{}/table-by-id/{}", self.object_owner_prefix, table_id)
-            }
-            OwnershipObject::Stage { name } => {
-                format!("{}/stage-by-name/{}", self.object_owner_prefix, name)
-            }
-            OwnershipObject::UDF { name } => {
-                format!("{}/udf-by-name/{}", self.object_owner_prefix, name)
-            }
-        }
+    /// Build meta-service for a role grantee, which is a tenant's database, table, stage, udf, etc.
+    fn ownership_object_key(&self, object: &OwnershipObject) -> String {
+        let grantee = TenantOwnershipObject::new(Tenant::new(self.tenant.as_str()), object.clone());
+        grantee.to_string_key()
+    }
+
+    /// Build meta-service for a listing keys belongs to the tenant.
+    ///
+    /// In form of `__fd_object_owners/<tenant>/`.
+    fn ownership_object_prefix(&self) -> String {
+        let dummy = OwnershipObject::UDF {
+            name: "dummy".to_string(),
+        };
+        let grantee = TenantOwnershipObject::new(Tenant::new(self.tenant.as_str()), dummy);
+        grantee.tenant_prefix()
+    }
+
+    fn role_key(&self, role: &str) -> String {
+        let r = RoleIdent::new(Tenant::new(self.tenant.as_str()), role.to_string());
+        r.to_string_key()
+    }
+
+    fn role_prefix(&self) -> String {
+        let r = RoleIdent::new(Tenant::new(self.tenant.as_str()), "dummy".to_string());
+        r.tenant_prefix()
     }
 }
 
@@ -132,11 +136,10 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn add_role(&self, role_info: RoleInfo) -> databend_common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
-        let key = self.make_role_key(role_info.identity());
-        let value = serde_json::to_vec(&role_info)?;
+        let key = self.role_key(role_info.identity());
+        let value = serialize_struct(&role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
-        let kv_api = self.kv_api.clone();
-        let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(
+        let upsert_kv = self.kv_api.upsert_kv(UpsertKVReq::new(
             &key,
             match_seq,
             Operation::Update(value),
@@ -144,7 +147,7 @@ impl RoleApi for RoleMgr {
         ));
 
         let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
-            ErrorCode::UserAlreadyExists(format!("Role '{}' already exists.", role_info.name))
+            ErrorCode::RoleAlreadyExists(format!("Role '{}' already exists.", role_info.name))
         })?;
 
         Ok(res_seq)
@@ -153,13 +156,25 @@ impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>, ErrorCode> {
-        let key = self.make_role_key(role);
+        let key = self.role_key(role);
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownRole(format!("Role '{}' does not exist.", role)))?;
 
         match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(seq_value.into_seqv()?),
+            Ok(_) => {
+                let data = check_and_upgrade_to_pb(
+                    key,
+                    &seq_value,
+                    self.kv_api.clone(),
+                    ErrorCode::UnknownRole,
+                    || format!("Role '{}' does not exist.", role),
+                )
+                .await?
+                .data;
+
+                Ok(SeqV::new(seq_value.seq, data))
+            }
             Err(_) => Err(ErrorCode::UnknownRole(format!(
                 "Role '{}' does not exist.",
                 role
@@ -170,15 +185,46 @@ impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
-        let role_prefix = self.role_prefix.clone();
-        let kv_api = self.kv_api.clone();
-        let values = kv_api.prefix_list_kv(role_prefix.as_str()).await?;
+        let role_prefix = self.role_prefix();
+        let values = self.kv_api.prefix_list_kv(role_prefix.as_str()).await?;
 
         let mut r = vec![];
-        for (_key, val) in values {
-            let u = serde_json::from_slice::<RoleInfo>(&val.data)
-                .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
+        for (key, val) in values {
+            let u = check_and_upgrade_to_pb(
+                key,
+                &val,
+                self.kv_api.clone(),
+                ErrorCode::UnknownRole,
+                || "",
+            )
+            .await?
+            .data;
+            r.push(SeqV::new(val.seq, u));
+        }
 
+        Ok(r)
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
+        let object_owner_prefix = self.ownership_object_prefix();
+        let values = self
+            .kv_api
+            .prefix_list_kv(object_owner_prefix.as_str())
+            .await?;
+
+        let mut r = vec![];
+        for (key, val) in values {
+            let u = check_and_upgrade_to_pb(
+                key,
+                &val,
+                self.kv_api.clone(),
+                ErrorCode::UnknownRole,
+                || "",
+            )
+            .await?
+            .data;
             r.push(SeqV::new(val.seq, u));
         }
 
@@ -224,12 +270,17 @@ impl RoleApi for RoleMgr {
     ) -> databend_common_exception::Result<()> {
         let old_role = self.get_ownership(object).await?.map(|o| o.role);
         let grant_object = convert_to_grant_obj(object);
-        let owner_key = self.make_object_owner_key(object);
 
-        let owner_value = serde_json::to_vec(&OwnershipInfo {
-            object: object.clone(),
-            role: new_role.to_string(),
-        })?;
+        let owner_key = self.ownership_object_key(object);
+
+        let owner_value = serialize_struct(
+            &OwnershipInfo {
+                object: object.clone(),
+                role: new_role.to_string(),
+            },
+            ErrorCode::IllegalUserInfoFormat,
+            || "",
+        )?;
 
         let mut condition = vec![];
         let mut if_then = vec![txn_op_put(&owner_key, owner_value.clone())];
@@ -237,7 +288,7 @@ impl RoleApi for RoleMgr {
         if let Some(old_role) = old_role {
             // BUILTIN role or Dropped role may get err, no need to revoke
             if let Ok(seqv) = self.get_role(&old_role.to_owned(), MatchSeq::GE(1)).await {
-                let old_key = self.make_role_key(&old_role);
+                let old_key = self.role_key(&old_role);
                 let old_seq = seqv.seq;
                 let mut old_role_info = seqv.data;
                 old_role_info.grants.revoke_privileges(
@@ -245,12 +296,16 @@ impl RoleApi for RoleMgr {
                     make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
                 );
                 condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                if_then.push(txn_op_put(&old_key, serde_json::to_vec(&old_role_info)?));
+                if_then.push(txn_op_put(
+                    &old_key,
+                    serialize_struct(&old_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
+                ));
             }
         }
 
-        if new_role != BUILTIN_ROLE_ACCOUNT_ADMIN && new_role != BUILTIN_ROLE_PUBLIC {
-            let new_key = self.make_role_key(new_role);
+        // account_admin has all privilege, no need to grant ownership.
+        if new_role != BUILTIN_ROLE_ACCOUNT_ADMIN {
+            let new_key = self.role_key(new_role);
             let SeqV {
                 seq: new_seq,
                 data: mut new_role_info,
@@ -261,7 +316,10 @@ impl RoleApi for RoleMgr {
                 make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
             );
             condition.push(txn_cond_seq(&new_key, Eq, new_seq));
-            if_then.push(txn_op_put(&new_key, serde_json::to_vec(&new_role_info)?));
+            if_then.push(txn_op_put(
+                &new_key,
+                serialize_struct(&new_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
+            ));
         }
 
         let mut retry = 0;
@@ -293,14 +351,25 @@ impl RoleApi for RoleMgr {
         &self,
         object: &OwnershipObject,
     ) -> databend_common_exception::Result<Option<OwnershipInfo>> {
-        let key = self.make_object_owner_key(object);
+        let key = self.ownership_object_key(object);
+
         let res = self.kv_api.get_kv(&key).await?;
-        let res_value = match res {
+        let seq_value = match res {
             Some(value) => value,
             None => return Ok(None),
         };
-        let ownership: SeqV<OwnershipInfo> = res_value.into_seqv()?;
-        Ok(Some(ownership.data))
+
+        // if can not get ownership, will directly return None.
+        let seq_val = check_and_upgrade_to_pb(
+            key,
+            &seq_value,
+            self.kv_api.clone(),
+            ErrorCode::UnknownRole,
+            || "",
+        )
+        .await?;
+
+        Ok(Some(seq_val.data))
     }
 
     #[async_backtrace::framed]
@@ -310,14 +379,15 @@ impl RoleApi for RoleMgr {
         object: &OwnershipObject,
     ) -> databend_common_exception::Result<()> {
         let role = self.get_ownership(object).await?.map(|o| o.role);
-        let owner_key = self.make_object_owner_key(object);
+
+        let owner_key = self.ownership_object_key(object);
 
         let mut if_then = vec![txn_op_del(&owner_key)];
         let mut condition = vec![];
 
         if let Some(role) = role {
             if let Ok(seqv) = self.get_role(&role.to_owned(), MatchSeq::GE(1)).await {
-                let old_key = self.make_role_key(&role);
+                let old_key = self.role_key(&role);
                 let grant_object = convert_to_grant_obj(object);
                 let old_seq = seqv.seq;
                 let mut old_role_info = seqv.data;
@@ -326,7 +396,10 @@ impl RoleApi for RoleMgr {
                     make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
                 );
                 condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                if_then.push(txn_op_put(&old_key, serde_json::to_vec(&old_role_info)?));
+                if_then.push(txn_op_put(
+                    &old_key,
+                    serialize_struct(&old_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
+                ));
             }
         }
 
@@ -356,19 +429,17 @@ impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<(), ErrorCode> {
-        let key = self.make_role_key(&role);
-        let kv_api = self.kv_api.clone();
-        let res = kv_api
+        let key = self.role_key(&role);
+
+        let res = self
+            .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
             .await?;
-        if res.prev.is_some() && res.result.is_none() {
-            Ok(())
-        } else {
-            Err(ErrorCode::UnknownRole(format!(
-                "Role '{}' does not exist.",
-                role
-            )))
-        }
+
+        res.removed_or_else(|_p| {
+            ErrorCode::UnknownRole(format!("Role '{}' does not exist.", role))
+        })?;
+        Ok(())
     }
 }
 

@@ -14,7 +14,6 @@
 
 use core::ops::Range;
 
-use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::rangemap::RangeMap;
@@ -110,7 +109,7 @@ impl EventDispatcher {
             current_watcher_id: 1,
         };
 
-        let _h = tokio::spawn(dispatcher.main());
+        let _h = databend_common_base::runtime::spawn(dispatcher.main());
 
         event_tx
     }

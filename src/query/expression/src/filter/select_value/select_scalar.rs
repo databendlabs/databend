@@ -18,14 +18,16 @@ use crate::filter::SelectStrategy;
 use crate::filter::Selector;
 use crate::types::ValueType;
 use crate::Scalar;
-use crate::SelectOp;
 
 impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
     // Select indices by comparing two scalars.
-    pub(crate) fn select_scalars<T: ValueType>(
+    pub(crate) fn select_scalars<
+        T: ValueType,
+        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
+    >(
         &self,
-        op: &SelectOp,
+        cmp: C,
         left: Scalar,
         right: Scalar,
         true_selection: &mut [u32],
@@ -39,7 +41,7 @@ impl<'a> Selector<'a> {
         let left = T::try_downcast_scalar(&left).unwrap();
         let right = right.as_ref();
         let right = T::try_downcast_scalar(&right).unwrap();
-        let result = T::compare_operation(op)(left, right);
+        let result = cmp(left, right);
         let count = self.select_boolean_scalar_adapt(
             result,
             true_selection,

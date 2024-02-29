@@ -20,10 +20,14 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateStagePlan;
+use databend_common_storages_stage::StageTable;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -46,6 +50,10 @@ impl CreateUserStageInterpreter {
 impl Interpreter for CreateUserStageInterpreter {
     fn name(&self) -> &str {
         "CreateUserStageInterpreter"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
     }
 
     #[minitrace::trace]
@@ -74,17 +82,38 @@ impl Interpreter for CreateUserStageInterpreter {
             )));
         };
 
-        if user_stage.stage_type != StageType::External {
-            let op = self.ctx.get_data_operator()?.operator();
-            op.create_dir(&user_stage.stage_prefix()).await?
-        }
+        let old_stage = match plan.create_option {
+            CreateOption::CreateOrReplace => user_mgr
+                .get_stage(&plan.tenant, &user_stage.stage_name)
+                .await
+                .ok(),
+            _ => None,
+        };
 
         let mut user_stage = user_stage;
         user_stage.creator = Some(self.ctx.get_current_user()?.identity());
         user_stage.created_on = Utc::now();
-        let _create_stage = user_mgr
-            .add_stage(&plan.tenant, user_stage, plan.if_not_exists)
+        let _ = user_mgr
+            .add_stage(&plan.tenant, user_stage.clone(), &plan.create_option)
             .await?;
+
+        // when create or replace stage success, if old stage is not External stage, remove stage files
+        if let Some(stage) = old_stage {
+            if stage.stage_type != StageType::External {
+                let op = StageTable::get_op(&stage)?;
+                op.remove_all("/").await?;
+                info!(
+                    "create or replace stage {:?} with all objects removed in stage",
+                    user_stage.stage_name
+                );
+            }
+        }
+
+        // create dir if new stage if not external stage
+        if user_stage.stage_type != StageType::External {
+            let op = self.ctx.get_data_operator()?.operator();
+            op.create_dir(&user_stage.stage_prefix()).await?
+        }
 
         // Grant ownership as the current role
         let tenant = self.ctx.get_tenant();
@@ -98,6 +127,7 @@ impl Interpreter for CreateUserStageInterpreter {
                     &current_role.name,
                 )
                 .await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         Ok(PipelineBuildResult::create())

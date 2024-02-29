@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::Utc;
 use databend_common_ast::ast::AlterUDFStmt;
 use databend_common_ast::ast::CreateUDFStmt;
 use databend_common_ast::ast::Identifier;
@@ -58,6 +59,7 @@ impl Binder {
                         parameters: validator.parameters,
                         definition: definition.to_string(),
                     }),
+                    created_on: Utc::now(),
                 })
             }
             UDFDefinition::UDFServer {
@@ -113,6 +115,7 @@ impl Binder {
                         handler: handler.clone(),
                         language: language.clone(),
                     }),
+                    created_on: Utc::now(),
                 })
             }
         }
@@ -126,7 +129,7 @@ impl Binder {
             .bind_udf_definition(&stmt.udf_name, &stmt.description, &stmt.definition)
             .await?;
         Ok(Plan::CreateUDF(Box::new(CreateUDFPlan {
-            if_not_exists: stmt.if_not_exists,
+            create_option: stmt.create_option,
             udf,
         })))
     }

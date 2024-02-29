@@ -14,24 +14,27 @@
 
 use nom::combinator::map;
 
+use super::statement::parse_create_option;
 use crate::ast::CreateStreamStmt;
 use crate::ast::DescribeStreamStmt;
 use crate::ast::DropStreamStmt;
 use crate::ast::ShowStreamsStmt;
 use crate::ast::Statement;
 use crate::ast::StreamPoint;
+use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
 use crate::parser::statement::show_limit;
 use crate::parser::token::TokenKind::*;
 use crate::rule;
 use crate::util::dot_separated_idents_1_to_2;
 use crate::util::dot_separated_idents_1_to_3;
+use crate::util::map_res;
 use crate::util::IResult;
 use crate::Input;
 
 pub fn stream_table(i: Input) -> IResult<Statement> {
     rule!(
-         #create_stream: "`CREATE STREAM [IF NOT EXISTS] [<database>.]<stream> ON TABLE [<database>.]<table> [<stream_point>] [COMMENT = '<string_literal>']`"
+         #create_stream: "`CREATE [OR REPLACE] STREAM [IF NOT EXISTS] [<database>.]<stream> ON TABLE [<database>.]<table> [<stream_point>] [COMMENT = '<string_literal>']`"
          | #drop_stream: "`DROP STREAM [IF EXISTS] [<database>.]<stream>`"
          | #show_streams: "`SHOW [FULL] STREAMS [FROM <database>] [<show_limit>]`"
          | #describe_stream: "`DESCRIBE STREAM [<database>.]<stream>`"
@@ -39,16 +42,18 @@ pub fn stream_table(i: Input) -> IResult<Statement> {
 }
 
 fn create_stream(i: Input) -> IResult<Statement> {
-    map(
+    map_res(
         rule! {
-            CREATE ~ STREAM ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ (OR ~ REPLACE)? ~ STREAM ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ ON ~ TABLE ~ #dot_separated_idents_1_to_2
             ~ ( #stream_point )?
+            ~ ( APPEND_ONLY ~ "=" ~ #literal_bool )?
             ~ ( COMMENT ~ "=" ~ #literal_string )?
         },
         |(
             _,
+            opt_or_replace,
             _,
             opt_if_not_exists,
             (catalog, database, stream),
@@ -56,18 +61,24 @@ fn create_stream(i: Input) -> IResult<Statement> {
             _,
             (table_database, table),
             stream_point,
+            opt_append_only,
             opt_comment,
         )| {
-            Statement::CreateStream(CreateStreamStmt {
-                if_not_exists: opt_if_not_exists.is_some(),
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateStream(CreateStreamStmt {
+                create_option,
                 catalog,
                 database,
                 stream,
                 table_database,
                 table,
                 stream_point,
+                append_only: opt_append_only
+                    .map(|(_, _, append_only)| append_only)
+                    .unwrap_or(true),
                 comment: opt_comment.map(|(_, _, comment)| comment),
-            })
+            }))
         },
     )(i)
 }

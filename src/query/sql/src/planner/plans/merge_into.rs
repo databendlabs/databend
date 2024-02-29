@@ -68,6 +68,15 @@ pub struct MergeInto {
     pub merge_type: MergeIntoType,
     pub distributed: bool,
     pub change_join_order: bool,
+    // when we use target table as build side or insert only, we will remove rowid columns.
+    pub row_id_index: IndexType,
+    pub split_idx: IndexType,
+    // an optimization:
+    // if it's full_operation/mactehd only and we have only one update without condition here, we shouldn't run
+    // evaluator, we can just do projection to get the right columns.But the limitation is below:
+    // `update *`` or `update set t1.a = t2.a ...`, the right expr on the `=` must be only a column,
+    // we don't support complex expressions.
+    pub can_try_update_column_only: bool,
 }
 
 impl std::fmt::Debug for MergeInto {
@@ -81,6 +90,10 @@ impl std::fmt::Debug for MergeInto {
             .field("matched", &self.matched_evaluators)
             .field("unmatched", &self.unmatched_evaluators)
             .field("distributed", &self.distributed)
+            .field(
+                "can_try_update_column_only",
+                &self.can_try_update_column_only,
+            )
             .finish()
     }
 }

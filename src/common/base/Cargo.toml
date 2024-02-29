@@ -28,7 +28,6 @@ databend-common-exception = { path = "../exception" }
 
 # Crates.io dependencies
 async-backtrace = { workspace = true }
-async-channel = "2"
 async-trait = { workspace = true }
 bytesize = "1.1.0"
 ctrlc = { version = "3.2.3", features = ["termination"] }
@@ -48,6 +47,7 @@ pprof = { version = "0.11.1", features = [
     "protobuf",
 ] }
 regex = { workspace = true }
+replace_with = "0.1.7"
 semver = { workspace = true }
 serde = { workspace = true }
 state = "0.5"

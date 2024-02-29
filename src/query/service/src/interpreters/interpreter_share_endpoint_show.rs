@@ -42,6 +42,10 @@ impl Interpreter for ShowShareEndpointInterpreter {
         "ShowShareEndpointInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
@@ -49,19 +53,19 @@ impl Interpreter for ShowShareEndpointInterpreter {
             .get_share_endpoint(self.plan.clone().into())
             .await?;
 
-        let mut endpoints: Vec<Vec<u8>> = vec![];
-        let mut urls: Vec<Vec<u8>> = vec![];
-        let mut to_tenants: Vec<Vec<u8>> = vec![];
-        let mut args: Vec<Vec<u8>> = vec![];
-        let mut comments: Vec<Vec<u8>> = vec![];
-        let mut created_on_vec: Vec<Vec<u8>> = vec![];
+        let mut endpoints: Vec<String> = vec![];
+        let mut urls: Vec<String> = vec![];
+        let mut to_tenants: Vec<String> = vec![];
+        let mut args: Vec<String> = vec![];
+        let mut comments: Vec<String> = vec![];
+        let mut created_on_vec: Vec<String> = vec![];
         for (endpoint, meta) in resp.share_endpoint_meta_vec {
-            endpoints.push(endpoint.endpoint.clone().as_bytes().to_vec());
-            urls.push(meta.url.clone().as_bytes().to_vec());
-            to_tenants.push(meta.tenant.clone().as_bytes().to_vec());
-            args.push(format!("{:?}", meta.args).as_bytes().to_vec());
-            comments.push(meta.comment.unwrap_or_default().as_bytes().to_vec());
-            created_on_vec.push(meta.create_on.to_string().as_bytes().to_vec());
+            endpoints.push(endpoint.endpoint.clone());
+            urls.push(meta.url.clone());
+            to_tenants.push(meta.tenant.clone());
+            args.push(format!("{:?}", meta.args));
+            comments.push(meta.comment.unwrap_or_default());
+            created_on_vec.push(meta.create_on.to_string());
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

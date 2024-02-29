@@ -13,8 +13,8 @@ select value=default from system.settings where name in ('max_threads', 'max_mem
 query TTT
 select name, level, description from system.settings where name in ('max_threads', 'max_memory_usage') order by name
 ----
-max_memory_usage  SESSION  Sets the maximum memory usage in bytes for processing a single query.
-max_threads       SESSION  Sets the maximum number of threads to execute a request.
+max_memory_usage  DEFAULT  Sets the maximum memory usage in bytes for processing a single query.
+max_threads       DEFAULT  Sets the maximum number of threads to execute a request.
 
 statement ok
 SET max_threads=11
@@ -31,12 +31,12 @@ SHOW SETTINGS LIKE 'enable%'
 query TT
 SHOW SETTINGS LIKE 'max%' LIMIT 1
 ----
-max_block_size 65536 65536 None SESSION Sets the maximum byte size of a single data block that can be read. UInt64
+max_block_size 65536 65536 [1, 18446744073709551615] DEFAULT Sets the maximum byte size of a single data block that can be read. UInt64
 
 query TT
 SHOW SETTINGS WHERE name='max_block_size' LIMIT 1
 ----
-max_block_size 65536 65536 None SESSION Sets the maximum byte size of a single data block that can be read. UInt64
+max_block_size 65536 65536 [1, 18446744073709551615] DEFAULT Sets the maximum byte size of a single data block that can be read. UInt64
 
 statement error
 SHOW SETTINGS ilike 'ff%' LIMIT 1

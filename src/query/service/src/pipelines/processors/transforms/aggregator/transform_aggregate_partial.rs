@@ -23,9 +23,12 @@ use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::HashTableConfig;
+use databend_common_expression::ProbeState;
 use databend_common_functions::aggregates::StateAddr;
 use databend_common_functions::aggregates::StateAddrs;
 use databend_common_hashtable::HashtableEntryMutRefLike;
@@ -52,6 +55,7 @@ use crate::sessions::QueryContext;
 enum HashTable<Method: HashMethodBounds> {
     MovedOut,
     HashTable(HashTableCell<Method, usize>),
+    AggregateHashTable(AggregateHashTable),
     PartitionedHashTable(HashTableCell<PartitionedHashMethod<Method>, usize>),
 }
 
@@ -106,7 +110,7 @@ pub struct TransformPartialAggregate<Method: HashMethodBounds> {
     method: Method,
     settings: AggregateSettings,
     hash_table: HashTable<Method>,
-
+    probe_state: ProbeState,
     params: Arc<AggregatorParams>,
 }
 
@@ -117,17 +121,26 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
+        config: HashTableConfig,
     ) -> Result<Box<dyn Processor>> {
-        let arena = Arc::new(Bump::new());
-        let hashtable = method.create_hash_table(arena)?;
-        let _dropper = AggregateHashTableDropper::create(params.clone());
-        let hashtable = HashTableCell::create(hashtable, _dropper);
+        let hash_table = if !params.enable_experimental_aggregate_hashtable {
+            let arena = Arc::new(Bump::new());
+            let hashtable = method.create_hash_table(arena)?;
+            let _dropper = AggregateHashTableDropper::create(params.clone());
+            let hashtable = HashTableCell::create(hashtable, _dropper);
 
-        let hash_table = match !Method::SUPPORT_PARTITIONED || !params.has_distinct_combinator() {
-            true => HashTable::HashTable(hashtable),
-            false => HashTable::PartitionedHashTable(PartitionedHashMethod::convert_hashtable(
-                &method, hashtable,
-            )?),
+            match !Method::SUPPORT_PARTITIONED || !params.has_distinct_combinator() {
+                true => HashTable::HashTable(hashtable),
+                false => HashTable::PartitionedHashTable(PartitionedHashMethod::convert_hashtable(
+                    &method, hashtable,
+                )?),
+            }
+        } else {
+            HashTable::AggregateHashTable(AggregateHashTable::new(
+                params.group_data_types.clone(),
+                params.aggregate_functions.clone(),
+                config,
+            ))
         };
 
         Ok(AccumulatingTransformer::create(
@@ -137,6 +150,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 method,
                 params,
                 hash_table,
+                probe_state: ProbeState::default(),
                 settings: AggregateSettings::try_from(ctx)?,
             },
         ))
@@ -234,11 +248,11 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
 
         unsafe {
             let rows_num = block.num_rows();
-            let state = self.method.build_keys_state(&group_columns, rows_num)?;
 
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
                 HashTable::HashTable(hashtable) => {
+                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
                     let mut places = Vec::with_capacity(rows_num);
 
                     for key in self.method.build_keys_iter(&state)? {
@@ -259,6 +273,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     }
                 }
                 HashTable::PartitionedHashTable(hashtable) => {
+                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
                     let mut places = Vec::with_capacity(rows_num);
 
                     for key in self.method.build_keys_iter(&state)? {
@@ -277,6 +292,41 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     } else {
                         Self::execute(&self.params, &block, &places)
                     }
+                }
+                HashTable::AggregateHashTable(hashtable) => {
+                    let group_columns: Vec<Column> =
+                        group_columns.into_iter().map(|c| c.0).collect();
+
+                    let (params_columns, agg_states) = if is_agg_index_block {
+                        (
+                            vec![],
+                            (0..self.params.aggregate_functions.len())
+                                .map(|index| {
+                                    block
+                                        .get_by_offset(
+                                            block.num_columns()
+                                                - self.params.aggregate_functions.len()
+                                                + index,
+                                        )
+                                        .value
+                                        .as_column()
+                                        .cloned()
+                                        .unwrap()
+                                })
+                                .collect(),
+                        )
+                    } else {
+                        (Self::aggregate_arguments(&block, &self.params)?, vec![])
+                    };
+
+                    let _ = hashtable.add_groups(
+                        &mut self.probe_state,
+                        &group_columns,
+                        &params_columns,
+                        &agg_states,
+                        rows_num,
+                    )?;
+                    Ok(())
                 }
             }
         }
@@ -338,9 +388,12 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
         Ok(vec![])
     }
 
-    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
+    fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
         Ok(match std::mem::take(&mut self.hash_table) {
-            HashTable::MovedOut => unreachable!(),
+            HashTable::MovedOut => match !output && std::thread::panicking() {
+                true => vec![],
+                false => unreachable!(),
+            },
             HashTable::HashTable(v) => match v.hashtable.len() == 0 {
                 true => vec![],
                 false => vec![DataBlock::empty_with_meta(
@@ -366,6 +419,9 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
 
                 blocks
             }
+            HashTable::AggregateHashTable(hashtable) => vec![DataBlock::empty_with_meta(
+                AggregateMeta::<Method, usize>::create_agg_hashtable(hashtable.payload),
+            )],
         })
     }
 }

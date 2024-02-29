@@ -63,6 +63,7 @@ impl CreateTaskInterpreter {
             if_not_exist: plan.if_not_exists,
             after: plan.after,
             when_condition: plan.when_condition,
+            session_parameters: plan.session_parameters,
         }
     }
 }
@@ -71,6 +72,10 @@ impl CreateTaskInterpreter {
 impl Interpreter for CreateTaskInterpreter {
     fn name(&self) -> &str {
         "CreateTaskInterpreter"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
     }
 
     #[minitrace::trace]
@@ -85,7 +90,7 @@ impl Interpreter for CreateTaskInterpreter {
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
         let req = self.build_request();
-        let config = get_client_config(self.ctx.clone())?;
+        let config = get_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);
         task_client.create_task(req).await?;
         Ok(PipelineBuildResult::create())

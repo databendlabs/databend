@@ -3,7 +3,7 @@
 
 [query]
 max_active_sessions = 256
-wait_timeout_mills = 5000
+shutdown_wait_timeout_ms = 5000
 
 # For flight rpc.
 flight_api_address = "0.0.0.0:29091"
@@ -69,6 +69,10 @@ auth_type = "no_password"
 level = "ERROR"
 format = "text"
 dir = "./.databend/logs_2"
+
+[log.structlog]
+on = true
+dir = "./.databend/structlog_2"
 
 [meta]
 endpoints = ["0.0.0.0:19191"]

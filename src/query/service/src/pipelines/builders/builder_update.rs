@@ -53,6 +53,7 @@ impl PipelineBuilder {
             let (stream, operators) = gen_mutation_stream_operator(
                 table.schema_with_stream(),
                 table.get_table_info().ident.seq,
+                false,
             )?;
             self.main_pipeline
                 .add_transform(|transform_input_port, transform_output_port| {

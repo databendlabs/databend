@@ -18,13 +18,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::group::Group;
+use crate::optimizer::extract::PatternExtractor;
 use crate::optimizer::memo::Memo;
-use crate::optimizer::pattern_extractor::PatternExtractor;
 use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RulePtr;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::SExpr;
-use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::IndexType;
 
@@ -45,7 +43,7 @@ pub struct MExpr {
 }
 
 impl MExpr {
-    pub fn create(
+    pub fn new(
         group_index: IndexType,
         index: IndexType,
         plan: Arc<RelOperator>,
@@ -76,19 +74,6 @@ impl MExpr {
         memo.group(*group_index)
     }
 
-    /// Doesn't check if children are matched
-    pub fn match_pattern(&self, _memo: &Memo, pattern: &SExpr) -> bool {
-        if pattern.is_pattern() {
-            return true;
-        }
-
-        if self.arity() != pattern.arity() {
-            return false;
-        }
-
-        self.plan.rel_op() == pattern.plan().rel_op()
-    }
-
     pub fn apply_rule(
         &self,
         memo: &Memo,
@@ -99,8 +84,8 @@ impl MExpr {
             return Ok(());
         }
 
-        let mut extractor = PatternExtractor::create();
-        for pattern in rule.patterns() {
+        let mut extractor = PatternExtractor::new();
+        for pattern in rule.matchers() {
             let exprs = extractor.extract(memo, self, pattern)?;
             for expr in exprs.iter() {
                 rule.apply(expr, transform_state)?;

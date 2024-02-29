@@ -16,6 +16,9 @@ use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
@@ -40,13 +43,13 @@ unsafe impl Send for SharedStatus {}
 
 impl Drop for SharedStatus {
     fn drop(&mut self) {
-        unsafe {
+        drop_guard(move || unsafe {
             let address = self.swap(std::ptr::null_mut(), 0, HAS_DATA);
 
             if !address.is_null() {
                 drop(Box::from_raw(address));
             }
-        }
+        })
     }
 }
 
@@ -206,6 +209,7 @@ impl InputPort {
 }
 
 pub struct OutputPort {
+    record_profile: UnSafeCellWrap<bool>,
     shared: UnSafeCellWrap<Arc<SharedStatus>>,
     update_trigger: UnSafeCellWrap<*mut UpdateTrigger>,
 }
@@ -213,6 +217,7 @@ pub struct OutputPort {
 impl OutputPort {
     pub fn create() -> Arc<OutputPort> {
         Arc::new(OutputPort {
+            record_profile: UnSafeCellWrap::create(false),
             shared: UnSafeCellWrap::create(SharedStatus::create()),
             update_trigger: UnSafeCellWrap::create(std::ptr::null_mut()),
         })
@@ -222,6 +227,19 @@ impl OutputPort {
     pub fn push_data(&self, data: Result<DataBlock>) {
         unsafe {
             UpdateTrigger::update_output(&self.update_trigger);
+
+            if *self.record_profile {
+                if let Ok(data_block) = &data {
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::OutputRows,
+                        data_block.num_rows(),
+                    );
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::OutputBytes,
+                        data_block.memory_size(),
+                    );
+                }
+            }
 
             let data = Box::into_raw(Box::new(SharedData(data)));
             self.shared.swap(data, HAS_DATA, HAS_DATA);
@@ -270,6 +288,13 @@ impl OutputPort {
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn set_trigger(&self, update_trigger: *mut UpdateTrigger) {
         self.update_trigger.set_value(update_trigger)
+    }
+
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
+    pub unsafe fn record_profile(&self) {
+        self.record_profile.set_value(true);
     }
 }
 

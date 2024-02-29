@@ -15,6 +15,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,6 +27,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use parking_lot::RwLock;
 
@@ -68,6 +70,21 @@ impl Session {
             mysql_connection_id,
             format_settings: FormatSettings::default(),
         }))
+    }
+
+    pub fn to_minitrace_properties(self: &Arc<Self>) -> Vec<(&'static str, String)> {
+        let mut properties = vec![
+            ("session_id", self.id.clone()),
+            ("session_database", self.get_current_database()),
+            ("session_tenant", self.get_current_tenant()),
+        ];
+        if let Some(query_id) = self.get_current_query_id() {
+            properties.push(("query_id", query_id));
+        }
+        if let Some(connection_id) = self.get_mysql_conn_id() {
+            properties.push(("connection_id", connection_id.to_string()));
+        }
+        properties
     }
 
     pub fn get_mysql_conn_id(self: &Arc<Self>) -> Option<u32> {
@@ -293,11 +310,17 @@ impl Session {
         self.session_ctx
             .update_query_ids_results(query_id, Some(result_cache_key))
     }
+
+    pub fn txn_mgr(&self) -> TxnManagerRef {
+        self.session_ctx.txn_mgr()
+    }
 }
 
 impl Drop for Session {
     fn drop(&mut self) {
-        debug!("Drop session {}", self.id.clone());
-        SessionManager::instance().destroy_session(&self.id.clone());
+        drop_guard(move || {
+            debug!("Drop session {}", self.id.clone());
+            SessionManager::instance().destroy_session(&self.id.clone());
+        })
     }
 }

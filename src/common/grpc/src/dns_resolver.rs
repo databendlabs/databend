@@ -23,10 +23,11 @@ use std::task::Poll;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_base::runtime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use hickory_resolver::TokioAsyncResolver;
 use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
@@ -38,7 +39,6 @@ use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 use tonic::transport::Endpoint;
-use trust_dns_resolver::TokioAsyncResolver;
 
 use crate::RpcClientTlsConfig;
 
@@ -95,7 +95,7 @@ impl Service<Name> for DNSService {
     }
 
     fn call(&mut self, name: Name) -> Self::Future {
-        let blocking = tokio::spawn(async move {
+        let blocking = runtime::spawn(async move {
             let resolver = DNSResolver::instance()?;
             match resolver.resolve(name.to_string()).await {
                 Err(err) => Err(err),

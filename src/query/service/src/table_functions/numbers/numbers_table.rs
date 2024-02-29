@@ -48,6 +48,7 @@ use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
+use databend_storages_common_table_meta::table::ChangeType;
 
 use super::numbers_part::generate_numbers_parts;
 use super::NumbersPartInfo;
@@ -213,6 +214,7 @@ impl Table for NumbersTable {
     async fn table_statistics(
         &self,
         _ctx: Arc<dyn TableContext>,
+        _change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         Ok(Some(TableStatistics {
             num_rows: Some(self.total),

@@ -15,6 +15,7 @@
 // https://github.com/rust-lang/rust-clippy/issues/8334
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::uninlined_format_args)]
+#![allow(internal_features)]
 #![feature(can_vector)]
 #![feature(read_buf)]
 #![feature(slice_internals)]
@@ -37,6 +38,7 @@ pub mod cursor_ext;
 mod decimal;
 mod escape;
 mod format_settings;
+mod geometry;
 mod position;
 mod stat_buffer;
 
@@ -45,3 +47,4 @@ pub use decimal::display_decimal_128;
 pub use decimal::display_decimal_256;
 pub use escape::escape_string;
 pub use escape::escape_string_with_quote;
+pub use geometry::parse_to_ewkb;

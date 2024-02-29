@@ -36,14 +36,14 @@ use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
 
-/// Define some states for hash join build spilling
-/// Each processor owns its `BuildSpillState`
+// Define some states for hash join build spilling
+// Each processor owns its `BuildSpillState`
 pub struct BuildSpillState {
-    /// Hash join build state
+    // Hash join build state
     pub build_state: Arc<HashJoinBuildState>,
-    /// Hash join build spilling coordinator
+    // Hash join build spilling coordinator
     pub spill_coordinator: Arc<BuildSpillCoordinator>,
-    /// Spiller, responsible for specific spill work
+    // Spiller, responsible for specific spill work
     pub spiller: Spiller,
 }
 
@@ -133,9 +133,22 @@ impl BuildSpillState {
 
     // Check if need to spill.
     // Notes: even if the method returns false, but there exists one processor need to spill, then it needs to wait spill.
-    pub(crate) fn check_need_spill(&self) -> Result<bool> {
+    pub(crate) fn check_need_spill(&self, input: &Option<DataBlock>) -> Result<bool> {
         if self.spiller.is_all_spilled() {
             return Ok(false);
+        }
+
+        // Check if input data size is bigger than `spilling_threshold_per_proc`
+        if let Some(input_data) = input {
+            let input_data_bytes = input_data.memory_size();
+            let spill_threshold_per_proc = self.build_state.spilling_threshold_per_proc;
+            if input_data_bytes > spill_threshold_per_proc {
+                info!(
+                    "input data: {:?} bytes, spilling threshold per processor: {:?} bytes",
+                    input_data_bytes, spill_threshold_per_proc
+                );
+                return Ok(true);
+            }
         }
 
         // Check if there are rows in `RowSpace`'s buffer and `Chunks`.
@@ -150,18 +163,22 @@ impl BuildSpillState {
         }
 
         // Check if global memory usage exceeds the threshold.
-        let global_used = GLOBAL_MEM_STAT.get_memory_usage();
+        let mut global_used = GLOBAL_MEM_STAT.get_memory_usage();
+        // `global_used` may be negative at the beginning of starting query.
+        if global_used < 0 {
+            global_used = 0;
+        }
+        let max_memory_usage = self.build_state.max_memory_usage;
         let byte = Byte::from_unit(global_used as f64, ByteUnit::B).unwrap();
         let total_gb = byte.get_appropriate_unit(false).format(3);
-        let spill_threshold = self
-            .build_state
-            .ctx
-            .get_settings()
-            .get_join_spilling_threshold()?;
-        if global_used as usize > spill_threshold {
+        if global_used as usize > max_memory_usage {
+            let spill_threshold_gb = Byte::from_unit(max_memory_usage as f64, ByteUnit::B)
+                .unwrap()
+                .get_appropriate_unit(false)
+                .format(3);
             info!(
-                "need to spill due to global memory usage {:?} is greater than spill threshold",
-                total_gb
+                "need to spill due to global memory usage {:?} is greater than spill threshold {:?}",
+                total_gb, spill_threshold_gb
             );
             return Ok(true);
         }
@@ -175,7 +192,7 @@ impl BuildSpillState {
             total_bytes += block.memory_size();
         }
 
-        if total_bytes * 3 > spill_threshold {
+        if total_bytes * 3 > max_memory_usage {
             return Ok(true);
         }
         Ok(false)
@@ -184,13 +201,9 @@ impl BuildSpillState {
     // Pick partitions which need to spill
     #[allow(unused)]
     fn pick_partitions(&self, partition_blocks: &mut HashMap<u8, Vec<DataBlock>>) -> Result<()> {
-        let mut memory_limit = self
-            .build_state
-            .ctx
-            .get_settings()
-            .get_join_spilling_threshold()?;
+        let mut max_memory_usage = self.build_state.max_memory_usage;
         let global_used = GLOBAL_MEM_STAT.get_memory_usage();
-        if global_used as usize > memory_limit {
+        if global_used as usize > max_memory_usage {
             return Ok(());
         }
         // Compute each partition's data size
@@ -206,7 +219,7 @@ impl BuildSpillState {
         partition_sizes.sort_by_key(|&(_id, size)| size);
 
         for (id, size) in partition_sizes.into_iter() {
-            if size as f64 <= memory_limit as f64 / 3.0 {
+            if size as f64 <= max_memory_usage as f64 / 3.0 {
                 // Put the partition's data to chunks
                 let chunks =
                     &mut unsafe { &mut *self.build_state.hash_join_state.build_state.get() }
@@ -219,7 +232,7 @@ impl BuildSpillState {
                     unsafe { &mut *self.build_state.hash_join_state.build_state.get() };
                 build_state.generation_state.build_num_rows += rows_num;
                 partition_blocks.remove(&id);
-                memory_limit -= size;
+                max_memory_usage -= size;
             } else {
                 break;
             }

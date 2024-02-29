@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_recursion::async_recursion;
-use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_catalog::catalog_kind::CATALOG_HIVE;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -55,6 +54,7 @@ use databend_common_storage::DataOperator;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::table::ChangeType;
 use futures::TryStreamExt;
 use log::info;
 use log::trace;
@@ -488,10 +488,9 @@ impl HiveTable {
             let sem_t = sem.clone();
             let operator_t = self.dal.clone();
             let dir_t = dir.to_string();
-            let task = tokio::spawn(
-                async_backtrace::location!()
-                    .frame(async move { list_files_from_dir(operator_t, dir_t, sem_t).await }),
-            );
+            let task = databend_common_base::runtime::spawn(async move {
+                list_files_from_dir(operator_t, dir_t, sem_t).await
+            });
             tasks.push((task, partition));
         }
 
@@ -623,6 +622,7 @@ impl Table for HiveTable {
     async fn table_statistics(
         &self,
         _ctx: Arc<dyn TableContext>,
+        _change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
@@ -738,10 +738,9 @@ async fn list_files_from_dir(
     for dir in dirs {
         let sem_t = sem.clone();
         let operator_t = operator.clone();
-        let task = tokio::spawn(
-            async_backtrace::location!()
-                .frame(async move { list_files_from_dir(operator_t, dir, sem_t).await }),
-        );
+        let task = databend_common_base::runtime::spawn(async move {
+            list_files_from_dir(operator_t, dir, sem_t).await
+        });
         tasks.push(task);
     }
 
