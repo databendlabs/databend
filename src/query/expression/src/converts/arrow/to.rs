@@ -115,7 +115,7 @@ impl DataBlock {
             let array = column.into_arrow_rs();
             let arrow_field: ArrowField = f.into();
 
-            // Ajust struct array names
+            // Adjust struct array names
             arrays.push(Self::adjust_struct_array(array, arrow_field));
         }
         let schema = Arc::new(ArrowSchema::from(table_schema));
