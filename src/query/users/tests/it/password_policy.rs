@@ -66,7 +66,11 @@ async fn test_password_policy() -> Result<()> {
     };
 
     let res = user_mgr
-        .add_password_policy(tenant, password_policy.clone(), &CreateOption::None)
+        .add_password_policy(
+            tenant,
+            password_policy.clone(),
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_ok());
 
@@ -74,15 +78,23 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy1 = password_policy.clone();
     invalid_password_policy1.min_length = 0;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy1, &CreateOption::None)
+        .add_password_policy(
+            tenant,
+            invalid_password_policy1,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
     // invalid max length
     let mut invalid_password_policy2 = password_policy.clone();
     invalid_password_policy2.max_length = 260;
-    let res = user_mgrNone
-        .add_password_policy(tenant, invalid_password_policy2, &CreateOption::None)
+    let res = user_mgr
+        .add_password_policy(
+            tenant,
+            invalid_password_policy2,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -91,7 +103,11 @@ async fn test_password_policy() -> Result<()> {
     invalid_password_policy3.min_length = 30;
     invalid_password_policy3.max_length = 20;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy3, &CreateOption::None)
+        .add_password_policy(
+            tenant,
+            invalid_password_policy3,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -102,11 +118,15 @@ async fn test_password_policy() -> Result<()> {
     invalid_password_policy4.min_numeric_chars = 272;
     invalid_password_policy4.min_special_chars = 273;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy4, &CreateOption::None)
+        .add_password_policy(
+            tenant,
+            invalid_password_policy4,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
-    // invalid sum of upperNone, lower chars, numeric chars and special chars greater than max length
+    // invalid sum of upper chars, lower chars, numeric chars and special chars greater than max length
     let mut invalid_password_policy5 = password_policy.clone();
     invalid_password_policy5.max_length = 30;
     invalid_password_policy5.min_upper_case_chars = 10;
@@ -114,16 +134,24 @@ async fn test_password_policy() -> Result<()> {
     invalid_password_policy5.min_numeric_chars = 12;
     invalid_password_policy5.min_special_chars = 13;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy5, &CreateOption::None)
+        .add_password_policy(
+            tenant,
+            invalid_password_policy5,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
     // invalid min age days greater than max age days
     let mut invalid_password_policy6 = password_policy.clone();
     invalid_password_policy6.min_age_days = 20;
-    invalid_password_policyNoneage_days = 10;
+    invalid_password_policy6.max_age_days = 10;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy6, &CreateOption::None)
+        .add_password_policy(
+            tenant,
+            invalid_password_policy6,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -131,15 +159,23 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy7 = password_policy.clone();
     invalid_password_policy7.max_retries = 20;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy7, &CreateOption::None)
+        .add_password_policy(
+            tenant,
+            invalid_password_policy7,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
     // invalid lockout time mins
     let mut invalid_password_policy8 = password_policy.clone();
-    invalid_password_policyNoneout_time_mins = 2000;
+    invalid_password_policy8.lockout_time_mins = 2000;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy8, &CreateOption::None)
+        .add_password_policy(
+            tenant,
+            invalid_password_policy8,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -147,7 +183,11 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy9 = password_policy.clone();
     invalid_password_policy9.history = 50;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy9, &CreateOption::None)
+        .add_password_policy(
+            tenant,
+            invalid_password_policy9,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -162,7 +202,7 @@ async fn test_password_policy() -> Result<()> {
         .await;
     assert!(res.is_ok());
 
-    // simple password, invNoneomplexity
+    // simple password, invalid complexity
     let mut auth_option1 = auth_option.clone();
     auth_option1.password = Some(invalid_pwd.to_string());
     let res = user_mgr
@@ -174,7 +214,7 @@ async fn test_password_policy() -> Result<()> {
     let auth_info1 = AuthInfo::create2(&None, &Some(pwd1.to_string())).unwrap();
     let mut user_info = UserInfo::new(username, hostname, auth_info1.clone());
     let mut option = UserOption::empty();
-    option = option.with_paNone_policy(Some(policy_name.clone()));
+    option = option.with_password_policy(Some(policy_name.clone()));
     user_info.update_auth_option(None, Some(option));
     let res = user_mgr
         .verify_password(
@@ -319,7 +359,7 @@ async fn test_password_policy() -> Result<()> {
 
     // add user
     user_mgr
-        .add_user(tenant, user_info, &CreateOption::None)
+        .add_user(tenant, user_info, &CreateOption::CreateIfNotExists)
         .await?;
 
     // drop password policy
