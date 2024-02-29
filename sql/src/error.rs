@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use geozero::error::GeozeroError;
+
 #[derive(Debug)]
 pub struct ConvertError {
     target: &'static str,
@@ -184,5 +186,11 @@ impl From<databend_client::error::Error> for Error {
 impl From<ConvertError> for Error {
     fn from(e: ConvertError) -> Self {
         Error::Convert(e)
+    }
+}
+
+impl From<GeozeroError> for Error {
+    fn from(e: GeozeroError) -> Self {
+        Error::Parsing(e.to_string())
     }
 }

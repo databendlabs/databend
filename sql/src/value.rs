@@ -20,6 +20,9 @@ use crate::{
     schema::{DecimalDataType, DecimalSize},
 };
 
+use geozero::wkb::FromWkb;
+use geozero::wkb::WkbDialect;
+use geozero::wkt::Ewkt;
 use std::fmt::Write;
 
 // Thu 1970-01-01 is R.D. 719163
@@ -30,7 +33,7 @@ const NULL_VALUE: &str = "NULL";
 use {
     crate::schema::{
         ARROW_EXT_TYPE_BITMAP, ARROW_EXT_TYPE_EMPTY_ARRAY, ARROW_EXT_TYPE_EMPTY_MAP,
-        ARROW_EXT_TYPE_VARIANT, EXTENSION_KEY,
+        ARROW_EXT_TYPE_GEOMETRY, ARROW_EXT_TYPE_VARIANT, EXTENSION_KEY,
     },
     arrow_array::{
         Array as ArrowArray, BinaryArray, BooleanArray, Date32Array, Decimal128Array,
@@ -77,6 +80,7 @@ pub enum Value {
     Tuple(Vec<Value>),
     Bitmap(String),
     Variant(String),
+    Geometry(String),
 }
 
 impl Value {
@@ -126,6 +130,7 @@ impl Value {
             }
             Self::Bitmap(_) => DataType::Bitmap,
             Self::Variant(_) => DataType::Variant,
+            Self::Geometry(_) => DataType::Geometry,
         }
     }
 }
@@ -191,6 +196,7 @@ impl TryFrom<(&DataType, &str)> for Value {
             )),
             DataType::Bitmap => Ok(Self::Bitmap(v.to_string())),
             DataType::Variant => Ok(Self::Variant(v.to_string())),
+            DataType::Geometry => Ok(Self::Geometry(v.to_string())),
 
             DataType::Nullable(inner) => {
                 if v == NULL_VALUE {
@@ -242,6 +248,18 @@ impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
                             Ok(Value::Bitmap(s))
                         }
                         None => Err(ConvertError::new("bitmap", format!("{:?}", array)).into()),
+                    };
+                }
+                ARROW_EXT_TYPE_GEOMETRY => {
+                    if field.is_nullable() && array.is_null(seq) {
+                        return Ok(Value::Null);
+                    }
+                    return match array.as_any().downcast_ref::<LargeBinaryArray>() {
+                        Some(array) => {
+                            let wkt = parse_geometry(array.value(seq))?;
+                            Ok(Value::Geometry(wkt))
+                        }
+                        None => Err(ConvertError::new("geometry", format!("{:?}", array)).into()),
                     };
                 }
                 _ => {
@@ -605,7 +623,7 @@ fn encode_value(f: &mut std::fmt::Formatter<'_>, val: &Value, raw: bool) -> std:
         Value::Boolean(b) => write!(f, "{}", b),
         Value::Number(n) => write!(f, "{}", n),
         Value::Binary(s) => write!(f, "{}", hex::encode_upper(s)),
-        Value::String(s) | Value::Bitmap(s) | Value::Variant(s) => {
+        Value::String(s) | Value::Bitmap(s) | Value::Variant(s) | Value::Geometry(s) => {
             if raw {
                 write!(f, "{}", s)
             } else {
@@ -799,4 +817,10 @@ pub fn parse_decimal(text: &str, size: DecimalSize) -> Result<NumberValue> {
             Ok(NumberValue::Decimal128(digits.parse::<i128>()?, size))
         }
     }
+}
+
+pub fn parse_geometry(raw_data: &[u8]) -> Result<String> {
+    let mut data = std::io::Cursor::new(raw_data);
+    let wkt = Ewkt::from_wkb(&mut data, WkbDialect::Ewkb);
+    wkt.map(|g| g.0).map_err(|e| e.into())
 }

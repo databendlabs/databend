@@ -76,6 +76,7 @@ impl IntoPy<PyObject> for Value {
             }
             databend_driver::Value::Bitmap(s) => s.into_py(py),
             databend_driver::Value::Variant(s) => s.into_py(py),
+            databend_driver::Value::Geometry(s) => s.into_py(py),
         }
     }
 }

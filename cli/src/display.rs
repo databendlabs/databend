@@ -567,13 +567,7 @@ fn create_table(
     let mut header = Vec::with_capacity(column_count);
     let mut aligns = Vec::with_capacity(column_count);
 
-    render_head(
-        schema,
-        &mut widths,
-        &mut column_map,
-        &mut header,
-        &mut aligns,
-    );
+    render_head(schema, &mut widths, &column_map, &mut header, &mut aligns);
     table.set_header(header);
 
     // render the top rows
@@ -681,7 +675,7 @@ fn create_table(
 fn render_head(
     schema: SchemaRef,
     widths: &mut [usize],
-    column_map: &mut Vec<i32>,
+    column_map: &[i32],
     header: &mut Vec<Cell>,
     aligns: &mut Vec<CellAlignment>,
 ) {

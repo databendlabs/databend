@@ -28,6 +28,8 @@ pub(crate) const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
 pub(crate) const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
 #[cfg(feature = "flight-sql")]
 pub(crate) const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
+#[cfg(feature = "flight-sql")]
+pub(crate) const ARROW_EXT_TYPE_GEOMETRY: &str = "Geometry";
 
 use databend_client::response::SchemaField as APISchemaField;
 
@@ -86,6 +88,7 @@ pub enum DataType {
     Tuple(Vec<DataType>),
     Variant,
     Bitmap,
+    Geometry,
     // Generic(usize),
 }
 
@@ -139,6 +142,7 @@ impl std::fmt::Display for DataType {
             }
             DataType::Variant => write!(f, "Variant"),
             DataType::Bitmap => write!(f, "Bitmap"),
+            DataType::Geometry => write!(f, "Geometry"),
         }
     }
 }
@@ -246,6 +250,7 @@ impl TryFrom<&TypeDesc<'_>> for DataType {
             }
             "Variant" => DataType::Variant,
             "Bitmap" => DataType::Bitmap,
+            "Geometry" => DataType::Geometry,
             _ => return Err(Error::Parsing(format!("Unknown type: {:?}", desc))),
         };
         Ok(dt)
@@ -289,6 +294,7 @@ impl TryFrom<&Arc<ArrowField>> for Field {
                 ARROW_EXT_TYPE_EMPTY_MAP => DataType::EmptyMap,
                 ARROW_EXT_TYPE_VARIANT => DataType::Variant,
                 ARROW_EXT_TYPE_BITMAP => DataType::Bitmap,
+                ARROW_EXT_TYPE_GEOMETRY => DataType::Geometry,
                 _ => {
                     return Err(Error::Parsing(format!(
                         "Unsupported extension datatype for arrow field: {:?}",
