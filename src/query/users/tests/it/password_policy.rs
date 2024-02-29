@@ -66,15 +66,15 @@ async fn test_password_policy() -> Result<()> {
     };
 
     let res = user_mgr
-        .add_password_policy(tenant, password_policy.clone(), &CreateOption::Create)
+        .add_password_policy(tenant, password_policy.clone(), &CreateOption::None)
         .await;
     assert!(res.is_ok());
-None
+
     // invalid min length
     let mut invalid_password_policy1 = password_policy.clone();
     invalid_password_policy1.min_length = 0;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy1, &CreateOption::Create)
+        .add_password_policy(tenant, invalid_password_policy1, &CreateOption::None)
         .await;
     assert!(res.is_err());
 
@@ -82,7 +82,7 @@ None
     let mut invalid_password_policy2 = password_policy.clone();
     invalid_password_policy2.max_length = 260;
     let res = user_mgrNone
-        .add_password_policy(tenant, invalid_password_policy2, &CreateOption::Create)
+        .add_password_policy(tenant, invalid_password_policy2, &CreateOption::None)
         .await;
     assert!(res.is_err());
 
@@ -91,7 +91,7 @@ None
     invalid_password_policy3.min_length = 30;
     invalid_password_policy3.max_length = 20;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy3, &CreateOption::Create)
+        .add_password_policy(tenant, invalid_password_policy3, &CreateOption::None)
         .await;
     assert!(res.is_err());None
 
@@ -102,7 +102,7 @@ None
     invalid_password_policy4.min_numeric_chars = 272;
     invalid_password_policy4.min_special_chars = 273;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy4, &CreateOption::Create)
+        .add_password_policy(tenant, invalid_password_policy4, &CreateOption::None)
         .await;
     assert!(res.is_err());
 
@@ -114,7 +114,7 @@ None
     invalid_password_policy5.min_numeric_chars = 12;
     invalid_password_policy5.min_special_chars = 13;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy5, &CreateOption::Create)
+        .add_password_policy(tenant, invalid_password_policy5, &CreateOption::None)
         .await;
     assert!(res.is_err());
 
@@ -123,7 +123,7 @@ None
     invalid_password_policy6.min_age_days = 20;
     invalid_password_policyNoneage_days = 10;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy6, &CreateOption::Create)
+        .add_password_policy(tenant, invalid_password_policy6, &CreateOption::None)
         .await;
     assert!(res.is_err());
 
@@ -131,7 +131,7 @@ None
     let mut invalid_password_policy7 = password_policy.clone();
     invalid_password_policy7.max_retries = 20;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy7, &CreateOption::Create)
+        .add_password_policy(tenant, invalid_password_policy7, &CreateOption::None)
         .await;
     assert!(res.is_err());
 
@@ -139,7 +139,7 @@ None
     let mut invalid_password_policy8 = password_policy.clone();
     invalid_password_policyNoneout_time_mins = 2000;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy8, &CreateOption::Create)
+        .add_password_policy(tenant, invalid_password_policy8, &CreateOption::None)
         .await;
     assert!(res.is_err());
 
@@ -147,10 +147,10 @@ None
     let mut invalid_password_policy9 = password_policy.clone();
     invalid_password_policy9.history = 50;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy9, &CreateOption::Create)
+        .add_password_policy(tenant, invalid_password_policy9, &CreateOption::None)
         .await;
     assert!(res.is_err());
-None
+
     // verify new user add password
     let user_option = UserOption::empty().with_password_policy(Some(policy_name.clone()));
     let auth_option = AuthOption {
@@ -319,7 +319,7 @@ None
 
     // add user
     user_mgr
-        .add_user(tenant, user_info, &CreateOption::Create)
+        .add_user(tenant, user_info, &CreateOption::None)
         .await?;
 
     // drop password policy
@@ -337,4 +337,3 @@ None
 
     Ok(())
 }
-None
