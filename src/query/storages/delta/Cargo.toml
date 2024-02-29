@@ -27,7 +27,7 @@ deltalake = { git = "https://github.com/delta-io/delta-rs", package = "deltalake
 futures = "0.3"
 match-template = "0.0.1"
 minitrace = { workspace = true }
-object_store = "0.7"
+object_store = "0.9"
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 parquet = { workspace = true }

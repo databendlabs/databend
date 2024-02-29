@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
@@ -161,7 +160,9 @@ impl DeltaTable {
         let mut table = DeltaTableBuilder::from_uri(Url::from_directory_path("/").unwrap())
             .with_storage_backend(opendal_store, Url::from_directory_path("/").unwrap())
             .build()
-            .map_err(|err| ErrorCode::ReadTableDataError("Delta table load failed: {err:?}"))?;
+            .map_err(|err| {
+                ErrorCode::ReadTableDataError(format!("Delta table load failed: {err:?}"))
+            })?;
 
         table.load().await.map_err(|err| {
             ErrorCode::ReadTableDataError(format!("Delta table load failed: {err:?}"))
@@ -278,12 +279,17 @@ impl DeltaTable {
         let mut read_bytes = 0;
 
         let partition_fields = self.get_partition_fields()?;
-        let adds = table.get_state().files();
+        let adds = table
+            .snapshot()
+            .and_then(|f| f.file_actions())
+            .map_err(|e| {
+                ErrorCode::ReadTableDataError(format!("Cannot read file_actions: {e:?}"))
+            })?;
         let total_files = adds.len();
         let parts = adds.iter()
             .map(|add: &Add| {
                 let stats = add
-                    .get_stats()
+                    .get_stats_parsed()
                     .map_err(|e| ErrorCode::ReadTableDataError(format!("Cannot get stats: {e:?}")))?
                     .ok_or_else(|| {
                         ErrorCode::ReadTableDataError(format!(

@@ -3731,7 +3731,7 @@ dependencies = [
  "maplit",
  "match-template",
  "minitrace",
- "object_store 0.7.1",
+ "object_store",
  "opendal",
  "ordered-float 4.2.0",
  "parquet",
@@ -4876,7 +4876,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "num_cpus",
- "object_store 0.9.0",
+ "object_store",
  "once_cell",
  "parking_lot 0.12.1",
  "parquet",
@@ -9448,27 +9448,6 @@ dependencies = [
 
 [[package]]
 name = "object_store"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f930c88a43b1c3f6e776dfe495b4afab89882dbc81530c632db2ed65451ebcb4"
-dependencies = [
- "async-trait",
- "bytes",
- "chrono",
- "futures",
- "humantime",
- "itertools 0.11.0",
- "parking_lot 0.12.1",
- "percent-encoding",
- "snafu",
- "tokio",
- "tracing",
- "url",
- "walkdir",
-]
-
-[[package]]
-name = "object_store"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d139f545f64630e2e3688fd9f81c470888ab01edeb72d13b4e86c566f1130000"
@@ -9899,7 +9878,7 @@ dependencies = [
  "lz4_flex",
  "num",
  "num-bigint",
- "object_store 0.9.0",
+ "object_store",
  "paste",
  "seq-macro",
  "snap",
