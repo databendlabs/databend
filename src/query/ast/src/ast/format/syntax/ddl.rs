@@ -45,17 +45,11 @@ pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
             RcDoc::nil()
         })
         .append(RcDoc::space().append(RcDoc::text("TABLE")))
-        .append(
-            if let CreateOption::CreateIfNotExists(if_not_exists) = stmt.create_option {
-                if if_not_exists {
-                    RcDoc::space().append(RcDoc::text("IF NOT EXISTS"))
-                } else {
-                    RcDoc::nil()
-                }
-            } else {
-                RcDoc::nil()
-            },
-        )
+        .append(match stmt.create_option {
+            CreateOption::None => RcDoc::nil(),
+            CreateOption::CreateIfNotExists => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
+            CreateOption::CreateOrReplace => RcDoc::nil(),
+        })
         .append(
             RcDoc::space()
                 .append(if let Some(catalog) = stmt.catalog {
@@ -250,17 +244,11 @@ pub(crate) fn pretty_create_view(stmt: CreateViewStmt) -> RcDoc<'static> {
             RcDoc::nil()
         })
         .append(RcDoc::space().append(RcDoc::text("VIEW")))
-        .append(
-            if let CreateOption::CreateIfNotExists(if_not_exists) = stmt.create_option {
-                if if_not_exists {
-                    RcDoc::space().append(RcDoc::text("IF NOT EXISTS"))
-                } else {
-                    RcDoc::nil()
-                }
-            } else {
-                RcDoc::nil()
-            },
-        )
+        .append(match stmt.create_option {
+            CreateOption::None => RcDoc::nil(),
+            CreateOption::CreateIfNotExists => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
+            CreateOption::CreateOrReplace => RcDoc::nil(),
+        })
         .append(
             RcDoc::space()
                 .append(if let Some(catalog) = stmt.catalog {
@@ -317,17 +305,11 @@ pub(crate) fn pretty_create_stream(stmt: CreateStreamStmt) -> RcDoc<'static> {
             RcDoc::nil()
         })
         .append(RcDoc::space().append(RcDoc::text("STREAM")))
-        .append(
-            if let CreateOption::CreateIfNotExists(if_not_exists) = stmt.create_option {
-                if if_not_exists {
-                    RcDoc::space().append(RcDoc::text("IF NOT EXISTS"))
-                } else {
-                    RcDoc::nil()
-                }
-            } else {
-                RcDoc::nil()
-            },
-        )
+        .append(match stmt.create_option {
+            CreateOption::None => RcDoc::nil(),
+            CreateOption::CreateIfNotExists => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
+            CreateOption::CreateOrReplace => RcDoc::nil(),
+        })
         .append(
             RcDoc::space()
                 .append(if let Some(catalog) = stmt.catalog {

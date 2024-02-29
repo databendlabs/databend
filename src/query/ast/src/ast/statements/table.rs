@@ -151,10 +151,8 @@ impl Display for CreateTableStmt {
             write!(f, "TRANSIENT ")?;
         }
         write!(f, "TABLE ")?;
-        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
-            if if_not_exists {
-                write!(f, "IF NOT EXISTS ")?;
-            }
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, "IF NOT EXISTS ")?;
         }
         write_dot_separated_list(
             f,

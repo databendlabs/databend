@@ -33,10 +33,8 @@ impl Display for CreateNetworkPolicyStmt {
             write!(f, "OR REPLACE ")?;
         }
         write!(f, "NETWORK POLICY ")?;
-        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
-            if if_not_exists {
-                write!(f, "IF NOT EXISTS ")?;
-            }
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, "IF NOT EXISTS ")?;
         }
         write!(f, "{}", self.name)?;
         write!(f, " ALLOWED_IP_LIST = (")?;

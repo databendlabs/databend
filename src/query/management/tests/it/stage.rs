@@ -34,7 +34,7 @@ async fn test_add_stage() -> Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::CreateIfNotExists(false))
+        .add_stage(stage_info.clone(), &CreateOption::None)
         .await?;
     let value = kv_api.get_kv("__fd_stages/admin/mystage").await?;
 
@@ -61,11 +61,11 @@ async fn test_already_exists_add_stage() -> Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::CreateIfNotExists(false))
+        .add_stage(stage_info.clone(), &CreateOption::None)
         .await?;
 
     match stage_api
-        .add_stage(stage_info.clone(), &CreateOption::CreateIfNotExists(false))
+        .add_stage(stage_info.clone(), &CreateOption::None)
         .await
     {
         Ok(_) => panic!("Already exists add stage must be return Err."),
@@ -84,7 +84,7 @@ async fn test_successfully_get_stages() -> Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::CreateIfNotExists(false))
+        .add_stage(stage_info.clone(), &CreateOption::None)
         .await?;
 
     let stages = stage_api.get_stages().await?;
@@ -98,7 +98,7 @@ async fn test_successfully_drop_stage() -> Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::CreateIfNotExists(false))
+        .add_stage(stage_info.clone(), &CreateOption::None)
         .await?;
 
     let stages = stage_api.get_stages().await?;
@@ -148,7 +148,7 @@ async fn test_add_stage_file() -> Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::CreateIfNotExists(false))
+        .add_stage(stage_info.clone(), &CreateOption::None)
         .await?;
     let mystage = stage_api.get_stage("mystage").await?;
     assert_eq!(mystage.number_of_files, 0);
@@ -187,7 +187,7 @@ async fn test_remove_files() -> Result<()> {
     let (_kv_api, stage_api) = new_stage_api().await?;
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::CreateIfNotExists(false))
+        .add_stage(stage_info.clone(), &CreateOption::None)
         .await?;
     let mystage = stage_api.get_stage("mystage").await?;
     assert_eq!(mystage.number_of_files, 0);

@@ -40,10 +40,8 @@ impl Display for CreateVirtualColumnStmt {
             write!(f, "OR REPLACE ")?;
         }
         write!(f, "VIRTUAL COLUMN ")?;
-        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
-            if if_not_exists {
-                write!(f, "IF NOT EXISTS ")?;
-            }
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, "IF NOT EXISTS ")?;
         }
         write!(f, "(")?;
         write_comma_separated_list(f, &self.virtual_columns)?;

@@ -22,24 +22,24 @@ use crate::parser::quote::quote_ident;
 // Identifier of table name or column name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identifier {
+    pub span: Span,
     pub name: String,
     pub quote: Option<char>,
-    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColumnPosition {
+    pub span: Span,
     pub pos: usize,
     pub name: String,
-    pub span: Span,
 }
 
 impl ColumnPosition {
-    pub fn create(pos: usize, span: Span) -> ColumnPosition {
+    pub fn create(span: Span, pos: usize) -> ColumnPosition {
         ColumnPosition {
+            span,
             pos,
             name: format!("${}", pos),
-            span,
         }
     }
     pub fn name(&self) -> String {
@@ -60,17 +60,17 @@ impl Identifier {
 
     pub fn from_name(name: impl Into<String>) -> Self {
         Self {
+            span: Span::default(),
             name: name.into(),
             quote: None,
-            span: Span::default(),
         }
     }
 
     pub fn from_name_with_quoted(name: impl Into<String>, quote: Option<char>) -> Self {
         Self {
+            span: Span::default(),
             name: name.into(),
             quote,
-            span: Span::default(),
         }
     }
 }
