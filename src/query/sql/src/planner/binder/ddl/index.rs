@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::walk_statement_mut;
 use databend_common_ast::ast::CreateIndexStmt;
 use databend_common_ast::ast::DropIndexStmt;
 use databend_common_ast::ast::ExplainKind;
@@ -21,11 +22,10 @@ use databend_common_ast::ast::RefreshIndexStmt;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::Visitor;
+use databend_common_ast::ast::VisitorMut;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::walk_statement_mut;
-use databend_common_ast::Visitor;
-use databend_common_ast::VisitorMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::AggregateIndex;

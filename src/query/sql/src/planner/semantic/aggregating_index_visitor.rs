@@ -14,6 +14,10 @@
 
 use std::collections::HashSet;
 
+use databend_common_ast::ast::walk_expr;
+use databend_common_ast::ast::walk_expr_mut;
+use databend_common_ast::ast::walk_select_target;
+use databend_common_ast::ast::walk_select_target_mut;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::GroupBy;
@@ -24,16 +28,12 @@ use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::Visitor;
+use databend_common_ast::ast::VisitorMut;
 use databend_common_ast::ast::Window;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::walk_expr;
-use databend_common_ast::walk_expr_mut;
-use databend_common_ast::walk_select_target;
-use databend_common_ast::walk_select_target_mut;
-use databend_common_ast::Dialect;
-use databend_common_ast::Visitor;
-use databend_common_ast::VisitorMut;
+use databend_common_ast::parser::Dialect;
 use databend_common_exception::Span;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;

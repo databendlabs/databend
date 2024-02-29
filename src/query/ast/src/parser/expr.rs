@@ -25,16 +25,16 @@ use pratt::PrattParser;
 use pratt::Precedence;
 
 use crate::ast::*;
-use crate::input::Input;
-use crate::input::WithSpan;
+use crate::parser::common::*;
+use crate::parser::input::Input;
+use crate::parser::input::WithSpan;
 use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::unescape::unescape_at_string;
 use crate::parser::unescape::unescape_string;
+use crate::parser::Error;
+use crate::parser::ErrorKind;
 use crate::rule;
-use crate::util::*;
-use crate::Error;
-use crate::ErrorKind;
 
 pub const BETWEEN_PREC: u32 = 20;
 pub const NOT_PREC: u32 = 15;

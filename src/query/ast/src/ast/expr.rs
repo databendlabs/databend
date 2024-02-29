@@ -24,10 +24,10 @@ use databend_common_io::escape_string_with_quote;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 
+use super::ColumnID;
 use super::OrderByExpr;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
-use crate::ast::ColumnPosition;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
@@ -43,30 +43,6 @@ pub enum IntervalKind {
     Doy,
     Week,
     Dow,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ColumnID {
-    Name(Identifier),
-    Position(ColumnPosition),
-}
-
-impl ColumnID {
-    pub fn name(&self) -> &str {
-        match self {
-            ColumnID::Name(id) => &id.name,
-            ColumnID::Position(id) => &id.name,
-        }
-    }
-}
-
-impl Display for ColumnID {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ColumnID::Name(id) => write!(f, "{}", id),
-            ColumnID::Position(id) => write!(f, "{}", id),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

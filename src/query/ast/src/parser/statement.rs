@@ -32,21 +32,21 @@ use nom::combinator::value;
 use nom::Slice;
 
 use crate::ast::*;
-use crate::input::Input;
+use crate::parser::common::*;
 use crate::parser::copy::copy_into;
 use crate::parser::copy::copy_into_table;
 use crate::parser::data_mask::data_mask_policy;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
+use crate::parser::input::Input;
 use crate::parser::query::*;
 use crate::parser::share::share_endpoint_uri_location;
 use crate::parser::stage::*;
 use crate::parser::stream::stream_table;
 use crate::parser::token::*;
+use crate::parser::Error;
+use crate::parser::ErrorKind;
 use crate::rule;
-use crate::util::*;
-use crate::Error;
-use crate::ErrorKind;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),

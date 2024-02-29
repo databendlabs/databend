@@ -20,7 +20,6 @@ use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 
 use crate::ast::*;
-use crate::visitors::Visitor;
 
 pub fn format_statement(stmt: Statement) -> Result<String> {
     let mut visitor = AstFormatVisitor::new();

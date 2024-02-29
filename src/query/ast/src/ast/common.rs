@@ -34,25 +34,6 @@ pub struct ColumnPosition {
     pub span: Span,
 }
 
-impl ColumnPosition {
-    pub fn create(pos: usize, span: Span) -> ColumnPosition {
-        ColumnPosition {
-            pos,
-            name: format!("${}", pos),
-            span,
-        }
-    }
-    pub fn name(&self) -> String {
-        format!("${}", self.pos)
-    }
-}
-
-impl Display for ColumnPosition {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "${}", self.pos)
-    }
-}
-
 impl Identifier {
     pub fn is_quoted(&self) -> bool {
         self.quote.is_some()
@@ -83,6 +64,89 @@ impl Display for Identifier {
         } else {
             write!(f, "{}", self.name)
         }
+    }
+}
+
+impl ColumnPosition {
+    pub fn create(pos: usize, span: Span) -> ColumnPosition {
+        ColumnPosition {
+            pos,
+            name: format!("${}", pos),
+            span,
+        }
+    }
+    pub fn name(&self) -> String {
+        format!("${}", self.pos)
+    }
+}
+
+impl Display for ColumnPosition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "${}", self.pos)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ColumnID {
+    Name(Identifier),
+    Position(ColumnPosition),
+}
+
+impl ColumnID {
+    pub fn name(&self) -> &str {
+        match self {
+            ColumnID::Name(id) => &id.name,
+            ColumnID::Position(id) => &id.name,
+        }
+    }
+}
+
+impl Display for ColumnID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ColumnID::Name(id) => write!(f, "{}", id),
+            ColumnID::Position(id) => write!(f, "{}", id),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableRef {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+}
+
+impl Display for TableRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        assert!(self.catalog.is_none() || (self.catalog.is_some() && self.database.is_some()));
+        if let Some(catalog) = &self.catalog {
+            write!(f, "{catalog}.")?;
+        }
+        if let Some(database) = &self.database {
+            write!(f, "{}.", database)?;
+        }
+        write!(f, "{}", self.table)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColumnRef {
+    pub database: Option<Identifier>,
+    pub table: Option<Identifier>,
+    pub column: ColumnID,
+}
+
+impl Display for ColumnRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(database) = &self.database {
+            write!(f, "{}.", database)?;
+        }
+        if let Some(table) = &self.table {
+            write!(f, "{}.", table)?;
+        }
+        write!(f, "{}", self.column)
     }
 }
 
