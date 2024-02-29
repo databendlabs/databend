@@ -114,11 +114,11 @@ impl DataBlock {
             );
 
             // Ajust field names
-            if let &ArrowDataType::Struct(fs) = arrow_field.data_type() {
+            if let ArrowDataType::Struct(fs) = arrow_field.data_type() {
                 let array = array.as_ref().as_struct();
                 let array =
-                    StructArray::new(fs.clone(), array.columns().clone(), array.nulls().cloned());
-                arrays.push(Arc::new(array));
+                    StructArray::new(fs.clone(), array.columns().to_vec(), array.nulls().cloned());
+                arrays.push(Arc::new(array) as _);
             } else {
                 arrays.push(array);
             }
