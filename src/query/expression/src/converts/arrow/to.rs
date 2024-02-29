@@ -15,7 +15,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use arrow_array::cast::AsArray;
+use arrow_array::Array;
 use arrow_array::RecordBatch;
+use arrow_array::StructArray;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Fields;
@@ -109,7 +112,16 @@ impl DataBlock {
                 array.data_type().clone(),
                 f.data_type().is_nullable(),
             );
-            arrays.push(array);
+
+            // Ajust field names
+            if let &ArrowDataType::Struct(fs) = arrow_field.data_type() {
+                let array = array.as_ref().as_struct();
+                let array =
+                    StructArray::new(fs.clone(), array.columns().clone(), array.nulls().cloned());
+                arrays.push(array);
+            } else {
+                arrays.push(array);
+            }
             arrow_fields.push(arrow_field);
         }
         let schema = Arc::new(ArrowSchema::new(arrow_fields));
