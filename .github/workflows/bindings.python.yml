@@ -20,18 +20,19 @@ concurrency:
 
 jobs:
   linux:
-    runs-on: [self-hosted, X64, Linux, 8c16g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c16g, gcp]
     strategy:
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
+        include:
+          - { arch: x86_64, runner: X64 }
+          # - { arch: aarch64, runner: ARM64 }
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: ./.github/actions/build_bindings_python
         with:
-          target: ${{ matrix.target }}
+          target: ${{ matrix.arch }}-unknown-linux-gnu
           version: ${{ inputs.tag }}
       - name: upload
         if: inputs.tag
@@ -45,15 +46,15 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        target:
-          - aarch64-apple-darwin
+        arch:
+          - aarch64
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: ./.github/actions/build_bindings_python
         with:
-          target: ${{ matrix.target }}
+          target: ${{ matrix.arch }}-apple-darwin
           version: ${{ inputs.tag }}
       - name: upload
         if: inputs.tag

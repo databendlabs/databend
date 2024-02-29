@@ -157,6 +157,6 @@ tokio-util = { version = "0.7", features = ["compat"] }
 # used to run formal property testing
 async-std = "1.12"
 env_logger = "0.10"
-flate2 = "1"
+flate2 = "1.0.28"
 proptest = { version = "1", default_features = false, features = ["std"] }
 quanta = "0.11.1"
