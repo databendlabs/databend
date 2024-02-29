@@ -16,7 +16,7 @@ use std::fmt;
 
 use crate::principal::UserIdentity;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PrincipalIdentity {
     User(UserIdentity),
     Role(String),
