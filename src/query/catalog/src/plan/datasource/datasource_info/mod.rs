@@ -14,7 +14,6 @@
 
 mod data_source_info;
 mod parquet;
-mod parquet2;
 mod parquet_read_options;
 mod result_scan;
 mod stage;
@@ -23,7 +22,6 @@ pub use data_source_info::DataSourceInfo;
 pub use parquet::FullParquetMeta;
 pub use parquet::ParquetTableInfo;
 pub use parquet::ParquetTableInfo as ParquetTableInfoV2;
-pub use parquet2::Parquet2TableInfo;
 pub use parquet_read_options::ParquetReadOptions;
 pub use result_scan::ResultScanTableInfo;
 pub use stage::StageTableInfo;

@@ -517,7 +517,7 @@ impl DefaultSettings {
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Use parquet2 instead of parquet_rs when infer_schema().",
+                    desc: "This setting is deprecated",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),

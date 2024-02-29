@@ -24,16 +24,13 @@ USER=${USER:-$(whoami)}
 case $TARGET in
 x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu)
 	RUNNER_BASE="debian"
-	USER_CMD="useradd -u ${_UID} -M -s /bin/bash ${USER}"
 	;;
 x86_64-unknown-linux-musl | aarch64-unknown-linux-musl)
-	RUNNER_BASE="alpine"
-	USER_CMD="adduser -u ${_UID} -D -H -s /bin/bash ${USER}"
+	RUNNER_BASE=${TARGET}
 	;;
 *)
 	RUNNER_BASE="dev"
 	TARGET=x86_64-unknown-linux-gnu
-	USER_CMD="useradd -u ${_UID} -M -s /bin/bash ${USER}"
 	;;
 esac
 
@@ -50,7 +47,7 @@ else
 		tmpdir=$(mktemp -d)
 		cat >"${tmpdir}/Dockerfile" <<EOF
 FROM datafuselabs/build-tool:${RUNNER_BASE}-${TOOLCHAIN_VERSION}
-RUN ${USER_CMD}
+RUN useradd -u ${_UID} -M -s /bin/bash ${USER}
 RUN chown -R ${USER} /opt/rust/
 RUN printf "${USER} ALL=(ALL:ALL) NOPASSWD:ALL\\n" > /etc/sudoers.d/databend
 EOF
