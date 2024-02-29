@@ -347,7 +347,7 @@ mod get_users {
         let (res, user_infos) = prepare()?;
         let mut kv = MockKV::new();
         {
-            let k = "__fd_users/tenant1";
+            let k = "__fd_users/tenant1/";
             kv.expect_prefix_list_kv()
                 .with(predicate::eq(k))
                 .times(1)
@@ -376,7 +376,7 @@ mod get_users {
 
         let mut kv = MockKV::new();
         {
-            let k = "__fd_users/tenant1";
+            let k = "__fd_users/tenant1/";
             kv.expect_prefix_list_kv()
                 .with(predicate::eq(k))
                 .times(1)
