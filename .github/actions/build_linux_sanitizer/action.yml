@@ -50,7 +50,7 @@ runs:
       if: env.BUILD_PROFILE == 'debug' && endsWith(inputs.target, '-gnu')
       shell: bash
       run: |
-        artifacts="meta,metactl,query"
+        artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact with sanitizer ..."
           cargo -Zbuild-std -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --manifest-path src/binaries/Cargo.toml --bin databend-$artifact
