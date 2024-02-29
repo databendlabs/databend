@@ -15,7 +15,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use arrow_array::cast::AsArray;
+use arrow_array::Array;
 use arrow_array::RecordBatch;
+use arrow_array::StructArray;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Fields;
@@ -26,6 +29,7 @@ use databend_common_exception::Result;
 
 use super::EXTENSION_KEY;
 use crate::converts::arrow2::table_field_to_arrow2_field_ignore_inside_nullable;
+use crate::infer_table_schema;
 use crate::Column;
 use crate::DataBlock;
 use crate::DataField;
@@ -93,27 +97,48 @@ impl From<&DataField> for ArrowField {
 }
 
 impl DataBlock {
-    pub fn to_record_batch(self, data_schema: &DataSchema) -> Result<RecordBatch> {
+    // Notice this function may loss some struct tuples as we are using infer_schema
+    pub fn to_record_batch_with_dataschema(self, data_schema: &DataSchema) -> Result<RecordBatch> {
+        let table_schema = infer_table_schema(data_schema)?;
+        self.to_record_batch(&table_schema)
+    }
+
+    pub fn to_record_batch(self, table_schema: &TableSchema) -> Result<RecordBatch> {
         let mut arrays = Vec::with_capacity(self.columns().len());
-        let mut arrow_fields = Vec::with_capacity(self.columns().len());
         for (entry, f) in self
             .convert_to_full()
             .columns()
             .iter()
-            .zip(data_schema.fields())
+            .zip(table_schema.fields())
         {
             let column = entry.value.to_owned().into_column().unwrap();
             let array = column.into_arrow_rs();
-            let arrow_field = ArrowField::new(
-                f.name(),
-                array.data_type().clone(),
-                f.data_type().is_nullable(),
-            );
-            arrays.push(array);
-            arrow_fields.push(arrow_field);
+            let arrow_field: ArrowField = f.into();
+
+            // Ajust struct array names
+            arrays.push(Self::adjust_struct_array(array, arrow_field));
         }
-        let schema = Arc::new(ArrowSchema::new(arrow_fields));
+        let schema = Arc::new(ArrowSchema::from(table_schema));
         Ok(RecordBatch::try_new(schema, arrays)?)
+    }
+
+    fn adjust_struct_array(array: Arc<dyn Array>, arrow_field: ArrowField) -> Arc<dyn Array> {
+        if let ArrowDataType::Struct(fs) = arrow_field.data_type() {
+            let array = array.as_ref().as_struct();
+            let inner_arrays = array
+                .columns()
+                .iter()
+                .zip(fs.iter())
+                .map(|(array, arrow_field)| {
+                    Self::adjust_struct_array(array.clone(), arrow_field.as_ref().to_owned())
+                })
+                .collect();
+
+            let array = StructArray::new(fs.clone(), inner_arrays, array.nulls().cloned());
+            Arc::new(array) as _
+        } else {
+            array
+        }
     }
 }
 
