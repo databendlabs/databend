@@ -20,9 +20,11 @@ use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadJoinHandle;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
@@ -203,7 +205,20 @@ impl QueryPipelineExecutor {
         let mut guard = self.on_finished_callback.lock();
         if let Some(on_finished_callback) = guard.take() {
             drop(guard);
-            catch_unwind(move || on_finished_callback(error))??;
+
+            // untracking for on finished
+            let mut tracking_payload = ThreadTracker::new_tracking_payload();
+            if let Some(mem_stat) = &tracking_payload.mem_stat {
+                tracking_payload.mem_stat = Some(MemStat::create_child(
+                    String::from("Pipeline-on-finished"),
+                    mem_stat.get_parent_memory_stat(),
+                ));
+            }
+
+            catch_unwind(move || {
+                let _guard = ThreadTracker::tracking(tracking_payload);
+                on_finished_callback(error)
+            })??;
         }
         Ok(())
     }
@@ -274,7 +289,21 @@ impl QueryPipelineExecutor {
                 let mut guard = self.on_init_callback.lock();
                 if let Some(callback) = guard.take() {
                     drop(guard);
-                    if let Err(cause) = Result::flatten(catch_unwind(callback)) {
+
+                    // untracking for on finished
+                    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+                    if let Some(mem_stat) = &tracking_payload.mem_stat {
+                        tracking_payload.mem_stat = Some(MemStat::create_child(
+                            String::from("Pipeline-on-finished"),
+                            mem_stat.get_parent_memory_stat(),
+                        ));
+                    }
+
+                    if let Err(cause) = Result::flatten(catch_unwind(move || {
+                        let _guard = ThreadTracker::tracking(tracking_payload);
+
+                        callback()
+                    })) {
                         return Err(cause.add_message_back("(while in query pipeline init)"));
                     }
                 }
@@ -438,8 +467,21 @@ impl Drop for QueryPipelineExecutor {
                         ErrorCode::Internal("Pipeline illegal state: not successfully shutdown.")
                     }
                 };
-                if let Err(cause) =
-                    catch_unwind(move || on_finished_callback(&Err(cause))).flatten()
+
+                // untracking for on finished
+                let mut tracking_payload = ThreadTracker::new_tracking_payload();
+                if let Some(mem_stat) = &tracking_payload.mem_stat {
+                    tracking_payload.mem_stat = Some(MemStat::create_child(
+                        String::from("Pipeline-on-finished"),
+                        mem_stat.get_parent_memory_stat(),
+                    ));
+                }
+
+                if let Err(cause) = catch_unwind(move || {
+                    let _guard = ThreadTracker::tracking(tracking_payload);
+                    on_finished_callback(&Err(cause))
+                })
+                .flatten()
                 {
                     warn!("Pipeline executor shutdown failure, {:?}", cause);
                 }
