@@ -160,6 +160,8 @@ jobs:
         include:
           - {target: x86_64-unknown-linux-gnu, runner: X64}
           - {target: aarch64-unknown-linux-gnu, runner: ARM64}
+          - {target: x86_64-unknown-linux-musl, runner: X64}
+          - {target: aarch64-unknown-linux-musl, runner: X64}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -174,6 +176,7 @@ jobs:
           artifacts: sqllogictests,sqlsmith,metactl,meta,query
           upload: false
       - name: Basic Sqllogic Test
+        if: matrix.target != 'aarch64-unknown-linux-musl'
         shell: bash
         env:
           TEST_HANDLERS: http
