@@ -93,7 +93,7 @@ async fn test_password_policy() -> Result<()> {
     let res = user_mgr
         .add_password_policy(tenant, invalid_password_policy3, &CreateOption::None)
         .await;
-    assert!(res.is_err());None
+    assert!(res.is_err());
 
     // invalid min chars
     let mut invalid_password_policy4 = password_policy.clone();
@@ -186,7 +186,7 @@ async fn test_password_policy() -> Result<()> {
         )
         .await;
     assert!(res.is_ok());
-None
+
     // change the password before the `min_age_days` reached.
     user_info.update_auth_option(Some(auth_info1.clone()), None);
     user_info.update_auth_history(Some(auth_info1));
