@@ -69,6 +69,11 @@ impl TransformHashJoinProbe {
     pub(crate) fn restore(&mut self) -> Result<Event> {
         debug_assert!(self.input_port.is_finished());
         if !self.input_data.is_empty() {
+            if self.output_port.is_finished() {
+                // If `output_port` is finished, drop `input_data` and go to `async` restore
+                self.input_data.clear();
+                return Ok(Event::Async);
+            }
             self.step = HashJoinProbeStep::Running;
             self.step_logs.push(HashJoinProbeStep::Running);
             Ok(Event::Sync)
@@ -142,13 +147,11 @@ impl TransformHashJoinProbe {
                 .probe_workers
                 .store(self.join_probe_state.processor_count, Ordering::Relaxed);
         }
-
-        if self
+        let old_final_probe_workers = self
             .join_probe_state
             .final_probe_workers
-            .fetch_add(1, Ordering::Acquire)
-            == 0
-        {
+            .fetch_add(1, Ordering::Acquire);
+        if old_final_probe_workers == 0 {
             // Before probe processor into `WaitBuild` state, send `1` to channel
             // After all build processors are finished, the last one will send `2` to channel and wake up all probe processors.
             self.join_probe_state

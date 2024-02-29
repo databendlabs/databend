@@ -252,6 +252,11 @@ impl TransformHashJoinProbe {
             {
                 return Ok(Event::Async);
             }
+
+            if self.join_probe_state.hash_join_state.enable_spill {
+                return self.next_round();
+            }
+
             self.input_port.finish();
             return Ok(Event::Finished);
         }
