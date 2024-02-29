@@ -27,13 +27,6 @@ pub struct Identifier {
     pub span: Span,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ColumnPosition {
-    pub pos: usize,
-    pub name: String,
-    pub span: Span,
-}
-
 impl Identifier {
     pub fn is_quoted(&self) -> bool {
         self.quote.is_some()
@@ -65,6 +58,13 @@ impl Display for Identifier {
             write!(f, "{}", self.name)
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColumnPosition {
+    pub pos: usize,
+    pub name: String,
+    pub span: Span,
 }
 
 impl ColumnPosition {

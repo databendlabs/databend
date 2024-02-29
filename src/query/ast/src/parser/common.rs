@@ -22,6 +22,7 @@ use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
 
+use crate::ast::ColumnID;
 use crate::ast::Identifier;
 use crate::ast::TableRef;
 use crate::parser::input::Input;
@@ -179,6 +180,28 @@ pub fn table_ref(i: Input) -> IResult<TableRef> {
             table,
         }
     })(i)
+}
+
+pub fn column_id(i: Input) -> IResult<ColumnID> {
+    alt((
+        map_res(rule! { ColumnPosition }, |token| {
+            let name = token.text().to_string();
+            let pos = name[1..]
+                .parse::<usize>()
+                .map_err(|e| nom::Err::Failure(e.into()))?;
+            if pos == 0 {
+                return Err(nom::Err::Failure(ErrorKind::Other(
+                    "column position must be greater than 0",
+                )));
+            }
+            Ok(ColumnID::Position(crate::ast::ColumnPosition {
+                pos,
+                name,
+                span: Some(token.span),
+            }))
+        }),
+        map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
+    ))(i)
 }
 
 /// Parse one to two idents separated by a dot, fulfilling from the right.
