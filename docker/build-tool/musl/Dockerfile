@@ -6,7 +6,7 @@ ENV MUSL_TARGET ${ARCH}-linux-musl
 ENV MUSL_RUST_TARGET ${ARCH}-unknown-linux-musl
 
 RUN curl -sSfLo /tmp/musl-cross-make.tar.gz https://github.com/richfelker/musl-cross-make/archive/v0.9.10.tar.gz && \
-    tar -xzf /tmp/musl-cross-make.tar.gz -d /tmp && \
+    tar -xzf /tmp/musl-cross-make.tar.gz -C /tmp && \
     cd /tmp/musl-cross-make-* && \
     make install "-j$(nproc)" \
         OUTPUT=/usr/local/ \
