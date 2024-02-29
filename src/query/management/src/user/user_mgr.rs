@@ -14,13 +14,16 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::escape_for_key;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::TenantUserIdent;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
@@ -32,11 +35,9 @@ use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
 use crate::user::user_api::UserApi;
 
-static USER_API_KEY_PREFIX: &str = "__fd_users";
-
 pub struct UserMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-    user_prefix: String,
+    tenant: Tenant,
 }
 
 impl UserMgr {
@@ -49,8 +50,21 @@ impl UserMgr {
 
         Ok(UserMgr {
             kv_api,
-            user_prefix: format!("{}/{}", USER_API_KEY_PREFIX, escape_for_key(tenant)?),
+            // TODO: use NonEmptyString
+            tenant: Tenant::new(tenant),
         })
+    }
+
+    /// Create a string key to store a user@host into meta-service.
+    fn user_key(&self, username: &str, hostname: &str) -> String {
+        let ident = TenantUserIdent::new_user_host(self.tenant.clone(), username, hostname);
+        ident.to_string_key()
+    }
+
+    /// Create a prefix `<PREFIX>/<tenant>/` for listing
+    fn user_prefix(&self) -> String {
+        let ident = TenantUserIdent::new_user_host(self.tenant.clone(), "dummy", "dummy");
+        ident.tenant_prefix()
     }
 
     #[async_backtrace::framed]
@@ -59,8 +73,8 @@ impl UserMgr {
         user_info: &UserInfo,
         seq: MatchSeq,
     ) -> databend_common_exception::Result<u64> {
-        let user_key = format_user_key(&user_info.name, &user_info.hostname);
-        let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
+        let key = self.user_key(&user_info.name, &user_info.hostname);
+
         let value = serialize_struct(user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let kv_api = self.kv_api.clone();
@@ -87,8 +101,7 @@ impl UserApi for UserMgr {
         user_info: UserInfo,
         create_option: &CreateOption,
     ) -> databend_common_exception::Result<()> {
-        let user_key = format_user_key(&user_info.name, &user_info.hostname);
-        let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
+        let key = self.user_key(&user_info.name, &user_info.hostname);
         let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let kv_api = &self.kv_api;
@@ -101,7 +114,7 @@ impl UserApi for UserMgr {
             if res.prev.is_some() {
                 return Err(ErrorCode::UserAlreadyExists(format!(
                     "User {} already exists.",
-                    user_key
+                    user_info.identity()
                 )));
             }
         }
@@ -112,11 +125,11 @@ impl UserApi for UserMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<SeqV<UserInfo>> {
-        let user_key = format_user_key(&user.username, &user.hostname);
-        let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
+        let key = self.user_key(&user.username, &user.hostname);
+
         let res = self.kv_api.get_kv(&key).await?;
-        let seq_value = res
-            .ok_or_else(|| ErrorCode::UnknownUser(format!("User {} does not exist.", user_key)))?;
+        let seq_value =
+            res.ok_or_else(|| ErrorCode::UnknownUser(format!("User {} does not exist.", user)))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
@@ -125,7 +138,7 @@ impl UserApi for UserMgr {
             )),
             Err(_) => Err(ErrorCode::UnknownUser(format!(
                 "User {} does not exist.",
-                user_key
+                user
             ))),
         }
     }
@@ -133,7 +146,7 @@ impl UserApi for UserMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>> {
-        let user_prefix = self.user_prefix.clone();
+        let user_prefix = self.user_prefix();
         let values = self.kv_api.prefix_list_kv(user_prefix.as_str()).await?;
 
         let mut r = vec![];
@@ -172,8 +185,7 @@ impl UserApi for UserMgr {
 
     #[async_backtrace::framed]
     async fn drop_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<()> {
-        let user_key = format_user_key(&user.username, &user.hostname);
-        let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
+        let key = self.user_key(&user.username, &user.hostname);
         let res = self
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
@@ -183,12 +195,8 @@ impl UserApi for UserMgr {
         } else {
             Err(ErrorCode::UnknownUser(format!(
                 "Cannot delete user {}. User does not exist or invalid operation.",
-                user_key
+                user
             )))
         }
     }
-}
-
-fn format_user_key(username: &str, hostname: &str) -> String {
-    format!("'{}'@'{}'", username, hostname)
 }

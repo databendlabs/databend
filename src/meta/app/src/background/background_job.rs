@@ -70,7 +70,7 @@ impl Display for BackgroundJobType {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct ManualTriggerParams {
     pub id: String,
     pub trigger: UserIdentity,

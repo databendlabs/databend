@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use std::str::Split;
+use std::string::FromUtf8Error;
 
 use databend_common_meta_types::NonEmptyString;
 
 use crate::kvapi::helper::decode_id;
 use crate::kvapi::helper::unescape;
+use crate::kvapi::helper::unescape_specified;
 use crate::kvapi::KeyError;
 
 /// A helper for parsing a string key into structured key.
@@ -138,6 +140,16 @@ impl<'s> KeyParser<'s> {
             });
         }
         Ok(())
+    }
+
+    /// Re-export unescape()
+    pub fn unescape(s: &str) -> Result<String, FromUtf8Error> {
+        unescape(s)
+    }
+
+    /// Re-export unescape()
+    pub fn unescape_specified(s: &str, chars: &[u8]) -> Result<String, FromUtf8Error> {
+        unescape_specified(s, chars)
     }
 }
 
