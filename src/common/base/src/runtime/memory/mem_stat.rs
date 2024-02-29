@@ -100,16 +100,6 @@ impl MemStat {
         used += batch_memory_used;
         self.peak_used.fetch_max(used, Ordering::Relaxed);
 
-        // info!(
-        //     "record memory({}): {}, {}",
-        //     self.name
-        //         .as_ref()
-        //         .map(|x| x.as_str())
-        //         .unwrap_or_else(|| "Global"),
-        //     current_memory_alloc,
-        //     batch_memory_used
-        // );
-
         for (idx, parent_memory_stat) in self.parent_memory_stat.iter().enumerate() {
             if let Err(cause) = parent_memory_stat
                 .record_memory::<NEED_ROLLBACK>(batch_memory_used, current_memory_alloc)
@@ -151,26 +141,10 @@ impl MemStat {
     pub fn movein_memory(&self, size: i64) {
         let used = self.used.fetch_add(size, Ordering::Relaxed);
         self.peak_used.fetch_max(used + size, Ordering::Relaxed);
-        // info!(
-        //     "movein memory({}): {}",
-        //     self.name
-        //         .as_ref()
-        //         .map(|x| x.as_str())
-        //         .unwrap_or_else(|| "Global"),
-        //     size,
-        // );
     }
 
     pub fn moveout_memory(&self, size: i64) {
         self.used.fetch_sub(size, Ordering::Relaxed);
-        // info!(
-        //     "moveout memory({}): {}",
-        //     self.name
-        //         .as_ref()
-        //         .map(|x| x.as_str())
-        //         .unwrap_or_else(|| "Global"),
-        //     size,
-        // );
     }
 
     /// Check if used memory is out of the limit.
