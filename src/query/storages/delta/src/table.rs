@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
@@ -45,9 +44,7 @@ use databend_common_storages_parquet::ParquetRSPruner;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use deltalake::kernel::Add;
-use deltalake::logstore::default_logstore::DefaultLogStore;
-use deltalake::logstore::LogStoreConfig;
-use deltalake::DeltaTableConfig;
+use deltalake::DeltaTableBuilder;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::OnceCell;
@@ -141,7 +138,7 @@ impl DeltaTable {
             ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
         })?;
 
-        let state = table.state.current_metadata().ok_or_else(|| {
+        let state = table.metadata().map_err(|_| {
             ErrorCode::ReadTableDataError("bug: Delta table current_metadata is None.")
         })?;
         let meta = DeltaTableMeta {
@@ -159,12 +156,14 @@ impl DeltaTable {
     pub async fn load(sp: &StorageParams) -> Result<deltalake::table::DeltaTable> {
         let op = init_operator(sp)?;
         let opendal_store = Arc::new(OpendalStore::new(op));
-        let config = DeltaTableConfig::default();
-        let log_store = Arc::new(DefaultLogStore::new(opendal_store, LogStoreConfig {
-            location: Url::from_directory_path("/").unwrap(),
-            options: HashMap::new().into(),
-        }));
-        let mut table = deltalake::table::DeltaTable::new(log_store, config);
+
+        let mut table = DeltaTableBuilder::from_uri(Url::from_directory_path("/").unwrap())
+            .with_storage_backend(opendal_store, Url::from_directory_path("/").unwrap())
+            .build()
+            .map_err(|err| {
+                ErrorCode::ReadTableDataError(format!("Delta table load failed: {err:?}"))
+            })?;
+
         table.load().await.map_err(|err| {
             ErrorCode::ReadTableDataError(format!("Delta table load failed: {err:?}"))
         })?;
@@ -280,12 +279,17 @@ impl DeltaTable {
         let mut read_bytes = 0;
 
         let partition_fields = self.get_partition_fields()?;
-        let adds = table.get_state().files();
+        let adds = table
+            .snapshot()
+            .and_then(|f| f.file_actions())
+            .map_err(|e| {
+                ErrorCode::ReadTableDataError(format!("Cannot read file_actions: {e:?}"))
+            })?;
         let total_files = adds.len();
         let parts = adds.iter()
             .map(|add: &Add| {
                 let stats = add
-                    .get_stats()
+                    .get_stats_parsed()
                     .map_err(|e| ErrorCode::ReadTableDataError(format!("Cannot get stats: {e:?}")))?
                     .ok_or_else(|| {
                         ErrorCode::ReadTableDataError(format!(

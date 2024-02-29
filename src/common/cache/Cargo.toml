@@ -17,7 +17,7 @@ heapsize = ["heapsize_"]
 
 # Crates.io dependencies
 bytes = { workspace = true }
-hashbrown = { workspace = true }
+hashbrown = "0.14.3"
 hashlink = "0.8"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]

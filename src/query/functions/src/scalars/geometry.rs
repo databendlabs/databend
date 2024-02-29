@@ -40,6 +40,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "st_geomfromewkt",
         "st_geometryfromtext",
         "st_geomfromtext",
+        "to_geometry",
     ]);
 
     // functions
