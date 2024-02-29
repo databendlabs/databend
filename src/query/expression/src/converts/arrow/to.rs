@@ -115,18 +115,30 @@ impl DataBlock {
             let array = column.into_arrow_rs();
             let arrow_field: ArrowField = f.into();
 
-            // Ajust field names
-            if let ArrowDataType::Struct(fs) = arrow_field.data_type() {
-                let array = array.as_ref().as_struct();
-                let array =
-                    StructArray::new(fs.clone(), array.columns().to_vec(), array.nulls().cloned());
-                arrays.push(Arc::new(array) as _);
-            } else {
-                arrays.push(array);
-            }
+            // Ajust struct array names
+            arrays.push(Self::adjust_struct_array(array, arrow_field));
         }
         let schema = Arc::new(ArrowSchema::from(table_schema));
         Ok(RecordBatch::try_new(schema, arrays)?)
+    }
+
+    fn adjust_struct_array(array: Arc<dyn Array>, arrow_field: ArrowField) -> Arc<dyn Array> {
+        if let ArrowDataType::Struct(fs) = arrow_field.data_type() {
+            let array = array.as_ref().as_struct();
+            let inner_arrays = array
+                .columns()
+                .iter()
+                .zip(fs.iter())
+                .map(|(array, arrow_field)| {
+                    Self::adjust_struct_array(array.clone(), arrow_field.as_ref().to_owned())
+                })
+                .collect();
+
+            let array = StructArray::new(fs.clone(), inner_arrays, array.nulls().cloned());
+            Arc::new(array) as _
+        } else {
+            array
+        }
     }
 }
 
