@@ -51,7 +51,7 @@ runs:
         rust-toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
         working-directory: src/bendpy
         target: ${{ inputs.target }}
-        manylinux: auto
+        manylinux: "2_28"
         # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
         rustup-components: rust-std rustfmt
         args: ${{ steps.opts.outputs.BUILD_ARGS }}
@@ -62,7 +62,7 @@ runs:
 
     - name: Run tests
       working-directory: src/bendpy
-      if: startsWith(inputs.target, 'x86_64-')
+      if: endsWith(inputs.target, '-gnu')
       shell: bash
       run: |
         pip install dist/*.whl

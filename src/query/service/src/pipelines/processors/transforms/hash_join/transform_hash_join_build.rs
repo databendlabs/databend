@@ -38,10 +38,6 @@ pub(crate) enum HashJoinBuildStep {
     FastReturn,
     // Wait to spill
     WaitSpill,
-    // Start the first spill
-    FirstSpill,
-    // Following spill after the first spill
-    FollowSpill,
     // Wait probe
     WaitProbe,
     // The whole build phase is finished.
@@ -123,8 +119,8 @@ impl Processor for TransformHashJoinBuild {
     fn event(&mut self) -> Result<Event> {
         match self.step {
             HashJoinBuildStep::Running => {
-                if let Some(step) = self.spill_handler.check_memory_and_next_step()? {
-                    self.step = step;
+                if self.spill_handler.check_need_spill(&mut self.input_data)? {
+                    self.step = HashJoinBuildStep::WaitSpill;
                     return Ok(Event::Async);
                 }
 
@@ -141,6 +137,10 @@ impl Processor for TransformHashJoinBuild {
                 match self.input_port.has_data() {
                     true => {
                         self.input_data = Some(self.input_port.pull_data().unwrap()?);
+                        if self.spill_handler.check_need_spill(&mut self.input_data)? {
+                            self.step = HashJoinBuildStep::WaitSpill;
+                            return Ok(Event::Async);
+                        }
                         Ok(Event::Sync)
                     }
                     false => {
@@ -152,9 +152,9 @@ impl Processor for TransformHashJoinBuild {
             HashJoinBuildStep::Finalize => match self.finalize_finished {
                 false => Ok(Event::Sync),
                 true => {
-                    // If join spill is enabled, we should wait probe to spill.
+                    // If join spill is enabled and build has spilled data really, we should wait probe to spill.
                     // Then restore data from disk and build hash table, util all spilled data are processed.
-                    if self.spill_handler.enabled_spill() {
+                    if self.spill_handler.need_to_wait_probe() {
                         self.step = HashJoinBuildStep::WaitProbe;
                         Ok(Event::Async)
                     } else {
@@ -166,10 +166,7 @@ impl Processor for TransformHashJoinBuild {
                 self.input_port.finish();
                 Ok(Event::Finished)
             }
-            HashJoinBuildStep::FirstSpill
-            | HashJoinBuildStep::FollowSpill
-            | HashJoinBuildStep::WaitSpill
-            | HashJoinBuildStep::WaitProbe => Ok(Event::Async),
+            HashJoinBuildStep::WaitSpill | HashJoinBuildStep::WaitProbe => Ok(Event::Async),
         }
     }
 
@@ -187,7 +184,7 @@ impl Processor for TransformHashJoinBuild {
                     if self.spill_handler.enabled_spill() {
                         let spill_state = self.spill_handler.spill_state();
                         if spill_state.spiller.is_any_spilled() {
-                            self.step = HashJoinBuildStep::FollowSpill;
+                            self.step = HashJoinBuildStep::WaitSpill;
                             self.spill_handler.set_spill_data(data_block);
                             return Ok(());
                         }
@@ -213,8 +210,6 @@ impl Processor for TransformHashJoinBuild {
             }
             HashJoinBuildStep::FastReturn
             | HashJoinBuildStep::WaitSpill
-            | HashJoinBuildStep::FirstSpill
-            | HashJoinBuildStep::FollowSpill
             | HashJoinBuildStep::WaitProbe
             | HashJoinBuildStep::Finished => unreachable!(),
         }
@@ -237,21 +232,23 @@ impl Processor for TransformHashJoinBuild {
                 self.step = HashJoinBuildStep::Finalize;
             }
             HashJoinBuildStep::WaitSpill => {
+                if let Some(spill_data) = self.spill_handler.spill_data().take() {
+                    // `spill_data` doesn't need to wait for spilling.
+                    let unspilled_data = self
+                        .spill_handler
+                        .spill(spill_data, self.processor_id)
+                        .await?;
+                    if !unspilled_data.is_empty() {
+                        self.build_state.build(unspilled_data)?;
+                    }
+                    self.step = HashJoinBuildStep::Running;
+                    return Ok(());
+                }
                 self.spill_handler.wait_spill_notify().await?;
-                self.step = HashJoinBuildStep::FirstSpill
-            }
-            HashJoinBuildStep::FirstSpill => {
                 self.spill_handler
                     .spill_buffered_data(self.processor_id)
                     .await?;
                 // After spill, the processor should continue to run, and process incoming data.
-                self.step = HashJoinBuildStep::Running;
-            }
-            HashJoinBuildStep::FollowSpill => {
-                let unspilled_data = self.spill_handler.spill(self.processor_id).await?;
-                if !unspilled_data.is_empty() {
-                    self.build_state.build(unspilled_data)?;
-                }
                 self.step = HashJoinBuildStep::Running;
             }
             HashJoinBuildStep::WaitProbe => {

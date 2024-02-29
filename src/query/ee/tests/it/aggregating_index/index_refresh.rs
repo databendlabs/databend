@@ -33,6 +33,8 @@ use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::IndexType;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::AggregatingIndexRewriter;
 use databend_common_sql::Planner;
@@ -544,12 +546,18 @@ async fn create_index(
 
     if let Plan::CreateIndex(plan) = plan {
         let catalog = ctx.get_catalog("default").await?;
+
+        let tenant_name = ctx.get_tenant();
+
+        let non_empty = NonEmptyString::new(tenant_name.to_string()).map_err(|_| {
+            ErrorCode::TenantIsEmpty("Tenant is empty(when create_index)".to_string())
+        })?;
+
+        let tenant = Tenant::new_nonempty(non_empty);
+
         let create_index_req = CreateIndexReq {
             create_option: plan.create_option,
-            name_ident: IndexNameIdent {
-                tenant: ctx.get_tenant(),
-                index_name: index_name.to_string(),
-            },
+            name_ident: IndexNameIdent::new(tenant, index_name),
             meta: IndexMeta {
                 table_id: plan.table_id,
                 index_type: IndexType::AGGREGATING,

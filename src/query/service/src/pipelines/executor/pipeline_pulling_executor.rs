@@ -20,6 +20,7 @@ use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
@@ -292,9 +293,11 @@ impl PipelinePullingExecutor {
 
 impl Drop for PipelinePullingExecutor {
     fn drop(&mut self) {
-        let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
+        drop_guard(move || {
+            let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
 
-        self.finish(None);
+            self.finish(None);
+        })
     }
 }
 

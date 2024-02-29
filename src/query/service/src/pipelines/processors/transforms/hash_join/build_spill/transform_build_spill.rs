@@ -20,7 +20,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use log::info;
 
-use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashJoinBuildStep;
 use crate::pipelines::processors::transforms::BuildSpillState;
 
 pub struct BuildSpillHandler {
@@ -68,6 +67,21 @@ impl BuildSpillHandler {
         self.spill_data = Some(spill_data);
     }
 
+    pub(crate) fn spill_data(&mut self) -> &mut Option<DataBlock> {
+        &mut self.spill_data
+    }
+
+    pub(crate) fn need_to_wait_probe(&self) -> bool {
+        if !self.enabled_spill() {
+            return false;
+        }
+        // Spilling actually didn't happen.
+        if self.spill_state().spiller.spilled_partition_set.is_empty() {
+            return false;
+        }
+        true
+    }
+
     // Get `spilled_partition_set` from spiller and set `sent_partition_set` to true
     pub(crate) fn spilled_partition_set(&mut self) -> Option<HashSet<u8>> {
         if !self.enabled_spill() {
@@ -83,11 +97,11 @@ impl BuildSpillHandler {
     // Request `spill_coordinator` to spill, it will return two possible steps:
     // 1. WaitSpill
     // 2. Start the first spilling if the processor is the last processor which waits for spilling
-    pub(crate) fn request_spill(&mut self) -> Result<HashJoinBuildStep> {
+    pub(crate) fn request_spill(&mut self) -> Result<()> {
         let spill_state = self.spill_state_mut();
         let wait = spill_state.spill_coordinator.wait_spill()?;
         if wait {
-            return Ok(HashJoinBuildStep::WaitSpill);
+            return Ok(());
         }
         // Before notify all processors to spill, we need to collect all buffered data in `RowSpace` and `Chunks`
         // Partition all rows and stat how many partitions and rows in each partition.
@@ -103,28 +117,35 @@ impl BuildSpillHandler {
             .ready_spill_watcher
             .send(true)
             .map_err(|_| ErrorCode::TokioError("ready_spill_watcher channel is closed"))?;
-        Ok(HashJoinBuildStep::FirstSpill)
+        Ok(())
     }
 
-    // Check if fit into memory and return next step
-    // If step doesn't be changed, return None.
-    pub(crate) fn check_memory_and_next_step(&mut self) -> Result<Option<HashJoinBuildStep>> {
+    // Check if need to wait spill
+    pub(crate) fn check_need_spill(&mut self, input: &mut Option<DataBlock>) -> Result<bool> {
         if !self.enabled_spill() || self.after_spill() {
-            return Ok(None);
+            return Ok(false);
         }
         let spill_state = self.spill_state();
         if spill_state.spiller.is_all_spilled() {
-            return Ok(None);
+            return Ok(false);
         }
-        if spill_state.check_need_spill()? {
+        if spill_state.check_need_spill(input)? {
             spill_state.spill_coordinator.need_spill()?;
-            return Ok(Some(self.request_spill()?));
+            if let Some(input) = input.take() {
+                spill_state.build_state.build(input)?;
+            }
+            self.request_spill()?;
+            return Ok(true);
         } else if spill_state.spill_coordinator.get_need_spill() {
+            if let Some(input) = input.take() {
+                spill_state.build_state.build(input)?;
+            }
             // even if input can fit into memory, but there exists one processor need to spill,
             // then it needs to wait spill.
-            return Ok(Some(self.request_spill()?));
+            self.request_spill()?;
+            return Ok(true);
         }
-        Ok(None)
+        Ok(false)
     }
 
     // Check if current processor is the last processor that is responsible for notifying spilling
@@ -180,18 +201,19 @@ impl BuildSpillHandler {
     }
 
     // Spill data block and return data that wasn't spilled
-    pub(crate) async fn spill(&mut self, processor_id: usize) -> Result<DataBlock> {
-        let mut unspilled_data = DataBlock::empty();
-        if let Some(block) = self.spill_data.take() {
-            let mut hashes = Vec::with_capacity(block.num_rows());
-            let spill_state = self.spill_state_mut();
-            spill_state.get_hashes(&block, &mut hashes)?;
-            let spilled_partition_set = spill_state.spiller.spilled_partition_set.clone();
-            unspilled_data = spill_state
-                .spiller
-                .spill_input(block, &hashes, &spilled_partition_set, processor_id)
-                .await?;
-        }
+    pub(crate) async fn spill(
+        &mut self,
+        block: DataBlock,
+        processor_id: usize,
+    ) -> Result<DataBlock> {
+        let mut hashes = Vec::with_capacity(block.num_rows());
+        let spill_state = self.spill_state_mut();
+        spill_state.get_hashes(&block, &mut hashes)?;
+        let spilled_partition_set = spill_state.spiller.spilled_partition_set.clone();
+        let unspilled_data = spill_state
+            .spiller
+            .spill_input(block, &hashes, &spilled_partition_set, processor_id)
+            .await?;
         Ok(unspilled_data)
     }
 

@@ -22,6 +22,7 @@ use databend_common_base::base::signal_stream;
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use futures::stream::Abortable;
 use futures::StreamExt;
@@ -106,12 +107,16 @@ impl ShutdownHandle {
 
 impl Drop for ShutdownHandle {
     fn drop(&mut self) {
-        if let Ok(false) =
-            self.shutdown
-                .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
-        {
-            let signal_stream = DummySignalStream::create(SignalType::Exit);
-            futures::executor::block_on(self.shutdown(signal_stream, Some(Duration::from_secs(5))));
-        }
+        drop_guard(move || {
+            if let Ok(false) =
+                self.shutdown
+                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
+            {
+                let signal_stream = DummySignalStream::create(SignalType::Exit);
+                futures::executor::block_on(
+                    self.shutdown(signal_stream, Some(Duration::from_secs(5))),
+                );
+            }
+        })
     }
 }

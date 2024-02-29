@@ -26,6 +26,7 @@ pub use backtrace::dump_backtrace;
 pub use backtrace::get_all_tasks;
 pub use backtrace::AsyncTaskItem;
 pub use catch_unwind::catch_unwind;
+pub use catch_unwind::drop_guard;
 pub use catch_unwind::CatchUnwindFuture;
 pub use global_runtime::GlobalIORuntime;
 pub use global_runtime::GlobalQueryRuntime;

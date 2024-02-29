@@ -265,9 +265,15 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("join_spilling_threshold", DefaultSettingValue {
+                ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Maximum amount of memory can use for hash join, 0 is unlimited.",
+                    desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
+                ("join_spilling_bytes_threshold_per_proc", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum amount of memory in bytes that one join processor can use before spilling data to storage during query execution, 0 is unlimited.",
                     mode: SettingMode::Both,
                     range: None,
                 }),
@@ -511,7 +517,7 @@ impl DefaultSettings {
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Use parquet2 instead of parquet_rs when infer_schema().",
+                    desc: "This setting is deprecated",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),

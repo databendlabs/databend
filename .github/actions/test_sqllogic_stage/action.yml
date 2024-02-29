@@ -45,18 +45,9 @@ runs:
         aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://testbucket
         aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data s3://testbucket/data  --recursive --no-progress
 
-    - name: Run sqllogic Tests with Standalone mode parquet2 lib
-      shell: bash
-      env:
-        TEST_HANDLERS: ${{ inputs.handlers }}
-        TEST_STAGE_STORAGE: ${{ inputs.storage }}
-        TEST_STAGE_PARQUET_LIB: parquet2
-      run: bash ./scripts/ci/ci-run-sqllogic-tests-without-sandbox.sh ${{ inputs.dirs }}
-
     - name: Run sqllogic Tests with Standalone mode parquet_rs lib
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_STAGE_STORAGE: ${{ inputs.storage }}
-        TEST_STAGE_PARQUET_LIB: parquet_rs
       run: bash ./scripts/ci/ci-run-sqllogic-tests-without-sandbox.sh ${{ inputs.dirs }}

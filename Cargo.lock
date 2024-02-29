@@ -878,7 +878,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "libc",
- "miniz_oxide 0.7.1",
+ "miniz_oxide",
  "object",
  "rustc-demangle",
 ]
@@ -892,7 +892,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "libc",
- "miniz_oxide 0.7.1",
+ "miniz_oxide",
  "object",
  "rustc-demangle",
 ]
@@ -1007,36 +1007,16 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.66.1"
+version = "0.69.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b84e06fc203107bfbad243f4aba2af864eb7db3b1cf46ea0a023b0b433d2a7"
+checksum = "a00dc851838a2120612785d195287475a3ac45514741da670b735818822129a0"
 dependencies = [
  "bitflags 2.4.0",
  "cexpr",
  "clang-sys",
+ "itertools 0.11.0",
  "lazy_static",
  "lazycell",
- "peeking_take_while",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash",
- "shlex",
- "syn 2.0.46",
-]
-
-[[package]]
-name = "bindgen"
-version = "0.68.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "726e4313eb6ec35d2730258ad4e15b547ee75d6afaa1361a922e78e59b7d8078"
-dependencies = [
- "bitflags 2.4.0",
- "cexpr",
- "clang-sys",
- "lazy_static",
- "lazycell",
- "peeking_take_while",
  "proc-macro2",
  "quote",
  "regex",
@@ -2701,6 +2681,7 @@ dependencies = [
  "dashmap",
  "databend-common-arrow",
  "databend-common-ast",
+ "databend-common-base",
  "databend-common-datavalues",
  "databend-common-exception",
  "databend-common-hashtable",
@@ -2977,6 +2958,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
+ "derive_more",
  "enumflags2",
  "hex",
  "itertools 0.10.5",
@@ -3315,6 +3297,7 @@ dependencies = [
  "convert_case 0.6.0",
  "databend-common-expression",
  "databend-common-meta-app",
+ "databend-common-meta-types",
  "databend-common-protos",
  "enumflags2",
  "maplit",
@@ -3735,7 +3718,6 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-metrics",
  "databend-common-pipeline-core",
- "databend-common-pipeline-sources",
  "databend-common-sql",
  "databend-common-storage",
  "databend-storages-common-pruner",
@@ -5334,13 +5316,13 @@ dependencies = [
 
 [[package]]
 name = "flate2"
-version = "1.0.25"
+version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8a2db397cb1c8772f31494cb8917e48cd1e64f0fa7efac59fbd741a0a8ce841"
+checksum = "46303f565772937ffe1d394a4fac6f411c6013172fadde9dcdb1e147a086940e"
 dependencies = [
  "crc32fast",
  "libz-sys",
- "miniz_oxide 0.6.2",
+ "miniz_oxide",
 ]
 
 [[package]]
@@ -8671,15 +8653,6 @@ dependencies = [
 
 [[package]]
 name = "miniz_oxide"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b275950c28b37e794e8c55d88aeb5e139d0ce23fdbbeda68f8d7174abdf9e8fa"
-dependencies = [
- "adler",
-]
-
-[[package]]
-name = "miniz_oxide"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7810e0be55b428ada41041c41f32c9f1a42817901b4ccf45fa3d4b6561e74c7"
@@ -8884,7 +8857,7 @@ checksum = "06f19e4cfa0ab5a76b627cec2d81331c49b034988eaf302c3bafeada684eadef"
 dependencies = [
  "base64 0.21.0",
  "bigdecimal",
- "bindgen 0.68.1",
+ "bindgen",
  "bitflags 2.4.0",
  "bitvec",
  "btoi",
@@ -9699,12 +9672,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "peeking_take_while"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
-
-[[package]]
 name = "pem"
 version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9947,9 +9914,9 @@ dependencies = [
 
 [[package]]
 name = "pkg-config"
-version = "0.3.26"
+version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
+checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 
 [[package]]
 name = "planus"
@@ -10541,7 +10508,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset 0.9.0",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "pyo3-build-config 0.19.1",
  "pyo3-ffi",
  "pyo3-macros",
@@ -11608,8 +11575,9 @@ dependencies = [
 
 [[package]]
 name = "sentry"
-version = "0.31.5"
-source = "git+https://github.com/getsentry/sentry-rust?rev=6ef6d97#6ef6d976225f029b6d58541eb267879b40778f0b"
+version = "0.32.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "766448f12e44d68e675d5789a261515c46ac6ccd240abdd451a9c46c84a49523"
 dependencies = [
  "httpdate",
  "reqwest",
@@ -11621,13 +11589,14 @@ dependencies = [
  "sentry-tracing",
  "tokio",
  "ureq",
- "webpki-roots 0.23.1",
+ "webpki-roots 0.25.2",
 ]
 
 [[package]]
 name = "sentry-backtrace"
-version = "0.31.5"
-source = "git+https://github.com/getsentry/sentry-rust?rev=6ef6d97#6ef6d976225f029b6d58541eb267879b40778f0b"
+version = "0.32.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32701cad8b3c78101e1cd33039303154791b0ff22e7802ed8cc23212ef478b45"
 dependencies = [
  "backtrace 0.3.69 (registry+https://github.com/rust-lang/crates.io-index)",
  "once_cell",
@@ -11637,8 +11606,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-contexts"
-version = "0.31.5"
-source = "git+https://github.com/getsentry/sentry-rust?rev=6ef6d97#6ef6d976225f029b6d58541eb267879b40778f0b"
+version = "0.32.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17ddd2a91a13805bd8dab4ebf47323426f758c35f7bf24eacc1aded9668f3824"
 dependencies = [
  "hostname",
  "libc",
@@ -11650,8 +11620,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-core"
-version = "0.31.5"
-source = "git+https://github.com/getsentry/sentry-rust?rev=6ef6d97#6ef6d976225f029b6d58541eb267879b40778f0b"
+version = "0.32.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1189f68d7e7e102ef7171adf75f83a59607fafd1a5eecc9dc06c026ff3bdec4"
 dependencies = [
  "once_cell",
  "rand 0.8.5",
@@ -11662,8 +11633,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-panic"
-version = "0.31.5"
-source = "git+https://github.com/getsentry/sentry-rust?rev=6ef6d97#6ef6d976225f029b6d58541eb267879b40778f0b"
+version = "0.32.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1c18d0b5fba195a4950f2f4c31023725c76f00aabb5840b7950479ece21b5ca"
 dependencies = [
  "sentry-backtrace",
  "sentry-core",
@@ -11671,8 +11643,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-tracing"
-version = "0.31.5"
-source = "git+https://github.com/getsentry/sentry-rust?rev=6ef6d97#6ef6d976225f029b6d58541eb267879b40778f0b"
+version = "0.32.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3012699a9957d7f97047fd75d116e22d120668327db6e7c59824582e16e791b2"
 dependencies = [
  "sentry-backtrace",
  "sentry-core",
@@ -11682,12 +11655,13 @@ dependencies = [
 
 [[package]]
 name = "sentry-types"
-version = "0.31.5"
-source = "git+https://github.com/getsentry/sentry-rust?rev=6ef6d97#6ef6d976225f029b6d58541eb267879b40778f0b"
+version = "0.32.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7173fd594569091f68a7c37a886e202f4d0c1db1e1fa1d18a051ba695b2e2ec"
 dependencies = [
  "debugid",
- "getrandom 0.2.11",
  "hex",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "thiserror",
@@ -13140,7 +13114,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -14096,21 +14070,21 @@ checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
 [[package]]
 name = "z3"
 version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a7ff5718c079e7b813378d67a5bed32ccc2086f151d6185074a7e24f4a565e8"
+source = "git+https://github.com/prove-rs/z3.rs?rev=247d308#247d308f27d8b59152ad402e2d8b13d617a1a6a1"
 dependencies = [
  "log",
+ "num",
  "z3-sys",
 ]
 
 [[package]]
 name = "z3-sys"
 version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7cf70fdbc0de3f42b404f49b0d4686a82562254ea29ff0a155eef2f5430f4b0"
+source = "git+https://github.com/prove-rs/z3.rs?rev=247d308#247d308f27d8b59152ad402e2d8b13d617a1a6a1"
 dependencies = [
- "bindgen 0.66.1",
+ "bindgen",
  "cmake",
+ "pkg-config",
 ]
 
 [[package]]
