@@ -17,11 +17,10 @@
 use std::fs;
 use std::io::Write;
 
+use arrow_array::RecordBatch;
 use arrow_cast::pretty::pretty_format_batches;
 use arrow_flight::flight_service_server::FlightServiceServer;
 use arrow_flight::sql::client::FlightSqlServiceClient;
-use arrow_flight::utils::flight_data_to_batches;
-use arrow_flight::FlightData;
 use arrow_schema::ArrowError;
 use databend_common_base::base::tokio;
 use databend_common_config::InnerConfig;
@@ -68,8 +67,7 @@ async fn run_query(
         let flight_info = stmt.execute().await?;
         let ticket = flight_info.endpoint[0].ticket.as_ref().unwrap().clone();
         let flight_data = client.do_get(ticket).await?;
-        let flight_data: Vec<FlightData> = flight_data.try_collect().await.unwrap();
-        let batches = flight_data_to_batches(&flight_data)?;
+        let batches: Vec<RecordBatch> = flight_data.try_collect().await.unwrap();
         pretty_format_batches(batches.as_slice())?.to_string()
     };
     Ok(res)
