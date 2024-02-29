@@ -399,7 +399,7 @@ async fn test_users_table() -> Result<()> {
                 password_update_on: None,
                 lockout_time: None,
             },
-            &CreateOption::CreateIfNotExists(false),
+            &CreateOption::None,
         )
         .await?;
     let auth_data = AuthInfo::new(AuthType::Sha256Password, &Some("123456789".to_string()));
@@ -419,7 +419,7 @@ async fn test_users_table() -> Result<()> {
                 password_update_on: None,
                 lockout_time: None,
             },
-            &CreateOption::CreateIfNotExists(false),
+            &CreateOption::None,
         )
         .await?;
 

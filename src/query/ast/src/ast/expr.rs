@@ -31,44 +31,6 @@ use crate::ast::ColumnPosition;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum IntervalKind {
-    Year,
-    Quarter,
-    Month,
-    Day,
-    Hour,
-    Minute,
-    Second,
-    Doy,
-    Week,
-    Dow,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ColumnID {
-    Name(Identifier),
-    Position(ColumnPosition),
-}
-
-impl ColumnID {
-    pub fn name(&self) -> &str {
-        match self {
-            ColumnID::Name(id) => &id.name,
-            ColumnID::Position(id) => &id.name,
-        }
-    }
-}
-
-impl Display for ColumnID {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ColumnID::Name(id) => write!(f, "{}", id),
-            ColumnID::Position(id) => write!(f, "{}", id),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     /// Column reference, with indirection like `table.column`
@@ -256,6 +218,35 @@ pub enum Expr {
     },
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ColumnID {
+    Name(Identifier),
+    Position(ColumnPosition),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum IntervalKind {
+    Year,
+    Quarter,
+    Month,
+    Day,
+    Hour,
+    Minute,
+    Second,
+    Doy,
+    Week,
+    Dow,
+}
+
+impl ColumnID {
+    pub fn name(&self) -> &str {
+        match self {
+            ColumnID::Name(id) => &id.name,
+            ColumnID::Position(id) => &id.name,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubqueryModifier {
     Any,
@@ -277,8 +268,6 @@ pub enum Literal {
     Boolean(bool),
     Null,
 }
-
-impl Literal {}
 
 /// The display style for a map access expression
 #[derive(Debug, Clone, PartialEq)]
@@ -606,6 +595,15 @@ impl Expr {
             "DATE_SUB",
             "DATE_TRUNC",
         ]
+    }
+}
+
+impl Display for ColumnID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ColumnID::Name(id) => write!(f, "{}", id),
+            ColumnID::Position(id) => write!(f, "{}", id),
+        }
     }
 }
 

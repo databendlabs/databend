@@ -11,11 +11,11 @@ ColumnRef {
     table: None,
     column: Name(
         Identifier {
-            name: "a",
-            quote: None,
             span: Some(
                 0..1,
             ),
+            name: "a",
+            quote: None,
         },
     ),
 }
@@ -32,11 +32,11 @@ FunctionCall {
     ),
     distinct: false,
     name: Identifier {
-        name: "add",
-        quote: None,
         span: Some(
             2..5,
         ),
+        name: "add",
+        quote: None,
     },
     args: [
         ColumnRef {
@@ -47,11 +47,11 @@ FunctionCall {
             table: None,
             column: Name(
                 Identifier {
-                    name: "a",
-                    quote: None,
                     span: Some(
                         0..1,
                     ),
+                    name: "a",
+                    quote: None,
                 },
             ),
         },
@@ -63,11 +63,11 @@ FunctionCall {
             table: None,
             column: Name(
                 Identifier {
+                    span: Some(
+                        6..7,
+                    ),
                     name: "b",
                     quote: None,
-                    span: Some(
-                        6..7,
-                    ),
                 },
             ),
         },
@@ -89,11 +89,11 @@ FunctionCall {
     ),
     distinct: false,
     name: Identifier {
-        name: "add",
-        quote: None,
         span: Some(
             9..12,
         ),
+        name: "add",
+        quote: None,
     },
     args: [
         FunctionCall {
@@ -102,11 +102,11 @@ FunctionCall {
             ),
             distinct: false,
             name: Identifier {
-                name: "sub",
-                quote: None,
                 span: Some(
                     2..5,
                 ),
+                name: "sub",
+                quote: None,
             },
             args: [
                 ColumnRef {
@@ -117,11 +117,11 @@ FunctionCall {
                     table: None,
                     column: Name(
                         Identifier {
-                            name: "a",
-                            quote: None,
                             span: Some(
                                 0..1,
                             ),
+                            name: "a",
+                            quote: None,
                         },
                     ),
                 },
@@ -133,11 +133,11 @@ FunctionCall {
                     table: None,
                     column: Name(
                         Identifier {
-                            name: "b",
-                            quote: None,
                             span: Some(
                                 6..7,
                             ),
+                            name: "b",
+                            quote: None,
                         },
                     ),
                 },
@@ -154,11 +154,11 @@ FunctionCall {
             table: None,
             column: Name(
                 Identifier {
-                    name: "e",
-                    quote: None,
                     span: Some(
                         13..14,
                     ),
+                    name: "e",
+                    quote: None,
                 },
             ),
         },
@@ -180,11 +180,11 @@ FunctionCall {
     ),
     distinct: false,
     name: Identifier {
-        name: "add",
-        quote: None,
         span: Some(
             9..12,
         ),
+        name: "add",
+        quote: None,
     },
     args: [
         FunctionCall {
@@ -193,11 +193,11 @@ FunctionCall {
             ),
             distinct: false,
             name: Identifier {
-                name: "sub",
-                quote: None,
                 span: Some(
                     2..5,
                 ),
+                name: "sub",
+                quote: None,
             },
             args: [
                 ColumnRef {
@@ -208,11 +208,11 @@ FunctionCall {
                     table: None,
                     column: Name(
                         Identifier {
-                            name: "a",
-                            quote: None,
                             span: Some(
                                 0..1,
                             ),
+                            name: "a",
+                            quote: None,
                         },
                     ),
                 },
@@ -224,11 +224,11 @@ FunctionCall {
                     table: None,
                     column: Name(
                         Identifier {
-                            name: "b",
-                            quote: None,
                             span: Some(
                                 6..7,
                             ),
+                            name: "b",
+                            quote: None,
                         },
                     ),
                 },
@@ -245,11 +245,11 @@ FunctionCall {
             table: None,
             column: Name(
                 Identifier {
-                    name: "e",
-                    quote: None,
                     span: Some(
                         13..14,
                     ),
+                    name: "e",
+                    quote: None,
                 },
             ),
         },
@@ -304,11 +304,11 @@ BinaryOp {
         },
         accessor: Colon {
             key: Identifier {
-                name: "k1",
-                quote: None,
                 span: Some(
                     14..16,
                 ),
+                name: "k1",
+                quote: None,
             },
         },
     },
@@ -326,11 +326,11 @@ FunctionCall {
     ),
     distinct: false,
     name: Identifier {
-        name: "plus",
-        quote: None,
         span: Some(
             4..8,
         ),
+        name: "plus",
+        quote: None,
     },
     args: [
         Literal {
@@ -367,11 +367,11 @@ FunctionCall {
     ),
     distinct: false,
     name: Identifier {
-        name: "add",
-        quote: None,
         span: Some(
             4..7,
         ),
+        name: "add",
+        quote: None,
     },
     args: [
         Literal {
@@ -408,11 +408,11 @@ FunctionCall {
             },
             accessor: Colon {
                 key: Identifier {
-                    name: "k1",
-                    quote: None,
                     span: Some(
                         19..21,
                     ),
+                    name: "k1",
+                    quote: None,
                 },
             },
         },
@@ -434,9 +434,9 @@ FunctionCall {
     ),
     distinct: false,
     name: Identifier {
+        span: None,
         name: "array_map",
         quote: None,
-        span: None,
     },
     args: [
         FunctionCall {
@@ -445,9 +445,9 @@ FunctionCall {
             ),
             distinct: false,
             name: Identifier {
+                span: None,
                 name: "array_filter",
                 quote: None,
-                span: None,
             },
             args: [
                 Array {
@@ -488,11 +488,11 @@ FunctionCall {
                 Lambda {
                     params: [
                         Identifier {
-                            name: "x",
-                            quote: None,
                             span: Some(
                                 14..15,
                             ),
+                            name: "x",
+                            quote: None,
                         },
                     ],
                     expr: BinaryOp {
@@ -513,11 +513,11 @@ FunctionCall {
                                 table: None,
                                 column: Name(
                                     Identifier {
-                                        name: "x",
-                                        quote: None,
                                         span: Some(
                                             30..31,
                                         ),
+                                        name: "x",
+                                        quote: None,
                                     },
                                 ),
                             },
@@ -549,11 +549,11 @@ FunctionCall {
         Lambda {
             params: [
                 Identifier {
-                    name: "x",
-                    quote: None,
                     span: Some(
                         14..15,
                     ),
+                    name: "x",
+                    quote: None,
                 },
             ],
             expr: BinaryOp {
@@ -569,11 +569,11 @@ FunctionCall {
                     table: None,
                     column: Name(
                         Identifier {
-                            name: "x",
-                            quote: None,
                             span: Some(
                                 2..3,
                             ),
+                            name: "x",
+                            quote: None,
                         },
                     ),
                 },
