@@ -3962,7 +3962,6 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-metrics",
  "databend-common-pipeline-core",
- "databend-common-pipeline-sources",
  "databend-common-sql",
  "databend-common-storage",
  "databend-storages-common-pruner",

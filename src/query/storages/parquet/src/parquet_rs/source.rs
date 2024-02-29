@@ -228,7 +228,6 @@ impl Processor for ParquetSource {
                             let buffers = futures::future::try_join_all(handlers).await?;
                             self.state = State::ReadFiles(buffers);
                         }
-                        _ => unreachable!(),
                     }
                 } else {
                     self.is_finished = true;

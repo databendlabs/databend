@@ -84,7 +84,6 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_iceberg::IcebergTable;
-use databend_common_storages_parquet::Parquet2Table;
 use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
@@ -332,7 +331,6 @@ impl TableContext for QueryContext {
                 stage_info,
                 plan.tbl_args.clone(),
             ),
-            DataSourceInfo::Parquet2Source(table_info) => Parquet2Table::from_info(table_info),
             DataSourceInfo::ParquetSource(table_info) => ParquetRSTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
         }

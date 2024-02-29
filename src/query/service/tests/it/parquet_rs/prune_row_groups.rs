@@ -23,7 +23,7 @@ use databend_common_storages_parquet::ParquetRSPruner;
 use super::data::make_test_file_rg;
 use super::data::Scenario;
 use super::utils::get_data_source_plan;
-use crate::parquet_rs::utils::create_parquet2_test_fixture;
+use crate::parquet_rs::utils::create_parquet_test_fixture;
 
 /// Enable row groups pruning and test.
 async fn test(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>) {
@@ -40,7 +40,7 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
     let file_path = file.path().to_string_lossy();
     let sql = format!("select * from 'fs://{file_path}' where {predicate}");
 
-    let fixture = create_parquet2_test_fixture().await;
+    let fixture = create_parquet_test_fixture().await;
     let plan = get_data_source_plan(fixture.new_query_ctx().await.unwrap(), &sql)
         .await
         .unwrap();
