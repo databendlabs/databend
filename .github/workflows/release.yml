@@ -158,7 +158,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {target: x86_64--unknown-linux-gnu, runner: X64}
+          - {target: x86_64-unknown-linux-gnu, runner: X64}
           - {target: aarch64-unknown-linux-gnu, runner: ARM64}
     steps:
       - name: Checkout

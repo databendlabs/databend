@@ -406,7 +406,15 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
     match field.default_expr() {
         Some(default_expr) => {
             let table: Arc<dyn Table> = Arc::new(DummyTable::default());
-            let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?.remove(0);
+            let mut exprs = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
+            if exprs.len() != 1 {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "Invalid default value for column: {}, expected single expr, but got: {}",
+                    field.name(),
+                    default_expr
+                )));
+            }
+            let expr = exprs.remove(0);
             let expr = check_cast(
                 None,
                 false,
@@ -427,7 +435,7 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
                     Ok(value.to_owned())
                 }
                 _ => Err(ErrorCode::BadDataValueType(format!(
-                    "Invalid default value for column: {}, must be constant but got: {}",
+                    "Invalid default value for column: {}, must be constant, but got: {}",
                     field.name(),
                     result
                 ))),
