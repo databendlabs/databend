@@ -16,6 +16,7 @@ use std::future::Future;
 use std::time::Duration;
 
 use databend_client::error::Error as ClientError;
+use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::DropTableStmt;
@@ -209,6 +210,18 @@ impl Runner {
 
             let alter_stmt_opt = generator.gen_alter(table, row_count);
             if let Some((alter_stmt, new_table, insert_stmt_opt)) = alter_stmt_opt {
+                if let AlterTableAction::RenameTable { ref new_table } = alter_stmt.action {
+                    let drop_table_stmt = DropTableStmt {
+                        if_exists: true,
+                        catalog: None,
+                        database: None,
+                        table: new_table.clone(),
+                        all: false,
+                    };
+                    let drop_table_sql = drop_table_stmt.to_string();
+                    tracing::info!("drop_table_sql: {}", drop_table_sql);
+                    Self::check_res(conn.exec(&drop_table_sql).await);
+                }
                 let alter_sql = alter_stmt.to_string();
                 tracing::info!("alter_sql: {}", alter_sql);
                 Self::check_res(conn.exec(&alter_sql).await);

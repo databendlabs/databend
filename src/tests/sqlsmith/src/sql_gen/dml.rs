@@ -540,24 +540,27 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                         if j > 0 {
                             buf.extend_from_slice(b",");
                         }
-                        if column.data_type().remove_nullable() == DataType::Bitmap {
-                            // convert binary bitmap to string
-                            match unsafe { column.index_unchecked(i) } {
-                                ScalarRef::Null => {
-                                    buf.extend_from_slice(NULL_BYTES_UPPER.as_bytes());
-                                }
-                                ScalarRef::Bitmap(v) => {
-                                    let rb = RoaringTreemap::deserialize_from(v).unwrap();
-                                    let vals = rb.into_iter().collect::<Vec<_>>();
-                                    let s = join(vals.iter(), ",");
-                                    buf.push(b'\'');
-                                    buf.extend_from_slice(s.as_bytes());
-                                    buf.push(b'\'');
-                                }
-                                _ => unreachable!(),
+                        // rewrite binary and bitmap values
+                        match unsafe { column.index_unchecked(i) } {
+                            ScalarRef::Null => {
+                                buf.extend_from_slice(NULL_BYTES_UPPER.as_bytes());
                             }
-                        } else {
-                            encoder.write_field(column, i, &mut buf, true);
+                            ScalarRef::Bitmap(v) => {
+                                let rb = RoaringTreemap::deserialize_from(v).unwrap();
+                                let vals = rb.into_iter().collect::<Vec<_>>();
+                                let s = join(vals.iter(), ",");
+                                buf.push(b'\'');
+                                buf.extend_from_slice(s.as_bytes());
+                                buf.push(b'\'');
+                            }
+                            ScalarRef::Binary(v) => {
+                                buf.extend_from_slice("to_binary('".as_bytes());
+                                buf.extend_from_slice(v);
+                                buf.extend_from_slice("')".as_bytes());
+                            }
+                            _ => {
+                                encoder.write_field(column, i, &mut buf, true);
+                            }
                         }
                     }
                     buf.extend_from_slice(b")");
