@@ -338,13 +338,14 @@ impl HttpQuery {
                 Some(TxnState::Active) => {
                     if let Some(ServerInfo { id, start_time }) = &session_conf.last_server_info {
                         if http_query_manager.server_info.id != *id {
-                            return Err(ErrorCode::InvalidSessionState(
-                                "transaction is active but last_query_ids is empty".to_string(),
-                            ));
+                            return Err(ErrorCode::InvalidSessionState(format!(
+                                "transaction is active, but the request routed to the wrong server: current server is {}, the last is {}.",
+                                http_query_manager.server_info.id, id
+                            )));
                         }
                         if http_query_manager.server_info.start_time != *start_time {
                             return Err(ErrorCode::CurrentTransactionIsAborted(format!(
-                                "transaction is aborted because server restarted as {}.",
+                                "transaction is aborted because server restarted at {}.",
                                 start_time
                             )));
                         }
