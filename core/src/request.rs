@@ -15,7 +15,11 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct ServerInfo {
+    pub id: String,
+    pub start_time: String,
+}
 #[derive(Deserialize, Serialize, Debug, Default, Clone)]
 pub struct SessionState {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -26,6 +30,13 @@ pub struct SessionState {
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secondary_roles: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub txn_state: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_server_info: Option<ServerInfo>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub last_query_ids: Vec<String>,
 }
 
 impl SessionState {
@@ -117,6 +128,9 @@ mod test {
                 settings: Some(BTreeMap::new()),
                 role: None,
                 secondary_roles: None,
+                txn_state: None,
+                last_server_info: None,
+                last_query_ids: vec![],
             }))
             .with_pagination(Some(PaginationConfig {
                 wait_time_secs: Some(1),
