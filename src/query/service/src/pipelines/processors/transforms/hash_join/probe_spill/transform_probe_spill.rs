@@ -99,6 +99,7 @@ impl TransformHashJoinProbe {
         // The last processor will notify build side to finish.
         self.join_probe_state.finish_final_probe()?;
         self.output_port.finish();
+        self.input_port.finish();
         Ok(Event::Finished)
     }
 
