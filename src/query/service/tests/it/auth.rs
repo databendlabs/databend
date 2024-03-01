@@ -156,7 +156,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
             .add_user(
                 tenant.as_str(),
                 user2_info.clone(),
-                &CreateOption::CreateIfNotExists(true),
+                &CreateOption::CreateIfNotExists,
             )
             .await?;
         let res2 = auth_mgr

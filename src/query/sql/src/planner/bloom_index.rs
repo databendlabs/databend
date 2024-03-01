@@ -17,7 +17,7 @@ use std::str::FromStr;
 
 use databend_common_ast::parser::parse_comma_separated_idents;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::is_stream_column_id;

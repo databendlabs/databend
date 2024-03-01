@@ -584,10 +584,8 @@ impl Display for Statement {
                     write!(f, " OR REPLACE")?;
                 }
                 write!(f, " FILE_FORMAT")?;
-                if let CreateOption::CreateIfNotExists(if_not_exists) = create_option {
-                    if *if_not_exists {
-                        write!(f, " IF NOT EXISTS")?;
-                    }
+                if let CreateOption::CreateIfNotExists = create_option {
+                    write!(f, " IF NOT EXISTS")?;
                 }
                 write!(f, " {name}")?;
                 write!(f, " {file_format_options}")?;

@@ -22,7 +22,7 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::VisitorMut;
+use databend_common_ast::ast::VisitorMut;
 
 #[derive(Debug, Clone, Default)]
 pub struct DistinctToGroupBy {}

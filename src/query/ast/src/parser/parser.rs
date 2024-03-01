@@ -18,21 +18,21 @@ use databend_common_exception::Result;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Statement;
-use crate::error::display_parser_error;
-use crate::input::Dialect;
-use crate::input::Input;
+use crate::parser::common::comma_separated_list0;
+use crate::parser::common::comma_separated_list1;
+use crate::parser::common::ident;
+use crate::parser::common::transform_span;
+use crate::parser::common::IResult;
+use crate::parser::error::display_parser_error;
 use crate::parser::expr::expr;
 use crate::parser::expr::values_with_placeholder;
+use crate::parser::input::Dialect;
+use crate::parser::input::Input;
 use crate::parser::statement::statement;
 use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
-use crate::util::comma_separated_list0;
-use crate::util::comma_separated_list1;
-use crate::util::ident;
-use crate::util::transform_span;
-use crate::util::IResult;
-use crate::Backtrace;
+use crate::parser::Backtrace;
 
 pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
     Tokenizer::new(sql).collect::<Result<Vec<_>>>()

@@ -28,11 +28,11 @@ Query {
                         Excludes(
                             [
                                 Identifier {
-                                    name: "c1",
-                                    quote: None,
                                     span: Some(
                                         17..19,
                                     ),
+                                    name: "c1",
+                                    quote: None,
                                 },
                             ],
                         ),
@@ -42,11 +42,11 @@ Query {
                     qualified: [
                         Identifier(
                             Identifier {
-                                name: "b",
-                                quote: None,
                                 span: Some(
                                     21..22,
                                 ),
+                                name: "b",
+                                quote: None,
                             },
                         ),
                         Star(
@@ -59,25 +59,25 @@ Query {
                         Excludes(
                             [
                                 Identifier {
-                                    name: "c2",
-                                    quote: None,
                                     span: Some(
                                         34..36,
                                     ),
+                                    name: "c2",
+                                    quote: None,
                                 },
                                 Identifier {
-                                    name: "c3",
-                                    quote: None,
                                     span: Some(
                                         38..40,
                                     ),
+                                    name: "c3",
+                                    quote: None,
                                 },
                                 Identifier {
-                                    name: "c4",
-                                    quote: None,
                                     span: Some(
                                         42..44,
                                     ),
+                                    name: "c4",
+                                    quote: None,
                                 },
                             ],
                         ),
@@ -105,11 +105,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "a",
-                                            quote: None,
                                             span: Some(
                                                 81..82,
                                             ),
+                                            name: "a",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -121,11 +121,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "b",
-                                            quote: None,
                                             span: Some(
                                                 85..86,
                                             ),
+                                            name: "b",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -138,11 +138,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "customer",
-                                quote: None,
                                 span: Some(
                                     51..59,
                                 ),
+                                name: "customer",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -157,11 +157,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "orders",
-                                quote: None,
                                 span: Some(
                                     71..77,
                                 ),
+                                name: "orders",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -226,9 +226,9 @@ Query {
                             Lambda {
                                 params: [
                                     Identifier {
+                                        span: None,
                                         name: "_t",
                                         quote: None,
-                                        span: None,
                                     },
                                 ],
                                 expr: BinaryOp {
@@ -242,9 +242,9 @@ Query {
                                         table: None,
                                         column: Name(
                                             Identifier {
+                                                span: None,
                                                 name: "_t",
                                                 quote: None,
-                                                span: None,
                                             },
                                         ),
                                     },
@@ -274,11 +274,11 @@ Query {
                             Lambda {
                                 params: [
                                     Identifier {
-                                        name: "a",
-                                        quote: None,
                                         span: Some(
                                             31..32,
                                         ),
+                                        name: "a",
+                                        quote: None,
                                     },
                                 ],
                                 expr: BinaryOp {
@@ -292,11 +292,11 @@ Query {
                                         ),
                                         distinct: false,
                                         name: Identifier {
-                                            name: "length",
-                                            quote: None,
                                             span: Some(
                                                 36..42,
                                             ),
+                                            name: "length",
+                                            quote: None,
                                         },
                                         args: [
                                             ColumnRef {
@@ -307,11 +307,11 @@ Query {
                                                 table: None,
                                                 column: Name(
                                                     Identifier {
-                                                        name: "a",
-                                                        quote: None,
                                                         span: Some(
                                                             43..44,
                                                         ),
+                                                        name: "a",
+                                                        quote: None,
                                                     },
                                                 ),
                                             },
@@ -342,11 +342,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "t",
-                        quote: None,
                         span: Some(
                             56..57,
                         ),
+                        name: "t",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -413,11 +413,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "customer",
-                                quote: None,
                                 span: Some(
                                     14..22,
                                 ),
+                                name: "customer",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -432,11 +432,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "orders",
-                                quote: None,
                                 span: Some(
                                     34..40,
                                 ),
+                                name: "orders",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -505,11 +505,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "customer",
-                                quote: None,
                                 span: Some(
                                     14..22,
                                 ),
+                                name: "customer",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -524,11 +524,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "orders",
-                                quote: None,
                                 span: Some(
                                     34..40,
                                 ),
+                                name: "orders",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -603,11 +603,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "a",
-                                            quote: None,
                                             span: Some(
                                                 45..46,
                                             ),
+                                            name: "a",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -619,11 +619,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "b",
-                                            quote: None,
                                             span: Some(
                                                 49..50,
                                             ),
+                                            name: "b",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -636,11 +636,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "customer",
-                                quote: None,
                                 span: Some(
                                     14..22,
                                 ),
+                                name: "customer",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -655,11 +655,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "orders",
-                                quote: None,
                                 span: Some(
                                     34..40,
                                 ),
+                                name: "orders",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -734,11 +734,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "a",
-                                            quote: None,
                                             span: Some(
                                                 44..45,
                                             ),
+                                            name: "a",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -750,11 +750,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "b",
-                                            quote: None,
                                             span: Some(
                                                 48..49,
                                             ),
+                                            name: "b",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -767,11 +767,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "customer",
-                                quote: None,
                                 span: Some(
                                     14..22,
                                 ),
+                                name: "customer",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -786,11 +786,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "orders",
-                                quote: None,
                                 span: Some(
                                     34..40,
                                 ),
+                                name: "orders",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -874,11 +874,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "a",
-                                            quote: None,
                                             span: Some(
                                                 44..45,
                                             ),
+                                            name: "a",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -890,11 +890,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "b",
-                                            quote: None,
                                             span: Some(
                                                 48..49,
                                             ),
+                                            name: "b",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -907,11 +907,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "customer",
-                                quote: None,
                                 span: Some(
                                     14..22,
                                 ),
+                                name: "customer",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -926,11 +926,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "orders",
-                                quote: None,
                                 span: Some(
                                     34..40,
                                 ),
+                                name: "orders",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -1017,11 +1017,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "customer",
-                                quote: None,
                                 span: Some(
                                     14..22,
                                 ),
+                                name: "customer",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -1036,11 +1036,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "orders",
-                                quote: None,
                                 span: Some(
                                     41..47,
                                 ),
+                                name: "orders",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -1104,11 +1104,11 @@ Query {
                         condition: Using(
                             [
                                 Identifier {
-                                    name: "id",
-                                    quote: None,
                                     span: Some(
                                         73..75,
                                     ),
+                                    name: "id",
+                                    quote: None,
                                 },
                             ],
                         ),
@@ -1126,11 +1126,11 @@ Query {
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
-                                        name: "customer",
-                                        quote: None,
                                         span: Some(
                                             14..22,
                                         ),
+                                        name: "customer",
+                                        quote: None,
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -1145,11 +1145,11 @@ Query {
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
-                                        name: "orders",
-                                        quote: None,
                                         span: Some(
                                             36..42,
                                         ),
+                                        name: "orders",
+                                        quote: None,
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -1166,11 +1166,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "detail",
-                                quote: None,
                                 span: Some(
                                     59..65,
                                 ),
+                                name: "detail",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -1217,19 +1217,19 @@ Query {
                     ),
                     alias: TableAlias {
                         name: Identifier {
-                            name: "t2",
-                            quote: None,
                             span: Some(
                                 5..7,
                             ),
+                            name: "t2",
+                            quote: None,
                         },
                         columns: [
                             Identifier {
-                                name: "tt",
-                                quote: None,
                                 span: Some(
                                     8..10,
                                 ),
+                                name: "tt",
+                                quote: None,
                             },
                         ],
                     },
@@ -1256,11 +1256,11 @@ Query {
                                             table: None,
                                             column: Name(
                                                 Identifier {
-                                                    name: "a",
-                                                    quote: None,
                                                     span: Some(
                                                         23..24,
                                                     ),
+                                                    name: "a",
+                                                    quote: None,
                                                 },
                                             ),
                                         },
@@ -1275,11 +1275,11 @@ Query {
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
-                                            name: "t",
-                                            quote: None,
                                             span: Some(
                                                 30..31,
                                             ),
+                                            name: "t",
+                                            quote: None,
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -1320,20 +1320,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t2",
-                                quote: None,
                                 span: Some(
                                     40..42,
                                 ),
+                                name: "t2",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "tt",
-                                quote: None,
                                 span: Some(
                                     43..45,
                                 ),
+                                name: "tt",
+                                quote: None,
                             },
                         ),
                     },
@@ -1348,11 +1348,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "t2",
-                        quote: None,
                         span: Some(
                             51..53,
                         ),
+                        name: "t2",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -1374,20 +1374,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t2",
-                                quote: None,
                                 span: Some(
                                     61..63,
                                 ),
+                                name: "t2",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "tt",
-                                quote: None,
                                 span: Some(
                                     64..66,
                                 ),
+                                name: "tt",
+                                quote: None,
                             },
                         ),
                     },
@@ -1436,19 +1436,19 @@ Query {
                     ),
                     alias: TableAlias {
                         name: Identifier {
-                            name: "t2",
-                            quote: None,
                             span: Some(
                                 5..7,
                             ),
+                            name: "t2",
+                            quote: None,
                         },
                         columns: [
                             Identifier {
-                                name: "tt",
-                                quote: None,
                                 span: Some(
                                     8..10,
                                 ),
+                                name: "tt",
+                                quote: None,
                             },
                         ],
                     },
@@ -1475,11 +1475,11 @@ Query {
                                             table: None,
                                             column: Name(
                                                 Identifier {
-                                                    name: "a",
-                                                    quote: None,
                                                     span: Some(
                                                         36..37,
                                                     ),
+                                                    name: "a",
+                                                    quote: None,
                                                 },
                                             ),
                                         },
@@ -1494,11 +1494,11 @@ Query {
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
-                                            name: "t",
-                                            quote: None,
                                             span: Some(
                                                 43..44,
                                             ),
+                                            name: "t",
+                                            quote: None,
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -1539,20 +1539,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t2",
-                                quote: None,
                                 span: Some(
                                     53..55,
                                 ),
+                                name: "t2",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "tt",
-                                quote: None,
                                 span: Some(
                                     56..58,
                                 ),
+                                name: "tt",
+                                quote: None,
                             },
                         ),
                     },
@@ -1567,11 +1567,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "t2",
-                        quote: None,
                         span: Some(
                             64..66,
                         ),
+                        name: "t2",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -1593,20 +1593,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t2",
-                                quote: None,
                                 span: Some(
                                     74..76,
                                 ),
+                                name: "t2",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "tt",
-                                quote: None,
                                 span: Some(
                                     77..79,
                                 ),
+                                name: "tt",
+                                quote: None,
                             },
                         ),
                     },
@@ -1655,11 +1655,11 @@ Query {
                     ),
                     alias: TableAlias {
                         name: Identifier {
-                            name: "t2",
-                            quote: None,
                             span: Some(
                                 5..7,
                             ),
+                            name: "t2",
+                            quote: None,
                         },
                         columns: [],
                     },
@@ -1686,11 +1686,11 @@ Query {
                                             table: None,
                                             column: Name(
                                                 Identifier {
-                                                    name: "a",
-                                                    quote: None,
                                                     span: Some(
                                                         19..20,
                                                     ),
+                                                    name: "a",
+                                                    quote: None,
                                                 },
                                             ),
                                         },
@@ -1705,11 +1705,11 @@ Query {
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
-                                            name: "t",
-                                            quote: None,
                                             span: Some(
                                                 26..27,
                                             ),
+                                            name: "t",
+                                            quote: None,
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -1750,20 +1750,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t2",
-                                quote: None,
                                 span: Some(
                                     36..38,
                                 ),
+                                name: "t2",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "a",
-                                quote: None,
                                 span: Some(
                                     39..40,
                                 ),
+                                name: "a",
+                                quote: None,
                             },
                         ),
                     },
@@ -1778,11 +1778,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "t2",
-                        quote: None,
                         span: Some(
                             46..48,
                         ),
+                        name: "t2",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -1804,20 +1804,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t2",
-                                quote: None,
                                 span: Some(
                                     56..58,
                                 ),
+                                name: "t2",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "a",
-                                quote: None,
                                 span: Some(
                                     59..60,
                                 ),
+                                name: "a",
+                                quote: None,
                             },
                         ),
                     },
@@ -1866,19 +1866,19 @@ Query {
                     ),
                     alias: TableAlias {
                         name: Identifier {
-                            name: "t2",
-                            quote: None,
                             span: Some(
                                 5..7,
                             ),
+                            name: "t2",
+                            quote: None,
                         },
                         columns: [
                             Identifier {
-                                name: "tt",
-                                quote: None,
                                 span: Some(
                                     8..10,
                                 ),
+                                name: "tt",
+                                quote: None,
                             },
                         ],
                     },
@@ -1905,11 +1905,11 @@ Query {
                                             table: None,
                                             column: Name(
                                                 Identifier {
-                                                    name: "a",
-                                                    quote: None,
                                                     span: Some(
                                                         36..37,
                                                     ),
+                                                    name: "a",
+                                                    quote: None,
                                                 },
                                             ),
                                         },
@@ -1924,11 +1924,11 @@ Query {
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
-                                            name: "t",
-                                            quote: None,
                                             span: Some(
                                                 43..44,
                                             ),
+                                            name: "t",
+                                            quote: None,
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -1956,11 +1956,11 @@ Query {
                     ),
                     alias: TableAlias {
                         name: Identifier {
-                            name: "t3",
-                            quote: None,
                             span: Some(
                                 47..49,
                             ),
+                            name: "t3",
+                            quote: None,
                         },
                         columns: [],
                     },
@@ -1997,11 +1997,11 @@ Query {
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
-                                            name: "t",
-                                            quote: None,
                                             span: Some(
                                                 81..82,
                                             ),
+                                            name: "t",
+                                            quote: None,
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -2029,11 +2029,11 @@ Query {
                     ),
                     alias: TableAlias {
                         name: Identifier {
-                            name: "t4",
-                            quote: None,
                             span: Some(
                                 85..87,
                             ),
+                            name: "t4",
+                            quote: None,
                         },
                         columns: [],
                     },
@@ -2060,11 +2060,11 @@ Query {
                                             table: None,
                                             column: Name(
                                                 Identifier {
-                                                    name: "a",
-                                                    quote: None,
                                                     span: Some(
                                                         99..100,
                                                     ),
+                                                    name: "a",
+                                                    quote: None,
                                                 },
                                             ),
                                         },
@@ -2079,11 +2079,11 @@ Query {
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
-                                            name: "t",
-                                            quote: None,
                                             span: Some(
                                                 106..107,
                                             ),
+                                            name: "t",
+                                            quote: None,
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -2106,11 +2106,11 @@ Query {
                                             table: None,
                                             column: Name(
                                                 Identifier {
-                                                    name: "a",
-                                                    quote: None,
                                                     span: Some(
                                                         114..115,
                                                     ),
+                                                    name: "a",
+                                                    quote: None,
                                                 },
                                             ),
                                         },
@@ -2155,20 +2155,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t2",
-                                quote: None,
                                 span: Some(
                                     128..130,
                                 ),
+                                name: "t2",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "tt",
-                                quote: None,
                                 span: Some(
                                     131..133,
                                 ),
+                                name: "tt",
+                                quote: None,
                             },
                         ),
                     },
@@ -2182,20 +2182,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t3",
-                                quote: None,
                                 span: Some(
                                     135..137,
                                 ),
+                                name: "t3",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "a",
-                                quote: None,
                                 span: Some(
                                     138..139,
                                 ),
+                                name: "a",
+                                quote: None,
                             },
                         ),
                     },
@@ -2209,20 +2209,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t4",
-                                quote: None,
                                 span: Some(
                                     141..143,
                                 ),
+                                name: "t4",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "a",
-                                quote: None,
                                 span: Some(
                                     144..145,
                                 ),
+                                name: "a",
+                                quote: None,
                             },
                         ),
                     },
@@ -2237,11 +2237,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "t2",
-                        quote: None,
                         span: Some(
                             151..153,
                         ),
+                        name: "t2",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -2256,11 +2256,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "t3",
-                        quote: None,
                         span: Some(
                             155..157,
                         ),
+                        name: "t3",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -2275,11 +2275,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "t4",
-                        quote: None,
                         span: Some(
                             159..161,
                         ),
+                        name: "t4",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -2301,20 +2301,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t2",
-                                quote: None,
                                 span: Some(
                                     168..170,
                                 ),
+                                name: "t2",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "tt",
-                                quote: None,
                                 span: Some(
                                     171..173,
                                 ),
+                                name: "tt",
+                                quote: None,
                             },
                         ),
                     },
@@ -2363,19 +2363,19 @@ Query {
                     ),
                     alias: TableAlias {
                         name: Identifier {
-                            name: "t2",
-                            quote: None,
                             span: Some(
                                 15..17,
                             ),
+                            name: "t2",
+                            quote: None,
                         },
                         columns: [
                             Identifier {
-                                name: "tt",
-                                quote: None,
                                 span: Some(
                                     18..20,
                                 ),
+                                name: "tt",
+                                quote: None,
                             },
                         ],
                     },
@@ -2409,11 +2409,11 @@ Query {
                                                     table: None,
                                                     column: Name(
                                                         Identifier {
-                                                            name: "a",
-                                                            quote: None,
                                                             span: Some(
                                                                 33..34,
                                                             ),
+                                                            name: "a",
+                                                            quote: None,
                                                         },
                                                     ),
                                                 },
@@ -2428,11 +2428,11 @@ Query {
                                                 catalog: None,
                                                 database: None,
                                                 table: Identifier {
-                                                    name: "t1",
-                                                    quote: None,
                                                     span: Some(
                                                         40..42,
                                                     ),
+                                                    name: "t1",
+                                                    quote: None,
                                                 },
                                                 alias: None,
                                                 travel_point: None,
@@ -2465,11 +2465,11 @@ Query {
                                                     table: None,
                                                     column: Name(
                                                         Identifier {
-                                                            name: "tt",
-                                                            quote: None,
                                                             span: Some(
                                                                 56..58,
                                                             ),
+                                                            name: "tt",
+                                                            quote: None,
                                                         },
                                                     ),
                                                 },
@@ -2484,11 +2484,11 @@ Query {
                                                 catalog: None,
                                                 database: None,
                                                 table: Identifier {
-                                                    name: "t2",
-                                                    quote: None,
                                                     span: Some(
                                                         64..66,
                                                     ),
+                                                    name: "t2",
+                                                    quote: None,
                                                 },
                                                 alias: None,
                                                 travel_point: None,
@@ -2531,20 +2531,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t2",
-                                quote: None,
                                 span: Some(
                                     75..77,
                                 ),
+                                name: "t2",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "tt",
-                                quote: None,
                                 span: Some(
                                     78..80,
                                 ),
+                                name: "tt",
+                                quote: None,
                             },
                         ),
                     },
@@ -2559,11 +2559,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "t2",
-                        quote: None,
                         span: Some(
                             86..88,
                         ),
+                        name: "t2",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -2608,26 +2608,26 @@ Query {
                     ),
                     alias: TableAlias {
                         name: Identifier {
-                            name: "t",
-                            quote: None,
                             span: Some(
                                 5..6,
                             ),
+                            name: "t",
+                            quote: None,
                         },
                         columns: [
                             Identifier {
-                                name: "a",
-                                quote: None,
                                 span: Some(
                                     7..8,
                                 ),
+                                name: "a",
+                                quote: None,
                             },
                             Identifier {
-                                name: "b",
-                                quote: None,
                                 span: Some(
                                     9..10,
                                 ),
+                                name: "b",
+                                quote: None,
                             },
                         ],
                     },
@@ -2719,20 +2719,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t",
-                                quote: None,
                                 span: Some(
                                     54..55,
                                 ),
+                                name: "t",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "a",
-                                quote: None,
                                 span: Some(
                                     56..57,
                                 ),
+                                name: "a",
+                                quote: None,
                             },
                         ),
                     },
@@ -2746,20 +2746,20 @@ Query {
                         database: None,
                         table: Some(
                             Identifier {
-                                name: "t",
-                                quote: None,
                                 span: Some(
                                     59..60,
                                 ),
+                                name: "t",
+                                quote: None,
                             },
                         ),
                         column: Name(
                             Identifier {
-                                name: "b",
-                                quote: None,
                                 span: Some(
                                     61..62,
                                 ),
+                                name: "b",
+                                quote: None,
                             },
                         ),
                     },
@@ -2774,11 +2774,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "t",
-                        quote: None,
                         span: Some(
                             68..69,
                         ),
+                        name: "t",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -2843,21 +2843,21 @@ Query {
                         table: None,
                         column: Name(
                             Identifier {
-                                name: "c_count",
-                                quote: None,
                                 span: Some(
                                     7..14,
                                 ),
+                                name: "c_count",
+                                quote: None,
                             },
                         ),
                     },
                     alias: Some(
                         Identifier {
-                            name: "cc",
-                            quote: None,
                             span: Some(
                                 15..17,
                             ),
+                            name: "cc",
+                            quote: None,
                         },
                     ),
                 },
@@ -2870,11 +2870,11 @@ Query {
                     },
                     alias: Some(
                         Identifier {
-                            name: "custdist",
-                            quote: None,
                             span: Some(
                                 31..39,
                             ),
+                            name: "custdist",
+                            quote: None,
                         },
                     ),
                 },
@@ -2885,11 +2885,11 @@ Query {
                         ),
                         distinct: false,
                         name: Identifier {
-                            name: "sum",
-                            quote: None,
                             span: Some(
                                 41..44,
                             ),
+                            name: "sum",
+                            quote: None,
                         },
                         args: [
                             ColumnRef {
@@ -2900,11 +2900,11 @@ Query {
                                 table: None,
                                 column: Name(
                                     Identifier {
-                                        name: "c_acctbal",
-                                        quote: None,
                                         span: Some(
                                             45..54,
                                         ),
+                                        name: "c_acctbal",
+                                        quote: None,
                                     },
                                 ),
                             },
@@ -2915,11 +2915,11 @@ Query {
                     },
                     alias: Some(
                         Identifier {
-                            name: "totacctbal",
-                            quote: None,
                             span: Some(
                                 59..69,
                             ),
+                            name: "totacctbal",
+                            quote: None,
                         },
                     ),
                 },
@@ -2932,11 +2932,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "customer",
-                        quote: None,
                         span: Some(
                             87..95,
                         ),
+                        name: "customer",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -2951,20 +2951,20 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "orders",
-                        quote: None,
                         span: Some(
                             97..103,
                         ),
+                        name: "orders",
+                        quote: None,
                     },
                     alias: Some(
                         TableAlias {
                             name: Identifier {
-                                name: "ODS",
-                                quote: None,
                                 span: Some(
                                     104..107,
                                 ),
+                                name: "ODS",
+                                quote: None,
                             },
                             columns: [],
                         },
@@ -3001,11 +3001,11 @@ Query {
                                             table: None,
                                             column: Name(
                                                 Identifier {
-                                                    name: "c_custkey",
-                                                    quote: None,
                                                     span: Some(
                                                         178..187,
                                                     ),
+                                                    name: "c_custkey",
+                                                    quote: None,
                                                 },
                                             ),
                                         },
@@ -3018,11 +3018,11 @@ Query {
                                             ),
                                             distinct: false,
                                             name: Identifier {
-                                                name: "count",
-                                                quote: None,
                                                 span: Some(
                                                     213..218,
                                                 ),
+                                                name: "count",
+                                                quote: None,
                                             },
                                             args: [
                                                 ColumnRef {
@@ -3033,11 +3033,11 @@ Query {
                                                     table: None,
                                                     column: Name(
                                                         Identifier {
-                                                            name: "o_orderkey",
-                                                            quote: None,
                                                             span: Some(
                                                                 219..229,
                                                             ),
+                                                            name: "o_orderkey",
+                                                            quote: None,
                                                         },
                                                     ),
                                                 },
@@ -3075,11 +3075,11 @@ Query {
                                                             table: None,
                                                             column: Name(
                                                                 Identifier {
-                                                                    name: "c_custkey",
-                                                                    quote: None,
                                                                     span: Some(
                                                                         343..352,
                                                                     ),
+                                                                    name: "c_custkey",
+                                                                    quote: None,
                                                                 },
                                                             ),
                                                         },
@@ -3091,11 +3091,11 @@ Query {
                                                             table: None,
                                                             column: Name(
                                                                 Identifier {
-                                                                    name: "o_custkey",
-                                                                    quote: None,
                                                                     span: Some(
                                                                         355..364,
                                                                     ),
+                                                                    name: "o_custkey",
+                                                                    quote: None,
                                                                 },
                                                             ),
                                                         },
@@ -3113,11 +3113,11 @@ Query {
                                                             table: None,
                                                             column: Name(
                                                                 Identifier {
-                                                                    name: "o_comment",
-                                                                    quote: None,
                                                                     span: Some(
                                                                         397..406,
                                                                     ),
+                                                                    name: "o_comment",
+                                                                    quote: None,
                                                                 },
                                                             ),
                                                         },
@@ -3139,11 +3139,11 @@ Query {
                                                 catalog: None,
                                                 database: None,
                                                 table: Identifier {
-                                                    name: "customer",
-                                                    quote: None,
                                                     span: Some(
                                                         280..288,
                                                     ),
+                                                    name: "customer",
+                                                    quote: None,
                                                 },
                                                 alias: None,
                                                 travel_point: None,
@@ -3158,11 +3158,11 @@ Query {
                                                 catalog: None,
                                                 database: None,
                                                 table: Identifier {
-                                                    name: "orders",
-                                                    quote: None,
                                                     span: Some(
                                                         305..311,
                                                     ),
+                                                    name: "orders",
+                                                    quote: None,
                                                 },
                                                 alias: None,
                                                 travel_point: None,
@@ -3185,11 +3185,11 @@ Query {
                                                 table: None,
                                                 column: Name(
                                                     Identifier {
-                                                        name: "c_custkey",
-                                                        quote: None,
                                                         span: Some(
                                                             479..488,
                                                         ),
+                                                        name: "c_custkey",
+                                                        quote: None,
                                                     },
                                                 ),
                                             },
@@ -3209,11 +3209,11 @@ Query {
                     alias: Some(
                         TableAlias {
                             name: Identifier {
-                                name: "c_orders",
-                                quote: None,
                                 span: Some(
                                     510..518,
                                 ),
+                                name: "c_orders",
+                                quote: None,
                             },
                             columns: [],
                         },
@@ -3232,11 +3232,11 @@ Query {
                             table: None,
                             column: Name(
                                 Identifier {
-                                    name: "c_count",
-                                    quote: None,
                                     span: Some(
                                         540..547,
                                     ),
+                                    name: "c_count",
+                                    quote: None,
                                 },
                             ),
                         },
@@ -3258,11 +3258,11 @@ Query {
                 table: None,
                 column: Name(
                     Identifier {
-                        name: "custdist",
-                        quote: None,
                         span: Some(
                             569..577,
                         ),
+                        name: "custdist",
+                        quote: None,
                     },
                 ),
             },
@@ -3282,11 +3282,11 @@ Query {
                 table: None,
                 column: Name(
                     Identifier {
-                        name: "c_count",
-                        quote: None,
                         span: Some(
                             596..603,
                         ),
+                        name: "c_count",
+                        quote: None,
                     },
                 ),
             },
@@ -3304,11 +3304,11 @@ Query {
                 table: None,
                 column: Name(
                     Identifier {
-                        name: "totacctbal",
-                        quote: None,
                         span: Some(
                             609..619,
                         ),
+                        name: "totacctbal",
+                        quote: None,
                     },
                 ),
             },
@@ -3335,11 +3335,11 @@ Query {
             table: None,
             column: Name(
                 Identifier {
-                    name: "totacctbal",
-                    quote: None,
                     span: Some(
                         653..663,
                     ),
+                    name: "totacctbal",
+                    quote: None,
                 },
             ),
         },
@@ -3393,11 +3393,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "t1",
-                                quote: None,
                                 span: Some(
                                     14..16,
                                 ),
+                                name: "t1",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -3440,11 +3440,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "t2",
-                                quote: None,
                                 span: Some(
                                     37..39,
                                 ),
+                                name: "t2",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -3513,11 +3513,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "t1",
-                                quote: None,
                                 span: Some(
                                     14..16,
                                 ),
+                                name: "t1",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -3560,11 +3560,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "t2",
-                                quote: None,
                                 span: Some(
                                     38..40,
                                 ),
+                                name: "t2",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -3640,11 +3640,11 @@ Query {
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
-                                        name: "t1",
-                                        quote: None,
                                         span: Some(
                                             14..16,
                                         ),
+                                        name: "t1",
+                                        quote: None,
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3687,11 +3687,11 @@ Query {
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
-                                        name: "t2",
-                                        quote: None,
                                         span: Some(
                                             37..39,
                                         ),
+                                        name: "t2",
+                                        quote: None,
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3736,11 +3736,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "t3",
-                                quote: None,
                                 span: Some(
                                     60..62,
                                 ),
+                                name: "t3",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -3816,11 +3816,11 @@ Query {
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
-                                        name: "t1",
-                                        quote: None,
                                         span: Some(
                                             14..16,
                                         ),
+                                        name: "t1",
+                                        quote: None,
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3863,11 +3863,11 @@ Query {
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
-                                        name: "t2",
-                                        quote: None,
                                         span: Some(
                                             37..39,
                                         ),
+                                        name: "t2",
+                                        quote: None,
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -3912,11 +3912,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "t3",
-                                quote: None,
                                 span: Some(
                                     64..66,
                                 ),
+                                name: "t3",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -3985,11 +3985,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "t1",
-                                quote: None,
                                 span: Some(
                                     14..16,
                                 ),
+                                name: "t1",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -4039,11 +4039,11 @@ Query {
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
-                                        name: "t2",
-                                        quote: None,
                                         span: Some(
                                             37..39,
                                         ),
+                                        name: "t2",
+                                        quote: None,
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -4086,11 +4086,11 @@ Query {
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
-                                        name: "t3",
-                                        quote: None,
                                         span: Some(
                                             64..66,
                                         ),
+                                        name: "t3",
+                                        quote: None,
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -4168,11 +4168,11 @@ Query {
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
-                                        name: "t1",
-                                        quote: None,
                                         span: Some(
                                             15..17,
                                         ),
+                                        name: "t1",
+                                        quote: None,
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -4215,11 +4215,11 @@ Query {
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
-                                        name: "t2",
-                                        quote: None,
                                         span: Some(
                                             38..40,
                                         ),
+                                        name: "t2",
+                                        quote: None,
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -4264,11 +4264,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "t3",
-                                quote: None,
                                 span: Some(
                                     62..64,
                                 ),
+                                name: "t3",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -4337,11 +4337,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "t1",
-                                quote: None,
                                 span: Some(
                                     14..16,
                                 ),
+                                name: "t1",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -4391,11 +4391,11 @@ Query {
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
-                                        name: "t2",
-                                        quote: None,
                                         span: Some(
                                             38..40,
                                         ),
+                                        name: "t2",
+                                        quote: None,
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -4438,11 +4438,11 @@ Query {
                                     catalog: None,
                                     database: None,
                                     table: Identifier {
-                                        name: "t3",
-                                        quote: None,
                                         span: Some(
                                             61..63,
                                         ),
+                                        name: "t3",
+                                        quote: None,
                                     },
                                     alias: None,
                                     travel_point: None,
@@ -4580,11 +4580,11 @@ Query {
                     alias: Some(
                         TableAlias {
                             name: Identifier {
-                                name: "foo",
-                                quote: None,
                                 span: Some(
                                     45..48,
                                 ),
+                                name: "foo",
+                                quote: None,
                             },
                             columns: [],
                         },
@@ -4716,11 +4716,11 @@ Query {
                     alias: Some(
                         TableAlias {
                             name: Identifier {
-                                name: "foo",
-                                quote: None,
                                 span: Some(
                                     47..50,
                                 ),
+                                name: "foo",
+                                quote: None,
                             },
                             columns: [],
                         },
@@ -4808,11 +4808,11 @@ Query {
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
-                                            name: "xyu",
-                                            quote: None,
                                             span: Some(
                                                 29..32,
                                             ),
+                                            name: "xyu",
+                                            quote: None,
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -4838,11 +4838,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "x",
-                                            quote: None,
                                             span: Some(
                                                 42..43,
                                             ),
+                                            name: "x",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -4858,11 +4858,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "y",
-                                            quote: None,
                                             span: Some(
                                                 45..46,
                                             ),
+                                            name: "y",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -4877,11 +4877,11 @@ Query {
                     alias: Some(
                         TableAlias {
                             name: Identifier {
-                                name: "xyu",
-                                quote: None,
                                 span: Some(
                                     51..54,
                                 ),
+                                name: "xyu",
+                                quote: None,
                             },
                             columns: [],
                         },
@@ -4939,11 +4939,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "monthly_sales",
-                        quote: None,
                         span: Some(
                             14..27,
                         ),
+                        name: "monthly_sales",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -4956,11 +4956,11 @@ Query {
                                 ),
                                 distinct: false,
                                 name: Identifier {
-                                    name: "sum",
-                                    quote: None,
                                     span: Some(
                                         34..37,
                                     ),
+                                    name: "sum",
+                                    quote: None,
                                 },
                                 args: [
                                     ColumnRef {
@@ -4971,11 +4971,11 @@ Query {
                                         table: None,
                                         column: Name(
                                             Identifier {
-                                                name: "amount",
-                                                quote: None,
                                                 span: Some(
                                                     38..44,
                                                 ),
+                                                name: "amount",
+                                                quote: None,
                                             },
                                         ),
                                     },
@@ -4985,11 +4985,11 @@ Query {
                                 lambda: None,
                             },
                             value_column: Identifier {
-                                name: "month",
-                                quote: None,
                                 span: Some(
                                     50..55,
                                 ),
+                                name: "month",
+                                quote: None,
                             },
                             values: [
                                 Literal {
@@ -5047,11 +5047,11 @@ Query {
                 table: None,
                 column: Name(
                     Identifier {
-                        name: "empid",
-                        quote: None,
                         span: Some(
                             98..103,
                         ),
+                        name: "empid",
+                        quote: None,
                     },
                 ),
             },
@@ -5102,11 +5102,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "monthly_sales_1",
-                        quote: None,
                         span: Some(
                             14..29,
                         ),
+                        name: "monthly_sales_1",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -5115,47 +5115,47 @@ Query {
                     unpivot: Some(
                         Unpivot {
                             value_column: Identifier {
-                                name: "sales",
-                                quote: None,
                                 span: Some(
                                     38..43,
                                 ),
+                                name: "sales",
+                                quote: None,
                             },
                             column_name: Identifier {
-                                name: "month",
-                                quote: None,
                                 span: Some(
                                     48..53,
                                 ),
+                                name: "month",
+                                quote: None,
                             },
                             names: [
                                 Identifier {
-                                    name: "jan",
-                                    quote: None,
                                     span: Some(
                                         58..61,
                                     ),
+                                    name: "jan",
+                                    quote: None,
                                 },
                                 Identifier {
-                                    name: "feb",
-                                    quote: None,
                                     span: Some(
                                         63..66,
                                     ),
+                                    name: "feb",
+                                    quote: None,
                                 },
                                 Identifier {
-                                    name: "mar",
-                                    quote: None,
                                     span: Some(
                                         68..71,
                                     ),
+                                    name: "mar",
+                                    quote: None,
                                 },
                                 Identifier {
-                                    name: "april",
-                                    quote: None,
                                     span: Some(
                                         73..78,
                                     ),
+                                    name: "april",
+                                    quote: None,
                                 },
                             ],
                         },
@@ -5179,11 +5179,11 @@ Query {
                 table: None,
                 column: Name(
                     Identifier {
-                        name: "empid",
-                        quote: None,
                         span: Some(
                             90..95,
                         ),
+                        name: "empid",
+                        quote: None,
                     },
                 ),
             },
@@ -5233,11 +5233,11 @@ Query {
                     ),
                     lateral: false,
                     name: Identifier {
-                        name: "range",
-                        quote: None,
                         span: Some(
                             14..19,
                         ),
+                        name: "range",
+                        quote: None,
                     },
                     params: [
                         Literal {
@@ -5300,11 +5300,11 @@ Query {
                         ),
                         distinct: false,
                         name: Identifier {
-                            name: "sum",
-                            quote: None,
                             span: Some(
                                 7..10,
                             ),
+                            name: "sum",
+                            quote: None,
                         },
                         args: [
                             ColumnRef {
@@ -5315,11 +5315,11 @@ Query {
                                 table: None,
                                 column: Name(
                                     Identifier {
-                                        name: "a",
-                                        quote: None,
                                         span: Some(
                                             11..12,
                                         ),
+                                        name: "a",
+                                        quote: None,
                                     },
                                 ),
                             },
@@ -5329,11 +5329,11 @@ Query {
                             WindowReference(
                                 WindowRef {
                                     window_name: Identifier {
-                                        name: "w",
-                                        quote: None,
                                         span: Some(
                                             19..20,
                                         ),
+                                        name: "w",
+                                        quote: None,
                                     },
                                 },
                             ),
@@ -5351,11 +5351,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "customer",
-                        quote: None,
                         span: Some(
                             26..34,
                         ),
+                        name: "customer",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -5371,11 +5371,11 @@ Query {
                 [
                     WindowDefinition {
                         name: Identifier {
-                            name: "w",
-                            quote: None,
                             span: Some(
                                 42..43,
                             ),
+                            name: "w",
+                            quote: None,
                         },
                         spec: WindowSpec {
                             existing_window_name: None,
@@ -5388,11 +5388,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "a",
-                                            quote: None,
                                             span: Some(
                                                 61..62,
                                             ),
+                                            name: "a",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -5407,11 +5407,11 @@ Query {
                                         table: None,
                                         column: Name(
                                             Identifier {
-                                                name: "b",
-                                                quote: None,
                                                 span: Some(
                                                     72..73,
                                                 ),
+                                                name: "b",
+                                                quote: None,
                                             },
                                         ),
                                     },
@@ -5461,11 +5461,11 @@ Query {
                         table: None,
                         column: Name(
                             Identifier {
-                                name: "a",
-                                quote: None,
                                 span: Some(
                                     7..8,
                                 ),
+                                name: "a",
+                                quote: None,
                             },
                         ),
                     },
@@ -5478,11 +5478,11 @@ Query {
                         ),
                         distinct: false,
                         name: Identifier {
-                            name: "sum",
-                            quote: None,
                             span: Some(
                                 10..13,
                             ),
+                            name: "sum",
+                            quote: None,
                         },
                         args: [
                             ColumnRef {
@@ -5493,11 +5493,11 @@ Query {
                                 table: None,
                                 column: Name(
                                     Identifier {
-                                        name: "a",
-                                        quote: None,
                                         span: Some(
                                             14..15,
                                         ),
+                                        name: "a",
+                                        quote: None,
                                     },
                                 ),
                             },
@@ -5507,11 +5507,11 @@ Query {
                             WindowReference(
                                 WindowRef {
                                     window_name: Identifier {
-                                        name: "w",
-                                        quote: None,
                                         span: Some(
                                             22..23,
                                         ),
+                                        name: "w",
+                                        quote: None,
                                     },
                                 },
                             ),
@@ -5527,11 +5527,11 @@ Query {
                         ),
                         distinct: false,
                         name: Identifier {
-                            name: "sum",
-                            quote: None,
                             span: Some(
                                 25..28,
                             ),
+                            name: "sum",
+                            quote: None,
                         },
                         args: [
                             ColumnRef {
@@ -5542,11 +5542,11 @@ Query {
                                 table: None,
                                 column: Name(
                                     Identifier {
-                                        name: "a",
-                                        quote: None,
                                         span: Some(
                                             29..30,
                                         ),
+                                        name: "a",
+                                        quote: None,
                                     },
                                 ),
                             },
@@ -5556,11 +5556,11 @@ Query {
                             WindowReference(
                                 WindowRef {
                                     window_name: Identifier {
-                                        name: "w1",
-                                        quote: None,
                                         span: Some(
                                             37..39,
                                         ),
+                                        name: "w1",
+                                        quote: None,
                                     },
                                 },
                             ),
@@ -5576,11 +5576,11 @@ Query {
                         ),
                         distinct: false,
                         name: Identifier {
-                            name: "sum",
-                            quote: None,
                             span: Some(
                                 41..44,
                             ),
+                            name: "sum",
+                            quote: None,
                         },
                         args: [
                             ColumnRef {
@@ -5591,11 +5591,11 @@ Query {
                                 table: None,
                                 column: Name(
                                     Identifier {
-                                        name: "a",
-                                        quote: None,
                                         span: Some(
                                             45..46,
                                         ),
+                                        name: "a",
+                                        quote: None,
                                     },
                                 ),
                             },
@@ -5605,11 +5605,11 @@ Query {
                             WindowReference(
                                 WindowRef {
                                     window_name: Identifier {
-                                        name: "w2",
-                                        quote: None,
                                         span: Some(
                                             53..55,
                                         ),
+                                        name: "w2",
+                                        quote: None,
                                     },
                                 },
                             ),
@@ -5627,11 +5627,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "t1",
-                        quote: None,
                         span: Some(
                             61..63,
                         ),
+                        name: "t1",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -5647,11 +5647,11 @@ Query {
                 [
                     WindowDefinition {
                         name: Identifier {
-                            name: "w",
-                            quote: None,
                             span: Some(
                                 71..72,
                             ),
+                            name: "w",
+                            quote: None,
                         },
                         spec: WindowSpec {
                             existing_window_name: None,
@@ -5664,11 +5664,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "a",
-                                            quote: None,
                                             span: Some(
                                                 90..91,
                                             ),
+                                            name: "a",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -5679,20 +5679,20 @@ Query {
                     },
                     WindowDefinition {
                         name: Identifier {
-                            name: "w2",
-                            quote: None,
                             span: Some(
                                 94..96,
                             ),
+                            name: "w2",
+                            quote: None,
                         },
                         spec: WindowSpec {
                             existing_window_name: Some(
                                 Identifier {
-                                    name: "w1",
-                                    quote: None,
                                     span: Some(
                                         101..103,
                                     ),
+                                    name: "w1",
+                                    quote: None,
                                 },
                             ),
                             partition_by: [],
@@ -5708,20 +5708,20 @@ Query {
                     },
                     WindowDefinition {
                         name: Identifier {
-                            name: "w1",
-                            quote: None,
                             span: Some(
                                 123..125,
                             ),
+                            name: "w1",
+                            quote: None,
                         },
                         spec: WindowSpec {
                             existing_window_name: Some(
                                 Identifier {
-                                    name: "w",
-                                    quote: None,
                                     span: Some(
                                         130..131,
                                     ),
+                                    name: "w",
+                                    quote: None,
                                 },
                             ),
                             partition_by: [],
@@ -5735,11 +5735,11 @@ Query {
                                         table: None,
                                         column: Name(
                                             Identifier {
-                                                name: "a",
-                                                quote: None,
                                                 span: Some(
                                                     141..142,
                                                 ),
+                                                name: "a",
+                                                quote: None,
                                             },
                                         ),
                                     },
@@ -5765,11 +5765,11 @@ Query {
                 table: None,
                 column: Name(
                     Identifier {
-                        name: "a",
-                        quote: None,
                         span: Some(
                             153..154,
                         ),
+                        name: "a",
+                        quote: None,
                     },
                 ),
             },
@@ -5850,11 +5850,11 @@ Query {
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
-                                            name: "xyu",
-                                            quote: None,
                                             span: Some(
                                                 30..33,
                                             ),
+                                            name: "xyu",
+                                            quote: None,
                                         },
                                         alias: None,
                                         travel_point: None,
@@ -5880,11 +5880,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "x",
-                                            quote: None,
                                             span: Some(
                                                 43..44,
                                             ),
+                                            name: "x",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -5900,11 +5900,11 @@ Query {
                                     table: None,
                                     column: Name(
                                         Identifier {
-                                            name: "y",
-                                            quote: None,
                                             span: Some(
                                                 46..47,
                                             ),
+                                            name: "y",
+                                            quote: None,
                                         },
                                     ),
                                 },
@@ -5919,11 +5919,11 @@ Query {
                     alias: Some(
                         TableAlias {
                             name: Identifier {
-                                name: "xyu",
-                                quote: None,
                                 span: Some(
                                     53..56,
                                 ),
+                                name: "xyu",
+                                quote: None,
                             },
                             columns: [],
                         },
@@ -6049,26 +6049,26 @@ Query {
                     alias: Some(
                         TableAlias {
                             name: Identifier {
-                                name: "t",
-                                quote: None,
                                 span: Some(
                                     49..50,
                                 ),
+                                name: "t",
+                                quote: None,
                             },
                             columns: [
                                 Identifier {
-                                    name: "a",
-                                    quote: None,
                                     span: Some(
                                         51..52,
                                     ),
+                                    name: "a",
+                                    quote: None,
                                 },
                                 Identifier {
-                                    name: "b",
-                                    quote: None,
                                     span: Some(
                                         53..54,
                                     ),
+                                    name: "b",
+                                    quote: None,
                                 },
                             ],
                         },
@@ -6168,11 +6168,11 @@ Query {
                 table: None,
                 column: Name(
                     Identifier {
-                        name: "col0",
-                        quote: None,
                         span: Some(
                             42..46,
                         ),
+                        name: "col0",
+                        quote: None,
                     },
                 ),
             },
@@ -6248,11 +6248,11 @@ Query {
                             catalog: None,
                             database: None,
                             table: Identifier {
-                                name: "t",
-                                quote: None,
                                 span: Some(
                                     14..15,
                                 ),
+                                name: "t",
+                                quote: None,
                             },
                             alias: None,
                             travel_point: None,
@@ -6404,11 +6404,11 @@ Query {
                     catalog: None,
                     database: None,
                     table: Identifier {
-                        name: "t",
-                        quote: None,
                         span: Some(
                             14..15,
                         ),
+                        name: "t",
+                        quote: None,
                     },
                     alias: None,
                     travel_point: None,
@@ -6422,11 +6422,11 @@ Query {
                     ),
                     lateral: true,
                     name: Identifier {
-                        name: "flatten",
-                        quote: None,
                         span: Some(
                             25..32,
                         ),
+                        name: "flatten",
+                        quote: None,
                     },
                     params: [],
                     named_params: [
@@ -6439,20 +6439,20 @@ Query {
                                 database: None,
                                 table: Some(
                                     Identifier {
-                                        name: "u",
-                                        quote: None,
                                         span: Some(
                                             42..43,
                                         ),
+                                        name: "u",
+                                        quote: None,
                                     },
                                 ),
                                 column: Name(
                                     Identifier {
-                                        name: "col",
-                                        quote: None,
                                         span: Some(
                                             44..47,
                                         ),
+                                        name: "col",
+                                        quote: None,
                                     },
                                 ),
                             },
@@ -6461,11 +6461,11 @@ Query {
                     alias: Some(
                         TableAlias {
                             name: Identifier {
-                                name: "f",
-                                quote: None,
                                 span: Some(
                                     49..50,
                                 ),
+                                name: "f",
+                                quote: None,
                             },
                             columns: [],
                         },

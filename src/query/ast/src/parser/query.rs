@@ -25,14 +25,14 @@ use pratt::Precedence;
 use super::stage::file_location;
 use super::stage::select_stage_option;
 use crate::ast::*;
-use crate::input::Input;
-use crate::input::WithSpan;
+use crate::parser::common::*;
 use crate::parser::expr::*;
+use crate::parser::input::Input;
+use crate::parser::input::WithSpan;
 use crate::parser::statement::hint;
 use crate::parser::token::*;
+use crate::parser::ErrorKind;
 use crate::rule;
-use crate::util::*;
-use crate::ErrorKind;
 
 pub fn query(i: Input) -> IResult<Query> {
     context(

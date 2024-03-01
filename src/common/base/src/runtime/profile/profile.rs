@@ -46,6 +46,23 @@ pub struct Profile {
     pub statistics: [AtomicUsize; std::mem::variant_count::<ProfileStatisticsName>()],
 }
 
+impl Clone for Profile {
+    fn clone(&self) -> Self {
+        Profile {
+            pid: self.pid,
+            p_name: self.p_name.clone(),
+            plan_id: self.plan_id,
+            plan_name: self.plan_name.clone(),
+            plan_parent_id: self.plan_parent_id,
+            labels: self.labels.clone(),
+            title: self.title.clone(),
+            statistics: std::array::from_fn(|idx| {
+                AtomicUsize::new(self.statistics[idx].load(Ordering::SeqCst))
+            }),
+        }
+    }
+}
+
 impl Profile {
     fn create_items() -> [AtomicUsize; std::mem::variant_count::<ProfileStatisticsName>()] {
         std::array::from_fn(|_| AtomicUsize::new(0))
@@ -69,12 +86,6 @@ impl Profile {
             labels,
             statistics: Self::create_items(),
         }
-    }
-
-    pub fn track_profile(profile: &Arc<Profile>) {
-        ThreadTracker::with(move |x| {
-            x.borrow_mut().payload.profile = Some(profile.clone());
-        });
     }
 
     pub fn record_usize_profile(name: ProfileStatisticsName, value: usize) {

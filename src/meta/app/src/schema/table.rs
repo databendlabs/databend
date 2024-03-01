@@ -470,25 +470,31 @@ impl CreateTableReq {
 
 impl Display for CreateTableReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
-            write!(
+        match self.create_option {
+            CreateOption::None => write!(
                 f,
-                "create_table(if_not_exists={}):{}/{}-{}={}",
-                if_not_exists,
+                "create_table:{}/{}-{}={}",
                 self.tenant(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
-            )
-        } else {
-            write!(
+            ),
+            CreateOption::CreateIfNotExists => write!(
+                f,
+                "create_table_if_not_exists:{}/{}-{}={}",
+                self.tenant(),
+                self.db_name(),
+                self.table_name(),
+                self.table_meta
+            ),
+            CreateOption::CreateOrReplace => write!(
                 f,
                 "create_or_replace_table:{}/{}-{}={}",
                 self.tenant(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
-            )
+            ),
         }
     }
 }

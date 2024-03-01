@@ -50,11 +50,7 @@ async fn test_network_policy() -> Result<()> {
         update_on: None,
     };
     user_mgr
-        .add_network_policy(
-            tenant,
-            network_policy,
-            &CreateOption::CreateIfNotExists(false),
-        )
+        .add_network_policy(tenant, network_policy, &CreateOption::None)
         .await?;
 
     // add user
@@ -68,7 +64,7 @@ async fn test_network_policy() -> Result<()> {
     option = option.with_network_policy(Some(policy_name.clone()));
     user_info.update_auth_option(None, Some(option));
     user_mgr
-        .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(false))
+        .add_user(tenant, user_info, &CreateOption::None)
         .await?;
 
     let user = UserIdentity::new(username, hostname);

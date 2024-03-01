@@ -16,7 +16,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
-use databend_common_ast::display_parser_error;
+use databend_common_ast::parser::display_parser_error;
 use databend_common_ast::parser::expr::*;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::query::*;
@@ -24,11 +24,11 @@ use databend_common_ast::parser::quote::quote_ident;
 use databend_common_ast::parser::quote::unquote_ident;
 use databend_common_ast::parser::token::*;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::parser::Backtrace;
+use databend_common_ast::parser::Dialect;
+use databend_common_ast::parser::IResult;
+use databend_common_ast::parser::Input;
 use databend_common_ast::rule;
-use databend_common_ast::Backtrace;
-use databend_common_ast::Dialect;
-use databend_common_ast::IResult;
-use databend_common_ast::Input;
 use goldenfile::Mint;
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)

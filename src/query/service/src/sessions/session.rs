@@ -314,6 +314,9 @@ impl Session {
     pub fn txn_mgr(&self) -> TxnManagerRef {
         self.session_ctx.txn_mgr()
     }
+    pub fn set_txn_mgr(&self, txn_mgr: TxnManagerRef) {
+        self.session_ctx.set_txn_mgr(txn_mgr)
+    }
 }
 
 impl Drop for Session {

@@ -22,20 +22,53 @@ use crate::parser::quote::quote_ident;
 // Identifier of table name or column name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identifier {
+    pub span: Span,
     pub name: String,
     pub quote: Option<char>,
-    pub span: Span,
+}
+
+impl Identifier {
+    pub fn is_quoted(&self) -> bool {
+        self.quote.is_some()
+    }
+
+    pub fn from_name(name: impl Into<String>) -> Self {
+        Self {
+            span: Span::default(),
+            name: name.into(),
+            quote: None,
+        }
+    }
+
+    pub fn from_name_with_quoted(name: impl Into<String>, quote: Option<char>) -> Self {
+        Self {
+            span: Span::default(),
+            name: name.into(),
+            quote,
+        }
+    }
+}
+
+impl Display for Identifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(c) = self.quote {
+            let quoted = quote_ident(&self.name, c, true);
+            write!(f, "{}", quoted)
+        } else {
+            write!(f, "{}", self.name)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColumnPosition {
+    pub span: Span,
     pub pos: usize,
     pub name: String,
-    pub span: Span,
 }
 
 impl ColumnPosition {
-    pub fn create(pos: usize, span: Span) -> ColumnPosition {
+    pub fn create(span: Span, pos: usize) -> ColumnPosition {
         ColumnPosition {
             pos,
             name: format!("${}", pos),
@@ -53,36 +86,67 @@ impl Display for ColumnPosition {
     }
 }
 
-impl Identifier {
-    pub fn is_quoted(&self) -> bool {
-        self.quote.is_some()
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ColumnID {
+    Name(Identifier),
+    Position(ColumnPosition),
+}
 
-    pub fn from_name(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            quote: None,
-            span: Span::default(),
-        }
-    }
-
-    pub fn from_name_with_quoted(name: impl Into<String>, quote: Option<char>) -> Self {
-        Self {
-            name: name.into(),
-            quote,
-            span: Span::default(),
+impl ColumnID {
+    pub fn name(&self) -> &str {
+        match self {
+            ColumnID::Name(id) => &id.name,
+            ColumnID::Position(id) => &id.name,
         }
     }
 }
 
-impl Display for Identifier {
+impl Display for ColumnID {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(c) = self.quote {
-            let quoted = quote_ident(&self.name, c, true);
-            write!(f, "{}", quoted)
-        } else {
-            write!(f, "{}", self.name)
+        match self {
+            ColumnID::Name(id) => write!(f, "{}", id),
+            ColumnID::Position(id) => write!(f, "{}", id),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableRef {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+}
+
+impl Display for TableRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        assert!(self.catalog.is_none() || (self.catalog.is_some() && self.database.is_some()));
+        if let Some(catalog) = &self.catalog {
+            write!(f, "{catalog}.")?;
+        }
+        if let Some(database) = &self.database {
+            write!(f, "{}.", database)?;
+        }
+        write!(f, "{}", self.table)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColumnRef {
+    pub database: Option<Identifier>,
+    pub table: Option<Identifier>,
+    pub column: ColumnID,
+}
+
+impl Display for ColumnRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(database) = &self.database {
+            write!(f, "{}.", database)?;
+        }
+        if let Some(table) = &self.table {
+            write!(f, "{}.", table)?;
+        }
+        write!(f, "{}", self.column)
     }
 }
 

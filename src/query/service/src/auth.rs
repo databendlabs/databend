@@ -118,11 +118,7 @@ impl AuthMgr {
                             }
                         }
                         user_api
-                            .add_user(
-                                &tenant,
-                                user_info.clone(),
-                                &CreateOption::CreateIfNotExists(true),
-                            )
+                            .add_user(&tenant, user_info.clone(), &CreateOption::CreateIfNotExists)
                             .await?;
                         user_info
                     }

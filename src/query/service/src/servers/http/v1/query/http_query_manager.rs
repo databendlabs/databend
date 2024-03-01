@@ -21,6 +21,7 @@ use std::hash::Hash;
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::SecondsFormat;
 use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::base::GlobalInstance;
@@ -28,13 +29,16 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
+use databend_storages_common_txn::TxnManagerRef;
 use log::warn;
 use parking_lot::Mutex;
+use tokio::task;
 
 use super::expiring_map::ExpiringMap;
 use super::HttpQueryContext;
 use crate::servers::http::v1::query::http_query::ExpireResult;
 use crate::servers::http::v1::query::http_query::HttpQuery;
+use crate::servers::http::v1::query::http_query::ServerInfo;
 use crate::servers::http::v1::query::HttpQueryRequest;
 use crate::sessions::Session;
 
@@ -88,19 +92,27 @@ impl<K: Clone + Eq + Hash, V> SizeLimitedIndexMap<K, V> {
 }
 
 pub struct HttpQueryManager {
+    pub(crate) server_info: ServerInfo,
     #[allow(clippy::type_complexity)]
     pub(crate) queries: Arc<RwLock<HashMap<String, Arc<HttpQuery>>>>,
-    pub(crate) sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
     pub(crate) removed_queries: Arc<RwLock<SizeLimitedIndexMap<String, RemoveReason>>>,
+    #[allow(clippy::type_complexity)]
+    pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, task::JoinHandle<()>)>>>,
+    pub(crate) sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
 }
 
 impl HttpQueryManager {
     #[async_backtrace::framed]
-    pub async fn init(_cfg: &InnerConfig) -> Result<()> {
+    pub async fn init(cfg: &InnerConfig) -> Result<()> {
         GlobalInstance::set(Arc::new(HttpQueryManager {
+            server_info: ServerInfo {
+                id: cfg.query.node_id.clone(),
+                start_time: chrono::Local::now().to_rfc3339_opts(SecondsFormat::Nanos, false),
+            },
             queries: Arc::new(RwLock::new(HashMap::new())),
             sessions: Mutex::new(ExpiringMap::default()),
             removed_queries: Arc::new(RwLock::new(SizeLimitedIndexMap::new(1000))),
+            txn_managers: Arc::new(Mutex::new(HashMap::new())),
         }));
 
         Ok(())
@@ -224,6 +236,42 @@ impl HttpQueryManager {
             Ok(q.clone())
         } else {
             Err(None)
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn add_txn(
+        self: &Arc<Self>,
+        last_query_id: String,
+        txn_mgr: TxnManagerRef,
+        timeout_secs: u64,
+    ) {
+        let mut txn_managers = self.txn_managers.lock();
+        let deleter = {
+            let self_clone = self.clone();
+            let last_query_id_clone = last_query_id.clone();
+            GlobalIORuntime::instance().spawn(last_query_id.clone(), async move {
+                sleep(Duration::from_secs(timeout_secs)).await;
+                if self_clone.get_txn(&last_query_id_clone).is_some() {
+                    log::info!(
+                        "transaction timeout after {} secs, last_query_id = {}.",
+                        timeout_secs,
+                        last_query_id_clone
+                    );
+                }
+            })
+        };
+        txn_managers.insert(last_query_id, (txn_mgr, deleter));
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) fn get_txn(self: &Arc<Self>, last_query_id: &str) -> Option<TxnManagerRef> {
+        let mut txn_managers = self.txn_managers.lock();
+        if let Some((txn_mgr, task_handle)) = txn_managers.remove(last_query_id) {
+            task_handle.abort();
+            Some(txn_mgr)
+        } else {
+            None
         }
     }
 

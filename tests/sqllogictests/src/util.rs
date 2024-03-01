@@ -26,12 +26,22 @@ use walkdir::WalkDir;
 use crate::arg::SqlLogicTestArgs;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct ServerInfo {
+    pub id: String,
+    pub start_time: String,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct HttpSessionConf {
     pub database: Option<String>,
-    pub keep_server_session_secs: Option<u64>,
+    pub role: Option<String>,
+    pub secondary_roles: Option<Vec<String>>,
     pub settings: Option<BTreeMap<String, String>>,
+    pub txn_state: Option<String>,
+    pub last_server_info: Option<ServerInfo>,
+    #[serde(default)]
+    pub last_query_ids: Vec<String>,
 }
 
 pub fn parser_rows(rows: &Value) -> Result<Vec<Vec<String>>> {

@@ -29,8 +29,8 @@ use super::walk::walk_statement;
 use super::walk::walk_table_reference;
 use super::walk_stream_point;
 use super::walk_time_travel_point;
+use crate::ast::visitors::walk_window_definition;
 use crate::ast::*;
-use crate::visitors::walk_window_definition;
 
 pub trait Visitor<'ast>: Sized {
     fn visit_expr(&mut self, expr: &'ast Expr) {

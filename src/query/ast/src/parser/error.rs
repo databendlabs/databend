@@ -23,9 +23,9 @@ use databend_common_exception::Range;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
 
-use crate::input::Input;
+use crate::parser::common::transform_span;
+use crate::parser::input::Input;
 use crate::parser::token::*;
-use crate::util::transform_span;
 
 const MAX_DISPLAY_ERROR_COUNT: usize = 60;
 

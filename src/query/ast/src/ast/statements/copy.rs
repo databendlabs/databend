@@ -34,42 +34,7 @@ use crate::ast::write_comma_separated_quoted_list;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TableIdentifier {
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
-}
-
-impl TableIdentifier {
-    pub fn from_tuple(t: (Option<Identifier>, Option<Identifier>, Identifier)) -> Self {
-        let (catalog, database, table) = t;
-        Self {
-            catalog,
-            database,
-            table,
-        }
-    }
-}
-
-impl Display for TableIdentifier {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(catalog) = &self.catalog {
-            write!(
-                f,
-                "{catalog}.{}.{}",
-                self.database.as_ref().expect("database must be valid"),
-                self.table
-            )?;
-        } else if let Some(database) = &self.database {
-            write!(f, "{database}.{}", self.table)?;
-        } else {
-            write!(f, "{}", self.table)?;
-        };
-        Ok(())
-    }
-}
+use crate::ast::TableRef;
 
 /// CopyIntoTableStmt is the parsed statement of `COPY into <table> from <location>`.
 ///
@@ -81,7 +46,7 @@ impl Display for TableIdentifier {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CopyIntoTableStmt {
     pub src: CopyIntoTableSource,
-    pub dst: TableIdentifier,
+    pub dst: TableRef,
     pub dst_columns: Option<Vec<Identifier>>,
 
     pub hints: Option<Hint>,
@@ -275,7 +240,7 @@ impl Display for CopyIntoTableSource {
 pub enum CopyIntoLocationSource {
     Query(Box<Query>),
     /// it will be rewrite as `(SELECT * FROM table)`
-    Table(TableIdentifier),
+    Table(TableRef),
 }
 
 impl Display for CopyIntoLocationSource {

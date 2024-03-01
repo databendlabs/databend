@@ -24,7 +24,7 @@ use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -612,9 +612,10 @@ impl<'a> Binder {
             Statement::DropPipe(_) => {
                 todo!()
             }
-            Statement::Begin=> Plan::Begin,
-            Statement::Commit=>Plan::Commit,
-            Statement::Abort=>Plan::Abort,
+
+            Statement::Begin => Plan::Begin,
+            Statement::Commit => Plan::Commit,
+            Statement::Abort => Plan::Abort,
         };
         Ok(plan)
     }

@@ -70,6 +70,7 @@ impl Thread {
             thread_builder = thread_builder.name(named);
         }
 
+        let f = ThreadTracker::tracking_function(f);
         ThreadJoinHandle::create(
             thread_builder
                 .spawn(move || {

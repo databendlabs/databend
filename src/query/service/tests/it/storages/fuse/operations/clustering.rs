@@ -39,7 +39,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
     let ctx = fixture.new_query_ctx().await?;
 
     let create_table_plan = CreateTablePlan {
-        create_option: CreateOption::CreateIfNotExists(false),
+        create_option: CreateOption::None,
         tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
