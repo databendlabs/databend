@@ -121,7 +121,7 @@ EvalScalar
             └── estimated rows: 0.00
 
 
-statement error Databend sqllogictests error: http query error: code: 2302, Text: Table 'explain_agg_t1' already exists
+statement ok
 create table explain_agg_t1(a int not null, b int not null);
 
 query T
