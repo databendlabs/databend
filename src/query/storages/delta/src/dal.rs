@@ -64,7 +64,7 @@ impl OpendalStore {
     }
 
     pub fn meta_key_flag(&self) -> flagset::FlagSet<Metakey> {
-        let mut res = Metakey::ContentLength | Metakey::ContentLength;
+        let mut res = Metakey::ContentLength.into();
         for key in self.meta_keys.iter() {
             res |= *key;
         }
