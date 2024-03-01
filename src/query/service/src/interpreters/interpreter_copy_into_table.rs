@@ -120,7 +120,15 @@ impl CopyIntoTableInterpreter {
                 &plan.table_name,
             )
             .await?;
-        let files = plan.collect_files(self.ctx.as_ref()).await?;
+        eprintln!(
+            "binding physical plan, from {:#?}",
+            plan.stage_table_info.files_to_copy
+        );
+        let files = if let Some(v) = &plan.stage_table_info.files_to_copy {
+            v.clone()
+        } else {
+            plan.collect_files(self.ctx.as_ref()).await?
+        };
         let mut seq = vec![];
         let source = if let Some(ref query) = plan.query {
             let (select_interpreter, query_source_schema, update_stream_meta) =
@@ -166,8 +174,6 @@ impl CopyIntoTableInterpreter {
             force: plan.force,
             write_mode: plan.write_mode,
             validation_mode: plan.validation_mode.clone(),
-
-            files: files.clone(),
             source,
         }));
         next_plan_id += 1;

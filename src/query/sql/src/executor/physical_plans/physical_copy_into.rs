@@ -39,7 +39,7 @@ pub struct CopyIntoTable {
     pub validation_mode: ValidationMode,
     pub force: bool,
     pub stage_table_info: StageTableInfo,
-    pub files: Vec<StageFileInfo>,
+    // pub files: Vec<StageFileInfo>,
     pub table_info: TableInfo,
 
     pub source: CopyIntoTableSource,

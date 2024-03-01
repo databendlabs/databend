@@ -34,6 +34,9 @@ dashmap = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 
+simd-json = "0.13.8"
+
+
 log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }

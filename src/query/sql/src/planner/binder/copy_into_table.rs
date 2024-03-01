@@ -327,6 +327,7 @@ impl<'a> Binder {
         select_list: &'a [SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
+        eprintln!("bind_copy_from_query_into_table");
         let need_copy_file_infos = plan.collect_files(self.ctx.as_ref()).await?;
 
         if need_copy_file_infos.is_empty() {
@@ -347,7 +348,7 @@ impl<'a> Binder {
             )
             .await?;
 
-        // Generate a analyzed select list with from context
+        // Generate an analyzed select list with from context
         let select_list = self
             .normalize_select_list(&mut from_context, select_list)
             .await?;
