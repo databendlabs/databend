@@ -3413,7 +3413,6 @@ dependencies = [
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
  "databend-storages-common-table-meta",
- "derive-visitor",
  "educe",
  "enum-as-inner 0.5.1",
  "globiter",
