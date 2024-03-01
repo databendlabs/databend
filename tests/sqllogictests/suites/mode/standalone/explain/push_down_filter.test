@@ -31,7 +31,7 @@ EvalScalar
                 ├── table: default.default.products
                 ├── output columns: [name (#0), details (#1)]
                 ├── read rows: 3
-                ├── read bytes: 620
+                ├── read bytes: 329
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
@@ -62,7 +62,7 @@ EvalScalar
             ├── table: default.default.products
             ├── output columns: [name (#0), details (#1)]
             ├── read rows: 3
-            ├── read bytes: 620
+            ├── read bytes: 329
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
