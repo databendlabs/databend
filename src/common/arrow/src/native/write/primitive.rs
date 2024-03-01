@@ -86,6 +86,7 @@ pub(crate) fn write_primitive<T: NativeType, W: Write>(
         crate::arrow::types::PrimitiveType::Float16 => unimplemented!(),
         crate::arrow::types::PrimitiveType::DaysMs => unimplemented!(),
         crate::arrow::types::PrimitiveType::MonthDayNano => unimplemented!(),
+        crate::arrow::types::PrimitiveType::UInt128 => unimplemented!(),
     }
     w.write_all(scratch.as_slice())?;
     Ok(())

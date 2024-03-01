@@ -15,6 +15,7 @@
 
 //! APIs to read from Parquet format.
 mod binary;
+mod binview;
 mod boolean;
 mod dictionary;
 mod fixed_size_binary;
@@ -144,6 +145,8 @@ fn is_primitive(data_type: &DataType) -> bool {
             | crate::arrow::datatypes::PhysicalType::LargeUtf8
             | crate::arrow::datatypes::PhysicalType::Binary
             | crate::arrow::datatypes::PhysicalType::LargeBinary
+            | crate::arrow::datatypes::PhysicalType::BinaryView
+            | crate::arrow::datatypes::PhysicalType::Utf8View
             | crate::arrow::datatypes::PhysicalType::FixedSizeBinary
             | crate::arrow::datatypes::PhysicalType::Dictionary(_)
     )
@@ -181,7 +184,7 @@ pub fn n_columns(data_type: &DataType) -> usize {
     use crate::arrow::datatypes::PhysicalType::*;
     match data_type.to_physical_type() {
         Null | Boolean | Primitive(_) | Binary | FixedSizeBinary | LargeBinary | Utf8
-        | Dictionary(_) | LargeUtf8 => 1,
+        | Dictionary(_) | LargeUtf8 | BinaryView | Utf8View => 1,
         List | FixedSizeList | LargeList => {
             let a = data_type.to_logical_type();
             if let DataType::List(inner) = a {

@@ -125,22 +125,26 @@ pub fn to_parquet_type(field: &Field) -> Result<ParquetType> {
             None,
             None,
         )?),
-        DataType::Binary | DataType::LargeBinary => Ok(ParquetType::try_from_primitive(
-            name,
-            PhysicalType::ByteArray,
-            repetition,
-            None,
-            None,
-            None,
-        )?),
-        DataType::Utf8 | DataType::LargeUtf8 => Ok(ParquetType::try_from_primitive(
-            name,
-            PhysicalType::ByteArray,
-            repetition,
-            Some(PrimitiveConvertedType::Utf8),
-            Some(PrimitiveLogicalType::String),
-            None,
-        )?),
+        DataType::Binary | DataType::LargeBinary | DataType::BinaryView => {
+            Ok(ParquetType::try_from_primitive(
+                name,
+                PhysicalType::ByteArray,
+                repetition,
+                None,
+                None,
+                None,
+            )?)
+        }
+        DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => {
+            Ok(ParquetType::try_from_primitive(
+                name,
+                PhysicalType::ByteArray,
+                repetition,
+                Some(PrimitiveConvertedType::Utf8),
+                Some(PrimitiveLogicalType::String),
+                None,
+            )?)
+        }
         DataType::Date32 => Ok(ParquetType::try_from_primitive(
             name,
             PhysicalType::Int32,

@@ -61,6 +61,8 @@ pub unsafe fn try_from<A: ArrowArrayRef>(array: A) -> Result<Box<dyn Array>> {
         }
         Union => Box::new(UnionArray::try_from_ffi(array)?),
         Map => Box::new(MapArray::try_from_ffi(array)?),
+        BinaryView => Box::new(BinaryViewArray::try_from_ffi(array)?),
+        Utf8View => Box::new(Utf8ViewArray::try_from_ffi(array)?),
     })
 }
 
@@ -234,6 +236,21 @@ unsafe fn get_buffer_ptr<T: NativeType>(
 
     // note: we can't prove that this pointer is not mutably shared - part of the safety invariant
     Ok(ptr as *mut T)
+}
+
+unsafe fn create_buffer_known_len<T: NativeType>(
+    array: &ArrowArray,
+    data_type: &DataType,
+    owner: InternalArrowArray,
+    len: usize,
+    index: usize,
+) -> Result<Buffer<T>> {
+    if len == 0 {
+        return Ok(Buffer::new());
+    }
+    let ptr: *mut T = get_buffer_ptr(array, data_type, index)?;
+    let bytes = Bytes::from_foreign(ptr, len, BytesAllocator::InternalArrowArray(owner));
+    Ok(Buffer::from_bytes(bytes))
 }
 
 /// returns the buffer `i` of `array` interpreted as a [`Buffer`].
@@ -468,6 +485,17 @@ pub trait ArrowArrayRef: std::fmt::Debug {
     /// This function assumes that the buffer created from FFI is valid; this is impossible to prove.
     unsafe fn buffer<T: NativeType>(&self, index: usize) -> Result<Buffer<T>> {
         create_buffer::<T>(self.array(), self.data_type(), self.owner(), index)
+    }
+
+    /// # Safety
+    /// The caller must guarantee that the buffer `index` corresponds to a buffer.
+    /// This function assumes that the buffer created from FFI is valid; this is impossible to prove.
+    unsafe fn buffer_known_len<T: NativeType>(
+        &self,
+        index: usize,
+        len: usize,
+    ) -> Result<Buffer<T>> {
+        create_buffer_known_len::<T>(self.array(), self.data_type(), self.owner(), len, index)
     }
 
     /// # Safety
