@@ -16,7 +16,8 @@ use databend_common_meta_types::MatchSeq;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CreateOption {
-    CreateIfNotExists(bool),
+    None,
+    CreateIfNotExists,
     CreateOrReplace,
 }
 
@@ -27,7 +28,8 @@ impl From<CreateOption> for MatchSeq {
     /// - If `CreateOption` is `CreateOrReplace`, then always to add a record, i.e., `MatchSeq` matches any value: `GE(0)`.
     fn from(create_option: CreateOption) -> Self {
         match create_option {
-            CreateOption::CreateIfNotExists(_) => MatchSeq::Exact(0),
+            CreateOption::None => MatchSeq::Exact(0),
+            CreateOption::CreateIfNotExists => MatchSeq::Exact(0),
             CreateOption::CreateOrReplace => MatchSeq::GE(0),
         }
     }

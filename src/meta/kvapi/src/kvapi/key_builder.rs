@@ -15,6 +15,7 @@
 //! A helper for building a string key from a structured key
 
 use crate::kvapi::helper::escape;
+use crate::kvapi::helper::escape_specified;
 
 pub struct KeyBuilder {
     buf: Vec<u8>,
@@ -51,6 +52,16 @@ impl KeyBuilder {
 
     pub fn done(self) -> String {
         String::from_utf8(self.buf).unwrap()
+    }
+
+    /// Re-export escape()
+    pub fn escape(s: &str) -> String {
+        escape(s)
+    }
+
+    /// Re-export escape_specified()
+    pub fn escape_specified(s: &str, chars: &[u8]) -> String {
+        escape_specified(s, chars)
     }
 }
 

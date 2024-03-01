@@ -739,7 +739,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 }
 
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
-    let column_ref = map(rule! {  #column_id }, |column| ExprElement::ColumnRef {
+    let column_ref = map(column_id, |column| ExprElement::ColumnRef {
         database: None,
         table: None,
         column,

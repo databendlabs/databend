@@ -69,7 +69,7 @@ async fn test_password_policy() -> Result<()> {
         .add_password_policy(
             tenant,
             password_policy.clone(),
-            &CreateOption::CreateIfNotExists(false),
+            &CreateOption::CreateIfNotExists,
         )
         .await;
     assert!(res.is_ok());
@@ -81,7 +81,7 @@ async fn test_password_policy() -> Result<()> {
         .add_password_policy(
             tenant,
             invalid_password_policy1,
-            &CreateOption::CreateIfNotExists(false),
+            &CreateOption::CreateIfNotExists,
         )
         .await;
     assert!(res.is_err());
@@ -93,7 +93,7 @@ async fn test_password_policy() -> Result<()> {
         .add_password_policy(
             tenant,
             invalid_password_policy2,
-            &CreateOption::CreateIfNotExists(false),
+            &CreateOption::CreateIfNotExists,
         )
         .await;
     assert!(res.is_err());
@@ -106,7 +106,7 @@ async fn test_password_policy() -> Result<()> {
         .add_password_policy(
             tenant,
             invalid_password_policy3,
-            &CreateOption::CreateIfNotExists(false),
+            &CreateOption::CreateIfNotExists,
         )
         .await;
     assert!(res.is_err());
@@ -121,7 +121,7 @@ async fn test_password_policy() -> Result<()> {
         .add_password_policy(
             tenant,
             invalid_password_policy4,
-            &CreateOption::CreateIfNotExists(false),
+            &CreateOption::CreateIfNotExists,
         )
         .await;
     assert!(res.is_err());
@@ -137,7 +137,7 @@ async fn test_password_policy() -> Result<()> {
         .add_password_policy(
             tenant,
             invalid_password_policy5,
-            &CreateOption::CreateIfNotExists(false),
+            &CreateOption::CreateIfNotExists,
         )
         .await;
     assert!(res.is_err());
@@ -150,7 +150,7 @@ async fn test_password_policy() -> Result<()> {
         .add_password_policy(
             tenant,
             invalid_password_policy6,
-            &CreateOption::CreateIfNotExists(false),
+            &CreateOption::CreateIfNotExists,
         )
         .await;
     assert!(res.is_err());
@@ -162,7 +162,7 @@ async fn test_password_policy() -> Result<()> {
         .add_password_policy(
             tenant,
             invalid_password_policy7,
-            &CreateOption::CreateIfNotExists(false),
+            &CreateOption::CreateIfNotExists,
         )
         .await;
     assert!(res.is_err());
@@ -174,7 +174,7 @@ async fn test_password_policy() -> Result<()> {
         .add_password_policy(
             tenant,
             invalid_password_policy8,
-            &CreateOption::CreateIfNotExists(false),
+            &CreateOption::CreateIfNotExists,
         )
         .await;
     assert!(res.is_err());
@@ -186,7 +186,7 @@ async fn test_password_policy() -> Result<()> {
         .add_password_policy(
             tenant,
             invalid_password_policy9,
-            &CreateOption::CreateIfNotExists(false),
+            &CreateOption::CreateIfNotExists,
         )
         .await;
     assert!(res.is_err());
@@ -359,7 +359,7 @@ async fn test_password_policy() -> Result<()> {
 
     // add user
     user_mgr
-        .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(false))
+        .add_user(tenant, user_info, &CreateOption::CreateIfNotExists)
         .await?;
 
     // drop password policy

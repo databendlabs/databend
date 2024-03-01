@@ -993,28 +993,30 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             let mut if_then = vec![];
 
             if share_endpoint_id_seq > 0 {
-                if let CreateOption::CreateIfNotExists(if_not_exists) = req.create_option {
-                    return if if_not_exists {
-                        Ok(CreateShareEndpointReply { share_endpoint_id })
-                    } else {
-                        Err(KVAppError::AppError(AppError::ShareEndpointAlreadyExists(
+                match req.create_option {
+                    CreateOption::None => {
+                        return Err(KVAppError::AppError(AppError::ShareEndpointAlreadyExists(
                             ShareEndpointAlreadyExists::new(
                                 &name_key.endpoint,
                                 format!("create share endpoint: tenant: {}", name_key.tenant),
                             ),
-                        )))
-                    };
-                } else {
-                    construct_drop_share_endpoint_txn_operations(
-                        self,
-                        name_key,
-                        false,
-                        false,
-                        func_name!(),
-                        &mut condition,
-                        &mut if_then,
-                    )
-                    .await?;
+                        )));
+                    }
+                    CreateOption::CreateIfNotExists => {
+                        return Ok(CreateShareEndpointReply { share_endpoint_id });
+                    }
+                    CreateOption::CreateOrReplace => {
+                        construct_drop_share_endpoint_txn_operations(
+                            self,
+                            name_key,
+                            true,
+                            false,
+                            func_name!(),
+                            &mut condition,
+                            &mut if_then,
+                        )
+                        .await?;
+                    }
                 }
             }
 

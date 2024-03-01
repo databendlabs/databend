@@ -727,7 +727,7 @@ impl Binder {
         };
 
         Ok(Plan::CreateTable(Box::new(CreateTablePlan {
-            create_option: CreateOption::CreateIfNotExists(false),
+            create_option: CreateOption::None,
             tenant: self.ctx.get_tenant(),
             catalog,
             database,

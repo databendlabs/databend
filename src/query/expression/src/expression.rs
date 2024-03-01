@@ -262,6 +262,12 @@ impl<Index: ColumnIndex> Expr<Index> {
         }
     }
 
+    pub fn runtime_filter_supported_types(&self) -> bool {
+        self.data_type().remove_nullable().is_numeric()
+            || self.data_type().remove_nullable().is_string()
+            || self.data_type().remove_nullable().is_date()
+    }
+
     pub fn data_type(&self) -> &DataType {
         match self {
             Expr::Constant { data_type, .. } => data_type,

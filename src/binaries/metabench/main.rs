@@ -189,7 +189,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 
     let res = client
         .create_database(CreateDatabaseReq {
-            create_option: CreateOption::CreateIfNotExists(false),
+            create_option: CreateOption::None,
             name_ident: DatabaseNameIdent {
                 tenant: tenant(),
                 db_name: db_name(),
@@ -206,7 +206,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 
     let res = client
         .create_table(CreateTableReq {
-            create_option: CreateOption::CreateIfNotExists(true),
+            create_option: CreateOption::CreateIfNotExists,
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
         })
@@ -246,7 +246,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 
     let res = client
         .create_table(CreateTableReq {
-            create_option: CreateOption::CreateIfNotExists(true),
+            create_option: CreateOption::CreateIfNotExists,
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
         })

@@ -45,10 +45,8 @@ impl Display for CreateIndexStmt {
         }
         let sync = if self.sync_creation { "SYNC" } else { "ASYNC" };
         write!(f, "{} {:?} INDEX", sync, self.index_type)?;
-        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
-            if if_not_exists {
-                write!(f, " IF NOT EXISTS")?;
-            }
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, " IF NOT EXISTS")?;
         }
 
         write!(f, " {:?}", self.index_name)?;

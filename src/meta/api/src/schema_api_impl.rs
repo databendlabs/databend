@@ -279,20 +279,19 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let spec_vec = if db_id_seq > 0 {
                 match req.create_option {
-                    CreateOption::CreateIfNotExists(if_not_exists) => {
-                        return if if_not_exists {
-                            Ok(CreateDatabaseReply {
-                                db_id,
-                                spec_vec: None,
-                            })
-                        } else {
-                            Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
-                                DatabaseAlreadyExists::new(
-                                    &name_key.db_name,
-                                    format!("create db: tenant: {}", name_key.tenant),
-                                ),
-                            )))
-                        };
+                    CreateOption::None => {
+                        return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
+                            DatabaseAlreadyExists::new(
+                                &name_key.db_name,
+                                format!("create db: tenant: {}", name_key.tenant),
+                            ),
+                        )));
+                    }
+                    CreateOption::CreateIfNotExists => {
+                        return Ok(CreateDatabaseReply {
+                            db_id,
+                            spec_vec: None,
+                        });
                     }
                     CreateOption::CreateOrReplace => {
                         drop_database_meta(
@@ -926,27 +925,29 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut if_then = vec![];
 
             let (_, index_id_seq) = if index_id_seq > 0 {
-                if let CreateOption::CreateIfNotExists(if_not_exists) = req.create_option {
-                    return if if_not_exists {
-                        Ok(CreateIndexReply { index_id })
-                    } else {
-                        Err(KVAppError::AppError(AppError::IndexAlreadyExists(
+                match req.create_option {
+                    CreateOption::None => {
+                        return Err(KVAppError::AppError(AppError::IndexAlreadyExists(
                             IndexAlreadyExists::new(
                                 &tenant_index.index_name,
                                 format!("create index with tenant: {}", tenant_index.tenant),
                             ),
-                        )))
-                    };
-                } else {
-                    construct_drop_index_txn_operations(
-                        self,
-                        tenant_index,
-                        false,
-                        false,
-                        &mut condition,
-                        &mut if_then,
-                    )
-                    .await?
+                        )));
+                    }
+                    CreateOption::CreateIfNotExists => {
+                        return Ok(CreateIndexReply { index_id });
+                    }
+                    CreateOption::CreateOrReplace => {
+                        construct_drop_index_txn_operations(
+                            self,
+                            tenant_index,
+                            false,
+                            false,
+                            &mut condition,
+                            &mut if_then,
+                        )
+                        .await?
+                    }
                 }
             } else {
                 (0, 0)
@@ -1262,10 +1263,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let mut if_then = vec![];
             let seq = if old_virtual_column_opt.is_some() {
-                if let CreateOption::CreateIfNotExists(if_not_exists) = req.create_option {
-                    if if_not_exists {
-                        return Ok(CreateVirtualColumnReply {});
-                    } else {
+                match req.create_option {
+                    CreateOption::None => {
                         return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
                             VirtualColumnAlreadyExists::new(
                                 req.name_ident.table_id,
@@ -1276,16 +1275,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             ),
                         )));
                     }
-                } else {
-                    construct_drop_virtual_column_txn_operations(
-                        self,
-                        &req.name_ident,
-                        false,
-                        false,
-                        ctx,
-                        &mut if_then,
-                    )
-                    .await?
+                    CreateOption::CreateIfNotExists => {
+                        return Ok(CreateVirtualColumnReply {});
+                    }
+                    CreateOption::CreateOrReplace => {
+                        construct_drop_virtual_column_txn_operations(
+                            self,
+                            &req.name_ident,
+                            false,
+                            false,
+                            ctx,
+                            &mut if_then,
+                        )
+                        .await?
+                    }
                 }
             } else {
                 0
@@ -1623,32 +1626,33 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
                 if let Some(id) = v {
                     // TODO: move if_not_exists to upper caller. It is not duty of SchemaApi.
-                    if let CreateOption::CreateIfNotExists(if_not_exists) = req.create_option {
-                        if if_not_exists {
+                    match req.create_option {
+                        CreateOption::None => {
+                            let app_err = make_exists_err(&req);
+                            return Err(KVAppError::AppError(app_err));
+                        }
+                        CreateOption::CreateIfNotExists => {
                             return Ok(CreateTableReply {
                                 table_id: *id.data,
                                 new_table: false,
                                 spec_vec: None,
                             });
-                        } else {
-                            let app_err = make_exists_err(&req);
-                            return Err(KVAppError::AppError(app_err));
-                        };
-                    } else {
-                        // create or replace
-                        construct_drop_table_txn_operations(
-                            self,
-                            req.name_ident.table_name.clone(),
-                            req.name_ident.tenant.clone(),
-                            *id.data,
-                            db_id.data,
-                            false,
-                            false,
-                            &mut tb_count,
-                            &mut condition,
-                            &mut if_then,
-                        )
-                        .await?
+                        }
+                        CreateOption::CreateOrReplace => {
+                            construct_drop_table_txn_operations(
+                                self,
+                                req.name_ident.table_name.clone(),
+                                req.name_ident.tenant.clone(),
+                                *id.data,
+                                db_id.data,
+                                false,
+                                false,
+                                &mut tb_count,
+                                &mut condition,
+                                &mut if_then,
+                            )
+                            .await?
+                        }
                     }
                 } else {
                     (None, 0)

@@ -81,7 +81,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         for bound_column in &self.bound_columns {
             if bound_column.data_type == *ty {
                 let column = if !bound_column.table_name.is_empty() && self.rng.gen_bool(0.2) {
-                    ColumnID::Position(ColumnPosition::create(bound_column.index, None))
+                    ColumnID::Position(ColumnPosition::create(None, bound_column.index))
                 } else {
                     let name = Identifier::from_name(bound_column.name.clone());
                     ColumnID::Name(name)

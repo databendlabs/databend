@@ -79,29 +79,29 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             let mut if_then = vec![];
 
             if seq > 0 {
-                if let CreateOption::CreateIfNotExists(if_not_exists) = req.create_option {
-                    return if if_not_exists {
-                        Ok(CreateDatamaskReply { id })
-                    } else {
-                        Err(KVAppError::AppError(AppError::DatamaskAlreadyExists(
+                match req.create_option {
+                    CreateOption::None => {
+                        return Err(KVAppError::AppError(AppError::DatamaskAlreadyExists(
                             DatamaskAlreadyExists::new(
                                 &name_key.name,
                                 format!("create data mask: {}", req.name),
                             ),
-                        )))
-                    };
-                } else {
-                    construct_drop_mask_policy_operations(
-                        self,
-                        name_key,
-                        false,
-                        false,
-                        func_name!(),
-                        &mut condition,
-                        &mut if_then,
-                    )
-                    .await?;
-                }
+                        )));
+                    }
+                    CreateOption::CreateIfNotExists => return Ok(CreateDatamaskReply { id }),
+                    CreateOption::CreateOrReplace => {
+                        construct_drop_mask_policy_operations(
+                            self,
+                            name_key,
+                            false,
+                            false,
+                            func_name!(),
+                            &mut condition,
+                            &mut if_then,
+                        )
+                        .await?;
+                    }
+                };
             };
 
             // Create data mask by inserting these record:

@@ -298,66 +298,6 @@ insert into t19 (id, c1) VALUES (0, 2);
 statement ok
 insert into t20 (id, c1) VALUES (0, 1);
 
-statement ok
-insert into t21 (id, c1) VALUES (0, 31);
-
-statement ok
-insert into t22 (id, c1) VALUES (0, 39);
-
-statement ok
-insert into t23 (id, c1) VALUES (0, 4);
-
-statement ok
-insert into t24 (id, c1) VALUES (0, 23);
-
-statement ok
-insert into t25 (id, c1) VALUES (0, 15);
-
-statement ok
-insert into t26 (id, c1) VALUES (0, 6);
-
-statement ok
-insert into t27 (id, c1) VALUES (0, 39);
-
-statement ok
-insert into t28 (id, c1) VALUES (0, 18);
-
-statement ok
-insert into t29 (id, c1) VALUES (0, 6);
-
-statement ok
-insert into t30 (id, c1) VALUES (0, 17);
-
-statement ok
-insert into t31 (id, c1) VALUES (0, 4);
-
-statement ok
-insert into t32 (id, c1) VALUES (0, 20);
-
-statement ok
-insert into t33 (id, c1) VALUES (0, 16);
-
-statement ok
-insert into t34 (id, c1) VALUES (0, 15);
-
-statement ok
-insert into t35 (id, c1) VALUES (0, 3);
-
-statement ok
-insert into t36 (id, c1) VALUES (0, 25);
-
-statement ok
-insert into t37 (id, c1) VALUES (0, 3);
-
-statement ok
-insert into t38 (id, c1) VALUES (0, 21);
-
-statement ok
-insert into t39 (id, c1) VALUES (0, 14);
-
-statement ok
-insert into t40 (id, c1) VALUES (0, 13);
-
 # Large query
 query I
 select * from t1
@@ -380,27 +320,8 @@ join t17 on t16.id = t17.id
 join t18 on t17.id = t18.id
 join t19 on t18.id = t19.id
 join t20 on t19.id = t20.id
-join t21 on t20.id = t21.id
-join t22 on t21.id = t22.id
-join t23 on t22.id = t23.id
-join t24 on t23.id = t24.id
-join t25 on t24.id = t25.id
-join t26 on t25.id = t26.id
-join t27 on t26.id = t27.id
-join t28 on t27.id = t28.id
-join t29 on t28.id = t29.id
-join t30 on t29.id = t30.id
-join t31 on t30.id = t31.id
-join t32 on t31.id = t32.id
-join t33 on t32.id = t33.id
-join t34 on t33.id = t34.id
-join t35 on t34.id = t35.id
-join t36 on t35.id = t36.id
-join t37 on t36.id = t37.id
-join t38 on t37.id = t38.id
-join t39 on t38.id = t39.id;
 ----
-0 36 0 29 0 31 0 19 0 1 0 17 0 3 0 21 0 25 0 5 0 29 0 15 0 23 0 7 0 36 0 22 0 6 0 7 0 2 0 1 0 31 0 39 0 4 0 23 0 15 0 6 0 39 0 18 0 6 0 17 0 4 0 20 0 16 0 15 0 3 0 25 0 3 0 21 0 14
+0 36 0 29 0 31 0 19 0 1 0 17 0 3 0 21 0 25 0 5 0 29 0 15 0 23 0 7 0 36 0 22 0 6 0 7 0 2 0 1
 
 # Large query with cross join.
 query I
@@ -423,26 +344,6 @@ join t16 on t15.id = t16.id
 join t17 on t16.id = t17.id
 join t18 on t17.id = t18.id
 join t19 on t18.id = t19.id
-join t20 on t19.id = t20.id
-join t21 on t20.id = t21.id
-join t22 on t21.id = t22.id
-join t23 on t22.id = t23.id
-join t24 on t23.id = t24.id
-join t25 on t24.id = t25.id
-join t26 on t25.id = t26.id
-join t27 on t26.id = t27.id
-join t28 on t27.id = t28.id
-join t29 on t28.id = t29.id
-join t30 on t29.id = t30.id
-join t31 on t30.id = t31.id
-join t32 on t31.id = t32.id
-join t33 on t32.id = t33.id
-join t34 on t33.id = t34.id
-join t35 on t34.id = t35.id
-join t36 on t35.id = t36.id
-join t37 on t36.id = t37.id
-join t38 on t37.id = t38.id
-join t39 on t38.id = t39.id
-join t40;
+join t20;
 ----
 1

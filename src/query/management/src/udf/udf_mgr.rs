@@ -64,7 +64,7 @@ impl UdfMgr {
         let req = UpsertPB::insert(key, info.clone()).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
-        if let CreateOption::CreateIfNotExists(false) = create_option {
+        if let CreateOption::None = create_option {
             if res.prev.is_some() {
                 let err = UdfError::Exists {
                     tenant: self.tenant.to_string(),

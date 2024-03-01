@@ -120,7 +120,7 @@ mod add {
                 .return_once(|_u| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, v)))));
             let api = Arc::new(api);
             let user_mgr = UserMgr::create(api, "tenant1")?;
-            let res = user_mgr.add_user(user_info, &CreateOption::CreateIfNotExists(false));
+            let res = user_mgr.add_user(user_info, &CreateOption::None);
 
             assert!(res.await.is_ok());
         }
@@ -149,9 +149,7 @@ mod add {
 
             let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-            let res = user_mgr
-                .add_user(user_info, &CreateOption::CreateIfNotExists(false))
-                .await;
+            let res = user_mgr.add_user(user_info, &CreateOption::None).await;
 
             assert_eq!(
                 res.unwrap_err().code(),
@@ -347,7 +345,7 @@ mod get_users {
         let (res, user_infos) = prepare()?;
         let mut kv = MockKV::new();
         {
-            let k = "__fd_users/tenant1";
+            let k = "__fd_users/tenant1/";
             kv.expect_prefix_list_kv()
                 .with(predicate::eq(k))
                 .times(1)
@@ -376,7 +374,7 @@ mod get_users {
 
         let mut kv = MockKV::new();
         {
-            let k = "__fd_users/tenant1";
+            let k = "__fd_users/tenant1/";
             kv.expect_prefix_list_kv()
                 .with(predicate::eq(k))
                 .times(1)
