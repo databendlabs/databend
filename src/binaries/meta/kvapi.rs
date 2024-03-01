@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use chrono::Duration;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MetaError;
@@ -40,7 +41,9 @@ impl KvApiCommand {
                 let req = UpsertKVReq::update(config.key[0].as_str(), config.value.as_bytes());
 
                 let req = if let Some(expire_after) = config.expire_after {
-                    req.with(MetaSpec::new_expire(SeqV::<()>::now_sec() + expire_after))
+                    req.with(MetaSpec::new_ttl(std::time::Duration::from_secs(
+                        expire_after,
+                    )))
                 } else {
                     req
                 };

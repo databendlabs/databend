@@ -66,13 +66,7 @@ impl ClusterMgr {
     }
 
     fn new_lift_time(&self) -> MetaSpec {
-        let now = std::time::SystemTime::now();
-        let expire_at = now
-            .add(self.lift_time)
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
-
-        MetaSpec::new_expire(expire_at.as_secs())
+        MetaSpec::new_ttl(self.lift_time)
     }
 }
 

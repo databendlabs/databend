@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -70,21 +71,21 @@ impl AsyncMpscSink for WriteResultCacheSink {
 
         // 2. Set result cache key-value pair to meta.
         let now = SeqV::<()>::now_ms() / 1000;
-        let ttl = self.meta_mgr.get_ttl();
-        let expire_at = now + ttl;
+        let ttl_sec = self.meta_mgr.get_ttl();
+        let ttl_interval = Duration::from_secs(ttl_sec);
 
         let value = ResultCacheValue {
             sql: self.sql.clone(),
             query_id: self.ctx.get_id(),
             query_time: now,
-            ttl,
+            ttl: ttl_sec,
             partitions_shas: self.partitions_shas.clone(),
             result_size: self.cache_writer.current_bytes(),
             num_rows: self.cache_writer.num_rows(),
             location,
         };
         self.meta_mgr
-            .set(self.meta_key.clone(), value, MatchSeq::GE(0), expire_at)
+            .set(self.meta_key.clone(), value, MatchSeq::GE(0), ttl_interval)
             .await?;
         self.ctx
             .set_query_id_result_cache(self.ctx.get_id(), self.meta_key.clone());

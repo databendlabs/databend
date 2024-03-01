@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -142,7 +143,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
         prev: Option<(u64, &'static str)>,
         result: Option<(u64, &'static str)>,
     ) -> T {
-        let m = meta.map(MetaSpec::new_expire);
+        let m = meta.map(|x| MetaSpec::new_ttl(Duration::from_secs(x)));
         T {
             key: name.to_string(),
             seq,
@@ -207,7 +208,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             "wow",
             MatchSeq::GE(0),
             "y",
-            Some(now + 1000),
+            Some(1000),
             None,
             Some((6, "y")),
         ),
@@ -290,7 +291,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     key: key.clone(),
                     seq: MatchSeq::GE(0),
                     value: Operation::AsIs,
-                    value_meta: Some(MetaSpec::new_expire(now + 10)),
+                    value_meta: Some(MetaSpec::new_ttl(Duration::from_secs(10))),
                 }),
                 &mut t,
                 None,
@@ -315,7 +316,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     key: key.clone(),
                     seq: MatchSeq::GE(0),
                     value: Operation::Update(b"value_meta_bar".to_vec()),
-                    value_meta: Some(MetaSpec::new_expire(now + 10)),
+                    value_meta: Some(MetaSpec::new_ttl(Duration::from_secs(10))),
                 }),
                 &mut t,
                 None,
@@ -332,7 +333,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     key: key.clone(),
                     seq: MatchSeq::GE(0),
                     value: Operation::AsIs,
-                    value_meta: Some(MetaSpec::new_expire(now + 20)),
+                    value_meta: Some(MetaSpec::new_ttl(Duration::from_secs(20))),
                 }),
                 &mut t,
                 None,

@@ -79,10 +79,6 @@ impl<K: kvapi::Key> UpsertPB<K> {
         }
     }
 
-    pub fn with_expire_sec(self, expire_at_sec: u64) -> Self {
-        self.with(MetaSpec::new_expire(expire_at_sec))
-    }
-
     /// Set the time to last for the value.
     /// When the ttl is passed, the value is deleted.
     pub fn with_ttl(self, ttl: Duration) -> Self {
