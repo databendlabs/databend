@@ -250,10 +250,10 @@ impl kvapi::TestSuite {
         // - Test list expired and non-expired.
         // - Test update with a new expire value.
 
-        let now_sec = SeqV::<()>::now_sec();
-
         let _res = kv
-            .upsert_kv(UpsertKVReq::update("k1", b"v1").with(MetaSpec::new_expire(now_sec + 2)))
+            .upsert_kv(
+                UpsertKVReq::update("k1", b"v1").with(MetaSpec::new_ttl(Duration::from_secs(2))),
+            )
             .await?;
         // dbg!("upsert non expired k1", _res);
 
@@ -291,7 +291,7 @@ impl kvapi::TestSuite {
                 .upsert_kv(
                     UpsertKVReq::update("k2", b"v2")
                         .with(MatchSeq::Exact(0))
-                        .with(MetaSpec::new_expire(now_sec + 10)),
+                        .with(MetaSpec::new_ttl(Duration::from_secs(10))),
                 )
                 .await?;
             // dbg!("update non expired k2", _res);
@@ -380,7 +380,7 @@ impl kvapi::TestSuite {
                 test_key,
                 MatchSeq::Exact(seq + 1),
                 Operation::AsIs,
-                Some(MetaSpec::new_expire(now_sec + 20)),
+                Some(MetaSpec::new_ttl(Duration::from_secs(20))),
             ))
             .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);
@@ -393,7 +393,7 @@ impl kvapi::TestSuite {
                 test_key,
                 MatchSeq::Exact(seq),
                 Operation::AsIs,
-                Some(MetaSpec::new_expire(now_sec + 20)),
+                Some(MetaSpec::new_ttl(Duration::from_secs(20))),
             ))
             .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);

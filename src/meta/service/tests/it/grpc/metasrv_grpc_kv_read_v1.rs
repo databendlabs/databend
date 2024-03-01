@@ -15,6 +15,7 @@
 //! Test kv_read_v1() API, which handles kv-read request and return result in a stream.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::Streamed;
@@ -45,7 +46,7 @@ async fn test_kv_read_v1_on_leader() -> anyhow::Result<()> {
 
     let client = tc.grpc_client().await?;
 
-    initialize_kvs(&client, now_sec).await?;
+    initialize_kvs(&client).await?;
     test_streamed_mget(&client, now_sec).await?;
     test_streamed_list(&client, now_sec).await?;
 
@@ -61,7 +62,7 @@ async fn test_kv_read_v1_on_follower() -> anyhow::Result<()> {
 
     let client = tcs[0].grpc_client().await?;
 
-    initialize_kvs(&client, now_sec).await?;
+    initialize_kvs(&client).await?;
 
     let client = tcs[1].grpc_client().await?;
     test_streamed_mget(&client, now_sec).await?;
@@ -125,11 +126,11 @@ async fn test_kv_read_v1_follower_responds_leader_endpoint() -> anyhow::Result<(
 ///
 /// Insert keys:
 /// a(meta), c, c1, c2
-async fn initialize_kvs(client: &Arc<ClientHandle>, now_sec: u64) -> anyhow::Result<()> {
+async fn initialize_kvs(client: &Arc<ClientHandle>) -> anyhow::Result<()> {
     info!("--- prepare keys: a(meta),c,c1,c2");
 
     let updates = vec![
-        UpsertKVReq::insert("a", &b("a")).with(MetaSpec::new_expire(now_sec + 10)),
+        UpsertKVReq::insert("a", &b("a")).with(MetaSpec::new_ttl(Duration::from_secs(10))),
         UpsertKVReq::insert("c", &b("c")),
         UpsertKVReq::insert("c1", &b("c1")),
         UpsertKVReq::insert("c2", &b("c2")),
