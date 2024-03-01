@@ -178,6 +178,13 @@ message ClusterStatus {
 message ClientInfo {
   // The address of the connected in form of "<ip>:<port>"
   string client_addr = 10;
+
+  // The timestamp when the meta-server received the request in milliseconds since 1970 .
+  //
+  // It is created with `SeqV::now_ms()`
+  // To convert it back to time with:
+  // `SystemTime::UNIX_EPOCH + Duration::from_millis(server_time)`
+  optional uint64 server_time = 20;
 }
 
 // Item for a Streaming read reply, e.g., for `Mget` and `List`.

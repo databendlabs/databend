@@ -44,6 +44,7 @@ use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::LogEntry;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
@@ -475,6 +476,7 @@ impl MetaService for MetaServiceImpl {
         if let Some(addr) = r {
             let resp = ClientInfo {
                 client_addr: addr.to_string(),
+                server_time: Some(SeqV::<()>::now_ms()),
             };
             return Ok(Response::new(resp));
         }
