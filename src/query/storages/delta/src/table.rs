@@ -286,18 +286,28 @@ impl DeltaTable {
                 ErrorCode::ReadTableDataError(format!("Cannot read file_actions: {e:?}"))
             })?;
         let total_files = adds.len();
+
+        #[derive(serde::Deserialize)]
+        struct Stats {
+            #[serde(rename = "numRecords")]
+            pub num_records: i64,
+        }
+
         let parts = adds.iter()
             .map(|add: &Add| {
-                let stats = add
+                let num_records = add
                     .get_stats_parsed()
-                    .map_err(|e| ErrorCode::ReadTableDataError(format!("Cannot get stats: {e:?}")))?
-                    .ok_or_else(|| {
-                        ErrorCode::ReadTableDataError(format!(
-                            "Current DeltaTable assuming Add contains Stats, but found in {}.",
-                            add.path
-                        ))
-                    })?;
-                read_rows += stats.num_records as usize;
+                    .ok()
+                    .and_then(|s| match (s, add.stats.as_ref()) {
+                        (Some(s), _) => Some(s.num_records),
+                        (None, Some(s)) => {
+                            let stats = serde_json::from_str::<Stats>(s.as_str()).unwrap();
+                            Some(stats.num_records)
+                        },
+                        _ =>  None,
+                    }
+                    ).unwrap_or(1);
+                read_rows += num_records as usize;
                 read_bytes += add.size as usize;
                 let partition_values = get_partition_values(add, &partition_fields[..])?;
                 Ok(Arc::new(

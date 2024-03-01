@@ -189,6 +189,7 @@ impl SuggestedBackgroundTasksSource {
         let record = record
             .to_record_batch_with_dataschema(data_schema.as_ref())
             .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
+
         Ok(Some(record))
     }
 
