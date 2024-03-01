@@ -12,19 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Duration;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_sql::plans::VacuumTablePlan;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -36,9 +42,104 @@ pub struct VacuumTableInterpreter {
     plan: VacuumTablePlan,
 }
 
+type FileStat = (HashSet<String>, u64);
+
+#[derive(Debug, Default)]
+struct Statistics {
+    pub snapshot_files: FileStat,
+    pub segment_files: FileStat,
+    pub block_files: FileStat,
+    pub index_files: FileStat,
+}
+
 impl VacuumTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: VacuumTablePlan) -> Result<Self> {
         Ok(VacuumTableInterpreter { ctx, plan })
+    }
+
+    async fn get_statistics(&self, fuse_table: &FuseTable) -> Result<Statistics> {
+        let location_gen = fuse_table.meta_location_generator();
+        let operator = fuse_table.get_operator_ref();
+
+        let mut current_snapshot = fuse_table.read_table_snapshot().await?;
+        if current_snapshot.is_none() {
+            return Ok(Statistics::default());
+        }
+
+        let mut snapshot_files: FileStat = FileStat::default();
+        let mut segment_files: FileStat = FileStat::default();
+        let mut block_files: FileStat = FileStat::default();
+        let mut index_files: FileStat = FileStat::default();
+        let snapshot_reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
+        let compact_segment_reader =
+            MetaReaders::segment_info_reader(fuse_table.get_operator(), fuse_table.schema());
+        while let Some(ref snapshot) = current_snapshot {
+            let location = location_gen
+                .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
+            let stat = operator.stat(&location).await?;
+
+            snapshot_files.0.insert(location);
+            snapshot_files.1 += stat.content_length();
+
+            for (location, ver) in &snapshot.segments {
+                if segment_files.0.contains(location) {
+                    continue;
+                }
+                let param = LoadParams {
+                    location: location.clone(),
+                    len_hint: None,
+                    ver: *ver,
+                    put_cache: false,
+                };
+                let compact_segment = compact_segment_reader.read(&param).await?;
+                let segment_info = SegmentInfo::try_from(compact_segment)?;
+
+                segment_files.0.insert(location.clone());
+                segment_files.1 += operator.stat(location).await?.content_length();
+
+                for block_meta in segment_info.blocks {
+                    if block_files.0.contains(&block_meta.location.0) {
+                        continue;
+                    }
+
+                    block_files.0.insert(block_meta.location.0.clone());
+                    block_files.1 += block_meta.file_size;
+
+                    if let Some((bloom_filter_index_location, _)) =
+                        &block_meta.bloom_filter_index_location
+                    {
+                        if !index_files.0.contains(bloom_filter_index_location) {
+                            index_files.0.insert(bloom_filter_index_location.clone());
+                            index_files.1 += block_meta.bloom_filter_index_size;
+                        }
+                    }
+                }
+            }
+
+            if let Some((prev_snapshot_id, version)) = snapshot.prev_snapshot_id {
+                let location =
+                    location_gen.snapshot_location_from_uuid(&prev_snapshot_id, version)?;
+
+                let params = LoadParams {
+                    location,
+                    len_hint: None,
+                    ver: version,
+                    put_cache: false,
+                };
+
+                let snapshot = snapshot_reader.read(&params).await?;
+                current_snapshot = Some(snapshot);
+            } else {
+                break;
+            }
+        }
+
+        Ok(Statistics {
+            snapshot_files,
+            segment_files,
+            block_files,
+            index_files,
+        })
     }
 }
 
@@ -88,7 +189,22 @@ impl Interpreter for VacuumTableInterpreter {
             .await?;
 
         match purge_files_opt {
-            None => return Ok(PipelineBuildResult::create()),
+            None => {
+                return {
+                    let stat = self.get_statistics(fuse_table).await?;
+
+                    PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                        UInt64Type::from_data(vec![stat.snapshot_files.0.len() as u64]),
+                        UInt64Type::from_data(vec![stat.snapshot_files.1]),
+                        UInt64Type::from_data(vec![stat.segment_files.0.len() as u64]),
+                        UInt64Type::from_data(vec![stat.segment_files.1]),
+                        UInt64Type::from_data(vec![stat.block_files.0.len() as u64]),
+                        UInt64Type::from_data(vec![stat.block_files.1]),
+                        UInt64Type::from_data(vec![stat.index_files.0.len() as u64]),
+                        UInt64Type::from_data(vec![stat.index_files.1]),
+                    ])])
+                };
+            }
             Some(purge_files) => PipelineBuildResult::from_blocks(vec![
                 DataBlock::new_from_columns(vec![StringType::from_data(purge_files)]),
             ]),

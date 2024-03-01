@@ -114,7 +114,16 @@ impl VacuumTablePlan {
                 DataType::String,
             )]))
         } else {
-            Arc::new(DataSchema::empty())
+            Arc::new(DataSchema::new(vec![
+                DataField::new("snapshot_files", DataType::Number(NumberDataType::UInt64)),
+                DataField::new("snapshot_bytes", DataType::Number(NumberDataType::UInt64)),
+                DataField::new("segments_files", DataType::Number(NumberDataType::UInt64)),
+                DataField::new("segments_size", DataType::Number(NumberDataType::UInt64)),
+                DataField::new("block_files", DataType::Number(NumberDataType::UInt64)),
+                DataField::new("block_size", DataType::Number(NumberDataType::UInt64)),
+                DataField::new("index_files", DataType::Number(NumberDataType::UInt64)),
+                DataField::new("index_size", DataType::Number(NumberDataType::UInt64)),
+            ]))
         }
     }
 }
