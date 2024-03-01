@@ -40,8 +40,6 @@ async fn test_spill_with_partition() -> Result<()> {
 
     let mut spiller = Spiller::create(ctx, operator, spiller_config, SpillerType::HashJoinBuild);
 
-    spiller.partition_set = vec![0, 1, 2];
-
     // Generate data block: two columns, type is i32, 100 rows
     let data = DataBlock::new_from_columns(vec![
         Int32Type::from_data((0..100).collect::<Vec<_>>()),
@@ -51,25 +49,29 @@ async fn test_spill_with_partition() -> Result<()> {
     let res = spiller.spill_with_partition(0_u8, data, 0).await;
 
     assert!(res.is_ok());
-    assert!(spiller.partition_location.get(&0).unwrap()[0].starts_with("_query_spill"));
+    assert!(
+        spiller
+            .partition_location
+            .get(&0)
+            .unwrap()
+            .starts_with("_query_spill")
+    );
 
     // Test read spilled data
-    let data_blocks = spiller.read_spilled_data(&(0_u8), 0).await?;
-    for block in data_blocks {
-        assert_eq!(block.num_rows(), 100);
-        assert_eq!(block.num_columns(), 2);
-        for (col_idx, col) in block.columns().iter().enumerate() {
-            for (idx, cell) in col
-                .value
-                .convert_to_full_column(&DataType::Number(NumberDataType::Int32), 100)
-                .iter()
-                .enumerate()
-            {
-                assert_eq!(
-                    cell,
-                    ScalarRef::Number(NumberScalar::Int32((col_idx + idx) as i32))
-                );
-            }
+    let block = spiller.read_spilled_data(&(0_u8), 0).await?;
+    assert_eq!(block.num_rows(), 100);
+    assert_eq!(block.num_columns(), 2);
+    for (col_idx, col) in block.columns().iter().enumerate() {
+        for (idx, cell) in col
+            .value
+            .convert_to_full_column(&DataType::Number(NumberDataType::Int32), 100)
+            .iter()
+            .enumerate()
+        {
+            assert_eq!(
+                cell,
+                ScalarRef::Number(NumberScalar::Int32((col_idx + idx) as i32))
+            );
         }
     }
 

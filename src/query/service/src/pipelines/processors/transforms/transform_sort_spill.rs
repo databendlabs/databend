@@ -164,7 +164,7 @@ where R: Rows + Send + Sync + 'static
                         Ok(Event::Async)
                     } else {
                         // If we get a memory block at initial state, it means we will never spill data.
-                        debug_assert!(self.spiller.columns_layout.is_empty());
+                        debug_assert!(self.spiller.columns_layouts.is_empty());
                         self.output_block(block);
                         self.state = State::NoSpill;
                         Ok(Event::NeedConsume)
@@ -314,7 +314,7 @@ where R: Rows + Sync + Send + 'static
         for _ in 0..num_streams - streams.len() {
             let files = self.unmerged_blocks.pop_front().unwrap();
             for file in files.iter() {
-                self.spiller.columns_layout.remove(file);
+                self.spiller.columns_layouts.remove(file);
             }
             let stream = BlockStream::Spilled((files, spiller_snapshot.clone()));
             streams.push(stream);

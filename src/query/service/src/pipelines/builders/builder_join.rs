@@ -28,7 +28,6 @@ use databend_common_sql::IndexType;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;
-use crate::pipelines::processors::transforms::BuildSpillCoordinator;
 use crate::pipelines::processors::transforms::BuildSpillState;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
@@ -144,7 +143,6 @@ impl PipelineBuilder {
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
         let output_len = build_res.main_pipeline.output_len();
-        let spill_coordinator = BuildSpillCoordinator::create(output_len);
         let build_state = HashJoinBuildState::try_create(
             self.ctx.clone(),
             self.func_ctx.clone(),
@@ -158,7 +156,6 @@ impl PipelineBuilder {
             let spill_state = if join_state.enable_spill {
                 Some(Box::new(BuildSpillState::create(
                     self.ctx.clone(),
-                    spill_coordinator.clone(),
                     build_state.clone(),
                 )))
             } else {
