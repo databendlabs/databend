@@ -18,6 +18,7 @@ use std::sync::Arc;
 use arrow_array::cast::AsArray;
 use arrow_array::Array;
 use arrow_array::LargeListArray;
+use arrow_array::MapArray;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
 use arrow_schema::DataType as ArrowDataType;
@@ -144,6 +145,20 @@ impl DataBlock {
                 array.offsets().clone(),
                 values,
                 array.nulls().cloned(),
+            );
+            Arc::new(array) as _
+        } else if let ArrowDataType::Map(f, ordered) = arrow_field.data_type() {
+            let array = array.as_ref().as_map();
+
+            let entry = Arc::new(array.entries().clone()) as Arc<dyn Array>;
+            let entry = Self::adjust_nested_array(entry, f.as_ref());
+
+            let array = MapArray::new(
+                f.clone(),
+                array.offsets().clone(),
+                entry.as_struct().clone(),
+                array.nulls().cloned(),
+                *ordered,
             );
             Arc::new(array) as _
         } else {
