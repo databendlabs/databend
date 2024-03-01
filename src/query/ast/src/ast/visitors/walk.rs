@@ -367,7 +367,11 @@ pub fn walk_window_definition<'a, V: Visitor<'a>>(
 
 pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statement) {
     match statement {
-        Statement::Explain { kind, query } => visitor.visit_explain(kind, query),
+        Statement::Explain {
+            kind,
+            options,
+            query,
+        } => visitor.visit_explain(kind, options, query),
         Statement::ExplainAnalyze { query } => visitor.visit_statement(query),
         Statement::Query(query) => visitor.visit_query(query),
         Statement::Insert(insert) => visitor.visit_insert(insert),

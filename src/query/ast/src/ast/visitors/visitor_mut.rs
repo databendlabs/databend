@@ -394,7 +394,12 @@ pub trait VisitorMut: Sized {
         walk_query_mut(self, query);
     }
 
-    fn visit_explain(&mut self, _kind: &mut ExplainKind, stmt: &mut Statement) {
+    fn visit_explain(
+        &mut self,
+        _kind: &mut ExplainKind,
+        _options: &mut [ExplainOption],
+        stmt: &mut Statement,
+    ) {
         walk_statement_mut(self, stmt);
     }
 

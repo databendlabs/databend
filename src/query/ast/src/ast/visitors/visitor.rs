@@ -380,7 +380,13 @@ pub trait Visitor<'ast>: Sized {
         walk_query(self, query);
     }
 
-    fn visit_explain(&mut self, _kind: &'ast ExplainKind, _query: &'ast Statement) {}
+    fn visit_explain(
+        &mut self,
+        _kind: &'ast ExplainKind,
+        _options: &'ast [ExplainOption],
+        _query: &'ast Statement,
+    ) {
+    }
 
     fn visit_copy_into_table(&mut self, copy: &'ast CopyIntoTableStmt) {
         if let CopyIntoTableSource::Query(query) = &copy.src {

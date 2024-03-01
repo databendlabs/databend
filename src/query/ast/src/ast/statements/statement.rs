@@ -19,6 +19,7 @@ use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::schema::CreateOption;
+use itertools::Itertools;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
@@ -36,6 +37,7 @@ pub enum Statement {
     Query(Box<Query>),
     Explain {
         kind: ExplainKind,
+        options: Vec<ExplainOption>,
         query: Box<Statement>,
     },
     ExplainAnalyze {
@@ -334,8 +336,34 @@ impl Statement {
 impl Display for Statement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Statement::Explain { kind, query } => {
+            Statement::Explain {
+                options,
+                kind,
+                query,
+            } => {
                 write!(f, "EXPLAIN")?;
+                if !options.is_empty() {
+                    write!(
+                        f,
+                        "({})",
+                        options
+                            .iter()
+                            .map(|opt| {
+                                match opt {
+                                    ExplainOption::Verbose(v) => {
+                                        format!("VERBOSE = {}", v)
+                                    }
+                                    ExplainOption::Logical(v) => {
+                                        format!("LOGICAL = {}", v)
+                                    }
+                                    ExplainOption::Optimized(v) => {
+                                        format!("OPTIMIZED = {}", v)
+                                    }
+                                }
+                            })
+                            .join(", ")
+                    )?;
+                }
                 match *kind {
                     ExplainKind::Ast(_) => write!(f, " AST")?,
                     ExplainKind::Syntax(_) => write!(f, " SYNTAX")?,
@@ -346,7 +374,7 @@ impl Display for Statement {
                     ExplainKind::Optimized => write!(f, " Optimized")?,
                     ExplainKind::Plan => (),
                     ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
-                    ExplainKind::JOIN => write!(f, " JOIN")?,
+                    ExplainKind::Join => write!(f, " JOIN")?,
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
                 }
                 write!(f, " {query}")?;

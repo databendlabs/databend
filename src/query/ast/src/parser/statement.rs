@@ -63,9 +63,9 @@ pub enum CreateDatabaseOption {
 pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
+            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
         },
-        |(_, opt_kind, statement)| {
+        |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
                     Some(TokenKind::AST) => {
@@ -83,7 +83,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                         ExplainKind::Syntax(pretty_stmt)
                     }
                     Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
-                    Some(TokenKind::JOIN) => ExplainKind::JOIN,
+                    Some(TokenKind::JOIN) => ExplainKind::Join,
                     Some(TokenKind::GRAPH) => ExplainKind::Graph,
                     Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
                     Some(TokenKind::RAW) => ExplainKind::Raw,
@@ -92,6 +92,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
+                options: options.as_ref().map_or(vec![], |(_, opts, _)| opts.clone()),
                 query: Box::new(statement.stmt),
             })
         },
@@ -3664,5 +3665,19 @@ pub fn alter_password_action(i: Input) -> IResult<AlterPasswordAction> {
     rule!(
         #set_options
         | #unset_options
+    )(i)
+}
+
+pub fn explain_option(i: Input) -> IResult<ExplainOption> {
+    map(
+        rule! {
+            VERBOSE | LOGICAL | OPTIMIZED
+        },
+        |opt| match &opt.kind {
+            VERBOSE => ExplainOption::Verbose(true),
+            LOGICAL => ExplainOption::Logical(true),
+            OPTIMIZED => ExplainOption::Optimized(true),
+            _ => unreachable!(),
+        },
     )(i)
 }

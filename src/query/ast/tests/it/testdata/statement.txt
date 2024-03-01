@@ -498,6 +498,7 @@ EXPLAIN PIPELINE SELECT a FROM b
 ---------- AST ------------
 Explain {
     kind: Pipeline,
+    options: [],
     query: Query(
         Query {
             span: Some(
@@ -576,6 +577,7 @@ EXPLAIN PIPELINE SELECT a FROM t1
 ---------- AST ------------
 Explain {
     kind: Pipeline,
+    options: [],
     query: Query(
         Query {
             span: Some(
@@ -642,6 +644,117 @@ Explain {
             limit: [],
             offset: None,
             ignore_result: true,
+        },
+    ),
+}
+
+
+---------- Input ----------
+explain(verbose, logical, optimized) select * from t where a = 1
+---------- Output ---------
+EXPLAIN(VERBOSE = true, LOGICAL = true, OPTIMIZED = true) SELECT * FROM t WHERE (a = 1)
+---------- AST ------------
+Explain {
+    kind: Plan,
+    options: [
+        Verbose(
+            true,
+        ),
+        Logical(
+            true,
+        ),
+        Optimized(
+            true,
+        ),
+    ],
+    query: Query(
+        Query {
+            span: Some(
+                37..64,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        37..64,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        44..45,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                51..52,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    51..52,
+                                ),
+                                name: "t",
+                                quote: None,
+                            },
+                            alias: None,
+                            travel_point: None,
+                            since_point: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: Some(
+                        BinaryOp {
+                            span: Some(
+                                61..62,
+                            ),
+                            op: Eq,
+                            left: ColumnRef {
+                                span: Some(
+                                    59..60,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            59..60,
+                                        ),
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                ),
+                            },
+                            right: Literal {
+                                span: Some(
+                                    63..64,
+                                ),
+                                lit: UInt64(
+                                    1,
+                                ),
+                            },
+                        },
+                    ),
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
         },
     ),
 }

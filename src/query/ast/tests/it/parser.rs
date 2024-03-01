@@ -97,6 +97,7 @@ fn test_statement() {
         r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
         r#"explain pipeline select a from b;"#,
         r#"explain pipeline select a from t1 ignore_result;"#,
+        r#"explain(verbose, logical, optimized) select * from t where a = 1"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,

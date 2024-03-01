@@ -24,6 +24,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_pipeline_core::processors::PlanProfile;
+use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::BindContext;
@@ -51,6 +52,7 @@ use crate::sql::plans::Plan;
 
 pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
+    config: ExplainConfig,
     kind: ExplainKind,
     plan: Plan,
 }
@@ -68,8 +70,8 @@ impl Interpreter for ExplainInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let blocks = match &self.kind {
-            ExplainKind::Raw => self.explain_plan(&self.plan)?,
-            ExplainKind::Optimized => self.explain_plan(&self.plan)?,
+            ExplainKind::Raw | ExplainKind::Optimized => self.explain_plan(&self.plan)?,
+            ExplainKind::Plan if self.config.logical => self.explain_plan(&self.plan)?,
             ExplainKind::Plan => match &self.plan {
                 Plan::Query {
                     s_expr,
@@ -123,7 +125,7 @@ impl Interpreter for ExplainInterpreter {
                 _ => self.explain_plan(&self.plan)?,
             },
 
-            ExplainKind::JOIN => match &self.plan {
+            ExplainKind::Join => match &self.plan {
                 Plan::Query {
                     s_expr,
                     metadata,
@@ -225,12 +227,22 @@ impl Interpreter for ExplainInterpreter {
 }
 
 impl ExplainInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: Plan, kind: ExplainKind) -> Result<Self> {
-        Ok(ExplainInterpreter { ctx, plan, kind })
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        plan: Plan,
+        kind: ExplainKind,
+        config: ExplainConfig,
+    ) -> Result<Self> {
+        Ok(ExplainInterpreter {
+            ctx,
+            plan,
+            kind,
+            config,
+        })
     }
 
     pub fn explain_plan(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
-        let result = plan.format_indent()?;
+        let result = plan.format_indent(self.config.verbose)?;
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
