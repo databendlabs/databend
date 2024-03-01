@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use arrow_array::cast::AsArray;
 use arrow_array::Array;
+use arrow_array::LargeListArray;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
 use arrow_schema::DataType as ArrowDataType;
@@ -116,12 +117,12 @@ impl DataBlock {
             let array = column.into_arrow_rs();
 
             // Adjust struct array names
-            arrays.push(Self::adjust_struct_array(array, arrow_field.as_ref()));
+            arrays.push(Self::adjust_nested_array(array, arrow_field.as_ref()));
         }
         Ok(RecordBatch::try_new(Arc::new(arrow_schema), arrays)?)
     }
 
-    fn adjust_struct_array(array: Arc<dyn Array>, arrow_field: &ArrowField) -> Arc<dyn Array> {
+    fn adjust_nested_array(array: Arc<dyn Array>, arrow_field: &ArrowField) -> Arc<dyn Array> {
         if let ArrowDataType::Struct(fs) = arrow_field.data_type() {
             let array = array.as_ref().as_struct();
             let inner_arrays = array
@@ -129,11 +130,21 @@ impl DataBlock {
                 .iter()
                 .zip(fs.iter())
                 .map(|(array, arrow_field)| {
-                    Self::adjust_struct_array(array.clone(), arrow_field.as_ref())
+                    Self::adjust_nested_array(array.clone(), arrow_field.as_ref())
                 })
                 .collect();
 
             let array = StructArray::new(fs.clone(), inner_arrays, array.nulls().cloned());
+            Arc::new(array) as _
+        } else if let ArrowDataType::LargeList(f) = arrow_field.data_type() {
+            let array = array.as_ref().as_list::<i64>();
+            let values = Self::adjust_nested_array(array.values().clone(), f.as_ref());
+            let array = LargeListArray::new(
+                f.clone(),
+                array.offsets().clone(),
+                values,
+                array.nulls().cloned(),
+            );
             Arc::new(array) as _
         } else {
             array
