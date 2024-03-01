@@ -13,8 +13,13 @@
 // limitations under the License.
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_exception::Result;
+use itertools::Itertools;
 
+use crate::optimizer::RelExpr;
+use crate::optimizer::RelationalProperty;
 use crate::optimizer::SExpr;
+use crate::optimizer::StatInfo;
 use crate::planner::format::display_rel_operator::to_format_tree;
 use crate::plans::RelOperator;
 use crate::ColumnEntry;
@@ -132,21 +137,104 @@ impl IdHumanizer for Metadata {
 /// A humanizer for `SExpr`.
 /// It will use `IdHumanizer` and `OperatorHumanizer` to humanize the `SExpr`.
 /// The result is a `FormatTreeNode` with the operator and its children.
-pub struct TreeHumanizer;
+pub struct TreeHumanizer<'a, I, O> {
+    id_humanizer: &'a I,
+    operator_humanizer: &'a O,
+    verbose: bool,
+}
 
-impl TreeHumanizer {
-    pub fn humanize_s_expr<I: IdHumanizer, O: OperatorHumanizer<I, Output = FormatTreeNode>>(
-        id_humanizer: &I,
-        operator_humanizer: &O,
-        s_expr: &SExpr,
-    ) -> O::Output {
+impl<'a, I: IdHumanizer<ColumnId = IndexType>, O: OperatorHumanizer<I, Output = FormatTreeNode>>
+    TreeHumanizer<'a, I, O>
+{
+    pub fn new(id_humanizer: &'a I, operator_humanizer: &'a O, verbose: bool) -> Self {
+        TreeHumanizer {
+            id_humanizer,
+            operator_humanizer,
+            verbose,
+        }
+    }
+
+    pub fn humanize_s_expr(&self, s_expr: &SExpr) -> Result<FormatTreeNode> {
         let op = s_expr.plan();
-        let mut tree = operator_humanizer.humanize_operator(id_humanizer, op);
+        let mut tree = self
+            .operator_humanizer
+            .humanize_operator(self.id_humanizer, op);
         let children = s_expr
             .children()
-            .map(|v| Self::humanize_s_expr(id_humanizer, operator_humanizer, v))
-            .collect::<Vec<_>>();
+            .map(|s_expr| self.humanize_s_expr(s_expr))
+            .collect::<Result<Vec<_>>>()?;
+
+        if self.verbose {
+            let rel_expr = RelExpr::with_s_expr(s_expr);
+            let prop = rel_expr.derive_relational_prop()?;
+            let stat = rel_expr.derive_cardinality()?;
+            let properties = self.humanize_property(&prop);
+            let stats = self.humanize_stat(&stat)?;
+            tree.children.extend(properties);
+            tree.children.extend(stats);
+        }
+
         tree.children.extend(children);
-        tree
+        Ok(tree)
+    }
+
+    fn humanize_property(&self, prop: &RelationalProperty) -> Vec<FormatTreeNode> {
+        let output_columns = prop
+            .output_columns
+            .iter()
+            .map(|idx| self.id_humanizer.humanize_column_id(*idx))
+            .sorted()
+            .collect::<Vec<_>>();
+
+        let outer_columns = prop
+            .outer_columns
+            .iter()
+            .map(|idx| self.id_humanizer.humanize_column_id(*idx))
+            .sorted()
+            .collect::<Vec<_>>();
+
+        let used_columns = prop
+            .used_columns
+            .iter()
+            .map(|idx| self.id_humanizer.humanize_column_id(*idx))
+            .sorted()
+            .collect::<Vec<_>>();
+
+        vec![
+            FormatTreeNode::new(format!("output columns: [{}]", output_columns.join(", "))),
+            FormatTreeNode::new(format!("outer columns: [{}]", outer_columns.join(", "))),
+            FormatTreeNode::new(format!("used columns: [{}]", used_columns.join(", "))),
+        ]
+    }
+
+    fn humanize_stat(&self, stat: &StatInfo) -> Result<Vec<FormatTreeNode>> {
+        let cardinality = format!("{:.3}", stat.cardinality);
+
+        let precise_cardinality = if let Some(card) = stat.statistics.precise_cardinality {
+            format!("{}", card)
+        } else {
+            "N/A".to_string()
+        };
+
+        let column_stats = stat
+            .statistics
+            .column_stats
+            .iter()
+            .map(|(column, hist)| {
+                let column = self.id_humanizer.humanize_column_id(*column);
+                let hist = format!(
+                    "{{ min: {}, max: {}, ndv: {}, null count: {} }}",
+                    hist.min, hist.max, hist.ndv, hist.null_count
+                );
+                FormatTreeNode::new(format!("{}: {}", column, hist))
+            })
+            .sorted_by(|a, b| a.payload.cmp(&b.payload))
+            .collect::<Vec<_>>();
+
+        Ok(vec![
+            FormatTreeNode::new(format!("cardinality: {}", cardinality)),
+            FormatTreeNode::new(format!("precise cardinality: {}", precise_cardinality)),
+            FormatTreeNode::with_children("statistics".to_string(), column_stats),
+        ])
     }
 }

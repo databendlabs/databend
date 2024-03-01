@@ -40,16 +40,16 @@ use crate::ScalarExpr;
 use crate::Visibility;
 
 impl Plan {
-    pub fn format_indent(&self) -> Result<String> {
+    pub fn format_indent(&self, verbose: bool) -> Result<String> {
         match self {
             Plan::Query {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                s_expr.to_format_tree(metadata).format_pretty()
+                s_expr.to_format_tree(metadata, verbose)?.format_pretty()
             }
-            Plan::Explain { kind, plan } => {
-                let result = plan.format_indent()?;
+            Plan::Explain { kind, plan, .. } => {
+                let result = plan.format_indent(false)?;
                 Ok(format!("{:?}:\n{}", kind, result))
             }
             Plan::ExplainAst { .. } => Ok("ExplainAst".to_string()),
@@ -260,7 +260,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
         SExpr::create_unary(Arc::new(filter), Arc::new(scan_expr))
     };
     let metadata = &*delete.metadata.read();
-    let res = s_expr.to_format_tree(metadata).format_pretty()?;
+    let res = s_expr.to_format_tree(metadata, false)?.format_pretty()?;
     Ok(format!("DeletePlan:\n{res}"))
 }
 
@@ -271,7 +271,7 @@ fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                let res = s_expr.to_format_tree(metadata);
+                let res = s_expr.to_format_tree(metadata, false)?;
                 FormatTreeNode::with_children("CreateTableAsSelect".to_string(), vec![res])
                     .format_pretty()
             }
@@ -372,7 +372,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
     }
     let s_expr = merge_into.input.as_ref();
     let metadata = &*merge_into.meta_data.read();
-    let input_format_child = s_expr.to_format_tree(metadata);
+    let input_format_child = s_expr.to_format_tree(metadata, false)?;
     let all_children = [
         vec![distributed_format],
         vec![target_build_optimization_format],
