@@ -217,10 +217,12 @@ impl TransformHashJoinProbe {
             .spilled_partitions()
             .contains(&(p_id as u8))
         {
-            let spilled_data = spill_state
-                .spiller
-                .read_spilled_data(&(p_id as u8), self.processor_id)
-                .await?;
+            let spilled_data = DataBlock::concat(
+                &spill_state
+                    .spiller
+                    .read_spilled_data(&(p_id as u8), self.processor_id)
+                    .await?,
+            )?;
             if !spilled_data.is_empty() {
                 // Split data to `block_size` rows per sub block.
                 let (sub_blocks, remain_block) = spilled_data.split_by_rows(self.max_block_size);

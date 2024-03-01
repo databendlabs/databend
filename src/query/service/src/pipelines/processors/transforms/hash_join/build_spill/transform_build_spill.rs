@@ -125,10 +125,12 @@ impl BuildSpillHandler {
             .partition_location
             .contains_key(&(partition_id as u8))
         {
-            let spilled_data = spill_state
-                .spiller
-                .read_spilled_data(&(partition_id as u8), processor_id)
-                .await?;
+            let spilled_data = DataBlock::concat(
+                &spill_state
+                    .spiller
+                    .read_spilled_data(&(partition_id as u8), processor_id)
+                    .await?,
+            )?;
             if !spilled_data.is_empty() {
                 return Ok(Some(spilled_data));
             }
