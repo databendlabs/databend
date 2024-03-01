@@ -44,7 +44,7 @@ pub fn stream_table(i: Input) -> IResult<Statement> {
 fn create_stream(i: Input) -> IResult<Statement> {
     map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ STREAM ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ STREAM ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ ON ~ TABLE ~ #dot_separated_idents_1_to_2
             ~ ( #stream_point )?

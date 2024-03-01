@@ -20,8 +20,10 @@ use async_recursion::async_recursion;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnPosition;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Expr::Array;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Join;
@@ -943,7 +945,10 @@ impl<'a> SelectRewriter<'a> {
     }
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
-            Expr::FunctionCall { name, args, .. } => Ok((name, args)),
+            Expr::FunctionCall {
+                func: FunctionCall { name, args, .. },
+                ..
+            } => Ok((name, args)),
             _ => Err(ErrorCode::SyntaxException("Aggregate function is required")),
         }
     }
@@ -960,10 +965,12 @@ impl<'a> SelectRewriter<'a> {
         Expr::BinaryOp {
             span: None,
             left: Box::new(Expr::ColumnRef {
-                column: ColumnID::Name(col),
                 span: None,
-                database: None,
-                table: None,
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: ColumnID::Name(col),
+                },
             }),
             op: BinaryOperator::Eq,
             right: Box::new(value),
@@ -978,12 +985,14 @@ impl<'a> SelectRewriter<'a> {
         SelectTarget::AliasedExpr {
             expr: Box::new(Expr::FunctionCall {
                 span: Span::default(),
-                distinct: false,
-                name,
-                args,
-                params: vec![],
-                window: None,
-                lambda: None,
+                func: FunctionCall {
+                    distinct: false,
+                    name,
+                    args,
+                    params: vec![],
+                    window: None,
+                    lambda: None,
+                },
             }),
             alias,
         }
@@ -1009,9 +1018,11 @@ impl<'a> SelectRewriter<'a> {
                 .into_iter()
                 .map(|expr| Expr::ColumnRef {
                     span: None,
-                    column: ColumnID::Name(expr),
-                    database: None,
-                    table: None,
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(expr),
+                    },
                 })
                 .collect(),
         }
@@ -1060,7 +1071,7 @@ impl<'a> SelectRewriter<'a> {
             .ok_or_else(|| ErrorCode::SyntaxException("Aggregate column not found"))?;
         let aggregate_column_names = aggregate_columns
             .iter()
-            .map(|col| col.name())
+            .map(|col| col.column.name())
             .collect::<Vec<_>>();
         let new_group_by = stmt.group_by.clone().unwrap_or_else(|| {
             GroupBy::Normal(
@@ -1085,7 +1096,7 @@ impl<'a> SelectRewriter<'a> {
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
             let mut exclude_columns: Vec<_> = aggregate_columns
                 .iter()
-                .map(|c| Identifier::from_name(c.name()))
+                .map(|c| Identifier::from_name(c.column.name()))
                 .collect();
             exclude_columns.push(pivot.value_column.clone());
             star.exclude(exclude_columns);

@@ -60,6 +60,7 @@ cidr = { version = "0.2.2" }
 cron = "0.12.0"
 ctor = "0.1.26"
 dashmap = { workspace = true }
+derive-visitor = { workspace = true }
 educe = "0.4"
 enum-as-inner = "0.5"
 globiter = "0.1"

@@ -20,7 +20,9 @@ use std::vec;
 use databend_common_ast::ast::contain_agg_func;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
 use databend_common_ast::ast::Lambda;
@@ -220,9 +222,12 @@ impl<'a> TypeChecker<'a> {
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
             Expr::ColumnRef {
                 span,
-                database,
-                table,
-                column: ident,
+                column:
+                    ColumnRef {
+                        database,
+                        table,
+                        column: ident,
+                    },
             } => {
                 let database = database
                     .as_ref()
@@ -395,27 +400,31 @@ impl<'a> TypeChecker<'a> {
                     // Deduplicate the array.
                     let array_expr = Expr::FunctionCall {
                         span: *span,
-                        name: Identifier::from_name("array_distinct"),
-                        args: vec![array_expr],
-                        params: vec![],
-                        window: None,
-                        lambda: None,
-                        distinct: false,
+                        func: ASTFunctionCall {
+                            name: Identifier::from_name("array_distinct"),
+                            args: vec![array_expr],
+                            params: vec![],
+                            window: None,
+                            lambda: None,
+                            distinct: false,
+                        },
                     };
                     let args = vec![&array_expr, expr.as_ref()];
                     if *not {
                         self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::FunctionCall {
                             span: *span,
-                            distinct: false,
-                            name: Identifier {
-                                name: "contains".to_string(),
-                                quote: None,
-                                span: *span,
+                            func: ASTFunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    name: "contains".to_string(),
+                                    quote: None,
+                                    span: *span,
+                                },
+                                args: args.iter().copied().cloned().collect(),
+                                params: vec![],
+                                window: None,
+                                lambda: None,
                             },
-                            args: args.iter().copied().cloned().collect(),
-                            params: vec![],
-                            window: None,
-                            lambda: None,
                         })
                         .await?
                     } else {
@@ -656,16 +665,18 @@ impl<'a> TypeChecker<'a> {
                             // compare case operand with each conditions until one of them is equal
                             let equal_expr = Expr::FunctionCall {
                                 span: *span,
-                                distinct: false,
-                                name: Identifier {
-                                    name: "eq".to_string(),
-                                    quote: None,
-                                    span: *span,
+                                func: ASTFunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        name: "eq".to_string(),
+                                        quote: None,
+                                        span: *span,
+                                    },
+                                    args: vec![*operand.clone(), c.clone()],
+                                    params: vec![],
+                                    window: None,
+                                    lambda: None,
                                 },
-                                args: vec![*operand.clone(), c.clone()],
-                                params: vec![],
-                                window: None,
-                                lambda: None,
                             };
                             arguments.push(equal_expr)
                         }
@@ -708,12 +719,15 @@ impl<'a> TypeChecker<'a> {
 
             Expr::FunctionCall {
                 span,
-                distinct,
-                name,
-                args,
-                params,
-                window,
-                lambda,
+                func:
+                    ASTFunctionCall {
+                        distinct,
+                        name,
+                        args,
+                        params,
+                        window,
+                        lambda,
+                    },
             } => {
                 let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
                 let func_name = func_name.as_str();
@@ -2544,16 +2558,18 @@ impl<'a> TypeChecker<'a> {
                 Some(
                     self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::FunctionCall {
                         span,
-                        distinct: false,
-                        name: Identifier {
-                            name: "is_not_null".to_string(),
-                            quote: None,
-                            span,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: Identifier {
+                                name: "is_not_null".to_string(),
+                                quote: None,
+                                span,
+                            },
+                            args: vec![arg_x.clone()],
+                            params: vec![],
+                            window: None,
+                            lambda: None,
                         },
-                        args: vec![arg_x.clone()],
-                        params: vec![],
-                        window: None,
-                        lambda: None,
                     })
                     .await,
                 )
@@ -2581,16 +2597,18 @@ impl<'a> TypeChecker<'a> {
 
                     let assume_not_null_expr = Expr::FunctionCall {
                         span,
-                        distinct: false,
-                        name: Identifier {
-                            name: "assume_not_null".to_string(),
-                            quote: None,
-                            span,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: Identifier {
+                                name: "assume_not_null".to_string(),
+                                quote: None,
+                                span,
+                            },
+                            args: vec![(*arg).clone()],
+                            params: vec![],
+                            window: None,
+                            lambda: None,
                         },
-                        args: vec![(*arg).clone()],
-                        params: vec![],
-                        window: None,
-                        lambda: None,
                     };
 
                     new_args.push(is_not_null_expr);
@@ -3053,7 +3071,7 @@ impl<'a> TypeChecker<'a> {
         let udf_expr = self
             .clone_expr_with_replacement(&expr, &|nest_expr| {
                 if let Expr::ColumnRef { column, .. } = nest_expr {
-                    if let Some(arg) = args_map.get(&column.name().to_string()) {
+                    if let Some(arg) = args_map.get(&column.column.name().to_string()) {
                         return Ok(Some(arg.clone()));
                     }
                 }
@@ -3675,23 +3693,28 @@ impl<'a> TypeChecker<'a> {
                 }),
                 Expr::FunctionCall {
                     span,
-                    distinct,
-                    name,
-                    args,
-                    params,
-                    window,
-                    lambda,
+                    func:
+                        ASTFunctionCall {
+                            distinct,
+                            name,
+                            args,
+                            params,
+                            window,
+                            lambda,
+                        },
                 } => Ok(Expr::FunctionCall {
                     span: *span,
-                    distinct: *distinct,
-                    name: name.clone(),
-                    args: args
-                        .iter()
-                        .map(|arg| self.clone_expr_with_replacement(arg, replacement_fn))
-                        .collect::<Result<Vec<Expr>>>()?,
-                    params: params.clone(),
-                    window: window.clone(),
-                    lambda: lambda.clone(),
+                    func: ASTFunctionCall {
+                        distinct: *distinct,
+                        name: name.clone(),
+                        args: args
+                            .iter()
+                            .map(|arg| self.clone_expr_with_replacement(arg, replacement_fn))
+                            .collect::<Result<Vec<Expr>>>()?,
+                        params: params.clone(),
+                        window: window.clone(),
+                        lambda: lambda.clone(),
+                    },
                 }),
                 Expr::Case {
                     span,

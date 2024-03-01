@@ -452,9 +452,11 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
                     op: BinaryOperator::Regexp,
                     left: Box::new(Expr::ColumnRef {
                         span: None,
-                        database: None,
-                        table: None,
-                        column: ColumnID::Name(Identifier::from_name("_t")),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: ColumnID::Name(Identifier::from_name("_t")),
+                        },
                     }),
                     right: Box::new(Expr::Literal {
                         span: Some(t.span),
@@ -600,17 +602,14 @@ pub fn table_reference(i: Input) -> IResult<TableReference> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TableFunctionParam {
     // func(name => arg)
-    Named { name: String, value: Expr },
+    Named { name: Identifier, value: Expr },
     // func(arg)
     Normal(Expr),
 }
 
 pub fn table_function_param(i: Input) -> IResult<TableFunctionParam> {
     let named = map(rule! { #ident ~ "=>" ~ #expr  }, |(name, _, value)| {
-        TableFunctionParam::Named {
-            name: name.to_string(),
-            value,
-        }
+        TableFunctionParam::Named { name, value }
     });
     let normal = map(rule! { #expr }, TableFunctionParam::Normal);
 

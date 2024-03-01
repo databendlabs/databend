@@ -16,7 +16,9 @@ use std::collections::HashMap;
 
 use databend_common_ast::ast::BinaryOperator as ASTBinaryOperator;
 use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr as ASTExpr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::UnaryOperator as ASTUnaryOperator;
@@ -52,11 +54,15 @@ fn sql_ast_to_mir(ast: ASTExpr, variables: &HashMap<String, MirDataType>) -> Opt
             Some(MirExpr::Constant(constant))
         }
         ASTExpr::ColumnRef {
-            database: None,
-            table: None,
-            column: ColumnID::Name(Identifier {
-                name, quote: None, ..
-            }),
+            column:
+                ColumnRef {
+                    database: None,
+                    table: None,
+                    column:
+                        ColumnID::Name(Identifier {
+                            name, quote: None, ..
+                        }),
+                },
             ..
         } => Some(MirExpr::Variable {
             data_type: variables[&name],
@@ -154,13 +160,15 @@ fn mir_to_sql_ast(expr: &MirExpr) -> ASTExpr {
         }
         MirExpr::Variable { name, .. } => ASTExpr::ColumnRef {
             span: None,
-            database: None,
-            table: None,
-            column: ColumnID::Name(Identifier {
-                span: None,
-                name: name.clone(),
-                quote: None,
-            }),
+            column: ColumnRef {
+                database: None,
+                table: None,
+                column: ColumnID::Name(Identifier {
+                    span: None,
+                    name: name.clone(),
+                    quote: None,
+                }),
+            },
         },
         MirExpr::UnaryOperator { op, arg } => {
             let op = match op {
@@ -189,16 +197,18 @@ fn mir_to_sql_ast(expr: &MirExpr) -> ASTExpr {
                 MirUnaryOperator::RemoveNullable => {
                     return ASTExpr::FunctionCall {
                         span: None,
-                        distinct: false,
-                        name: Identifier {
-                            name: "remove_nullable".to_string(),
-                            quote: None,
-                            span: None,
+                        func: FunctionCall {
+                            distinct: false,
+                            name: Identifier {
+                                name: "remove_nullable".to_string(),
+                                quote: None,
+                                span: None,
+                            },
+                            args: vec![mir_to_sql_ast(arg)],
+                            params: vec![],
+                            window: None,
+                            lambda: None,
                         },
-                        args: vec![mir_to_sql_ast(arg)],
-                        params: vec![],
-                        window: None,
-                        lambda: None,
                     };
                 }
             };

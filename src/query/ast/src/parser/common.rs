@@ -23,6 +23,8 @@ use pratt::PrattParser;
 use pratt::Precedence;
 
 use crate::ast::ColumnID;
+use crate::ast::ColumnRef;
+use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
 use crate::ast::TableRef;
 use crate::parser::input::Input;
@@ -172,6 +174,12 @@ fn non_reserved_keyword(
     }
 }
 
+pub fn database_ref(i: Input) -> IResult<DatabaseRef> {
+    map(dot_separated_idents_1_to_2, |(catalog, database)| {
+        DatabaseRef { catalog, database }
+    })(i)
+}
+
 pub fn table_ref(i: Input) -> IResult<TableRef> {
     map(dot_separated_idents_1_to_3, |(catalog, database, table)| {
         TableRef {
@@ -180,6 +188,31 @@ pub fn table_ref(i: Input) -> IResult<TableRef> {
             table,
         }
     })(i)
+}
+
+pub fn column_ref(i: Input) -> IResult<ColumnRef> {
+    alt((
+        map(
+            rule! { #ident ~ "." ~ #ident ~ "." ~ #column_id },
+            |(database, _, table, _, column)| ColumnRef {
+                database: Some(database),
+                table: Some(table),
+                column,
+            },
+        ),
+        map(rule! { #ident ~ "." ~ #column_id }, |(table, _, column)| {
+            ColumnRef {
+                database: None,
+                table: Some(table),
+                column,
+            }
+        }),
+        map(rule! { #column_id }, |column| ColumnRef {
+            database: None,
+            table: None,
+            column,
+        }),
+    ))(i)
 }
 
 pub fn column_id(i: Input) -> IResult<ColumnID> {

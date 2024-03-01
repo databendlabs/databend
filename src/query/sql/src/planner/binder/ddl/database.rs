@@ -18,6 +18,7 @@ use databend_common_ast::ast::AlterDatabaseAction;
 use databend_common_ast::ast::AlterDatabaseStmt;
 use databend_common_ast::ast::CreateDatabaseStmt;
 use databend_common_ast::ast::DatabaseEngine;
+use databend_common_ast::ast::DatabaseRef;
 use databend_common_ast::ast::DropDatabaseStmt;
 use databend_common_ast::ast::SQLProperty;
 use databend_common_ast::ast::ShowCreateDatabaseStmt;
@@ -208,8 +209,7 @@ impl Binder {
     ) -> Result<Plan> {
         let CreateDatabaseStmt {
             create_option,
-            catalog,
-            database,
+            database: DatabaseRef { catalog, database },
             engine,
             options,
             from_share,

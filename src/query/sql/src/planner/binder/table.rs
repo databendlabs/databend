@@ -25,6 +25,7 @@ use dashmap::DashMap;
 use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::Join;
@@ -578,12 +579,14 @@ impl Binder {
                     // convert lateral join table function to srf function
                     let srf = Expr::FunctionCall {
                         span: *span,
-                        distinct: false,
-                        name: func_name.clone(),
-                        args,
-                        params: vec![],
-                        window: None,
-                        lambda: None,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: func_name.clone(),
+                            args,
+                            params: vec![],
+                            window: None,
+                            lambda: None,
+                        },
                     };
                     let srfs = vec![srf.clone()];
                     let srf_expr = self
@@ -662,7 +665,7 @@ impl Binder {
         span: &Span,
         name: &Identifier,
         params: &[Expr],
-        named_params: &[(String, Expr)],
+        named_params: &[(Identifier, Expr)],
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
         let func_name = normalize_identifier(name, &self.name_resolution_ctx);
@@ -682,16 +685,18 @@ impl Binder {
                 select_list: vec![SelectTarget::AliasedExpr {
                     expr: Box::new(databend_common_ast::ast::Expr::FunctionCall {
                         span: *span,
-                        distinct: false,
-                        name: databend_common_ast::ast::Identifier {
-                            span: *span,
-                            name: func_name.name.clone(),
-                            quote: None,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: databend_common_ast::ast::Identifier {
+                                span: *span,
+                                name: func_name.name.clone(),
+                                quote: None,
+                            },
+                            params: vec![],
+                            args,
+                            window: None,
+                            lambda: None,
                         },
-                        params: vec![],
-                        args,
-                        window: None,
-                        lambda: None,
                     }),
                     alias: None,
                 }],
@@ -1519,13 +1524,13 @@ fn parse_table_function_args(
     span: &Span,
     func_name: &Identifier,
     params: &[Expr],
-    named_params: &[(String, Expr)],
+    named_params: &[(Identifier, Expr)],
 ) -> Result<Vec<Expr>> {
     if func_name.name.eq_ignore_ascii_case("flatten") {
         // build flatten function arguments.
         let mut named_args: HashMap<String, Expr> = named_params
             .iter()
-            .map(|(name, value)| (name.to_lowercase(), value.clone()))
+            .map(|(name, value)| (name.name.to_lowercase(), value.clone()))
             .collect::<HashMap<_, _>>();
 
         let mut args = Vec::with_capacity(named_args.len() + params.len());
@@ -1559,7 +1564,7 @@ fn parse_table_function_args(
         if !named_params.is_empty() {
             let invalid_names = named_params
                 .iter()
-                .map(|(name, _)| name.clone())
+                .map(|(name, _)| name.name.clone())
                 .collect::<Vec<String>>()
                 .join(", ");
             return Err(ErrorCode::InvalidArgument(format!(

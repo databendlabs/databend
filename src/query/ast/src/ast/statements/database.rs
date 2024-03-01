@@ -20,6 +20,7 @@ use databend_common_meta_app::share::ShareNameIdent;
 
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_dot_separated_list;
+use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq)] // Databases
@@ -65,8 +66,7 @@ impl Display for ShowCreateDatabaseStmt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateDatabaseStmt {
     pub create_option: CreateOption,
-    pub catalog: Option<Identifier>,
-    pub database: Identifier,
+    pub database: DatabaseRef,
     pub engine: Option<DatabaseEngine>,
     pub options: Vec<SQLProperty>,
     pub from_share: Option<ShareNameIdent>,
@@ -83,7 +83,7 @@ impl Display for CreateDatabaseStmt {
             write!(f, " IF NOT EXISTS ")?;
         }
 
-        write_dot_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
+        write!(f, " {}", self.database)?;
 
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;

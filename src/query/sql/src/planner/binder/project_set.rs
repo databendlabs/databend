@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::Visitor;
@@ -63,12 +64,14 @@ impl<'a> Visitor<'a> for SrfCollector {
             // Collect the srf
             self.srfs.push(Expr::FunctionCall {
                 span,
-                distinct,
-                name: name.clone(),
-                args: args.to_vec(),
-                params: params.to_vec(),
-                window: over.clone(),
-                lambda: lambda.clone(),
+                func: ASTFunctionCall {
+                    distinct,
+                    name: name.clone(),
+                    args: args.to_vec(),
+                    params: params.to_vec(),
+                    window: over.clone(),
+                    lambda: lambda.clone(),
+                },
             });
         } else {
             for arg in args.iter() {
@@ -110,7 +113,10 @@ impl Binder {
         let mut items = Vec::with_capacity(srfs.len());
         for srf in srfs {
             let (name, srf_scalar) = match srf {
-                Expr::FunctionCall { name, args, .. } => {
+                Expr::FunctionCall {
+                    func: ASTFunctionCall { name, args, .. },
+                    ..
+                } => {
                     let name = normalize_identifier(name, &self.name_resolution_ctx).to_string();
 
                     let original_context = bind_context.expr_context.clone();

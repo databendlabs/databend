@@ -1184,7 +1184,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_create_database(&mut self, stmt: &'ast CreateDatabaseStmt) {
         let mut children = Vec::new();
-        self.visit_database_ref(&stmt.catalog, &stmt.database);
+        self.visit_database_ref(&stmt.database.catalog, &stmt.database.database);
         children.push(self.children.pop().unwrap());
         if let Some(engine) = &stmt.engine {
             let engine_name = format!("DatabaseEngine {}", engine);
