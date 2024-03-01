@@ -25,16 +25,16 @@ use pratt::PrattParser;
 use pratt::Precedence;
 
 use crate::ast::*;
-use crate::input::Input;
-use crate::input::WithSpan;
+use crate::parser::common::*;
+use crate::parser::input::Input;
+use crate::parser::input::WithSpan;
 use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::unescape::unescape_at_string;
 use crate::parser::unescape::unescape_string;
+use crate::parser::Error;
+use crate::parser::ErrorKind;
 use crate::rule;
-use crate::util::*;
-use crate::Error;
-use crate::ErrorKind;
 
 pub const BETWEEN_PREC: u32 = 20;
 pub const NOT_PREC: u32 = 15;
@@ -1234,28 +1234,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     )))(i)?;
 
     Ok((rest, WithSpan { span, elem }))
-}
-
-pub fn column_id(i: Input) -> IResult<ColumnID> {
-    alt((
-        map_res(rule! { ColumnPosition }, |token| {
-            let name = token.text().to_string();
-            let pos = name[1..]
-                .parse::<usize>()
-                .map_err(|e| nom::Err::Failure(e.into()))?;
-            if pos == 0 {
-                return Err(nom::Err::Failure(ErrorKind::Other(
-                    "column position must be greater than 0",
-                )));
-            }
-            Ok(ColumnID::Position(crate::ast::ColumnPosition {
-                pos,
-                name,
-                span: Some(token.span),
-            }))
-        }),
-        map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
-    ))(i)
 }
 
 /// Parse one to three idents separated by a dot, fulfilling from the right.

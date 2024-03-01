@@ -20,12 +20,12 @@ use nom::combinator::map;
 use crate::ast::FileLocation;
 use crate::ast::SelectStageOption;
 use crate::ast::UriLocation;
-use crate::input::Input;
+use crate::parser::common::*;
 use crate::parser::expr::*;
+use crate::parser::input::Input;
 use crate::parser::token::*;
+use crate::parser::ErrorKind;
 use crate::rule;
-use crate::util::*;
-use crate::ErrorKind;
 
 pub fn parameter_to_string(i: Input) -> IResult<String> {
     let ident_to_string = |i| map_res(ident, |ident| Ok(ident.name))(i);

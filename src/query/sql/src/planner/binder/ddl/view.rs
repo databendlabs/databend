@@ -15,7 +15,7 @@
 use databend_common_ast::ast::AlterViewStmt;
 use databend_common_ast::ast::CreateViewStmt;
 use databend_common_ast::ast::DropViewStmt;
-use databend_common_ast::VisitorMut;
+use databend_common_ast::ast::VisitorMut;
 use databend_common_exception::Result;
 
 use crate::binder::Binder;

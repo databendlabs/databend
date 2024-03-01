@@ -13,14 +13,16 @@
 // limitations under the License.
 
 #[allow(clippy::module_inception)]
-mod ast;
+mod common;
 mod expr;
 mod format;
 mod query;
 mod statements;
+mod visitors;
 
-pub use ast::*;
+pub use common::*;
 pub use expr::*;
 pub use format::*;
 pub use query::*;
 pub use statements::*;
+pub use visitors::*;

@@ -15,11 +15,11 @@
 use std::collections::BTreeMap;
 
 use crate::ast::UriLocation;
-use crate::input::Input;
+use crate::parser::common::*;
 use crate::parser::expr::*;
+use crate::parser::input::Input;
+use crate::parser::ErrorKind;
 use crate::rule;
-use crate::util::*;
-use crate::ErrorKind;
 
 pub fn share_endpoint_uri_location(i: Input) -> IResult<UriLocation> {
     map_res(

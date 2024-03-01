@@ -10441,7 +10441,7 @@ CopyIntoTable(
                 "~/mybucket/my data.csv",
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -10491,7 +10491,7 @@ CopyIntoTable(
                 "~/mybucket/data.csv",
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -10556,7 +10556,7 @@ CopyIntoTable(
                 },
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -10621,7 +10621,7 @@ CopyIntoTable(
                 },
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -10690,7 +10690,7 @@ CopyIntoTable(
                 },
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -10759,7 +10759,7 @@ CopyIntoTable(
                 },
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -10815,7 +10815,7 @@ CopyIntoTable(
                 },
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -10866,7 +10866,7 @@ CopyIntoTable(
                 },
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -10917,7 +10917,7 @@ CopyIntoTable(
                 "my_stage",
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -10969,7 +10969,7 @@ CopyIntoLocation(
     CopyIntoLocationStmt {
         hints: None,
         src: Table(
-            TableIdentifier {
+            TableRef {
                 catalog: None,
                 database: None,
                 table: Identifier {
@@ -11016,7 +11016,7 @@ CopyIntoLocation(
     CopyIntoLocationStmt {
         hints: None,
         src: Table(
-            TableIdentifier {
+            TableRef {
                 catalog: None,
                 database: None,
                 table: Identifier {
@@ -11056,7 +11056,7 @@ CopyIntoLocation(
     CopyIntoLocationStmt {
         hints: None,
         src: Table(
-            TableIdentifier {
+            TableRef {
                 catalog: None,
                 database: None,
                 table: Identifier {
@@ -11121,7 +11121,7 @@ CopyIntoTable(
                 },
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -11176,7 +11176,7 @@ CopyIntoTable(
                 "external_stage/path/to/file.csv",
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -11231,7 +11231,7 @@ CopyIntoTable(
                 "external_stage/path/to/dir/",
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -11286,7 +11286,7 @@ CopyIntoTable(
                 "external_stage/path/to/file.csv",
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -11351,7 +11351,7 @@ CopyIntoTable(
                 },
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -11418,7 +11418,7 @@ CopyIntoTable(
                 },
             ),
         ),
-        dst: TableIdentifier {
+        dst: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
@@ -15598,7 +15598,7 @@ CreatePipe(
                     "~/MyStage1",
                 ),
             ),
-            dst: TableIdentifier {
+            dst: TableRef {
                 catalog: None,
                 database: None,
                 table: Identifier {
@@ -15647,7 +15647,7 @@ CreatePipe(
                     "~/mybucket/data.csv",
                 ),
             ),
-            dst: TableIdentifier {
+            dst: TableRef {
                 catalog: None,
                 database: Some(
                     Identifier {

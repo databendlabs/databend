@@ -148,6 +148,16 @@ pub fn walk_identifier<'a, V: Visitor<'a>>(visitor: &mut V, ident: &'a Identifie
     visitor.visit_identifier(ident);
 }
 
+pub fn walk_table_ref<'a, V: Visitor<'a>>(visitor: &mut V, table: &'a TableRef) {
+    if let Some(catalog) = &table.catalog {
+        visitor.visit_identifier(catalog);
+    }
+    if let Some(database) = &table.database {
+        visitor.visit_identifier(database);
+    }
+    visitor.visit_identifier(&table.table);
+}
+
 pub fn walk_query<'a, V: Visitor<'a>>(visitor: &mut V, query: &'a Query) {
     let Query {
         with,
