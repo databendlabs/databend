@@ -3707,6 +3707,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-table-meta",
  "deltalake-core",
+ "flagset",
  "futures",
  "maplit",
  "match-template",

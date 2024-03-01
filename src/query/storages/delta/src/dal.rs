@@ -46,12 +46,29 @@ use tokio::io::AsyncWrite;
 #[derive(Debug)]
 pub struct OpendalStore {
     inner: Operator,
+    meta_keys: Vec<Metakey>,
 }
 
 impl OpendalStore {
     /// Create OpendalStore by given Operator.
     pub fn new(op: Operator) -> Self {
-        Self { inner: op }
+        Self {
+            inner: op,
+            meta_keys: vec![Metakey::Mode, Metakey::ContentLength, Metakey::LastModified],
+        }
+    }
+
+    pub fn with_metakey(mut self, metakey: Metakey) -> Self {
+        self.meta_keys.push(metakey);
+        self
+    }
+
+    pub fn meta_key_flag(&self) -> flagset::FlagSet<Metakey> {
+        let mut res = Metakey::ContentLength | Metakey::ContentLength;
+        for key in self.meta_keys.iter() {
+            res |= *key;
+        }
+        res
     }
 }
 
@@ -190,7 +207,7 @@ impl ObjectStore for OpendalStore {
             let stream = self
                 .inner
                 .lister_with(&path)
-                .metakey(Metakey::ContentLength | Metakey::LastModified)
+                .metakey(self.meta_key_flag())
                 .recursive(true)
                 .await
                 .map_err(|err| format_object_store_error(err, &path))?;
@@ -220,7 +237,7 @@ impl ObjectStore for OpendalStore {
                 self.inner
                     .lister_with(&path)
                     .start_after(offset.as_ref())
-                    .metakey(Metakey::ContentLength | Metakey::LastModified)
+                    .metakey(self.meta_key_flag())
                     .recursive(true)
                     .await
                     .map_err(|err| format_object_store_error(err, &path))?
@@ -229,7 +246,7 @@ impl ObjectStore for OpendalStore {
             } else {
                 self.inner
                     .lister_with(&path)
-                    .metakey(Metakey::ContentLength | Metakey::LastModified)
+                    .metakey(self.meta_key_flag())
                     .recursive(true)
                     .await
                     .map_err(|err| format_object_store_error(err, &path))?
@@ -248,7 +265,7 @@ impl ObjectStore for OpendalStore {
         let mut stream = self
             .inner
             .lister_with(&path)
-            .metakey(Metakey::Mode | Metakey::ContentLength | Metakey::LastModified)
+            .metakey(self.meta_key_flag())
             .await
             .map_err(|err| format_object_store_error(err, &path))?;
 

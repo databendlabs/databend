@@ -25,6 +25,7 @@ async-trait = { version = "0.1.77", package = "async-trait-fn" }
 bytes = { workspace = true }
 deltalake = { git = "https://github.com/delta-io/delta-rs", package = "deltalake-core", rev = "7f0454e" }
 futures = "0.3"
+flagset = "0.4"
 match-template = "0.0.1"
 minitrace = { workspace = true }
 object_store = "0.9"
