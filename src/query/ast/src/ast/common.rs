@@ -62,13 +62,13 @@ impl Display for Identifier {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColumnPosition {
+    pub span: Span,
     pub pos: usize,
     pub name: String,
-    pub span: Span,
 }
 
 impl ColumnPosition {
-    pub fn create(pos: usize, span: Span) -> ColumnPosition {
+    pub fn create(span: Span, pos: usize) -> ColumnPosition {
         ColumnPosition {
             pos,
             name: format!("${}", pos),

@@ -218,12 +218,6 @@ pub enum Expr {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ColumnID {
-    Name(Identifier),
-    Position(ColumnPosition),
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum IntervalKind {
     Year,
@@ -236,15 +230,6 @@ pub enum IntervalKind {
     Doy,
     Week,
     Dow,
-}
-
-impl ColumnID {
-    pub fn name(&self) -> &str {
-        match self {
-            ColumnID::Name(id) => &id.name,
-            ColumnID::Position(id) => &id.name,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -595,15 +580,6 @@ impl Expr {
             "DATE_SUB",
             "DATE_TRUNC",
         ]
-    }
-}
-
-impl Display for ColumnID {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ColumnID::Name(id) => write!(f, "{}", id),
-            ColumnID::Position(id) => write!(f, "{}", id),
-        }
     }
 }
 
