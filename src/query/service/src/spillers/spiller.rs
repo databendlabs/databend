@@ -24,6 +24,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_hashtable::hash2bucket;
 use log::info;
@@ -74,16 +75,11 @@ pub struct Spiller {
     operator: Operator,
     config: SpillerConfig,
     spiller_type: SpillerType,
-    /// Partition set, which records there are how many partitions.
-    /// Currently, it's fixed, in the future we can make it configurable.
-    pub partition_set: Vec<u8>,
-    /// Spilled partition set, after one partition is spilled, it will be added to this set.
-    pub spilled_partition_set: HashSet<u8>,
     /// Record the location of the spilled partitions
-    /// 1 partition -> N partition files
-    pub partition_location: HashMap<u8, Vec<String>>,
-    /// Record columns layout for spilled data, will be used when read data from disk
-    pub columns_layout: HashMap<String, Vec<usize>>,
+    /// 1 partition -> 1 partition file
+    pub partition_location: HashMap<u8, String>,
+    /// Record columns layouts for spilled data, will be used when read data from disk
+    pub columns_layouts: HashMap<String, Vec<Vec<usize>>>,
 }
 
 impl Spiller {
@@ -99,32 +95,87 @@ impl Spiller {
             operator,
             config,
             spiller_type,
-            partition_set: vec![0, 1, 2, 3, 4, 5, 6, 7],
-            spilled_partition_set: Default::default(),
             partition_location: Default::default(),
-            columns_layout: Default::default(),
+            columns_layouts: Default::default(),
         }
+    }
+
+    pub fn spilled_partitions(&self) -> HashSet<u8> {
+        self.partition_location.keys().copied().collect()
     }
 
     /// Read a certain file to a [`DataBlock`].
     /// We should guarantee that the file is managed by this spiller.
     pub async fn read_spilled(&self, file: &str) -> Result<(DataBlock, u64)> {
-        debug_assert!(self.columns_layout.contains_key(file));
+        debug_assert!(self.columns_layouts.contains_key(file));
         let data = self.operator.read(file).await?;
         let bytes = data.len() as u64;
 
         let mut begin = 0;
-        let mut columns = Vec::with_capacity(self.columns_layout.len());
-        let columns_layout = self.columns_layout.get(file).unwrap();
-        for column_layout in columns_layout.iter() {
-            columns.push(deserialize_column(&data[begin..begin + column_layout]).unwrap());
-            begin += column_layout;
+        let mut columns = vec![];
+        let columns_layouts = self.columns_layouts.get(file).unwrap();
+        for (idx, columns_layout) in columns_layouts.iter().enumerate() {
+            for (col_idx, column_layout) in columns_layout.iter().enumerate() {
+                if idx == 0 {
+                    columns.push(vec![
+                        deserialize_column(&data[begin..begin + column_layout]).unwrap(),
+                    ]);
+                    begin += column_layout;
+                    continue;
+                }
+                columns[col_idx]
+                    .push(deserialize_column(&data[begin..begin + column_layout]).unwrap());
+                begin += column_layout;
+            }
         }
+        // Concat `columns`
+        let columns = columns
+            .into_iter()
+            .map(|v| Column::concat_columns(v.into_iter()))
+            .collect::<Result<Vec<_>>>()?;
         let block = DataBlock::new_from_columns(columns);
         Ok((block, bytes))
     }
 
+    /// Write a [`DataBlock`] to storage with specific location.
+    pub async fn spill_block_with_location(
+        &mut self,
+        data: DataBlock,
+        location: &str,
+    ) -> Result<u64> {
+        let mut write_bytes = 0;
+        let mut writer = self
+            .operator
+            .writer_with(location)
+            .append(true)
+            .buffer(8 * 1024 * 1024)
+            .await?;
+        let columns = data.columns().to_vec();
+        let mut columns_data = Vec::with_capacity(columns.len());
+        let mut columns_layout = Vec::with_capacity(columns.len());
+        for column in columns.into_iter() {
+            let column = column.value.as_column().unwrap();
+            let column_data = serialize_column(column);
+            columns_layout.push(column_data.len());
+            write_bytes += column_data.len() as u64;
+            columns_data.push(column_data);
+        }
+        self.columns_layouts
+            .entry(location.to_string())
+            .and_modify(|layouts| {
+                layouts.push(columns_layout.clone());
+            })
+            .or_insert(vec![columns_layout]);
+        for data in columns_data.into_iter() {
+            writer.write(data).await?;
+        }
+        writer.close().await?;
+
+        Ok(write_bytes)
+    }
+
     /// Write a [`DataBlock`] to storage.
+    /// Todo: change sort call
     pub async fn spill_block(&mut self, data: DataBlock) -> Result<(String, u64)> {
         let unique_name = GlobalUniqName::unique();
         let location = format!("{}/{}", self.config.location_prefix, unique_name);
@@ -136,19 +187,17 @@ impl Spiller {
             .buffer(8 * 1024 * 1024)
             .await?;
         let columns = data.columns().to_vec();
+        let mut columns_layout = Vec::with_capacity(columns.len());
         let mut columns_data = Vec::with_capacity(columns.len());
         for column in columns.into_iter() {
             let column = column.value.as_column().unwrap();
             let column_data = serialize_column(column);
-            self.columns_layout
-                .entry(location.clone())
-                .and_modify(|layouts| {
-                    layouts.push(column_data.len());
-                })
-                .or_insert(vec![column_data.len()]);
+            columns_layout.push(column_data.len());
             write_bytes += column_data.len() as u64;
             columns_data.push(column_data);
         }
+        self.columns_layouts
+            .insert(location.clone(), vec![columns_layout]);
         for data in columns_data.into_iter() {
             writer.write(data).await?;
         }
@@ -184,14 +233,15 @@ impl Spiller {
             bytes: data.memory_size(),
         };
 
-        let (location, _) = self.spill_block(data).await?;
-        self.spilled_partition_set.insert(p_id);
-        self.partition_location
-            .entry(p_id)
-            .and_modify(|locs| {
-                locs.push(location.clone());
-            })
-            .or_insert(vec![location.clone()]);
+        if let Some(location) = self.partition_location.get(&p_id) {
+            // Append data
+            let _ = self
+                .spill_block_with_location(data, location.clone().as_str())
+                .await?;
+        } else {
+            let (location, _) = self.spill_block(data).await?;
+            self.partition_location.insert(p_id, location);
+        }
 
         self.ctx.get_join_spill_progress().incr(&progress_val);
 
@@ -203,66 +253,44 @@ impl Spiller {
     }
 
     #[async_backtrace::framed]
-    /// Read spilled data from multiple partitions
-    pub async fn read_spilled_data_from_partitions(
-        &self,
-        partitions: &HashSet<u8>,
-        worker_id: usize,
-    ) -> Result<Vec<DataBlock>> {
-        let mut spilled_data = Vec::with_capacity(partitions.len());
-        for p_id in partitions.iter() {
-            spilled_data.append(&mut self.read_spilled_data(p_id, worker_id).await?);
-        }
-        Ok(spilled_data)
-    }
-
-    #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_data(&self, p_id: &u8, worker_id: usize) -> Result<Vec<DataBlock>> {
+    pub async fn read_spilled_data(&self, p_id: &u8, worker_id: usize) -> Result<DataBlock> {
         debug_assert!(self.partition_location.contains_key(p_id));
-        let files = self.partition_location.get(p_id).unwrap();
-        let mut spilled_data = Vec::with_capacity(files.len());
-        // Todo: make it parallel
-        for file in files.iter() {
-            let (block, _) = self.read_spilled(file).await?;
-            if block.num_rows() != 0 {
-                spilled_data.push(block);
-            }
-        }
+        let file = self.partition_location.get(p_id).unwrap();
+        let (block, _) = self.read_spilled(file).await?;
         info!(
             "{:?} read partition {:?}, work id: {:?}",
             self.spiller_type, p_id, worker_id
         );
-        Ok(spilled_data)
+        Ok(block)
     }
 
     #[async_backtrace::framed]
     // Directly spill input data without buffering.
     // Need to compute hashes for data block advanced.
-    // Return unspilled data.
+    // For probe, only need to spill rows in build spilled partitions.
     pub(crate) async fn spill_input(
         &mut self,
         data_block: DataBlock,
         hashes: &[u64],
-        spilled_partition_set: &HashSet<u8>,
+        spilled_partitions: Option<&HashSet<u8>>,
         worker_id: usize,
-    ) -> Result<DataBlock> {
-        // Save the row index which is not spilled.
-        let mut unspilled_row_index = Vec::with_capacity(data_block.num_rows());
+    ) -> Result<()> {
         // Key is partition, value is row indexes
         let mut partition_rows = HashMap::new();
         // Classify rows to spill or not spill.
         for (row_idx, hash) in hashes.iter().enumerate() {
             let partition_id = hash2bucket::<3, false>(*hash as usize) as u8;
-            if spilled_partition_set.contains(&partition_id) {
-                // the row can be directly spilled to corresponding partition
-                partition_rows
-                    .entry(partition_id)
-                    .and_modify(|v: &mut Vec<usize>| v.push(row_idx))
-                    .or_insert(vec![row_idx]);
-            } else {
-                unspilled_row_index.push(row_idx);
+            if let Some(spilled_partitions) = spilled_partitions {
+                if !spilled_partitions.contains(&partition_id) {
+                    continue;
+                }
             }
+            // the row can be directly spilled to corresponding partition
+            partition_rows
+                .entry(partition_id)
+                .and_modify(|v: &mut Vec<usize>| v.push(row_idx))
+                .or_insert(vec![row_idx]);
         }
         for (p_id, row_indexes) in partition_rows.iter() {
             let block_row_indexes = row_indexes
@@ -277,33 +305,7 @@ impl Spiller {
             // Spill block with partition id
             self.spill_with_partition(*p_id, block, worker_id).await?;
         }
-        // Return unspilled data
-        let unspilled_block_row_indexes = unspilled_row_index
-            .iter()
-            .map(|idx| (0_u32, *idx as u32, 1_usize))
-            .collect::<Vec<_>>();
-        info!(
-            "{:?} unspilled {:?} rows data",
-            self.spiller_type,
-            unspilled_row_index.len()
-        );
-        Ok(DataBlock::take_blocks(
-            &[data_block.clone()],
-            &unspilled_block_row_indexes,
-            unspilled_row_index.len(),
-        ))
-    }
-
-    /// Check if all partitions have been spilled
-    #[inline(always)]
-    pub fn is_all_spilled(&self) -> bool {
-        self.partition_set.len() == self.spilled_partition_set.len()
-    }
-
-    /// Check if any partition has been spilled
-    #[inline(always)]
-    pub fn is_any_spilled(&self) -> bool {
-        !self.spilled_partition_set.is_empty()
+        Ok(())
     }
 
     #[inline(always)]

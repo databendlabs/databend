@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
 use log::info;
 
@@ -111,7 +113,7 @@ impl TransformHashJoinProbe {
             .spill_handler
             .spill_state()
             .spiller
-            .spilled_partition_set;
+            .spilled_partitions();
         if !spilled_partition_set.is_empty() {
             info!("probe spilled partitions: {:?}", spilled_partition_set);
             let mut spill_partitions = self.join_probe_state.spill_partitions.write();
@@ -167,7 +169,8 @@ impl TransformHashJoinProbe {
 
     // Async spill action
     pub(crate) async fn spill_action(&mut self) -> Result<()> {
-        let mut unmatched_data_blocks = vec![];
+        // Before spilling, if there is a hash table, probe the hash table first
+        self.try_probe_first_round_hashtable(self.input_data.clone())?;
         for data in self.input_data.drain(..) {
             let spill_state = self.spill_handler.spill_state_mut();
             let mut hashes = Vec::with_capacity(data.num_rows());
@@ -179,23 +182,15 @@ impl TransformHashJoinProbe {
                 .build_spilled_partitions
                 .read()
                 .clone();
-            let unmatched_data_block = spill_state
+            spill_state
                 .spiller
-                .spill_input(data, &hashes, &build_spilled_partitions, self.processor_id)
+                .spill_input(
+                    data,
+                    &hashes,
+                    Some(&build_spilled_partitions),
+                    self.processor_id,
+                )
                 .await?;
-            // Use `unmatched_data_block` to probe the first round hashtable (if the hashtable isn't empty)
-            if !unmatched_data_block.is_empty()
-                && unsafe { &*self.join_probe_state.hash_join_state.build_state.get() }
-                    .generation_state
-                    .build_num_rows
-                    != 0
-            {
-                unmatched_data_blocks.push(unmatched_data_block);
-            }
-        }
-        // Probe unmatched blocks with the first round hashtable
-        for block in unmatched_data_blocks.into_iter() {
-            self.probe(block)?;
         }
 
         // Back to Running step and try to pull input data
@@ -219,7 +214,7 @@ impl TransformHashJoinProbe {
         }
         if spill_state
             .spiller
-            .spilled_partition_set
+            .spilled_partitions()
             .contains(&(p_id as u8))
         {
             let spilled_data = spill_state
@@ -227,10 +222,35 @@ impl TransformHashJoinProbe {
                 .read_spilled_data(&(p_id as u8), self.processor_id)
                 .await?;
             if !spilled_data.is_empty() {
-                self.input_data.extend(spilled_data);
+                // Split data to `block_size` rows per sub block.
+                let (sub_blocks, remain_block) = spilled_data.split_by_rows(self.max_block_size);
+                self.input_data.extend(sub_blocks);
+                if let Some(remain) = remain_block {
+                    self.input_data.push_back(remain);
+                }
             }
         }
         self.join_probe_state.restore_barrier.wait().await;
         self.reset().await
+    }
+
+    // Try to probe the first round hashtable
+    pub(crate) fn try_probe_first_round_hashtable(
+        &mut self,
+        input_data: VecDeque<DataBlock>,
+    ) -> Result<()> {
+        if unsafe { &*self.join_probe_state.hash_join_state.build_state.get() }
+            .generation_state
+            .build_num_rows
+            == 0
+        {
+            return Ok(());
+        }
+
+        for data in input_data.iter() {
+            let data = data.convert_to_full();
+            self.probe(data)?;
+        }
+        Ok(())
     }
 }
