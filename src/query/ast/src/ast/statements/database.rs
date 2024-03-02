@@ -83,7 +83,7 @@ impl Display for CreateDatabaseStmt {
             write!(f, " IF NOT EXISTS ")?;
         }
 
-        write!(f, " {}", self.database)?;
+        write!(f, "{}", self.database)?;
 
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;

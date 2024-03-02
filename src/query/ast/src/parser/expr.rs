@@ -713,7 +713,13 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 }
 
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
-    let column_ref = map(column_ref, |column| ExprElement::ColumnRef { column });
+    let column_ref = map(column_id, |column| ExprElement::ColumnRef {
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column,
+        },
+    });
     let is_null = map(
         rule! {
             IS ~ NOT? ~ NULL
