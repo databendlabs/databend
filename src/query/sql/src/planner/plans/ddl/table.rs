@@ -31,6 +31,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_types::NonEmptyString;
 
 use crate::plans::Plan;
 
@@ -83,7 +84,7 @@ impl DescribeTablePlan {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTablePlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: NonEmptyString,
     pub catalog: String,
     pub database: String,
     /// The table name

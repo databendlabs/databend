@@ -83,12 +83,7 @@ impl Interpreter for RevokePrivilegeInterpreter {
                 }
                 for object in plan.on {
                     user_mgr
-                        .revoke_privileges_from_role(
-                            tenant.as_str(),
-                            &role,
-                            object,
-                            plan.priv_types,
-                        )
+                        .revoke_privileges_from_role(&tenant, &role, object, plan.priv_types)
                         .await?;
                 }
             }

@@ -91,9 +91,7 @@ impl AsyncSystemTable for StagesTable {
             name.push(stage_name.clone());
             owners.push(
                 user_api
-                    .get_ownership(tenant.as_str(), &OwnershipObject::Stage {
-                        name: stage_name,
-                    })
+                    .get_ownership(&tenant, &OwnershipObject::Stage { name: stage_name })
                     .await
                     .ok()
                     .and_then(|ownership| ownership.map(|o| o.role.clone())),

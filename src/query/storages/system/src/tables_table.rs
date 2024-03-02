@@ -243,10 +243,7 @@ where TablesTable<T>: HistoryAware
                 })
                 .collect::<Vec<_>>();
 
-            let ownership = user_api
-                .get_ownerships(tenant.as_str())
-                .await
-                .unwrap_or_default();
+            let ownership = user_api.get_ownerships(&tenant).await.unwrap_or_default();
             for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
                 let db_id = db.get_db_info().ident.db_id;
