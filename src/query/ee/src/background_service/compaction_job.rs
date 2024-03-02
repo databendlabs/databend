@@ -147,7 +147,10 @@ impl CompactionJob {
         finish_tx: Arc<Mutex<Sender<u64>>>,
     ) -> Self {
         let tenant = config.query.tenant_id.clone();
-        let creator = BackgroundJobIdent { tenant, name };
+        let creator = BackgroundJobIdent {
+            tenant: tenant.to_string(),
+            name,
+        };
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         Self {
             conf: config.clone(),

@@ -144,7 +144,7 @@ impl MutableCatalog {
             provider.create_meta_store().await?
         };
 
-        let tenant = conf.query.tenant_id.clone();
+        let tenant = conf.query.tenant_id.to_string();
 
         // Create default database.
         let req = CreateDatabaseReq {
@@ -173,7 +173,7 @@ impl MutableCatalog {
         };
         Ok(MutableCatalog {
             ctx,
-            tenant: conf.query.tenant_id.clone(),
+            tenant: conf.query.tenant_id.to_string(),
         })
     }
 
@@ -206,7 +206,7 @@ impl Catalog for MutableCatalog {
         let db_info = self
             .ctx
             .meta
-            .get_database(GetDatabaseReq::new(tenant, db_name))
+            .get_database(GetDatabaseReq::new(tenant.to_string(), db_name))
             .await?;
         self.build_db_instance(&db_info)
     }

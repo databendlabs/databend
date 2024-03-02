@@ -170,10 +170,10 @@ impl ClusterDiscovery {
                 lift_time,
                 provider,
                 cfg.query.cluster_id.clone(),
-                cfg.query.tenant_id.clone(),
+                cfg.query.tenant_id.to_string(),
             )),
             cluster_id: cfg.query.cluster_id.clone(),
-            tenant_id: cfg.query.tenant_id.clone(),
+            tenant_id: cfg.query.tenant_id.to_string(),
             flight_address: cfg.query.flight_api_address.clone(),
         }))
     }
@@ -190,7 +190,8 @@ impl ClusterDiscovery {
         let tenant_id = &cfg.query.tenant_id;
         let cluster_id = &cfg.query.cluster_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager = ClusterMgr::create(metastore, tenant_id, cluster_id, lift_time)?;
+        let cluster_manager =
+            ClusterMgr::create(metastore, tenant_id.as_str(), cluster_id, lift_time)?;
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }

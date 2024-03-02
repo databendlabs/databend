@@ -57,12 +57,12 @@ impl CatalogInfoProvider {
             vec![(
                 catalog_name.clone(),
                 catalog_mgr
-                    .get_catalog(&tenant, &catalog_name, ctx.txn_mgr())
+                    .get_catalog(tenant.as_str(), &catalog_name, ctx.txn_mgr())
                     .await?,
             )]
         } else {
             catalog_mgr
-                .list_catalogs(&tenant, ctx.txn_mgr())
+                .list_catalogs(tenant.as_str(), ctx.txn_mgr())
                 .await?
                 .iter()
                 .map(|r| (r.name(), r.clone()))

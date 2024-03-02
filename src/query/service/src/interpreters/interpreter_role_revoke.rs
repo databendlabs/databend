@@ -63,12 +63,14 @@ impl Interpreter for RevokeRoleInterpreter {
             }
             PrincipalIdentity::Role(role) => {
                 UserApiProvider::instance()
-                    .revoke_role_from_role(&tenant, &role, &plan.role)
+                    .revoke_role_from_role(tenant.as_str(), &role, &plan.role)
                     .await?;
             }
         }
 
-        RoleCacheManager::instance().force_reload(&tenant).await?;
+        RoleCacheManager::instance()
+            .force_reload(tenant.as_str())
+            .await?;
         Ok(PipelineBuildResult::create())
     }
 }

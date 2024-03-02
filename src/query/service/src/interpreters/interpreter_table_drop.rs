@@ -99,12 +99,14 @@ impl Interpreter for DropTableInterpreter {
         }
 
         let tenant = self.ctx.get_tenant();
-        let db = catalog.get_database(&tenant, &self.plan.database).await?;
+        let db = catalog
+            .get_database(tenant.as_str(), &self.plan.database)
+            .await?;
         // actually drop table
         let resp = catalog
             .drop_table_by_id(DropTableByIdReq {
                 if_exists: self.plan.if_exists,
-                tenant: tenant.clone(),
+                tenant: tenant.to_string(),
                 table_name: tbl_name.to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
                 db_id: db.get_db_info().ident.db_id,
@@ -122,7 +124,7 @@ impl Interpreter for DropTableInterpreter {
         };
 
         role_api.revoke_ownership(&owner_object).await?;
-        RoleCacheManager::instance().invalidate_cache(&tenant);
+        RoleCacheManager::instance().invalidate_cache(tenant.as_str());
 
         // if `plan.all`, truncate, then purge the historical data
         if self.plan.all {
@@ -143,7 +145,7 @@ impl Interpreter for DropTableInterpreter {
         // update share spec if needed
         if let Some((spec_vec, share_table_info)) = resp.spec_vec {
             save_share_spec(
-                &self.ctx.get_tenant(),
+                &self.ctx.get_tenant().to_string(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),

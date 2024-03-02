@@ -65,5 +65,10 @@ pub fn get_client_config(ctx: Arc<QueryContext>, timeout: Duration) -> Result<Cl
     let user = ctx.get_current_user()?.identity().to_string();
     let query_id = ctx.get_id();
 
-    Ok(build_client_config(tenant, user, query_id, timeout))
+    Ok(build_client_config(
+        tenant.to_string(),
+        user,
+        query_id,
+        timeout,
+    ))
 }

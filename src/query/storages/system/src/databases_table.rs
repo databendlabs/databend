@@ -58,7 +58,7 @@ impl AsyncSystemTable for DatabasesTable {
         let tenant = ctx.get_tenant();
         let catalogs = CatalogManager::instance();
         let catalogs: Vec<(String, Arc<dyn Catalog>)> = catalogs
-            .list_catalogs(&tenant, ctx.txn_mgr())
+            .list_catalogs(tenant.as_str(), ctx.txn_mgr())
             .await?
             .iter()
             .map(|e| (e.name(), e.clone()))
@@ -93,7 +93,7 @@ impl AsyncSystemTable for DatabasesTable {
                 db_id.push(id);
                 owners.push(
                     user_api
-                        .get_ownership(&tenant, &OwnershipObject::Database {
+                        .get_ownership(tenant.as_str(), &OwnershipObject::Database {
                             catalog_name: ctl_name.to_string(),
                             db_id: id,
                         })

@@ -55,7 +55,7 @@ impl AsyncSystemTable for IndexesTable {
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
         let indexes = catalog
             .list_indexes(ListIndexesReq {
-                tenant,
+                tenant: tenant.to_string(),
                 table_id: None,
             })
             .await?;

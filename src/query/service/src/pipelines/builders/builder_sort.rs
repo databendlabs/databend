@@ -283,7 +283,7 @@ impl SortPipelineBuilder {
 
         if may_spill {
             let schema = add_order_field(sort_merge_output_schema.clone(), &self.sort_desc);
-            let config = SpillerConfig::create(query_spill_prefix(&self.ctx.get_tenant()));
+            let config = SpillerConfig::create(query_spill_prefix(self.ctx.get_tenant().as_str()));
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().operator();
                 let spiller =

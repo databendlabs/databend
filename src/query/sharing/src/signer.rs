@@ -156,7 +156,11 @@ impl SharedSigner {
             .collect();
         let bs = Bytes::from(serde_json::to_vec(&reqs)?);
         let auth = self.token.to_header().await?;
-        let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
+        let requester = GlobalConfig::instance()
+            .as_ref()
+            .query
+            .tenant_id
+            .to_string();
         let req = Request::builder()
             .method(Method::POST)
             .uri(&self.endpoint)

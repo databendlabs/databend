@@ -59,7 +59,7 @@ impl AsyncSystemTable for VirtualColumnsTable {
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
         let virtual_column_metas = catalog
             .list_virtual_columns(ListVirtualColumnsReq {
-                tenant: tenant.clone(),
+                tenant: tenant.to_string(),
                 table_id: None,
             })
             .await?;

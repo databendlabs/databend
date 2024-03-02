@@ -159,7 +159,7 @@ impl AuthMgr {
                     _ => Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                 };
                 UserApiProvider::instance()
-                    .update_user_login_result(&tenant, identity, authed.is_ok())
+                    .update_user_login_result(tenant, identity, authed.is_ok())
                     .await?;
 
                 authed?;

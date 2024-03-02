@@ -2610,6 +2610,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-app",
+ "databend-common-meta-types",
  "databend-common-storage",
  "databend-common-tracing",
  "databend-common-users",

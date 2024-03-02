@@ -78,7 +78,7 @@ impl VacuumDropTablesInterpreter {
         for c in drop_db_table_ids.chunks(chunk_size) {
             info!("vacuum drop {} table ids: {:?}", c.len(), c);
             let req = GcDroppedTableReq {
-                tenant: self.ctx.get_tenant(),
+                tenant: self.ctx.get_tenant().to_string(),
                 drop_ids: c.to_vec(),
             };
             let _ = catalog.gc_drop_tables(req).await?;
@@ -88,7 +88,7 @@ impl VacuumDropTablesInterpreter {
         for c in drop_db_ids.chunks(chunk_size) {
             info!("vacuum drop {} db ids: {:?}", c.len(), c);
             let req = GcDroppedTableReq {
-                tenant: self.ctx.get_tenant(),
+                tenant: self.ctx.get_tenant().to_string(),
                 drop_ids: c.to_vec(),
             };
             let _ = catalog.gc_drop_tables(req).await?;
@@ -135,7 +135,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
         let (tables, drop_ids) = catalog
             .get_drop_table_infos(ListDroppedTableReq {
                 inner: DatabaseNameIdent {
-                    tenant,
+                    tenant: tenant.to_string(),
                     db_name: self.plan.database.clone(),
                 },
                 filter,

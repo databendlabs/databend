@@ -73,7 +73,10 @@ impl Interpreter for CreateVirtualColumnInterpreter {
 
         let create_virtual_column_req = CreateVirtualColumnReq {
             create_option: self.plan.create_option,
-            name_ident: VirtualColumnNameIdent { tenant, table_id },
+            name_ident: VirtualColumnNameIdent {
+                tenant: tenant.to_string(),
+                table_id,
+            },
             virtual_columns: self.plan.virtual_columns.clone(),
         };
 

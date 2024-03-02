@@ -90,7 +90,7 @@ impl PrivilegeAccess {
                     .ctx
                     .get_catalog(catalog_name)
                     .await?
-                    .get_database(&tenant, db_name)
+                    .get_database(tenant.as_str(), db_name)
                     .await?
                     .get_db_info()
                     .ident
@@ -106,12 +106,14 @@ impl PrivilegeAccess {
                 }
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
                 let db_id = catalog
-                    .get_database(&tenant, db_name)
+                    .get_database(tenant.as_str(), db_name)
                     .await?
                     .get_db_info()
                     .ident
                     .db_id;
-                let table = catalog.get_table(&tenant, db_name, table_name).await?;
+                let table = catalog
+                    .get_table(tenant.as_str(), db_name, table_name)
+                    .await?;
                 let table_id = table.get_id();
                 OwnershipObject::Table {
                     catalog_name: catalog_name.clone(),
@@ -161,7 +163,7 @@ impl PrivilegeAccess {
             }
             Err(_err) => {
                 match self
-                    .convert_to_id(&tenant, catalog_name, db_name, None)
+                    .convert_to_id(tenant.as_str(), catalog_name, db_name, None)
                     .await
                 {
                     Ok(obj) => {
@@ -233,7 +235,7 @@ impl PrivilegeAccess {
             Ok(_) => return Ok(()),
             Err(_err) => {
                 match self
-                    .convert_to_id(&tenant, catalog_name, db_name, Some(table_name))
+                    .convert_to_id(tenant.as_str(), catalog_name, db_name, Some(table_name))
                     .await
                 {
                     Ok(obj) => {
@@ -501,11 +503,11 @@ impl AccessChecker for PrivilegeAccess {
                         if self.has_ownership(&session, &GrantObject::Database(catalog.clone(), database.clone())).await? {
                             return Ok(());
                         }
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, catalog, database, None).await? {
+                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), catalog, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let has_priv = has_priv(&tenant, database, None, db_id, table_id, grant_set).await?;
+                        let has_priv = has_priv(tenant.as_str(), database, None, db_id, table_id, grant_set).await?;
                         return if has_priv {
                             Ok(())
                         } else {
@@ -520,11 +522,11 @@ impl AccessChecker for PrivilegeAccess {
                         if self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone())).await? {
                             return Ok(());
                         }
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, database, None).await? {
+                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), &catalog_name, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let has_priv = has_priv(&tenant, database, None, db_id, table_id, grant_set).await?;
+                        let has_priv = has_priv(tenant.as_str(), database, None, db_id, table_id, grant_set).await?;
                         return if has_priv {
                             Ok(())
                         } else {
@@ -539,11 +541,11 @@ impl AccessChecker for PrivilegeAccess {
                         if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone())).await? {
                             return Ok(());
                         }
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, catalog_name, database, Some(table)).await? {
+                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), catalog_name, database, Some(table)).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let has_priv = has_priv(&tenant, database, Some(table), db_id, table_id, grant_set).await?;
+                        let has_priv = has_priv(tenant.as_str(), database, Some(table), db_id, table_id, grant_set).await?;
                         return if has_priv {
                             Ok(())
                         } else {
@@ -622,11 +624,11 @@ impl AccessChecker for PrivilegeAccess {
                 }
                 // Use db is special. Should not check the privilege.
                 // Just need to check user grant objects contain the db that be used.
-                let (db_id, _) = match self.convert_to_id(&tenant, &catalog_name, &plan.database, None).await? {
+                let (db_id, _) = match self.convert_to_id(tenant.as_str(), &catalog_name, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
-                let has_priv = has_priv(&tenant, &plan.database, None, db_id, None, grant_set).await?;
+                let has_priv = has_priv(tenant.as_str(), &plan.database, None, db_id, None, grant_set).await?;
 
                 return if has_priv {
                     Ok(())

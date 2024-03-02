@@ -322,10 +322,10 @@ impl Deref for GetDatabaseReq {
 }
 
 impl GetDatabaseReq {
-    pub fn new(tenant: impl Into<String>, db_name: impl Into<String>) -> GetDatabaseReq {
+    pub fn new(tenant: impl ToString, db_name: impl Into<String>) -> GetDatabaseReq {
         GetDatabaseReq {
             inner: DatabaseNameIdent {
-                tenant: tenant.into(),
+                tenant: tenant.to_string(),
                 db_name: db_name.into(),
             },
         }
