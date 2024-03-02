@@ -25,7 +25,6 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::DataBlock;
-use databend_common_hashtable::hash2bucket;
 use opendal::Operator;
 
 use crate::sessions::QueryContext;
@@ -73,6 +72,7 @@ pub struct Spiller {
     operator: Operator,
     config: SpillerConfig,
     _spiller_type: SpillerType,
+    pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
     pub partition_location: HashMap<u8, Vec<String>>,
     /// Record columns layout for spilled data, will be used when read data from disk
@@ -86,15 +86,17 @@ impl Spiller {
         operator: Operator,
         config: SpillerConfig,
         spiller_type: SpillerType,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        let join_spilling_partition_bits = ctx.get_settings().get_join_spilling_partition_bits()?;
+        Ok(Self {
             ctx,
             operator,
             config,
             _spiller_type: spiller_type,
+            join_spilling_partition_bits,
             partition_location: Default::default(),
             columns_layout: Default::default(),
-        }
+        })
     }
 
     pub fn spilled_partitions(&self) -> HashSet<u8> {
@@ -202,7 +204,8 @@ impl Spiller {
         let mut partition_rows = HashMap::new();
         // Classify rows to spill or not spill.
         for (row_idx, hash) in hashes.iter().enumerate() {
-            let partition_id = hash2bucket::<3, false>(*hash as usize) as u8;
+            let partition_id =
+                get_partition_id(*hash as usize, self.join_spilling_partition_bits) as u8;
             if let Some(spilled_partitions) = spilled_partitions {
                 if !spilled_partitions.contains(&partition_id) {
                     continue;
@@ -229,4 +232,8 @@ impl Spiller {
         }
         Ok(())
     }
+}
+
+fn get_partition_id(hash: usize, bits: usize) -> usize {
+    (hash >> (32 - bits)) & ((1 << bits) - 1)
 }

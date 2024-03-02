@@ -38,7 +38,7 @@ async fn test_spill_with_partition() -> Result<()> {
     let spiller_config = SpillerConfig::create(query_spill_prefix(tenant.as_str()));
     let operator = DataOperator::instance().operator();
 
-    let mut spiller = Spiller::create(ctx, operator, spiller_config, SpillerType::HashJoinBuild);
+    let mut spiller = Spiller::create(ctx, operator, spiller_config, SpillerType::HashJoinBuild)?;
 
     // Generate data block: two columns, type is i32, 100 rows
     let data = DataBlock::new_from_columns(vec![

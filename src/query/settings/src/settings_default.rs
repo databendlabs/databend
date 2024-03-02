@@ -277,6 +277,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
+                ("join_spilling_partition_bits", DefaultSettingValue{
+                    value: UserSettingValue::UInt64(4),
+                    desc: "Set the number of partitions for join spilling. Default value is 4, it means 2^4 partitions.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
                 ("enable_bloom_runtime_filter", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables runtime filter optimization for JOIN.",
