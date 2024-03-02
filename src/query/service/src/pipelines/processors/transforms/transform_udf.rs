@@ -87,7 +87,7 @@ impl AsyncTransform for TransformUdf {
             let data_schema = DataSchema::new(fields);
 
             let input_batch = DataBlock::new(block_entries, num_rows)
-                .to_record_batch(&data_schema)
+                .to_record_batch_with_dataschema(&data_schema)
                 .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
             let mut client =

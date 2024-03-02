@@ -196,8 +196,6 @@ use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures::TryStreamExt;
-use log::as_debug;
-use log::as_display;
 use log::debug;
 use log::error;
 use log::warn;
@@ -256,7 +254,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: CreateDatabaseReq,
     ) -> Result<CreateDatabaseReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_key = &req.name_ident;
 
@@ -272,7 +270,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // Get db by name to ensure absence
             let (db_id_seq, db_id) = get_u64_value(self, name_key).await?;
-            debug!(db_id_seq = db_id_seq, db_id = db_id, name_key = as_debug!(name_key); "get_database");
+            debug!(db_id_seq = db_id_seq, db_id = db_id, name_key :? =(name_key); "get_database");
 
             let mut condition = vec![];
             let mut if_then = vec![];
@@ -336,7 +334,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let id_key = DatabaseId { db_id };
             let id_to_name_key = DatabaseIdToName { db_id };
 
-            debug!(db_id = db_id, name_key = as_debug!(name_key); "new database id");
+            debug!(db_id = db_id, name_key :? =(name_key); "new database id");
 
             {
                 // append db_id into db_id_list
@@ -363,8 +361,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(name_key),
-                    id = as_debug!(&id_key),
+                    name :? =(name_key),
+                    id :? =(&id_key),
                     succ = succ;
                     "create_database"
                 );
@@ -379,7 +377,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant_dbname = &req.name_ident;
 
@@ -408,7 +406,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                name = as_debug!(tenant_dbname),
+                name :? =(tenant_dbname),
                 succ = succ;
                 "drop_database"
             );
@@ -425,7 +423,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: UndropDatabaseReq,
     ) -> Result<UndropDatabaseReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_key = &req.name_ident;
 
@@ -477,7 +475,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) =
                 get_pb_value(self, &dbid).await?;
 
-            debug!(db_id = db_id, name_key = as_debug!(name_key); "undrop_database");
+            debug!(db_id = db_id, name_key :? =(name_key); "undrop_database");
 
             {
                 // reset drop on time
@@ -506,7 +504,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name_key = as_debug!(name_key),
+                    name_key :? =(name_key),
                     succ = succ;
                     "undrop_database"
                 );
@@ -524,7 +522,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: RenameDatabaseReq,
     ) -> Result<RenameDatabaseReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant_dbname = &req.name_ident;
         let tenant_newdbname = DatabaseNameIdent {
@@ -548,7 +546,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             debug!(
                 old_db_id = old_db_id,
-                tenant_dbname = as_debug!(tenant_dbname);
+                tenant_dbname :? =(tenant_dbname);
                 "rename_database"
             );
 
@@ -644,9 +642,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(tenant_dbname),
-                    to = as_debug!(&tenant_newdbname),
-                    database_id = as_debug!(&old_db_id),
+                    name :? =(tenant_dbname),
+                    to :? =(&tenant_newdbname),
+                    database_id :? =(&old_db_id),
                     succ = succ;
                     "rename_database"
                 );
@@ -661,7 +659,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_key = &req.inner;
 
@@ -686,7 +684,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListDatabaseReq,
     ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // List tables by tenant, db_id, table_name.
         let dbid_tbname_idlist = DbIdListKey {
@@ -843,7 +841,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListDatabaseReq,
     ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_key = DatabaseNameIdent {
             tenant: req.tenant,
@@ -898,7 +896,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant_index = &req.name_ident;
 
@@ -917,7 +915,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             debug!(
                 index_id_seq = index_id_seq,
                 index_id = index_id,
-                tenant_index = as_debug!(tenant_index);
+                tenant_index :? =(tenant_index);
                 "get_index_seq_id"
             );
 
@@ -964,7 +962,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             debug!(
                 index_id = index_id,
-                index_key = as_debug!(tenant_index);
+                index_key :? =(tenant_index);
                 "new index id"
             );
 
@@ -988,8 +986,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    index_name = as_debug!(tenant_index),
-                    id = as_debug!(&id_key),
+                    index_name :? =(tenant_index),
+                    id :? =(&id_key),
                     succ = succ;
                     "create_index"
                 );
@@ -1004,7 +1002,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant_index = &req.name_ident;
 
@@ -1037,8 +1035,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                name = as_debug!(tenant_index),
-                id = as_debug!(&IndexId { index_id }),
+                name :? =(tenant_index),
+                id :? =(&IndexId { index_id }),
                 succ = succ;
                 "drop_index"
             );
@@ -1053,7 +1051,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant_index = &req.name_ident;
 
@@ -1072,7 +1070,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         debug!(
             index_id = index_id,
-            name_key = as_debug!(tenant_index);
+            name_key :? =(tenant_index);
             "drop_index"
         );
 
@@ -1092,7 +1090,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let index_id_key = IndexId {
             index_id: req.index_id,
@@ -1122,7 +1120,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListIndexesReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // Get index id list by `prefix_list` "<prefix>/<tenant>"
         let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
@@ -1169,7 +1167,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListIndexesByIdReq,
     ) -> Result<Vec<u64>, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // Get index id list by `prefix_list` "<prefix>/<tenant>"
         let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
@@ -1186,7 +1184,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             id_name_list.push((index_id.0, name_ident.index_name));
         }
 
-        debug!(ident = as_display!(&prefix_key); "list_indexes");
+        debug!(ident :% =(&prefix_key); "list_indexes");
 
         if id_name_list.is_empty() {
             return Ok(vec![]);
@@ -1210,7 +1208,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListIndexesByIdReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // Get index id list by `prefix_list` "<prefix>/<tenant>"
         let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
@@ -1227,7 +1225,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             id_name_list.push((index_id.0, name_ident.index_name));
         }
 
-        debug!(ident = as_display!(&prefix_key); "list_indexes");
+        debug!(ident :% =(&prefix_key); "list_indexes");
 
         if id_name_list.is_empty() {
             return Ok(vec![]);
@@ -1251,7 +1249,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: CreateVirtualColumnReq,
     ) -> Result<CreateVirtualColumnReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let ctx = func_name!();
         let mut trials = txn_backoff(None, func_name!());
@@ -1318,7 +1316,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    "req.name_ident" = as_debug!(&virtual_column_meta),
+                    "req.name_ident" :? =(&virtual_column_meta),
                     succ = succ;
                     "create_virtual_column"
                 );
@@ -1337,7 +1335,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: UpdateVirtualColumnReq,
     ) -> Result<UpdateVirtualColumnReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let ctx = func_name!();
 
@@ -1382,7 +1380,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    "req.name_ident" = as_debug!(&virtual_column_meta),
+                    "req.name_ident" :? =(&virtual_column_meta),
                     succ = succ;
                     "update_virtual_column"
                 );
@@ -1401,7 +1399,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: DropVirtualColumnReq,
     ) -> Result<DropVirtualColumnReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let ctx = func_name!();
 
@@ -1432,7 +1430,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                "name_ident" = as_debug!(&req.name_ident),
+                "name_ident" :? =(&req.name_ident),
                 succ = succ;
                 "drop_virtual_column"
             );
@@ -1450,7 +1448,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListVirtualColumnsReq,
     ) -> Result<Vec<VirtualColumnMeta>, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         if let Some(table_id) = req.table_id {
             let name_ident = VirtualColumnNameIdent {
@@ -1509,7 +1507,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
         }
 
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant = req.name_ident.tenant();
         let tenant_dbname_tbname = &req.name_ident;
@@ -1686,8 +1684,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let key_table_id_to_name = TableIdToName { table_id };
 
             debug!(
-                key_table_id = as_debug!(key_table_id),
-                name = as_debug!(tenant_dbname_tbname);
+                key_table_id :? =(key_table_id),
+                name :? =(tenant_dbname_tbname);
                 "new table id"
             );
 
@@ -1738,10 +1736,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (succ, responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(tenant_dbname_tbname),
-                    key_table_id = as_debug!(&key_table_id),
+                    name :? =(tenant_dbname_tbname),
+                    key_table_id :? =(&key_table_id),
                     succ = succ,
-                    responses = as_debug!(responses);
+                    responses :? =(responses);
                     "create_table"
                 );
 
@@ -1794,7 +1792,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
@@ -1887,8 +1885,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // (db_id, table_name) -> table_id
 
             debug!(
-                ident = as_display!(&tbid),
-                name = as_display!(tenant_dbname_tbname);
+                ident :% =(&tbid),
+                name :% =(tenant_dbname_tbname);
                 "undrop table"
             );
 
@@ -1930,8 +1928,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(tenant_dbname_tbname),
-                    id = as_debug!(&tbid),
+                    name :? =(tenant_dbname_tbname),
+                    id :? =(&tbid),
                     succ = succ;
                     "undrop_table"
                 );
@@ -1946,7 +1944,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = tenant_dbname_tbname.db_name_ident();
@@ -2125,9 +2123,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(tenant_dbname_tbname),
-                    to = as_debug!(&newdbid_newtbname),
-                    table_id = as_debug!(&table_id),
+                    name :? =(tenant_dbname_tbname),
+                    to :? =(&newdbid_newtbname),
+                    table_id :? =(&table_id),
                     succ = succ;
                     "rename_table"
                 );
@@ -2142,7 +2140,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant_dbname_tbname = &req.inner;
         let tenant_dbname = tenant_dbname_tbname.db_name_ident();
@@ -2194,9 +2192,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         )?;
 
         debug!(
-            ident = as_display!(&tbid),
-            name = as_display!(tenant_dbname_tbname),
-            table_meta = as_debug!(&tb_meta);
+            ident :% =(&tbid),
+            name :% =(tenant_dbname_tbname),
+            table_meta :? =(&tb_meta);
             "get_table"
         );
 
@@ -2231,7 +2229,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListTableReq,
     ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant_dbname = &req.inner;
 
@@ -2288,7 +2286,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 };
 
                 debug!(
-                    name = as_display!(&table_id_list_key);
+                    name :% =(&table_id_list_key);
                     "get_table_history"
                 );
 
@@ -2359,7 +2357,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant_dbname = &req.inner;
 
@@ -2392,13 +2390,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         table_id: MetaId,
     ) -> Result<(TableIdent, Arc<TableMeta>), KVAppError> {
-        debug!(req = as_debug!(&table_id); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
 
         let tbid = TableId { table_id };
 
         let (tb_meta_seq, table_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
 
-        debug!(ident = as_display!(&tbid); "get_table_by_id");
+        debug!(ident :% =(&tbid); "get_table_by_id");
 
         if tb_meta_seq == 0 || table_meta.is_none() {
             return Err(KVAppError::AppError(AppError::UnknownTableId(
@@ -2415,14 +2413,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String, KVAppError> {
-        debug!(req = as_debug!(&table_id); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
 
         let table_id_to_name_key = TableIdToName { table_id };
 
         let (tb_meta_seq, table_name): (_, Option<DBIdTableName>) =
             get_pb_value(self, &table_id_to_name_key).await?;
 
-        debug!(ident = as_display!(&table_id_to_name_key); "get_table_name_by_id");
+        debug!(ident :% =(&table_id_to_name_key); "get_table_name_by_id");
 
         if tb_meta_seq == 0 || table_name.is_none() {
             return Err(KVAppError::AppError(AppError::UnknownTableId(
@@ -2436,14 +2434,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn get_db_name_by_id(&self, db_id: u64) -> Result<String, KVAppError> {
-        debug!(req = as_debug!(&db_id); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&db_id); "SchemaApi: {}", func_name!());
 
         let db_id_to_name_key = DatabaseIdToName { db_id };
 
         let (meta_seq, db_name): (_, Option<DatabaseNameIdent>) =
             get_pb_value(self, &db_id_to_name_key).await?;
 
-        debug!(ident = as_display!(&db_id_to_name_key); "get_db_name_by_id");
+        debug!(ident :% =(&db_id_to_name_key); "get_db_name_by_id");
 
         if meta_seq == 0 || db_name.is_none() {
             return Err(KVAppError::AppError(AppError::UnknownDatabaseId(
@@ -2458,7 +2456,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[minitrace::trace]
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply, KVAppError> {
         let table_id = req.tb_id;
-        debug!(req = as_debug!(&table_id); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
 
         let mut tb_count = None;
         let tenant = &req.tenant;
@@ -2497,8 +2495,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                tenant = as_display!(&tenant),
-                id = as_debug!(&table_id),
+                tenant :% =(&tenant),
+                id :? =(&table_id),
                 succ = succ;
                 "drop_table_by_id"
             );
@@ -2519,7 +2517,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let table_id = req.table_id;
 
@@ -2534,8 +2532,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         debug!(
-            ident = as_display!(&tbid),
-            table_meta = as_debug!(&tb_meta);
+            ident :% =(&tbid),
+            table_meta :? =(&tb_meta);
             "get_table_copied_file_info"
         );
 
@@ -2579,7 +2577,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // NOTE: this method read and remove in multiple transactions.
         // It is not atomic, but it is safe because it deletes only the files that matches the seq.
 
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let ctx = func_name!();
 
@@ -2665,7 +2663,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
                 let (succ, _responses) = send_txn(self, txn_req).await?;
                 debug!(
-                    id = as_debug!(&table_id),
+                    id :? =(&table_id),
                     succ = succ,
                     ctx = ctx;
                     ""
@@ -2686,7 +2684,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tbid = TableId {
             table_id: req.table_id,
@@ -2697,7 +2695,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
                 get_pb_value(self, &tbid).await?;
 
-            debug!(ident = as_display!(&tbid); "upsert_table_option");
+            debug!(ident :% =(&tbid); "upsert_table_option");
 
             if tb_meta_seq == 0 || table_meta.is_none() {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
@@ -2742,7 +2740,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                id = as_debug!(&tbid),
+                id :? =(&tbid),
                 succ = succ;
                 "upsert_table_option"
             );
@@ -2761,7 +2759,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         let tbid = TableId {
             table_id: req.table_id,
         };
@@ -2777,7 +2775,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
                 get_pb_value(self, &tbid).await?;
 
-            debug!(ident = as_display!(&tbid); "update_table_meta");
+            debug!(ident :% =(&tbid); "update_table_meta");
 
             if tb_meta_seq == 0 || table_meta.is_none() {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
@@ -2869,7 +2867,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                id = as_debug!(&tbid),
+                id :? =(&tbid),
                 succ = succ;
                 "update_table_meta"
             );
@@ -3040,7 +3038,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         let tbid = TableId {
             table_id: req.table_id,
         };
@@ -3053,7 +3051,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
                 get_pb_value(self, &tbid).await?;
 
-            debug!(ident = as_display!(&tbid); "set_table_column_mask_policy");
+            debug!(ident :% =(&tbid); "set_table_column_mask_policy");
 
             if tb_meta_seq == 0 || table_meta.is_none() {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
@@ -3120,7 +3118,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                id = as_debug!(&tbid),
+                id :? =(&tbid),
                 succ = succ;
                 "set_table_column_mask_policy"
             );
@@ -3139,7 +3137,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListDroppedTableReq,
     ) -> Result<ListDroppedTableResp, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         if let TableInfoFilter::AllDroppedTables(filter_drop_on) = &req.filter {
             let db_infos = self
@@ -3341,7 +3339,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let key = CountTablesKey {
             tenant: req.tenant.to_string_key(),
@@ -3421,7 +3419,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: CreateLockRevReq,
     ) -> Result<CreateLockRevReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let lock_key = &req.lock_key;
         let lock_type = lock_key.lock_type();
@@ -3473,7 +3471,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                ident = as_display!(&tbid),
+                ident :% =(&tbid),
                 succ = succ;
                 "create_lock_revision"
             );
@@ -3488,7 +3486,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[minitrace::trace]
     async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<(), KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let ctx = func_name!();
 
@@ -3537,7 +3535,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                ident = as_display!(&tbid),
+                ident :% =(&tbid),
                 succ = succ;
                 "extend_lock_revision"
             );
@@ -3551,7 +3549,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[minitrace::trace]
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<(), KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let lock_key = &req.lock_key;
 
@@ -3583,7 +3581,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                ident = as_display!(&tbid),
+                ident :% =(&tbid),
                 succ = succ;
                 "delete_lock_revision"
             );
@@ -3633,7 +3631,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: CreateCatalogReq,
     ) -> Result<CreateCatalogReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_key = &req.name_ident;
 
@@ -3646,7 +3644,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             debug!(
                 catalog_id_seq = catalog_id_seq,
                 catalog_id = catalog_id,
-                name_key = as_debug!(name_key);
+                name_key :? =(name_key);
                 "get_catalog"
             );
 
@@ -3671,7 +3669,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let id_key = CatalogId { catalog_id };
             let id_to_name_key = CatalogIdToName { catalog_id };
 
-            debug!(catalog_id = catalog_id, name_key = as_debug!(name_key); "new catalog id");
+            debug!(catalog_id = catalog_id, name_key :? =(name_key); "new catalog id");
 
             {
                 let condition = vec![
@@ -3693,8 +3691,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (succ, _) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(name_key),
-                    id = as_debug!(&id_key),
+                    name :? =(name_key),
+                    id :? =(&id_key),
                     succ = succ;
                     "create_catalog"
                 );
@@ -3709,7 +3707,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn get_catalog(&self, req: GetCatalogReq) -> Result<Arc<CatalogInfo>, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_key = &req.inner;
 
@@ -3728,7 +3726,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn drop_catalog(&self, req: DropCatalogReq) -> Result<DropCatalogReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_key = &req.name_ident;
 
@@ -3761,7 +3759,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             debug!(
                 catalog_id = catalog_id,
-                name_key = as_debug!(&name_key);
+                name_key :? =(&name_key);
                 "catalog keys to delete"
             );
 
@@ -3782,8 +3780,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (succ, _) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(&name_key),
-                    id = as_debug!(&id_key),
+                    name :? =(&name_key),
+                    id :? =(&id_key),
                     succ = succ;
                     "drop_catalog"
                 );
@@ -3803,7 +3801,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListCatalogReq,
     ) -> Result<Vec<Arc<CatalogInfo>>, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let name_key = CatalogNameIdent {
             tenant: req.tenant,
@@ -3848,7 +3846,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 catalog_infos.push(Arc::new(catalog_info));
             } else {
                 debug!(
-                    k = as_display!(&kv_keys[i]);
+                    k :% =(&kv_keys[i]);
                     "catalog_meta not found, maybe just deleted after listing names and before listing meta"
                 );
             }
@@ -3859,7 +3857,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[minitrace::trace]
     async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let table_id = req.table_id;
 
@@ -3892,7 +3890,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                name = as_debug!(req.table_id),
+                name :? =(req.table_id),
                 succ = succ;
                 "set_table_lvt"
             );
@@ -3905,7 +3903,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[minitrace::trace]
     async fn get_table_lvt(&self, req: GetLVTReq) -> Result<GetLVTReply, KVAppError> {
-        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let table_id = req.table_id;
 
@@ -3949,7 +3947,7 @@ async fn construct_drop_virtual_column_txn_operations(
     }
 
     debug!(
-        "name_ident" = as_debug!(&name_ident),
+        "name_ident" :? =(&name_ident),
         ctx = ctx;
         "construct_drop_virtual_column_txn_operations"
     );
@@ -3983,7 +3981,7 @@ async fn construct_drop_index_txn_operations(
     // Safe unwrap(): index_meta_seq > 0 implies index_meta is not None.
     let mut index_meta = index_meta.unwrap();
 
-    debug!(index_id = index_id, name_key = as_debug!(tenant_index); "drop_index");
+    debug!(index_id = index_id, name_key :? =(tenant_index); "drop_index");
 
     // drop an index with drop time
     if index_meta.dropped_on.is_some() {
@@ -4092,8 +4090,8 @@ async fn construct_drop_table_txn_operations(
     }
 
     debug!(
-        ident = as_display!(&tbid),
-        tenant = as_display!(&tenant);
+        ident :% =(&tbid),
+        tenant :% =(&tenant);
         "drop table by id"
     );
 
@@ -4275,8 +4273,8 @@ async fn drop_database_meta(
     if removed {
         // if db create from share then remove it directly and remove db id from share
         debug!(
-            name = as_debug!(tenant_dbname),
-            id = as_debug!(&DatabaseId { db_id });
+            name :? =(tenant_dbname),
+            id :? =(&DatabaseId { db_id });
             "drop_database from share"
         );
 
@@ -4309,7 +4307,7 @@ async fn drop_database_meta(
 
         debug!(
             db_id = db_id,
-            name_key = as_debug!(tenant_dbname);
+            name_key :? =(tenant_dbname);
             "drop_database"
         );
 
@@ -4491,7 +4489,7 @@ fn db_has_to_not_exist(
     if seq == 0 {
         Ok(())
     } else {
-        debug!(seq = seq, name_ident = as_debug!(name_ident); "exist");
+        debug!(seq = seq, name_ident :? =(name_ident); "exist");
 
         Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
             DatabaseAlreadyExists::new(&name_ident.db_name, format!("{}: {}", ctx, name_ident)),
@@ -4510,7 +4508,7 @@ fn table_has_to_not_exist(
     if seq == 0 {
         Ok(())
     } else {
-        debug!(seq = seq, name_ident = as_debug!(name_ident); "exist");
+        debug!(seq = seq, name_ident :? =(name_ident); "exist");
 
         Err(KVAppError::AppError(AppError::TableAlreadyExists(
             TableAlreadyExists::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
@@ -5252,7 +5250,7 @@ pub fn catalog_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq = seq, catalog_name_ident = as_debug!(catalog_name_ident); "catalog does not exist");
+        debug!(seq = seq, catalog_name_ident :? =(catalog_name_ident); "catalog does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownCatalog(
             UnknownCatalog::new(

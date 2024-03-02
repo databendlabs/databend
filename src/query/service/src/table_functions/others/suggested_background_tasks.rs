@@ -187,8 +187,9 @@ impl SuggestedBackgroundTasksSource {
         }
         let record = DataBlock::concat(&result)?;
         let record = record
-            .to_record_batch(data_schema.as_ref())
+            .to_record_batch_with_dataschema(data_schema.as_ref())
             .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
+
         Ok(Some(record))
     }
 
