@@ -147,7 +147,9 @@ impl Spiller {
         }
 
         for data in columns_data.into_iter() {
+            info!("spill data to {:?}", location);
             writer.write(data).await?;
+            info!("finish spill data to {:?}", location);
         }
         writer.close().await?;
 
