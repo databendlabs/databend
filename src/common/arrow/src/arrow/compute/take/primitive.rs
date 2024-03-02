@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use arrow_buffer::bit_util::unset_bit_raw;
+
 use super::Index;
 use crate::arrow::array::Array;
 use crate::arrow::array::PrimitiveArray;
@@ -109,6 +111,65 @@ fn take_values_indices_validity<T: NativeType, I: Index>(
         })
         .collect::<Vec<_>>();
     (values.into(), bitmap.into())
+}
+
+pub(super) unsafe fn take_values_and_validity_unchecked<T: NativeType, I: Index>(
+    values: &[T],
+    validity_values: Option<&Bitmap>,
+    indices: &PrimitiveArray<I>,
+) -> (Vec<T>, Option<Bitmap>) {
+    let index_values = indices.values().as_slice();
+
+    let null_count = validity_values.map(|b| b.unset_bits()).unwrap_or(0);
+
+    // first take the values, these are always needed
+    let values: Vec<T> = if indices.null_count() == 0 {
+        index_values
+            .iter()
+            .map(|idx| *values.get_unchecked(idx.to_usize()))
+            .collect()
+    } else {
+        indices
+            .iter()
+            .map(|idx| match idx {
+                Some(idx) => *values.get_unchecked(idx.to_usize()),
+                None => T::default(),
+            })
+            .collect()
+    };
+
+    if null_count > 0 {
+        let validity_values = validity_values.unwrap();
+        // the validity buffer we will fill with all valid. And we unset the ones that are null
+        // in later checks
+        // this is in the assumption that most values will be valid.
+        // Maybe we could add another branch based on the null count
+        let mut validity = MutableBitmap::with_capacity(indices.len());
+        validity.extend_constant(indices.len(), true);
+        let validity_ptr = validity.as_slice().as_ptr() as *mut u8;
+
+        if let Some(validity_indices) = indices.validity().as_ref() {
+            index_values.iter().enumerate().for_each(|(i, idx)| {
+                // i is iteration count
+                // idx is the index that we take from the values array.
+                let idx = idx.to_usize();
+                if !validity_indices.get_bit_unchecked(i) || !validity_values.get_bit_unchecked(idx)
+                {
+                    unset_bit_raw(validity_ptr, i);
+                }
+            });
+        } else {
+            index_values.iter().enumerate().for_each(|(i, idx)| {
+                let idx = idx.to_usize();
+                if !validity_values.get_bit_unchecked(idx) {
+                    unset_bit_raw(validity_ptr, i);
+                }
+            });
+        };
+        (values, Some(validity.freeze()))
+    } else {
+        (values, indices.validity().cloned())
+    }
 }
 
 /// `take` implementation for primitive arrays

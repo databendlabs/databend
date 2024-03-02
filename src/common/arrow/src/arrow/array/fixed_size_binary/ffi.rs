@@ -24,7 +24,7 @@ unsafe impl ToFfi for FixedSizeBinaryArray {
     fn buffers(&self) -> Vec<Option<*const u8>> {
         vec![
             self.validity.as_ref().map(|x| x.as_ptr()),
-            Some(self.values.as_ptr().cast::<u8>()),
+            Some(self.values.data_ptr().cast::<u8>()),
         ]
     }
 

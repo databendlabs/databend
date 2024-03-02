@@ -62,7 +62,7 @@ impl Binder {
             Plan::Query { metadata, .. } => {
                 self.do_bind_query_index(bind_context, metadata).await?;
             }
-            Plan::Explain { kind, plan }
+            Plan::Explain { kind, plan, .. }
                 if matches!(kind, ExplainKind::Plan) && matches!(**plan, Plan::Query { .. }) =>
             {
                 match **plan {

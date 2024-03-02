@@ -19,6 +19,7 @@ pub use immutable::*;
 
 mod iterator;
 pub use iterator::IntoIter;
+pub use iterator::TrueIdxIter;
 
 mod mutable;
 pub use mutable::MutableBitmap;
@@ -29,4 +30,5 @@ pub use bitmap_ops::*;
 mod assign_ops;
 pub use assign_ops::*;
 
+mod bitmask;
 pub mod utils;

@@ -27,7 +27,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::background::BackgroundJobInfo;
 use databend_common_meta_app::background::BackgroundJobState;
 use databend_common_meta_app::background::BackgroundJobType;
-use log::as_debug;
 use log::info;
 
 use crate::background_service::job::BoxedJob;
@@ -160,7 +159,7 @@ impl JobScheduler {
             let mut status = info.job_status.clone().unwrap();
             status.next_task_scheduled_time = params.get_next_running_time(Utc::now());
             job.update_job_status(status.clone()).await?;
-            info!(background = true, next_scheduled_time = as_debug!(&status.next_task_scheduled_time); "Running job");
+            info!(background = true, next_scheduled_time:? = (&status.next_task_scheduled_time); "Running job");
         } else {
             info!(background = true; "Running execute job");
         }

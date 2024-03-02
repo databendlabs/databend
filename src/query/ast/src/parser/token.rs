@@ -673,6 +673,8 @@ pub enum TokenKind {
     LOCATION_PREFIX,
     #[token("LOCKS", ignore(ascii_case))]
     LOCKS,
+    #[token("LOGICAL", ignore(ascii_case))]
+    LOGICAL,
     #[token("ACCOUNT", ignore(ascii_case))]
     ACCOUNT,
     #[token("SECONDARY", ignore(ascii_case))]
@@ -1070,6 +1072,8 @@ pub enum TokenKind {
     VARCHAR,
     #[token("VARIANT", ignore(ascii_case))]
     VARIANT,
+    #[token("VERBOSE", ignore(ascii_case))]
+    VERBOSE,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
     #[token("VIRTUAL", ignore(ascii_case))]

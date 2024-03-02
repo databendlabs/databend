@@ -46,6 +46,7 @@ pub use utf8::GrowableUtf8;
 mod dictionary;
 pub use dictionary::GrowableDictionary;
 
+mod binview;
 mod utils;
 
 /// Describes a struct that can be extended from slices of other pre-existing [`Array`]s.
@@ -147,6 +148,22 @@ pub fn make_growable<'a>(
             Box::new(union::GrowableUnion::new(arrays, capacity))
         }
         Map => dyn_growable!(map::GrowableMap, arrays, use_validity, capacity),
+        BinaryView => {
+            dyn_growable!(
+                binview::GrowableBinaryViewArray::<[u8]>,
+                arrays,
+                use_validity,
+                capacity
+            )
+        }
+        Utf8View => {
+            dyn_growable!(
+                binview::GrowableBinaryViewArray::<str>,
+                arrays,
+                use_validity,
+                capacity
+            )
+        }
         Dictionary(key_type) => {
             match_integer_type!(key_type, |$T| {
                 let arrays = arrays

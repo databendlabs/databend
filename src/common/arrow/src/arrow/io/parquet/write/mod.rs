@@ -28,6 +28,7 @@
 //! The use of these arrow types will result in no logical type being stored within a parquet file.
 
 mod binary;
+mod binview;
 mod boolean;
 mod dictionary;
 mod file;
@@ -106,6 +107,7 @@ pub use schema::to_parquet_type;
 #[cfg_attr(docsrs, doc(cfg(feature = "io_parquet_async")))]
 pub use sink::FileSink;
 
+use crate::arrow;
 use crate::arrow::compute::aggregate::estimated_bytes_size;
 
 /// returns offset and length to slice the leaf values
@@ -436,6 +438,25 @@ pub fn array_to_page_simple(
             type_,
             encoding,
         ),
+        DataType::BinaryView => {
+            return binview::array_to_page(
+                array.as_any().downcast_ref().unwrap(),
+                options,
+                type_,
+                encoding,
+            );
+        }
+        DataType::Utf8View => {
+            let array =
+                arrow::compute::cast::cast(array, &DataType::BinaryView, Default::default())
+                    .unwrap();
+            return binview::array_to_page(
+                array.as_any().downcast_ref().unwrap(),
+                options,
+                type_,
+                encoding,
+            );
+        }
         DataType::Null => {
             let array = Int32Array::new_null(DataType::Int32, array.len());
             primitive::array_to_page_plain::<i32, i32>(&array, options, type_)
@@ -667,6 +688,15 @@ fn array_to_page_nested(
             let array = array.as_any().downcast_ref().unwrap();
             binary::nested_array_to_page::<i64>(array, options, type_, nested)
         }
+        BinaryView => {
+            let array = array.as_any().downcast_ref().unwrap();
+            binview::nested_array_to_page(array, options, type_, nested)
+        }
+        Utf8View => {
+            let array = arrow::compute::cast::cast(array, &BinaryView, Default::default()).unwrap();
+            let array = array.as_any().downcast_ref().unwrap();
+            binview::nested_array_to_page(array, options, type_, nested)
+        }
         UInt8 => {
             let array = array.as_any().downcast_ref().unwrap();
             primitive::nested_array_to_page::<u8, i32>(array, options, type_, nested)
@@ -853,7 +883,7 @@ fn transverse_recursive<T, F: Fn(&DataType) -> T + Clone>(
     use crate::arrow::datatypes::PhysicalType::*;
     match data_type.to_physical_type() {
         Null | Boolean | Primitive(_) | Binary | FixedSizeBinary | LargeBinary | Utf8
-        | Dictionary(_) | LargeUtf8 => encodings.push(map(data_type)),
+        | Dictionary(_) | LargeUtf8 | BinaryView | Utf8View => encodings.push(map(data_type)),
         List | FixedSizeList | LargeList => {
             let a = data_type.to_logical_type();
             if let DataType::List(inner) = a {

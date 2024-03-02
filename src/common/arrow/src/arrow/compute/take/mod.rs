@@ -19,11 +19,14 @@ use crate::arrow::array::new_empty_array;
 use crate::arrow::array::Array;
 use crate::arrow::array::NullArray;
 use crate::arrow::array::PrimitiveArray;
+use crate::arrow::array::Utf8ViewArray;
+use crate::arrow::compute::take::binview::take_binview_unchecked;
 use crate::arrow::datatypes::DataType;
 use crate::arrow::error::Result;
 use crate::arrow::types::Index;
 
 mod binary;
+mod binview;
 mod boolean;
 mod dict;
 mod fixed_size_list;
@@ -92,6 +95,15 @@ pub fn take<O: Index>(values: &dyn Array, indices: &PrimitiveArray<O>) -> Result
             let array = values.as_any().downcast_ref().unwrap();
             Ok(Box::new(fixed_size_list::take::<O>(array, indices)))
         }
+        BinaryView => unsafe {
+            Ok(take_binview_unchecked(values.as_any().downcast_ref().unwrap(), indices).boxed())
+        },
+        Utf8View => unsafe {
+            let arr: &Utf8ViewArray = values.as_any().downcast_ref().unwrap();
+            Ok(take_binview_unchecked(&arr.to_binview(), indices)
+                .to_utf8view_unchecked()
+                .boxed())
+        },
         t => unimplemented!("Take not supported for data type {:?}", t),
     }
 }

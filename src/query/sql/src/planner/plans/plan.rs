@@ -25,6 +25,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use super::SetSecondaryRolesPlan;
+use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::AddTableColumnPlan;
@@ -154,6 +155,7 @@ pub enum Plan {
 
     Explain {
         kind: ExplainKind,
+        config: ExplainConfig,
         plan: Box<Plan>,
     },
     ExplainAst {
