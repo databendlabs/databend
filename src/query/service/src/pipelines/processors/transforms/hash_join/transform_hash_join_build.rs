@@ -37,7 +37,7 @@ pub(crate) enum HashJoinBuildStep {
     // so we can directly finish the following steps for hash join and return empty result.
     FastReturn,
     // Wait to spill
-    WaitSpill,
+    Spill,
     // Wait probe
     WaitProbe,
     // The whole build phase is finished.
@@ -120,7 +120,7 @@ impl Processor for TransformHashJoinBuild {
         match self.step {
             HashJoinBuildStep::Running => {
                 if self.spill_handler.check_need_spill(&mut self.input_data)? {
-                    self.step = HashJoinBuildStep::WaitSpill;
+                    self.step = HashJoinBuildStep::Spill;
                     return Ok(Event::Async);
                 }
 
@@ -129,7 +129,7 @@ impl Processor for TransformHashJoinBuild {
                 }
 
                 if self.input_port.is_finished() {
-                    if self.spill_handler.enabled_spill() {
+                    if self.spill_handler.enabled_spill() && !self.spill_handler.after_spill() {
                         self.spill_handler
                             .finalize_spill(&self.build_state, self.processor_id)?;
                     }
@@ -141,7 +141,7 @@ impl Processor for TransformHashJoinBuild {
                     true => {
                         self.input_data = Some(self.input_port.pull_data().unwrap()?);
                         if self.spill_handler.check_need_spill(&mut self.input_data)? {
-                            self.step = HashJoinBuildStep::WaitSpill;
+                            self.step = HashJoinBuildStep::Spill;
                             return Ok(Event::Async);
                         }
                         Ok(Event::Sync)
@@ -170,7 +170,7 @@ impl Processor for TransformHashJoinBuild {
                 self.input_port.finish();
                 Ok(Event::Finished)
             }
-            HashJoinBuildStep::WaitSpill | HashJoinBuildStep::WaitProbe => Ok(Event::Async),
+            HashJoinBuildStep::Spill | HashJoinBuildStep::WaitProbe => Ok(Event::Async),
         }
     }
 
@@ -182,9 +182,6 @@ impl Processor for TransformHashJoinBuild {
         match self.step {
             HashJoinBuildStep::Running => {
                 if let Some(data_block) = self.input_data.take() {
-                    if self.spill_handler.after_spill() {
-                        return self.build_state.build(data_block);
-                    }
                     self.build_state.build(data_block)?;
                 }
                 Ok(())
@@ -198,7 +195,7 @@ impl Processor for TransformHashJoinBuild {
                 }
             }
             HashJoinBuildStep::FastReturn
-            | HashJoinBuildStep::WaitSpill
+            | HashJoinBuildStep::Spill
             | HashJoinBuildStep::WaitProbe
             | HashJoinBuildStep::Finished => unreachable!(),
         }
@@ -220,7 +217,7 @@ impl Processor for TransformHashJoinBuild {
                 }
                 self.step = HashJoinBuildStep::Finalize;
             }
-            HashJoinBuildStep::WaitSpill => {
+            HashJoinBuildStep::Spill => {
                 self.spill_handler.spill().await?;
                 // After spill, the processor should continue to run, and process incoming data.
                 self.step = HashJoinBuildStep::Running;

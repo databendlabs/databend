@@ -157,7 +157,7 @@ impl PipelineBuilder {
                 Some(Box::new(BuildSpillState::create(
                     self.ctx.clone(),
                     build_state.clone(),
-                )))
+                )?))
             } else {
                 None
             };
@@ -207,7 +207,7 @@ impl PipelineBuilder {
                 Some(Box::new(ProbeSpillState::create(
                     self.ctx.clone(),
                     probe_state.clone(),
-                )))
+                )?))
             } else {
                 None
             };

@@ -41,15 +41,15 @@ pub struct BuildSpillState {
 }
 
 impl BuildSpillState {
-    pub fn create(ctx: Arc<QueryContext>, build_state: Arc<HashJoinBuildState>) -> Self {
+    pub fn create(ctx: Arc<QueryContext>, build_state: Arc<HashJoinBuildState>) -> Result<Self> {
         let tenant = ctx.get_tenant();
         let spill_config = SpillerConfig::create(query_spill_prefix(&tenant));
         let operator = DataOperator::instance().operator();
-        let spiller = Spiller::create(ctx, operator, spill_config, SpillerType::HashJoinBuild);
-        Self {
+        let spiller = Spiller::create(ctx, operator, spill_config, SpillerType::HashJoinBuild)?;
+        Ok(Self {
             build_state,
             spiller,
-        }
+        })
     }
 
     // Get all hashes for build input data.

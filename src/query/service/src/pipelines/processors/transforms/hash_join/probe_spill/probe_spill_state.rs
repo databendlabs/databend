@@ -37,15 +37,15 @@ pub struct ProbeSpillState {
 }
 
 impl ProbeSpillState {
-    pub fn create(ctx: Arc<QueryContext>, probe_state: Arc<HashJoinProbeState>) -> Self {
+    pub fn create(ctx: Arc<QueryContext>, probe_state: Arc<HashJoinProbeState>) -> Result<Self> {
         let tenant = ctx.get_tenant();
         let spill_config = SpillerConfig::create(query_spill_prefix(&tenant));
         let operator = DataOperator::instance().operator();
-        let spiller = Spiller::create(ctx, operator, spill_config, SpillerType::HashJoinProbe);
-        Self {
+        let spiller = Spiller::create(ctx, operator, spill_config, SpillerType::HashJoinProbe)?;
+        Ok(Self {
             probe_state,
             spiller,
-        }
+        })
     }
 
     // Get all hashes for probe input data.
