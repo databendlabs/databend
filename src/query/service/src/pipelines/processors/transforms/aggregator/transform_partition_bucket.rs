@@ -21,10 +21,13 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::HashTableConfig;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::PayloadFlushState;
+use databend_common_expression::ProbeState;
 use databend_common_hashtable::hash2bucket;
 use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::Event;
@@ -61,7 +64,7 @@ struct InputPortState {
 pub struct TransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> {
     output: Arc<OutputPort>,
     inputs: Vec<InputPortState>,
-
+    params: Arc<AggregatorParams>,
     method: Method,
     working_bucket: isize,
     pushing_bucket: isize,
@@ -78,7 +81,11 @@ pub struct TransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send + S
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
     TransformPartitionBucket<Method, V>
 {
-    pub fn create(method: Method, input_nums: usize) -> Result<Self> {
+    pub fn create(
+        method: Method,
+        input_nums: usize,
+        params: Arc<AggregatorParams>,
+    ) -> Result<Self> {
         let mut inputs = Vec::with_capacity(input_nums);
 
         for _index in 0..input_nums {
@@ -90,7 +97,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
         Ok(TransformPartitionBucket {
             method,
-            // params,
+            params,
             inputs,
             working_bucket: 0,
             pushing_bucket: 0,
@@ -161,10 +168,18 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                 let (bucket, res) = match block_meta {
                     AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
+                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(payload) => {
                         (payload.bucket, SINGLE_LEVEL_BUCKET_NUM)
                     }
-                    AggregateMeta::Serialized(payload) => (payload.bucket, payload.bucket),
+                    AggregateMeta::Serialized(payload) => {
+                        if payload.max_partition_count > 0 {
+                            self.max_partition_count =
+                                self.max_partition_count.max(payload.max_partition_count);
+                            self.current_partition_count = payload.max_partition_count;
+                        }
+                        (payload.bucket, payload.bucket)
+                    }
                     AggregateMeta::HashTable(payload) => (payload.bucket, payload.bucket),
                     AggregateMeta::Spilled(_) => {
                         let meta = data_block.take_meta().unwrap();
@@ -196,7 +211,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
                         unreachable!()
                     }
-                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(p) => {
                         self.max_partition_count =
                             self.max_partition_count.max(p.max_partition_count);
@@ -222,12 +236,71 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
         if self.max_partition_count > 0 {
             let meta = data_block.take_meta().unwrap();
-            if let Some(AggregateMeta::AggregatePayload(p)) =
-                AggregateMeta::<Method, V>::downcast_from(meta)
-            {
-                let res = p.bucket;
-                self.agg_payloads.push(p);
-                return res;
+            if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_from(meta) {
+                return match block_meta {
+                    AggregateMeta::AggregatePayload(p) => {
+                        let res = p.bucket;
+                        self.agg_payloads.push(p);
+                        res
+                    }
+                    AggregateMeta::Serialized(p) => {
+                        let rows_num = p.data_block.num_rows();
+
+                        let config = HashTableConfig::default()
+                            .with_initial_radix_bits(p.max_partition_count as u64);
+                        let mut state = ProbeState::default();
+                        let mut hashtable = AggregateHashTable::new_with_capacity(
+                            self.params.group_data_types.clone(),
+                            self.params.aggregate_functions.clone(),
+                            config,
+                            rows_num,
+                        );
+
+                        let agg_len = self.params.aggregate_functions.len();
+                        let group_len = self.params.group_columns.len();
+                        let agg_states = (0..agg_len)
+                            .map(|i| {
+                                p.data_block
+                                    .get_by_offset(i)
+                                    .value
+                                    .as_column()
+                                    .unwrap()
+                                    .clone()
+                            })
+                            .collect::<Vec<_>>();
+                        let group_columns = (agg_len..(agg_len + group_len))
+                            .map(|i| {
+                                p.data_block
+                                    .get_by_offset(i)
+                                    .value
+                                    .as_column()
+                                    .unwrap()
+                                    .clone()
+                            })
+                            .collect::<Vec<_>>();
+
+                        let _ = hashtable
+                            .add_groups(
+                                &mut state,
+                                &group_columns,
+                                &[vec![]],
+                                &agg_states,
+                                rows_num,
+                            )
+                            .unwrap();
+
+                        for payload in hashtable.payload.payloads.into_iter() {
+                            self.agg_payloads.push(AggregatePayload {
+                                bucket: p.bucket,
+                                payload,
+                                max_partition_count: p.max_partition_count,
+                            });
+                        }
+
+                        p.bucket
+                    }
+                    _ => unreachable!(),
+                };
             }
             return 0;
         }
@@ -302,7 +375,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             blocks.push(match data_block.is_empty() {
                 true => None,
                 false => Some(DataBlock::empty_with_meta(
-                    AggregateMeta::<Method, V>::create_serialized(bucket as isize, data_block),
+                    AggregateMeta::<Method, V>::create_serialized(bucket as isize, data_block, 0),
                 )),
             });
         }
@@ -433,8 +506,8 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
 
     fn process(&mut self) -> Result<()> {
         if !self.agg_payloads.is_empty() {
-            let group_types = self.agg_payloads[0].payload.group_types.clone();
-            let aggrs = self.agg_payloads[0].payload.aggrs.clone();
+            let group_types = self.params.group_data_types.clone();
+            let aggrs = self.params.aggregate_functions.clone();
 
             let mut partitioned_payload = PartitionedPayload::new(
                 group_types.clone(),
@@ -518,7 +591,8 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
     params: Arc<AggregatorParams>,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
-    let transform = TransformPartitionBucket::<Method, V>::create(method.clone(), input_nums)?;
+    let transform =
+        TransformPartitionBucket::<Method, V>::create(method.clone(), input_nums, params.clone())?;
 
     let output = transform.get_output();
     let inputs_port = transform.get_inputs();

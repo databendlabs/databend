@@ -35,6 +35,8 @@ pub struct HashTablePayload<T: HashMethodBounds, V: Send + Sync + 'static> {
 pub struct SerializedPayload {
     pub bucket: isize,
     pub data_block: DataBlock,
+    // use for new agg_hashtable
+    pub max_partition_count: usize,
 }
 
 impl SerializedPayload {
@@ -95,10 +97,15 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
         ))
     }
 
-    pub fn create_serialized(bucket: isize, block: DataBlock) -> BlockMetaInfoPtr {
+    pub fn create_serialized(
+        bucket: isize,
+        block: DataBlock,
+        max_partition_count: usize,
+    ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::<Method, V>::Serialized(SerializedPayload {
             bucket,
             data_block: block,
+            max_partition_count,
         }))
     }
 

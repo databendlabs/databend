@@ -21,6 +21,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Payload;
+use databend_common_expression::PayloadFlushState;
 use databend_common_hashtable::FastHash;
 use databend_common_hashtable::HashtableEntryMutRefLike;
 use databend_common_hashtable::HashtableEntryRefLike;
@@ -78,7 +80,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                         AggregateMeta::Serialized(v) => Ok(v.bucket),
                         AggregateMeta::HashTable(v) => Ok(v.bucket),
                         AggregateMeta::AggregateHashTable(_) => unreachable!(),
-                        AggregateMeta::AggregatePayload(_) => unreachable!(),
+                        AggregateMeta::AggregatePayload(v) => Ok(v.bucket),
                         AggregateMeta::Spilled(_)
                         | AggregateMeta::Spilling(_)
                         | AggregateMeta::BucketSpilled(_) => Ok(-1),
@@ -140,6 +142,42 @@ fn scatter<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
     Ok(res)
 }
 
+fn scatter_paylaod(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>> {
+    let mut buckets = Vec::with_capacity(buckets);
+
+    let group_types = payload.group_types.clone();
+    let aggrs = payload.aggrs.clone();
+    let mut state = PayloadFlushState::default();
+
+    for _ in 0..buckets.capacity() {
+        buckets.push(Payload::new(
+            Arc::new(Bump::new()),
+            group_types.clone(),
+            aggrs.clone(),
+        ));
+    }
+
+    for bucket in buckets.iter_mut() {
+        bucket.arenas.extend_from_slice(&payload.arenas);
+    }
+
+    // scatter each page of the payload.
+    while payload.scatter(&mut state, buckets.len()) {
+        // copy to the corresponding bucket.
+        for (idx, bucket) in buckets.iter_mut().enumerate() {
+            let count = state.probe_state.partition_count[idx];
+
+            if count > 0 {
+                let sel = &state.probe_state.partition_entries[idx];
+                bucket.copy_rows(sel, count, &state.addresses);
+            }
+        }
+    }
+    payload.state_move_out = true;
+
+    Ok(buckets)
+}
+
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
     for HashTableHashScatter<Method, V>
 {
@@ -177,9 +215,18 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                             });
                         }
                     }
-
-                    AggregateMeta::AggregateHashTable(_) => todo!("AGG_HASHTABLE"),
-                    AggregateMeta::AggregatePayload(_) => todo!("AGG_HASHTABLE"),
+                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
+                    AggregateMeta::AggregatePayload(p) => {
+                        for payload in scatter_paylaod(p.payload, self.buckets)? {
+                            blocks.push(DataBlock::empty_with_meta(
+                                AggregateMeta::<Method, V>::create_agg_payload(
+                                    p.bucket,
+                                    payload,
+                                    p.max_partition_count,
+                                ),
+                            ))
+                        }
+                    }
                 };
 
                 return Ok(blocks);

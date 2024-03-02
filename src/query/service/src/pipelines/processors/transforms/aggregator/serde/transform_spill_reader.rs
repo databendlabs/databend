@@ -300,6 +300,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
         AggregateMeta::<Method, V>::Serialized(SerializedPayload {
             bucket: payload.bucket,
             data_block: DataBlock::new_from_columns(columns),
+            max_partition_count: 0,
         })
     }
 }

@@ -58,6 +58,7 @@ terminal_size = "0.2.6"
 tonic = { workspace = true }
 typetag = { workspace = true }
 unicode-segmentation = "1.10.1"
+strength_reduce = "0.2.4"
 
 [dev-dependencies]
 arrow-ord = { workspace = true }

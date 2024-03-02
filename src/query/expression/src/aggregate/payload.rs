@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
+use strength_reduce::StrengthReducedU64;
 
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
@@ -26,8 +27,10 @@ use crate::store;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
+use crate::PayloadFlushState;
 use crate::SelectVector;
 use crate::StateAddr;
+use crate::BATCH_SIZE;
 use crate::MAX_PAGE_SIZE;
 
 // payload layout
@@ -334,6 +337,44 @@ impl Payload {
             self.total_rows,
             self.pages.iter().map(|x| x.rows).sum::<usize>()
         );
+    }
+
+    pub fn scatter(&self, state: &mut PayloadFlushState, partition_count: usize) -> bool {
+        if state.flush_page >= self.pages.len() {
+            return false;
+        }
+
+        let page = &self.pages[state.flush_page];
+
+        // ToNext
+        if state.flush_page_row >= page.rows {
+            state.flush_page += 1;
+            state.flush_page_row = 0;
+            state.row_count = 0;
+            return self.scatter(state, partition_count);
+        }
+
+        let end = (state.flush_page_row + BATCH_SIZE).min(page.rows);
+        let rows = end - state.flush_page_row;
+        state.row_count = rows;
+
+        state.probe_state.reset_partitions(partition_count);
+
+        let mods: StrengthReducedU64 = StrengthReducedU64::new(partition_count as u64);
+        for idx in 0..rows {
+            state.addresses[idx] = self.data_ptr(page, idx + state.flush_page_row);
+
+            let hash =
+                unsafe { core::ptr::read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
+
+            let partition_idx = (hash % mods) as usize;
+
+            let sel = &mut state.probe_state.partition_entries[partition_idx];
+            sel[state.probe_state.partition_count[partition_idx]] = idx;
+            state.probe_state.partition_count[partition_idx] += 1;
+        }
+        state.flush_page_row = end;
+        true
     }
 }
 
