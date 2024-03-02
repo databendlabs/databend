@@ -27,7 +27,6 @@ use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
 pub use header::Header;
-use log::as_debug;
 use log::debug;
 use log::info;
 use openraft::AnyError;
@@ -81,7 +80,7 @@ impl OnDisk {
     /// Initialize data version for local store, returns the loaded version.
     #[minitrace::trace]
     pub async fn open(db: &sled::Db, config: &RaftConfig) -> Result<OnDisk, MetaStorageError> {
-        info!(config = as_debug!(config); "open and initialize data-version");
+        info!(config :? =(config); "open and initialize data-version");
 
         let tree_name = config.tree_name(TREE_HEADER);
         let tree = SledTree::open(db, &tree_name, config.is_sync())?;
@@ -228,7 +227,7 @@ impl OnDisk {
                 };
 
                 debug!(
-                    kv_entry = as_debug!(&kv_entry);
+                    kv_entry :? =(&kv_entry);
                     "upgrade kv from {:?}",
                     self.header.version
                 );
@@ -341,7 +340,7 @@ impl OnDisk {
             };
 
             debug!(
-                kv_entry = as_debug!(&kv_entry);
+                kv_entry :? =(&kv_entry);
                 "upgrade kv from {:?}", self.header.version
             );
 

@@ -57,6 +57,7 @@ pub use user_grant::GrantObject;
 pub use user_grant::OwnershipObject;
 pub use user_grant::TenantOwnershipObject;
 pub use user_grant::UserGrantSet;
+pub use user_identity::TenantUserIdent;
 pub use user_identity::UserIdentity;
 pub use user_info::UserInfo;
 pub use user_info::UserOption;

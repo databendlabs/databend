@@ -90,6 +90,7 @@ arrow-format = { workspace = true }
 bitpacking = "0.8.0"
 byteorder = { workspace = true }
 bytes = "^1"
+indexmap = "2.2.3"
 log = { workspace = true }
 num = { version = "0.4", default-features = false, features = ["std"] }
 ordered-float = "3.7.0"

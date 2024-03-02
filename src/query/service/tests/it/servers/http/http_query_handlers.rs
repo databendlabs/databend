@@ -43,6 +43,7 @@ use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::QueryAffect;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_txn::TxnState;
 use futures_util::future::try_join_all;
 use headers::Header;
 use headers::HeaderMapExt;
@@ -1445,6 +1446,9 @@ async fn test_affect() -> Result<()> {
                     ("max_threads".to_string(), "1".to_string()),
                     ("timezone".to_string(), "Asia/Shanghai".to_string()),
                 ])),
+                txn_state: Some(TxnState::AutoCommit),
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
         (
@@ -1464,6 +1468,9 @@ async fn test_affect() -> Result<()> {
                     "max_threads".to_string(),
                     "6".to_string(),
                 )])),
+                txn_state: Some(TxnState::AutoCommit),
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
         (
@@ -1478,6 +1485,9 @@ async fn test_affect() -> Result<()> {
                     "max_threads".to_string(),
                     "6".to_string(),
                 )])),
+                txn_state: Some(TxnState::AutoCommit),
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
         (
@@ -1494,6 +1504,9 @@ async fn test_affect() -> Result<()> {
                     "max_threads".to_string(),
                     "6".to_string(),
                 )])),
+                txn_state: Some(TxnState::AutoCommit),
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
         (
@@ -1512,6 +1525,9 @@ async fn test_affect() -> Result<()> {
                     "timezone".to_string(),
                     "Asia/Shanghai".to_string(),
                 )])),
+                txn_state: Some(TxnState::AutoCommit),
+                last_server_info: None,
+                last_query_ids: vec![],
             }),
         ),
     ];
@@ -1525,7 +1541,13 @@ async fn test_affect() -> Result<()> {
         assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
         assert_eq!(result.1.state, ExecuteStateKind::Succeeded);
         assert_eq!(result.1.affect, affect);
-        assert_eq!(result.1.session, session_conf);
+        let session = result.1.session.map(|s| HttpSessionConf {
+            last_server_info: None,
+            last_query_ids: vec![],
+            ..s
+        });
+
+        assert_eq!(session, session_conf);
     }
 
     Ok(())
@@ -1591,6 +1613,66 @@ async fn test_auth_configured_user() -> Result<()> {
         v[0][0],
         serde_json::Value::String(format!("'{}'@'%'", user_name))
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_txn_error() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let wait_time_secs = 5;
+
+    let json =
+        serde_json::json!({"sql": "begin", "pagination": {"wait_time_secs": wait_time_secs}});
+    let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+    let last = reply.last().1;
+    let session = last.session.unwrap();
+
+    {
+        let mut session = session.clone();
+        session.last_server_info = None;
+        let json = serde_json::json! ({
+            "sql": "select 1",
+            "session": session,
+            "pagination": {"wait_time_secs": wait_time_secs}
+        });
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+        assert_eq!(reply.last().1.error.unwrap().code, 4004u16);
+        assert_eq!(
+            &reply.last().1.error.unwrap().message,
+            "transaction is active but missing server_info"
+        );
+    }
+
+    {
+        let mut session = session.clone();
+        if let Some(s) = &mut session.last_server_info {
+            s.id = "abc".to_string()
+        }
+        let json = serde_json::json! ({
+            "sql": "select 1",
+            "session": session,
+            "pagination": {"wait_time_secs": wait_time_secs}
+        });
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+        assert_eq!(reply.last().1.error.unwrap().code, 4004u16);
+        assert!(reply.last().1.error.unwrap().message.contains("routed"));
+    }
+
+    {
+        let mut session = session.clone();
+        if let Some(s) = &mut session.last_server_info {
+            s.start_time = "abc".to_string()
+        }
+        let json = serde_json::json! ({
+            "sql": "select 1",
+            "session": session,
+            "pagination": {"wait_time_secs": wait_time_secs}
+        });
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+        assert_eq!(reply.last().1.error.unwrap().code, 4002u16);
+        assert!(reply.last().1.error.unwrap().message.contains("restarted"));
+    }
 
     Ok(())
 }

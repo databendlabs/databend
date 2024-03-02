@@ -31,9 +31,9 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
+use databend_common_ast::ast::Visitor;
 use databend_common_ast::parser::parser_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Visitor;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
@@ -578,7 +578,7 @@ pub async fn resolve_stage_location(
         StageInfo::new_user_stage(&ctx.get_current_user()?.name)
     } else {
         UserApiProvider::instance()
-            .get_stage(&ctx.get_tenant(), names[0])
+            .get_stage(ctx.get_tenant().as_str(), names[0])
             .await?
     };
 

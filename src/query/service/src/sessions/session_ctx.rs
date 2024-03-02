@@ -23,9 +23,11 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_settings::Settings;
 use databend_storages_common_txn::TxnManager;
 use databend_storages_common_txn::TxnManagerRef;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use super::SessionType;
@@ -65,7 +67,7 @@ pub struct SessionContext {
     // query result through previous query_id easily.
     query_ids_results: RwLock<Vec<(String, Option<String>)>>,
     typ: SessionType,
-    txn_mgr: TxnManagerRef,
+    txn_mgr: Mutex<TxnManagerRef>,
 }
 
 impl SessionContext {
@@ -85,7 +87,7 @@ impl SessionContext {
             query_context_shared: Default::default(),
             query_ids_results: Default::default(),
             typ,
-            txn_mgr: TxnManager::init(),
+            txn_mgr: Mutex::new(TxnManager::init()),
         }))
     }
 
@@ -149,20 +151,20 @@ impl SessionContext {
         *lock = role
     }
 
-    pub fn get_current_tenant(&self) -> String {
+    pub fn get_current_tenant(&self) -> NonEmptyString {
         let conf = GlobalConfig::instance();
 
         if conf.query.internal_enable_sandbox_tenant {
             let sandbox_tenant = self.settings.get_sandbox_tenant().unwrap_or_default();
             if !sandbox_tenant.is_empty() {
-                return sandbox_tenant;
+                return NonEmptyString::new(sandbox_tenant).unwrap();
             }
         }
 
         if conf.query.management_mode || self.typ == SessionType::Local {
             let lock = self.current_tenant.read();
             if !lock.is_empty() {
-                return lock.clone();
+                return NonEmptyString::new(lock.clone()).unwrap();
             }
         }
 
@@ -292,6 +294,10 @@ impl SessionContext {
     }
 
     pub fn txn_mgr(&self) -> TxnManagerRef {
-        self.txn_mgr.clone()
+        self.txn_mgr.lock().clone()
+    }
+
+    pub fn set_txn_mgr(&self, txn_mgr: TxnManagerRef) {
+        *self.txn_mgr.lock() = txn_mgr;
     }
 }

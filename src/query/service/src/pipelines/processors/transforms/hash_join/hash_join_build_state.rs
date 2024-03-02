@@ -931,9 +931,7 @@ impl HashJoinBuildState {
         build_key: &Expr,
         probe_key: &Expr<String>,
     ) -> Result<()> {
-        if !build_key.data_type().remove_nullable().is_numeric()
-            && !build_key.data_type().remove_nullable().is_string()
-        {
+        if !build_key.runtime_filter_supported_types() {
             return Ok(());
         }
         if let Expr::ColumnRef { .. } = probe_key {
@@ -1013,6 +1011,11 @@ impl HashJoinBuildState {
                 Domain::String(domain) => {
                     let min = Scalar::String(domain.min);
                     let max = Scalar::String(domain.max.unwrap());
+                    min_max_filter(min, max, probe_key)?
+                }
+                Domain::Date(date_domain) => {
+                    let min = Scalar::Date(date_domain.min);
+                    let max = Scalar::Date(date_domain.max);
                     min_max_filter(min, max, probe_key)?
                 }
                 _ => unreachable!(),

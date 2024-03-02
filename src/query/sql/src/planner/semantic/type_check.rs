@@ -39,7 +39,7 @@ use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -3849,7 +3849,7 @@ pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataT
     let sql_tokens = databend_common_ast::parser::tokenize_sql(name)?;
     let ast = databend_common_ast::parser::run_parser(
         &sql_tokens,
-        databend_common_ast::Dialect::default(),
+        databend_common_ast::parser::Dialect::default(),
         false,
         databend_common_ast::parser::expr::type_name,
     )?;

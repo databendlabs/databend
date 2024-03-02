@@ -67,7 +67,7 @@ impl AsyncSystemTable for StreamsTable {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
         let ctls: Vec<(String, Arc<dyn Catalog>)> = catalog_mgr
-            .list_catalogs(&tenant, ctx.txn_mgr())
+            .list_catalogs(tenant.as_str(), ctx.txn_mgr())
             .await?
             .iter()
             .map(|e| (e.name(), e.clone()))
@@ -171,7 +171,7 @@ impl AsyncSystemTable for StreamsTable {
                         updated_on.push(stream_info.meta.updated_on.timestamp_micros());
                         owner.push(
                             user_api
-                                .get_ownership(&tenant, &OwnershipObject::Table {
+                                .get_ownership(tenant.as_str(), &OwnershipObject::Table {
                                     catalog_name: ctl_name.to_string(),
                                     db_id,
                                     table_id: t_id,

@@ -53,7 +53,9 @@ impl AsyncSystemTable for RolesTable {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let roles = UserApiProvider::instance().get_roles(&tenant).await?;
+        let roles = UserApiProvider::instance()
+            .get_roles(tenant.as_str())
+            .await?;
 
         let names: Vec<&str> = roles.iter().map(|x| x.name.as_str()).collect();
         let inherited_roles: Vec<u64> = roles

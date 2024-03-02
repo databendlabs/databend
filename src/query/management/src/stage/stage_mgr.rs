@@ -88,7 +88,7 @@ impl StageApi for StageMgr {
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None))
             .await?;
 
-        if let CreateOption::CreateIfNotExists(false) = create_option {
+        if let CreateOption::None = create_option {
             if res.prev.is_some() {
                 return Err(ErrorCode::StageAlreadyExists(format!(
                     "Stage '{}' already exists.",

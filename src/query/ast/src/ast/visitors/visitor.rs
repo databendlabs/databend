@@ -29,8 +29,8 @@ use super::walk::walk_statement;
 use super::walk::walk_table_reference;
 use super::walk_stream_point;
 use super::walk_time_travel_point;
+use crate::ast::visitors::walk_window_definition;
 use crate::ast::*;
-use crate::visitors::walk_window_definition;
 
 pub trait Visitor<'ast>: Sized {
     fn visit_expr(&mut self, expr: &'ast Expr) {
@@ -380,7 +380,13 @@ pub trait Visitor<'ast>: Sized {
         walk_query(self, query);
     }
 
-    fn visit_explain(&mut self, _kind: &'ast ExplainKind, _query: &'ast Statement) {}
+    fn visit_explain(
+        &mut self,
+        _kind: &'ast ExplainKind,
+        _options: &'ast [ExplainOption],
+        _query: &'ast Statement,
+    ) {
+    }
 
     fn visit_copy_into_table(&mut self, copy: &'ast CopyIntoTableStmt) {
         if let CopyIntoTableSource::Query(query) = &copy.src {

@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -135,7 +136,8 @@ impl ExecutorWorkerContext {
         &mut self,
         proc: ProcessorWrapper,
     ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
-        Profile::track_profile(proc.graph.get_node_profile(proc.processor.id()));
+        let payload = proc.graph.get_node_tracking_payload(proc.processor.id());
+        let _guard = ThreadTracker::tracking(payload.clone());
 
         let instant = Instant::now();
 
@@ -159,8 +161,10 @@ impl ExecutorWorkerContext {
             let query_id = self.query_id.clone();
             let wakeup_worker_id = self.worker_id;
             let process_future = proc.processor.async_process();
-            let node_profile = executor.graph.get_node_profile(proc.processor.id()).clone();
             let graph = proc.graph;
+            let node_index = proc.processor.id();
+            let tracking_payload = graph.get_node_tracking_payload(node_index);
+            let _guard = ThreadTracker::tracking(tracking_payload.clone());
             executor.async_runtime.spawn(
                 query_id.as_ref().clone(),
                 ProcessorAsyncTask::create(
@@ -169,7 +173,6 @@ impl ExecutorWorkerContext {
                     proc.processor.clone(),
                     Arc::new(ExecutorTasksQueue::QueriesExecutorTasksQueue(global_queue)),
                     workers_condvar,
-                    node_profile,
                     graph,
                     process_future,
                 )

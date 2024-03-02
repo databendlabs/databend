@@ -105,7 +105,9 @@ where TablesTable<T>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let catalogs = catalog_mgr.list_catalogs(&tenant, ctx.txn_mgr()).await?;
+        let catalogs = catalog_mgr
+            .list_catalogs(tenant.as_str(), ctx.txn_mgr())
+            .await?;
         let visibility_checker = ctx.get_visibility_checker().await?;
 
         Ok(self
@@ -241,7 +243,10 @@ where TablesTable<T>: HistoryAware
                 })
                 .collect::<Vec<_>>();
 
-            let ownership = user_api.get_ownerships(&tenant).await.unwrap_or_default();
+            let ownership = user_api
+                .get_ownerships(tenant.as_str())
+                .await
+                .unwrap_or_default();
             for db in final_dbs {
                 let name = db.name().to_string().into_boxed_str();
                 let db_id = db.get_db_info().ident.db_id;

@@ -70,6 +70,7 @@ use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
@@ -134,7 +135,7 @@ impl QueryContext {
     pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
         debug!("Create QueryContext");
 
-        let tenant = GlobalConfig::instance().query.tenant_id.clone();
+        let tenant = GlobalConfig::instance().query.tenant_id.to_string();
         let query_settings = Settings::create(tenant);
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
@@ -511,7 +512,11 @@ impl TableContext for QueryContext {
     async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_catalog(&self.get_tenant(), catalog_name.as_ref(), self.txn_mgr())
+            .get_catalog(
+                self.get_tenant().as_str(),
+                catalog_name.as_ref(),
+                self.txn_mgr(),
+            )
             .await
     }
 
@@ -586,7 +591,7 @@ impl TableContext for QueryContext {
         Ok(format)
     }
 
-    fn get_tenant(&self) -> String {
+    fn get_tenant(&self) -> NonEmptyString {
         self.shared.get_tenant()
     }
 
@@ -728,7 +733,7 @@ impl TableContext for QueryContext {
                 let user_mgr = UserApiProvider::instance();
                 let tenant = self.get_tenant();
                 Ok(user_mgr
-                    .get_file_format(&tenant, name)
+                    .get_file_format(tenant.as_str(), name)
                     .await?
                     .file_format_params)
             }
@@ -783,7 +788,7 @@ impl TableContext for QueryContext {
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
-            .get_table(&tenant, database_name, table_name)
+            .get_table(tenant.as_str(), database_name, table_name)
             .await?;
         let table_id = table.get_id();
 
@@ -798,7 +803,7 @@ impl TableContext for QueryContext {
             let req = GetTableCopiedFileReq { table_id, files };
             let start_request = Instant::now();
             let copied_files = catalog
-                .get_table_copied_file_info(&tenant, database_name, req)
+                .get_table_copied_file_info(tenant.as_str(), database_name, req)
                 .await?
                 .file_info;
 

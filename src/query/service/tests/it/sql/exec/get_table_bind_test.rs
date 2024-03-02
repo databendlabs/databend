@@ -108,6 +108,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
@@ -567,7 +568,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_tenant(&self) -> String {
+    fn get_tenant(&self) -> NonEmptyString {
         self.ctx.get_tenant()
     }
 
@@ -653,7 +654,7 @@ impl TableContext for CtxDelegation {
         let tenant = self.ctx.get_tenant();
         let db = database.to_string();
         let tbl = table.to_string();
-        let table_meta_key = (tenant, db, tbl);
+        let table_meta_key = (tenant.to_string(), db, tbl);
         let already_in_cache = { self.cache.lock().contains_key(&table_meta_key) };
         if already_in_cache {
             self.table_from_cache

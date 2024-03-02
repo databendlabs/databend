@@ -64,8 +64,6 @@ use databend_common_meta_types::RaftMetrics;
 use databend_common_meta_types::TypeConfig;
 use futures::channel::oneshot;
 use itertools::Itertools;
-use log::as_debug;
-use log::as_display;
 use log::debug;
 use log::error;
 use log::info;
@@ -543,7 +541,7 @@ impl MetaNode {
     /// according to config.
     #[minitrace::trace]
     pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
-        info!(config = as_debug!(config); "start()");
+        info!(config :? =(config); "start()");
         let mn = Self::do_start(config).await?;
         info!("Done starting MetaNode: {:?}", config);
         Ok(mn)
@@ -987,8 +985,8 @@ impl MetaNode {
         for<'a> MetaLeader<'a>: Handler<Req>,
         for<'a> MetaForwarder<'a>: Forwarder<Req>,
     {
-        debug!(target = as_display!(&req.forward_to_leader),
-               req = as_debug!(&req);
+        debug!(target :% =(&req.forward_to_leader),
+               req :? =(&req);
                "handle_forwardable_request");
 
         let mut n_retry = 20;

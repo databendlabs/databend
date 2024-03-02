@@ -17,6 +17,7 @@
 use databend_common_base::mem_allocator::GlobalAllocator;
 
 mod fixed_heap;
+mod memory;
 mod pool;
 mod pool_retry;
 mod progress;

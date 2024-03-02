@@ -16,7 +16,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
-use databend_common_ast::display_parser_error;
+use databend_common_ast::parser::display_parser_error;
 use databend_common_ast::parser::expr::*;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::query::*;
@@ -24,11 +24,11 @@ use databend_common_ast::parser::quote::quote_ident;
 use databend_common_ast::parser::quote::unquote_ident;
 use databend_common_ast::parser::token::*;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::parser::Backtrace;
+use databend_common_ast::parser::Dialect;
+use databend_common_ast::parser::IResult;
+use databend_common_ast::parser::Input;
 use databend_common_ast::rule;
-use databend_common_ast::Backtrace;
-use databend_common_ast::Dialect;
-use databend_common_ast::IResult;
-use databend_common_ast::Input;
 use goldenfile::Mint;
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
@@ -97,6 +97,7 @@ fn test_statement() {
         r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
         r#"explain pipeline select a from b;"#,
         r#"explain pipeline select a from t1 ignore_result;"#,
+        r#"explain(verbose, logical, optimized) select * from t where a = 1"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,

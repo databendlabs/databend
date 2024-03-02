@@ -7,39 +7,31 @@ use test_txn_dedup_label;
 statement ok
 CREATE TABLE t1(a Int, b bool);
 
-onlyif mysql
 statement ok
 begin;
 
-onlyif mysql
 statement ok
 INSERT /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 (a, b) VALUES(1, false);
 
-onlyif mysql
 statement ok
 UPDATE /*+ SET_VAR(deduplicate_label='databend') */ t1 SET a = 20 WHERE b = false;
 
-onlyif mysql
 query II
 SELECT * FROM t1;
 ----
 1 0
 
-onlyif mysql
 statement ok
 commit;
 
-onlyif mysql
 query II
 SELECT * FROM t1;
 ----
 1 0
 
-onlyif mysql
 statement ok
 REPLACE /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 on(a,b) VALUES(40, false);
 
-onlyif mysql
 query II
 SELECT * FROM t1;
 ----

@@ -132,7 +132,7 @@ impl Interpreter for DropTableColumnInterpreter {
         let res = catalog.update_table_meta(table_info, req).await?;
         if let Some(share_table_info) = res.share_table_info {
             save_share_table_info(
-                &self.ctx.get_tenant(),
+                self.ctx.get_tenant().as_str(),
                 self.ctx.get_data_operator()?.operator(),
                 share_table_info,
             )

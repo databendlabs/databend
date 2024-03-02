@@ -24,50 +24,12 @@ use databend_common_io::escape_string_with_quote;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 
+use super::ColumnID;
 use super::OrderByExpr;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
-use crate::ast::ColumnPosition;
 use crate::ast::Identifier;
 use crate::ast::Query;
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum IntervalKind {
-    Year,
-    Quarter,
-    Month,
-    Day,
-    Hour,
-    Minute,
-    Second,
-    Doy,
-    Week,
-    Dow,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ColumnID {
-    Name(Identifier),
-    Position(ColumnPosition),
-}
-
-impl ColumnID {
-    pub fn name(&self) -> &str {
-        match self {
-            ColumnID::Name(id) => &id.name,
-            ColumnID::Position(id) => &id.name,
-        }
-    }
-}
-
-impl Display for ColumnID {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ColumnID::Name(id) => write!(f, "{}", id),
-            ColumnID::Position(id) => write!(f, "{}", id),
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
@@ -256,6 +218,20 @@ pub enum Expr {
     },
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum IntervalKind {
+    Year,
+    Quarter,
+    Month,
+    Day,
+    Hour,
+    Minute,
+    Second,
+    Doy,
+    Week,
+    Dow,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubqueryModifier {
     Any,
@@ -277,8 +253,6 @@ pub enum Literal {
     Boolean(bool),
     Null,
 }
-
-impl Literal {}
 
 /// The display style for a map access expression
 #[derive(Debug, Clone, PartialEq)]

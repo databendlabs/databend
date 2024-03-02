@@ -60,21 +60,25 @@ impl Interpreter for GrantRoleInterpreter {
         // TODO: check privileges
 
         // Check if the grant role exists.
-        user_mgr.get_role(&tenant, plan.role.clone()).await?;
+        user_mgr
+            .get_role(tenant.as_str(), plan.role.clone())
+            .await?;
         match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr
-                    .grant_role_to_user(&tenant, user, plan.role)
+                    .grant_role_to_user(tenant.clone(), user, plan.role)
                     .await?;
             }
             PrincipalIdentity::Role(role) => {
                 user_mgr
-                    .grant_role_to_role(&tenant, &role, plan.role)
+                    .grant_role_to_role(tenant.as_str(), &role, plan.role)
                     .await?;
             }
         }
 
-        RoleCacheManager::instance().force_reload(&tenant).await?;
+        RoleCacheManager::instance()
+            .force_reload(tenant.as_str())
+            .await?;
         Ok(PipelineBuildResult::create())
     }
 }

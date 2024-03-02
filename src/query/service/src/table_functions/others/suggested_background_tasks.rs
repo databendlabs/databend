@@ -189,6 +189,7 @@ impl SuggestedBackgroundTasksSource {
         let record = record
             .to_record_batch_with_dataschema(data_schema.as_ref())
             .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
+
         Ok(Some(record))
     }
 
@@ -197,7 +198,7 @@ impl SuggestedBackgroundTasksSource {
         let ctx = ctx.clone();
         info!(
             background = true,
-            tenant = ctx.get_tenant();
+            tenant = ctx.get_tenant().to_string();
             "list all lsuggestions"
         );
         Self::get_suggested_compaction_tasks(ctx).await

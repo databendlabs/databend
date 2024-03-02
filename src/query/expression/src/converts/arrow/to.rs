@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use arrow_array::cast::AsArray;
 use arrow_array::Array;
+use arrow_array::LargeListArray;
+use arrow_array::MapArray;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
 use arrow_schema::DataType as ArrowDataType;
@@ -104,25 +106,24 @@ impl DataBlock {
     }
 
     pub fn to_record_batch(self, table_schema: &TableSchema) -> Result<RecordBatch> {
+        let arrow_schema = table_schema_to_arrow_schema_ignore_inside_nullable(table_schema);
         let mut arrays = Vec::with_capacity(self.columns().len());
-        for (entry, f) in self
+        for (entry, arrow_field) in self
             .convert_to_full()
             .columns()
             .iter()
-            .zip(table_schema.fields())
+            .zip(arrow_schema.fields())
         {
             let column = entry.value.to_owned().into_column().unwrap();
             let array = column.into_arrow_rs();
-            let arrow_field: ArrowField = f.into();
 
-            // Ajust struct array names
-            arrays.push(Self::adjust_struct_array(array, arrow_field));
+            // Adjust struct array names
+            arrays.push(Self::adjust_nested_array(array, arrow_field.as_ref()));
         }
-        let schema = Arc::new(ArrowSchema::from(table_schema));
-        Ok(RecordBatch::try_new(schema, arrays)?)
+        Ok(RecordBatch::try_new(Arc::new(arrow_schema), arrays)?)
     }
 
-    fn adjust_struct_array(array: Arc<dyn Array>, arrow_field: ArrowField) -> Arc<dyn Array> {
+    fn adjust_nested_array(array: Arc<dyn Array>, arrow_field: &ArrowField) -> Arc<dyn Array> {
         if let ArrowDataType::Struct(fs) = arrow_field.data_type() {
             let array = array.as_ref().as_struct();
             let inner_arrays = array
@@ -130,11 +131,35 @@ impl DataBlock {
                 .iter()
                 .zip(fs.iter())
                 .map(|(array, arrow_field)| {
-                    Self::adjust_struct_array(array.clone(), arrow_field.as_ref().to_owned())
+                    Self::adjust_nested_array(array.clone(), arrow_field.as_ref())
                 })
                 .collect();
 
             let array = StructArray::new(fs.clone(), inner_arrays, array.nulls().cloned());
+            Arc::new(array) as _
+        } else if let ArrowDataType::LargeList(f) = arrow_field.data_type() {
+            let array = array.as_ref().as_list::<i64>();
+            let values = Self::adjust_nested_array(array.values().clone(), f.as_ref());
+            let array = LargeListArray::new(
+                f.clone(),
+                array.offsets().clone(),
+                values,
+                array.nulls().cloned(),
+            );
+            Arc::new(array) as _
+        } else if let ArrowDataType::Map(f, ordered) = arrow_field.data_type() {
+            let array = array.as_ref().as_map();
+
+            let entry = Arc::new(array.entries().clone()) as Arc<dyn Array>;
+            let entry = Self::adjust_nested_array(entry, f.as_ref());
+
+            let array = MapArray::new(
+                f.clone(),
+                array.offsets().clone(),
+                entry.as_struct().clone(),
+                array.nulls().cloned(),
+                *ordered,
+            );
             Arc::new(array) as _
         } else {
             array

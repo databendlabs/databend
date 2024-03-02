@@ -74,19 +74,17 @@ pub struct CreateDatabaseStmt {
 
 impl Display for CreateDatabaseStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self.create_option {
-            CreateOption::CreateIfNotExists(if_not_exists) => {
-                write!(f, "CREATE DATABASE ")?;
-                if if_not_exists {
-                    write!(f, "IF NOT EXISTS ")?;
-                }
-            }
-            CreateOption::CreateOrReplace => {
-                write!(f, "CREATE OR REPLACE DATABASE ")?;
-            }
+        write!(f, "CREATE")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, " OR REPLACE")?;
+        }
+        write!(f, " DATABASE")?;
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, " IF NOT EXISTS ")?;
         }
 
         write_dot_separated_list(f, self.catalog.iter().chain(Some(&self.database)))?;
+
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;
         }

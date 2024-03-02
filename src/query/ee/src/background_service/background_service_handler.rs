@@ -166,9 +166,9 @@ impl RealBackgroundService {
         params: BackgroundJobParams,
         creator: UserIdentity,
     ) -> Result<BackgroundJobIdent> {
-        let name = RealBackgroundService::get_compactor_job_name(conf.query.tenant_id.clone());
+        let name = RealBackgroundService::get_compactor_job_name(conf.query.tenant_id.to_string());
         let id = BackgroundJobIdent {
-            tenant: conf.query.tenant_id.clone(),
+            tenant: conf.query.tenant_id.to_string(),
             name,
         };
         let info = BackgroundJobInfo::new_compactor_job(params, creator);

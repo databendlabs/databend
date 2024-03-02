@@ -59,7 +59,9 @@ impl AsyncSystemTable for BackgroundJobTable {
         let tenant = ctx.get_tenant();
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let jobs = meta_api
-            .list_background_jobs(ListBackgroundJobsReq { tenant })
+            .list_background_jobs(ListBackgroundJobsReq {
+                tenant: tenant.to_string(),
+            })
             .await?;
         let mut names = Vec::with_capacity(jobs.len());
         let mut job_types = Vec::with_capacity(jobs.len());

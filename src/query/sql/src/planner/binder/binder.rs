@@ -18,13 +18,12 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 use databend_common_ast::ast::format_statement;
-use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -217,12 +216,8 @@ impl<'a> Binder {
                 }
             }
 
-            Statement::Explain { query, kind } => {
-                match kind {
-                    ExplainKind::Ast(formatted_stmt) => Plan::ExplainAst { formatted_string: formatted_stmt.clone() },
-                    ExplainKind::Syntax(formatted_sql) => Plan::ExplainSyntax { formatted_sql: formatted_sql.clone() },
-                    _ => Plan::Explain { kind: kind.clone(), plan: Box::new(self.bind_statement(bind_context, query).await?) },
-                }
+            Statement::Explain { query, options, kind } => {
+                self.bind_explain(bind_context, kind, options, query).await?
             }
 
             Statement::ExplainAnalyze { query } => {
@@ -612,9 +607,10 @@ impl<'a> Binder {
             Statement::DropPipe(_) => {
                 todo!()
             }
-            Statement::Begin=> Plan::Begin,
-            Statement::Commit=>Plan::Commit,
-            Statement::Abort=>Plan::Abort,
+
+            Statement::Begin => Plan::Begin,
+            Statement::Commit => Plan::Commit,
+            Statement::Abort => Plan::Abort,
         };
         Ok(plan)
     }

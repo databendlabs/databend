@@ -214,20 +214,22 @@ pub struct CreateDatabaseReq {
 impl Display for CreateDatabaseReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
-            CreateOption::CreateIfNotExists(if_not_exists) => {
-                write!(
-                    f,
-                    "create_db(if_not_exists={}):{}/{}={:?}",
-                    if_not_exists, self.name_ident.tenant, self.name_ident.db_name, self.meta
-                )
-            }
-            CreateOption::CreateOrReplace => {
-                write!(
-                    f,
-                    "create_or_replace_db:{}/{}={:?}",
-                    self.name_ident.tenant, self.name_ident.db_name, self.meta
-                )
-            }
+            CreateOption::None => write!(
+                f,
+                "create_db:{}/{}={:?}",
+                self.name_ident.tenant, self.name_ident.db_name, self.meta
+            ),
+            CreateOption::CreateIfNotExists => write!(
+                f,
+                "create_db_if_not_exists:{}/{}={:?}",
+                self.name_ident.tenant, self.name_ident.db_name, self.meta
+            ),
+
+            CreateOption::CreateOrReplace => write!(
+                f,
+                "create_or_replace_db:{}/{}={:?}",
+                self.name_ident.tenant, self.name_ident.db_name, self.meta
+            ),
         }
     }
 }
@@ -320,10 +322,10 @@ impl Deref for GetDatabaseReq {
 }
 
 impl GetDatabaseReq {
-    pub fn new(tenant: impl Into<String>, db_name: impl Into<String>) -> GetDatabaseReq {
+    pub fn new(tenant: impl ToString, db_name: impl Into<String>) -> GetDatabaseReq {
         GetDatabaseReq {
             inner: DatabaseNameIdent {
-                tenant: tenant.into(),
+                tenant: tenant.to_string(),
                 db_name: db_name.into(),
             },
         }

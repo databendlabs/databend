@@ -70,7 +70,7 @@ impl Interpreter for ShowGrantsInterpreter {
                 }
                 PrincipalIdentity::Role(role) => {
                     let role = UserApiProvider::instance()
-                        .get_role(&tenant, role.clone())
+                        .get_role(tenant.as_str(), role.clone())
                         .await?;
                     (format!("ROLE `{}`", role.identity()), role.grants)
                 }
@@ -78,7 +78,7 @@ impl Interpreter for ShowGrantsInterpreter {
         };
         // TODO: display roles list instead of the inherited roles
         let grant_entries = RoleCacheManager::instance()
-            .find_related_roles(&tenant, &grant_set.roles())
+            .find_related_roles(tenant.as_str(), &grant_set.roles())
             .await?
             .into_iter()
             .map(|role| role.grants)

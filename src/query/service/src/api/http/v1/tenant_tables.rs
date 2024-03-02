@@ -107,14 +107,8 @@ pub async fn list_tenant_tables_handler(
 #[async_backtrace::framed]
 pub async fn list_tables_handler() -> poem::Result<impl IntoResponse> {
     let tenant = &GlobalConfig::instance().query.tenant_id;
-    if tenant.is_empty() {
-        return Ok(Json(TenantTablesResponse {
-            tables: vec![],
-            warnings: vec![],
-        }));
-    }
 
-    let resp = load_tenant_tables(tenant)
+    let resp = load_tenant_tables(tenant.as_str())
         .await
         .map_err(poem::error::InternalServerError)?;
     Ok(Json(resp))

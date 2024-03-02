@@ -234,7 +234,7 @@ pub(crate) async fn dump_tables(
     } else {
         for db in databases {
             let db_id = catalog
-                .get_database(&tenant, &db)
+                .get_database(tenant.as_str(), &db)
                 .await?
                 .get_db_info()
                 .ident

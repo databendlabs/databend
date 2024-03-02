@@ -18,11 +18,11 @@ use crate::ast::DataMaskArg;
 use crate::ast::DataMaskPolicy;
 use crate::ast::Expr;
 use crate::ast::TypeName;
-use crate::input::Input;
+use crate::parser::common::*;
 use crate::parser::expr::*;
+use crate::parser::input::Input;
 use crate::parser::token::*;
 use crate::rule;
-use crate::util::*;
 
 fn data_mask_arg(i: Input) -> IResult<DataMaskArg> {
     map(rule! { #ident ~ #type_name }, |(arg_name, arg_type)| {

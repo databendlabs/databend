@@ -1,8 +1,8 @@
 --- named internal stage
-2	45	789
+2	45	770
 1	2	3
 4	5	6
-2	45	789
+2	45	770
 --- external stage
 1	2	3
 4	5	6
@@ -10,6 +10,6 @@
 1	2	3
 4	5	6
 --- variant named internal stage
-2	70	816
+2	70	726
 1	[1,2,3]
 2	{"k":"v"}

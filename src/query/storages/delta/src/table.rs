@@ -45,6 +45,10 @@ use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use deltalake::kernel::Add;
 use deltalake::DeltaTableBuilder;
+<<<<<<< HEAD
+=======
+use opendal::Metakey;
+>>>>>>> main
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::OnceCell;
@@ -155,7 +159,7 @@ impl DeltaTable {
     #[async_backtrace::framed]
     pub async fn load(sp: &StorageParams) -> Result<deltalake::table::DeltaTable> {
         let op = init_operator(sp)?;
-        let opendal_store = Arc::new(OpendalStore::new(op));
+        let opendal_store = Arc::new(OpendalStore::new(op).with_metakey(Metakey::Version));
 
         let mut table = DeltaTableBuilder::from_uri(Url::from_directory_path("/").unwrap())
             .with_storage_backend(opendal_store, Url::from_directory_path("/").unwrap())
@@ -286,8 +290,16 @@ impl DeltaTable {
                 ErrorCode::ReadTableDataError(format!("Cannot read file_actions: {e:?}"))
             })?;
         let total_files = adds.len();
+
+        #[derive(serde::Deserialize)]
+        struct Stats {
+            #[serde(rename = "numRecords")]
+            pub num_records: i64,
+        }
+
         let parts = adds.iter()
             .map(|add: &Add| {
+<<<<<<< HEAD
                 let stats = add
                     .get_stats_parsed()
                     .map_err(|e| ErrorCode::ReadTableDataError(format!("Cannot get stats: {e:?}")))?
@@ -298,6 +310,21 @@ impl DeltaTable {
                         ))
                     })?;
                 read_rows += stats.num_records as usize;
+=======
+                let num_records = add
+                    .get_stats_parsed()
+                    .ok()
+                    .and_then(|s| match (s, add.stats.as_ref()) {
+                        (Some(s), _) => Some(s.num_records),
+                        (None, Some(s)) => {
+                            let stats = serde_json::from_str::<Stats>(s.as_str()).unwrap();
+                            Some(stats.num_records)
+                        },
+                        _ =>  None,
+                    }
+                    ).unwrap_or(1);
+                read_rows += num_records as usize;
+>>>>>>> main
                 read_bytes += add.size as usize;
                 let partition_values = get_partition_values(add, &partition_fields[..])?;
                 Ok(Arc::new(

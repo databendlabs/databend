@@ -47,6 +47,7 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::NonEmptyStr;
+use databend_common_meta_types::NonEmptyString;
 
 use crate::idm_config::IDMConfig;
 use crate::BUILTIN_ROLE_PUBLIC;
@@ -118,8 +119,9 @@ impl UserApiProvider {
         GlobalInstance::get()
     }
 
-    pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<impl UserApi>> {
-        Ok(Arc::new(UserMgr::create(self.client.clone(), tenant)?))
+    pub fn get_user_api_client(&self, tenant: &NonEmptyString) -> Arc<impl UserApi> {
+        let user_mgr = UserMgr::create(self.client.clone(), tenant.as_non_empty_str());
+        Arc::new(user_mgr)
     }
 
     pub fn get_role_api_client(&self, tenant: &str) -> Result<Arc<impl RoleApi>> {

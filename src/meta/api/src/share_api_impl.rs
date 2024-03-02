@@ -41,7 +41,6 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
-use log::as_debug;
 use log::debug;
 use log::error;
 use minitrace::func_name;
@@ -80,7 +79,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn show_shares(&self, req: ShowSharesReq) -> Result<ShowSharesReply, KVAppError> {
-        debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
         // Get all outbound share accounts.
         let outbound_accounts = get_outbound_share_infos_by_tenant(self, &req.tenant).await?;
@@ -91,7 +90,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, KVAppError> {
-        debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
 
@@ -101,7 +100,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
             // Get share by name to ensure absence
             let (share_id_seq, share_id) = get_u64_value(self, name_key).await?;
-            debug!(share_id_seq = share_id_seq, share_id = share_id, name_key = as_debug!(name_key); "get_share");
+            debug!(share_id_seq = share_id_seq, share_id = share_id, name_key :? =(name_key); "get_share");
 
             if share_id_seq > 0 {
                 return if req.if_not_exists {
@@ -128,7 +127,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             let id_key = ShareId { share_id };
             let id_to_name_key = ShareIdToName { share_id };
 
-            debug!(share_id = share_id, name_key = as_debug!(name_key); "new share id");
+            debug!(share_id = share_id, name_key :? =(name_key); "new share id");
 
             // Create share by transaction.
             {
@@ -149,8 +148,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(name_key) ,
-                    id = as_debug!(&id_key),
+                    name :? =(name_key) ,
+                    id :? =(&id_key),
                     succ = succ;
                     "create_share"
                 );
@@ -177,7 +176,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     //     remove share id from ObjectSharedByShareIds
     // drop all the databases created from the share(from ShareMeta.share_from_db_ids),
     async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, KVAppError> {
-        debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
 
@@ -260,7 +259,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             let share_id_key = ShareId { share_id };
             let id_name_key = ShareIdToName { share_id };
 
-            debug!(share_id = share_id, name_key = as_debug!(name_key); "drop_share");
+            debug!(share_id = share_id, name_key :? =(name_key); "drop_share");
 
             {
                 condition.push(txn_cond_seq(name_key, Eq, share_id_seq));
@@ -279,8 +278,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(name_key) ,
-                    id = as_debug!(&share_id_key),
+                    name :? =(name_key) ,
+                    id :? =(&share_id_key),
                     succ = succ;
                     "drop_share"
                 );
@@ -301,7 +300,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: AddShareAccountsReq,
     ) -> Result<AddShareAccountsReply, KVAppError> {
-        debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
 
@@ -385,8 +384,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(name_key) ,
-                    id = as_debug!(&id_key),
+                    name :? =(name_key) ,
+                    id :? =(&id_key),
                     succ = succ;
                     "add_share_tenants"
                 );
@@ -407,7 +406,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: RemoveShareAccountsReq,
     ) -> Result<RemoveShareAccountsReply, KVAppError> {
-        debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.share_name;
 
@@ -504,7 +503,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    id = as_debug!(&id_key),
+                    id :? =(&id_key),
                     succ = succ;
                     "remove_share_tenants"
                 );
@@ -525,7 +524,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: GrantShareObjectReq,
     ) -> Result<GrantShareObjectReply, KVAppError> {
-        debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
 
@@ -621,8 +620,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(share_name_key),
-                    id = as_debug!(&id_key),
+                    name :? =(share_name_key),
+                    id :? =(&id_key),
                     succ = succ;
                     "grant_share_object"
                 );
@@ -645,7 +644,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: RevokeShareObjectReq,
     ) -> Result<RevokeShareObjectReply, KVAppError> {
-        debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
 
@@ -757,8 +756,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(share_name_key),
-                    id = as_debug!(&id_key),
+                    name :? =(share_name_key),
+                    id :? =(&id_key),
                     succ = succ;
                     "revoke_share_object"
                 );
@@ -781,7 +780,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: GetShareGrantObjectReq,
     ) -> Result<GetShareGrantObjectReply, KVAppError> {
-        debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
         let share_name_key = &req.share_name;
 
@@ -972,7 +971,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: CreateShareEndpointReq,
     ) -> Result<CreateShareEndpointReply, KVAppError> {
-        debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.endpoint;
 
@@ -985,7 +984,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             debug!(
                 share_endpoint_id_seq = share_endpoint_id_seq,
                 share_endpoint_id = share_endpoint_id,
-                name_key = as_debug!(name_key);
+                name_key :? =(name_key);
                 "create_share_endpoint"
             );
 
@@ -993,28 +992,30 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             let mut if_then = vec![];
 
             if share_endpoint_id_seq > 0 {
-                if let CreateOption::CreateIfNotExists(if_not_exists) = req.create_option {
-                    return if if_not_exists {
-                        Ok(CreateShareEndpointReply { share_endpoint_id })
-                    } else {
-                        Err(KVAppError::AppError(AppError::ShareEndpointAlreadyExists(
+                match req.create_option {
+                    CreateOption::None => {
+                        return Err(KVAppError::AppError(AppError::ShareEndpointAlreadyExists(
                             ShareEndpointAlreadyExists::new(
                                 &name_key.endpoint,
                                 format!("create share endpoint: tenant: {}", name_key.tenant),
                             ),
-                        )))
-                    };
-                } else {
-                    construct_drop_share_endpoint_txn_operations(
-                        self,
-                        name_key,
-                        false,
-                        false,
-                        func_name!(),
-                        &mut condition,
-                        &mut if_then,
-                    )
-                    .await?;
+                        )));
+                    }
+                    CreateOption::CreateIfNotExists => {
+                        return Ok(CreateShareEndpointReply { share_endpoint_id });
+                    }
+                    CreateOption::CreateOrReplace => {
+                        construct_drop_share_endpoint_txn_operations(
+                            self,
+                            name_key,
+                            true,
+                            false,
+                            func_name!(),
+                            &mut condition,
+                            &mut if_then,
+                        )
+                        .await?;
+                    }
                 }
             }
 
@@ -1029,7 +1030,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
             debug!(
                 share_endpoint_id = share_endpoint_id,
-                name_key = as_debug!(name_key);
+                name_key :? =(name_key);
                 "new share endpoint id"
             );
 
@@ -1055,8 +1056,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(name_key) ,
-                    id = as_debug!(&id_key),
+                    name :? =(name_key) ,
+                    id :? =(&id_key),
                     succ = succ;
                     "create_share_endpoint"
                 );
@@ -1072,7 +1073,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: UpsertShareEndpointReq,
     ) -> Result<UpsertShareEndpointReply, KVAppError> {
-        debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.endpoint;
 
@@ -1085,7 +1086,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             debug!(
                 share_endpoint_id_seq = share_endpoint_id_seq,
                 share_endpoint_id = share_endpoint_id,
-                name_key = as_debug!(name_key);
+                name_key :? =(name_key);
                 "upsert_share_endpoint"
             );
 
@@ -1113,7 +1114,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
             debug!(
                 share_endpoint_id = share_endpoint_id,
-                name_key = as_debug!(name_key);
+                name_key :? =(name_key);
                 "new share endpoint id"
             );
 
@@ -1164,7 +1165,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(name_key) ,
+                    name :? =(name_key) ,
                     succ = succ;
                     "upsert_share_endpoint"
                 );
@@ -1212,7 +1213,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: DropShareEndpointReq,
     ) -> Result<DropShareEndpointReply, KVAppError> {
-        debug!(req = as_debug!(&req); "ShareApi: {}", func_name!());
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
         let name_key = &req.endpoint;
 
@@ -1250,8 +1251,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
             let share_id_key = ShareEndpointId { share_endpoint_id };
             debug!(
-                name = as_debug!(name_key) ,
-                id = as_debug!(&share_id_key),
+                name :? =(name_key) ,
+                id :? =(&share_id_key),
                 succ = succ;
                 "drop_share_endpoint"
             );
@@ -1314,7 +1315,7 @@ async fn construct_drop_share_endpoint_txn_operations(
 
     debug!(
         share_endpoint_id = share_endpoint_id,
-        name_key = as_debug!(name_key),
+        name_key :? =(name_key),
         ctx = ctx;
         "construct_drop_share_endpoint_txn_operations"
     );

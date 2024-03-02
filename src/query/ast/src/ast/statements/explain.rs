@@ -22,12 +22,23 @@ pub enum ExplainKind {
     Graph,
     Pipeline,
     Fragments,
+
+    // `EXPLAIN RAW` and `EXPLAIN OPTIMIZED` will be deprecated in the future,
+    // use explain options instead
     Raw,
     Optimized,
+
     Plan,
 
-    JOIN,
+    Join,
 
     // Explain analyze plan
     AnalyzePlan,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExplainOption {
+    Verbose(bool),
+    Logical(bool),
+    Optimized(bool),
 }

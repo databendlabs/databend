@@ -29,6 +29,7 @@ use databend_common_settings::Settings;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
+use databend_storages_common_txn::TxnManagerRef;
 use futures::StreamExt;
 use log::error;
 use log::info;
@@ -130,6 +131,7 @@ pub struct ExecutorSessionState {
     pub current_role: Option<String>,
     pub secondary_roles: Option<Vec<String>>,
     pub settings: Arc<Settings>,
+    pub txn_manager: TxnManagerRef,
 }
 
 impl ExecutorSessionState {
@@ -139,6 +141,7 @@ impl ExecutorSessionState {
             current_role: session.get_current_role().map(|r| r.name),
             secondary_roles: session.get_secondary_roles(),
             settings: session.get_settings(),
+            txn_manager: session.txn_mgr(),
         }
     }
 }
@@ -222,6 +225,9 @@ impl Executor {
                     )
                     .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
+                if reason.is_err() {
+                    s.ctx.get_current_session().txn_mgr().lock().set_fail();
+                }
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),
                     reason,
@@ -241,6 +247,9 @@ impl Executor {
                             "Aborted query, because the server is shutting down or the query was killed",
                         ));
                     }
+                }
+                if reason.is_err() {
+                    r.session.txn_mgr().lock().set_fail();
                 }
 
                 guard.state = Stopped(Box::new(ExecuteStopped {

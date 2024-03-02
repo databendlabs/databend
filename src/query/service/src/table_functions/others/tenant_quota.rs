@@ -222,7 +222,7 @@ impl AsyncSource for TenantQuotaSource {
         }
 
         self.done = true;
-        let mut tenant = self.ctx.get_tenant();
+        let mut tenant = self.ctx.get_tenant().to_string();
         let args = &self.args;
         if !args.is_empty() {
             let user_info = self.ctx.get_current_user()?;

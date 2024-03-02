@@ -22,7 +22,7 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::UnaryOperator as ASTUnaryOperator;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 use databend_common_constraint::mir::MirBinaryOperator;
 use databend_common_constraint::mir::MirConstant;
 use databend_common_constraint::mir::MirDataType;
