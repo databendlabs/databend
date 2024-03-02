@@ -76,6 +76,15 @@ impl BuildSpillHandler {
         if let Some(input) = input.take() {
             self.add_pending_spill_data(input);
         }
+        // If there is no pending spill data, return false
+        let rows_num = self
+            .pending_spill_data
+            .iter()
+            .fold(0, |acc, block| acc + block.num_rows());
+        if rows_num == 0 {
+            return Ok(false);
+        }
+
         self.spill_state()
             .check_need_spill(self.pending_spill_data())
     }
