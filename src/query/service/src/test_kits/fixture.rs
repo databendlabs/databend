@@ -459,7 +459,7 @@ impl TestFixture {
         let db_name = gen_db_name(&self.prefix);
         let plan = CreateDatabasePlan {
             catalog: "default".to_owned(),
-            tenant: tenant.to_string(),
+            tenant,
             create_option: CreateOption::None,
             database: db_name,
             meta: DatabaseMeta {

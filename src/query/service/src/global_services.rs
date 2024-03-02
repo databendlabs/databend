@@ -103,7 +103,7 @@ impl GlobalServices {
         UserApiProvider::init(
             config.meta.to_meta_grpc_client_conf(),
             config.query.idm.clone(),
-            config.query.tenant_id.as_str(),
+            &config.query.tenant_id,
             config.query.tenant_quota.clone(),
         )
         .await?;

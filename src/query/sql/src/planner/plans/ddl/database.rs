@@ -19,12 +19,13 @@ use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_types::NonEmptyString;
 
 /// Create.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabasePlan {
     pub create_option: CreateOption,
-    pub tenant: String,
+    pub tenant: NonEmptyString,
     pub catalog: String,
     pub database: String,
     pub meta: DatabaseMeta,
@@ -35,7 +36,7 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
         CreateDatabaseReq {
             create_option: p.create_option,
             name_ident: DatabaseNameIdent {
-                tenant: p.tenant,
+                tenant: p.tenant.to_string(),
                 db_name: p.database,
             },
             meta: p.meta,
@@ -48,7 +49,7 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
         CreateDatabaseReq {
             create_option: p.create_option,
             name_ident: DatabaseNameIdent {
-                tenant: p.tenant.clone(),
+                tenant: p.tenant.to_string(),
                 db_name: p.database.clone(),
             },
             meta: p.meta.clone(),

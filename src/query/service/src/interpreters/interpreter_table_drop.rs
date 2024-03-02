@@ -116,7 +116,7 @@ impl Interpreter for DropTableInterpreter {
         // we should do `drop ownership` after actually drop table, otherwise when we drop the ownership,
         // but the table still exists, in the interval maybe some unexpected things will happen.
         // drop the ownership
-        let role_api = UserApiProvider::instance().get_role_api_client(&self.plan.tenant)?;
+        let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
         let owner_object = OwnershipObject::Table {
             catalog_name: self.plan.catalog.clone(),
             db_id: db.get_db_info().ident.db_id,
@@ -124,7 +124,7 @@ impl Interpreter for DropTableInterpreter {
         };
 
         role_api.revoke_ownership(&owner_object).await?;
-        RoleCacheManager::instance().invalidate_cache(tenant.as_str());
+        RoleCacheManager::instance().invalidate_cache(&tenant);
 
         // if `plan.all`, truncate, then purge the historical data
         if self.plan.all {

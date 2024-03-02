@@ -58,12 +58,12 @@ impl Interpreter for CreateUserUDFScript {
         let tenant = self.ctx.get_tenant();
         let udf = plan.udf;
         let _ = UserApiProvider::instance()
-            .add_udf(tenant.as_str(), udf, &plan.create_option)
+            .add_udf(&tenant, udf, &plan.create_option)
             .await?;
 
         // Grant ownership as the current role
         if let Some(current_role) = self.ctx.get_current_role() {
-            let role_api = UserApiProvider::instance().get_role_api_client(tenant.as_str())?;
+            let role_api = UserApiProvider::instance().role_api(&tenant);
             role_api
                 .grant_ownership(
                     &OwnershipObject::UDF {
@@ -72,7 +72,7 @@ impl Interpreter for CreateUserUDFScript {
                     &current_role.name,
                 )
                 .await?;
-            RoleCacheManager::instance().invalidate_cache(tenant.as_str());
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         Ok(PipelineBuildResult::create())

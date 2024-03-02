@@ -35,7 +35,7 @@ async fn test_password_policy() -> Result<()> {
     let tenant_name = "test";
     let tenant = NonEmptyString::new(tenant_name.to_string()).unwrap();
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, tenant_name).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let username = "test-user1";
     let hostname = "%";
     let pwd1 = "123456abcDEF!@#1";
