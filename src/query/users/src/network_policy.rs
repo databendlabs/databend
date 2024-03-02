@@ -19,6 +19,7 @@ use databend_common_management::NetworkPolicyApi;
 use databend_common_meta_app::principal::NetworkPolicy;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyString;
 
 use crate::UserApiProvider;
 
@@ -86,7 +87,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn drop_network_policy(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         name: &str,
         if_exists: bool,
     ) -> Result<()> {
@@ -102,7 +103,7 @@ impl UserApiProvider {
             }
         }
 
-        let client = self.get_network_policy_api_client(tenant)?;
+        let client = self.get_network_policy_api_client(tenant.as_str())?;
         match client.drop_network_policy(name, MatchSeq::GE(1)).await {
             Ok(res) => Ok(res),
             Err(e) => {

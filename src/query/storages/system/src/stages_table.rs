@@ -57,7 +57,9 @@ impl AsyncSystemTable for StagesTable {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let stages = UserApiProvider::instance().get_stages(&tenant).await?;
+        let stages = UserApiProvider::instance()
+            .get_stages(tenant.as_str())
+            .await?;
         let enable_experimental_rbac_check =
             ctx.get_settings().get_enable_experimental_rbac_check()?;
         let stages = if enable_experimental_rbac_check {
@@ -89,7 +91,9 @@ impl AsyncSystemTable for StagesTable {
             name.push(stage_name.clone());
             owners.push(
                 user_api
-                    .get_ownership(&tenant, &OwnershipObject::Stage { name: stage_name })
+                    .get_ownership(tenant.as_str(), &OwnershipObject::Stage {
+                        name: stage_name,
+                    })
                     .await
                     .ok()
                     .and_then(|ownership| ownership.map(|o| o.role.clone())),

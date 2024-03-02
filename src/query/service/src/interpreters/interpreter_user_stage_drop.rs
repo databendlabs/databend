@@ -69,21 +69,21 @@ impl Interpreter for DropUserStageInterpreter {
             ));
         }
 
-        let stage = user_mgr.get_stage(&tenant, &plan.name).await;
+        let stage = user_mgr.get_stage(tenant.as_str(), &plan.name).await;
         user_mgr
-            .drop_stage(&tenant, &plan.name, plan.if_exists)
+            .drop_stage(tenant.as_str(), &plan.name, plan.if_exists)
             .await?;
 
         if let Ok(stage) = stage {
             // we should do `drop ownership` after actually drop stage,
             // drop the ownership
-            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            let role_api = UserApiProvider::instance().get_role_api_client(tenant.as_str())?;
             let owner_object = OwnershipObject::Stage {
                 name: self.plan.name.clone(),
             };
 
             role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+            RoleCacheManager::instance().invalidate_cache(tenant.as_str());
 
             if !matches!(&stage.stage_type, StageType::External) {
                 let op = StageTable::get_op(&stage)?;

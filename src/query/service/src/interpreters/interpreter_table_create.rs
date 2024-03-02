@@ -186,7 +186,7 @@ impl CreateTableInterpreter {
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
 
-            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            let role_api = UserApiProvider::instance().get_role_api_client(tenant.as_str())?;
             role_api
                 .grant_ownership(
                     &OwnershipObject::Table {
@@ -197,7 +197,7 @@ impl CreateTableInterpreter {
                     &current_role.name,
                 )
                 .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+            RoleCacheManager::instance().invalidate_cache(tenant.as_str());
         }
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
@@ -222,7 +222,7 @@ impl CreateTableInterpreter {
         // update share spec if needed
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
-                &tenant,
+                &tenant.to_string(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),
@@ -278,7 +278,7 @@ impl CreateTableInterpreter {
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
 
-            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            let role_api = UserApiProvider::instance().get_role_api_client(tenant.as_str())?;
             role_api
                 .grant_ownership(
                     &OwnershipObject::Table {
@@ -289,13 +289,13 @@ impl CreateTableInterpreter {
                     &current_role.name,
                 )
                 .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+            RoleCacheManager::instance().invalidate_cache(tenant.as_str());
         }
 
         // update share spec if needed
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
-                &self.ctx.get_tenant(),
+                &self.ctx.get_tenant().to_string(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),

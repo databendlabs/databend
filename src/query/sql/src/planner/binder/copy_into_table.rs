@@ -578,7 +578,7 @@ pub async fn resolve_stage_location(
         StageInfo::new_user_stage(&ctx.get_current_user()?.name)
     } else {
         UserApiProvider::instance()
-            .get_stage(&ctx.get_tenant(), names[0])
+            .get_stage(ctx.get_tenant().as_str(), names[0])
             .await?
     };
 

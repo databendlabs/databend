@@ -64,7 +64,7 @@ impl Interpreter for DescPasswordPolicyInterpreter {
         let user_mgr = UserApiProvider::instance();
 
         let password_policy = user_mgr
-            .get_password_policy(&tenant, self.plan.name.as_str())
+            .get_password_policy(tenant.as_str(), self.plan.name.as_str())
             .await?;
 
         let properties = vec![
