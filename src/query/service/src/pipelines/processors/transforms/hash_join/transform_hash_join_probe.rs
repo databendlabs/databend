@@ -22,7 +22,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::JoinType;
-use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillHandler;
 use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillState;
@@ -169,12 +168,7 @@ impl TransformHashJoinProbe {
     // Probe with hashtable
     pub(crate) fn probe(&mut self, block: DataBlock) -> Result<()> {
         self.probe_state.clear();
-        info!("Start to probe with {:?} rows", block.num_rows());
         let data_blocks = self.join_probe_state.probe(block, &mut self.probe_state)?;
-        let res_rows = data_blocks
-            .iter()
-            .fold(0, |acc, data| acc + data.num_rows());
-        info!("Finish probing with {:?} rows", res_rows);
         if !data_blocks.is_empty() {
             self.output_data_blocks.extend(data_blocks);
         }
@@ -282,14 +276,16 @@ impl TransformHashJoinProbe {
 
         if self.input_port.has_data() {
             let data = self.input_port.pull_data().unwrap()?;
+            if self.need_spill() {
+                // Don't need to split data to reduce spill files number.
+                self.input_data.push_back(data);
+                return self.set_spill_step();
+            }
             // Split data to `block_size` rows per sub block.
             let (sub_blocks, remain_block) = data.split_by_rows(self.max_block_size);
             self.input_data.extend(sub_blocks);
             if let Some(remain) = remain_block {
                 self.input_data.push_back(remain);
-            }
-            if self.need_spill() {
-                return self.set_spill_step();
             }
             return Ok(Event::Sync);
         }
@@ -301,7 +297,7 @@ impl TransformHashJoinProbe {
 
         // Input port is finished, make spilling finished
         if self.need_spill() && !self.spill_handler.spill_done() {
-            return self.spill_finished();
+            return self.spill_finished(self.processor_id);
         }
 
         if self.join_probe_state.hash_join_state.need_final_scan() {

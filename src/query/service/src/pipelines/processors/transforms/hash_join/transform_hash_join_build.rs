@@ -130,7 +130,8 @@ impl Processor for TransformHashJoinBuild {
 
                 if self.input_port.is_finished() {
                     if self.spill_handler.enabled_spill() {
-                        self.spill_handler.finalize_spill(&self.build_state)?;
+                        self.spill_handler
+                            .finalize_spill(&self.build_state, self.processor_id)?;
                     }
                     self.build_state.row_space_build_done()?;
                     return Ok(Event::Async);
@@ -220,7 +221,7 @@ impl Processor for TransformHashJoinBuild {
                 self.step = HashJoinBuildStep::Finalize;
             }
             HashJoinBuildStep::WaitSpill => {
-                self.spill_handler.spill(self.processor_id).await?;
+                self.spill_handler.spill().await?;
                 // After spill, the processor should continue to run, and process incoming data.
                 self.step = HashJoinBuildStep::Running;
             }
@@ -247,10 +248,7 @@ impl Processor for TransformHashJoinBuild {
                     self.step = HashJoinBuildStep::Finished;
                     return Ok(());
                 }
-                self.input_data = self
-                    .spill_handler
-                    .restore(partition_id, self.processor_id)
-                    .await?;
+                self.input_data = self.spill_handler.restore(partition_id).await?;
                 self.build_state.restore_barrier.wait().await;
                 self.reset().await?;
             }

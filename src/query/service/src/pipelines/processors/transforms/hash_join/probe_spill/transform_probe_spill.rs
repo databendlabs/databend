@@ -108,15 +108,18 @@ impl TransformHashJoinProbe {
     // 2. the input port has finished and spill finished,
     //    then add spill_partitions to `spill_partition_set` and set `spill_done` to true.
     //    change current step to `WaitBuild`
-    pub(crate) fn spill_finished(&mut self) -> Result<Event> {
+    pub(crate) fn spill_finished(&mut self, processor_id: usize) -> Result<Event> {
         // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
         let spilled_partition_set = &self
             .spill_handler
             .spill_state()
             .spiller
             .spilled_partitions();
+        info!(
+            "probe processor-{:?}: spill finished with spilled partitions {:?}",
+            processor_id, spilled_partition_set
+        );
         if !spilled_partition_set.is_empty() {
-            info!("probe spilled partitions: {:?}", spilled_partition_set);
             let mut spill_partitions = self.join_probe_state.spill_partitions.write();
             spill_partitions.extend(spilled_partition_set);
         }
@@ -185,12 +188,7 @@ impl TransformHashJoinProbe {
                 .clone();
             spill_state
                 .spiller
-                .spill_input(
-                    data,
-                    &hashes,
-                    Some(&build_spilled_partitions),
-                    self.processor_id,
-                )
+                .spill_input(data, &hashes, Some(&build_spilled_partitions))
                 .await?;
         }
 
@@ -218,12 +216,8 @@ impl TransformHashJoinProbe {
             .spilled_partitions()
             .contains(&(p_id as u8))
         {
-            let spilled_data = DataBlock::concat(
-                &spill_state
-                    .spiller
-                    .read_spilled_data(&(p_id as u8), self.processor_id)
-                    .await?,
-            )?;
+            let spilled_data =
+                DataBlock::concat(&spill_state.spiller.read_spilled_data(&(p_id as u8)).await?)?;
             if !spilled_data.is_empty() {
                 // Split data to `block_size` rows per sub block.
                 let (sub_blocks, remain_block) = spilled_data.split_by_rows(self.max_block_size);
