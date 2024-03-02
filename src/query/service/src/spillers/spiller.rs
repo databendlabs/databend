@@ -26,7 +26,6 @@ use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::DataBlock;
 use databend_common_hashtable::hash2bucket;
-use log::info;
 use opendal::Operator;
 
 use crate::sessions::QueryContext;
@@ -73,7 +72,7 @@ pub struct Spiller {
     ctx: Arc<QueryContext>,
     operator: Operator,
     config: SpillerConfig,
-    spiller_type: SpillerType,
+    _spiller_type: SpillerType,
     /// 1 partition -> N partition files
     pub partition_location: HashMap<u8, Vec<String>>,
     /// Record columns layout for spilled data, will be used when read data from disk
@@ -92,7 +91,7 @@ impl Spiller {
             ctx,
             operator,
             config,
-            spiller_type,
+            _spiller_type: spiller_type,
             partition_location: Default::default(),
             columns_layout: Default::default(),
         }
@@ -147,9 +146,7 @@ impl Spiller {
         }
 
         for data in columns_data.into_iter() {
-            info!("spill data to {:?}", location);
             writer.write(data).await?;
-            info!("finish spill data to {:?}", location);
         }
         writer.close().await?;
 
@@ -158,12 +155,7 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Spill data block with location
-    pub async fn spill_with_partition(
-        &mut self,
-        p_id: u8,
-        data: DataBlock,
-        worker_id: usize,
-    ) -> Result<()> {
+    pub async fn spill_with_partition(&mut self, p_id: u8, data: DataBlock) -> Result<()> {
         let progress_val = ProgressValues {
             rows: data.num_rows(),
             bytes: data.memory_size(),
@@ -178,17 +170,12 @@ impl Spiller {
             .or_insert(vec![location.clone()]);
 
         self.ctx.get_join_spill_progress().incr(&progress_val);
-
-        info!(
-            "{:?} spilled {:?} rows data, partition id is {:?}, worker id is {:?}",
-            self.spiller_type, progress_val.rows, p_id, worker_id
-        );
         Ok(())
     }
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_data(&self, p_id: &u8, worker_id: usize) -> Result<Vec<DataBlock>> {
+    pub async fn read_spilled_data(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
         debug_assert!(self.partition_location.contains_key(p_id));
         let files = self.partition_location.get(p_id).unwrap();
         let mut spilled_data = Vec::with_capacity(files.len());
@@ -198,10 +185,6 @@ impl Spiller {
                 spilled_data.push(block);
             }
         }
-        info!(
-            "{:?} read partition {:?}, work id: {:?}",
-            self.spiller_type, p_id, worker_id
-        );
         Ok(spilled_data)
     }
 
@@ -214,7 +197,6 @@ impl Spiller {
         data_block: DataBlock,
         hashes: &[u64],
         spilled_partitions: Option<&HashSet<u8>>,
-        worker_id: usize,
     ) -> Result<()> {
         // Key is partition, value is row indexes
         let mut partition_rows = HashMap::new();
@@ -243,7 +225,7 @@ impl Spiller {
                 row_indexes.len(),
             );
             // Spill block with partition id
-            self.spill_with_partition(*p_id, block, worker_id).await?;
+            self.spill_with_partition(*p_id, block).await?;
         }
         Ok(())
     }

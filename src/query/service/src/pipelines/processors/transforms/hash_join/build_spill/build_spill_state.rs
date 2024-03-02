@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use byte_unit::Byte;
@@ -99,47 +98,5 @@ impl BuildSpillState {
             return Ok(true);
         }
         Ok(false)
-    }
-
-    // Pick partitions which need to spill
-    #[allow(unused)]
-    fn pick_partitions(&self, partition_blocks: &mut HashMap<u8, Vec<DataBlock>>) -> Result<()> {
-        let mut max_memory_usage = self.build_state.max_memory_usage;
-        let global_used = GLOBAL_MEM_STAT.get_memory_usage();
-        if global_used as usize > max_memory_usage {
-            return Ok(());
-        }
-        // Compute each partition's data size
-        let mut partition_sizes = partition_blocks
-            .iter()
-            .map(|(id, blocks)| {
-                let size = blocks
-                    .iter()
-                    .fold(0, |acc, block| acc + block.memory_size());
-                (*id, size)
-            })
-            .collect::<Vec<(u8, usize)>>();
-        partition_sizes.sort_by_key(|&(_id, size)| size);
-
-        for (id, size) in partition_sizes.into_iter() {
-            if size as f64 <= max_memory_usage as f64 / 3.0 {
-                // Put the partition's data to chunks
-                let chunks =
-                    &mut unsafe { &mut *self.build_state.hash_join_state.build_state.get() }
-                        .generation_state
-                        .chunks;
-                let blocks = partition_blocks.get_mut(&id).unwrap();
-                let rows_num = blocks.iter().fold(0, |acc, block| acc + block.num_rows());
-                chunks.append(blocks);
-                let build_state =
-                    unsafe { &mut *self.build_state.hash_join_state.build_state.get() };
-                build_state.generation_state.build_num_rows += rows_num;
-                partition_blocks.remove(&id);
-                max_memory_usage -= size;
-            } else {
-                break;
-            }
-        }
-        Ok(())
     }
 }

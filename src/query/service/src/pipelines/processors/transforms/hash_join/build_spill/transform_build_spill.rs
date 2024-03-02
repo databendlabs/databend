@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use log::info;
 
 use crate::pipelines::processors::transforms::BuildSpillState;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
@@ -90,7 +91,7 @@ impl BuildSpillHandler {
     }
 
     // Spill pending data block
-    pub(crate) async fn spill(&mut self, processor_id: usize) -> Result<()> {
+    pub(crate) async fn spill(&mut self) -> Result<()> {
         let pending_spill_data = self.pending_spill_data.clone();
         for block in pending_spill_data.iter() {
             let mut hashes = Vec::with_capacity(block.num_rows());
@@ -98,7 +99,7 @@ impl BuildSpillHandler {
             spill_state.get_hashes(block, &mut hashes)?;
             spill_state
                 .spiller
-                .spill_input(block.clone(), &hashes, None, processor_id)
+                .spill_input(block.clone(), &hashes, None)
                 .await?;
         }
         self.pending_spill_data.clear();
@@ -106,9 +107,17 @@ impl BuildSpillHandler {
     }
 
     // Finishing up after spilling
-    pub(crate) fn finalize_spill(&mut self, build_state: &Arc<HashJoinBuildState>) -> Result<()> {
+    pub(crate) fn finalize_spill(
+        &mut self,
+        build_state: &Arc<HashJoinBuildState>,
+        processor_id: usize,
+    ) -> Result<()> {
         // Add spilled partition ids to `spill_partitions` of `HashJoinBuildState`
         let spilled_partition_set = self.spill_state().spiller.spilled_partitions();
+        info!(
+            "build processor-{:?}: spill finished with spilled partitions {:?}",
+            processor_id, spilled_partition_set
+        );
         build_state
             .spilled_partition_set
             .write()
@@ -123,11 +132,7 @@ impl BuildSpillHandler {
     }
 
     // Restore
-    pub(crate) async fn restore(
-        &mut self,
-        partition_id: i8,
-        processor_id: usize,
-    ) -> Result<Option<DataBlock>> {
+    pub(crate) async fn restore(&mut self, partition_id: i8) -> Result<Option<DataBlock>> {
         let spill_state = self.spill_state();
         if spill_state
             .spiller
@@ -137,7 +142,7 @@ impl BuildSpillHandler {
             let spilled_data = DataBlock::concat(
                 &spill_state
                     .spiller
-                    .read_spilled_data(&(partition_id as u8), processor_id)
+                    .read_spilled_data(&(partition_id as u8))
                     .await?,
             )?;
             if !spilled_data.is_empty() {
