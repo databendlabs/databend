@@ -56,7 +56,7 @@ impl Interpreter for AlterUserUDFInterpreter {
 
         let tenant = self.ctx.get_tenant();
         UserApiProvider::instance()
-            .update_udf(&tenant, plan.udf)
+            .update_udf(tenant.as_str(), plan.udf)
             .await?;
 
         Ok(PipelineBuildResult::create())

@@ -39,7 +39,7 @@ pub struct ProbeSpillState {
 impl ProbeSpillState {
     pub fn create(ctx: Arc<QueryContext>, probe_state: Arc<HashJoinProbeState>) -> Self {
         let tenant = ctx.get_tenant();
-        let spill_config = SpillerConfig::create(query_spill_prefix(&tenant));
+        let spill_config = SpillerConfig::create(query_spill_prefix(tenant.as_str()));
         let operator = DataOperator::instance().operator();
         let spiller = Spiller::create(ctx, operator, spill_config, SpillerType::HashJoinProbe);
         Self {

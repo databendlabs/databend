@@ -148,7 +148,7 @@ impl Binder {
                 };
 
                 Ok(Plan::RenameDatabase(Box::new(RenameDatabasePlan {
-                    tenant,
+                    tenant: tenant.to_string(),
                     entities: vec![entry],
                 })))
             }
@@ -175,7 +175,7 @@ impl Binder {
 
         Ok(Plan::DropDatabase(Box::new(DropDatabasePlan {
             if_exists: *if_exists,
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
         })))
@@ -196,7 +196,7 @@ impl Binder {
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
 
         Ok(Plan::UndropDatabase(Box::new(UndropDatabasePlan {
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
         })))
@@ -232,7 +232,7 @@ impl Binder {
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
             create_option: *create_option,
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
             meta,

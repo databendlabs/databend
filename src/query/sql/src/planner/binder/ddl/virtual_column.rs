@@ -168,7 +168,7 @@ impl Binder {
         let catalog_info = self.ctx.get_catalog(&catalog).await?;
         let res = catalog_info
             .list_virtual_columns(ListVirtualColumnsReq {
-                tenant: self.ctx.get_tenant(),
+                tenant: self.ctx.get_tenant().to_string(),
                 table_id: Some(table_info.get_id()),
             })
             .await?;
@@ -298,7 +298,7 @@ impl Binder {
             Some(ident) => {
                 let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
                 catalog
-                    .get_database(&self.ctx.get_tenant(), &database)
+                    .get_database(self.ctx.get_tenant().as_str(), &database)
                     .await?;
                 database
             }

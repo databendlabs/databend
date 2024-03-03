@@ -100,7 +100,7 @@ impl CatalogManager {
             let ctl = creator.try_create(&CatalogInfo {
                 id: CatalogId { catalog_id: 0 },
                 name_ident: CatalogNameIdent {
-                    tenant: tenant.clone(),
+                    tenant: tenant.to_string(),
                     catalog_name: name.clone(),
                 },
                 meta: CatalogMeta {

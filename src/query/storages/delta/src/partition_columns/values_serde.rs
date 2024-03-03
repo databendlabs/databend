@@ -23,28 +23,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use deltalake::kernel::Add;
 use ordered_float::OrderedFloat;
-use parquet::record::Field as ParquetFieldValue;
-
-fn field_to_value(value: &ParquetFieldValue) -> Result<Scalar> {
-    match value {
-        ParquetFieldValue::Bool(v) => Ok(Scalar::Boolean(*v)),
-        ParquetFieldValue::Byte(v) => Ok(Scalar::Number(NumberScalar::Int8(*v))),
-        ParquetFieldValue::Short(v) => Ok(Scalar::Number(NumberScalar::Int16(*v))),
-        ParquetFieldValue::Int(v) => Ok(Scalar::Number(NumberScalar::Int32(*v))),
-        ParquetFieldValue::Long(v) => Ok(Scalar::Number(NumberScalar::Int64(*v))),
-        ParquetFieldValue::UByte(v) => Ok(Scalar::Number(NumberScalar::UInt8(*v))),
-        ParquetFieldValue::UShort(v) => Ok(Scalar::Number(NumberScalar::UInt16(*v))),
-        ParquetFieldValue::UInt(v) => Ok(Scalar::Number(NumberScalar::UInt32(*v))),
-        ParquetFieldValue::ULong(v) => Ok(Scalar::Number(NumberScalar::UInt64(*v))),
-        ParquetFieldValue::Float(v) => Ok(Scalar::Number(NumberScalar::Float32(OrderedFloat(*v)))),
-        ParquetFieldValue::Double(v) => Ok(Scalar::Number(NumberScalar::Float64(OrderedFloat(*v)))),
-        ParquetFieldValue::Str(v) => Ok(Scalar::String(v.clone())),
-        _ => Err(ErrorCode::IllegalDataType(format!(
-            "Unsupported parquet type {:?}",
-            value
-        ))),
-    }
-}
 
 pub fn str_to_scalar(value: &str, data_type: &DataType) -> Result<Scalar> {
     if value.is_empty() {
@@ -105,26 +83,18 @@ pub fn str_to_scalar(value: &str, data_type: &DataType) -> Result<Scalar> {
 }
 
 pub fn get_partition_values(add: &Add, fields: &[&TableField]) -> Result<Vec<Scalar>> {
-    match &add.partition_values_parsed {
-        Some(row) => row
-            .get_column_iter()
-            .map(|(_, field)| field_to_value(field))
-            .collect(),
-        None => {
-            let mut values = Vec::with_capacity(fields.len());
-            for f in fields {
-                match add.partition_values.get(&f.name) {
-                    Some(Some(v)) => values.push(str_to_scalar(v, &f.data_type().into())?),
-                    Some(None) => values.push(Scalar::Null),
-                    None => {
-                        return Err(ErrorCode::BadArguments(format!(
-                            "partition value for column {} not found",
-                            &f.name
-                        )));
-                    }
-                }
+    let mut values = Vec::with_capacity(fields.len());
+    for f in fields {
+        match add.partition_values.get(&f.name) {
+            Some(Some(v)) => values.push(str_to_scalar(v, &f.data_type().into())?),
+            Some(None) => values.push(Scalar::Null),
+            None => {
+                return Err(ErrorCode::BadArguments(format!(
+                    "partition value for column {} not found",
+                    &f.name
+                )));
             }
-            Ok(values)
         }
     }
+    Ok(values)
 }

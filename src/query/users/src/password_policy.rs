@@ -27,6 +27,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyString;
 use log::info;
 use passwords::analyzer;
 
@@ -164,7 +165,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn drop_password_policy(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         name: &str,
         if_exists: bool,
     ) -> Result<()> {
@@ -180,7 +181,7 @@ impl UserApiProvider {
             }
         }
 
-        let client = self.get_password_policy_api_client(tenant)?;
+        let client = self.get_password_policy_api_client(tenant.as_str())?;
         match client.drop_password_policy(name, MatchSeq::GE(1)).await {
             Ok(res) => Ok(res),
             Err(e) => {
@@ -358,7 +359,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn check_login_password(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         identity: UserIdentity,
         user_info: &UserInfo,
     ) -> Result<()> {
@@ -378,7 +379,7 @@ impl UserApiProvider {
         }
 
         if let Some(name) = user_info.option.password_policy() {
-            if let Ok(password_policy) = self.get_password_policy(tenant, name).await {
+            if let Ok(password_policy) = self.get_password_policy(tenant.as_str(), name).await {
                 // Check the number of login password fails
                 if !user_info.password_fails.is_empty() && password_policy.max_retries > 0 {
                     let check_time = now

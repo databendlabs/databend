@@ -154,7 +154,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let user2_info = UserInfo::new(user2, "%", AuthInfo::JWT);
         UserApiProvider::instance()
             .add_user(
-                tenant.as_str(),
+                &tenant,
                 user2_info.clone(),
                 &CreateOption::CreateIfNotExists,
             )
@@ -653,7 +653,7 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
             .await?;
         let user_info = ctx.get_current_user()?;
         let current_tenant = ctx.get_tenant();
-        assert_eq!(current_tenant, tenant.to_string());
+        assert_eq!(current_tenant.to_string(), tenant.to_string());
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 
