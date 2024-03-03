@@ -190,31 +190,6 @@ pub fn table_ref(i: Input) -> IResult<TableRef> {
     })(i)
 }
 
-pub fn column_ref(i: Input) -> IResult<ColumnRef> {
-    alt((
-        map(
-            rule! { #ident ~ "." ~ #ident ~ "." ~ #column_id },
-            |(database, _, table, _, column)| ColumnRef {
-                database: Some(database),
-                table: Some(table),
-                column,
-            },
-        ),
-        map(rule! { #ident ~ "." ~ #column_id }, |(table, _, column)| {
-            ColumnRef {
-                database: None,
-                table: Some(table),
-                column,
-            }
-        }),
-        map(rule! { #column_id }, |column| ColumnRef {
-            database: None,
-            table: None,
-            column,
-        }),
-    ))(i)
-}
-
 pub fn column_id(i: Input) -> IResult<ColumnID> {
     alt((
         map_res(rule! { ColumnPosition }, |token| {
