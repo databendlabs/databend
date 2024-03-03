@@ -23,7 +23,6 @@ use pratt::PrattParser;
 use pratt::Precedence;
 
 use crate::ast::ColumnID;
-use crate::ast::ColumnRef;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
 use crate::ast::TableRef;
