@@ -57,6 +57,7 @@ impl Udf {
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UdfFunctionDesc {
+    pub name: String,
     pub func_name: String,
     pub output_column: IndexType,
     pub arg_indices: Vec<IndexType>,
@@ -138,6 +139,7 @@ impl PhysicalPlanBuilder {
                         .collect::<Result<Vec<_>>>()?;
 
                     let udf_func = UdfFunctionDesc {
+                        name: func.name.clone(),
                         func_name: func.func_name.clone(),
                         output_column: item.index,
                         arg_indices,

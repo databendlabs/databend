@@ -35,7 +35,7 @@ mod transform_runtime_cast_schema;
 mod transform_sort_spill;
 mod transform_srf;
 mod transform_udf;
-mod transform_udf_interpreter;
+mod transform_udf_server;
 mod window;
 
 pub use hash_join::*;
@@ -60,6 +60,7 @@ pub use transform_runtime_cast_schema::TransformRuntimeCastSchema;
 pub use transform_sort_spill::create_transform_sort_spill;
 pub use transform_srf::TransformSRF;
 pub use transform_udf::TransformUdf;
+pub use transform_udf_server::TransformUdfServer;
 pub use window::FrameBound;
 pub use window::TransformWindow;
 pub use window::WindowFunctionInfo;

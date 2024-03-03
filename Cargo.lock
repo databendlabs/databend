@@ -746,21 +746,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arrow-udf-python"
-version = "0.1.0"
-source = "git+https://github.com/risingwavelabs/arrow-udf?rev=6c32f71#6c32f710b5948147f8214797fc334a4a3cadef0d"
-dependencies = [
- "anyhow",
- "arrow-array 50.0.0",
- "arrow-buffer 50.0.0",
- "arrow-ipc 50.0.0",
- "arrow-schema 50.0.0",
- "lazy_static",
- "pyo3",
- "pyo3-build-config 0.20.3",
-]
-
-[[package]]
 name = "assert-json-diff"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4380,7 +4365,6 @@ dependencies = [
  "arrow-ipc 50.0.0",
  "arrow-schema 50.0.0",
  "arrow-udf-js",
- "arrow-udf-python",
  "async-backtrace",
  "async-channel 1.9.0",
  "async-stream",

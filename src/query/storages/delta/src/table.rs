@@ -45,10 +45,7 @@ use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use deltalake::kernel::Add;
 use deltalake::DeltaTableBuilder;
-<<<<<<< HEAD
-=======
 use opendal::Metakey;
->>>>>>> main
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::OnceCell;
@@ -299,18 +296,6 @@ impl DeltaTable {
 
         let parts = adds.iter()
             .map(|add: &Add| {
-<<<<<<< HEAD
-                let stats = add
-                    .get_stats_parsed()
-                    .map_err(|e| ErrorCode::ReadTableDataError(format!("Cannot get stats: {e:?}")))?
-                    .ok_or_else(|| {
-                        ErrorCode::ReadTableDataError(format!(
-                            "Current DeltaTable assuming Add contains Stats, but found in {}.",
-                            add.path
-                        ))
-                    })?;
-                read_rows += stats.num_records as usize;
-=======
                 let num_records = add
                     .get_stats_parsed()
                     .ok()
@@ -324,7 +309,6 @@ impl DeltaTable {
                     }
                     ).unwrap_or(1);
                 read_rows += num_records as usize;
->>>>>>> main
                 read_bytes += add.size as usize;
                 let partition_values = get_partition_values(add, &partition_fields[..])?;
                 Ok(Arc::new(

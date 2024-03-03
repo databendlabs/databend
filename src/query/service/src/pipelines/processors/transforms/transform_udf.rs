@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 use std::sync::Arc;
+
+use arrow_schema::Schema;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::variant_transform::contains_variant;
 use databend_common_expression::variant_transform::transform_variant;
 use databend_common_expression::BlockEntry;
@@ -24,45 +26,62 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
-use databend_common_pipeline_transforms::processors::AsyncTransform;
-use databend_common_pipeline_transforms::processors::AsyncTransformer;
+
+use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
-
 pub struct TransformUdf {
-    func_ctx: FunctionContext,
     funcs: Vec<UdfFunctionDesc>,
+    js_runtime: Arc<arrow_udf_js::Runtime>,
 }
+
+unsafe impl Send for TransformUdf {}
 
 impl TransformUdf {
     pub fn try_create(
-        func_ctx: FunctionContext,
+        _func_ctx: FunctionContext,
         funcs: Vec<UdfFunctionDesc>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<Box<dyn Processor>> {
-        Ok(AsyncTransformer::create(input, output, Self {
-            func_ctx,
+        let mut js_runtime = arrow_udf_js::Runtime::new()
+            .map_err(|err| ErrorCode::from_string(format!("Cannot create js runtime: {err}")))?;
+
+        for func in funcs.iter() {
+            let tmp_schema =
+                DataSchema::new(vec![DataField::new("tmp", func.data_type.as_ref().clone())]);
+            let arrow_schema = Schema::from(&tmp_schema);
+
+            let (_, _, code) = func.udf_type.as_interepter().unwrap();
+            js_runtime
+                .add_function_with_handler(
+                    &func.name,
+                    arrow_schema.field(0).data_type().clone(),
+                    arrow_udf_js::CallMode::ReturnNullOnNullInput,
+                    code,
+                    &func.func_name,
+                )
+                .map_err(|err| ErrorCode::from_string(format!("Cannot add js function: {err}")))?;
+        }
+
+        Ok(Transformer::create(input, output, Self {
             funcs,
+            js_runtime: Arc::new(js_runtime),
         }))
     }
 }
 
-#[async_trait::async_trait]
-impl AsyncTransform for TransformUdf {
-    const NAME: &'static str = "UdfTransform";
+impl Transform for TransformUdf {
+    const NAME: &'static str = "UdfInterpreterTransform";
 
-    #[async_backtrace::framed]
-    async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
-        let connect_timeout = self.func_ctx.external_server_connect_timeout_secs;
-        let request_timeout = self.func_ctx.external_server_request_timeout_secs;
+    fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        let num_rows = data_block.num_rows();
         for func in &self.funcs {
-            let server_addr = func.udf_type.as_server().unwrap();
             // construct input record_batch
-            let num_rows = data_block.num_rows();
             let block_entries = func
                 .arg_indices
                 .iter()
@@ -91,44 +110,23 @@ impl AsyncTransform for TransformUdf {
                 .to_record_batch_with_dataschema(&data_schema)
                 .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
-            let mut client =
-                UDFFlightClient::connect(server_addr, connect_timeout, request_timeout).await?;
-            let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
+            let result_batch = self
+                .js_runtime
+                .call(&func.name, &input_batch)
+                .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
             let schema = DataSchema::try_from(&(*result_batch.schema()))?;
-            let (result_block, result_schema) =
+            let (result_block, _result_schema) =
                 DataBlock::from_record_batch(&schema, &result_batch).map_err(|err| {
                     ErrorCode::UDFDataError(format!(
                         "Cannot convert arrow record batch to data block: {err}"
                     ))
                 })?;
 
-            let result_fields = result_schema.fields();
-            if result_fields.is_empty() || result_block.is_empty() {
-                return Err(ErrorCode::EmptyDataFromServer(
-                    "Get empty data from UDF Server",
-                ));
-            }
-
-            if result_fields[0].data_type() != &*func.data_type {
-                return Err(ErrorCode::UDFSchemaMismatch(format!(
-                    "UDF server return incorrect type, expected: {}, but got: {}",
-                    func.data_type,
-                    result_fields[0].data_type()
-                )));
-            }
-            if result_block.num_rows() != num_rows {
-                return Err(ErrorCode::UDFDataError(format!(
-                    "UDF server should return {} rows, but it returned {} rows",
-                    num_rows,
-                    result_block.num_rows()
-                )));
-            }
-
             let col = if contains_variant(&func.data_type) {
                 let value = transform_variant(&result_block.get_by_offset(0).value, false)?;
                 BlockEntry {
-                    data_type: result_fields[0].data_type().clone(),
+                    data_type: func.data_type.as_ref().clone(),
                     value,
                 }
             } else {

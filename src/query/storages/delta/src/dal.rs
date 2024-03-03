@@ -238,7 +238,10 @@ impl ObjectStore for OpendalStore {
                     .lister_with(&path)
                     .start_after(offset.as_ref())
                     .metakey(self.meta_key_flag())
+                    .recursive(true)
+                    .await
                     .map_err(|err| format_object_store_error(err, &path))?
+                    .then(try_format_object_meta)
                     .boxed()
             } else {
                 self.inner
