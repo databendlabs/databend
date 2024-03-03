@@ -23,6 +23,7 @@ use pratt::PrattParser;
 use pratt::Precedence;
 
 use crate::ast::ColumnID;
+use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
 use crate::ast::TableRef;
 use crate::parser::input::Input;
@@ -170,6 +171,12 @@ fn non_reserved_keyword(
             ErrorKind::ExpectToken(Ident),
         ))),
     }
+}
+
+pub fn database_ref(i: Input) -> IResult<DatabaseRef> {
+    map(dot_separated_idents_1_to_2, |(catalog, database)| {
+        DatabaseRef { catalog, database }
+    })(i)
 }
 
 pub fn table_ref(i: Input) -> IResult<TableRef> {

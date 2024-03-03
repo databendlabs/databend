@@ -21,62 +21,73 @@ use databend_common_exception::Span;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_io::display_decimal_256;
 use databend_common_io::escape_string_with_quote;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 
-use super::ColumnID;
+use super::ColumnRef;
 use super::OrderByExpr;
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_dot_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Expr {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
+        #[drive(skip)]
         span: Span,
-        database: Option<Identifier>,
-        table: Option<Identifier>,
-        column: ColumnID,
+        column: ColumnRef,
     },
     /// `IS [ NOT ] NULL` expression
     IsNull {
+        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
+        #[drive(skip)]
         not: bool,
     },
     /// `IS [NOT] DISTINCT` expression
     IsDistinctFrom {
+        #[drive(skip)]
         span: Span,
         left: Box<Expr>,
         right: Box<Expr>,
+        #[drive(skip)]
         not: bool,
     },
     /// `[ NOT ] IN (expr, ...)`
     InList {
+        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         list: Vec<Expr>,
+        #[drive(skip)]
         not: bool,
     },
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
+        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         subquery: Box<Query>,
+        #[drive(skip)]
         not: bool,
     },
     /// `BETWEEN ... AND ...`
     Between {
+        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         low: Box<Expr>,
         high: Box<Expr>,
+        #[drive(skip)]
         not: bool,
     },
     /// Binary operation
     BinaryOp {
+        #[drive(skip)]
         span: Span,
         op: BinaryOperator,
         left: Box<Expr>,
@@ -84,6 +95,7 @@ pub enum Expr {
     },
     /// JSON operation
     JsonOp {
+        #[drive(skip)]
         span: Span,
         op: JsonOperator,
         left: Box<Expr>,
@@ -91,43 +103,51 @@ pub enum Expr {
     },
     /// Unary operation
     UnaryOp {
+        #[drive(skip)]
         span: Span,
         op: UnaryOperator,
         expr: Box<Expr>,
     },
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
+        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         target_type: TypeName,
+        #[drive(skip)]
         pg_style: bool,
     },
     /// `TRY_CAST` expression`
     TryCast {
+        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         target_type: TypeName,
     },
     /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
+        #[drive(skip)]
         span: Span,
         kind: IntervalKind,
         expr: Box<Expr>,
     },
     /// DATE_PART(IntervalKind, <expr>)
     DatePart {
+        #[drive(skip)]
         span: Span,
         kind: IntervalKind,
         expr: Box<Expr>,
     },
     /// POSITION(<expr> IN <expr>)
     Position {
+        #[drive(skip)]
         span: Span,
         substr_expr: Box<Expr>,
         str_expr: Box<Expr>,
     },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     Substring {
+        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         substring_from: Box<Expr>,
@@ -137,30 +157,39 @@ pub enum Expr {
     /// Or
     /// TRIM(<expr>)
     Trim {
+        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         // ([BOTH | LEADING | TRAILING], <expr>)
         trim_where: Option<(TrimWhere, Box<Expr>)>,
     },
     /// A literal value, such as string, number, date or NULL
-    Literal { span: Span, lit: Literal },
+    Literal {
+        #[drive(skip)]
+        span: Span,
+        lit: Literal,
+    },
     /// `COUNT(*)` expression
-    CountAll { span: Span, window: Option<Window> },
+    CountAll {
+        #[drive(skip)]
+        span: Span,
+        window: Option<Window>,
+    },
     /// `(foo, bar)`
-    Tuple { span: Span, exprs: Vec<Expr> },
+    Tuple {
+        #[drive(skip)]
+        span: Span,
+        exprs: Vec<Expr>,
+    },
     /// Scalar/Agg/Window function call
     FunctionCall {
+        #[drive(skip)]
         span: Span,
-        /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
-        distinct: bool,
-        name: Identifier,
-        args: Vec<Expr>,
-        params: Vec<Expr>,
-        window: Option<Window>,
-        lambda: Option<Lambda>,
+        func: FunctionCall,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
+        #[drive(skip)]
         span: Span,
         operand: Option<Box<Expr>>,
         conditions: Vec<Expr>,
@@ -169,56 +198,69 @@ pub enum Expr {
     },
     /// `EXISTS` expression
     Exists {
+        #[drive(skip)]
         span: Span,
         /// Indicate if this is a `NOT EXISTS`
+        #[drive(skip)]
         not: bool,
         subquery: Box<Query>,
     },
     /// Scalar/ANY/ALL/SOME subquery
     Subquery {
+        #[drive(skip)]
         span: Span,
         modifier: Option<SubqueryModifier>,
         subquery: Box<Query>,
     },
     /// Access elements of `Array`, `Map` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
+        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         accessor: MapAccessor,
     },
     /// The `Array` expr
-    Array { span: Span, exprs: Vec<Expr> },
+    Array {
+        #[drive(skip)]
+        span: Span,
+        exprs: Vec<Expr>,
+    },
     /// The `Map` expr
     Map {
+        #[drive(skip)]
         span: Span,
         kvs: Vec<(Literal, Expr)>,
     },
     /// The `Interval 1 DAY` expr
     Interval {
+        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         unit: IntervalKind,
     },
     DateAdd {
+        #[drive(skip)]
         span: Span,
         unit: IntervalKind,
         interval: Box<Expr>,
         date: Box<Expr>,
     },
     DateSub {
+        #[drive(skip)]
         span: Span,
         unit: IntervalKind,
         interval: Box<Expr>,
         date: Box<Expr>,
     },
     DateTrunc {
+        #[drive(skip)]
         span: Span,
         unit: IntervalKind,
         date: Box<Expr>,
     },
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum IntervalKind {
     Year,
     Quarter,
@@ -232,40 +274,58 @@ pub enum IntervalKind {
     Dow,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum SubqueryModifier {
     Any,
     All,
     Some,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Literal {
-    UInt64(u64),
-    Float64(f64),
+    UInt64(#[drive(skip)] u64),
+    Float64(#[drive(skip)] f64),
     Decimal256 {
+        #[drive(skip)]
         value: i256,
+        #[drive(skip)]
         precision: u8,
+        #[drive(skip)]
         scale: u8,
     },
     // Quoted string literal value
-    String(String),
-    Boolean(bool),
+    String(#[drive(skip)] String),
+    Boolean(#[drive(skip)] bool),
     Null,
 }
 
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct FunctionCall {
+    /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
+    #[drive(skip)]
+    pub distinct: bool,
+    pub name: Identifier,
+    pub args: Vec<Expr>,
+    pub params: Vec<Expr>,
+    pub window: Option<Window>,
+    pub lambda: Option<Lambda>,
+}
+
 /// The display style for a map access expression
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum MapAccessor {
     /// `[0][1]`
     Bracket { key: Box<Expr> },
     /// `.1`
-    DotNumber { key: u64 },
+    DotNumber {
+        #[drive(skip)]
+        key: u64,
+    },
     /// `:a:b`
     Colon { key: Identifier },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TypeName {
     Boolean,
     UInt8,
@@ -279,7 +339,9 @@ pub enum TypeName {
     Float32,
     Float64,
     Decimal {
+        #[drive(skip)]
         precision: u8,
+        #[drive(skip)]
         scale: u8,
     },
     Date,
@@ -293,6 +355,7 @@ pub enum TypeName {
     },
     Bitmap,
     Tuple {
+        #[drive(skip)]
         fields_name: Option<Vec<String>>,
         fields_type: Vec<TypeName>,
     },
@@ -323,31 +386,31 @@ impl TypeName {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum TrimWhere {
     Both,
     Leading,
     Trailing,
 }
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner, Drive, DriveMut)]
 pub enum Window {
     WindowReference(WindowRef),
     WindowSpec(WindowSpec),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct WindowDefinition {
     pub name: Identifier,
     pub spec: WindowSpec,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct WindowRef {
     pub window_name: Identifier,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct WindowSpec {
     pub existing_window_name: Option<Identifier>,
     pub partition_by: Vec<Expr>,
@@ -356,21 +419,21 @@ pub struct WindowSpec {
 }
 
 /// `RANGE UNBOUNDED PRECEDING` or `ROWS BETWEEN 5 PRECEDING AND CURRENT ROW`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct WindowFrame {
     pub units: WindowFrameUnits,
     pub start_bound: WindowFrameBound,
     pub end_bound: WindowFrameBound,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumAsInner, Drive, DriveMut)]
 pub enum WindowFrameUnits {
     Rows,
     Range,
 }
 
 /// Specifies [WindowFrame]'s `start_bound` and `end_bound`
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
@@ -380,13 +443,13 @@ pub enum WindowFrameBound {
     Following(Option<Box<Expr>>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Lambda {
     pub params: Vec<Identifier>,
     pub expr: Box<Expr>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum BinaryOperator {
     Plus,
     Minus,
@@ -458,7 +521,7 @@ impl BinaryOperator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum JsonOperator {
     /// -> keeps the value as json
     Arrow,
@@ -505,7 +568,7 @@ impl JsonOperator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum UnaryOperator {
     Plus,
     Minus,
@@ -597,6 +660,39 @@ impl Display for IntervalKind {
             IntervalKind::Dow => "DOW",
             IntervalKind::Week => "WEEK",
         })
+    }
+}
+
+impl Display for FunctionCall {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let FunctionCall {
+            distinct,
+            name,
+            args,
+            params,
+            window,
+            lambda,
+        } = self;
+        write!(f, "{name}")?;
+        if !params.is_empty() {
+            write!(f, "(")?;
+            write_comma_separated_list(f, params)?;
+            write!(f, ")")?;
+        }
+        write!(f, "(")?;
+        if *distinct {
+            write!(f, "DISTINCT ")?;
+        }
+        write_comma_separated_list(f, args)?;
+        if let Some(lambda) = lambda {
+            write!(f, ", {lambda}")?;
+        }
+        write!(f, ")")?;
+
+        if let Some(window) = window {
+            write!(f, " OVER ({window})")?;
+        }
+        Ok(())
     }
 }
 
@@ -1029,20 +1125,11 @@ impl Display for Lambda {
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expr::ColumnRef {
-                database,
-                table,
-                column,
-                ..
-            } => {
+            Expr::ColumnRef { column, .. } => {
                 if f.alternate() {
-                    write!(f, "{}", column)?;
+                    write!(f, "{column:#}")?;
                 } else {
-                    write_dot_separated_list(f, database.iter().chain(table))?;
-                    if table.is_some() {
-                        write!(f, ".")?;
-                    }
-                    write!(f, "{}", column)?;
+                    write!(f, "{column}")?;
                 }
             }
             Expr::IsNull { expr, not, .. } => {
@@ -1191,34 +1278,8 @@ impl Display for Expr {
                 }
                 write!(f, ")")?;
             }
-            Expr::FunctionCall {
-                distinct,
-                name,
-                args,
-                params,
-                window,
-                lambda,
-                ..
-            } => {
-                write!(f, "{name}")?;
-                if !params.is_empty() {
-                    write!(f, "(")?;
-                    write_comma_separated_list(f, params)?;
-                    write!(f, ")")?;
-                }
-                write!(f, "(")?;
-                if *distinct {
-                    write!(f, "DISTINCT ")?;
-                }
-                write_comma_separated_list(f, args)?;
-                if let Some(lambda) = lambda {
-                    write!(f, ", {lambda}")?;
-                }
-                write!(f, ")")?;
-
-                if let Some(window) = window {
-                    write!(f, " OVER ({window})")?;
-                }
+            Expr::FunctionCall { func, .. } => {
+                write!(f, "{func}")?;
             }
             Expr::Case {
                 operand,
@@ -1369,8 +1430,8 @@ pub fn contain_agg_func(expr: &Expr) -> bool {
         Expr::Literal { .. } => false,
         Expr::CountAll { .. } => false,
         Expr::Tuple { exprs, .. } => exprs.iter().any(contain_agg_func),
-        Expr::FunctionCall { name, .. } => {
-            AggregateFunctionFactory::instance().contains(name.to_string())
+        Expr::FunctionCall { func, .. } => {
+            AggregateFunctionFactory::instance().contains(func.name.to_string())
         }
         Expr::Case {
             operand,

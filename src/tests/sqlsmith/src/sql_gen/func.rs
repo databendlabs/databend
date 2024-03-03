@@ -15,6 +15,7 @@
 use std::mem;
 
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::Literal;
@@ -770,12 +771,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let name = Identifier::from_name(name);
         Expr::FunctionCall {
             span: None,
-            distinct,
-            name,
-            args,
-            params,
-            window,
-            lambda,
+            func: FunctionCall {
+                distinct,
+                name,
+                args,
+                params,
+                window,
+                lambda,
+            },
         }
     }
 }
