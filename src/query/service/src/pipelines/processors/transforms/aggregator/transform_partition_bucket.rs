@@ -74,7 +74,6 @@ pub struct TransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send + S
     agg_payloads: Vec<AggregatePayload>,
     unsplitted_blocks: Vec<DataBlock>,
     max_partition_count: usize,
-    current_partition_count: usize,
     _phantom: PhantomData<V>,
 }
 
@@ -108,7 +107,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             agg_payloads: vec![],
             initialized_all_inputs: false,
             max_partition_count: 0,
-            current_partition_count: 0,
             _phantom: Default::default(),
         })
     }
@@ -150,9 +148,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             let data_block = self.inputs[index].port.pull_data().unwrap()?;
             self.inputs[index].bucket = self.add_bucket(data_block);
 
-            if self.inputs[index].bucket <= SINGLE_LEVEL_BUCKET_NUM
-                || (self.max_partition_count > 0
-                    && self.inputs[index].bucket < self.current_partition_count as isize - 1)
+            if self.inputs[index].bucket <= SINGLE_LEVEL_BUCKET_NUM || self.max_partition_count > 0
             {
                 self.inputs[index].port.set_need_data();
                 self.initialized_all_inputs = false;
@@ -176,7 +172,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         if payload.max_partition_count > 0 {
                             self.max_partition_count =
                                 self.max_partition_count.max(payload.max_partition_count);
-                            self.current_partition_count = payload.max_partition_count;
                         }
                         (payload.bucket, payload.bucket)
                     }
@@ -214,7 +209,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     AggregateMeta::AggregatePayload(p) => {
                         self.max_partition_count =
                             self.max_partition_count.max(p.max_partition_count);
-                        self.current_partition_count = p.max_partition_count;
                         (p.bucket, p.bucket)
                     }
                 };
@@ -245,15 +239,15 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     }
                     AggregateMeta::Serialized(p) => {
                         let rows_num = p.data_block.num_rows();
-
-                        let config = HashTableConfig::default()
-                            .with_initial_radix_bits(p.max_partition_count as u64);
+                        let radix_bits = p.max_partition_count.trailing_zeros() as u64;
+                        let config = HashTableConfig::default().with_initial_radix_bits(radix_bits);
                         let mut state = ProbeState::default();
+                        let capacity = AggregateHashTable::get_capacity_for_count(rows_num);
                         let mut hashtable = AggregateHashTable::new_with_capacity(
                             self.params.group_data_types.clone(),
                             self.params.aggregate_functions.clone(),
                             config,
-                            rows_num,
+                            capacity,
                         );
 
                         let agg_len = self.params.aggregate_functions.len();
@@ -289,9 +283,10 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                             )
                             .unwrap();
 
-                        for payload in hashtable.payload.payloads.into_iter() {
+                        for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate()
+                        {
                             self.agg_payloads.push(AggregatePayload {
-                                bucket: p.bucket,
+                                bucket: bucket as isize,
                                 payload,
                                 max_partition_count: p.max_partition_count,
                             });
@@ -473,9 +468,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
 
                 let data_block = self.inputs[index].port.pull_data().unwrap()?;
                 self.inputs[index].bucket = self.add_bucket(data_block);
-                if self.max_partition_count == 0 {
-                    debug_assert!(self.unsplitted_blocks.is_empty());
-                }
+                debug_assert!(self.unsplitted_blocks.is_empty());
 
                 if self.inputs[index].bucket <= self.working_bucket {
                     all_port_prepared_data = false;
