@@ -121,7 +121,7 @@ sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafus
 
 # openraft for debugging
 openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.9.0-alpha.7", features = [
-    "compat-07",
+    "serde",
     "tracing-log",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
 ] }
