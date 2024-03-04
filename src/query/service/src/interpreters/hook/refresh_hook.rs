@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::CatalogManager;
@@ -35,6 +36,9 @@ use databend_storages_common_table_meta::meta::Location;
 use log::info;
 use parking_lot::RwLock;
 
+use crate::interpreters::common::metrics_inc_refresh_hook_compact_time_ms;
+use crate::interpreters::common::metrics_inc_refresh_hook_main_operation_time_ms;
+use crate::interpreters::hook::compact_hook::CompactHookTraceCtx;
 use crate::interpreters::Interpreter;
 use crate::interpreters::RefreshIndexInterpreter;
 use crate::interpreters::RefreshVirtualColumnInterpreter;
@@ -50,23 +54,43 @@ pub struct RefreshDesc {
 
 /// Hook refresh action with a on-finished callback.
 /// errors (if any) are ignored.
-pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc: RefreshDesc) {
+pub async fn hook_refresh(
+    ctx: Arc<QueryContext>,
+    pipeline: &mut Pipeline,
+    desc: RefreshDesc,
+    trace_ctx: CompactHookTraceCtx,
+) {
     if pipeline.is_empty() {
         return;
     }
 
     pipeline.set_on_finished(move |err| {
+        let op_name = &trace_ctx.operation_name;
+        metrics_inc_refresh_hook_main_operation_time_ms(
+            op_name,
+            trace_ctx.start.elapsed().as_millis() as u64,
+        );
+
+        let refresh_start_at = Instant::now();
+
         if err.is_ok() {
             info!("execute pipeline finished successfully, starting run refresh job.");
+
             match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc)) {
                 Ok(_) => {
-                    info!("execute refresh job successfully.");
+                    info!("execute {op_name} refresh job successfully.");
                 }
                 Err(e) => {
                     info!("execute refresh job failed. {:?}", e);
                 }
             }
         }
+
+        metrics_inc_refresh_hook_compact_time_ms(
+            &trace_ctx.operation_name,
+            refresh_start_at.elapsed().as_millis() as u64,
+        );
+
         Ok(())
     });
 }

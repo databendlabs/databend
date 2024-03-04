@@ -102,6 +102,11 @@ impl HookOperator {
             table: self.table.to_owned(),
         };
 
-        hook_refresh(self.ctx.clone(), pipeline, refresh_desc).await;
+        let trace_ctx = CompactHookTraceCtx {
+            start: Instant::now(),
+            operation_name: self.operation_name.to_owned(),
+        };
+
+        hook_refresh(self.ctx.clone(), pipeline, refresh_desc, trace_ctx).await;
     }
 }
