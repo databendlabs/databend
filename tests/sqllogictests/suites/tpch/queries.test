@@ -103,7 +103,7 @@ order by
     s_name,
     p_partkey;
 ----
-9828.21 Supplier#000000647 UNITED KINGDOM 13120 Manufacturer#5 x5U7MBZmwfG9 33-258-202-4782 s the slyly even ideas poach fluffily 
+9828.21 Supplier#000000647 UNITED KINGDOM 13120 Manufacturer#5 x5U7MBZmwfG9 33-258-202-4782 s the slyly even ideas poach fluffily
 9508.37 Supplier#000000070 FRANCE 3563 Manufacturer#1 INWNH2w,OOWgNDq0BRCcBwOMQc6PdFDc4 16-821-608-1166 ests sleep quickly express ideas. ironic ideas haggle about the final T
 9508.37 Supplier#000000070 FRANCE 17268 Manufacturer#4 INWNH2w,OOWgNDq0BRCcBwOMQc6PdFDc4 16-821-608-1166 ests sleep quickly express ideas. ironic ideas haggle about the final T
 9453.01 Supplier#000000802 ROMANIA 10021 Manufacturer#5 ,6HYXb4uaHITmtMBj4Ak57Pd 29-342-882-6463 gular frets. permanently special multipliers believe blithely alongs
@@ -122,7 +122,7 @@ order by
 6820.35 Supplier#000000007 UNITED KINGDOM 13217 Manufacturer#5 s,4TicNGB4uO6PaSqNBUq 33-990-965-2201 s unwind silently furiously regular courts. final requests are deposits. requests wake quietly blit
 6721.70 Supplier#000000954 FRANCE 4191 Manufacturer#3 P3O5p UFz1QsLmZX 16-537-341-8517 ect blithely blithely final acco
 6329.90 Supplier#000000996 GERMANY 10735 Manufacturer#2 Wx4dQwOAwWjfSCGupfrM 17-447-811-3282  ironic forges cajole blithely agai
-6173.87 Supplier#000000408 RUSSIA 18139 Manufacturer#1 qcor1u,vJXAokjnL5,dilyYNmh 32-858-724-2950 blithely pending packages cajole furiously slyly pending notornis. slyly final 
+6173.87 Supplier#000000408 RUSSIA 18139 Manufacturer#1 qcor1u,vJXAokjnL5,dilyYNmh 32-858-724-2950 blithely pending packages cajole furiously slyly pending notornis. slyly final
 5364.99 Supplier#000000785 RUSSIA 13784 Manufacturer#4 W VkHBpQyD3qjQjWGpWicOpmILFehmEdWy67kUGY 32-297-653-2203  packages boost carefully. express ideas along
 5069.27 Supplier#000000328 GERMANY 16327 Manufacturer#1 SMm24d WG62 17-231-513-5721 he unusual ideas. slyly final packages a
 4941.88 Supplier#000000321 ROMANIA 7320 Manufacturer#5 pLngFl5yeMcHyov 29-573-279-1406 y final requests impress s
@@ -137,11 +137,11 @@ order by
 2963.09 Supplier#000000840 ROMANIA 3080 Manufacturer#2 iYzUIypKhC0Y 29-781-337-5584 eep blithely regular dependencies. blithely regular platelets sublate alongside o
 2221.25 Supplier#000000771 ROMANIA 13981 Manufacturer#2 lwZ I15rq9kmZXUNhl 29-986-304-9006 nal foxes eat slyly about the fluffily permanent id
 1381.97 Supplier#000000104 FRANCE 18103 Manufacturer#3 Dcl4yGrzqv3OPeRO49bKh78XmQEDR7PBXIs0m 16-434-972-6922 gular ideas. bravely bold deposits haggle through the carefully final deposits. slyly unusual idea
-906.07 Supplier#000000138 ROMANIA 8363 Manufacturer#4 utbplAm g7RmxVfYoNdhcrQGWuzRqPe0qHSwbKw 29-533-434-6776 ickly unusual requests cajole. accounts above the furiously special excuses 
-765.69 Supplier#000000799 RUSSIA 11276 Manufacturer#2 jwFN7ZB3T9sMF 32-579-339-1495 nusual requests. furiously unusual epitaphs integrate. slyly 
+906.07 Supplier#000000138 ROMANIA 8363 Manufacturer#4 utbplAm g7RmxVfYoNdhcrQGWuzRqPe0qHSwbKw 29-533-434-6776 ickly unusual requests cajole. accounts above the furiously special excuses
+765.69 Supplier#000000799 RUSSIA 11276 Manufacturer#2 jwFN7ZB3T9sMF 32-579-339-1495 nusual requests. furiously unusual epitaphs integrate. slyly
 727.89 Supplier#000000470 ROMANIA 6213 Manufacturer#3 XckbzsAgBLbUkdfjgJEPjmUMTM8ebSMEvI 29-165-289-1523 gular excuses. furiously regular excuses sleep slyly caref
 683.07 Supplier#000000651 RUSSIA 4888 Manufacturer#4 oWekiBV6s,1g 32-181-426-4490 ly regular requests cajole abou
-167.56 Supplier#000000290 FRANCE 2037 Manufacturer#1 6Bk06GVtwZaKqg01 16-675-286-5102  the theodolites. ironic, ironic deposits above 
+167.56 Supplier#000000290 FRANCE 2037 Manufacturer#1 6Bk06GVtwZaKqg01 16-675-286-5102  the theodolites. ironic, ironic deposits above
 91.39 Supplier#000000949 UNITED KINGDOM 9430 Manufacturer#2 a,UE,6nRVl2fCphkOoetR1ajIzAEJ1Aa1G1HV 33-332-697-2768 pinto beans. carefully express requests hagg
 -314.06 Supplier#000000510 ROMANIA 17242 Manufacturer#4 VmXQl ,vY8JiEseo8Mv4zscvNCfsY 29-207-852-3454  bold deposits. carefully even d
 -820.89 Supplier#000000409 GERMANY 2156 Manufacturer#5 LyXUYFz7aXrvy65kKAbTatGzGS,NDBcdtD 17-719-517-9836 y final, slow theodolites. furiously regular req
@@ -878,7 +878,7 @@ group by
     o_totalprice
 order by
     o_totalprice desc,
-    o_orderdate limit 100;
+    o_orderdate;
 ----
 Customer#000001639 1639 502886 1994-04-12 456423.88 312.00
 Customer#000006655 6655 29158 1995-10-21 452805.02 305.00
@@ -1226,33 +1226,33 @@ HashJoin: INNER
 │       ├── Build
 │       │   └── HashJoin: INNER
 │       │       ├── Build
-│       │       │   └── Scan: default.tpch_test.region (#4) (read rows: 5)
+│       │       │   └── HashJoin: INNER
+│       │       │       ├── Build
+│       │       │       │   └── Scan: default.tpch_test.region (#4) (read rows: 5)
+│       │       │       └── Probe
+│       │       │           └── Scan: default.tpch_test.nation (#3) (read rows: 25)
 │       │       └── Probe
-│       │           └── Scan: default.tpch_test.nation (#3) (read rows: 25)
+│       │           └── Scan: default.tpch_test.supplier (#1) (read rows: 1000)
 │       └── Probe
-│           └── Scan: default.tpch_test.supplier (#1) (read rows: 1000)
+│           └── HashJoin: INNER
+│               ├── Build
+│               │   └── Scan: default.tpch_test.part (#0) (read rows: 20000)
+│               └── Probe
+│                   └── Scan: default.tpch_test.partsupp (#2) (read rows: 80000)
 └── Probe
     └── HashJoin: INNER
         ├── Build
         │   └── HashJoin: INNER
         │       ├── Build
-        │       │   └── Scan: default.tpch_test.part (#0) (read rows: 20000)
+        │       │   └── HashJoin: INNER
+        │       │       ├── Build
+        │       │       │   └── Scan: default.tpch_test.region (#8) (read rows: 5)
+        │       │       └── Probe
+        │       │           └── Scan: default.tpch_test.nation (#7) (read rows: 25)
         │       └── Probe
-        │           └── HashJoin: INNER
-        │               ├── Build
-        │               │   └── HashJoin: INNER
-        │               │       ├── Build
-        │               │       │   └── HashJoin: INNER
-        │               │       │       ├── Build
-        │               │       │       │   └── Scan: default.tpch_test.region (#8) (read rows: 5)
-        │               │       │       └── Probe
-        │               │       │           └── Scan: default.tpch_test.nation (#7) (read rows: 25)
-        │               │       └── Probe
-        │               │           └── Scan: default.tpch_test.supplier (#6) (read rows: 1000)
-        │               └── Probe
-        │                   └── Scan: default.tpch_test.partsupp (#5) (read rows: 80000)
+        │           └── Scan: default.tpch_test.supplier (#6) (read rows: 1000)
         └── Probe
-            └── Scan: default.tpch_test.partsupp (#2) (read rows: 80000)
+            └── Scan: default.tpch_test.partsupp (#5) (read rows: 80000)
 
 # Q3
 query I
@@ -1849,13 +1849,13 @@ MaterializedCte: 0
         ├── Build
         │   └── CTEScan
         │       ├── CTE index: 0, sub index: 2
-        │       └── estimated rows: 81.00
+        │       └── estimated rows: 80.00
         └── Probe
             └── HashJoin: INNER
                 ├── Build
                 │   └── CTEScan
                 │       ├── CTE index: 0, sub index: 1
-                │       └── estimated rows: 81.00
+                │       └── estimated rows: 80.00
                 └── Probe
                     └── Scan: default.tpch_test.supplier (#0) (read rows: 1000)
 
