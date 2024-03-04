@@ -580,7 +580,7 @@ mod tests {
             op,
             SpillerConfig::create("_spill_test".to_string()),
             SpillerType::OrderBy,
-        );
+        )?;
 
         let sort_desc = Arc::new(vec![SortColumnDescription {
             offset: 0,

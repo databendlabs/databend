@@ -277,6 +277,10 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_bytes_threshold_per_proc")? as usize)
     }
 
+    pub fn get_join_spilling_partition_bits(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_partition_bits")? as usize)
+    }
+
     pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_bloom_runtime_filter")? != 0)
     }
