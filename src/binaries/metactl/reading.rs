@@ -19,11 +19,9 @@ use std::io::Lines;
 use std::iter::Peekable;
 
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
-use databend_common_meta_raft_store::key_spaces::RaftStoreEntryCompat;
 use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::ondisk::TREE_HEADER;
-use databend_common_meta_sled_store::openraft::compat::Upgrade;
 
 /// Import from lines of exported data and Return the max log id that is found.
 pub fn validate_version<B: BufRead + 'static>(
@@ -56,9 +54,7 @@ pub fn validate_version<B: BufRead + 'static>(
 }
 
 pub fn read_version(first_line: &str) -> anyhow::Result<DataVersion> {
-    let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(first_line)?;
-
-    let kv_entry = kv_entry.upgrade();
+    let (tree_name, kv_entry): (String, RaftStoreEntry) = serde_json::from_str(first_line)?;
 
     let version = if tree_name == TREE_HEADER {
         // There is a explicit header.
