@@ -162,7 +162,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
         let files_opt = handler
             .do_vacuum_drop_tables(
                 tables,
-                if self.plan.option.dry_run.is_some() {
+                if self.plan.option.dry_run {
                     Some(DRY_RUN_LIMIT)
                 } else {
                     None
@@ -170,7 +170,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
             )
             .await?;
         // gc meta data only when not dry run
-        if self.plan.option.dry_run.is_none() {
+        if !self.plan.option.dry_run {
             self.gc_drop_tables(catalog, drop_ids).await?;
         }
 

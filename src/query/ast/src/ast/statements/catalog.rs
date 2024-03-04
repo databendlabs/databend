@@ -17,12 +17,14 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_meta_app::schema::CatalogType;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
-use super::ShowLimit;
 use crate::ast::write_comma_separated_map;
 use crate::ast::Identifier;
+use crate::ast::ShowLimit;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowCatalogsStmt {
     pub limit: Option<ShowLimit>,
 }
@@ -38,7 +40,7 @@ impl Display for ShowCatalogsStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowCreateCatalogStmt {
     pub catalog: Identifier,
 }
@@ -49,11 +51,15 @@ impl Display for ShowCreateCatalogStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateCatalogStmt {
+    #[drive(skip)]
     pub if_not_exists: bool,
+    #[drive(skip)]
     pub catalog_name: String,
+    #[drive(skip)]
     pub catalog_type: CatalogType,
+    #[drive(skip)]
     pub catalog_options: BTreeMap<String, String>,
 }
 
@@ -71,8 +77,9 @@ impl Display for CreateCatalogStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropCatalogStmt {
+    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Identifier,
 }

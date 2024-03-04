@@ -15,11 +15,16 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
 use crate::ast::write_comma_separated_list;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CallStmt {
+    #[drive(skip)]
     pub name: String,
+    #[drive(skip)]
     pub args: Vec<String>,
 }
 

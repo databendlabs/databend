@@ -32,12 +32,12 @@ use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
 
-pub struct TransformUdf {
+pub struct TransformUdfServer {
     func_ctx: FunctionContext,
     funcs: Vec<UdfFunctionDesc>,
 }
 
-impl TransformUdf {
+impl TransformUdfServer {
     pub fn try_create(
         func_ctx: FunctionContext,
         funcs: Vec<UdfFunctionDesc>,
@@ -52,7 +52,7 @@ impl TransformUdf {
 }
 
 #[async_trait::async_trait]
-impl AsyncTransform for TransformUdf {
+impl AsyncTransform for TransformUdfServer {
     const NAME: &'static str = "UdfTransform";
 
     #[async_backtrace::framed]
@@ -60,6 +60,7 @@ impl AsyncTransform for TransformUdf {
         let connect_timeout = self.func_ctx.external_server_connect_timeout_secs;
         let request_timeout = self.func_ctx.external_server_request_timeout_secs;
         for func in &self.funcs {
+            let server_addr = func.udf_type.as_server().unwrap();
             // construct input record_batch
             let num_rows = data_block.num_rows();
             let block_entries = func
@@ -91,8 +92,7 @@ impl AsyncTransform for TransformUdf {
                 .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
             let mut client =
-                UDFFlightClient::connect(&func.server_addr, connect_timeout, request_timeout)
-                    .await?;
+                UDFFlightClient::connect(server_addr, connect_timeout, request_timeout).await?;
             let result_batch = client.do_exchange(&func.func_name, input_batch).await?;
 
             let schema = DataSchema::try_from(&(*result_batch.schema()))?;

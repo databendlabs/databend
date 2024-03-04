@@ -15,10 +15,14 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
 use crate::ast::ShowLimit;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowLocksStmt {
+    #[drive(skip)]
     pub in_account: bool,
     pub limit: Option<ShowLimit>,
 }

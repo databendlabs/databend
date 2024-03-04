@@ -16,22 +16,26 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_meta_app::schema::CreateOption;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
 use crate::ast::Identifier;
 use crate::ast::Query;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateIndexStmt {
     pub index_type: TableIndexType,
+    #[drive(skip)]
     pub create_option: CreateOption,
 
     pub index_name: Identifier,
 
     pub query: Box<Query>,
+    #[drive(skip)]
     pub sync_creation: bool,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum TableIndexType {
     Aggregating,
     // Join
@@ -54,8 +58,9 @@ impl Display for CreateIndexStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropIndexStmt {
+    #[drive(skip)]
     pub if_exists: bool,
     pub index: Identifier,
 }
@@ -72,9 +77,10 @@ impl Display for DropIndexStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct RefreshIndexStmt {
     pub index: Identifier,
+    #[drive(skip)]
     pub limit: Option<u64>,
 }
 

@@ -15,10 +15,13 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
 use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct UnSetStmt {
     pub source: UnSetSource,
 }
@@ -30,7 +33,7 @@ impl Display for UnSetStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum UnSetSource {
     Var { variable: Identifier },
     Vars { variables: Vec<Identifier> },

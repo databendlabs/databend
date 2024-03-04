@@ -18,18 +18,20 @@ use std::fmt::Formatter;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
-use super::Hint;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
+use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableAlias;
 use crate::ast::TableReference;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct MergeUpdateExpr {
     pub table: Option<Identifier>,
     pub name: Identifier,
@@ -46,41 +48,43 @@ impl Display for MergeUpdateExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum MatchOperation {
     Update {
         update_list: Vec<MergeUpdateExpr>,
+        #[drive(skip)]
         is_star: bool,
     },
     Delete,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct MatchedClause {
     pub selection: Option<Expr>,
     pub operation: MatchOperation,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct InsertOperation {
     pub columns: Option<Vec<Identifier>>,
     pub values: Vec<Expr>,
+    #[drive(skip)]
     pub is_star: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct UnmatchedClause {
     pub selection: Option<Expr>,
     pub insert_operation: InsertOperation,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum MergeOption {
     Match(MatchedClause),
     Unmatch(UnmatchedClause),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct MergeIntoStmt {
     pub hints: Option<Hint>,
     pub catalog: Option<Identifier>,
@@ -201,11 +205,14 @@ impl MergeIntoStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum MergeSource {
     StreamingV2 {
+        #[drive(skip)]
         settings: BTreeMap<String, String>,
+        #[drive(skip)]
         on_error_mode: Option<String>,
+        #[drive(skip)]
         start: usize,
     },
 
@@ -221,10 +228,13 @@ pub enum MergeSource {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct StreamingSource {
+    #[drive(skip)]
     settings: BTreeMap<String, String>,
+    #[drive(skip)]
     on_error_mode: Option<String>,
+    #[drive(skip)]
     start: usize,
 }
 
