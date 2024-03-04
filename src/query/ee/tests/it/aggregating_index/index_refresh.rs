@@ -18,7 +18,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_ast::ast::walk_statement_mut;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -43,6 +42,7 @@ use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
+use derive_visitor::DriveMut;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]

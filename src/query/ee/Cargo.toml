@@ -50,9 +50,9 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 dashmap = { workspace = true }
+derive-visitor = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
-
 jwt-simple = "0.11.0"
 log = { workspace = true }
 tempfile = "3.4.0"
