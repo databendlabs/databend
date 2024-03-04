@@ -218,7 +218,9 @@ impl Processor for TransformHashJoinBuild {
                 self.step = HashJoinBuildStep::Finalize;
             }
             HashJoinBuildStep::Spill => {
-                self.spill_handler.spill().await?;
+                self.spill_handler
+                    .spill(&self.build_state.join_type())
+                    .await?;
                 // After spill, the processor should continue to run, and process incoming data.
                 self.step = HashJoinBuildStep::Running;
             }
