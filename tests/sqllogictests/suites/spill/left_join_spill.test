@@ -114,8 +114,6 @@ order by c_custkey
 10
 10
 
-statement ok
-set disable_join_reorder = 0;
 
 # tpch queries contain left join
 #Q13
@@ -181,3 +179,13 @@ order by
 140 5
 4 3
 144 1
+
+
+statement ok
+set disable_join_reorder = 0;
+
+statement ok
+set join_spilling_memory_ratio = 0;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 0;
