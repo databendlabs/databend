@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_storages_fuse::TableContext;
+use databend_storages_common_txn::TxnManagerRef;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -47,6 +48,7 @@ impl Interpreter for CommitInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let _guard = CLearTxnManagerGuard(self.ctx.txn_mgr().clone());
         let is_active = self.ctx.txn_mgr().lock().is_active();
         if is_active {
             let catalog = self.ctx.get_default_catalog()?;
@@ -57,7 +59,14 @@ impl Interpreter for CommitInterpreter {
                 PipelineBuilder::try_purge_files(self.ctx.clone(), &stage_info, &files).await;
             }
         }
-        self.ctx.txn_mgr().lock().clear();
         Ok(PipelineBuildResult::create())
+    }
+}
+
+struct CLearTxnManagerGuard(TxnManagerRef);
+
+impl Drop for CLearTxnManagerGuard {
+    fn drop(&mut self) {
+        self.0.lock().clear();
     }
 }

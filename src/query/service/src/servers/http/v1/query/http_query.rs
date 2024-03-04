@@ -334,6 +334,8 @@ impl HttpQuery {
                         })?;
                 }
             }
+            println!("request.sql: {}", request.sql);
+            println!("receive session_conf.txn_state: {:?}", session_conf.txn_state);
             match &session_conf.txn_state {
                 Some(TxnState::Active) => {
                     if let Some(ServerInfo { id, start_time }) = &session_conf.last_server_info {
@@ -598,6 +600,8 @@ impl HttpQuery {
                 .add_txn(self.id.clone(), session_state.txn_manager.clone(), timeout)
                 .await;
         }
+        println!("sql: {}", self.request.sql);
+        println!("send txn_state: {:?}", txn_state);
         HttpSessionConf {
             database: Some(database),
             role,
