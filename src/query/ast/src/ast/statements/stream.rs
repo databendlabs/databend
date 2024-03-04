@@ -16,12 +16,14 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_meta_app::schema::CreateOption;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
 use crate::ast::write_dot_separated_list;
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum StreamPoint {
     AtStream {
         database: Option<Identifier>,
@@ -41,8 +43,9 @@ impl Display for StreamPoint {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateStreamStmt {
+    #[drive(skip)]
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -50,7 +53,9 @@ pub struct CreateStreamStmt {
     pub table_database: Option<Identifier>,
     pub table: Identifier,
     pub stream_point: Option<StreamPoint>,
+    #[drive(skip)]
     pub append_only: bool,
+    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -86,8 +91,9 @@ impl Display for CreateStreamStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropStreamStmt {
+    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -110,10 +116,11 @@ impl Display for DropStreamStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowStreamsStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
+    #[drive(skip)]
     pub full: bool,
     pub limit: Option<ShowLimit>,
 }
@@ -140,7 +147,7 @@ impl Display for ShowStreamsStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DescribeStreamStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,

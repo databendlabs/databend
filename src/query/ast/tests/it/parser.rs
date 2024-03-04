@@ -573,6 +573,15 @@ fn test_statement() {
         "CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';",
         "CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
         "CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
+        r#"create or replace function addone(int)
+returns int
+language python
+handler = 'addone_py'
+as
+$$
+def addone_py(i):
+  return i+1
+$$;"#,
         "DROP FUNCTION binary_reverse;",
         "DROP FUNCTION isnotempty;",
     ];
@@ -779,6 +788,7 @@ fn test_expr() {
         r#"char(0xD0, 0xBF, 0xD1)"#,
         r#"[42, 3.5, 4., .001, 5e2, 1.925e-3, .38e+7, 1.e-01, 0xfff, x'deedbeef']"#,
         r#"123456789012345678901234567890"#,
+        r#"$$ab123c$$"#,
         r#"x'123456789012345678901234567890'"#,
         r#"1e100000000000000"#,
         r#"100_100_000"#,

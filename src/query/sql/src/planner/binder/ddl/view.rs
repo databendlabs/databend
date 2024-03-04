@@ -15,8 +15,8 @@
 use databend_common_ast::ast::AlterViewStmt;
 use databend_common_ast::ast::CreateViewStmt;
 use databend_common_ast::ast::DropViewStmt;
-use databend_common_ast::ast::VisitorMut;
 use databend_common_exception::Result;
+use derive_visitor::DriveMut;
 
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
@@ -51,7 +51,7 @@ impl Binder {
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
-        visitor.visit_query(&mut query);
+        query.drive_mut(&mut visitor);
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
@@ -90,7 +90,7 @@ impl Binder {
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
-        visitor.visit_query(&mut query);
+        query.drive_mut(&mut visitor);
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {

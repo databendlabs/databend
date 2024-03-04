@@ -108,7 +108,7 @@ pub struct VacuumTablePlan {
 
 impl VacuumTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        if self.option.dry_run.is_some() {
+        if self.option.dry_run {
             Arc::new(DataSchema::new(vec![DataField::new(
                 "Files",
                 DataType::String,
@@ -140,7 +140,7 @@ pub struct VacuumDropTablePlan {
 
 impl VacuumDropTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        if self.option.dry_run.is_some() {
+        if self.option.dry_run {
             Arc::new(DataSchema::new(vec![
                 DataField::new("Table", DataType::String),
                 DataField::new("File", DataType::String),
@@ -168,13 +168,13 @@ impl crate::plans::VacuumTemporaryFilesPlan {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VacuumDropTableOption {
-    pub dry_run: Option<()>,
+    pub dry_run: bool,
     pub limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VacuumTableOption {
-    pub dry_run: Option<()>,
+    pub dry_run: bool,
 }
 
 /// Optimize.

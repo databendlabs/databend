@@ -15,11 +15,14 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
 use crate::ast::Expr;
 use crate::ast::Hint;
 use crate::ast::TableReference;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DeleteStmt {
     pub hints: Option<Hint>,
     pub table: TableReference,

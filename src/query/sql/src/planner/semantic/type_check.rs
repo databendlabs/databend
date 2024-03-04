@@ -77,6 +77,7 @@ use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_users::UserApiProvider;
 use indexmap::IndexMap;
@@ -114,8 +115,9 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
-use crate::plans::UDFServerCall;
+use crate::plans::UDFType;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -2972,6 +2974,10 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_udf_server(span, name, arguments, udf_def)
                     .await?,
             )),
+            UDFDefinition::UDFScript(udf_def) => Ok(Some(
+                self.resolve_udf_script(span, name, arguments, udf_def)
+                    .await?,
+            )),
         }
     }
 
@@ -3025,14 +3031,57 @@ impl<'a> TypeChecker<'a> {
 
         self.ctx.set_cacheable(false);
         Ok(Box::new((
-            UDFServerCall {
+            UDFCall {
                 span,
                 name,
                 func_name: udf_definition.handler,
                 display_name,
-                server_addr: udf_definition.address,
+                udf_type: UDFType::Server(address.clone()),
                 arg_types: udf_definition.arg_types,
                 return_type: Box::new(udf_definition.return_type.clone()),
+                arguments: args,
+            }
+            .into(),
+            udf_definition.return_type.clone(),
+        )))
+    }
+
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
+    async fn resolve_udf_script(
+        &mut self,
+        span: Span,
+        name: String,
+        arguments: &[Expr],
+        udf_definition: UDFScript,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let mut args = Vec::with_capacity(arguments.len());
+        for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
+            let box (arg, ty) = self.resolve(argument).await?;
+            if ty != *dest_type {
+                args.push(wrap_cast(&arg, dest_type));
+            } else {
+                args.push(arg);
+            }
+        }
+
+        let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
+        let display_name = format!("{}({})", udf_definition.handler, arg_names);
+
+        self.ctx.set_cacheable(false);
+        Ok(Box::new((
+            UDFCall {
+                span,
+                name,
+                func_name: udf_definition.handler,
+                display_name,
+                arg_types: udf_definition.arg_types,
+                return_type: Box::new(udf_definition.return_type.clone()),
+                udf_type: UDFType::Script((
+                    udf_definition.language,
+                    udf_definition.runtime_version,
+                    udf_definition.code,
+                )),
                 arguments: args,
             }
             .into(),
