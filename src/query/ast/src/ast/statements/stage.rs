@@ -46,7 +46,7 @@ pub struct CreateStageStmt {
     pub comments: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum SelectStageOption {
     Files(#[drive(skip)] Vec<String>),
     Pattern(#[drive(skip)] String),
@@ -69,7 +69,7 @@ impl SelectStageOptions {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Drive, DriveMut)]
 pub struct SelectStageOptions {
     #[drive(skip)]
     pub files: Option<Vec<String>>,

@@ -3049,15 +3049,9 @@ pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
         rule! {
             (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(dry_run_opt, opt_limit)| {
-            let dry_run = match dry_run_opt {
-                Some(_) => Some(()),
-                None => None,
-            };
-            VacuumDropTableOption {
-                dry_run,
-                limit: opt_limit.map(|(_, limit)| limit as usize),
-            }
+        |(opt_dry_run, opt_limit)| VacuumDropTableOption {
+            dry_run: opt_dry_run.is_some(),
+            limit: opt_limit.map(|(_, limit)| limit as usize),
         },
     ),))(i)
 }
@@ -3067,12 +3061,8 @@ pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
         rule! {
             (DRY ~ ^RUN)?
         },
-        |dry_run_opt| {
-            let dry_run = match dry_run_opt {
-                Some(_) => Some(()),
-                None => None,
-            };
-            VacuumTableOption { dry_run }
+        |opt_dry_run| VacuumTableOption {
+            dry_run: opt_dry_run.is_some(),
         },
     ),))(i)
 }
@@ -3130,7 +3120,7 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
              ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
              ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
              ~ ( COMMENT ~ "=" ~ #literal_string )?
-             ~ (#set_table_option)?
+             ~ #set_table_option?
         },
         |(_, warehouse_opts, schedule_opts, suspend_opts, comment, session_opts)| {
             AlterTaskOptions::Set {

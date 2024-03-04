@@ -16,27 +16,33 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_meta_app::schema::CreateOption;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
 use crate::ast::Expr;
 use crate::ast::TypeName;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DataMaskArg {
+    #[drive(skip)]
     pub arg_name: String,
     pub arg_type: TypeName,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DataMaskPolicy {
     pub args: Vec<DataMaskArg>,
     pub return_type: TypeName,
     pub body: Expr,
+    #[drive(skip)]
     pub comment: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateDatamaskPolicyStmt {
+    #[drive(skip)]
     pub create_option: CreateOption,
+    #[drive(skip)]
     pub name: String,
     pub policy: DataMaskPolicy,
 }
@@ -73,9 +79,11 @@ impl Display for CreateDatamaskPolicyStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropDatamaskPolicyStmt {
+    #[drive(skip)]
     pub if_exists: bool,
+    #[drive(skip)]
     pub name: String,
 }
 
@@ -91,8 +99,9 @@ impl Display for DropDatamaskPolicyStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DescDatamaskPolicyStmt {
+    #[drive(skip)]
     pub name: String,
 }
 

@@ -16,7 +16,10 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum PresignAction {
     Download,
     Upload,
@@ -38,9 +41,9 @@ impl Display for PresignAction {
 }
 
 /// TODO: we can support uri location in the future.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum PresignLocation {
-    StageLocation(String),
+    StageLocation(#[drive(skip)] String),
 }
 
 impl Display for PresignLocation {
@@ -51,11 +54,13 @@ impl Display for PresignLocation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct PresignStmt {
     pub action: PresignAction,
     pub location: PresignLocation,
+    #[drive(skip)]
     pub expire: Duration,
+    #[drive(skip)]
     pub content_type: Option<String>,
 }
 
