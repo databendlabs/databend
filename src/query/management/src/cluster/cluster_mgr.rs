@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Add;
 use std::time::Duration;
-use std::time::UNIX_EPOCH;
 
 use databend_common_base::base::escape_for_key;
 use databend_common_base::base::unescape_for_key;
@@ -66,13 +64,7 @@ impl ClusterMgr {
     }
 
     fn new_lift_time(&self) -> MetaSpec {
-        let now = std::time::SystemTime::now();
-        let expire_at = now
-            .add(self.lift_time)
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
-
-        MetaSpec::new_expire(expire_at.as_secs())
+        MetaSpec::new_ttl(self.lift_time)
     }
 }
 
