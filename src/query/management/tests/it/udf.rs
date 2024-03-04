@@ -211,7 +211,7 @@ fn create_test_udf_server() -> UserDefinedFunction {
 
 fn create_test_udf_script() -> UserDefinedFunction {
     UserDefinedFunction::create_udf_script(
-        "strlen",
+        "strlen2",
         "testcode",
         "strlen_py",
         "python",

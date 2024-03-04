@@ -133,10 +133,8 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
         if let ScalarExpr::UDFCall(udf) = expr {
             if let Some(column_ref) = self.udf_functions_map.get(&udf.display_name) {
                 *expr = ScalarExpr::BoundColumnRef(column_ref.clone());
-            } else {
-                if udf.udf_type.match_type(self.script_udf) {
-                    return Err(ErrorCode::Internal("Rewrite udf function failed"));
-                }
+            } else if udf.udf_type.match_type(self.script_udf) {
+                return Err(ErrorCode::Internal("Rewrite udf function failed"));
             }
         }
         Ok(())
