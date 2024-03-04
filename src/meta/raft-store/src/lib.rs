@@ -21,7 +21,6 @@
 // #![allow(incomplete_features)]
 
 pub mod applier;
-pub(crate) mod compat07;
 pub mod config;
 pub mod key_spaces;
 pub mod log;
