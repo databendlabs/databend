@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::walk_table_reference_mut;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::ast::VisitorMut;
+use derive_visitor::VisitorMut;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, VisitorMut)]
+#[visitor(TableReference(enter))]
 pub struct ViewRewriter {
     pub current_database: String,
 }
 
-impl VisitorMut for ViewRewriter {
-    fn visit_table_reference(&mut self, table_ref: &mut TableReference) {
+impl ViewRewriter {
+    fn enter_table_reference(&mut self, table_ref: &mut TableReference) {
         match table_ref {
             TableReference::Table {
                 span,
@@ -56,7 +56,7 @@ impl VisitorMut for ViewRewriter {
                     }
                 }
             }
-            _ => walk_table_reference_mut(self, table_ref),
+            _ => (),
         }
     }
 }
