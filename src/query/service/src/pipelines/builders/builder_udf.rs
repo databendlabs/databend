@@ -24,7 +24,7 @@ impl PipelineBuilder {
     pub(crate) fn build_udf(&mut self, udf: &Udf) -> Result<()> {
         self.build_pipeline(&udf.input)?;
 
-        if udf.interpreter_udf {
+        if udf.script_udf {
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(TransformUdfScript::try_create(
                     self.func_ctx.clone(),

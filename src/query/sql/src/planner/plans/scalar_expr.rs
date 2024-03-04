@@ -604,8 +604,17 @@ pub struct UDFCall {
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
-    Server(String),                       // server_addr
-    Interepter((String, String, String)), // Lang, Version, Code
+    Server(String),                   // server_addr
+    Script((String, String, String)), // Lang, Version, Code
+}
+
+impl UDFType {
+    pub fn match_type(&self, is_script: bool) -> bool {
+        match self {
+            UDFType::Server(_) => !is_script,
+            UDFType::Script(_) => is_script,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Educe)]

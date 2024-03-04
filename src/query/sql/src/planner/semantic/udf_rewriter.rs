@@ -46,18 +46,18 @@ pub(crate) struct UdfRewriter {
     /// Mapping: (udf function display name) -> (derived index)
     /// This is used to reuse already generated derived columns
     udf_functions_index_map: HashMap<String, IndexType>,
-    interpreter_udf: bool,
+    script_udf: bool,
 }
 
 impl UdfRewriter {
-    pub(crate) fn new(metadata: MetadataRef, interpreter_udf: bool) -> Self {
+    pub(crate) fn new(metadata: MetadataRef, script_udf: bool) -> Self {
         Self {
             metadata,
             udf_arguments: Default::default(),
             udf_functions: Default::default(),
             udf_functions_map: Default::default(),
             udf_functions_index_map: Default::default(),
-            interpreter_udf,
+            script_udf,
         }
     }
 
@@ -117,7 +117,7 @@ impl UdfRewriter {
 
             let udf_plan = Udf {
                 items: mem::take(&mut self.udf_functions),
-                interpreter_udf: self.interpreter_udf,
+                script_udf: self.script_udf,
             };
             Arc::new(SExpr::create_unary(Arc::new(udf_plan.into()), child_expr))
         } else {
@@ -134,14 +134,16 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
             if let Some(column_ref) = self.udf_functions_map.get(&udf.display_name) {
                 *expr = ScalarExpr::BoundColumnRef(column_ref.clone());
             } else {
-                return Err(ErrorCode::Internal("Rewrite udf function failed"));
+                if udf.udf_type.match_type(self.script_udf) {
+                    return Err(ErrorCode::Internal("Rewrite udf function failed"));
+                }
             }
         }
         Ok(())
     }
 
     fn visit_udf_call(&mut self, udf: &'a mut UDFCall) -> Result<()> {
-        if udf.udf_type.as_interepter().is_some() && !self.interpreter_udf {
+        if !udf.udf_type.match_type(self.script_udf) {
             return Ok(());
         }
 

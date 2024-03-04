@@ -37,7 +37,7 @@ pub struct Udf {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub udf_funcs: Vec<UdfFunctionDesc>,
-    pub interpreter_udf: bool,
+    pub script_udf: bool,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -91,7 +91,7 @@ impl PhysicalPlanBuilder {
         }
         let udf = crate::plans::Udf {
             items: used,
-            interpreter_udf: udf.interpreter_udf,
+            script_udf: udf.script_udf,
         };
         let input = self.build(s_expr.child(0)?, required).await?;
         let input_schema = input.output_schema()?;
@@ -158,7 +158,7 @@ impl PhysicalPlanBuilder {
             plan_id: 0,
             input: Box::new(input),
             udf_funcs,
-            interpreter_udf: udf.interpreter_udf,
+            script_udf: udf.script_udf,
             stat_info: Some(stat_info),
         }))
     }

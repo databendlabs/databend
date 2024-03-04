@@ -55,7 +55,7 @@ impl TransformUdfScript {
                 DataSchema::new(vec![DataField::new("tmp", func.data_type.as_ref().clone())]);
             let arrow_schema = Schema::from(&tmp_schema);
 
-            let (_, _, code) = func.udf_type.as_interepter().unwrap();
+            let (_, _, code) = func.udf_type.as_script().unwrap();
             js_runtime
                 .add_function_with_handler(
                     &func.name,

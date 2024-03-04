@@ -3077,7 +3077,7 @@ impl<'a> TypeChecker<'a> {
                 display_name,
                 arg_types: udf_definition.arg_types,
                 return_type: Box::new(udf_definition.return_type.clone()),
-                udf_type: UDFType::Interepter((
+                udf_type: UDFType::Script((
                     udf_definition.language,
                     udf_definition.runtime_version,
                     udf_definition.code,
