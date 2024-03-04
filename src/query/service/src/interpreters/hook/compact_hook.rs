@@ -73,10 +73,7 @@ async fn do_hook_compact(
         {
             pipeline.set_on_finished(move |err| {
                 if !ctx.get_need_compact_after_write() {
-                    eprintln!("no need to compact");
                     return Ok(());
-                } else {
-                    eprintln!("need compact");
                 }
 
                 let op_name = &trace_ctx.operation_name;

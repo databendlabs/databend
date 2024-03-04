@@ -22,3 +22,5 @@ pub mod openai;
 pub mod session;
 pub mod storage;
 pub mod transform;
+
+pub mod copy_into;

@@ -32,6 +32,8 @@ use databend_common_expression::Scalar;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_metrics::copy_into::metrics_inc_copy_into_timings_ms_filter_files;
+use databend_common_metrics::copy_into::metrics_inc_copy_into_timings_ms_list_files;
 use databend_common_metrics::storage::*;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
@@ -146,10 +148,10 @@ impl CopyIntoTablePlan {
 
         let num_all_files = all_source_file_infos.len();
 
-        let end_get_all_source = Instant::now();
-        let cost_get_all_files = end_get_all_source.duration_since(start).as_millis();
-        metrics_inc_copy_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
+        let list_file_used_time_ms = start.elapsed().as_millis() as u64;
+        metrics_inc_copy_collect_files_get_all_source_files_milliseconds(list_file_used_time_ms);
 
+        metrics_inc_copy_into_timings_ms_list_files(list_file_used_time_ms);
         ctx.set_status_info(&format!("end list files: got {} files", num_all_files));
 
         let need_copy_file_infos = if self.force {
@@ -167,6 +169,8 @@ impl CopyIntoTablePlan {
             // Status.
             ctx.set_status_info("begin filtering out copied files");
 
+            let filter_start = Instant::now();
+
             let files = ctx
                 .filter_out_copied_files(
                     self.catalog_info.catalog_name(),
@@ -181,17 +185,14 @@ impl CopyIntoTablePlan {
                 num_all_files
             ));
 
-            let end_filter_out = Instant::now();
-            let cost_filter_out = end_filter_out
-                .duration_since(end_get_all_source)
-                .as_millis();
-            metrics_inc_copy_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
-
+            let filter_used_time_ms = filter_start.elapsed().as_millis() as u64;
+            metrics_inc_copy_filter_out_copied_files_entire_milliseconds(filter_used_time_ms);
+            metrics_inc_copy_into_timings_ms_filter_files(filter_used_time_ms);
             files
         };
 
         info!(
-            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{}",
+            "copy: collect_files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{}",
             max_files,
             num_all_files,
             need_copy_file_infos.len(),

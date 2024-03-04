@@ -19,6 +19,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_metrics::copy_into::metrics_inc_copy_into_timings_ms_purge_files;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::StageFileInfo;
@@ -74,9 +75,9 @@ impl PipelineBuilder {
                             // Perf.
                             {
                                 metrics_inc_copy_purge_files_counter(files.len() as u32);
-                                metrics_inc_copy_purge_files_cost_milliseconds(
-                                    start.elapsed().as_millis() as u32,
-                                );
+                                let elapsed = start.elapsed().as_millis();
+                                metrics_inc_copy_purge_files_cost_milliseconds(elapsed as u32);
+                                metrics_inc_copy_into_timings_ms_purge_files(elapsed as u64)
                             }
                         }
 

@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_ast::ast::ColumnID as AstColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -53,11 +54,13 @@ use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_metrics::copy_into::metrics_inc_copy_into_timings_ms_bind;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use indexmap::IndexMap;
 use log::debug;
+use log::info;
 use log::warn;
 use parking_lot::RwLock;
 
@@ -80,7 +83,8 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         stmt: &CopyIntoTableStmt,
     ) -> Result<Plan> {
-        match &stmt.src {
+        let begin = Instant::now();
+        let plan = match &stmt.src {
             CopyIntoTableSource::Location(location) => {
                 let plan = self
                     .bind_copy_into_table_common(bind_context, stmt, location)
@@ -102,7 +106,13 @@ impl<'a> Binder {
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
                     .await
             }
-        }
+        };
+
+        let elapsed = begin.elapsed().as_millis() as u64;
+        metrics_inc_copy_into_timings_ms_bind(elapsed);
+        info!("bind_copy_into_table done, time used: {:?}", elapsed);
+
+        plan
     }
 
     async fn bind_copy_into_table_common(
@@ -327,7 +337,6 @@ impl<'a> Binder {
         select_list: &'a [SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
-        eprintln!("bind_copy_from_query_into_table");
         let need_copy_file_infos = plan.collect_files(self.ctx.as_ref()).await?;
 
         if need_copy_file_infos.is_empty() {

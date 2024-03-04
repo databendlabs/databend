@@ -19,7 +19,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_storage::StageFileInfo;
 use enum_as_inner::EnumAsInner;
 
 use crate::executor::physical_plan::PhysicalPlan;
