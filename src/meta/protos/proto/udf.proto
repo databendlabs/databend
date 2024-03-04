@@ -59,7 +59,7 @@ message UserDefinedFunction {
   oneof definition {
     LambdaUDF lambda_udf = 3;
     UDFServer udf_server = 4;
-    UDFScript udf_interpreter = 6;
+    UDFScript udf_script = 6;
   }
   // The time udf created.
   optional string created_on = 5;

@@ -107,11 +107,11 @@ impl FromToProto for mt::UDFServer {
 }
 
 impl FromToProto for mt::UDFScript {
-    type PB = pb::UDFScript;
+    type PB = pb::UdfScript;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
-    fn from_pb(p: pb::UDFScript) -> Result<Self, Incompatible> {
+    fn from_pb(p: pb::UdfScript) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let mut arg_types = Vec::with_capacity(p.arg_types.len());
@@ -135,7 +135,7 @@ impl FromToProto for mt::UDFScript {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::UDFScript, Incompatible> {
+    fn to_pb(&self) -> Result<pb::UdfScript, Incompatible> {
         let mut arg_types = Vec::with_capacity(self.arg_types.len());
         for arg_type in self.arg_types.iter() {
             let arg_type = infer_schema_type(arg_type)
@@ -151,7 +151,7 @@ impl FromToProto for mt::UDFScript {
             })?
             .to_pb()?;
 
-        Ok(pb::UDFScript {
+        Ok(pb::UdfScript {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             code: self.code.clone(),
@@ -178,7 +178,7 @@ impl FromToProto for mt::UserDefinedFunction {
             Some(pb::user_defined_function::Definition::UdfServer(udf_server)) => {
                 mt::UDFDefinition::UDFServer(mt::UDFServer::from_pb(udf_server)?)
             }
-            Some(pb::user_defined_function::Definition::UDFScript(udf_interpreter)) => {
+            Some(pb::user_defined_function::Definition::UdfScript(udf_interpreter)) => {
                 mt::UDFDefinition::UDFScript(mt::UDFScript::from_pb(udf_interpreter)?)
             }
             None => {
@@ -208,7 +208,7 @@ impl FromToProto for mt::UserDefinedFunction {
                 pb::user_defined_function::Definition::UdfServer(udf_server.to_pb()?)
             }
             mt::UDFDefinition::UDFScript(udf_interpreter) => {
-                pb::user_defined_function::Definition::UDFScript(udf_interpreter.to_pb()?)
+                pb::user_defined_function::Definition::UdfScript(udf_interpreter.to_pb()?)
             }
         };
 
