@@ -122,15 +122,13 @@ impl CopyIntoTableInterpreter {
                 &plan.table_name,
             )
             .await?;
-        eprintln!(
-            "binding physical plan, from {:#?}",
-            plan.stage_table_info.files_to_copy
-        );
+
         let files = if let Some(v) = &plan.stage_table_info.files_to_copy {
             v.clone()
         } else {
             plan.collect_files(self.ctx.as_ref()).await?
         };
+
         let mut seq = vec![];
         let source = if let Some(ref query) = plan.query {
             let (select_interpreter, query_source_schema, update_stream_meta) =
@@ -314,10 +312,12 @@ impl Interpreter for CopyIntoTableInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let begin = Instant::now();
+        let begin_building_physical_plan = Instant::now();
         let (physical_plan, files, update_stream_meta) =
             self.build_physical_plan(&self.plan).await?;
-        metrics_inc_copy_into_timings_ms_build_physical_plan(begin.elapsed().as_millis() as u64);
+        metrics_inc_copy_into_timings_ms_build_physical_plan(
+            begin_building_physical_plan.elapsed().as_millis() as u64,
+        );
 
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
