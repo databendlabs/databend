@@ -525,7 +525,7 @@ fn rewrite_original_query(ctx: Arc<QueryContext>, original_query: &str) -> Resul
     let tokens = tokenize_sql(original_query)?;
     let (mut stmt, _) = parse_sql(&tokens, ctx.get_settings().get_sql_dialect()?)?;
     let mut index_rewriter = AggregatingIndexRewriter::new(ctx.get_settings().get_sql_dialect()?);
-    walk_statement_mut(&mut index_rewriter, &mut stmt);
+    stmt.drive_mut(&mut index_rewriter);
     if let Statement::Query(q) = &stmt {
         Ok(q.to_string())
     } else {

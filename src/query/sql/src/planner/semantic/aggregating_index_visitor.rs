@@ -14,8 +14,6 @@
 
 use std::collections::HashSet;
 
-use databend_common_ast::ast::walk_expr_mut;
-use databend_common_ast::ast::walk_select_target_mut;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
@@ -109,7 +107,7 @@ impl AggregatingIndexRewriter {
             }
         });
         let mut new_select_list: Vec<SelectTarget> = vec![];
-        for (position, target) in select_list.iter_mut().enumerate() {
+        for (position, _) in select_list.iter_mut().enumerate() {
             if self.has_agg_function {
                 // if target has agg function, we will extract the func to a hashset
                 // see `visit_expr` above for detail.
