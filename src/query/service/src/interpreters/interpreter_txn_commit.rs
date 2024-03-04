@@ -48,7 +48,8 @@ impl Interpreter for CommitInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // guard to clear txn manager before return,  no matter whether the commit is successful or not
+        // After commit statement, current session should be in auto commit mode, no matter update meta success or not.
+        // Use this guard to clear txn manager before return.
         let _guard = ClearTxnManagerGuard(self.ctx.txn_mgr().clone());
         let is_active = self.ctx.txn_mgr().lock().is_active();
         if is_active {
