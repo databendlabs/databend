@@ -209,7 +209,7 @@ jobs:
           tar -C ./release/testsuite -czvf databend-testsuite-${version}-${target}.tar.gz bin suites
           sha256sum databend-testsuite-${version}-${target}.tar.gz >> sha256-testsuite-${version}-${target}.txt
       - name: post sha256
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sha256sums
           path: sha256-*.txt
@@ -284,7 +284,7 @@ jobs:
           tar -C ./release/${target} -czvf databend-hdfs-${version}-${target}.tar.gz bin configs systemd scripts readme.txt
           sha256sum databend-hdfs-${version}-${target}.tar.gz >> sha256-hdfs-${version}-${target}.txt
       - name: post sha256
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sha256sums
           path: sha256-*.txt
