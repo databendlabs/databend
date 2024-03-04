@@ -16609,7 +16609,7 @@ def addone_py(i):
   return i+1
 $$;
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = addone_py AS $$
+CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python runtime_version =  HANDLER = addone_py AS $$
 def addone_py(i):
   return i+1
 $$
@@ -16618,11 +16618,11 @@ CreateUDF(
     CreateUDFStmt {
         create_option: CreateOrReplace,
         udf_name: Identifier {
-            name: "addone",
-            quote: None,
             span: Some(
                 27..33,
             ),
+            name: "addone",
+            quote: None,
         },
         description: None,
         definition: UDFScript {
@@ -16637,6 +16637,7 @@ CreateUDF(
             code: "\ndef addone_py(i):\n  return i+1\n",
             handler: "addone_py",
             language: "python",
+            runtime_version: "",
         },
     },
 )
