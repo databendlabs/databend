@@ -62,14 +62,14 @@ from
 101
 101
 101
-101
-101
-101
-101
-101
-101
-101
-101
+103
+103
+103
+103
+103
+103
+103
+103
 
 query I
 select
@@ -121,20 +121,20 @@ group by
 order by c_custkey
 limit 20;
 ----
-101 48
-103 72
-104 28
-106 72
-107 48
-109 100
-110 36
-112 76
-113 68
-115 112
-116 16
-118 72
-119 40
-NULL 299606
+101 12
+103 18
+104 7
+106 18
+107 12
+109 25
+110 9
+112 19
+113 17
+115 28
+116 4
+118 18
+119 10
+NULL 149803
 
 query I
 select
@@ -149,25 +149,18 @@ order by c_custkey
     limit 20;
 ----
 101
-101
-103
 103
 104
-104
-106
 106
 107
-107
-109
 109
 110
-110
-112
 112
 113
-113
 115
-115
+116
+118
+119
 
 query I
 select
@@ -193,14 +186,14 @@ order by o_custkey
 101
 101
 101
-101
-101
-101
-101
-101
-101
-101
-101
+103
+103
+103
+103
+103
+103
+103
+103
 
 query I
 select
@@ -215,25 +208,25 @@ order by c_custkey
     limit 20;
 ----
 1
-1
-2
 2
 3
-3
-4
 4
 5
-5
-6
 6
 7
-7
-8
 8
 9
-9
 10
-10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
 
 query I
 select
@@ -256,15 +249,15 @@ order by o_custkey
 1
 1
 1
-1
-1
-1
-1
-1
-1
-1
-1
-1
+2
+2
+2
+2
+2
+2
+2
+2
+2
 2
 2
 
@@ -298,7 +291,7 @@ order by o_comment
  Tiresias about the blithely ironic a
  Tiresias about the blithely ironic a
  Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
+ Tiresias above the carefully ironic packages nag about the pend
 
 statement ok
 set max_block_size = 1024;
@@ -315,9 +308,9 @@ select l_orderkey from (select * from lineitem order by l_orderkey limit 5000) a
 3
 3
 3
-3
-3
-3
+4
+5
+5
 
 statement ok
 set max_block_size = 65536;
@@ -326,9 +319,9 @@ query I
 select l_orderkey from (select * from lineitem order by l_orderkey limit 5000) as l, (select * from orders order by o_orderkey limit 5000) as o where l.l_orderkey > o.o_orderkey order by l_orderkey limit 10;
 ----
 2
-2
-2
-2
+3
+3
+3
 3
 3
 3
@@ -344,7 +337,7 @@ select l_orderkey, o_orderdate, o_shippriority from lineitem left join orders on
 3271 1992-01-01 0
 3271 1992-01-01 0
 3271 1992-01-01 0
-3271 1992-01-01 0
+5607 1992-01-01 0
 
 # LEFT ANTI
 query I
@@ -359,4 +352,4 @@ select o_custkey from orders where not exists (select * from customer where subs
 1
 1
 1
-1
+4

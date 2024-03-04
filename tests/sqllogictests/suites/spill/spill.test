@@ -2,7 +2,7 @@ statement ok
 set sandbox_tenant = 'test_tenant';
 
 statement ok
-use tpch_test;
+use spill_test;
 
 statement ok
 set join_spilling_memory_ratio = 10;
@@ -10,7 +10,7 @@ set join_spilling_memory_ratio = 10;
 statement ok
 set join_spilling_bytes_threshold_per_proc = 1024;
 
-query
+query 
 SELECT * FROM orders as o1 INNER JOIN orders AS o ON (o1.o_orderkey = o.o_orderkey) order by o1.o_orderkey limit 5;
 ----
 1 3691 O 194029.55 1996-01-02 5-LOW Clerk#000000951 0 nstructions sleep furiously among  1 3691 O 194029.55 1996-01-02 5-LOW Clerk#000000951 0 nstructions sleep furiously among
