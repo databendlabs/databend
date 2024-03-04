@@ -294,8 +294,12 @@ impl Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
-        // rewrite udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone());
+        // rewrite udf for interpreter udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
+
+        // rewrite udf for server udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
         s_expr = udf_rewriter.rewrite(&s_expr)?;
 
         // rewrite variant inner fields as virtual columns

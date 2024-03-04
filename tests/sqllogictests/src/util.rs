@@ -129,6 +129,7 @@ pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
 static PREPARE_TPCH: std::sync::Once = std::sync::Once::new();
 static PREPARE_TPCDS: std::sync::Once = std::sync::Once::new();
 static PREPARE_STAGE: std::sync::Once = std::sync::Once::new();
+static PREPARE_SPILL: std::sync::Once = std::sync::Once::new();
 
 pub fn lazy_prepare_data(file_path: &Path) -> Result<()> {
     let file_path = file_path.to_str().unwrap_or_default();
@@ -144,6 +145,8 @@ pub fn lazy_prepare_data(file_path: &Path) -> Result<()> {
         PREPARE_STAGE.call_once(|| {
             run_script("prepare_stage.sh").unwrap();
         });
+    } else if file_path.contains("spill/") {
+        PREPARE_SPILL.call_once(|| run_script("prepare_spill_data.sh").unwrap())
     }
     Ok(())
 }

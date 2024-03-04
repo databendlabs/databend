@@ -28,21 +28,21 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 #[derive(Debug)]
-pub struct CreateUserUDFInterpreter {
+pub struct CreateUserUDFScript {
     ctx: Arc<QueryContext>,
     plan: CreateUDFPlan,
 }
 
-impl CreateUserUDFInterpreter {
+impl CreateUserUDFScript {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CreateUDFPlan) -> Result<Self> {
-        Ok(CreateUserUDFInterpreter { ctx, plan })
+        Ok(CreateUserUDFScript { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateUserUDFInterpreter {
+impl Interpreter for CreateUserUDFScript {
     fn name(&self) -> &str {
-        "CreateUserUDFInterpreter"
+        "CreateUserUDFScript"
     }
 
     fn is_ddl(&self) -> bool {

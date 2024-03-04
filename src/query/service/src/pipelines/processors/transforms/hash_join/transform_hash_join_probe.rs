@@ -22,7 +22,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::JoinType;
-use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillHandler;
 use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillState;
@@ -169,12 +168,7 @@ impl TransformHashJoinProbe {
     // Probe with hashtable
     pub(crate) fn probe(&mut self, block: DataBlock) -> Result<()> {
         self.probe_state.clear();
-        info!("Start to probe with {:?} rows", block.num_rows());
         let data_blocks = self.join_probe_state.probe(block, &mut self.probe_state)?;
-        let res_rows = data_blocks
-            .iter()
-            .fold(0, |acc, data| acc + data.num_rows());
-        info!("Finish probing with {:?} rows", res_rows);
         if !data_blocks.is_empty() {
             self.output_data_blocks.extend(data_blocks);
         }
@@ -252,6 +246,11 @@ impl TransformHashJoinProbe {
             {
                 return Ok(Event::Async);
             }
+
+            if self.join_probe_state.hash_join_state.enable_spill {
+                return self.next_round();
+            }
+
             self.input_port.finish();
             return Ok(Event::Finished);
         }
@@ -296,7 +295,7 @@ impl TransformHashJoinProbe {
 
         // Input port is finished, make spilling finished
         if self.need_spill() && !self.spill_handler.spill_done() {
-            return self.spill_finished();
+            return self.spill_finished(self.processor_id);
         }
 
         if self.join_probe_state.hash_join_state.need_final_scan() {

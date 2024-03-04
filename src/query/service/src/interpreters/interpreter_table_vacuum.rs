@@ -79,12 +79,7 @@ impl Interpreter for VacuumTableInterpreter {
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let handler = get_vacuum_handler();
         let purge_files_opt = handler
-            .do_vacuum(
-                fuse_table,
-                ctx,
-                retention_time,
-                self.plan.option.dry_run.is_some(),
-            )
+            .do_vacuum(fuse_table, ctx, retention_time, self.plan.option.dry_run)
             .await?;
 
         match purge_files_opt {

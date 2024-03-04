@@ -378,15 +378,15 @@ impl InterpreterFactory {
                 ctx,
                 *revoke_role.clone(),
             )?)),
-            Plan::CreateUDF(create_user_udf) => Ok(Arc::new(CreateUserUDFInterpreter::try_create(
+            Plan::CreateUDF(create_user_udf) => Ok(Arc::new(CreateUserUDFScript::try_create(
                 ctx,
                 *create_user_udf.clone(),
             )?)),
-            Plan::AlterUDF(alter_udf) => Ok(Arc::new(AlterUserUDFInterpreter::try_create(
+            Plan::AlterUDF(alter_udf) => Ok(Arc::new(AlterUserUDFScript::try_create(
                 ctx,
                 *alter_udf.clone(),
             )?)),
-            Plan::DropUDF(drop_udf) => Ok(Arc::new(DropUserUDFInterpreter::try_create(
+            Plan::DropUDF(drop_udf) => Ok(Arc::new(DropUserUDFScript::try_create(
                 ctx,
                 *drop_udf.clone(),
             )?)),

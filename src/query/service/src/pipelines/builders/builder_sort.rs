@@ -287,7 +287,7 @@ impl SortPipelineBuilder {
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().operator();
                 let spiller =
-                    Spiller::create(self.ctx.clone(), op, config.clone(), SpillerType::OrderBy);
+                    Spiller::create(self.ctx.clone(), op, config.clone(), SpillerType::OrderBy)?;
                 Ok(ProcessorPtr::create(create_transform_sort_spill(
                     input,
                     output,

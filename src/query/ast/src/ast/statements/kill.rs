@@ -15,7 +15,9 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum KillTarget {
     Query,
     Connection,

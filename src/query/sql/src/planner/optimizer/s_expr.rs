@@ -28,8 +28,8 @@ use crate::plans::Exchange;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::SubqueryExpr;
+use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
-use crate::plans::UDFServerCall;
 use crate::plans::Visitor;
 use crate::plans::WindowFuncType;
 use crate::IndexType;
@@ -466,7 +466,7 @@ pub fn get_udf_names(scalar: &ScalarExpr) -> Result<HashSet<&String>> {
     }
 
     impl<'a> Visitor<'a> for FindUdfNamesVisitor<'a> {
-        fn visit_udf_server_call(&mut self, udf: &'a UDFServerCall) -> Result<()> {
+        fn visit_udf_call(&mut self, udf: &'a UDFCall) -> Result<()> {
             for expr in &udf.arguments {
                 self.visit(expr)?;
             }

@@ -18,29 +18,35 @@ use std::fmt::Formatter;
 
 use databend_common_base::base::mask_string;
 use databend_common_meta_app::schema::CreateOption;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
 use crate::ast::Identifier;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateConnectionStmt {
     pub name: Identifier,
+    #[drive(skip)]
     pub storage_type: String,
+    #[drive(skip)]
     pub storage_params: BTreeMap<String, String>,
+    #[drive(skip)]
     pub create_option: CreateOption,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropConnectionStmt {
+    #[drive(skip)]
     pub if_exists: bool,
     pub name: Identifier,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DescribeConnectionStmt {
     pub name: Identifier,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowConnectionsStmt {}
 
 impl Display for CreateConnectionStmt {

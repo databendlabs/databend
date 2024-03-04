@@ -9814,7 +9814,7 @@ VacuumTable(
             quote: None,
         },
         option: VacuumTableOption {
-            dry_run: None,
+            dry_run: false,
         },
     },
 )
@@ -9837,9 +9837,7 @@ VacuumTable(
             quote: None,
         },
         option: VacuumTableOption {
-            dry_run: Some(
-                (),
-            ),
+            dry_run: true,
         },
     },
 )
@@ -9855,7 +9853,7 @@ VacuumDropTable(
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            dry_run: None,
+            dry_run: false,
             limit: None,
         },
     },
@@ -9872,9 +9870,7 @@ VacuumDropTable(
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            dry_run: Some(
-                (),
-            ),
+            dry_run: true,
             limit: None,
         },
     },
@@ -9899,7 +9895,7 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            dry_run: None,
+            dry_run: false,
             limit: None,
         },
     },
@@ -9924,7 +9920,7 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            dry_run: None,
+            dry_run: false,
             limit: Some(
                 10,
             ),
@@ -16593,6 +16589,51 @@ CreateUDF(
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
             language: "python",
+        },
+    },
+)
+
+
+---------- Input ----------
+create or replace function addone(int)
+returns int
+language python
+handler = 'addone_py'
+as
+$$
+def addone_py(i):
+  return i+1
+$$;
+---------- Output ---------
+CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python runtime_version =  HANDLER = addone_py AS $$
+def addone_py(i):
+  return i+1
+$$
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateOrReplace,
+        udf_name: Identifier {
+            span: Some(
+                27..33,
+            ),
+            name: "addone",
+            quote: None,
+        },
+        description: None,
+        definition: UDFScript {
+            arg_types: [
+                Nullable(
+                    Int32,
+                ),
+            ],
+            return_type: Nullable(
+                Int32,
+            ),
+            code: "\ndef addone_py(i):\n  return i+1\n",
+            handler: "addone_py",
+            language: "python",
+            runtime_version: "",
         },
     },
 )
