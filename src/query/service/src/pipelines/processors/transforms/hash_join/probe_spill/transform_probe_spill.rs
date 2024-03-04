@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
 use log::info;
 
@@ -69,6 +71,11 @@ impl TransformHashJoinProbe {
     pub(crate) fn restore(&mut self) -> Result<Event> {
         debug_assert!(self.input_port.is_finished());
         if !self.input_data.is_empty() {
+            if self.output_port.is_finished() {
+                // If `output_port` is finished, drop `input_data` and go to `async` restore
+                self.input_data.clear();
+                return Ok(Event::Async);
+            }
             self.step = HashJoinProbeStep::Running;
             self.step_logs.push(HashJoinProbeStep::Running);
             Ok(Event::Sync)
@@ -92,6 +99,7 @@ impl TransformHashJoinProbe {
         // The last processor will notify build side to finish.
         self.join_probe_state.finish_final_probe()?;
         self.output_port.finish();
+        self.input_port.finish();
         Ok(Event::Finished)
     }
 
@@ -100,15 +108,18 @@ impl TransformHashJoinProbe {
     // 2. the input port has finished and spill finished,
     //    then add spill_partitions to `spill_partition_set` and set `spill_done` to true.
     //    change current step to `WaitBuild`
-    pub(crate) fn spill_finished(&mut self) -> Result<Event> {
+    pub(crate) fn spill_finished(&mut self, processor_id: usize) -> Result<Event> {
         // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
         let spilled_partition_set = &self
             .spill_handler
             .spill_state()
             .spiller
-            .spilled_partition_set;
+            .spilled_partitions();
+        info!(
+            "probe processor-{:?}: spill finished with spilled partitions {:?}",
+            processor_id, spilled_partition_set
+        );
         if !spilled_partition_set.is_empty() {
-            info!("probe spilled partitions: {:?}", spilled_partition_set);
             let mut spill_partitions = self.join_probe_state.spill_partitions.write();
             spill_partitions.extend(spilled_partition_set);
         }
@@ -142,13 +153,11 @@ impl TransformHashJoinProbe {
                 .probe_workers
                 .store(self.join_probe_state.processor_count, Ordering::Relaxed);
         }
-
-        if self
+        let old_final_probe_workers = self
             .join_probe_state
             .final_probe_workers
-            .fetch_add(1, Ordering::Acquire)
-            == 0
-        {
+            .fetch_add(1, Ordering::Acquire);
+        if old_final_probe_workers == 0 {
             // Before probe processor into `WaitBuild` state, send `1` to channel
             // After all build processors are finished, the last one will send `2` to channel and wake up all probe processors.
             self.join_probe_state
@@ -164,7 +173,8 @@ impl TransformHashJoinProbe {
 
     // Async spill action
     pub(crate) async fn spill_action(&mut self) -> Result<()> {
-        let mut unmatched_data_blocks = vec![];
+        // Before spilling, if there is a hash table, probe the hash table first
+        self.try_probe_first_round_hashtable(self.input_data.clone())?;
         for data in self.input_data.drain(..) {
             let spill_state = self.spill_handler.spill_state_mut();
             let mut hashes = Vec::with_capacity(data.num_rows());
@@ -176,23 +186,10 @@ impl TransformHashJoinProbe {
                 .build_spilled_partitions
                 .read()
                 .clone();
-            let unmatched_data_block = spill_state
+            spill_state
                 .spiller
-                .spill_input(data, &hashes, &build_spilled_partitions, self.processor_id)
+                .spill_input(data, &hashes, Some(&build_spilled_partitions))
                 .await?;
-            // Use `unmatched_data_block` to probe the first round hashtable (if the hashtable isn't empty)
-            if !unmatched_data_block.is_empty()
-                && unsafe { &*self.join_probe_state.hash_join_state.build_state.get() }
-                    .generation_state
-                    .build_num_rows
-                    != 0
-            {
-                unmatched_data_blocks.push(unmatched_data_block);
-            }
-        }
-        // Probe unmatched blocks with the first round hashtable
-        for block in unmatched_data_blocks.into_iter() {
-            self.probe(block)?;
         }
 
         // Back to Running step and try to pull input data
@@ -216,18 +213,41 @@ impl TransformHashJoinProbe {
         }
         if spill_state
             .spiller
-            .spilled_partition_set
+            .spilled_partitions()
             .contains(&(p_id as u8))
         {
-            let spilled_data = spill_state
-                .spiller
-                .read_spilled_data(&(p_id as u8), self.processor_id)
-                .await?;
+            let spilled_data =
+                DataBlock::concat(&spill_state.spiller.read_spilled_data(&(p_id as u8)).await?)?;
             if !spilled_data.is_empty() {
-                self.input_data.extend(spilled_data);
+                // Split data to `block_size` rows per sub block.
+                let (sub_blocks, remain_block) = spilled_data.split_by_rows(self.max_block_size);
+                self.input_data.extend(sub_blocks);
+                if let Some(remain) = remain_block {
+                    self.input_data.push_back(remain);
+                }
             }
         }
         self.join_probe_state.restore_barrier.wait().await;
         self.reset().await
+    }
+
+    // Try to probe the first round hashtable
+    pub(crate) fn try_probe_first_round_hashtable(
+        &mut self,
+        input_data: VecDeque<DataBlock>,
+    ) -> Result<()> {
+        if unsafe { &*self.join_probe_state.hash_join_state.build_state.get() }
+            .generation_state
+            .build_num_rows
+            == 0
+        {
+            return Ok(());
+        }
+
+        for data in input_data.iter() {
+            let data = data.convert_to_full();
+            self.probe(data)?;
+        }
+        Ok(())
     }
 }
