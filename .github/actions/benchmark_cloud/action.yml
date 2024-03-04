@@ -76,7 +76,7 @@ runs:
         mv result.json result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: benchmark
         path: benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json

@@ -36,7 +36,7 @@ jobs:
           version: ${{ inputs.tag }}
       - name: upload
         if: inputs.tag
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: python
           path: src/bendpy/dist/*.whl
@@ -58,7 +58,7 @@ jobs:
           version: ${{ inputs.tag }}
       - name: upload
         if: inputs.tag
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: python
           path: src/bendpy/dist/*.whl
