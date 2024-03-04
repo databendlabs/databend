@@ -37,6 +37,7 @@ use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
@@ -279,7 +280,7 @@ impl QueryContextShared {
         StorageMetrics::merge(&metrics)
     }
 
-    pub fn get_tenant(&self) -> String {
+    pub fn get_tenant(&self) -> NonEmptyString {
         self.session.get_current_tenant()
     }
 
@@ -330,7 +331,7 @@ impl QueryContextShared {
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
         let catalog = self
             .catalog_manager
-            .get_catalog(&tenant, catalog, self.session.session_ctx.txn_mgr())
+            .get_catalog(tenant.as_str(), catalog, self.session.session_ctx.txn_mgr())
             .await?;
         let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
@@ -451,7 +452,7 @@ impl QueryContextShared {
     pub async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
         let user_mgr = UserApiProvider::instance();
         let tenant = self.get_tenant();
-        user_mgr.get_connection(&tenant, name).await
+        user_mgr.get_connection(tenant.as_str(), name).await
     }
 
     pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {

@@ -18,23 +18,76 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_meta_app::schema::CreateOption;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_quoted_list;
 use crate::ast::UriLocation;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateStageStmt {
+    #[drive(skip)]
     pub create_option: CreateOption,
+    #[drive(skip)]
     pub stage_name: String,
 
     pub location: Option<UriLocation>,
 
+    #[drive(skip)]
     pub file_format_options: BTreeMap<String, String>,
+    #[drive(skip)]
     pub on_error: String,
+    #[drive(skip)]
     pub size_limit: usize,
+    #[drive(skip)]
     pub validation_mode: String,
+    #[drive(skip)]
     pub comments: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum SelectStageOption {
+    Files(#[drive(skip)] Vec<String>),
+    Pattern(#[drive(skip)] String),
+    FileFormat(#[drive(skip)] String),
+    Connection(#[drive(skip)] BTreeMap<String, String>),
+}
+
+impl SelectStageOptions {
+    pub fn from(opts: Vec<SelectStageOption>) -> Self {
+        let mut options: SelectStageOptions = Default::default();
+        for opt in opts.into_iter() {
+            match opt {
+                SelectStageOption::Files(v) => options.files = Some(v),
+                SelectStageOption::Pattern(v) => options.pattern = Some(v),
+                SelectStageOption::FileFormat(v) => options.file_format = Some(v),
+                SelectStageOption::Connection(v) => options.connection = v,
+            }
+        }
+        options
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Drive, DriveMut)]
+pub struct SelectStageOptions {
+    #[drive(skip)]
+    pub files: Option<Vec<String>>,
+    #[drive(skip)]
+    pub pattern: Option<String>,
+    #[drive(skip)]
+    pub file_format: Option<String>,
+    #[drive(skip)]
+    pub connection: BTreeMap<String, String>,
+}
+
+impl SelectStageOptions {
+    pub fn is_empty(&self) -> bool {
+        self.files.is_none()
+            && self.pattern.is_none()
+            && self.file_format.is_none()
+            && self.connection.is_empty()
+    }
 }
 
 impl Display for CreateStageStmt {
@@ -76,31 +129,6 @@ impl Display for CreateStageStmt {
         }
 
         Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SelectStageOption {
-    Files(Vec<String>),
-    Pattern(String),
-    FileFormat(String),
-    Connection(BTreeMap<String, String>),
-}
-
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct SelectStageOptions {
-    pub files: Option<Vec<String>>,
-    pub pattern: Option<String>,
-    pub file_format: Option<String>,
-    pub connection: BTreeMap<String, String>,
-}
-
-impl SelectStageOptions {
-    pub fn is_empty(&self) -> bool {
-        self.files.is_none()
-            && self.pattern.is_none()
-            && self.file_format.is_none()
-            && self.connection.is_empty()
     }
 }
 
@@ -146,20 +174,5 @@ impl Display for SelectStageOptions {
         write!(f, " )")?;
 
         Ok(())
-    }
-}
-
-impl SelectStageOptions {
-    pub fn from(opts: Vec<SelectStageOption>) -> Self {
-        let mut options: SelectStageOptions = Default::default();
-        for opt in opts.into_iter() {
-            match opt {
-                SelectStageOption::Files(v) => options.files = Some(v),
-                SelectStageOption::Pattern(v) => options.pattern = Some(v),
-                SelectStageOption::FileFormat(v) => options.file_format = Some(v),
-                SelectStageOption::Connection(v) => options.connection = v,
-            }
-        }
-        options
     }
 }

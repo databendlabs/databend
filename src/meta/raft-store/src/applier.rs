@@ -49,8 +49,6 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use futures::stream::TryStreamExt;
-use log::as_debug;
-use log::as_display;
 use log::debug;
 use log::error;
 use log::info;
@@ -197,7 +195,7 @@ impl<'a> Applier<'a> {
     /// update the primary index and optionally update the secondary index.
     #[minitrace::trace]
     async fn apply_upsert_kv(&mut self, upsert_kv: &UpsertKV) -> Result<AppliedState, io::Error> {
-        debug!(upsert_kv = as_debug!(upsert_kv); "apply_update_kv_cmd");
+        debug!(upsert_kv :? =(upsert_kv); "apply_update_kv_cmd");
 
         let (prev, result) = self.upsert_kv(upsert_kv).await?;
 
@@ -213,7 +211,7 @@ impl<'a> Applier<'a> {
         &mut self,
         upsert_kv: &UpsertKV,
     ) -> Result<(Option<SeqV>, Option<SeqV>), io::Error> {
-        debug!(upsert_kv = as_debug!(upsert_kv); "upsert_kv");
+        debug!(upsert_kv :? =(upsert_kv); "upsert_kv");
 
         let (prev, result) = self
             .sm
@@ -239,7 +237,7 @@ impl<'a> Applier<'a> {
 
     #[minitrace::trace]
     async fn apply_txn(&mut self, req: &TxnRequest) -> Result<AppliedState, io::Error> {
-        debug!(txn = as_display!(req); "apply txn cmd");
+        debug!(txn :% =(req); "apply txn cmd");
 
         let success = self.eval_txn_conditions(&req.condition).await?;
 
@@ -268,7 +266,7 @@ impl<'a> Applier<'a> {
         condition: &Vec<TxnCondition>,
     ) -> Result<bool, io::Error> {
         for cond in condition {
-            debug!(condition = as_display!(cond); "txn_execute_condition");
+            debug!(condition :% =(cond); "txn_execute_condition");
 
             if !self.eval_one_condition(cond).await? {
                 return Ok(false);
@@ -280,7 +278,7 @@ impl<'a> Applier<'a> {
 
     #[minitrace::trace]
     async fn eval_one_condition(&self, cond: &TxnCondition) -> Result<bool, io::Error> {
-        debug!(cond = as_display!(cond); "txn_execute_one_condition");
+        debug!(cond :% =(cond); "txn_execute_one_condition");
 
         let key = &cond.key;
         // No expiration check:
@@ -347,7 +345,7 @@ impl<'a> Applier<'a> {
         op: &TxnOp,
         resp: &mut TxnReply,
     ) -> Result<(), io::Error> {
-        debug!(op = as_display!(op); "txn execute TxnOp");
+        debug!(op :% =(op); "txn execute TxnOp");
         match &op.request {
             Some(txn_op::Request::Get(get)) => {
                 self.txn_execute_get(get, resp).await?;

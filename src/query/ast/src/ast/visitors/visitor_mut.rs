@@ -30,8 +30,8 @@ use super::walk_mut::walk_table_reference_mut;
 use super::walk_stream_point_mut;
 use super::walk_time_travel_point_mut;
 use super::walk_window_definition_mut;
+use crate::ast::visitors::walk_column_id_mut;
 use crate::ast::*;
-use crate::visitors::walk_column_id_mut;
 
 pub trait VisitorMut: Sized {
     fn visit_expr(&mut self, expr: &mut Expr) {
@@ -394,7 +394,12 @@ pub trait VisitorMut: Sized {
         walk_query_mut(self, query);
     }
 
-    fn visit_explain(&mut self, _kind: &mut ExplainKind, stmt: &mut Statement) {
+    fn visit_explain(
+        &mut self,
+        _kind: &mut ExplainKind,
+        _options: &mut [ExplainOption],
+        stmt: &mut Statement,
+    ) {
         walk_statement_mut(self, stmt);
     }
 

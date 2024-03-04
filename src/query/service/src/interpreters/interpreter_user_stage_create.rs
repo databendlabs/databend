@@ -117,7 +117,7 @@ impl Interpreter for CreateUserStageInterpreter {
 
         // Grant ownership as the current role
         let tenant = self.ctx.get_tenant();
-        let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+        let role_api = UserApiProvider::instance().get_role_api_client(tenant.as_str())?;
         if let Some(current_role) = self.ctx.get_current_role() {
             role_api
                 .grant_ownership(
@@ -127,7 +127,7 @@ impl Interpreter for CreateUserStageInterpreter {
                     &current_role.name,
                 )
                 .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+            RoleCacheManager::instance().invalidate_cache(tenant.as_str());
         }
 
         Ok(PipelineBuildResult::create())

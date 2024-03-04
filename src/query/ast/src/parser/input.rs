@@ -20,7 +20,7 @@ use std::ops::RangeTo;
 use enum_as_inner::EnumAsInner;
 
 use crate::parser::token::Token;
-use crate::Backtrace;
+use crate::parser::Backtrace;
 
 /// Input tokens slice with a backtrace that records all errors including
 /// the optional branch.

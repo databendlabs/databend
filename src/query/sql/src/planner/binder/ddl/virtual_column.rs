@@ -168,7 +168,7 @@ impl Binder {
         let catalog_info = self.ctx.get_catalog(&catalog).await?;
         let res = catalog_info
             .list_virtual_columns(ListVirtualColumnsReq {
-                tenant: self.ctx.get_tenant(),
+                tenant: self.ctx.get_tenant().to_string(),
                 table_id: Some(table_info.get_id()),
             })
             .await?;
@@ -228,14 +228,14 @@ impl Binder {
                 ));
             }
             if let Expr::ColumnRef { column, .. } = expr {
-                if let Ok(field) = schema.field_with_name(column.name()) {
+                if let Ok(field) = schema.field_with_name(column.column.name()) {
                     if field.data_type().remove_nullable() != TableDataType::Variant {
                         return Err(ErrorCode::SemanticError(
                             "Virtual Column only support Variant data type",
                         ));
                     }
                     let mut virtual_name = String::new();
-                    virtual_name.push_str(column.name());
+                    virtual_name.push_str(column.column.name());
                     for path in paths {
                         virtual_name.push('[');
                         match path {
@@ -298,7 +298,7 @@ impl Binder {
             Some(ident) => {
                 let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
                 catalog
-                    .get_database(&self.ctx.get_tenant(), &database)
+                    .get_database(self.ctx.get_tenant().as_str(), &database)
                     .await?;
                 database
             }

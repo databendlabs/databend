@@ -117,7 +117,7 @@ impl Binder {
 
         Ok(Plan::CreateStage(Box::new(CreateStagePlan {
             create_option: *create_option,
-            tenant: self.ctx.get_tenant(),
+            tenant: self.ctx.get_tenant().to_string(),
             stage_info,
         })))
     }

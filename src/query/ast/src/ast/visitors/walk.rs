@@ -19,9 +19,12 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
     match expr {
         Expr::ColumnRef {
             span,
-            database,
-            table,
-            column,
+            column:
+                ColumnRef {
+                    database,
+                    table,
+                    column,
+                },
         } => visitor.visit_column_ref(*span, database, table, column),
         Expr::IsNull { span, expr, not } => visitor.visit_is_null(*span, expr, *not),
         Expr::IsDistinctFrom {
@@ -96,12 +99,15 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
         Expr::Tuple { span, exprs } => visitor.visit_tuple(*span, exprs),
         Expr::FunctionCall {
             span,
-            distinct,
-            name,
-            args,
-            params,
-            window,
-            lambda,
+            func:
+                FunctionCall {
+                    distinct,
+                    name,
+                    args,
+                    params,
+                    window,
+                    lambda,
+                },
         } => visitor.visit_function_call(*span, *distinct, name, args, params, window, lambda),
         Expr::Case {
             span,
@@ -146,6 +152,16 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
 
 pub fn walk_identifier<'a, V: Visitor<'a>>(visitor: &mut V, ident: &'a Identifier) {
     visitor.visit_identifier(ident);
+}
+
+pub fn walk_table_ref<'a, V: Visitor<'a>>(visitor: &mut V, table: &'a TableRef) {
+    if let Some(catalog) = &table.catalog {
+        visitor.visit_identifier(catalog);
+    }
+    if let Some(database) = &table.database {
+        visitor.visit_identifier(database);
+    }
+    visitor.visit_identifier(&table.table);
 }
 
 pub fn walk_query<'a, V: Visitor<'a>>(visitor: &mut V, query: &'a Query) {
@@ -357,7 +373,11 @@ pub fn walk_window_definition<'a, V: Visitor<'a>>(
 
 pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statement) {
     match statement {
-        Statement::Explain { kind, query } => visitor.visit_explain(kind, query),
+        Statement::Explain {
+            kind,
+            options,
+            query,
+        } => visitor.visit_explain(kind, options, query),
         Statement::ExplainAnalyze { query } => visitor.visit_statement(query),
         Statement::Query(query) => visitor.visit_query(query),
         Statement::Insert(insert) => visitor.visit_insert(insert),

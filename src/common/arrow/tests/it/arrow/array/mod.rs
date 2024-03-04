@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod binary;
+mod binview;
 mod boolean;
 mod dictionary;
 mod equal;

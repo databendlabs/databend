@@ -18,9 +18,9 @@ use databend_common_exception::Result;
 use databend_common_exception::Span;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
+use itertools::Itertools;
 
 use crate::ast::*;
-use crate::visitors::Visitor;
 
 pub fn format_statement(stmt: Statement) -> Result<String> {
     let mut visitor = AstFormatVisitor::new();
@@ -700,23 +700,49 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_explain(&mut self, kind: &'ast ExplainKind, query: &'ast Statement) {
+    fn visit_explain(
+        &mut self,
+        kind: &'ast ExplainKind,
+        options: &'ast [ExplainOption],
+        query: &'ast Statement,
+    ) {
         self.visit_statement(query);
         let child = self.children.pop().unwrap();
 
-        let name = format!("Explain{}", match kind {
-            ExplainKind::Ast(_) => "Ast",
-            ExplainKind::Syntax(_) => "Syntax",
-            ExplainKind::Graph => "Graph",
-            ExplainKind::Pipeline => "Pipeline",
-            ExplainKind::Fragments => "Fragments",
-            ExplainKind::Raw => "Raw",
-            ExplainKind::Optimized => "Optimized",
-            ExplainKind::Plan => "Plan",
-            ExplainKind::Memo(_) => "Memo",
-            ExplainKind::JOIN => "JOIN",
-            ExplainKind::AnalyzePlan => "Analyze",
-        });
+        let name = format!(
+            "Explain{}{}",
+            match kind {
+                ExplainKind::Ast(_) => "Ast",
+                ExplainKind::Syntax(_) => "Syntax",
+                ExplainKind::Graph => "Graph",
+                ExplainKind::Pipeline => "Pipeline",
+                ExplainKind::Fragments => "Fragments",
+                ExplainKind::Raw => "Raw",
+                ExplainKind::Optimized => "Optimized",
+                ExplainKind::Plan => "Plan",
+                ExplainKind::Memo(_) => "Memo",
+                ExplainKind::Join => "Join",
+                ExplainKind::AnalyzePlan => "Analyze",
+            },
+            if options.is_empty() {
+                "".to_string()
+            } else {
+                format!(
+                    "({})",
+                    options
+                        .iter()
+                        .flat_map(|opt| {
+                            match opt {
+                                ExplainOption::Verbose(true) => Some("Verbose"),
+                                ExplainOption::Logical(true) => Some("Logical"),
+                                ExplainOption::Optimized(true) => Some("Optimized"),
+                                _ => None,
+                            }
+                        })
+                        .join(", ")
+                )
+            }
+        );
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![child]);
         self.children.push(node);
@@ -1158,7 +1184,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_create_database(&mut self, stmt: &'ast CreateDatabaseStmt) {
         let mut children = Vec::new();
-        self.visit_database_ref(&stmt.catalog, &stmt.database);
+        self.visit_database_ref(&stmt.database.catalog, &stmt.database.database);
         children.push(self.children.pop().unwrap());
         if let Some(engine) = &stmt.engine {
             let engine_name = format!("DatabaseEngine {}", engine);

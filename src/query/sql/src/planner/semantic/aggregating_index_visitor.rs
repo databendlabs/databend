@@ -14,8 +14,14 @@
 
 use std::collections::HashSet;
 
+use databend_common_ast::ast::walk_expr;
+use databend_common_ast::ast::walk_expr_mut;
+use databend_common_ast::ast::walk_select_target;
+use databend_common_ast::ast::walk_select_target_mut;
 use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
@@ -24,16 +30,12 @@ use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::Visitor;
+use databend_common_ast::ast::VisitorMut;
 use databend_common_ast::ast::Window;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::walk_expr;
-use databend_common_ast::walk_expr_mut;
-use databend_common_ast::walk_select_target;
-use databend_common_ast::walk_select_target_mut;
-use databend_common_ast::Dialect;
-use databend_common_ast::Visitor;
-use databend_common_ast::VisitorMut;
+use databend_common_ast::parser::Dialect;
 use databend_common_exception::Span;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
@@ -57,11 +59,15 @@ impl VisitorMut for AggregatingIndexRewriter {
 
         match expr {
             Expr::FunctionCall {
-                distinct,
-                name,
-                args,
-                window,
-                lambda,
+                func:
+                    FunctionCall {
+                        distinct,
+                        name,
+                        args,
+                        window,
+                        lambda,
+                        ..
+                    },
                 ..
             } if !*distinct
                 && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
@@ -316,9 +322,13 @@ impl VisitorMut for RefreshAggregatingIndexRewriter {
     fn visit_expr(&mut self, expr: &mut Expr) {
         match expr {
             Expr::FunctionCall {
-                distinct,
-                name,
-                window,
+                func:
+                    FunctionCall {
+                        distinct,
+                        name,
+                        window,
+                        ..
+                    },
                 ..
             } if !*distinct
                 && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
@@ -332,16 +342,18 @@ impl VisitorMut for RefreshAggregatingIndexRewriter {
                 self.has_agg_function = true;
                 *expr = Expr::FunctionCall {
                     span: None,
-                    distinct: false,
-                    name: Identifier {
-                        name: "COUNT_STATE".to_string(),
-                        quote: None,
-                        span: None,
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier {
+                            name: "COUNT_STATE".to_string(),
+                            quote: None,
+                            span: None,
+                        },
+                        args: vec![],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
                     },
-                    args: vec![],
-                    params: vec![],
-                    window: None,
-                    lambda: None,
                 };
             }
             _ => {}
@@ -370,17 +382,20 @@ impl VisitorMut for RefreshAggregatingIndexRewriter {
 
         let block_name_expr = Expr::ColumnRef {
             span: None,
-            database: None,
-            table: Some(table),
-            column: ColumnID::Name(Identifier::from_name(BLOCK_NAME_COL_NAME)),
+            column: ColumnRef {
+                database: None,
+                table: Some(table),
+                column: ColumnID::Name(Identifier::from_name(BLOCK_NAME_COL_NAME)),
+            },
         };
 
         // if select list already contains `BLOCK_NAME_COL_NAME`
         if select_list.iter().any(|target| match target {
             SelectTarget::AliasedExpr { expr, .. } => match (*expr).clone().as_ref() {
-                Expr::ColumnRef { column, .. } => {
-                    column.name().eq_ignore_ascii_case(BLOCK_NAME_COL_NAME)
-                }
+                Expr::ColumnRef { column, .. } => column
+                    .column
+                    .name()
+                    .eq_ignore_ascii_case(BLOCK_NAME_COL_NAME),
 
                 _ => false,
             },
@@ -398,9 +413,10 @@ impl VisitorMut for RefreshAggregatingIndexRewriter {
             Some(group_by) => match group_by {
                 GroupBy::Normal(groups) => {
                     if !groups.iter().any(|expr| match (*expr).clone() {
-                        Expr::ColumnRef { column, .. } => {
-                            column.name().eq_ignore_ascii_case(BLOCK_NAME_COL_NAME)
-                        }
+                        Expr::ColumnRef { column, .. } => column
+                            .column
+                            .name()
+                            .eq_ignore_ascii_case(BLOCK_NAME_COL_NAME),
                         _ => false,
                     }) {
                         groups.extend_one(block_name_expr)

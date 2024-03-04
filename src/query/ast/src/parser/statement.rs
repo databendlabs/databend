@@ -32,21 +32,21 @@ use nom::combinator::value;
 use nom::Slice;
 
 use crate::ast::*;
-use crate::input::Input;
+use crate::parser::common::*;
 use crate::parser::copy::copy_into;
 use crate::parser::copy::copy_into_table;
 use crate::parser::data_mask::data_mask_policy;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
+use crate::parser::input::Input;
 use crate::parser::query::*;
 use crate::parser::share::share_endpoint_uri_location;
 use crate::parser::stage::*;
 use crate::parser::stream::stream_table;
 use crate::parser::token::*;
+use crate::parser::Error;
+use crate::parser::ErrorKind;
 use crate::rule;
-use crate::util::*;
-use crate::Error;
-use crate::ErrorKind;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
@@ -63,9 +63,9 @@ pub enum CreateDatabaseOption {
 pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
+            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
         },
-        |(_, opt_kind, statement)| {
+        |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
                     Some(TokenKind::AST) => {
@@ -83,7 +83,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                         ExplainKind::Syntax(pretty_stmt)
                     }
                     Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
-                    Some(TokenKind::JOIN) => ExplainKind::JOIN,
+                    Some(TokenKind::JOIN) => ExplainKind::Join,
                     Some(TokenKind::GRAPH) => ExplainKind::Graph,
                     Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
                     Some(TokenKind::RAW) => ExplainKind::Raw,
@@ -92,6 +92,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
+                options: options.as_ref().map_or(vec![], |(_, opts, _)| opts.clone()),
                 query: Box::new(statement.stmt),
             })
         },
@@ -107,7 +108,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_task = map(
         rule! {
-            CREATE ~ TASK ~ (IF ~ ^NOT ~ ^EXISTS)?
+            CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ #task_warehouse_option
             ~ (SCHEDULE ~ "=" ~ #task_schedule_option)?
@@ -459,7 +460,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     // TODO: use a more specific option struct instead of BTreeMap
     let create_catalog = map(
         rule! {
-            CREATE ~ CATALOG ~ (IF ~ ^NOT ~ ^EXISTS)?
+            CREATE ~ CATALOG ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ TYPE ~ "=" ~ #catalog_type
             ~ CONNECTION ~ "=" ~ #connection_options
@@ -508,9 +509,14 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_database = map_res(
         rule! {
-            CREATE ~ (OR ~ ^REPLACE)? ~ ( DATABASE | SCHEMA ) ~ (IF ~ ^NOT ~ ^EXISTS)? ~ #dot_separated_idents_1_to_2 ~ #create_database_option?
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ ( DATABASE | SCHEMA )
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #database_ref
+            ~ #create_database_option?
         },
-        |(_, opt_or_replace, _, opt_if_not_exists, (catalog, database), create_database_option)| {
+        |(_, opt_or_replace, _, opt_if_not_exists, database, create_database_option)| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
@@ -518,7 +524,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 Some(CreateDatabaseOption::DatabaseEngine(engine)) => {
                     Statement::CreateDatabase(CreateDatabaseStmt {
                         create_option,
-                        catalog,
                         database,
                         engine: Some(engine),
                         options: vec![],
@@ -528,7 +533,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 Some(CreateDatabaseOption::FromShare(share_name)) => {
                     Statement::CreateDatabase(CreateDatabaseStmt {
                         create_option,
-                        catalog,
                         database,
                         engine: None,
                         options: vec![],
@@ -537,7 +541,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 }
                 None => Statement::CreateDatabase(CreateDatabaseStmt {
                     create_option,
-                    catalog,
                     database,
                     engine: None,
                     options: vec![],
@@ -611,7 +614,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let show_columns = map(
         rule! {
-            SHOW ~ FULL? ~ COLUMNS ~ ( FROM | IN ) ~ #ident ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)? ~ #show_limit?
+            SHOW
+            ~ FULL? ~ COLUMNS
+            ~ ( FROM | IN ) ~ #ident
+            ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)?
+            ~ #show_limit?
         },
         |(_, opt_full, _, _, table, ctl_db, limit)| {
             let (catalog, database) = match ctl_db {
@@ -706,7 +713,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let create_table = map_res(
         rule! {
-            CREATE ~ (OR ~ ^REPLACE)? ~ TRANSIENT? ~ TABLE ~ (IF ~ ^NOT ~ ^EXISTS)?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
@@ -902,7 +909,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_view = map_res(
         rule! {
-            CREATE ~ (OR ~ ^REPLACE)? ~ VIEW ~ (IF ~ ^NOT ~ ^EXISTS)?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
@@ -966,7 +973,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_index = map_res(
         rule! {
-            CREATE ~ (OR ~ ^REPLACE)? ~ ASYNC? ~ AGGREGATING ~ INDEX ~ (IF ~ ^NOT ~ ^EXISTS)?
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ ASYNC?
+            ~ AGGREGATING ~ INDEX
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ AS ~ #query
         },
@@ -1009,7 +1020,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_virtual_column = map_res(
         rule! {
-            CREATE ~ (OR ~ ^REPLACE)? ~ VIRTUAL ~ COLUMN ~ (IF ~ ^NOT ~ ^EXISTS)? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ VIRTUAL ~ COLUMN
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+            ~ FOR ~ #dot_separated_idents_1_to_3
         },
         |(
             _,
@@ -1100,7 +1116,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
     let create_user = map_res(
         rule! {
-            CREATE ~  (OR ~ ^REPLACE)? ~ USER ~ (IF ~ ^NOT ~ ^EXISTS)?
+            CREATE ~  ( OR ~ ^REPLACE )? ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #user_identity
             ~ IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )?
             ~ ( WITH ~ ^#comma_separated_list1(user_option))?
@@ -1162,7 +1178,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let show_roles = value(Statement::ShowRoles, rule! { SHOW ~ ROLES });
     let create_role = map(
         rule! {
-            CREATE ~ ROLE ~ (IF ~ ^NOT ~ ^EXISTS)? ~ #role_name
+            CREATE ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
         },
         |(_, _, opt_if_not_exists, role_name)| Statement::CreateRole {
             if_not_exists: opt_if_not_exists.is_some(),
@@ -1233,7 +1249,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let create_udf = map_res(
         rule! {
-            CREATE ~ (OR ~ ^REPLACE)? ~ FUNCTION ~ (IF ~ ^NOT ~ ^EXISTS)?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ FUNCTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #udf_definition
             ~ ( DESC ~ ^"=" ~ ^#literal_string )?
         },
@@ -1275,7 +1291,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     // stages
     let create_stage = map_res(
         rule! {
-            CREATE ~ (OR ~ ^REPLACE)? ~ STAGE ~ (IF ~ ^NOT ~ ^EXISTS)?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ STAGE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ ( #stage_name )
             ~ ( (URL ~ ^"=")? ~ #uri_location )?
             ~ ( #file_format_clause )?
@@ -1357,7 +1373,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let connection_opt = connection_opt("=");
     let create_connection = map_res(
         rule! {
-            CREATE ~ (OR ~ ^REPLACE)? ~ CONNECTION ~ (IF ~ ^NOT ~ ^EXISTS)?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ CONNECTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ STORAGE_TYPE ~ "=" ~  #literal_string ~ #connection_opt*
         },
         |(
@@ -1445,7 +1461,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     // share statements
     let create_share_endpoint = map_res(
         rule! {
-            CREATE ~ (OR ~ ^REPLACE)? ~ SHARE ~ ENDPOINT ~ (IF ~ ^NOT ~ ^EXISTS)?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
              ~ #ident
              ~ URL ~ "=" ~ #share_endpoint_uri_location
              ~ TENANT ~ "=" ~ #ident
@@ -1506,7 +1522,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let create_share = map(
         rule! {
-            CREATE ~ SHARE ~ (IF ~ ^NOT ~ ^EXISTS)? ~ #ident ~ ( COMMENT ~ "=" ~ #literal_string)?
+            CREATE ~ SHARE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ ( COMMENT ~ "=" ~ #literal_string)?
         },
         |(_, _, opt_if_not_exists, share, comment_opt)| {
             Statement::CreateShare(CreateShareStmt {
@@ -1556,7 +1572,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let alter_share_tenants = map(
         rule! {
-            ALTER ~ SHARE ~ ( IF ~ ^EXISTS )? ~ #ident ~ #alter_add_share_accounts ~ TENANTS ~ Eq ~ #comma_separated_list1(ident)
+            ALTER
+            ~ SHARE
+            ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+            ~ #alter_add_share_accounts
+            ~ TENANTS ~ Eq ~ #comma_separated_list1(ident)
         },
         |(_, _, opt_if_exists, share, is_add, _, _, tenants)| {
             Statement::AlterShareTenants(AlterShareTenantsStmt {
@@ -1582,7 +1603,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_file_format = map_res(
         rule! {
-            CREATE ~ (OR ~ ^REPLACE)? ~ FILE ~ FORMAT ~ (IF ~ ^NOT ~ ^EXISTS)?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #format_options
         },
         |(_, opt_or_replace, _, _, opt_if_not_exists, name, options)| {
@@ -1612,7 +1633,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     // data mark policy
     let create_data_mask_policy = map_res(
         rule! {
-            CREATE ~ (OR ~ ^REPLACE)? ~ MASKING ~ POLICY ~ (IF ~ ^NOT ~ ^EXISTS)? ~ #ident ~ #data_mask_policy
+            CREATE ~ ( OR ~ ^REPLACE )? ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
         },
         |(_, opt_or_replace, _, _, opt_if_not_exists, name, policy)| {
             let create_option =
@@ -1650,7 +1671,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_network_policy = map_res(
         rule! {
-            CREATE ~  (OR ~ ^REPLACE)? ~ NETWORK ~ ^POLICY ~ (IF ~ ^NOT ~ ^EXISTS)? ~ ^#ident
+            CREATE ~  ( OR ~ ^REPLACE )? ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
              ~ ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")"
              ~ ( BLOCKED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
              ~ ( COMMENT ~ ^Eq ~ ^#literal_string)?
@@ -1754,7 +1775,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_password_policy = map_res(
         rule! {
-            CREATE ~ (OR ~ ^REPLACE)? ~ PASSWORD ~ ^POLICY ~ (IF ~ ^NOT ~ ^EXISTS)? ~ ^#ident
+            CREATE ~ ( OR ~ ^REPLACE )? ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
              ~ #password_set_options
         },
         |(_, opt_or_replace, _, _, opt_if_not_exists, name, set_options)| {
@@ -1813,7 +1834,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_pipe = map(
         rule! {
-            CREATE ~ PIPE ~ (IF ~ ^NOT ~ ^EXISTS)?
+            CREATE ~ PIPE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ ( AUTO_INGEST ~ "=" ~ #literal_bool )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
@@ -3664,5 +3685,19 @@ pub fn alter_password_action(i: Input) -> IResult<AlterPasswordAction> {
     rule!(
         #set_options
         | #unset_options
+    )(i)
+}
+
+pub fn explain_option(i: Input) -> IResult<ExplainOption> {
+    map(
+        rule! {
+            VERBOSE | LOGICAL | OPTIMIZED
+        },
+        |opt| match &opt.kind {
+            VERBOSE => ExplainOption::Verbose(true),
+            LOGICAL => ExplainOption::Logical(true),
+            OPTIMIZED => ExplainOption::Optimized(true),
+            _ => unreachable!(),
+        },
     )(i)
 }

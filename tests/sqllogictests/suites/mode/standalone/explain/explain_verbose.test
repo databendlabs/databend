@@ -1,0 +1,297 @@
+statement ok
+drop database if exists testdb
+
+statement ok
+create database testdb
+
+statement ok
+use testdb
+
+statement ok
+create table t(a int, b int)
+
+statement ok
+insert into t select number, number + 1 from numbers(1000)
+
+query T
+explain(verbose, logical) select * from t where a = 1
+----
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+├── output columns: [testdb.t.a, testdb.t.b]
+├── outer columns: []
+├── used columns: [testdb.t.a, testdb.t.b]
+├── cardinality: 1.000
+├── precise cardinality: N/A
+├── statistics
+│   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+│   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+└── Filter
+    ├── filters: [eq(t.a (#0), 1)]
+    ├── output columns: [testdb.t.a, testdb.t.b]
+    ├── outer columns: []
+    ├── used columns: [testdb.t.a, testdb.t.b]
+    ├── cardinality: 1.000
+    ├── precise cardinality: N/A
+    ├── statistics
+    │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    └── Scan
+        ├── table: testdb.t
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        ├── output columns: [testdb.t.a, testdb.t.b]
+        ├── outer columns: []
+        ├── used columns: [testdb.t.a, testdb.t.b]
+        ├── cardinality: 1000.000
+        ├── precise cardinality: 1000
+        └── statistics
+            ├── testdb.t.a: { min: 0, max: 999, ndv: 1000, null count: 0 }
+            └── testdb.t.b: { min: 1, max: 1000, ndv: 1000, null count: 0 }
+
+query T
+explain(verbose, logical, optimized) select * from t where a = 1
+----
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+├── output columns: [testdb.t.a, testdb.t.b]
+├── outer columns: []
+├── used columns: [testdb.t.a, testdb.t.b]
+├── cardinality: 1.000
+├── precise cardinality: N/A
+├── statistics
+│   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+│   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+└── Filter
+    ├── filters: [eq(t.a (#0), 1)]
+    ├── output columns: [testdb.t.a, testdb.t.b]
+    ├── outer columns: []
+    ├── used columns: [testdb.t.a, testdb.t.b]
+    ├── cardinality: 1.000
+    ├── precise cardinality: N/A
+    ├── statistics
+    │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    └── Scan
+        ├── table: testdb.t
+        ├── filters: [eq(t.a (#0), 1)]
+        ├── order by: []
+        ├── limit: NONE
+        ├── output columns: [testdb.t.a, testdb.t.b]
+        ├── outer columns: []
+        ├── used columns: [testdb.t.a, testdb.t.b]
+        ├── cardinality: 1000.000
+        ├── precise cardinality: 1000
+        └── statistics
+            ├── testdb.t.a: { min: 0, max: 999, ndv: 1000, null count: 0 }
+            └── testdb.t.b: { min: 1, max: 1000, ndv: 1000, null count: 0 }
+
+query T
+explain(verbose, logical, optimized) select * from t, t t1, t t2, t t3, t t4
+where t.a = 1 and t1.a = 1 and t2.a = 1 and t3.a = 1 and t4.a = 1
+----
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1), t1.a (#2) AS (#2), t1.b (#3) AS (#3), t2.a (#4) AS (#4), t2.b (#5) AS (#5), t3.a (#6) AS (#6), t3.b (#7) AS (#7), t4.a (#8) AS (#8), t4.b (#9) AS (#9)]
+├── output columns: [testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.b, testdb.t.b, testdb.t.b, testdb.t.b, testdb.t.b]
+├── outer columns: []
+├── used columns: [testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.b, testdb.t.b, testdb.t.b, testdb.t.b, testdb.t.b]
+├── cardinality: 1.000
+├── precise cardinality: N/A
+├── statistics
+│   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+│   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+│   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+│   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+│   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+│   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+└── Join(Cross)
+    ├── build keys: []
+    ├── probe keys: []
+    ├── other filters: []
+    ├── output columns: [testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.b, testdb.t.b, testdb.t.b, testdb.t.b, testdb.t.b]
+    ├── outer columns: []
+    ├── used columns: [testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.b, testdb.t.b, testdb.t.b, testdb.t.b, testdb.t.b]
+    ├── cardinality: 1.000
+    ├── precise cardinality: N/A
+    ├── statistics
+    │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    ├── Join(Cross)
+    │   ├── build keys: []
+    │   ├── probe keys: []
+    │   ├── other filters: []
+    │   ├── output columns: [testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.b, testdb.t.b, testdb.t.b, testdb.t.b]
+    │   ├── outer columns: []
+    │   ├── used columns: [testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.b, testdb.t.b, testdb.t.b, testdb.t.b]
+    │   ├── cardinality: 1.000
+    │   ├── precise cardinality: N/A
+    │   ├── statistics
+    │   │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   │   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   │   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   │   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   │   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   ├── Join(Cross)
+    │   │   ├── build keys: []
+    │   │   ├── probe keys: []
+    │   │   ├── other filters: []
+    │   │   ├── output columns: [testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.b, testdb.t.b, testdb.t.b]
+    │   │   ├── outer columns: []
+    │   │   ├── used columns: [testdb.t.a, testdb.t.a, testdb.t.a, testdb.t.b, testdb.t.b, testdb.t.b]
+    │   │   ├── cardinality: 1.000
+    │   │   ├── precise cardinality: N/A
+    │   │   ├── statistics
+    │   │   │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   │   │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   │   │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   │   │   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   │   │   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   │   │   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   │   ├── Join(Cross)
+    │   │   │   ├── build keys: []
+    │   │   │   ├── probe keys: []
+    │   │   │   ├── other filters: []
+    │   │   │   ├── output columns: [testdb.t.a, testdb.t.a, testdb.t.b, testdb.t.b]
+    │   │   │   ├── outer columns: []
+    │   │   │   ├── used columns: [testdb.t.a, testdb.t.a, testdb.t.b, testdb.t.b]
+    │   │   │   ├── cardinality: 1.000
+    │   │   │   ├── precise cardinality: N/A
+    │   │   │   ├── statistics
+    │   │   │   │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   │   │   │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   │   │   │   ├── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   │   │   │   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   │   │   ├── Filter
+    │   │   │   │   ├── filters: [eq(t.a (#0), 1)]
+    │   │   │   │   ├── output columns: [testdb.t.a, testdb.t.b]
+    │   │   │   │   ├── outer columns: []
+    │   │   │   │   ├── used columns: [testdb.t.a, testdb.t.b]
+    │   │   │   │   ├── cardinality: 1.000
+    │   │   │   │   ├── precise cardinality: N/A
+    │   │   │   │   ├── statistics
+    │   │   │   │   │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   │   │   │   │   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   │   │   │   └── Scan
+    │   │   │   │       ├── table: testdb.t
+    │   │   │   │       ├── filters: [eq(t.a (#0), 1)]
+    │   │   │   │       ├── order by: []
+    │   │   │   │       ├── limit: NONE
+    │   │   │   │       ├── output columns: [testdb.t.a, testdb.t.b]
+    │   │   │   │       ├── outer columns: []
+    │   │   │   │       ├── used columns: [testdb.t.a, testdb.t.b]
+    │   │   │   │       ├── cardinality: 1000.000
+    │   │   │   │       ├── precise cardinality: 1000
+    │   │   │   │       └── statistics
+    │   │   │   │           ├── testdb.t.a: { min: 0, max: 999, ndv: 1000, null count: 0 }
+    │   │   │   │           └── testdb.t.b: { min: 1, max: 1000, ndv: 1000, null count: 0 }
+    │   │   │   └── Filter
+    │   │   │       ├── filters: [eq(t1.a (#2), 1)]
+    │   │   │       ├── output columns: [testdb.t.a, testdb.t.b]
+    │   │   │       ├── outer columns: []
+    │   │   │       ├── used columns: [testdb.t.a, testdb.t.b]
+    │   │   │       ├── cardinality: 1.000
+    │   │   │       ├── precise cardinality: N/A
+    │   │   │       ├── statistics
+    │   │   │       │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   │   │       │   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   │   │       └── Scan
+    │   │   │           ├── table: testdb.t
+    │   │   │           ├── filters: [eq(t.a (#2), 1)]
+    │   │   │           ├── order by: []
+    │   │   │           ├── limit: NONE
+    │   │   │           ├── output columns: [testdb.t.a, testdb.t.b]
+    │   │   │           ├── outer columns: []
+    │   │   │           ├── used columns: [testdb.t.a, testdb.t.b]
+    │   │   │           ├── cardinality: 1000.000
+    │   │   │           ├── precise cardinality: 1000
+    │   │   │           └── statistics
+    │   │   │               ├── testdb.t.a: { min: 0, max: 999, ndv: 1000, null count: 0 }
+    │   │   │               └── testdb.t.b: { min: 1, max: 1000, ndv: 1000, null count: 0 }
+    │   │   └── Filter
+    │   │       ├── filters: [eq(t2.a (#4), 1)]
+    │   │       ├── output columns: [testdb.t.a, testdb.t.b]
+    │   │       ├── outer columns: []
+    │   │       ├── used columns: [testdb.t.a, testdb.t.b]
+    │   │       ├── cardinality: 1.000
+    │   │       ├── precise cardinality: N/A
+    │   │       ├── statistics
+    │   │       │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   │       │   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   │       └── Scan
+    │   │           ├── table: testdb.t
+    │   │           ├── filters: [eq(t.a (#4), 1)]
+    │   │           ├── order by: []
+    │   │           ├── limit: NONE
+    │   │           ├── output columns: [testdb.t.a, testdb.t.b]
+    │   │           ├── outer columns: []
+    │   │           ├── used columns: [testdb.t.a, testdb.t.b]
+    │   │           ├── cardinality: 1000.000
+    │   │           ├── precise cardinality: 1000
+    │   │           └── statistics
+    │   │               ├── testdb.t.a: { min: 0, max: 999, ndv: 1000, null count: 0 }
+    │   │               └── testdb.t.b: { min: 1, max: 1000, ndv: 1000, null count: 0 }
+    │   └── Filter
+    │       ├── filters: [eq(t3.a (#6), 1)]
+    │       ├── output columns: [testdb.t.a, testdb.t.b]
+    │       ├── outer columns: []
+    │       ├── used columns: [testdb.t.a, testdb.t.b]
+    │       ├── cardinality: 1.000
+    │       ├── precise cardinality: N/A
+    │       ├── statistics
+    │       │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+    │       │   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │       └── Scan
+    │           ├── table: testdb.t
+    │           ├── filters: [eq(t.a (#6), 1)]
+    │           ├── order by: []
+    │           ├── limit: NONE
+    │           ├── output columns: [testdb.t.a, testdb.t.b]
+    │           ├── outer columns: []
+    │           ├── used columns: [testdb.t.a, testdb.t.b]
+    │           ├── cardinality: 1000.000
+    │           ├── precise cardinality: 1000
+    │           └── statistics
+    │               ├── testdb.t.a: { min: 0, max: 999, ndv: 1000, null count: 0 }
+    │               └── testdb.t.b: { min: 1, max: 1000, ndv: 1000, null count: 0 }
+    └── Filter
+        ├── filters: [eq(t4.a (#8), 1)]
+        ├── output columns: [testdb.t.a, testdb.t.b]
+        ├── outer columns: []
+        ├── used columns: [testdb.t.a, testdb.t.b]
+        ├── cardinality: 1.000
+        ├── precise cardinality: N/A
+        ├── statistics
+        │   ├── testdb.t.a: { min: 1, max: 1, ndv: 1, null count: 0 }
+        │   └── testdb.t.b: { min: 1, max: 1000, ndv: 1, null count: 0 }
+        └── Scan
+            ├── table: testdb.t
+            ├── filters: [eq(t.a (#8), 1)]
+            ├── order by: []
+            ├── limit: NONE
+            ├── output columns: [testdb.t.a, testdb.t.b]
+            ├── outer columns: []
+            ├── used columns: [testdb.t.a, testdb.t.b]
+            ├── cardinality: 1000.000
+            ├── precise cardinality: 1000
+            └── statistics
+                ├── testdb.t.a: { min: 0, max: 999, ndv: 1000, null count: 0 }
+                └── testdb.t.b: { min: 1, max: 1000, ndv: 1000, null count: 0 }
+
+statement ok
+drop database testdb

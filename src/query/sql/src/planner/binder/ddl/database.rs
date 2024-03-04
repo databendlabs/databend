@@ -18,6 +18,7 @@ use databend_common_ast::ast::AlterDatabaseAction;
 use databend_common_ast::ast::AlterDatabaseStmt;
 use databend_common_ast::ast::CreateDatabaseStmt;
 use databend_common_ast::ast::DatabaseEngine;
+use databend_common_ast::ast::DatabaseRef;
 use databend_common_ast::ast::DropDatabaseStmt;
 use databend_common_ast::ast::SQLProperty;
 use databend_common_ast::ast::ShowCreateDatabaseStmt;
@@ -147,7 +148,7 @@ impl Binder {
                 };
 
                 Ok(Plan::RenameDatabase(Box::new(RenameDatabasePlan {
-                    tenant,
+                    tenant: tenant.to_string(),
                     entities: vec![entry],
                 })))
             }
@@ -174,7 +175,7 @@ impl Binder {
 
         Ok(Plan::DropDatabase(Box::new(DropDatabasePlan {
             if_exists: *if_exists,
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
         })))
@@ -195,7 +196,7 @@ impl Binder {
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
 
         Ok(Plan::UndropDatabase(Box::new(UndropDatabasePlan {
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
         })))
@@ -208,8 +209,7 @@ impl Binder {
     ) -> Result<Plan> {
         let CreateDatabaseStmt {
             create_option,
-            catalog,
-            database,
+            database: DatabaseRef { catalog, database },
             engine,
             options,
             from_share,
@@ -232,7 +232,7 @@ impl Binder {
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
             create_option: *create_option,
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
             meta,

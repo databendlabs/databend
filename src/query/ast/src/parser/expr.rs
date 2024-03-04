@@ -25,16 +25,16 @@ use pratt::PrattParser;
 use pratt::Precedence;
 
 use crate::ast::*;
-use crate::input::Input;
-use crate::input::WithSpan;
+use crate::parser::common::*;
+use crate::parser::input::Input;
+use crate::parser::input::WithSpan;
 use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::unescape::unescape_at_string;
 use crate::parser::unescape::unescape_string;
+use crate::parser::Error;
+use crate::parser::ErrorKind;
 use crate::rule;
-use crate::util::*;
-use crate::Error;
-use crate::ErrorKind;
 
 pub const BETWEEN_PREC: u32 = 20;
 pub const NOT_PREC: u32 = 15;
@@ -160,9 +160,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
 pub enum ExprElement {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
-        database: Option<Identifier>,
-        table: Option<Identifier>,
-        column: ColumnID,
+        column: ColumnRef,
     },
     /// `.a.b` after column ref, currently it'll be taken as column reference
     DotAccess {
@@ -261,13 +259,7 @@ pub enum ExprElement {
     },
     /// Scalar function call
     FunctionCall {
-        /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
-        distinct: bool,
-        name: Identifier,
-        args: Vec<Expr>,
-        params: Vec<Expr>,
-        window: Option<Window>,
-        lambda: Option<Lambda>,
+        func: FunctionCall,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
@@ -416,14 +408,8 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
     fn primary(&mut self, elem: WithSpan<'a, ExprElement>) -> Result<Expr, &'static str> {
         let expr = match elem.elem {
-            ExprElement::ColumnRef {
-                database,
-                table,
-                column,
-            } => Expr::ColumnRef {
+            ExprElement::ColumnRef { column } => Expr::ColumnRef {
                 span: transform_span(elem.span.0),
-                database,
-                table,
                 column,
             },
             ExprElement::Cast { expr, target_type } => Expr::Cast {
@@ -482,21 +468,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.0),
                 exprs,
             },
-            ExprElement::FunctionCall {
-                distinct,
-                name,
-                args,
-                params,
-                window,
-                lambda,
-            } => Expr::FunctionCall {
+            ExprElement::FunctionCall { func } => Expr::FunctionCall {
                 span: transform_span(elem.span.0),
-                distinct,
-                name,
-                args,
-                params,
-                window,
-                lambda,
+                func,
             },
             ExprElement::Case {
                 operand,
@@ -538,29 +512,33 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 if let Some(filter) = filter {
                     source = Expr::FunctionCall {
                         span,
-                        distinct: false,
-                        name: Identifier::from_name("array_filter"),
-                        args: vec![source],
-                        params: vec![],
-                        window: None,
-                        lambda: Some(Lambda {
-                            params: vec![param.clone()],
-                            expr: Box::new(filter),
-                        }),
+                        func: FunctionCall {
+                            distinct: false,
+                            name: Identifier::from_name("array_filter"),
+                            args: vec![source],
+                            params: vec![],
+                            window: None,
+                            lambda: Some(Lambda {
+                                params: vec![param.clone()],
+                                expr: Box::new(filter),
+                            }),
+                        },
                     };
                 }
                 // array_map(source, result)
                 Expr::FunctionCall {
                     span,
-                    distinct: false,
-                    name: Identifier::from_name("array_map"),
-                    args: vec![source],
-                    params: vec![],
-                    window: None,
-                    lambda: Some(Lambda {
-                        params: vec![param.clone()],
-                        expr: Box::new(result),
-                    }),
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name("array_map"),
+                        args: vec![source],
+                        params: vec![],
+                        window: None,
+                        lambda: Some(Lambda {
+                            params: vec![param.clone()],
+                            expr: Box::new(result),
+                        }),
+                    },
                 }
             }
             ExprElement::Map { kvs } => Expr::Map {
@@ -658,18 +636,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             // Lift level up the identifier
             ExprElement::DotAccess { key } => {
                 let mut is_map_access = true;
-                if let Expr::ColumnRef {
-                    database,
-                    table,
-                    column,
-                    ..
-                } = &mut lhs
-                {
-                    if let ColumnID::Name(name) = column {
+                if let Expr::ColumnRef { column, .. } = &mut lhs {
+                    if let ColumnID::Name(name) = &column.column {
                         is_map_access = false;
-                        *database = table.take();
-                        *table = Some(name.clone());
-                        *column = key.clone();
+                        column.database = column.table.take();
+                        column.table = Some(name.clone());
+                        column.column = key.clone();
                     }
                 }
 
@@ -690,12 +662,14 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             }
             ExprElement::ChainFunctionCall { name, args, lambda } => Expr::FunctionCall {
                 span: transform_span(elem.span.0),
-                distinct: false,
-                name,
-                args: [vec![lhs], args].concat(),
-                params: vec![],
-                window: None,
-                lambda,
+                func: FunctionCall {
+                    distinct: false,
+                    name,
+                    args: [vec![lhs], args].concat(),
+                    params: vec![],
+                    window: None,
+                    lambda,
+                },
             },
             ExprElement::IsNull { not } => Expr::IsNull {
                 span: transform_span(elem.span.0),
@@ -740,11 +714,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let column_ref = map(column_id, |column| ExprElement::ColumnRef {
-        database: None,
-        table: None,
-        column,
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column,
+        },
     });
-
     let is_null = map(
         rule! {
             IS ~ NOT? ~ NULL
@@ -918,12 +893,14 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
         },
         |(name, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
-            distinct: opt_distinct.is_some(),
-            name,
-            args: opt_args.unwrap_or_default(),
-            params: vec![],
-            window: None,
-            lambda: None,
+            func: FunctionCall {
+                distinct: opt_distinct.is_some(),
+                name,
+                args: opt_args.unwrap_or_default(),
+                params: vec![],
+                window: None,
+                lambda: None,
+            },
         },
     );
     let function_call_with_lambda = map(
@@ -932,15 +909,17 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ~ "(" ~ #subexpr(0) ~ "," ~ #lambda_params ~ "->" ~ #subexpr(0) ~ ")"
         },
         |(name, _, arg, _, params, _, expr, _)| ExprElement::FunctionCall {
-            distinct: false,
-            name,
-            args: vec![arg],
-            params: vec![],
-            window: None,
-            lambda: Some(Lambda {
-                params,
-                expr: Box::new(expr),
-            }),
+            func: FunctionCall {
+                distinct: false,
+                name,
+                args: vec![arg],
+                params: vec![],
+                window: None,
+                lambda: Some(Lambda {
+                    params,
+                    expr: Box::new(expr),
+                }),
+            },
         },
     );
     let function_call_with_window = map(
@@ -950,12 +929,14 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ~ (OVER ~ #window_spec_ident)
         },
         |(name, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
-            distinct: opt_distinct.is_some(),
-            name,
-            args: opt_args.unwrap_or_default(),
-            params: vec![],
-            window: Some(window.1),
-            lambda: None,
+            func: FunctionCall {
+                distinct: opt_distinct.is_some(),
+                name,
+                args: opt_args.unwrap_or_default(),
+                params: vec![],
+                window: Some(window.1),
+                lambda: None,
+            },
         },
     );
     let function_call_with_params = map(
@@ -965,12 +946,14 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
         },
         |(name, params, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
-            distinct: opt_distinct.is_some(),
-            name,
-            args: opt_args.unwrap_or_default(),
-            params: params.map(|(_, x, _)| x).unwrap_or_default(),
-            window: None,
-            lambda: None,
+            func: FunctionCall {
+                distinct: opt_distinct.is_some(),
+                name,
+                args: opt_args.unwrap_or_default(),
+                params: params.map(|(_, x, _)| x).unwrap_or_default(),
+                window: None,
+                lambda: None,
+            },
         },
     );
 
@@ -1175,12 +1158,14 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let current_timestamp = value(
         ExprElement::FunctionCall {
-            distinct: false,
-            name: Identifier::from_name("current_timestamp"),
-            args: vec![],
-            params: vec![],
-            window: None,
-            lambda: None,
+            func: FunctionCall {
+                distinct: false,
+                name: Identifier::from_name("current_timestamp"),
+                args: vec![],
+                params: vec![],
+                window: None,
+                lambda: None,
+            },
         },
         rule! { CURRENT_TIMESTAMP },
     );
@@ -1234,45 +1219,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     )))(i)?;
 
     Ok((rest, WithSpan { span, elem }))
-}
-
-pub fn column_id(i: Input) -> IResult<ColumnID> {
-    alt((
-        map_res(rule! { ColumnPosition }, |token| {
-            let name = token.text().to_string();
-            let pos = name[1..]
-                .parse::<usize>()
-                .map_err(|e| nom::Err::Failure(e.into()))?;
-            if pos == 0 {
-                return Err(nom::Err::Failure(ErrorKind::Other(
-                    "column position must be greater than 0",
-                )));
-            }
-            Ok(ColumnID::Position(crate::ast::ColumnPosition {
-                pos,
-                name,
-                span: Some(token.span),
-            }))
-        }),
-        map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
-    ))(i)
-}
-
-/// Parse one to three idents separated by a dot, fulfilling from the right.
-///
-/// Example: `db.table.column`
-pub fn column_ref(i: Input) -> IResult<(Option<Identifier>, Option<Identifier>, ColumnID)> {
-    alt((
-        map(
-            rule! { #ident ~ "." ~ #ident ~ "." ~ #column_id },
-            |(ident1, _, ident2, _, ident3)| (Some(ident1), Some(ident2), ident3),
-        ),
-        map(
-            rule! { #ident ~ "." ~ #column_id },
-            |(ident2, _, ident3)| (None, Some(ident2), ident3),
-        ),
-        map(rule! { #column_id }, |ident3| (None, None, ident3)),
-    ))(i)
 }
 
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {

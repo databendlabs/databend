@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::walk_expr_mut;
 use databend_common_ast::ast::AddColumnOption as AstAddColumnOption;
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
@@ -52,7 +53,6 @@ use databend_common_ast::ast::VacuumTableStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::walk_expr_mut;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -390,7 +390,7 @@ impl Binder {
                 self.ctx
                     .get_catalog(&ctl_name)
                     .await?
-                    .get_database(&self.ctx.get_tenant(), &database)
+                    .get_database(self.ctx.get_tenant().as_str(), &database)
                     .await?;
                 Ok(database)
             }
@@ -586,7 +586,7 @@ impl Binder {
             // safely eliminate this "FUSE" constant and the table meta option entry.
             let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
-                .get_database(&self.ctx.get_tenant(), &database)
+                .get_database(self.ctx.get_tenant().as_str(), &database)
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
@@ -646,7 +646,7 @@ impl Binder {
 
         let plan = CreateTablePlan {
             create_option: *create_option,
-            tenant: self.ctx.get_tenant(),
+            tenant: self.ctx.get_tenant().to_string(),
             catalog: catalog.clone(),
             database: database.clone(),
             table,
@@ -728,7 +728,7 @@ impl Binder {
 
         Ok(Plan::CreateTable(Box::new(CreateTablePlan {
             create_option: CreateOption::None,
-            tenant: self.ctx.get_tenant(),
+            tenant: self.ctx.get_tenant().to_string(),
             catalog,
             database,
             table,
@@ -764,7 +764,7 @@ impl Binder {
 
         Ok(Plan::DropTable(Box::new(DropTablePlan {
             if_exists: *if_exists,
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
             table,
@@ -788,7 +788,7 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::UndropTable(Box::new(UndropTablePlan {
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
             table,
@@ -826,7 +826,7 @@ impl Binder {
         match action {
             AlterTableAction::RenameTable { new_table } => {
                 Ok(Plan::RenameTable(Box::new(RenameTablePlan {
-                    tenant,
+                    tenant: tenant.to_string(),
                     if_exists: *if_exists,
                     new_database: database.clone(),
                     new_table: normalize_identifier(new_table, &self.name_resolution_ctx).name,
@@ -848,7 +848,7 @@ impl Binder {
                     .analyze_rename_column(old_column, new_column, schema)
                     .await?;
                 Ok(Plan::RenameTableColumn(Box::new(RenameTableColumnPlan {
-                    tenant: self.ctx.get_tenant(),
+                    tenant: self.ctx.get_tenant().to_string(),
                     catalog,
                     database,
                     table,
@@ -875,7 +875,7 @@ impl Binder {
                     AstAddColumnOption::End => AddColumnOption::End,
                 };
                 Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
-                    tenant: self.ctx.get_tenant(),
+                    tenant: self.ctx.get_tenant().to_string(),
                     catalog,
                     database,
                     table,
@@ -938,7 +938,7 @@ impl Binder {
 
                 Ok(Plan::AlterTableClusterKey(Box::new(
                     AlterTableClusterKeyPlan {
-                        tenant,
+                        tenant: tenant.to_string(),
                         catalog,
                         database,
                         table,
@@ -948,7 +948,7 @@ impl Binder {
             }
             AlterTableAction::DropTableClusterKey => Ok(Plan::DropTableClusterKey(Box::new(
                 DropTableClusterKeyPlan {
-                    tenant,
+                    tenant: tenant.to_string(),
                     catalog,
                     database,
                     table,
@@ -981,7 +981,7 @@ impl Binder {
                 };
 
                 Ok(Plan::ReclusterTable(Box::new(ReclusterTablePlan {
-                    tenant,
+                    tenant: tenant.to_string(),
                     catalog,
                     database,
                     table,
@@ -994,7 +994,7 @@ impl Binder {
             AlterTableAction::RevertTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point).await?;
                 Ok(Plan::RevertTable(Box::new(RevertTablePlan {
-                    tenant,
+                    tenant: tenant.to_string(),
                     catalog,
                     database,
                     table,
@@ -1042,7 +1042,7 @@ impl Binder {
         }
 
         Ok(Plan::RenameTable(Box::new(RenameTablePlan {
-            tenant,
+            tenant: tenant.to_string(),
             if_exists: *if_exists,
             catalog,
             database: db_name,

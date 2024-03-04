@@ -70,9 +70,15 @@ impl Interpreter for CreateRoleInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
         user_mgr
-            .add_role(&tenant, RoleInfo::new(&role_name), plan.if_not_exists)
+            .add_role(
+                tenant.as_str(),
+                RoleInfo::new(&role_name),
+                plan.if_not_exists,
+            )
             .await?;
-        RoleCacheManager::instance().force_reload(&tenant).await?;
+        RoleCacheManager::instance()
+            .force_reload(tenant.as_str())
+            .await?;
         Ok(PipelineBuildResult::create())
     }
 }

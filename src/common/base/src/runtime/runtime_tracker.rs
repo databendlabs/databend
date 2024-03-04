@@ -176,16 +176,17 @@ impl ThreadTracker {
         TRACKER.with(f)
     }
 
-    pub fn tracking(mut tracking_payload: TrackingPayload) -> TrackingGuard {
+    pub fn tracking(tracking_payload: TrackingPayload) -> TrackingGuard {
+        let mut guard = TrackingGuard {
+            saved: tracking_payload,
+        };
         let _ = StatBuffer::current().flush::<false>(0);
 
         TRACKER.with(move |x| {
             let mut thread_tracker = x.borrow_mut();
-            std::mem::swap(&mut thread_tracker.payload, &mut tracking_payload);
+            std::mem::swap(&mut thread_tracker.payload, &mut guard.saved);
 
-            TrackingGuard {
-                saved: tracking_payload,
-            }
+            guard
         })
     }
 

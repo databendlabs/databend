@@ -210,7 +210,7 @@ impl TestFixture {
         }
 
         GlobalServices::init_with(config).await?;
-        OssLicenseManager::init(config.query.tenant_id.clone())?;
+        OssLicenseManager::init(config.query.tenant_id.to_string())?;
 
         // Cluster register.
         {
@@ -266,7 +266,7 @@ impl TestFixture {
     }
 
     pub fn default_tenant(&self) -> String {
-        self.conf.query.tenant_id.clone()
+        self.conf.query.tenant_id.to_string()
     }
 
     pub fn default_db_name(&self) -> String {
@@ -459,7 +459,7 @@ impl TestFixture {
         let db_name = gen_db_name(&self.prefix);
         let plan = CreateDatabasePlan {
             catalog: "default".to_owned(),
-            tenant,
+            tenant: tenant.to_string(),
             create_option: CreateOption::None,
             database: db_name,
             meta: DatabaseMeta {

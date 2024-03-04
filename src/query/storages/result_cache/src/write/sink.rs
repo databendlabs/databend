@@ -107,7 +107,7 @@ impl WriteResultCacheSink {
         let sql = ctx.get_query_str();
         let partitions_shas = ctx.get_partitions_shas();
 
-        let meta_key = gen_result_cache_meta_key(&tenant, key);
+        let meta_key = gen_result_cache_meta_key(tenant.as_str(), key);
         let location = gen_result_cache_dir(key);
 
         let operator = DataOperator::instance().operator();

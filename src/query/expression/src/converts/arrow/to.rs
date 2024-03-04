@@ -15,7 +15,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use arrow_array::cast::AsArray;
+use arrow_array::Array;
+use arrow_array::LargeListArray;
+use arrow_array::MapArray;
 use arrow_array::RecordBatch;
+use arrow_array::StructArray;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Fields;
@@ -26,6 +31,7 @@ use databend_common_exception::Result;
 
 use super::EXTENSION_KEY;
 use crate::converts::arrow2::table_field_to_arrow2_field_ignore_inside_nullable;
+use crate::infer_table_schema;
 use crate::Column;
 use crate::DataBlock;
 use crate::DataField;
@@ -93,27 +99,71 @@ impl From<&DataField> for ArrowField {
 }
 
 impl DataBlock {
-    pub fn to_record_batch(self, data_schema: &DataSchema) -> Result<RecordBatch> {
+    // Notice this function may loss some struct tuples as we are using infer_schema
+    pub fn to_record_batch_with_dataschema(self, data_schema: &DataSchema) -> Result<RecordBatch> {
+        let table_schema = infer_table_schema(data_schema)?;
+        self.to_record_batch(&table_schema)
+    }
+
+    pub fn to_record_batch(self, table_schema: &TableSchema) -> Result<RecordBatch> {
+        let arrow_schema = table_schema_to_arrow_schema_ignore_inside_nullable(table_schema);
         let mut arrays = Vec::with_capacity(self.columns().len());
-        let mut arrow_fields = Vec::with_capacity(self.columns().len());
-        for (entry, f) in self
+        for (entry, arrow_field) in self
             .convert_to_full()
             .columns()
             .iter()
-            .zip(data_schema.fields())
+            .zip(arrow_schema.fields())
         {
             let column = entry.value.to_owned().into_column().unwrap();
             let array = column.into_arrow_rs();
-            let arrow_field = ArrowField::new(
-                f.name(),
-                array.data_type().clone(),
-                f.data_type().is_nullable(),
-            );
-            arrays.push(array);
-            arrow_fields.push(arrow_field);
+
+            // Adjust struct array names
+            arrays.push(Self::adjust_nested_array(array, arrow_field.as_ref()));
         }
-        let schema = Arc::new(ArrowSchema::new(arrow_fields));
-        Ok(RecordBatch::try_new(schema, arrays)?)
+        Ok(RecordBatch::try_new(Arc::new(arrow_schema), arrays)?)
+    }
+
+    fn adjust_nested_array(array: Arc<dyn Array>, arrow_field: &ArrowField) -> Arc<dyn Array> {
+        if let ArrowDataType::Struct(fs) = arrow_field.data_type() {
+            let array = array.as_ref().as_struct();
+            let inner_arrays = array
+                .columns()
+                .iter()
+                .zip(fs.iter())
+                .map(|(array, arrow_field)| {
+                    Self::adjust_nested_array(array.clone(), arrow_field.as_ref())
+                })
+                .collect();
+
+            let array = StructArray::new(fs.clone(), inner_arrays, array.nulls().cloned());
+            Arc::new(array) as _
+        } else if let ArrowDataType::LargeList(f) = arrow_field.data_type() {
+            let array = array.as_ref().as_list::<i64>();
+            let values = Self::adjust_nested_array(array.values().clone(), f.as_ref());
+            let array = LargeListArray::new(
+                f.clone(),
+                array.offsets().clone(),
+                values,
+                array.nulls().cloned(),
+            );
+            Arc::new(array) as _
+        } else if let ArrowDataType::Map(f, ordered) = arrow_field.data_type() {
+            let array = array.as_ref().as_map();
+
+            let entry = Arc::new(array.entries().clone()) as Arc<dyn Array>;
+            let entry = Self::adjust_nested_array(entry, f.as_ref());
+
+            let array = MapArray::new(
+                f.clone(),
+                array.offsets().clone(),
+                entry.as_struct().clone(),
+                array.nulls().cloned(),
+                *ordered,
+            );
+            Arc::new(array) as _
+        } else {
+            array
+        }
     }
 }
 

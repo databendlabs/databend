@@ -14,13 +14,13 @@
 
 use std::collections::HashSet;
 
+use databend_common_ast::ast::walk_expr;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
+use databend_common_ast::ast::Visitor;
 use databend_common_ast::ast::Window;
-use databend_common_ast::walk_expr;
-use databend_common_ast::Visitor;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;

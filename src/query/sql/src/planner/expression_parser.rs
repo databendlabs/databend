@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::walk_expr_mut;
 use databend_common_ast::ast::Expr as AExpr;
 use databend_common_ast::parser::parse_comma_separated_exprs;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::walk_expr_mut;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table::Table;

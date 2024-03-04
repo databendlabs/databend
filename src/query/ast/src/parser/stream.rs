@@ -21,16 +21,16 @@ use crate::ast::DropStreamStmt;
 use crate::ast::ShowStreamsStmt;
 use crate::ast::Statement;
 use crate::ast::StreamPoint;
+use crate::parser::common::dot_separated_idents_1_to_2;
+use crate::parser::common::dot_separated_idents_1_to_3;
+use crate::parser::common::map_res;
+use crate::parser::common::IResult;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
 use crate::parser::statement::show_limit;
 use crate::parser::token::TokenKind::*;
+use crate::parser::Input;
 use crate::rule;
-use crate::util::dot_separated_idents_1_to_2;
-use crate::util::dot_separated_idents_1_to_3;
-use crate::util::map_res;
-use crate::util::IResult;
-use crate::Input;
 
 pub fn stream_table(i: Input) -> IResult<Statement> {
     rule!(
@@ -44,7 +44,7 @@ pub fn stream_table(i: Input) -> IResult<Statement> {
 fn create_stream(i: Input) -> IResult<Statement> {
     map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ STREAM ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ STREAM ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ ON ~ TABLE ~ #dot_separated_idents_1_to_2
             ~ ( #stream_point )?

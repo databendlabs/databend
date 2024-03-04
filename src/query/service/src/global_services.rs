@@ -64,7 +64,7 @@ impl GlobalServices {
         // 2. log init.
         let mut log_labels = BTreeMap::new();
         log_labels.insert("service".to_string(), "databend-query".to_string());
-        log_labels.insert("tenant_id".to_string(), config.query.tenant_id.clone());
+        log_labels.insert("tenant_id".to_string(), config.query.tenant_id.to_string());
         log_labels.insert("cluster_id".to_string(), config.query.cluster_id.clone());
         log_labels.insert("node_id".to_string(), config.query.node_id.clone());
         GlobalLogger::init(&app_name_shuffle, &config.log, log_labels);
@@ -114,9 +114,9 @@ impl GlobalServices {
         ShareTableConfig::init(
             &config.query.share_endpoint_address,
             &config.query.share_endpoint_auth_token_file,
-            config.query.tenant_id.clone(),
+            config.query.tenant_id.to_string(),
         )?;
-        CacheManager::init(&config.cache, &config.query.tenant_id)?;
+        CacheManager::init(&config.cache, config.query.tenant_id.to_string())?;
 
         if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
             CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;

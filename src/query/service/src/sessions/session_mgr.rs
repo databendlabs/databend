@@ -88,7 +88,7 @@ impl SessionManager {
             self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
         }
 
-        let tenant = GlobalConfig::instance().query.tenant_id.clone();
+        let tenant = GlobalConfig::instance().query.tenant_id.to_string();
         let settings = Settings::create(tenant);
         self.load_config_changes(&settings)?;
         settings.load_global_changes().await?;

@@ -66,7 +66,7 @@ pub fn try_into_table_info(
     let partition_keys = if let Some(partitions) = &hms_table.partition_keys {
         let r = partitions
             .iter()
-            .filter_map(|field| field.name.clone().map(|v| v.into_string()))
+            .filter_map(|field| field.name.clone().map(|v| v.to_string()))
             .collect();
         Some(r)
     } else {

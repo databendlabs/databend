@@ -28,6 +28,7 @@ use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::NonEmptyStr;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 
@@ -41,18 +42,11 @@ pub struct UserMgr {
 }
 
 impl UserMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &str) -> Result<Self> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while user mgr create)",
-            ));
-        }
-
-        Ok(UserMgr {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: NonEmptyStr) -> Self {
+        UserMgr {
             kv_api,
-            // TODO: use NonEmptyString
-            tenant: Tenant::new(tenant),
-        })
+            tenant: Tenant::new_nonempty(tenant.into()),
+        }
     }
 
     /// Create a string key to store a user@host into meta-service.

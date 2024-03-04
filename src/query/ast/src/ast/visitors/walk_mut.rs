@@ -19,9 +19,12 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
     match expr {
         Expr::ColumnRef {
             span,
-            database,
-            table,
-            column,
+            column:
+                ColumnRef {
+                    database,
+                    table,
+                    column,
+                },
         } => visitor.visit_column_ref(*span, database, table, column),
         Expr::IsNull { span, expr, not } => visitor.visit_is_null(*span, expr, *not),
         Expr::IsDistinctFrom {
@@ -96,12 +99,15 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
         Expr::Tuple { span, exprs } => visitor.visit_tuple(*span, exprs),
         Expr::FunctionCall {
             span,
-            distinct,
-            name,
-            args,
-            params,
-            window,
-            lambda,
+            func:
+                FunctionCall {
+                    distinct,
+                    name,
+                    args,
+                    params,
+                    window,
+                    lambda,
+                },
         } => visitor.visit_function_call(*span, *distinct, name, args, params, window, lambda),
         Expr::Case {
             span,
@@ -362,7 +368,11 @@ pub fn walk_cte_mut<V: VisitorMut>(visitor: &mut V, cte: &mut CTE) {
 
 pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statement) {
     match statement {
-        Statement::Explain { kind, query } => visitor.visit_explain(kind, &mut *query),
+        Statement::Explain {
+            kind,
+            options,
+            query,
+        } => visitor.visit_explain(kind, options, &mut *query),
         Statement::ExplainAnalyze { query } => visitor.visit_statement(&mut *query),
         Statement::Query(query) => visitor.visit_query(&mut *query),
         Statement::Insert(insert) => visitor.visit_insert(insert),

@@ -39,7 +39,6 @@ use databend_common_meta_types::StorageError;
 use databend_common_meta_types::StoredMembership;
 use databend_common_meta_types::TypeConfig;
 use databend_common_meta_types::Vote;
-use log::as_debug;
 use log::debug;
 use log::error;
 use log::info;
@@ -198,7 +197,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
     #[minitrace::trace]
     async fn save_vote(&mut self, hs: &Vote) -> Result<(), StorageError> {
-        info!(id = self.id, hs = as_debug!(hs); "save_vote");
+        info!(id = self.id, hs :? =(hs); "save_vote");
 
         match self
             .raft_state
@@ -238,7 +237,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
     #[minitrace::trace]
     async fn purge_logs_upto(&mut self, log_id: LogId) -> Result<(), StorageError> {
-        info!(id = self.id, log_id = as_debug!(&log_id); "purge_logs_upto: start");
+        info!(id = self.id, log_id :? =(&log_id); "purge_logs_upto: start");
 
         if let Err(err) = self
             .log
@@ -252,7 +251,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
             return Err(err);
         };
 
-        info!(id = self.id, log_id = as_debug!(&log_id); "purge_logs_upto: Done: set_last_purged()");
+        info!(id = self.id, log_id :? =(&log_id); "purge_logs_upto: Done: set_last_purged()");
 
         let log = self.log.write().await.clone();
 
@@ -267,16 +266,16 @@ impl RaftStorage<TypeConfig> for RaftStore {
         databend_common_base::runtime::spawn({
             let id = self.id;
             async move {
-                info!(id = id, log_id = as_debug!(&log_id); "purge_logs_upto: Start: asynchronous range_remove()");
+                info!(id = id, log_id :? =(&log_id); "purge_logs_upto: Start: asynchronous range_remove()");
 
                 let res = log.range_remove(..=log_id.index).await;
 
                 if let Err(err) = res {
-                    error!(id = id, log_id = as_debug!(&log_id); "purge_logs_upto: in asynchronous error: {}", err);
+                    error!(id = id, log_id :? =(&log_id); "purge_logs_upto: in asynchronous error: {}", err);
                     raft_metrics::storage::incr_raft_storage_fail("purge_logs_upto", true);
                 }
 
-                info!(id = id, log_id = as_debug!(&log_id); "purge_logs_upto: Done: asynchronous range_remove()");
+                info!(id = id, log_id :? =(&log_id); "purge_logs_upto: Done: asynchronous range_remove()");
             }
         });
 

@@ -26,6 +26,9 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_types::MatchSeq;
 use parking_lot::Mutex;
+use serde::Deserialize;
+use serde::Serialize;
+
 #[derive(Debug, Clone)]
 pub struct TxnManager {
     state: TxnState,
@@ -34,7 +37,7 @@ pub struct TxnManager {
 
 pub type TxnManagerRef = Arc<Mutex<TxnManager>>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub enum TxnState {
     AutoCommit,
     Active,
@@ -119,6 +122,10 @@ impl TxnManager {
         if let TxnState::Active = self.state {
             self.state = TxnState::Fail;
         }
+    }
+
+    pub fn force_set_fail(&mut self) {
+        self.state = TxnState::Fail;
     }
 
     pub fn is_fail(&self) -> bool {

@@ -26,7 +26,7 @@ use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowTasksStmt;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -110,7 +110,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let plan = CreateTaskPlan {
             if_not_exists: *if_not_exists,
-            tenant,
+            tenant: tenant.to_string(),
             task_name: name.to_string(),
             warehouse_opts: warehouse_opts.clone(),
             schedule_opts: schedule_opts.clone(),
@@ -165,7 +165,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let plan = AlterTaskPlan {
             if_exists: *if_exists,
-            tenant,
+            tenant: tenant.to_string(),
             task_name: name.to_string(),
             alter_options: options.clone(),
         };
@@ -183,7 +183,7 @@ impl Binder {
 
         let plan = DropTaskPlan {
             if_exists: *if_exists,
-            tenant,
+            tenant: tenant.to_string(),
             task_name: name.to_string(),
         };
         Ok(Plan::DropTask(Box::new(plan)))
@@ -199,7 +199,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = DescribeTaskPlan {
-            tenant,
+            tenant: tenant.to_string(),
             task_name: name.to_string(),
         };
         Ok(Plan::DescribeTask(Box::new(plan)))
@@ -215,7 +215,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = ExecuteTaskPlan {
-            tenant,
+            tenant: tenant.to_string(),
             task_name: name.to_string(),
         };
         Ok(Plan::ExecuteTask(Box::new(plan)))
@@ -231,7 +231,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = ShowTasksPlan {
-            tenant,
+            tenant: tenant.to_string(),
             limit: limit.clone(),
         };
         Ok(Plan::ShowTasks(Box::new(plan)))

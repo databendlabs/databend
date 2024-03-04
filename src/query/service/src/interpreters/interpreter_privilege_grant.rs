@@ -190,16 +190,16 @@ impl Interpreter for GrantPrivilegeInterpreter {
         match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr
-                    .grant_privileges_to_user(&tenant, user, plan.on, plan.priv_types)
+                    .grant_privileges_to_user(tenant.clone(), user, plan.on, plan.priv_types)
                     .await?;
             }
             PrincipalIdentity::Role(role) => {
                 if plan.priv_types.has_privilege(Ownership) && plan.priv_types.len() == 1 {
                     let owner_object = self
-                        .convert_to_ownerobject(&tenant, &plan.on, plan.on.catalog())
+                        .convert_to_ownerobject(tenant.as_str(), &plan.on, plan.on.catalog())
                         .await?;
                     if self.ctx.get_current_role().is_some() {
-                        self.grant_ownership(&self.ctx, &tenant, &owner_object, &role)
+                        self.grant_ownership(&self.ctx, tenant.as_str(), &owner_object, &role)
                             .await?;
                     } else {
                         return Err(databend_common_exception::ErrorCode::UnknownRole(
@@ -208,9 +208,9 @@ impl Interpreter for GrantPrivilegeInterpreter {
                     }
                 } else {
                     user_mgr
-                        .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)
+                        .grant_privileges_to_role(tenant.as_str(), &role, plan.on, plan.priv_types)
                         .await?;
-                    RoleCacheManager::instance().invalidate_cache(&tenant);
+                    RoleCacheManager::instance().invalidate_cache(tenant.as_str());
                 }
             }
         }
