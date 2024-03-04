@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use std::sync::Arc;
 
 use arrow_schema::Schema;
-
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::variant_transform::contains_variant;
@@ -26,7 +24,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
-
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
@@ -37,6 +34,8 @@ use crate::pipelines::processors::Processor;
 pub struct TransformUdf {
     funcs: Vec<UdfFunctionDesc>,
     js_runtime: Arc<arrow_udf_js::Runtime>,
+    // TODO:
+    // py_runtime: Arc<arrow_udf_python::Runtime>,
 }
 
 unsafe impl Send for TransformUdf {}
@@ -49,7 +48,7 @@ impl TransformUdf {
         output: Arc<OutputPort>,
     ) -> Result<Box<dyn Processor>> {
         let mut js_runtime = arrow_udf_js::Runtime::new()
-            .map_err(|err| ErrorCode::from_string(format!("Cannot create js runtime: {err}")))?;
+            .map_err(|err| ErrorCode::UDFDataError(format!("Cannot create js runtime: {err}")))?;
 
         for func in funcs.iter() {
             let tmp_schema =
@@ -65,7 +64,7 @@ impl TransformUdf {
                     code,
                     &func.func_name,
                 )
-                .map_err(|err| ErrorCode::from_string(format!("Cannot add js function: {err}")))?;
+                .map_err(|err| ErrorCode::UDFDataError(format!("Cannot add js function: {err}")))?;
         }
 
         Ok(Transformer::create(input, output, Self {
