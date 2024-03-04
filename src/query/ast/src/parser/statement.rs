@@ -3539,7 +3539,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         },
     );
 
-    let udf_interpreter = map(
+    let udf_script = map(
         rule! {
             "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
             ~ RETURNS ~ #udf_arg_type
@@ -3564,7 +3564,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
     rule!(
         #udf_server: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>"
         | #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
-        | #udf_interpreter: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> AS <language_codes>"
+        | #udf_script: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> AS <language_codes>"
     )(i)
 }
 

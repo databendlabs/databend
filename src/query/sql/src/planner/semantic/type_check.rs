@@ -2957,7 +2957,7 @@ impl<'a> TypeChecker<'a> {
                     .await?,
             )),
             UDFDefinition::UDFScript(udf_def) => Ok(Some(
-                self.resolve_udf_interpreter(span, name, arguments, udf_def)
+                self.resolve_udf_script(span, name, arguments, udf_def)
                     .await?,
             )),
         }
@@ -3030,7 +3030,7 @@ impl<'a> TypeChecker<'a> {
 
     #[async_recursion::async_recursion]
     #[async_backtrace::framed]
-    async fn resolve_udf_interpreter(
+    async fn resolve_udf_script(
         &mut self,
         span: Span,
         name: String,

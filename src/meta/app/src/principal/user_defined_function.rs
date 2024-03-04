@@ -120,7 +120,7 @@ impl UserDefinedFunction {
         }
     }
 
-    pub fn create_udf_interpreter(
+    pub fn create_udf_script(
         name: &str,
         code: &str,
         handler: &str,

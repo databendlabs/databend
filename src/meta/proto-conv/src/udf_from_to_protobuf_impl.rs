@@ -178,8 +178,8 @@ impl FromToProto for mt::UserDefinedFunction {
             Some(pb::user_defined_function::Definition::UdfServer(udf_server)) => {
                 mt::UDFDefinition::UDFServer(mt::UDFServer::from_pb(udf_server)?)
             }
-            Some(pb::user_defined_function::Definition::UdfScript(udf_interpreter)) => {
-                mt::UDFDefinition::UDFScript(mt::UDFScript::from_pb(udf_interpreter)?)
+            Some(pb::user_defined_function::Definition::UdfScript(udf_script)) => {
+                mt::UDFDefinition::UDFScript(mt::UDFScript::from_pb(udf_script)?)
             }
             None => {
                 return Err(Incompatible {
@@ -207,8 +207,8 @@ impl FromToProto for mt::UserDefinedFunction {
             mt::UDFDefinition::UDFServer(udf_server) => {
                 pb::user_defined_function::Definition::UdfServer(udf_server.to_pb()?)
             }
-            mt::UDFDefinition::UDFScript(udf_interpreter) => {
-                pb::user_defined_function::Definition::UdfScript(udf_interpreter.to_pb()?)
+            mt::UDFDefinition::UDFScript(udf_script) => {
+                pb::user_defined_function::Definition::UdfScript(udf_script.to_pb()?)
             }
         };
 

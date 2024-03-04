@@ -77,6 +77,29 @@ async fn test_add_udf() -> Result<()> {
         catch => panic!("GetKVActionReply{:?}", catch),
     }
 
+    // udf script
+    let udf = create_test_udf_script();
+
+    udf_api.add_udf(udf.clone(), &CreateOption::None).await??;
+
+    let value = kv_api
+        .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
+        .await?;
+
+    match value {
+        Some(SeqV {
+            seq: 2,
+            meta: _,
+            data: value,
+        }) => {
+            assert_eq!(
+                value,
+                serialize_struct(&udf, ErrorCode::IllegalUDFFormat, || "")?
+            );
+        }
+        catch => panic!("GetKVActionReply{:?}", catch),
+    }
+
     Ok(())
 }
 
@@ -182,6 +205,19 @@ fn create_test_udf_server() -> UserDefinedFunction {
         "python",
         vec![DataType::String],
         DataType::Number(NumberDataType::Int64),
+        "This is a description",
+    )
+}
+
+fn create_test_udf_script() -> UserDefinedFunction {
+    UserDefinedFunction::create_udf_script(
+        "strlen",
+        "testcode",
+        "strlen_py",
+        "python",
+        vec![DataType::String],
+        DataType::Number(NumberDataType::Int64),
+        "3.12.0",
         "This is a description",
     )
 }
