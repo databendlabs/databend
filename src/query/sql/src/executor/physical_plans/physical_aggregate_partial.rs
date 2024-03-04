@@ -86,11 +86,8 @@ impl AggregatePartial {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        for (idx, data_type) in group_types.iter().enumerate() {
-            fields.push(DataField::new(
-                &format!("_group_by_key_{}", idx),
-                data_type.clone(),
-            ));
+        for data_type in group_types.iter() {
+            fields.push(DataField::new("_group_by_key", data_type.clone()));
         }
         Ok(DataSchemaRefExt::create(fields))
     }

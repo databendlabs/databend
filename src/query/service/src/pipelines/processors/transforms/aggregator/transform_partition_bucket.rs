@@ -473,7 +473,9 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
 
                 let data_block = self.inputs[index].port.pull_data().unwrap()?;
                 self.inputs[index].bucket = self.add_bucket(data_block);
-                debug_assert!(self.unsplitted_blocks.is_empty());
+                if self.max_partition_count == 0 {
+                    debug_assert!(self.unsplitted_blocks.is_empty());
+                }
 
                 if self.inputs[index].bucket <= self.working_bucket {
                     all_port_prepared_data = false;
