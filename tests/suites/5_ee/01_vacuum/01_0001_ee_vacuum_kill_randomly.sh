@@ -30,7 +30,7 @@ bash ../scripts/ci/deploy/databend-query-standalone.sh >/dev/null 2>&1
 # check if before and after vacuum table the table count matched
 old_count=$(echo "select * from test_vacuum.a order by c" | $BENDSQL_CLIENT_CONNECT)
 
-echo "set data_retention_time_in_days=0; vacuum table test_vacuum.a" | $BENDSQL_CLIENT_CONNECT
+echo "set data_retention_time_in_days=0; vacuum table test_vacuum.a" | $BENDSQL_CLIENT_CONNECT >/dev/null
 #echo "optimize table test_vacuum.a all" | $BENDSQL_CLIENT_CONNECT
 count=$(echo "select * from test_vacuum.a order by c" | $BENDSQL_CLIENT_CONNECT)
 
