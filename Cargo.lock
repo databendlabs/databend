@@ -14348,8 +14348,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "sentry"
-version = "0.31.5"
-source = "git+https://github.com/getsentry/sentry-rust?rev=6ef6d97#6ef6d976225f029b6d58541eb267879b40778f0b"
