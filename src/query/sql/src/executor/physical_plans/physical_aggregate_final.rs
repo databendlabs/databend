@@ -157,6 +157,8 @@ impl PhysicalPlanBuilder {
 
                 let settings = self.ctx.get_settings();
                 let group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
+                let enable_experimental_aggregate_hashtable =
+                    settings.get_enable_experimental_aggregate_hashtable()?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     assert_eq!(grouping_sets.dup_group_items.len(), group_items.len() - 1); // ignore `_grouping_id`.
@@ -191,6 +193,7 @@ impl PhysicalPlanBuilder {
                                 plan_id: 0,
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 agg_funcs,
+                                enable_experimental_aggregate_hashtable,
                                 group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
@@ -200,6 +203,7 @@ impl PhysicalPlanBuilder {
                                 plan_id: 0,
                                 input,
                                 agg_funcs,
+                                enable_experimental_aggregate_hashtable,
                                 group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
@@ -246,6 +250,7 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
                                 plan_id: 0,
                                 agg_funcs,
+                                enable_experimental_aggregate_hashtable,
                                 group_by_display,
                                 group_by: group_items,
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
@@ -255,6 +260,7 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
                                 plan_id: 0,
                                 agg_funcs,
+                                enable_experimental_aggregate_hashtable,
                                 group_by_display,
                                 group_by: group_items,
                                 input: Box::new(input),

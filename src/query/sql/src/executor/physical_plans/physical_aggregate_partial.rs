@@ -32,7 +32,7 @@ pub struct AggregatePartial {
     pub input: Box<PhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
-
+    pub enable_experimental_aggregate_hashtable: bool,
     pub group_by_display: Vec<String>,
 
     // Only used for explain
@@ -42,56 +42,61 @@ pub struct AggregatePartial {
 impl AggregatePartial {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
-        // let mut fields =
-        //     Vec::with_capacity(self.agg_funcs.len() + self.group_by.is_empty() as usize);
-        // for agg in self.agg_funcs.iter() {
-        //     fields.push(DataField::new(
-        //         &agg.output_column.to_string(),
-        //         DataType::Binary,
-        //     ));
-        // }
-        // if !self.group_by.is_empty() {
-        //     let method = DataBlock::choose_hash_method_with_types(
-        //         &self
-        //             .group_by
-        //             .iter()
-        //             .map(|index| {
-        //                 Ok(input_schema
-        //                     .field_with_name(&index.to_string())?
-        //                     .data_type()
-        //                     .clone())
-        //             })
-        //             .collect::<Result<Vec<_>>>()?,
-        //         false,
-        //     )?;
-        //     fields.push(DataField::new("_group_by_key", method.data_type()));
-        // }
 
-        let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
+        if self.enable_experimental_aggregate_hashtable {
+            let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
+            for agg in self.agg_funcs.iter() {
+                fields.push(DataField::new(
+                    &agg.output_column.to_string(),
+                    DataType::Binary,
+                ));
+            }
+
+            let group_types = self
+                .group_by
+                .iter()
+                .map(|index| {
+                    Ok(input_schema
+                        .field_with_name(&index.to_string())?
+                        .data_type()
+                        .clone())
+                })
+                .collect::<Result<Vec<_>>>()?;
+
+            for (idx, data_type) in group_types.iter().enumerate() {
+                fields.push(DataField::new(
+                    &format!("_group_by_key_{}", idx),
+                    data_type.clone(),
+                ));
+            }
+            return Ok(DataSchemaRefExt::create(fields));
+        }
+
+        let mut fields =
+            Vec::with_capacity(self.agg_funcs.len() + self.group_by.is_empty() as usize);
         for agg in self.agg_funcs.iter() {
             fields.push(DataField::new(
                 &agg.output_column.to_string(),
                 DataType::Binary,
             ));
         }
-
-        let group_types = self
-            .group_by
-            .iter()
-            .map(|index| {
-                Ok(input_schema
-                    .field_with_name(&index.to_string())?
-                    .data_type()
-                    .clone())
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        for (idx, data_type) in group_types.iter().enumerate() {
-            fields.push(DataField::new(
-                &format!("_group_by_key_{}", idx),
-                data_type.clone(),
-            ));
+        if !self.group_by.is_empty() {
+            let method = DataBlock::choose_hash_method_with_types(
+                &self
+                    .group_by
+                    .iter()
+                    .map(|index| {
+                        Ok(input_schema
+                            .field_with_name(&index.to_string())?
+                            .data_type()
+                            .clone())
+                    })
+                    .collect::<Result<Vec<_>>>()?,
+                false,
+            )?;
+            fields.push(DataField::new("_group_by_key", method.data_type()));
         }
+
         Ok(DataSchemaRefExt::create(fields))
     }
 }

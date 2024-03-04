@@ -249,6 +249,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                             config,
                             capacity,
                         );
+                        hashtable.direct_append = true;
 
                         let agg_len = self.params.aggregate_functions.len();
                         let group_len = self.params.group_columns.len();
