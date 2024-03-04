@@ -17,6 +17,7 @@ use std::fmt;
 use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledBytesError;
 use databend_common_meta_sled_store::SledOrderedSerde;
+use databend_common_meta_sled_store::SledSerde;
 use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::LogId;
 use serde::Deserialize;
@@ -67,40 +68,10 @@ impl SledOrderedSerde for LogMetaKey {
     }
 }
 
-pub(crate) mod compat_with_07 {
-    use databend_common_meta_sled_store::SledBytesError;
-    use databend_common_meta_sled_store::SledSerde;
-    use databend_common_meta_types::compat07;
-    use openraft::compat::Upgrade;
-
-    use super::LogMetaValue;
-
-    #[derive(Debug, serde::Serialize, serde::Deserialize)]
-    pub enum LogMetaValueCompat {
-        LogId(compat07::LogId),
-    }
-
-    impl Upgrade<LogMetaValue> for LogMetaValueCompat {
-        #[rustfmt::skip]
-        fn upgrade(self) -> LogMetaValue {
-            let Self::LogId(lid) = self;
-            LogMetaValue::LogId(lid.upgrade())
-        }
-    }
-
-    impl SledSerde for LogMetaValueCompat {
-        fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
-        where Self: Sized {
-            let s = serde_json::from_slice(v.as_ref())?;
-            Ok(s)
-        }
-    }
-
-    impl SledSerde for LogMetaValue {
-        fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
-        where Self: Sized {
-            let s = serde_json::from_slice(v.as_ref())?;
-            Ok(s)
-        }
+impl SledSerde for LogMetaValue {
+    fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
+    where Self: Sized {
+        let s = serde_json::from_slice(v.as_ref())?;
+        Ok(s)
     }
 }
