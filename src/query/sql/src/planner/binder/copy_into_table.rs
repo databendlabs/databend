@@ -56,6 +56,7 @@ use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
+use derive_visitor::Drive;
 use indexmap::IndexMap;
 use log::debug;
 use log::warn;
@@ -90,7 +91,7 @@ impl<'a> Binder {
             }
             CopyIntoTableSource::Query(query) => {
                 let mut max_column_position = MaxColumnPosition::new();
-                max_column_position.visit_query(query.as_ref());
+                query.drive(&mut max_column_position);
                 self.metadata
                     .write()
                     .set_max_column_position(max_column_position.max_pos);

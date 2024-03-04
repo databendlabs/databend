@@ -44,9 +44,13 @@ pub enum UDFDefinition {
     UDFScript {
         arg_types: Vec<TypeName>,
         return_type: TypeName,
+        #[drive(skip)]
         code: String,
+        #[drive(skip)]
         handler: String,
+        #[drive(skip)]
         language: String,
+        #[drive(skip)]
         runtime_version: String,
     },
 }
