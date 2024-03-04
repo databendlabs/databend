@@ -75,7 +75,7 @@ use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
-use databend_common_meta_app::principal::UDFInterpreter;
+use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_users::UserApiProvider;
 use indexmap::IndexMap;
@@ -2956,7 +2956,7 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_udf_server(span, name, arguments, udf_def)
                     .await?,
             )),
-            UDFDefinition::UDFInterpreter(udf_def) => Ok(Some(
+            UDFDefinition::UDFScript(udf_def) => Ok(Some(
                 self.resolve_udf_interpreter(span, name, arguments, udf_def)
                     .await?,
             )),
@@ -3035,7 +3035,7 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         name: String,
         arguments: &[Expr],
-        udf_definition: UDFInterpreter,
+        udf_definition: UDFScript,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut args = Vec::with_capacity(arguments.len());
         for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {

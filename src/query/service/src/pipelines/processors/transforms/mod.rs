@@ -34,7 +34,7 @@ mod transform_resort_addon_without_source_schema;
 mod transform_runtime_cast_schema;
 mod transform_sort_spill;
 mod transform_srf;
-mod transform_udf;
+mod transform_udf_script;
 mod transform_udf_server;
 mod window;
 
@@ -59,7 +59,7 @@ pub use transform_resort_addon_without_source_schema::TransformResortAddOnWithou
 pub use transform_runtime_cast_schema::TransformRuntimeCastSchema;
 pub use transform_sort_spill::create_transform_sort_spill;
 pub use transform_srf::TransformSRF;
-pub use transform_udf::TransformUdf;
+pub use transform_udf_script::TransformUdfScript;
 pub use transform_udf_server::TransformUdfServer;
 pub use window::FrameBound;
 pub use window::TransformWindow;

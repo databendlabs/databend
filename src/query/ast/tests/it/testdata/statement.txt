@@ -16373,7 +16373,7 @@ CreateUDF(
             ),
         },
         description: None,
-        definition: UDFInterpreter {
+        definition: UDFScript {
             arg_types: [
                 Nullable(
                     Int32,

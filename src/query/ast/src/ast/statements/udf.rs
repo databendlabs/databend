@@ -36,7 +36,7 @@ pub enum UDFDefinition {
         language: String,
     },
 
-    UDFInterpreter {
+    UDFScript {
         arg_types: Vec<TypeName>,
         return_type: TypeName,
         code: String,
@@ -86,7 +86,7 @@ impl Display for UDFDefinition {
                     ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler} ADDRESS = {address}"
                 )?;
             }
-            UDFDefinition::UDFInterpreter {
+            UDFDefinition::UDFScript {
                 arg_types,
                 return_type,
                 code,

@@ -37,7 +37,7 @@ message UDFServer {
   DataType return_type = 5;
 }
 
-message UDFInterpreter {
+message UDFScript {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
@@ -59,7 +59,7 @@ message UserDefinedFunction {
   oneof definition {
     LambdaUDF lambda_udf = 3;
     UDFServer udf_server = 4;
-    UDFInterpreter udf_interpreter = 6;
+    UDFScript udf_interpreter = 6;
   }
   // The time udf created.
   optional string created_on = 5;

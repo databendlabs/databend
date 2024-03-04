@@ -55,7 +55,7 @@ pub struct UDFServer {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct UDFInterpreter {
+pub struct UDFScript {
     pub code: String,
     pub handler: String,
     pub language: String,
@@ -68,7 +68,7 @@ pub struct UDFInterpreter {
 pub enum UDFDefinition {
     LambdaUDF(LambdaUDF),
     UDFServer(UDFServer),
-    UDFInterpreter(UDFInterpreter),
+    UDFScript(UDFScript),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -133,7 +133,7 @@ impl UserDefinedFunction {
         Self {
             name: name.to_string(),
             description: description.to_string(),
-            definition: UDFDefinition::UDFInterpreter(UDFInterpreter {
+            definition: UDFDefinition::UDFScript(UDFScript {
                 code: code.to_string(),
                 handler: handler.to_string(),
                 language: language.to_string(),
@@ -181,7 +181,7 @@ impl Display for UDFDefinition {
                 )?;
             }
 
-            UDFDefinition::UDFInterpreter(UDFInterpreter {
+            UDFDefinition::UDFScript(UDFScript {
                 code,
                 arg_types,
                 return_type,

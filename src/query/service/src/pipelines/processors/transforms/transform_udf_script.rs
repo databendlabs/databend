@@ -31,16 +31,16 @@ use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
-pub struct TransformUdf {
+pub struct TransformUdfScript {
     funcs: Vec<UdfFunctionDesc>,
     js_runtime: Arc<arrow_udf_js::Runtime>,
     // TODO:
     // py_runtime: Arc<arrow_udf_python::Runtime>,
 }
 
-unsafe impl Send for TransformUdf {}
+unsafe impl Send for TransformUdfScript {}
 
-impl TransformUdf {
+impl TransformUdfScript {
     pub fn try_create(
         _func_ctx: FunctionContext,
         funcs: Vec<UdfFunctionDesc>,
@@ -74,8 +74,8 @@ impl TransformUdf {
     }
 }
 
-impl Transform for TransformUdf {
-    const NAME: &'static str = "UdfInterpreterTransform";
+impl Transform for TransformUdfScript {
+    const NAME: &'static str = "UDFScriptTransform";
 
     fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
         let num_rows = data_block.num_rows();

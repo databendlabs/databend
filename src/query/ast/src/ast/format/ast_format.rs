@@ -2189,7 +2189,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     AstFormatContext::new(format!("UdfServerAddress {address}"));
                 children.push(FormatTreeNode::new(address_format_ctx));
             }
-            UDFDefinition::UDFInterpreter {
+            UDFDefinition::UDFScript {
                 arg_types,
                 return_type,
                 code,
@@ -2327,7 +2327,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 children.push(FormatTreeNode::new(address_format_ctx));
             }
 
-            UDFDefinition::UDFInterpreter {
+            UDFDefinition::UDFScript {
                 arg_types,
                 return_type,
                 code,

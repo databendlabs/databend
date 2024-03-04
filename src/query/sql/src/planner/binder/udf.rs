@@ -24,7 +24,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
-use databend_common_meta_app::principal::UDFInterpreter;
+use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 
@@ -119,7 +119,7 @@ impl Binder {
                     created_on: Utc::now(),
                 })
             }
-            UDFDefinition::UDFInterpreter {
+            UDFDefinition::UDFScript {
                 arg_types,
                 return_type,
                 code,
@@ -147,7 +147,7 @@ impl Binder {
                 Ok(UserDefinedFunction {
                     name: udf_name.to_string(),
                     description: udf_description.clone().unwrap_or_default(),
-                    definition: PlanUDFDefinition::UDFInterpreter(UDFInterpreter {
+                    definition: PlanUDFDefinition::UDFScript(UDFScript {
                         code: code.clone(),
                         arg_types: arg_datatypes,
                         return_type,

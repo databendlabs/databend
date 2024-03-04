@@ -3548,7 +3548,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ AS ~ ^#code_string
         },
         |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, code)| {
-            UDFDefinition::UDFInterpreter {
+            UDFDefinition::UDFScript {
                 arg_types,
                 return_type,
                 code,

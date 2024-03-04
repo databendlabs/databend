@@ -106,12 +106,12 @@ impl FromToProto for mt::UDFServer {
     }
 }
 
-impl FromToProto for mt::UDFInterpreter {
-    type PB = pb::UdfInterpreter;
+impl FromToProto for mt::UDFScript {
+    type PB = pb::UDFScript;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
-    fn from_pb(p: pb::UdfInterpreter) -> Result<Self, Incompatible> {
+    fn from_pb(p: pb::UDFScript) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let mut arg_types = Vec::with_capacity(p.arg_types.len());
@@ -121,11 +121,11 @@ impl FromToProto for mt::UDFInterpreter {
         }
         let return_type = DataType::from(&TableDataType::from_pb(p.return_type.ok_or_else(
             || Incompatible {
-                reason: "UdfInterpreter.return_type can not be None".to_string(),
+                reason: "UDFScript.return_type can not be None".to_string(),
             },
         )?)?);
 
-        Ok(mt::UDFInterpreter {
+        Ok(mt::UDFScript {
             code: p.code,
             arg_types,
             return_type,
@@ -135,7 +135,7 @@ impl FromToProto for mt::UDFInterpreter {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::UdfInterpreter, Incompatible> {
+    fn to_pb(&self) -> Result<pb::UDFScript, Incompatible> {
         let mut arg_types = Vec::with_capacity(self.arg_types.len());
         for arg_type in self.arg_types.iter() {
             let arg_type = infer_schema_type(arg_type)
@@ -151,7 +151,7 @@ impl FromToProto for mt::UDFInterpreter {
             })?
             .to_pb()?;
 
-        Ok(pb::UdfInterpreter {
+        Ok(pb::UDFScript {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             code: self.code.clone(),
@@ -178,8 +178,8 @@ impl FromToProto for mt::UserDefinedFunction {
             Some(pb::user_defined_function::Definition::UdfServer(udf_server)) => {
                 mt::UDFDefinition::UDFServer(mt::UDFServer::from_pb(udf_server)?)
             }
-            Some(pb::user_defined_function::Definition::UdfInterpreter(udf_interpreter)) => {
-                mt::UDFDefinition::UDFInterpreter(mt::UDFInterpreter::from_pb(udf_interpreter)?)
+            Some(pb::user_defined_function::Definition::UDFScript(udf_interpreter)) => {
+                mt::UDFDefinition::UDFScript(mt::UDFScript::from_pb(udf_interpreter)?)
             }
             None => {
                 return Err(Incompatible {
@@ -207,8 +207,8 @@ impl FromToProto for mt::UserDefinedFunction {
             mt::UDFDefinition::UDFServer(udf_server) => {
                 pb::user_defined_function::Definition::UdfServer(udf_server.to_pb()?)
             }
-            mt::UDFDefinition::UDFInterpreter(udf_interpreter) => {
-                pb::user_defined_function::Definition::UdfInterpreter(udf_interpreter.to_pb()?)
+            mt::UDFDefinition::UDFScript(udf_interpreter) => {
+                pb::user_defined_function::Definition::UDFScript(udf_interpreter.to_pb()?)
             }
         };
 
