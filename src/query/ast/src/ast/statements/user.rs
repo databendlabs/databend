@@ -22,12 +22,16 @@ use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserOptionFlag;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CreateOption;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateUserStmt {
+    #[drive(skip)]
     pub create_option: CreateOption,
+    #[drive(skip)]
     pub user: UserIdentity,
     pub auth_option: AuthOption,
     pub user_options: Vec<UserOptionItem>,
@@ -56,9 +60,11 @@ impl Display for CreateUserStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Drive, DriveMut)]
 pub struct AuthOption {
+    #[drive(skip)]
     pub auth_type: Option<AuthType>,
+    #[drive(skip)]
     pub password: Option<String>,
 }
 
@@ -75,9 +81,10 @@ impl Display for AuthOption {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct AlterUserStmt {
     // None means current user
+    #[drive(skip)]
     pub user: Option<UserIdentity>,
     // None means no change to make
     pub auth_option: Option<AuthOption>,
@@ -106,9 +113,10 @@ impl Display for AlterUserStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct GrantStmt {
     pub source: AccountMgrSource,
+    #[drive(skip)]
     pub principal: PrincipalIdentity,
 }
 
@@ -122,9 +130,10 @@ impl Display for GrantStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct RevokeStmt {
     pub source: AccountMgrSource,
+    #[drive(skip)]
     pub principal: PrincipalIdentity,
 }
 
@@ -138,12 +147,14 @@ impl Display for RevokeStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum AccountMgrSource {
     Role {
+        #[drive(skip)]
         role: String,
     },
     Privs {
+        #[drive(skip)]
         privileges: Vec<UserPrivilegeType>,
         level: AccountMgrLevel,
     },
@@ -152,28 +163,28 @@ pub enum AccountMgrSource {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum AccountMgrLevel {
     Global,
-    Database(Option<String>),
-    Table(Option<String>, String),
-    UDF(String),
-    Stage(String),
+    Database(#[drive(skip)] Option<String>),
+    Table(#[drive(skip)] Option<String>, #[drive(skip)] String),
+    UDF(#[drive(skip)] String),
+    Stage(#[drive(skip)] String),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum SecondaryRolesOption {
     None,
     All,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum UserOptionItem {
-    TenantSetting(bool),
-    DefaultRole(String),
-    SetNetworkPolicy(String),
+    TenantSetting(#[drive(skip)] bool),
+    DefaultRole(#[drive(skip)] String),
+    SetNetworkPolicy(#[drive(skip)] String),
     UnsetNetworkPolicy,
-    SetPasswordPolicy(String),
+    SetPasswordPolicy(#[drive(skip)] String),
     UnsetPasswordPolicy,
 }
 
