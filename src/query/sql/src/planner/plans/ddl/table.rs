@@ -123,6 +123,8 @@ impl VacuumTablePlan {
                 DataField::new("block_size", DataType::Number(NumberDataType::UInt64)),
                 DataField::new("index_files", DataType::Number(NumberDataType::UInt64)),
                 DataField::new("index_size", DataType::Number(NumberDataType::UInt64)),
+                DataField::new("total_files", DataType::Number(NumberDataType::UInt64)),
+                DataField::new("total_size", DataType::Number(NumberDataType::UInt64)),
             ]))
         }
     }

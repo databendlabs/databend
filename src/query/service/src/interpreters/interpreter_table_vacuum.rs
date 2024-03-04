@@ -192,7 +192,14 @@ impl Interpreter for VacuumTableInterpreter {
             None => {
                 return {
                     let stat = self.get_statistics(fuse_table).await?;
-
+                    let total_files = stat.snapshot_files.0.len()
+                        + stat.segment_files.0.len()
+                        + stat.block_files.0.len()
+                        + stat.index_files.0.len();
+                    let total_size = stat.snapshot_files.1
+                        + stat.segment_files.1
+                        + stat.block_files.1
+                        + stat.index_files.1;
                     PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
                         UInt64Type::from_data(vec![stat.snapshot_files.0.len() as u64]),
                         UInt64Type::from_data(vec![stat.snapshot_files.1]),
@@ -202,6 +209,8 @@ impl Interpreter for VacuumTableInterpreter {
                         UInt64Type::from_data(vec![stat.block_files.1]),
                         UInt64Type::from_data(vec![stat.index_files.0.len() as u64]),
                         UInt64Type::from_data(vec![stat.index_files.1]),
+                        UInt64Type::from_data(vec![total_files as u64]),
+                        UInt64Type::from_data(vec![total_size]),
                     ])])
                 };
             }
