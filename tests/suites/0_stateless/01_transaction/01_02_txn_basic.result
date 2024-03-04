@@ -1,0 +1,17 @@
+>>>> curl Q1: {"sql": "begin", "pagination": { "wait_time_secs": 2}} | jq .session.txn_state
+"Active"
+<<<<
+>>>> curl Q2: {"sql": "commit", "pagination": { "wait_time_secs": 2}} | jq .session.txn_state
+"AutoCommit"
+<<<<
+>>>> curl Q3: {"sql": "select 1", "pagination": { "wait_time_secs": 2}} | jq .session.txn_state
+"AutoCommit"
+<<<<
+>>>> curl Q4: {"sql": "select 1", "pagination": { "wait_time_secs": 2}, "session": {"txn_state": "Fail"}} | jq .session.txn_state, .error.code
+"Fail"
+4002
+<<<<
+>>>> curl Q5: {"sql": "select 1", "pagination": { "wait_time_secs": 2}, "session": {"txn_state": "Active"}} | jq .session.txn_state, .error.code
+"Fail"
+4004
+<<<<
