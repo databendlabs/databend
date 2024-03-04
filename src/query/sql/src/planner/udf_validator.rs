@@ -35,6 +35,18 @@ pub struct UDFValidator {
 }
 
 impl UDFValidator {
+    fn enter_column_ref(&mut self, column: &ColumnRef) {
+        self.expr_params.insert(column.column.name().to_string());
+    }
+
+    fn enter_function_call(&mut self, func: &FunctionCall) {
+        let name = &func.name.name;
+        if !is_builtin_function(&name) && self.name.eq_ignore_ascii_case(name) {
+            self.has_recursive = true;
+            return;
+        }
+    }
+
     pub fn verify_definition_expr(&mut self, definition_expr: &Expr) -> Result<()> {
         self.expr_params.clear();
 
@@ -71,23 +83,5 @@ impl UDFValidator {
                 format!("Parameters are not used: {:?}", params_not_used)
             },
         )))
-    }
-    
-    fn enter_column_ref(
-        &mut self,
-        column: &ColumnRef,
-    ) {
-        self.expr_params.insert(column.column.name().to_string());
-    }
-
-    fn enter_function_call(
-        &mut self,
-        func: &FunctionCall,
-    ) {
-        let name = &func.name.name;
-        if !is_builtin_function(&name) && self.name.eq_ignore_ascii_case(name) {
-            self.has_recursive = true;
-            return;
-        }
     }
 }

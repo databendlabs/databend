@@ -15,24 +15,21 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
-use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::Lambda;
-use databend_common_ast::ast::Visitor;
-use databend_common_ast::ast::Window;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use derive_visitor::Drive;
+use derive_visitor::Visitor;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
-use crate::plans::FunctionCall;
+use crate::plans::FunctionCall as ScalarExprFunctionCall;
 use crate::plans::ProjectSet;
 use crate::plans::SrfItem;
 use crate::BindContext;
@@ -41,21 +38,23 @@ use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
 
+#[derive(Visitor)]
+#[visitor(FunctionCall(enter))]
 pub struct SrfCollector {
     srfs: Vec<Expr>,
 }
 
-impl<'a> Visitor<'a> for SrfCollector {
-    fn visit_function_call(
-        &mut self,
-        span: Span,
-        distinct: bool,
-        name: &'a Identifier,
-        args: &'a [Expr],
-        params: &'a [Expr],
-        over: &'a Option<Window>,
-        lambda: &'a Option<Lambda>,
-    ) {
+impl SrfCollector {
+    fn enter_function_call(&mut self, func: &FunctionCall) {
+        let FunctionCall {
+            distinct,
+            name,
+            args,
+            params,
+            window,
+            lambda,
+        } = func;
+
         if BUILTIN_FUNCTIONS
             .get_property(&name.name)
             .map(|property| property.kind == FunctionKind::SRF)
@@ -63,23 +62,16 @@ impl<'a> Visitor<'a> for SrfCollector {
         {
             // Collect the srf
             self.srfs.push(Expr::FunctionCall {
-                span,
-                func: ASTFunctionCall {
-                    distinct,
+                span: name.span,
+                func: FunctionCall {
+                    distinct: *distinct,
                     name: name.clone(),
                     args: args.to_vec(),
                     params: params.to_vec(),
-                    window: over.clone(),
+                    window: window.clone(),
                     lambda: lambda.clone(),
                 },
             });
-        } else {
-            for arg in args.iter() {
-                self.visit_expr(arg);
-            }
-            for param in params.iter() {
-                self.visit_expr(param);
-            }
         }
     }
 }
@@ -90,7 +82,7 @@ impl SrfCollector {
     }
 
     pub fn visit(&mut self, expr: &Expr) {
-        self.visit_expr(expr);
+        expr.drive(self);
     }
 
     pub fn into_srfs(self) -> Vec<Expr> {
@@ -114,7 +106,7 @@ impl Binder {
         for srf in srfs {
             let (name, srf_scalar) = match srf {
                 Expr::FunctionCall {
-                    func: ASTFunctionCall { name, args, .. },
+                    func: FunctionCall { name, args, .. },
                     ..
                 } => {
                     let name = normalize_identifier(name, &self.name_resolution_ctx).to_string();
@@ -140,7 +132,7 @@ impl Binder {
                     // Restore the original context
                     bind_context.set_expr_context(original_context);
 
-                    let scalar = ScalarExpr::FunctionCall(FunctionCall {
+                    let scalar = ScalarExpr::FunctionCall(ScalarExprFunctionCall {
                         span: srf.span(),
                         func_name: name.clone(),
                         params: vec![],
@@ -184,7 +176,7 @@ impl Binder {
                     column,
                 })
             } else {
-                ScalarExpr::FunctionCall(FunctionCall {
+                ScalarExpr::FunctionCall(ScalarExprFunctionCall {
                     span: srf.span(),
                     func_name: "get".to_string(),
                     params: vec![Scalar::Number(NumberScalar::Int64(1))],
