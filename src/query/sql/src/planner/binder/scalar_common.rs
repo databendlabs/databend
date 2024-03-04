@@ -180,7 +180,7 @@ pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
         }
         ScalarExpr::FunctionCall(func) => func.arguments.iter().any(contain_subquery),
         ScalarExpr::CastExpr(CastExpr { argument, .. }) => contain_subquery(argument),
-        ScalarExpr::UDFServerCall(udf) => udf.arguments.iter().any(contain_subquery),
+        ScalarExpr::UDFCall(udf) => udf.arguments.iter().any(contain_subquery),
         _ => false,
     }
 }

@@ -35,6 +35,15 @@ pub enum UDFDefinition {
         handler: String,
         language: String,
     },
+
+    UDFScript {
+        arg_types: Vec<TypeName>,
+        return_type: TypeName,
+        code: String,
+        handler: String,
+        language: String,
+        runtime_version: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -75,6 +84,21 @@ impl Display for UDFDefinition {
                 write!(
                     f,
                     ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler} ADDRESS = {address}"
+                )?;
+            }
+            UDFDefinition::UDFScript {
+                arg_types,
+                return_type,
+                code,
+                handler,
+                language,
+                runtime_version,
+            } => {
+                write!(f, "(")?;
+                write_comma_separated_list(f, arg_types)?;
+                write!(
+                    f,
+                    ") RETURNS {return_type} LANGUAGE {language} runtime_version = {runtime_version} HANDLER = {handler} AS $${code}$$"
                 )?;
             }
         }

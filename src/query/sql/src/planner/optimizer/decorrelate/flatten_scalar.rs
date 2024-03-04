@@ -23,7 +23,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
-use crate::plans::UDFServerCall;
+use crate::plans::UDFCall;
 
 impl SubqueryRewriter {
     pub(crate) fn flatten_scalar(
@@ -88,18 +88,18 @@ impl SubqueryRewriter {
                     target_type: cast_expr.target_type.clone(),
                 }))
             }
-            ScalarExpr::UDFServerCall(udf) => {
+            ScalarExpr::UDFCall(udf) => {
                 let arguments = udf
                     .arguments
                     .iter()
                     .map(|arg| self.flatten_scalar(arg, correlated_columns))
                     .collect::<Result<Vec<_>>>()?;
-                Ok(ScalarExpr::UDFServerCall(UDFServerCall {
+                Ok(ScalarExpr::UDFCall(UDFCall {
                     span: udf.span,
                     name: udf.name.clone(),
                     func_name: udf.func_name.clone(),
                     display_name: udf.display_name.clone(),
-                    server_addr: udf.server_addr.clone(),
+                    udf_type: udf.udf_type.clone(),
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),
                     arguments,

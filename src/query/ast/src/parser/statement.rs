@@ -3559,9 +3559,32 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         },
     );
 
+    let udf_script = map(
+        rule! {
+            "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
+            ~ RETURNS ~ #udf_arg_type
+            ~ LANGUAGE ~ #ident
+            ~ HANDLER ~ ^"=" ~ ^#literal_string
+            ~ AS ~ ^#code_string
+        },
+        |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, code)| {
+            UDFDefinition::UDFScript {
+                arg_types,
+                return_type,
+                code,
+                handler,
+                language: language.to_string(),
+                // TODO inject runtime_version by user
+                // Now we use fixed runtime version
+                runtime_version: "".to_string(),
+            }
+        },
+    );
+
     rule!(
         #udf_server: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>"
         | #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
+        | #udf_script: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> AS <language_codes>"
     )(i)
 }
 
