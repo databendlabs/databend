@@ -91,26 +91,27 @@ impl VacuumTableInterpreter {
                     ver: *ver,
                     put_cache: false,
                 };
-                let compact_segment = compact_segment_reader.read(&param).await?;
-                let segment_info = SegmentInfo::try_from(compact_segment)?;
+                if let Ok(compact_segment) = compact_segment_reader.read(&param).await {
+                    let segment_info = SegmentInfo::try_from(compact_segment)?;
 
-                segment_files.0.insert(location.clone());
-                segment_files.1 += operator.stat(location).await?.content_length();
+                    segment_files.0.insert(location.clone());
+                    segment_files.1 += operator.stat(location).await?.content_length();
 
-                for block_meta in segment_info.blocks {
-                    if block_files.0.contains(&block_meta.location.0) {
-                        continue;
-                    }
+                    for block_meta in segment_info.blocks {
+                        if block_files.0.contains(&block_meta.location.0) {
+                            continue;
+                        }
 
-                    block_files.0.insert(block_meta.location.0.clone());
-                    block_files.1 += block_meta.file_size;
+                        block_files.0.insert(block_meta.location.0.clone());
+                        block_files.1 += block_meta.file_size;
 
-                    if let Some((bloom_filter_index_location, _)) =
-                        &block_meta.bloom_filter_index_location
-                    {
-                        if !index_files.0.contains(bloom_filter_index_location) {
-                            index_files.0.insert(bloom_filter_index_location.clone());
-                            index_files.1 += block_meta.bloom_filter_index_size;
+                        if let Some((bloom_filter_index_location, _)) =
+                            &block_meta.bloom_filter_index_location
+                        {
+                            if !index_files.0.contains(bloom_filter_index_location) {
+                                index_files.0.insert(bloom_filter_index_location.clone());
+                                index_files.1 += block_meta.bloom_filter_index_size;
+                            }
                         }
                     }
                 }
@@ -127,8 +128,11 @@ impl VacuumTableInterpreter {
                     put_cache: false,
                 };
 
-                let snapshot = snapshot_reader.read(&params).await?;
-                current_snapshot = Some(snapshot);
+                if let Ok(snapshot) = snapshot_reader.read(&params).await {
+                    current_snapshot = Some(snapshot);
+                } else {
+                    break;
+                }
             } else {
                 break;
             }
