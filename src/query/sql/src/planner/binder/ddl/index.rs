@@ -36,6 +36,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::NonEmptyString;
 use databend_storages_common_table_meta::meta::Location;
 use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
 use crate::binder::Binder;
 use crate::optimizer::optimize;
@@ -177,7 +178,7 @@ impl Binder {
         let mut query = query.clone();
         // TODO(ariesdevil): unify the checker and rewriter.
         let mut agg_index_rewritter = AggregatingIndexRewriter::new(self.dialect);
-        agg_index_rewritter.visit_query(&mut query);
+        query.drive_mut(&mut agg_index_rewritter);
 
         let index_name = self.normalize_object_identifier(index_name);
 
@@ -304,7 +305,7 @@ impl Binder {
 
         // And we will rewrite the agg function to agg state func in this rewriter.
         let mut index_rewriter = RefreshAggregatingIndexRewriter::default();
-        walk_statement_mut(&mut index_rewriter, &mut stmt);
+        stmt.drive_mut(&mut index_rewriter);
 
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {

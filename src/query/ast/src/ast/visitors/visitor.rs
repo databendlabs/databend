@@ -32,6 +32,7 @@ use super::walk_time_travel_point;
 use crate::ast::visitors::walk_window_definition;
 use crate::ast::*;
 
+#[deprecated = "Use derive_visitor::Visitor instead"]
 pub trait Visitor<'ast>: Sized {
     fn visit_expr(&mut self, expr: &'ast Expr) {
         walk_expr(self, expr);

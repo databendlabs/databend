@@ -41,9 +41,8 @@ impl UDFValidator {
 
     fn enter_function_call(&mut self, func: &FunctionCall) {
         let name = &func.name.name;
-        if !is_builtin_function(&name) && self.name.eq_ignore_ascii_case(name) {
+        if !is_builtin_function(name) && self.name.eq_ignore_ascii_case(name) {
             self.has_recursive = true;
-            return;
         }
     }
 

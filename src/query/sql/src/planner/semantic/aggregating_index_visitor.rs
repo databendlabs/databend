@@ -27,7 +27,6 @@ use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::ast::VisitorMut;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
@@ -35,11 +34,13 @@ use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use derive_visitor::Visitor;
+use derive_visitor::VisitorMut;
 use itertools::Itertools;
 
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, VisitorMut)]
+#[visitor(Expr(exit), SelectStmt(enter))]
 pub struct AggregatingIndexRewriter {
     pub sql_dialect: Dialect,
     has_agg_function: bool,
@@ -47,11 +48,8 @@ pub struct AggregatingIndexRewriter {
     agg_func_positions: HashSet<usize>,
 }
 
-impl VisitorMut for AggregatingIndexRewriter {
-    fn visit_expr(&mut self, expr: &mut Expr) {
-        // rewrite children
-        walk_expr_mut(self, expr);
-
+impl AggregatingIndexRewriter {
+    fn exit_expr(&mut self, expr: &mut Expr) {
         match expr {
             Expr::FunctionCall {
                 func:
@@ -92,7 +90,7 @@ impl VisitorMut for AggregatingIndexRewriter {
         };
     }
 
-    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
+    fn enter_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             group_by,
@@ -112,7 +110,6 @@ impl VisitorMut for AggregatingIndexRewriter {
         });
         let mut new_select_list: Vec<SelectTarget> = vec![];
         for (position, target) in select_list.iter_mut().enumerate() {
-            walk_select_target_mut(self, target);
             if self.has_agg_function {
                 // if target has agg function, we will extract the func to a hashset
                 // see `visit_expr` above for detail.
@@ -269,28 +266,24 @@ impl AggregatingIndexChecker {
     }
 
     fn enter_query(&mut self, query: &Query) {
-        if self.not_support {
-            return;
-        }
-        if query.with.is_some() || !query.order_by.is_empty() || !query.limit.is_empty() {
+        if query.with.is_some()
+            || !query.order_by.is_empty()
+            || !query.limit.is_empty()
+            || !matches!(&query.body, SetExpr::Select(_))
+        {
             self.not_support = true;
-            return;
-        }
-
-        if !matches!(&query.body, SetExpr::Select(_)) {
-            self.not_support = true;
-            return;
         }
     }
 }
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, VisitorMut)]
+#[visitor(Expr(enter), SelectStmt(enter))]
 pub struct RefreshAggregatingIndexRewriter {
     pub user_defined_block_name: bool,
     has_agg_function: bool,
 }
 
-impl VisitorMut for RefreshAggregatingIndexRewriter {
-    fn visit_expr(&mut self, expr: &mut Expr) {
+impl RefreshAggregatingIndexRewriter {
+    fn enter_expr(&mut self, expr: &mut Expr) {
         match expr {
             Expr::FunctionCall {
                 func:
@@ -331,17 +324,13 @@ impl VisitorMut for RefreshAggregatingIndexRewriter {
         }
     }
 
-    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
+    fn enter_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             from,
             group_by,
             ..
         } = stmt;
-
-        for target in select_list.iter_mut() {
-            walk_select_target_mut(self, target);
-        }
 
         let table = {
             let table_ref = from.first().unwrap();
