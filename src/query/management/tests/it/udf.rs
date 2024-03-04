@@ -88,7 +88,7 @@ async fn test_add_udf() -> Result<()> {
 
     match value {
         Some(SeqV {
-            seq: 2,
+            seq: 3,
             meta: _,
             data: value,
         }) => {
@@ -214,7 +214,7 @@ fn create_test_udf_script() -> UserDefinedFunction {
         "strlen2",
         "testcode",
         "strlen_py",
-        "python",
+        "javascript",
         vec![DataType::String],
         DataType::Number(NumberDataType::Int64),
         "3.12.0",
