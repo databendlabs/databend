@@ -22,7 +22,6 @@ use databend_common_ast::ast::RefreshIndexStmt;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::ast::Visitor;
 use databend_common_ast::ast::VisitorMut;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -36,6 +35,7 @@ use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::NonEmptyString;
 use databend_storages_common_table_meta::meta::Location;
+use derive_visitor::Drive;
 
 use crate::binder::Binder;
 use crate::optimizer::optimize;
@@ -159,7 +159,7 @@ impl Binder {
         // check if query support index
         {
             let mut agg_index_checker = AggregatingIndexChecker::default();
-            agg_index_checker.visit_query(query);
+            query.drive(&mut agg_index_checker);
             if !agg_index_checker.is_supported() {
                 return Err(ErrorCode::UnsupportedIndex(format!(
                     "Currently create aggregating index just support simple query, like: {}, \
