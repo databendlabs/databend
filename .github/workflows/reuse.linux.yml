@@ -128,14 +128,6 @@ jobs:
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
-  test_meta-data-compat-openraft-07:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_meta_data_compat_openraft_07
-        timeout-minutes: 10
-
   test_compat:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
