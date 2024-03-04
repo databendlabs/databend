@@ -402,7 +402,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             .append(inline_comma(params.into_iter().map(pretty_expr)))
             .append(separator)
             .append(inline_comma(named_params.into_iter().map(|(k, v)| {
-                RcDoc::text(k)
+                RcDoc::text(k.to_string())
                     .append(RcDoc::text("=>"))
                     .append(pretty_expr(v))
             })))

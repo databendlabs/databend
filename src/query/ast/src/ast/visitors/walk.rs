@@ -19,9 +19,12 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
     match expr {
         Expr::ColumnRef {
             span,
-            database,
-            table,
-            column,
+            column:
+                ColumnRef {
+                    database,
+                    table,
+                    column,
+                },
         } => visitor.visit_column_ref(*span, database, table, column),
         Expr::IsNull { span, expr, not } => visitor.visit_is_null(*span, expr, *not),
         Expr::IsDistinctFrom {
@@ -96,12 +99,15 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
         Expr::Tuple { span, exprs } => visitor.visit_tuple(*span, exprs),
         Expr::FunctionCall {
             span,
-            distinct,
-            name,
-            args,
-            params,
-            window,
-            lambda,
+            func:
+                FunctionCall {
+                    distinct,
+                    name,
+                    args,
+                    params,
+                    window,
+                    lambda,
+                },
         } => visitor.visit_function_call(*span, *distinct, name, args, params, window, lambda),
         Expr::Case {
             span,

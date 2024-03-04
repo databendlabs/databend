@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Literal;
@@ -774,9 +775,12 @@ impl Binder {
             // Alias of the select item
             let col_name = column_binding.column_name.as_str();
             if let Expr::ColumnRef {
-                column,
-                database: None,
-                table: None,
+                column:
+                    ColumnRef {
+                        database: None,
+                        table: None,
+                        column,
+                    },
                 ..
             } = expr
             {

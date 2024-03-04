@@ -19,7 +19,9 @@ use std::sync::Arc;
 use databend_common_ast::ast::walk_expr_mut;
 use databend_common_ast::ast::ColumnFilter;
 use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::Literal;
@@ -260,7 +262,11 @@ impl Binder {
                     let expr_name = match (expr.as_ref(), alias) {
                         (
                             Expr::ColumnRef {
-                                column: ColumnID::Name(column),
+                                column:
+                                    ColumnRef {
+                                        column: ColumnID::Name(column),
+                                        ..
+                                    },
                                 ..
                             },
                             None,
@@ -474,13 +480,15 @@ impl Binder {
             };
 
             let expr = Expr::FunctionCall {
-                name: Identifier::from_name("array_apply"),
-                args: vec![input_array],
-                lambda: lambda.cloned(),
                 span,
-                distinct: false,
-                params: vec![],
-                window: None,
+                func: FunctionCall {
+                    name: Identifier::from_name("array_apply"),
+                    args: vec![input_array],
+                    lambda: lambda.cloned(),
+                    distinct: false,
+                    params: vec![],
+                    window: None,
+                },
             };
 
             let mut temp_ctx = BindContext::new();

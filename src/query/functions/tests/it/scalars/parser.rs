@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr as AExpr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::IntervalKind;
 use databend_common_ast::ast::Literal as ASTLiteral;
 use databend_common_ast::ast::MapAccessor;
@@ -100,9 +102,12 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         },
         AExpr::ColumnRef {
             span,
-            database: None,
-            table: None,
-            column,
+            column:
+                ColumnRef {
+                    database: None,
+                    table: None,
+                    column,
+                },
         } => {
             let col_id = columns
                 .iter()
@@ -139,9 +144,9 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         },
         AExpr::FunctionCall {
             span,
-            name,
-            args,
-            params,
+            func: FunctionCall {
+                name, args, params, ..
+            },
             ..
         } => RawExpr::FunctionCall {
             span,

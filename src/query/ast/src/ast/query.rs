@@ -16,6 +16,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_exception::Span;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
 use super::Lambda;
 use crate::ast::write_comma_separated_list;
@@ -28,8 +30,9 @@ use crate::ast::SelectStageOptions;
 use crate::ast::WindowDefinition;
 
 /// Root node of a query tree
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Query {
+    #[drive(skip)]
     pub span: Span,
     // With clause, common table expression
     pub with: Option<With>,
@@ -45,38 +48,47 @@ pub struct Query {
     pub offset: Option<Expr>,
 
     // If ignore the result (not output).
+    #[drive(skip)]
     pub ignore_result: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct With {
+    #[drive(skip)]
     pub span: Span,
+    #[drive(skip)]
     pub recursive: bool,
     pub ctes: Vec<CTE>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CTE {
+    #[drive(skip)]
     pub span: Span,
     pub alias: TableAlias,
+    #[drive(skip)]
     pub materialized: bool,
     pub query: Box<Query>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct SetOperation {
+    #[drive(skip)]
     pub span: Span,
     pub op: SetOperator,
+    #[drive(skip)]
     pub all: bool,
     pub left: Box<SetExpr>,
     pub right: Box<SetExpr>,
 }
 
 /// A subquery represented with `SELECT` statement
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct SelectStmt {
+    #[drive(skip)]
     pub span: Span,
     pub hints: Option<Hint>,
+    #[drive(skip)]
     pub distinct: bool,
     // Result set of current subquery
     pub select_list: Vec<SelectTarget>,
@@ -97,7 +109,7 @@ pub struct SelectStmt {
 }
 
 /// Group by Clause.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum GroupBy {
     /// GROUP BY expr [, expr]*
     Normal(Vec<Expr>),
@@ -114,17 +126,21 @@ pub enum GroupBy {
 }
 
 /// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum SetExpr {
     Select(Box<SelectStmt>),
     Query(Box<Query>),
     // UNION/EXCEPT/INTERSECT operator
     SetOperation(Box<SetOperation>),
     // Values clause
-    Values { span: Span, values: Vec<Vec<Expr>> },
+    Values {
+        #[drive(skip)]
+        span: Span,
+        values: Vec<Vec<Expr>>,
+    },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum SetOperator {
     Union,
     Except,
@@ -132,17 +148,19 @@ pub enum SetOperator {
 }
 
 /// `ORDER BY` clause
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct OrderByExpr {
     pub expr: Expr,
     // Optional `ASC` or `DESC`
+    #[drive(skip)]
     pub asc: Option<bool>,
     // Optional `NULLS FIRST` or `NULLS LAST`
+    #[drive(skip)]
     pub nulls_first: Option<bool>,
 }
 
 /// One item of the comma-separated list following `SELECT`
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum SelectTarget {
     // Expression with alias, e.g. `SELECT t.a, b AS a, a+1 AS b FROM t`
     AliasedExpr {
@@ -158,30 +176,6 @@ pub enum SelectTarget {
         qualified: QualifiedName,
         column_filter: Option<ColumnFilter>,
     },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ColumnFilter {
-    Excludes(Vec<Identifier>),
-    Lambda(Lambda),
-}
-
-impl ColumnFilter {
-    pub fn get_excludes(&self) -> Option<&[Identifier]> {
-        if let ColumnFilter::Excludes(ex) = self {
-            Some(ex)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_lambda(&self) -> Option<&Lambda> {
-        if let ColumnFilter::Lambda(l) = self {
-            Some(l)
-        } else {
-            None
-        }
-    }
 }
 
 impl SelectTarget {
@@ -206,7 +200,7 @@ impl SelectTarget {
     pub fn has_window(&self) -> bool {
         match self {
             SelectTarget::AliasedExpr { box expr, .. } => match expr {
-                Expr::FunctionCall { window, .. } => window.is_some(),
+                Expr::FunctionCall { func, .. } => func.window.is_some(),
                 _ => false,
             },
             SelectTarget::StarColumns { .. } => false,
@@ -216,8 +210,8 @@ impl SelectTarget {
     pub fn function_call_name(&self) -> Option<String> {
         match self {
             SelectTarget::AliasedExpr { box expr, .. } => match expr {
-                Expr::FunctionCall { name, window, .. } if window.is_none() => {
-                    Some(name.name.to_lowercase())
+                Expr::FunctionCall { func, .. } if func.window.is_none() => {
+                    Some(func.name.name.to_lowercase())
                 }
                 _ => None,
             },
@@ -226,33 +220,57 @@ impl SelectTarget {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum ColumnFilter {
+    Excludes(Vec<Identifier>),
+    Lambda(Lambda),
+}
+
+impl ColumnFilter {
+    pub fn get_excludes(&self) -> Option<&[Identifier]> {
+        if let ColumnFilter::Excludes(ex) = self {
+            Some(ex)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_lambda(&self) -> Option<&Lambda> {
+        if let ColumnFilter::Lambda(l) = self {
+            Some(l)
+        } else {
+            None
+        }
+    }
+}
+
 pub type QualifiedName = Vec<Indirection>;
 
 /// Indirection of a select result, like a part of `db.table.column`.
 /// Can be a database name, table name, field name or wildcard star(`*`).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum Indirection {
     // Field name
     Identifier(Identifier),
     // Wildcard star
-    Star(Span),
+    Star(#[drive(skip)] Span),
 }
 
 /// Time Travel specification
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TimeTravelPoint {
-    Snapshot(String),
+    Snapshot(#[drive(skip)] String),
     Timestamp(Box<Expr>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Pivot {
     pub aggregate: Expr,
     pub value_column: Identifier,
     pub values: Vec<Expr>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Unpivot {
     pub value_column: Identifier,
     pub column_name: Identifier,
@@ -260,10 +278,11 @@ pub struct Unpivot {
 }
 
 /// A table name or a parenthesized subquery with an optional alias
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TableReference {
     // Table name
     Table {
+        #[drive(skip)]
         span: Span,
         catalog: Option<Identifier>,
         database: Option<Identifier>,
@@ -276,27 +295,33 @@ pub enum TableReference {
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
+        #[drive(skip)]
         span: Span,
         /// Whether the table function is a lateral table function
+        #[drive(skip)]
         lateral: bool,
         name: Identifier,
         params: Vec<Expr>,
-        named_params: Vec<(String, Expr)>,
+        named_params: Vec<(Identifier, Expr)>,
         alias: Option<TableAlias>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
+        #[drive(skip)]
         span: Span,
         /// Whether the subquery is a lateral subquery
+        #[drive(skip)]
         lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
     Join {
+        #[drive(skip)]
         span: Span,
         join: Join,
     },
     Location {
+        #[drive(skip)]
         span: Span,
         location: FileLocation,
         options: SelectStageOptions,
@@ -327,13 +352,13 @@ impl TableReference {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct TableAlias {
     pub name: Identifier,
     pub columns: Vec<Identifier>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Join {
     pub op: JoinOperator,
     pub condition: JoinCondition,
@@ -341,7 +366,7 @@ pub struct Join {
     pub right: Box<TableReference>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum JoinOperator {
     Inner,
     // Outer joins can not work with `JoinCondition::None`
@@ -356,7 +381,7 @@ pub enum JoinOperator {
     CrossJoin,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum JoinCondition {
     On(Box<Expr>),
     Using(Vec<Identifier>),

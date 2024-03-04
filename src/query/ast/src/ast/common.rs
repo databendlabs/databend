@@ -16,14 +16,19 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_exception::Span;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
 use crate::parser::quote::quote_ident;
 
 // Identifier of table name or column name.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct Identifier {
+    #[drive(skip)]
     pub span: Span,
+    #[drive(skip)]
     pub name: String,
+    #[drive(skip)]
     pub quote: Option<char>,
 }
 
@@ -60,10 +65,13 @@ impl Display for Identifier {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ColumnPosition {
+    #[drive(skip)]
     pub span: Span,
+    #[drive(skip)]
     pub pos: usize,
+    #[drive(skip)]
     pub name: String,
 }
 
@@ -86,7 +94,7 @@ impl Display for ColumnPosition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum ColumnID {
     Name(Identifier),
     Position(ColumnPosition),
@@ -110,7 +118,23 @@ impl Display for ColumnID {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct DatabaseRef {
+    pub catalog: Option<Identifier>,
+    pub database: Identifier,
+}
+
+impl Display for DatabaseRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(catalog) = &self.catalog {
+            write!(f, "{}.", catalog)?;
+        }
+        write!(f, "{}", self.database)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct TableRef {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -121,7 +145,7 @@ impl Display for TableRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         assert!(self.catalog.is_none() || (self.catalog.is_some() && self.database.is_some()));
         if let Some(catalog) = &self.catalog {
-            write!(f, "{catalog}.")?;
+            write!(f, "{}.", catalog)?;
         }
         if let Some(database) = &self.database {
             write!(f, "{}.", database)?;
@@ -131,7 +155,7 @@ impl Display for TableRef {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ColumnRef {
     pub database: Option<Identifier>,
     pub table: Option<Identifier>,
@@ -140,13 +164,21 @@ pub struct ColumnRef {
 
 impl Display for ColumnRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        assert!(self.database.is_none() || (self.database.is_some() && self.table.is_some()));
+
+        if f.alternate() {
+            write!(f, "{}", self.column)?;
+            return Ok(());
+        }
+
         if let Some(database) = &self.database {
             write!(f, "{}.", database)?;
         }
         if let Some(table) = &self.table {
             write!(f, "{}.", table)?;
         }
-        write!(f, "{}", self.column)
+        write!(f, "{}", self.column)?;
+        Ok(())
     }
 }
 

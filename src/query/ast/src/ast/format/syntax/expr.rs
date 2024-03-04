@@ -21,26 +21,22 @@ use crate::ast::format::syntax::parenthesized;
 use crate::ast::format::syntax::NEST_FACTOR;
 use crate::ast::BinaryOperator;
 use crate::ast::Expr;
+use crate::ast::FunctionCall;
 use crate::ast::MapAccessor;
 
 pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
     match expr {
-        Expr::ColumnRef {
-            database,
-            table,
-            column,
-            ..
-        } => if let Some(database) = database {
+        Expr::ColumnRef { column, .. } => if let Some(database) = column.database {
             RcDoc::text(database.to_string()).append(RcDoc::text("."))
         } else {
             RcDoc::nil()
         }
-        .append(if let Some(table) = table {
+        .append(if let Some(table) = column.table {
             RcDoc::text(table.to_string()).append(RcDoc::text("."))
         } else {
             RcDoc::nil()
         })
-        .append(RcDoc::text(column.to_string())),
+        .append(RcDoc::text(column.column.to_string())),
         Expr::IsNull { expr, not, .. } => pretty_expr(*expr)
             .append(RcDoc::space())
             .append(RcDoc::text("IS"))
@@ -250,40 +246,62 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
         Expr::Tuple { exprs, .. } => RcDoc::text("(")
             .append(inline_comma(exprs.into_iter().map(pretty_expr)))
             .append(RcDoc::text(")")),
-        Expr::FunctionCall {
-            distinct,
-            name,
-            args,
-            params,
-            window,
-            ..
-        } => RcDoc::text(name.to_string())
-            .append(if !params.is_empty() {
-                RcDoc::text("(")
-                    .append(inline_comma(
-                        params
-                            .into_iter()
-                            .map(|literal| RcDoc::text(literal.to_string())),
-                    ))
-                    .append(")")
-            } else {
-                RcDoc::nil()
-            })
-            .append(RcDoc::text("("))
-            .append(if distinct {
-                RcDoc::text("DISTINCT").append(RcDoc::space())
-            } else {
-                RcDoc::nil()
-            })
-            .append(inline_comma(args.into_iter().map(pretty_expr)))
-            .append(RcDoc::text(")"))
-            .append(if let Some(window) = window {
-                RcDoc::text(" OVER (")
-                    .append(RcDoc::text(window.to_string()))
-                    .append(")")
-            } else {
-                RcDoc::nil()
-            }),
+        Expr::FunctionCall { func, .. } => {
+            let FunctionCall {
+                name,
+                distinct,
+                args,
+                params,
+                window,
+                lambda,
+            } = func;
+
+            RcDoc::text(name.to_string())
+                .append(if !params.is_empty() {
+                    RcDoc::text("(")
+                        .append(inline_comma(
+                            params
+                                .into_iter()
+                                .map(|literal| RcDoc::text(literal.to_string())),
+                        ))
+                        .append(")")
+                } else {
+                    RcDoc::nil()
+                })
+                .append(RcDoc::text("("))
+                .append(if distinct {
+                    RcDoc::text("DISTINCT").append(RcDoc::space())
+                } else {
+                    RcDoc::nil()
+                })
+                .append(inline_comma(args.into_iter().map(pretty_expr)))
+                .append(if let Some(lambda) = lambda {
+                    if lambda.params.len() == 1 {
+                        RcDoc::text(lambda.params[0].to_string())
+                    } else {
+                        RcDoc::text("(")
+                            .append(inline_comma(
+                                lambda
+                                    .params
+                                    .iter()
+                                    .map(|param| RcDoc::text(param.to_string())),
+                            ))
+                            .append(RcDoc::text(")"))
+                    }
+                    .append(RcDoc::text(" -> "))
+                    .append(pretty_expr(*lambda.expr))
+                } else {
+                    RcDoc::nil()
+                })
+                .append(RcDoc::text(")"))
+                .append(if let Some(window) = window {
+                    RcDoc::text(" OVER (")
+                        .append(RcDoc::text(window.to_string()))
+                        .append(")")
+                } else {
+                    RcDoc::nil()
+                })
+        }
         Expr::Case {
             operand,
             conditions,

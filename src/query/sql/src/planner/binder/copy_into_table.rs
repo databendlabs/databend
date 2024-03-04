@@ -17,6 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnID as AstColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::CopyIntoTableSource;
 use databend_common_ast::ast::CopyIntoTableStmt;
 use databend_common_ast::ast::Expr;
@@ -186,9 +187,13 @@ impl<'a> Binder {
             for dest_field in plan.required_source_schema.fields().iter() {
                 let column = Expr::ColumnRef {
                     span: None,
-                    database: None,
-                    table: None,
-                    column: AstColumnID::Name(Identifier::from_name(dest_field.name().to_string())),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: AstColumnID::Name(Identifier::from_name(
+                            dest_field.name().to_string(),
+                        )),
+                    },
                 };
                 // cast types to variant, tuple will be rewrite as `json_object_keep_null`
                 let expr = if dest_field.data_type().remove_nullable() == DataType::Variant {
