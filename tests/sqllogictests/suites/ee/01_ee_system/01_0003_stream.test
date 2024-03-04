@@ -450,7 +450,7 @@ statement ok
 create table t8(a int, b int, c int)
 
 statement ok
-insert into t8 values(3, 3, 3), (4, 4, 4)
+insert into t8 values(2, 2, 2), (3, 3, 3), (4, 4, 4)
 
 # test replace into
 statement ok
@@ -459,6 +459,8 @@ replace into t7 on(a, b) delete when a = 3 select * from t8
 query IITB
 select a, b, change$action, change$is_update from s7 order by a, b
 ----
+2 2 DELETE 0
+2 2 INSERT 0
 3 3 DELETE 0
 4 4 INSERT 0
 
@@ -466,8 +468,8 @@ query IIBBII
 select a, b, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t7 order by a
 ----
 1 1 0 0 0 0
-2 2 0 0 1 0
-4 4 0 0 0 0
+2 2 0 0 0 0
+4 4 0 0 1 0
 
 statement ok
 create stream s7_1 on table t7 at(stream => s7)
@@ -475,6 +477,7 @@ create stream s7_1 on table t7 at(stream => s7)
 query IITB
 select a, b, change$action, change$is_update from s7_1 order by a, b
 ----
+2 2 INSERT 0
 4 4 INSERT 0
 
 statement ok
