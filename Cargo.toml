@@ -132,7 +132,7 @@ async-trait = { version = "0.1.77", package = "async-trait-fn" }
 bincode = { version = "2.0.0-rc.3", features = ["serde", "std", "alloc"] }
 borsh = { version = "1.2.1", features = ["derive"] }
 bytes = "1.5.0"
-hashbrown = { version = "0.14.3",  default-features = false }
+hashbrown = { version = "0.14.3", default-features = false }
 byteorder = "1.4.3"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
