@@ -48,6 +48,7 @@ impl Interpreter for CommitInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        // guard to clear txn manager before return,  no matter whether the commit is successful or not
         let _guard = ClearTxnManagerGuard(self.ctx.txn_mgr().clone());
         let is_active = self.ctx.txn_mgr().lock().is_active();
         if is_active {
