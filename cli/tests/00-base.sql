@@ -16,6 +16,16 @@ select [], {};
 
 select /* ignore this block */ 'with comment';
 
+select 1; select 2; select '
+a'; select 3;
+
+-- enable it after we support code string in databend
+-- select $$aa$$;
+-- select $$
+-- def add(a, b):
+-- 	a + b
+-- $$;
+
 /* ignore this block /* /*
 select 'in comment block';
 */

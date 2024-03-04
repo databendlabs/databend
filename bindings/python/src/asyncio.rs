@@ -76,6 +76,20 @@ impl AsyncDatabendConnection {
         })
     }
 
+    pub fn query_all<'p>(&self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
+        let this = self.0.clone();
+        future_into_py(py, async move {
+            let rows: Vec<Row> = this
+                .query_all(&sql)
+                .await
+                .map_err(DriverError::new)?
+                .into_iter()
+                .map(Row::new)
+                .collect();
+            Ok(rows)
+        })
+    }
+
     pub fn query_iter<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
         let this = self.0.clone();
         future_into_py(py, async move {

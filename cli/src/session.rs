@@ -57,7 +57,6 @@ pub struct Session {
 
     settings: Settings,
     query: String,
-    in_comment_block: bool,
 
     keywords: Arc<Vec<String>>,
 }
@@ -108,7 +107,6 @@ impl Session {
             is_repl,
             settings,
             query: String::new(),
-            in_comment_block: false,
             keywords: Arc::new(keywords),
         })
     }
@@ -316,7 +314,6 @@ impl Session {
     }
 
     pub fn append_query(&mut self, line: &str) -> Vec<String> {
-        let line = line.trim();
         if line.is_empty() {
             return vec![];
         }
@@ -338,63 +335,56 @@ impl Session {
             }
         }
 
-        self.query.push(' ');
-
+        // consume self.query and get the result
         let mut queries = Vec::new();
-        let mut tokenizer = Tokenizer::new(line);
-        let mut in_comment = false;
-        let mut start = 0;
-        let mut comment_block_start = 0;
 
-        while let Some(Ok(token)) = tokenizer.next() {
-            match token.kind {
-                TokenKind::SemiColon => {
-                    if in_comment || self.in_comment_block {
-                        continue;
-                    } else {
-                        let mut sql = self.query.trim().to_owned();
-                        if sql.is_empty() {
+        if !self.query.is_empty() {
+            self.query.push('\n');
+        }
+        self.query.push_str(line);
+
+        'Parser: loop {
+            let mut tokenizer = Tokenizer::new(&self.query);
+
+            let mut in_comment = false;
+            let mut in_comment_block = false;
+
+            while let Some(Ok(token)) = tokenizer.next() {
+                match token.kind {
+                    TokenKind::SemiColon => {
+                        if in_comment_block || in_comment {
                             continue;
                         }
-                        sql.push(';');
 
-                        queries.push(sql);
-                        self.query.clear();
+                        // push to current and continue the tokenizer
+                        let (sql, remain) = self.query.split_at(token.span.end);
+                        if !sql.is_empty() {
+                            queries.push(sql.to_string());
+                        }
+                        self.query = remain.to_string();
+                        continue 'Parser;
                     }
-                }
-                TokenKind::Comment => {
-                    in_comment = true;
-                }
-                TokenKind::EOI => {
-                    in_comment = false;
-                }
-                TokenKind::Newline => {
-                    in_comment = false;
-                    self.query.push('\n');
-                }
-                TokenKind::CommentBlockStart => {
-                    if !self.in_comment_block {
-                        comment_block_start = token.span.start;
+                    TokenKind::Comment => {
+                        if in_comment_block {
+                            continue;
+                        }
+                        in_comment = true;
                     }
-                    self.in_comment_block = true;
-                }
-                TokenKind::CommentBlockEnd => {
-                    self.in_comment_block = false;
-                    self.query
-                        .push_str(&line[comment_block_start..token.span.end]);
-                }
-                _ => {
-                    if !in_comment && !self.in_comment_block {
-                        self.query.push_str(&line[start..token.span.end]);
+                    TokenKind::Newline => {
+                        in_comment = false;
                     }
+                    TokenKind::CommentBlockStart => {
+                        in_comment_block = true;
+                    }
+                    TokenKind::CommentBlockEnd => {
+                        in_comment_block = false;
+                    }
+                    _ => {}
                 }
             }
-            start = token.span.end;
+            break;
         }
 
-        if self.in_comment_block {
-            self.query.push_str(&line[comment_block_start..]);
-        }
         queries
     }
 

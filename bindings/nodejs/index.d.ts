@@ -34,6 +34,8 @@ export class Connection {
   exec(sql: string): Promise<number>
   /** Execute a SQL query, and only return the first row. */
   queryRow(sql: string): Promise<Row | null>
+  /** Execute a SQL query and fetch all data into the result */
+  queryAll(sql: string): Promise<Array<Row>>
   /** Execute a SQL query, and return all rows. */
   queryIter(sql: string): Promise<RowIterator>
   /** Execute a SQL query, and return all rows with schema and stats. */

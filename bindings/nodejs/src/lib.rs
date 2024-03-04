@@ -332,6 +332,19 @@ impl Connection {
             .map_err(format_napi_error)
     }
 
+    /// Execute a SQL query and fetch all data into the result
+    #[napi]
+    pub async fn query_all(&self, sql: String) -> Result<Vec<Row>> {
+        Ok(self
+            .0
+            .query_all(&sql)
+            .await
+            .map_err(format_napi_error)?
+            .into_iter()
+            .map(|row| Row(row))
+            .collect())
+    }
+
     /// Execute a SQL query, and return all rows.
     #[napi]
     pub async fn query_iter(&self, sql: String) -> Result<RowIterator> {

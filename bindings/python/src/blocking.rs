@@ -78,6 +78,14 @@ impl BlockingDatabendConnection {
         Ok(ret.map(Row::new))
     }
 
+    pub fn query_all(&self, py: Python, sql: String) -> PyResult<Vec<Row>> {
+        let this = self.0.clone();
+        let rows = wait_for_future(py, async move {
+            this.query_all(&sql).await.map_err(DriverError::new)
+        })?;
+        Ok(rows.into_iter().map(Row::new).collect())
+    }
+
     pub fn query_iter(&self, py: Python, sql: String) -> PyResult<RowIterator> {
         let this = self.0.clone();
         let it = wait_for_future(py, async {
