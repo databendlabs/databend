@@ -32,7 +32,6 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
-use databend_common_ast::ast::Visitor;
 use databend_common_ast::parser::parser_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::plan::StageTableInfo;
