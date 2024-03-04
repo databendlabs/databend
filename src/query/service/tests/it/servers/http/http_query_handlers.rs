@@ -1676,3 +1676,33 @@ async fn test_txn_error() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_txn_timeout() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let wait_time_secs = 5;
+
+    let json = serde_json::json!({"sql": "begin", "session": { "settings": {"idle_transaction_timeout_secs": "1"}}, "pagination": {"wait_time_secs": wait_time_secs}});
+    let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+    let last = reply.last().1;
+    let session = last.session.unwrap();
+    sleep(Duration::from_secs(3)).await;
+
+    let session = session.clone();
+    let last_query_id = session.last_query_ids.first().unwrap().to_string();
+    let json = serde_json::json! ({
+        "sql": "select 1",
+        "session": session,
+        "pagination": {"wait_time_secs": wait_time_secs}
+    });
+    let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+    assert_eq!(reply.last().1.error.unwrap().code, 4003u16);
+    assert_eq!(
+        reply.last().1.error.unwrap().message,
+        format!(
+            "transaction timeout: last_query_id {} not found",
+            last_query_id
+        )
+    );
+    Ok(())
+}
