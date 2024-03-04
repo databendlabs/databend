@@ -304,7 +304,36 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
                 let mut blocks = vec![];
 
                 while p.payload.flush(&mut state) {
-                    let mut cols = state.take_aggregate_results();
+                    let row_count = state.row_count;
+
+                    let mut state_builders: Vec<BinaryColumnBuilder> = p
+                        .payload
+                        .aggrs
+                        .iter()
+                        .map(|agg| create_state_serializer(agg, row_count))
+                        .collect();
+
+                    for place in state.state_places.as_slice()[0..row_count].iter() {
+                        for (idx, (addr_offset, aggr)) in p
+                            .payload
+                            .state_addr_offsets
+                            .iter()
+                            .zip(p.payload.aggrs.iter())
+                            .enumerate()
+                        {
+                            let arg_place = place.next(*addr_offset);
+                            aggr.serialize(arg_place, &mut state_builders[idx].data)?;
+                            state_builders[idx].commit_row();
+                        }
+                    }
+
+                    let mut cols =
+                        Vec::with_capacity(p.payload.aggrs.len() + p.payload.group_types.len());
+                    for builder in state_builders.into_iter() {
+                        let col = Column::Binary(builder.build());
+                        cols.push(col);
+                    }
+
                     cols.extend_from_slice(&state.take_group_columns());
 
                     blocks.push(DataBlock::new_from_columns(cols));

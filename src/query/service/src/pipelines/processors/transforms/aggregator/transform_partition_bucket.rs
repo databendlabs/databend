@@ -432,7 +432,9 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
         }
 
         if !self.agg_payloads.is_empty()
-            || (!self.buckets_blocks.is_empty() && !self.unsplitted_blocks.is_empty())
+            || (!self.buckets_blocks.is_empty()
+                && !self.unsplitted_blocks.is_empty()
+                && self.max_partition_count == 0)
         {
             // Split data blocks if it's unsplitted.
             return Ok(Event::Sync);
