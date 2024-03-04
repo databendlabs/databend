@@ -48,7 +48,7 @@ impl Interpreter for CommitInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let _guard = CLearTxnManagerGuard(self.ctx.txn_mgr().clone());
+        let _guard = ClearTxnManagerGuard(self.ctx.txn_mgr().clone());
         let is_active = self.ctx.txn_mgr().lock().is_active();
         if is_active {
             let catalog = self.ctx.get_default_catalog()?;
@@ -63,9 +63,9 @@ impl Interpreter for CommitInterpreter {
     }
 }
 
-struct CLearTxnManagerGuard(TxnManagerRef);
+struct ClearTxnManagerGuard(TxnManagerRef);
 
-impl Drop for CLearTxnManagerGuard {
+impl Drop for ClearTxnManagerGuard {
     fn drop(&mut self) {
         self.0.lock().clear();
     }
