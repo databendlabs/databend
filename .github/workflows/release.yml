@@ -544,7 +544,6 @@ jobs:
       - name: download sha256sums
         uses: actions/download-artifact@v4
         with:
-          name: sha256sums
           pattern: sha256sums-*
           merge-multiple: true
       - shell: bash
