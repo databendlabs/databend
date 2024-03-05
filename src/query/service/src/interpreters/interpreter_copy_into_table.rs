@@ -26,7 +26,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_metrics::copy_into::metrics_inc_copy_into_timings_ms_build_physical_plan;
+use databend_common_metrics::copy_into_table::metrics_inc_copy_into_timings_ms_build_physical_plan;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
@@ -313,8 +313,10 @@ impl Interpreter for CopyIntoTableInterpreter {
         }
 
         let begin_building_physical_plan = Instant::now();
+
         let (physical_plan, files, update_stream_meta) =
             self.build_physical_plan(&self.plan).await?;
+
         metrics_inc_copy_into_timings_ms_build_physical_plan(
             begin_building_physical_plan.elapsed().as_millis() as u64,
         );

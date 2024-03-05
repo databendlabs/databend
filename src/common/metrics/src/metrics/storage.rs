@@ -14,10 +14,20 @@
 
 use std::sync::LazyLock;
 
+use prometheus_client::metrics::family::Family;
+
 use crate::register_counter;
+use crate::register_counter_family;
+use crate::register_histogram_family_in_milliseconds;
 use crate::register_histogram_in_milliseconds;
 use crate::Counter;
 use crate::Histogram;
+use crate::VecLabels;
+
+// the operation that purge occurred. e.g. copy, replace_into, merge_into, etc.
+pub const LABEL_PURGE_BY_OPERATION: &str = "operation";
+
+pub const LABEL_COMMIT_BY_OPERATION: &str = "operation";
 
 // Common metrics.
 static OMIT_FILTER_ROWGROUPS: LazyLock<Counter> =
@@ -25,10 +35,12 @@ static OMIT_FILTER_ROWGROUPS: LazyLock<Counter> =
 static OMIT_FILTER_ROWS: LazyLock<Counter> = LazyLock::new(|| register_counter("omit_filter_rows"));
 
 // COPY metrics.
-static COPY_PURGE_FILE_COUNTER: LazyLock<Counter> =
-    LazyLock::new(|| register_counter("copy_purge_file_counter"));
-static COPY_PURGE_FILE_COST_MILLISECONDS: LazyLock<Histogram> =
-    LazyLock::new(|| register_histogram_in_milliseconds("copy_purge_file_cost_milliseconds"));
+static COPY_PURGE_FILE_COUNTER: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("copy_purge_file_counter"));
+static COPY_PURGE_FILE_COST_MILLISECONDS: LazyLock<Family<VecLabels, Histogram>> =
+    LazyLock::new(|| {
+        register_histogram_family_in_milliseconds("copy_purge_file_cost_milliseconds")
+    });
 static COPY_READ_PART_COUNTER: LazyLock<Counter> =
     LazyLock::new(|| register_counter("copy_read_part_counter"));
 static COPY_READ_SIZE_BYTES: LazyLock<Counter> =
@@ -107,15 +119,16 @@ static COMMIT_MUTATION_LATEST_SNAPSHOT_APPEND_ONLY: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_commit_mutation_latest_snapshot_append_only"));
 static COMMIT_MUTATION_MODIFIED_SEGMENT_EXISTS_IN_LATEST: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_commit_mutation_modified_segment_exists_in_latest"));
-static COMMIT_MUTATION_RETRY: LazyLock<Counter> =
-    LazyLock::new(|| register_counter("fuse_commit_mutation_retry"));
-static COMMIT_MUTATION_SUCCESS: LazyLock<Counter> =
-    LazyLock::new(|| register_counter("fuse_commit_mutation_success"));
-static COMMIT_COPIED_FILES: LazyLock<Counter> =
-    LazyLock::new(|| register_counter("fuse_commit_copied_files"));
-static COMMIT_MILLISECONDS: LazyLock<Counter> =
-    LazyLock::new(|| register_counter("fuse_commit_milliseconds"));
-static COMMIT_ABORTS: LazyLock<Counter> = LazyLock::new(|| register_counter("fuse_commit_aborts"));
+static COMMIT_MUTATION_RETRY: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("fuse_commit_mutation_retry"));
+static COMMIT_MUTATION_SUCCESS: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("fuse_commit_mutation_success"));
+static COMMIT_COPIED_FILES: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("fuse_commit_copied_files"));
+static COMMIT_MILLISECONDS: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("fuse_commit_milliseconds"));
+static COMMIT_ABORTS: LazyLock<Family<VecLabels, Counter>> =
+    LazyLock::new(|| register_counter_family("fuse_commit_aborts"));
 static REMOTE_IO_SEEKS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_remote_io_seeks"));
 static REMOTE_IO_SEEKS_AFTER_MERGED: LazyLock<Counter> =
@@ -268,12 +281,14 @@ pub fn metrics_inc_omit_filter_rows(c: u64) {
 }
 
 /// COPY
-pub fn metrics_inc_copy_purge_files_counter(c: u32) {
-    COPY_PURGE_FILE_COUNTER.inc_by(c as u64);
+pub fn metrics_inc_copy_purge_files_counter(c: u64, labels: &VecLabels) {
+    COPY_PURGE_FILE_COUNTER.get_or_create(labels).inc_by(c);
 }
 
-pub fn metrics_inc_copy_purge_files_cost_milliseconds(c: u32) {
-    COPY_PURGE_FILE_COST_MILLISECONDS.observe(c as f64);
+pub fn metrics_observe_copy_purge_files_cost_milliseconds(c: u64, labels: &VecLabels) {
+    COPY_PURGE_FILE_COST_MILLISECONDS
+        .get_or_create(labels)
+        .observe(c as f64);
 }
 
 pub fn metrics_inc_copy_read_part_counter() {
@@ -415,24 +430,24 @@ pub fn metrics_inc_commit_mutation_modified_segment_exists_in_latest() {
     COMMIT_MUTATION_MODIFIED_SEGMENT_EXISTS_IN_LATEST.inc();
 }
 
-pub fn metrics_inc_commit_mutation_retry() {
-    COMMIT_MUTATION_RETRY.inc();
+pub fn metrics_inc_commit_mutation_retry(labels: &VecLabels) {
+    COMMIT_MUTATION_RETRY.get_or_create(labels).inc();
 }
 
-pub fn metrics_inc_commit_mutation_success() {
-    COMMIT_MUTATION_SUCCESS.inc();
+pub fn metrics_inc_commit_mutation_success(labels: &VecLabels) {
+    COMMIT_MUTATION_SUCCESS.get_or_create(labels).inc();
 }
 
-pub fn metrics_inc_commit_copied_files(n: u64) {
-    COMMIT_COPIED_FILES.inc_by(n);
+pub fn metrics_inc_commit_copied_files(n: u64, labels: &VecLabels) {
+    COMMIT_COPIED_FILES.get_or_create(labels).inc_by(n);
 }
 
-pub fn metrics_inc_commit_milliseconds(c: u128) {
-    COMMIT_MILLISECONDS.inc_by(c as u64);
+pub fn metrics_inc_commit_milliseconds(c: u128, labels: &VecLabels) {
+    COMMIT_MILLISECONDS.get_or_create(labels).inc_by(c as u64);
 }
 
-pub fn metrics_inc_commit_aborts() {
-    COMMIT_ABORTS.inc();
+pub fn metrics_inc_commit_aborts(labels: &VecLabels) {
+    COMMIT_ABORTS.get_or_create(labels).inc();
 }
 
 pub fn metrics_inc_remote_io_seeks(c: u64) {

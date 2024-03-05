@@ -58,11 +58,3 @@ pub fn metrics_inc_copy_into_timings_ms_build_physical_plan(c: u64) {
         })
         .inc_by(c);
 }
-
-pub fn metrics_inc_copy_into_timings_ms_purge_files(c: u64) {
-    METRIC_COPY_INTO_TIMINGS_MS
-        .get_or_create(&CacheLabels {
-            cache_name: "purge_files".to_owned(),
-        })
-        .inc_by(c);
-}

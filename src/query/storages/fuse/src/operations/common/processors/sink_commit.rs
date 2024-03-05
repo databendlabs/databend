@@ -30,6 +30,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_metrics::storage::*;
+use databend_common_metrics::VecLabels;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -182,6 +183,11 @@ where F: SnapshotGenerator + Send + 'static
         }
 
         Ok(Event::Async)
+    }
+
+    fn metric_labels(&self) -> VecLabels {
+        let query_kind = self.ctx.get_query_kind().to_string();
+        vec![(LABEL_COMMIT_BY_OPERATION, query_kind)]
     }
 }
 
@@ -373,18 +379,22 @@ where F: SnapshotGenerator + Send + 'static
                                 info!("GC of transient table done");
                             }
                         }
-                        metrics_inc_commit_mutation_success();
+
+                        let labels = self.metric_labels();
+
+                        metrics_inc_commit_mutation_success(&labels);
                         {
                             let elapsed_time = self.start_time.elapsed().as_millis();
                             let status = format!(
                                 "commit mutation success after {} retries, which took {} ms",
                                 self.retries, elapsed_time
                             );
-                            metrics_inc_commit_milliseconds(elapsed_time);
+
+                            metrics_inc_commit_milliseconds(elapsed_time, &labels);
                             self.ctx.set_status_info(&status);
                         }
                         if let Some(files) = &self.copied_files {
-                            metrics_inc_commit_copied_files(files.file_info.len() as u64);
+                            metrics_inc_commit_copied_files(files.file_info.len() as u64, &labels);
                         }
                         for segment in self.abort_operation.segments.iter() {
                             self.ctx.add_segment_location((
@@ -449,10 +459,11 @@ where F: SnapshotGenerator + Send + 'static
                 };
             }
             State::AbortOperation => {
+                let labels = self.metric_labels();
                 let duration = self.start_time.elapsed();
-                metrics_inc_commit_aborts();
+                metrics_inc_commit_aborts(&labels);
                 // todo: use histogram when it ready
-                metrics_inc_commit_milliseconds(duration.as_millis());
+                metrics_inc_commit_milliseconds(duration.as_millis(), &labels);
                 let op = self.abort_operation.clone();
                 op.abort(self.ctx.clone(), self.dal.clone()).await?;
                 return Err(ErrorCode::StorageOther(format!(

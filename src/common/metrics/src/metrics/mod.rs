@@ -23,4 +23,4 @@ pub mod session;
 pub mod storage;
 pub mod transform;
 
-pub mod copy_into;
+pub mod copy_into_table;

@@ -50,7 +50,7 @@ pub use registry::reset_global_prometheus_registry;
 
 pub use crate::metrics::cache;
 pub use crate::metrics::cluster;
-pub use crate::metrics::copy_into;
+pub use crate::metrics::copy_into_table;
 /// Metrics.
 pub use crate::metrics::http;
 pub use crate::metrics::interpreter;

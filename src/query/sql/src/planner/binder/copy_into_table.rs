@@ -54,7 +54,7 @@ use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_metrics::copy_into::metrics_inc_copy_into_timings_ms_bind;
+use databend_common_metrics::copy_into_table::metrics_inc_copy_into_timings_ms_bind;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;

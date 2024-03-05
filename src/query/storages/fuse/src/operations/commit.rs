@@ -31,6 +31,7 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_metrics::storage::*;
+use databend_common_metrics::VecLabels;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
@@ -308,6 +309,8 @@ impl FuseTable {
         // Status
         ctx.set_status_info("mutation: begin try to commit");
 
+        let labels = metric_labels(ctx.as_ref());
+
         loop {
             let mut snapshot_tobe_committed =
                 TableSnapshot::from_previous(latest_snapshot.as_ref());
@@ -385,7 +388,7 @@ impl FuseTable {
                             }
 
                             retries += 1;
-                            metrics_inc_commit_mutation_retry();
+                            metrics_inc_commit_mutation_retry(&labels);
                             continue;
                         }
                         None => {
@@ -410,7 +413,7 @@ impl FuseTable {
                 }
                 Ok(_) => {
                     break {
-                        metrics_inc_commit_mutation_success();
+                        metrics_inc_commit_mutation_success(&labels);
                         Ok(())
                     };
                 }
@@ -474,4 +477,10 @@ impl FuseTable {
     pub fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
         table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     }
+}
+
+// TODO duplicated
+fn metric_labels(ctx: &dyn TableContext) -> VecLabels {
+    let query_kind = ctx.get_query_kind().to_string();
+    vec![(LABEL_COMMIT_BY_OPERATION, query_kind)]
 }
