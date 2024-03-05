@@ -297,15 +297,16 @@ impl kvapi::TestSuite {
             // dbg!("update non expired k2", _res);
 
             info!("--- mget should not return expired");
-            let res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
-            assert_eq!(res, vec![
-                None,
-                Some(SeqV::with_meta(
-                    3,
-                    Some(KVMeta::new_expire(now_sec + 10)),
-                    b"v2".to_vec()
-                ))
-            ]);
+            let mut res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
+            {
+                assert_eq!(res[0], None);
+
+                let v2 = res.remove(1).unwrap();
+                assert_eq!(v2.seq, 3);
+                assert_eq!(v2.data, b("v2"));
+                let v2_meta = v2.meta.unwrap();
+                assert_eq!(v2_meta.get_expire_at_ms().unwrap() / 1000, now_sec + 10);
+            }
         }
 
         info!("--- list should not return expired");
