@@ -28,7 +28,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
@@ -257,12 +256,7 @@ impl Processor for MutationSource {
                                     );
                                 } else {
                                     if self.block_reader.update_stream_columns {
-                                        let row_num = BlockEntry::new(
-                                            DataType::Nullable(Box::new(DataType::Number(
-                                                NumberDataType::UInt64,
-                                            ))),
-                                            build_origin_block_row_num(num_rows),
-                                        );
+                                        let row_num = build_origin_block_row_num(num_rows);
                                         data_block.add_column(row_num);
                                     }
 

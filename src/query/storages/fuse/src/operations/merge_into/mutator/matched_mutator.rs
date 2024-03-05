@@ -25,6 +25,7 @@ use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::build_origin_block_row_num;
 use databend_common_catalog::plan::split_prefix;
 use databend_common_catalog::plan::split_row_id;
 use databend_common_catalog::plan::Projection;
@@ -257,8 +258,6 @@ impl MatchedAggregator {
                 let segment_info: SegmentInfo = compact_segment_info.try_into()?;
 
                 e.insert(segment_info);
-            } else {
-                continue;
             }
         }
 
@@ -376,7 +375,7 @@ impl AggregationContext {
             bytes: 0,
         };
         self.ctx.get_write_progress().incr(&progress_values);
-        let origin_data_block = read_block(
+        let mut origin_data_block = read_block(
             self.write_settings.storage_format,
             &self.block_reader,
             block_meta,
@@ -385,6 +384,11 @@ impl AggregationContext {
         )
         .await?;
         let origin_num_rows = origin_data_block.num_rows();
+        if self.block_reader.update_stream_columns() {
+            let row_num = build_origin_block_row_num(origin_num_rows);
+            origin_data_block.add_column(row_num);
+        }
+
         // apply delete
         let mut bitmap = MutableBitmap::new();
         for row in 0..origin_num_rows {

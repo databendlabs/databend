@@ -19,18 +19,16 @@ use std::time::Instant;
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FunctionContext;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::StreamContext;
 use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::io::BlockReader;
@@ -57,12 +55,10 @@ enum State {
 pub struct CompactSource {
     state: State,
     ctx: Arc<dyn TableContext>,
-    func_ctx: FunctionContext,
     block_reader: Arc<BlockReader>,
     storage_format: FuseStorageFormat,
     output: Arc<OutputPort>,
-    stream_columns: Vec<StreamColumn>,
-    stream_operators: Vec<BlockOperator>,
+    stream_ctx: Option<StreamContext>,
 }
 
 impl CompactSource {
@@ -70,20 +66,16 @@ impl CompactSource {
         ctx: Arc<dyn TableContext>,
         storage_format: FuseStorageFormat,
         block_reader: Arc<BlockReader>,
-        stream_columns: Vec<StreamColumn>,
-        stream_operators: Vec<BlockOperator>,
+        stream_ctx: Option<StreamContext>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        let func_ctx = ctx.get_function_context()?;
         Ok(ProcessorPtr::create(Box::new(CompactSource {
             state: State::ReadData(None),
             ctx,
-            func_ctx,
             block_reader,
             storage_format,
             output,
-            stream_columns,
-            stream_operators,
+            stream_ctx,
         })))
     }
 }
@@ -153,18 +145,9 @@ impl Processor for CompactSource {
                             data,
                         )?;
 
-                        if self.block_reader.update_stream_columns() {
-                            let num_rows = block.num_rows();
+                        if let Some(stream_ctx) = &self.stream_ctx {
                             let stream_meta = gen_mutation_stream_meta(None, &meta.location.0)?;
-                            for stream_column in self.stream_columns.iter() {
-                                let entry =
-                                    stream_column.generate_column_values(&stream_meta, num_rows);
-                                block.add_column(entry);
-                            }
-                            block = self
-                                .stream_operators
-                                .iter()
-                                .try_fold(block, |input, op| op.execute(&self.func_ctx, input))?;
+                            block = stream_ctx.apply(block, stream_meta)?;
                         }
                         Ok(block)
                     })

@@ -23,7 +23,7 @@ use databend_common_pipeline_sources::EmptySource;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::DeleteSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::gen_mutation_stream_operator;
+use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseLazyPartInfo;
@@ -106,8 +106,8 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
         )?;
         if table.change_tracking_enabled() {
-            let func_ctx = self.ctx.get_function_context()?;
-            let (stream, operators) = gen_mutation_stream_operator(
+            let stream_operators = StreamContext::try_create(
+                self.ctx.get_function_context()?,
                 table.schema_with_stream(),
                 table.get_table_info().ident.seq,
                 true,
@@ -117,11 +117,7 @@ impl PipelineBuilder {
                     TransformAddStreamColumns::try_create(
                         transform_input_port,
                         transform_output_port,
-                        CompoundBlockOperator {
-                            operators: operators.clone(),
-                            ctx: func_ctx.clone(),
-                        },
-                        stream.clone(),
+                        stream_operators.clone(),
                     )
                 })?;
         }
