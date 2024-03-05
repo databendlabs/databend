@@ -314,6 +314,16 @@ pub async fn append_variant_sample_data(num_blocks: usize, fixture: &TestFixture
         .await
 }
 
+pub async fn append_string_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
+    let stream = TestFixture::gen_string_sample_blocks_stream(num_blocks, 1);
+    let table = fixture.latest_default_table().await?;
+
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, true, true)
+        .await
+}
+
 pub async fn append_computed_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
     let stream = TestFixture::gen_computed_sample_blocks_stream(num_blocks, 1);
     let table = fixture.latest_default_table().await?;

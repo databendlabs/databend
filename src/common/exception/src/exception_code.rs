@@ -199,7 +199,12 @@ build_exceptions! {
     IllegalCloudControlMessageFormat(1703),
 
     // Geometry errors.
-    GeometryError(1801)
+    GeometryError(1801),
+
+    // Tantivy errors.
+    TantivyError(1901),
+    TantivyOpenReadError(1902),
+    TantivyQueryParserError(1903)
 }
 
 // Meta service errors [2001, 3000].
