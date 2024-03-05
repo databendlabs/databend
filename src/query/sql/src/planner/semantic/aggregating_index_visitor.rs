@@ -31,6 +31,7 @@ use databend_common_ast::parser::Dialect;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
 use derive_visitor::VisitorMut;
 use itertools::Itertools;
@@ -38,11 +39,11 @@ use itertools::Itertools;
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
 #[derive(Debug, Clone, VisitorMut)]
-#[visitor(Expr(exit), SelectStmt(exit))]
+#[visitor(Expr(exit), SelectStmt(enter))]
 pub struct AggregatingIndexRewriter {
     pub sql_dialect: Dialect,
-    has_agg_function: bool,
     extracted_aggs: HashSet<String>,
+    current_position: Option<usize>,
     agg_func_positions: HashSet<usize>,
 }
 
@@ -66,7 +67,8 @@ impl AggregatingIndexRewriter {
                 && window.is_none()
                 && lambda.is_none() =>
             {
-                self.has_agg_function = true;
+                self.agg_func_positions
+                    .insert(self.current_position.unwrap());
                 if name.name.eq_ignore_ascii_case("avg") {
                     self.extract_avg(args);
                 } else if name.name.eq_ignore_ascii_case("count") {
@@ -81,14 +83,15 @@ impl AggregatingIndexRewriter {
                 }
             }
             Expr::CountAll { window, .. } if window.is_none() => {
-                self.has_agg_function = true;
+                self.agg_func_positions
+                    .insert(self.current_position.unwrap());
                 self.extracted_aggs.insert("COUNT()".to_string());
             }
             _ => {}
         };
     }
 
-    fn exit_select_stmt(&mut self, stmt: &mut SelectStmt) {
+    fn enter_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             group_by,
@@ -107,23 +110,15 @@ impl AggregatingIndexRewriter {
             }
         });
         let mut new_select_list: Vec<SelectTarget> = vec![];
-        for (position, _) in select_list.iter_mut().enumerate() {
-            if self.has_agg_function {
-                // if target has agg function, we will extract the func to a hashset
-                // see `visit_expr` above for detail.
-                // we save the position of target that has agg function here,
-                // so that we can skip this target after and replace this skipped
-                // target with extracted agg function.
-                self.agg_func_positions.insert(position);
-                self.has_agg_function = false;
-            }
-        }
+        for (position, target) in select_list.iter_mut().enumerate() {
+            // if target has agg function, we will extract the func to a hashset
+            // see `exit_expr` above for detail.
+            // we save the position of target that has agg function here,
+            // so that we can skip this target after and replace this skipped
+            // target with extracted agg function.
+            self.current_position = Some(position);
+            target.drive_mut(self);
 
-        if !self.agg_func_positions.is_empty() {
-            self.has_agg_function = true;
-        }
-
-        for (position, target) in select_list.iter().enumerate() {
             // add targets that not have agg function to new select list.
             if !self.agg_func_positions.contains(&position) {
                 new_select_list.push(target.clone());
@@ -172,8 +167,8 @@ impl AggregatingIndexRewriter {
     pub fn new(sql_dialect: Dialect) -> Self {
         Self {
             sql_dialect,
-            has_agg_function: false,
             extracted_aggs: Default::default(),
+            current_position: None,
             agg_func_positions: Default::default(),
         }
     }
@@ -274,14 +269,14 @@ impl AggregatingIndexChecker {
     }
 }
 #[derive(Debug, Clone, Default, VisitorMut)]
-#[visitor(Expr(enter), SelectStmt(enter))]
+#[visitor(Expr(exit), SelectStmt(exit))]
 pub struct RefreshAggregatingIndexRewriter {
     pub user_defined_block_name: bool,
     has_agg_function: bool,
 }
 
 impl RefreshAggregatingIndexRewriter {
-    fn enter_expr(&mut self, expr: &mut Expr) {
+    fn exit_expr(&mut self, expr: &mut Expr) {
         match expr {
             Expr::FunctionCall {
                 func:
@@ -322,7 +317,7 @@ impl RefreshAggregatingIndexRewriter {
         }
     }
 
-    fn enter_select_stmt(&mut self, stmt: &mut SelectStmt) {
+    fn exit_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             from,
