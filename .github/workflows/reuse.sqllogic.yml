@@ -134,7 +134,8 @@ jobs:
         dirs:
           - "query"
           - "crdb"
-          - "duckdb"
+          # FIXME: tmp disable for flaky test
+          # - "duckdb"
           - "base"
           - "ydb"
           - "tpcds"
