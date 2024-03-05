@@ -222,7 +222,6 @@ impl UpdateInterpreter {
             tbl.schema_with_stream().into(),
             col_indices.clone(),
             None,
-            false,
         )?;
 
         let computed_list = self

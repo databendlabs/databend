@@ -64,82 +64,16 @@ impl UpdatePlan {
         schema: DataSchema,
         col_indices: Vec<usize>,
         use_column_name_index: Option<usize>,
-        has_alias: bool,
     ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
-        let column = ColumnBindingBuilder::new(
-            PREDICATE_COLUMN_NAME.to_string(),
-            use_column_name_index.unwrap_or_else(|| schema.num_fields()),
-            Box::new(DataType::Boolean),
-            Visibility::Visible,
-        )
-        .build();
-        let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
-
-        self.update_list.iter().try_fold(
-            Vec::with_capacity(self.update_list.len()),
-            |mut acc, (index, scalar)| {
-                let field = schema.field(*index);
-                let data_type = scalar.data_type()?;
-                let target_type = field.data_type();
-                let left = if data_type != *target_type {
-                    wrap_cast(scalar, target_type)
-                } else {
-                    scalar.clone()
-                };
-
-                let scalar = if col_indices.is_empty() {
-                    // The condition is always true.
-                    // Replace column to the result of the following expression:
-                    // CAST(expression, type)
-                    left
-                } else {
-                    // Replace column to the result of the following expression:
-                    // if(condition, CAST(expression, type), column)
-                    let mut right = None;
-                    for column_binding in self.bind_context.columns.iter() {
-                        if BindContext::match_column_binding(
-                            if has_alias {
-                                None
-                            } else {
-                                Some(&self.database)
-                            },
-                            Some(&self.table),
-                            field.name(),
-                            column_binding,
-                        ) {
-                            right = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                span: None,
-                                column: column_binding.clone(),
-                            }));
-                            break;
-                        }
-                    }
-
-                    let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
-
-                    // corner case: for merge into, if target_table's fields are not null, when after bind_join, it will
-                    // change into nullable, so we need to cast this. but we will do cast after all macthed clauses,please
-                    // see `cast_data_type_for_merge()`.
-
-                    ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "if".to_string(),
-                        params: vec![],
-                        arguments: vec![predicate.clone(), left, right],
-                    })
-                };
-                let expr = scalar.as_expr()?.project_column_ref(|col| {
-                    if use_column_name_index.is_none() {
-                        col.column_name.clone()
-                    } else {
-                        col.index.to_string()
-                    }
-                });
-                let (expr, _) =
-                    ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
-                acc.push((*index, expr.as_remote_expr()));
-                Ok::<_, ErrorCode>(acc)
-            },
+        generate_update_list(
+            ctx,
+            &self.bind_context,
+            &self.update_list,
+            schema,
+            col_indices,
+            use_column_name_index,
+            Some(&self.database),
+            &self.table,
         )
     }
 
@@ -177,4 +111,87 @@ impl UpdatePlan {
         }
         Ok(remote_exprs)
     }
+}
+
+pub fn generate_update_list(
+    ctx: Arc<dyn TableContext>,
+    bind_context: &BindContext,
+    update_list: &HashMap<FieldIndex, ScalarExpr>,
+    schema: DataSchema,
+    col_indices: Vec<usize>,
+    use_column_name_index: Option<usize>,
+    database: Option<&str>,
+    table: &str,
+) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
+    let column = ColumnBindingBuilder::new(
+        PREDICATE_COLUMN_NAME.to_string(),
+        use_column_name_index.unwrap_or_else(|| schema.num_fields()),
+        Box::new(DataType::Boolean),
+        Visibility::Visible,
+    )
+    .build();
+    let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
+
+    update_list.iter().try_fold(
+        Vec::with_capacity(update_list.len()),
+        |mut acc, (index, scalar)| {
+            let field = schema.field(*index);
+            let data_type = scalar.data_type()?;
+            let target_type = field.data_type();
+            let left = if data_type != *target_type {
+                wrap_cast(scalar, target_type)
+            } else {
+                scalar.clone()
+            };
+
+            let scalar = if col_indices.is_empty() {
+                // The condition is always true.
+                // Replace column to the result of the following expression:
+                // CAST(expression, type)
+                left
+            } else {
+                // Replace column to the result of the following expression:
+                // if(condition, CAST(expression, type), column)
+                let mut right = None;
+                for column_binding in bind_context.columns.iter() {
+                    if BindContext::match_column_binding(
+                        database,
+                        Some(table),
+                        field.name(),
+                        column_binding,
+                    ) {
+                        right = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: None,
+                            column: column_binding.clone(),
+                        }));
+                        break;
+                    }
+                }
+
+                let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+
+                // corner case: for merge into, if target_table's fields are not null, when after bind_join, it will
+                // change into nullable, so we need to cast this. but we will do cast after all macthed clauses,please
+                // see `cast_data_type_for_merge()`.
+
+                ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: "if".to_string(),
+                    params: vec![],
+                    arguments: vec![predicate.clone(), left, right],
+                })
+            };
+            let expr = scalar.as_expr()?.project_column_ref(|col| {
+                if use_column_name_index.is_none() {
+                    col.column_name.clone()
+                } else {
+                    col.index.to_string()
+                }
+            });
+            let (expr, _) =
+                ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+            acc.push((*index, expr.as_remote_expr()));
+            Ok::<_, ErrorCode>(acc)
+        },
+    )
 }
