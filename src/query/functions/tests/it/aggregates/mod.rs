@@ -92,6 +92,14 @@ pub fn run_agg_ast(
                     params
                 };
 
+                // Convert the num_buckets of histogram to params
+                let params = if name.eq_ignore_ascii_case("histogram") && args.len() == 2 {
+                    let val = args[1].0.as_scalar().unwrap();
+                    vec![val.clone()]
+                } else {
+                    params
+                };
+
                 let arg_columns: Vec<Column> = args
                     .iter()
                     .map(|(arg, ty)| match arg {
