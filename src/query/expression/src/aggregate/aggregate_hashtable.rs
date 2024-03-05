@@ -42,6 +42,8 @@ pub type Entry = u64;
 
 pub struct AggregateHashTable {
     pub payload: PartitionedPayload,
+    // use for append rows directly during deserialize
+    pub direct_append: bool,
     config: HashTableConfig,
     current_radix_bits: u64,
     entries: Vec<Entry>,
@@ -71,6 +73,7 @@ impl AggregateHashTable {
         Self {
             entries: vec![0u64; capacity],
             count: 0,
+            direct_append: false,
             current_radix_bits: config.initial_radix_bits,
             payload: PartitionedPayload::new(group_types, aggrs, 1 << config.initial_radix_bits),
             capacity,
@@ -134,7 +137,15 @@ impl AggregateHashTable {
         state.row_count = row_count;
         group_hash_columns(group_columns, &mut state.group_hashes);
 
-        let new_group_count = self.probe_and_create(state, group_columns, row_count);
+        let new_group_count = if self.direct_append {
+            for idx in 0..row_count {
+                state.empty_vector[idx] = idx;
+            }
+            self.payload.append_rows(state, row_count, group_columns);
+            row_count
+        } else {
+            self.probe_and_create(state, group_columns, row_count)
+        };
 
         if !self.payload.aggrs.is_empty() {
             for i in 0..row_count {

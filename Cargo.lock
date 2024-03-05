@@ -2881,6 +2881,7 @@ dependencies = [
  "serde",
  "serde_json",
  "simdutf8",
+ "strength_reduce",
  "terminal_size",
  "tonic 0.10.2",
  "typetag",

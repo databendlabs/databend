@@ -14,6 +14,7 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+#[allow(unused_imports)]
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
@@ -31,7 +32,7 @@ pub struct AggregatePartial {
     pub input: Box<PhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
-
+    pub enable_experimental_aggregate_hashtable: bool,
     pub group_by_display: Vec<String>,
 
     // Only used for explain
@@ -41,6 +42,33 @@ pub struct AggregatePartial {
 impl AggregatePartial {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
+
+        if self.enable_experimental_aggregate_hashtable {
+            let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
+            for agg in self.agg_funcs.iter() {
+                fields.push(DataField::new(
+                    &agg.output_column.to_string(),
+                    DataType::Binary,
+                ));
+            }
+
+            let group_types = self
+                .group_by
+                .iter()
+                .map(|index| {
+                    Ok(input_schema
+                        .field_with_name(&index.to_string())?
+                        .data_type()
+                        .clone())
+                })
+                .collect::<Result<Vec<_>>>()?;
+
+            for (idx, data_type) in group_types.iter().enumerate() {
+                fields.push(DataField::new(&idx.to_string(), data_type.clone()));
+            }
+            return Ok(DataSchemaRefExt::create(fields));
+        }
+
         let mut fields =
             Vec::with_capacity(self.agg_funcs.len() + self.group_by.is_empty() as usize);
         for agg in self.agg_funcs.iter() {
@@ -65,6 +93,7 @@ impl AggregatePartial {
             )?;
             fields.push(DataField::new("_group_by_key", method.data_type()));
         }
+
         Ok(DataSchemaRefExt::create(fields))
     }
 }
