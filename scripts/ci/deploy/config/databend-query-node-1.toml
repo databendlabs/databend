@@ -68,6 +68,7 @@ auth_type = "no_password"
 
 [query.settings]
 aggregate_spilling_memory_ratio = 60
+join_spilling_memory_ratio = 60
 
 
 [log]
