@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::runtime::profile::get_statistics_desc;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -246,7 +247,10 @@ fn append_profile_info(
 ) {
     if let Some(prof) = profs.get(&plan_id) {
         for (_, desc) in get_statistics_desc().iter() {
-            if prof.statistics[desc.index] != 0 {
+            if prof.statistics[desc.index] != 0
+                || prof.statistics[desc.index] == 0
+                    && desc.index == ProfileStatisticsName::RuntimeFilterPruneParts as usize
+            {
                 children.push(FormatTreeNode::new(format!(
                     "{}: {}",
                     desc.display_name.to_lowercase(),
