@@ -42,7 +42,7 @@ runs:
         fi
         echo "path=${path}" >> $GITHUB_OUTPUT
 
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       if: env.RUNNER_PROVIDER == 'github'
       with:
         name: ${{ env.BUILD_PROFILE }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
