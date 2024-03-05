@@ -118,6 +118,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
                                     schema,
                                     &self.schema,
                                 )?,
+                                meta.max_partition_count,
                             ),
                         )),
                         false => {

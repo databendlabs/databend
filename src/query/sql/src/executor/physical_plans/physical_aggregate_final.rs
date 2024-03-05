@@ -157,6 +157,8 @@ impl PhysicalPlanBuilder {
 
                 let settings = self.ctx.get_settings();
                 let group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
+                let enable_experimental_aggregate_hashtable =
+                    settings.get_enable_experimental_aggregate_hashtable()?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     assert_eq!(grouping_sets.dup_group_items.len(), group_items.len() - 1); // ignore `_grouping_id`.
@@ -191,6 +193,7 @@ impl PhysicalPlanBuilder {
                                 plan_id: 0,
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 agg_funcs,
+                                enable_experimental_aggregate_hashtable,
                                 group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
@@ -200,6 +203,7 @@ impl PhysicalPlanBuilder {
                                 plan_id: 0,
                                 input,
                                 agg_funcs,
+                                enable_experimental_aggregate_hashtable,
                                 group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
@@ -208,17 +212,42 @@ impl PhysicalPlanBuilder {
 
                         let settings = self.ctx.get_settings();
                         let efficiently_memory = settings.get_efficiently_memory_group_by()?;
+                        let enable_experimental_aggregate_hashtable =
+                            settings.get_enable_experimental_aggregate_hashtable()?;
 
-                        let group_by_key_index =
-                            aggregate_partial.output_schema()?.num_fields() - 1;
-                        let group_by_key_data_type = DataBlock::choose_hash_method_with_types(
-                            &agg.group_items
-                                .iter()
-                                .map(|v| v.scalar.data_type())
-                                .collect::<Result<Vec<_>>>()?,
-                            efficiently_memory,
-                        )?
-                        .data_type();
+                        let keys = if enable_experimental_aggregate_hashtable {
+                            let schema = aggregate_partial.output_schema()?;
+                            let start = aggregate_partial.agg_funcs.len();
+                            let end = schema.num_fields();
+                            let mut groups = Vec::with_capacity(end - start);
+                            for idx in start..end {
+                                let group_key = RemoteExpr::ColumnRef {
+                                    span: None,
+                                    id: idx,
+                                    data_type: schema.field(idx).data_type().clone(),
+                                    display_name: (idx - start).to_string(),
+                                };
+                                groups.push(group_key);
+                            }
+                            groups
+                        } else {
+                            let group_by_key_index =
+                                aggregate_partial.output_schema()?.num_fields() - 1;
+                            let group_by_key_data_type = DataBlock::choose_hash_method_with_types(
+                                &agg.group_items
+                                    .iter()
+                                    .map(|v| v.scalar.data_type())
+                                    .collect::<Result<Vec<_>>>()?,
+                                efficiently_memory,
+                            )?
+                            .data_type();
+                            vec![RemoteExpr::ColumnRef {
+                                span: None,
+                                id: group_by_key_index,
+                                data_type: group_by_key_data_type,
+                                display_name: "_group_by_key".to_string(),
+                            }]
+                        };
 
                         PhysicalPlan::Exchange(Exchange {
                             plan_id: 0,
@@ -226,12 +255,7 @@ impl PhysicalPlanBuilder {
                             allow_adjust_parallelism: true,
                             ignore_exchange: false,
                             input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
-                            keys: vec![RemoteExpr::ColumnRef {
-                                span: None,
-                                id: group_by_key_index,
-                                data_type: group_by_key_data_type,
-                                display_name: "_group_by_key".to_string(),
-                            }],
+                            keys,
                         })
                     }
                     _ => {
@@ -246,6 +270,7 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
                                 plan_id: 0,
                                 agg_funcs,
+                                enable_experimental_aggregate_hashtable,
                                 group_by_display,
                                 group_by: group_items,
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
@@ -255,6 +280,7 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
                                 plan_id: 0,
                                 agg_funcs,
+                                enable_experimental_aggregate_hashtable,
                                 group_by_display,
                                 group_by: group_items,
                                 input: Box::new(input),

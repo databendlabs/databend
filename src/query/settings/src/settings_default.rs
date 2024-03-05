@@ -277,6 +277,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
+                ("join_spilling_partition_bits", DefaultSettingValue{
+                    value: UserSettingValue::UInt64(4),
+                    desc: "Set the number of partitions for join spilling. Default value is 4, it means 2^4 partitions.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
                 ("enable_bloom_runtime_filter", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables runtime filter optimization for JOIN.",
@@ -691,7 +697,13 @@ impl DefaultSettings {
                     mode:SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1))
                 }),
-                ("enable_experimental_new_executor", DefaultSettingValue {
+                ("idle_transaction_timeout_secs", DefaultSettingValue{
+                    value: UserSettingValue::UInt64(4 * 60 * 60),
+                    desc: "Set the timeout in seconds for active session without any query",
+                    mode:SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX))
+                }),
+                ("enable_experimental_queries_executor", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables experimental new executor",
                     mode: SettingMode::Both,

@@ -37,5 +37,7 @@ async fn test_get_client_info() -> anyhow::Result<()> {
         .to_string();
 
     assert_eq!("1.1.1.1:1", masked_addr);
+
+    assert!(resp.server_time > Some(1), "server time is returned");
     Ok(())
 }

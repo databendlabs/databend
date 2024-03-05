@@ -1,0 +1,191 @@
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use spill_test;
+
+statement ok
+set join_spilling_memory_ratio = 10;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 1024;
+
+statement ok
+set disable_join_reorder = 1;
+
+query I
+select
+    c_custkey, count(o_orderkey) as c_count
+from
+    customer
+        left join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+group by
+    c_custkey
+order by c_custkey
+    limit 20;
+----
+1 0
+2 0
+3 0
+4 0
+5 0
+6 0
+7 0
+8 0
+9 0
+10 0
+11 0
+12 0
+13 0
+14 0
+15 0
+16 0
+17 0
+18 0
+19 0
+20 0
+
+query II
+select
+    c_custkey
+from
+    customer
+        left semi join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by c_custkey
+    limit 20;
+----
+101
+101
+103
+103
+104
+104
+106
+106
+107
+107
+109
+109
+110
+110
+112
+112
+113
+113
+115
+115
+
+query I
+select
+    c_custkey
+from
+    customer
+    left anti join
+    orders
+on c_custkey = o_custkey
+    and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by c_custkey
+    limit 20;
+----
+1
+1
+2
+2
+3
+3
+4
+4
+5
+5
+6
+6
+7
+7
+8
+8
+9
+9
+10
+10
+
+
+# tpch queries contain left join
+#Q13
+query I
+select
+    c_count,
+    count(*) as custdist
+from
+    (
+        select
+            c_custkey,
+            count(o_orderkey) as c_count
+        from
+            customer
+                left outer join
+            orders
+            on c_custkey = o_custkey
+                and o_comment not like '%pending%deposits%'
+        group by
+            c_custkey
+    )
+        c_orders
+group by
+    c_count
+order by
+    custdist desc,
+    c_count desc;
+----
+0 5000
+40 676
+36 651
+44 618
+48 554
+32 548
+52 514
+28 487
+76 485
+72 461
+56 454
+80 444
+64 442
+68 438
+60 430
+84 396
+88 378
+24 355
+92 322
+96 262
+100 188
+20 184
+104 162
+108 138
+112 103
+16 92
+116 59
+12 49
+120 29
+124 26
+128 19
+8 12
+132 8
+136 7
+140 5
+4 3
+144 1
+
+
+statement ok
+set disable_join_reorder = 0;
+
+statement ok
+set join_spilling_memory_ratio = 0;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 0;

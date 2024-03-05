@@ -15,7 +15,9 @@
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnPosition;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IntervalKind;
 use databend_common_ast::ast::Literal;
@@ -81,7 +83,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         for bound_column in &self.bound_columns {
             if bound_column.data_type == *ty {
                 let column = if !bound_column.table_name.is_empty() && self.rng.gen_bool(0.2) {
-                    ColumnID::Position(ColumnPosition::create(bound_column.index, None))
+                    ColumnID::Position(ColumnPosition::create(None, bound_column.index))
                 } else {
                     let name = Identifier::from_name(bound_column.name.clone());
                     ColumnID::Name(name)
@@ -96,9 +98,11 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 return Expr::ColumnRef {
                     span: None,
                     // TODO
-                    database: None,
-                    table,
-                    column,
+                    column: ColumnRef {
+                        database: None,
+                        table,
+                        column,
+                    },
                 };
             }
         }
@@ -143,12 +147,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 Expr::FunctionCall {
                     span: None,
-                    distinct: false,
-                    name: Identifier::from_name("to_date".to_string()),
-                    args: vec![arg],
-                    params: vec![],
-                    window: None,
-                    lambda: None,
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name("to_date".to_string()),
+                        args: vec![arg],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                    },
                 }
             }
             DataType::Timestamp => {
@@ -158,12 +164,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 Expr::FunctionCall {
                     span: None,
-                    distinct: false,
-                    name: Identifier::from_name("to_timestamp".to_string()),
-                    args: vec![arg],
-                    params: vec![],
-                    window: None,
-                    lambda: None,
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name("to_timestamp".to_string()),
+                        args: vec![arg],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                    },
                 }
             }
             DataType::Nullable(box inner_ty) => {
@@ -213,12 +221,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 Expr::FunctionCall {
                     span: None,
-                    distinct: false,
-                    name: Identifier::from_name("to_bitmap".to_string()),
-                    args: vec![arg],
-                    params: vec![],
-                    window: None,
-                    lambda: None,
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name("to_bitmap".to_string()),
+                        args: vec![arg],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                    },
                 }
             }
             DataType::Variant => {
@@ -229,12 +239,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 Expr::FunctionCall {
                     span: None,
-                    distinct: false,
-                    name: Identifier::from_name("parse_json".to_string()),
-                    args: vec![arg],
-                    params: vec![],
-                    window: None,
-                    lambda: None,
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name("parse_json".to_string()),
+                        args: vec![arg],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                    },
                 }
             }
             DataType::Binary => {
@@ -244,12 +256,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 Expr::FunctionCall {
                     span: None,
-                    distinct: false,
-                    name: Identifier::from_name("to_binary".to_string()),
-                    args: vec![arg],
-                    params: vec![],
-                    window: None,
-                    lambda: None,
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name("to_binary".to_string()),
+                        args: vec![arg],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                    },
                 }
             }
             DataType::Geometry => {
@@ -261,12 +275,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 Expr::FunctionCall {
                     span: None,
-                    distinct: false,
-                    name: Identifier::from_name("to_geometry".to_string()),
-                    args: vec![arg],
-                    params: vec![],
-                    window: None,
-                    lambda: None,
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name("to_geometry".to_string()),
+                        args: vec![arg],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                    },
                 }
             }
             _ => Expr::Literal {
@@ -587,12 +603,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let arg = self.gen_expr(&arg_ty);
                 Expr::FunctionCall {
                     span: None,
-                    distinct: false,
-                    name: Identifier::from_name("to_binary"),
-                    args: vec![arg],
-                    params: vec![],
-                    window: None,
-                    lambda: None,
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name("to_binary"),
+                        args: vec![arg],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                    },
                 }
             }
             DataType::Geometry => {
@@ -623,12 +641,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 Expr::FunctionCall {
                     span: None,
-                    distinct: false,
-                    name: Identifier::from_name(func_name),
-                    args,
-                    params: vec![],
-                    window: None,
-                    lambda: None,
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name(func_name),
+                        args,
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                    },
                 }
             }
             _ => {

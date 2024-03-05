@@ -28,21 +28,21 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 #[derive(Debug)]
-pub struct CreateUserUDFInterpreter {
+pub struct CreateUserUDFScript {
     ctx: Arc<QueryContext>,
     plan: CreateUDFPlan,
 }
 
-impl CreateUserUDFInterpreter {
+impl CreateUserUDFScript {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CreateUDFPlan) -> Result<Self> {
-        Ok(CreateUserUDFInterpreter { ctx, plan })
+        Ok(CreateUserUDFScript { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateUserUDFInterpreter {
+impl Interpreter for CreateUserUDFScript {
     fn name(&self) -> &str {
-        "CreateUserUDFInterpreter"
+        "CreateUserUDFScript"
     }
 
     fn is_ddl(&self) -> bool {
@@ -58,12 +58,12 @@ impl Interpreter for CreateUserUDFInterpreter {
         let tenant = self.ctx.get_tenant();
         let udf = plan.udf;
         let _ = UserApiProvider::instance()
-            .add_udf(&tenant, udf, &plan.create_option)
+            .add_udf(tenant.as_str(), udf, &plan.create_option)
             .await?;
 
         // Grant ownership as the current role
         if let Some(current_role) = self.ctx.get_current_role() {
-            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            let role_api = UserApiProvider::instance().get_role_api_client(tenant.as_str())?;
             role_api
                 .grant_ownership(
                     &OwnershipObject::UDF {
@@ -72,7 +72,7 @@ impl Interpreter for CreateUserUDFInterpreter {
                     &current_role.name,
                 )
                 .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+            RoleCacheManager::instance().invalidate_cache(tenant.as_str());
         }
 
         Ok(PipelineBuildResult::create())

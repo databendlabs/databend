@@ -264,9 +264,22 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
 
                 blocks
             }
-            HashTable::AggregateHashTable(hashtable) => vec![DataBlock::empty_with_meta(
-                AggregateMeta::<Method, ()>::create_agg_hashtable(hashtable.payload),
-            )],
+            HashTable::AggregateHashTable(hashtable) => {
+                let partition_count = hashtable.payload.partition_count();
+                let mut blocks = Vec::with_capacity(partition_count);
+                for (bucket, mut payload) in hashtable.payload.payloads.into_iter().enumerate() {
+                    payload.arenas.extend_from_slice(&hashtable.payload.arenas);
+                    blocks.push(DataBlock::empty_with_meta(
+                        AggregateMeta::<Method, ()>::create_agg_payload(
+                            bucket as isize,
+                            payload,
+                            partition_count,
+                        ),
+                    ));
+                }
+
+                blocks
+            }
         })
     }
 }

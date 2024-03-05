@@ -31,13 +31,13 @@ use parquet_rs::format::SchemaElement;
 use parquet_rs::schema::types;
 use parquet_rs::schema::types::SchemaDescPtr;
 use parquet_rs::schema::types::SchemaDescriptor;
+use parquet_rs::thrift::TSerializable;
 use serde::Deserialize;
 use thrift::protocol::TCompactInputProtocol;
 use thrift::protocol::TCompactOutputProtocol;
 use thrift::protocol::TInputProtocol;
 use thrift::protocol::TListIdentifier;
 use thrift::protocol::TOutputProtocol;
-use thrift::protocol::TSerializable;
 use thrift::protocol::TType;
 
 use crate::plan::datasource::datasource_info::parquet_read_options::ParquetReadOptions;

@@ -210,7 +210,7 @@ impl TestFixture {
         }
 
         GlobalServices::init_with(config).await?;
-        OssLicenseManager::init(config.query.tenant_id.clone())?;
+        OssLicenseManager::init(config.query.tenant_id.to_string())?;
 
         // Cluster register.
         {
@@ -266,7 +266,7 @@ impl TestFixture {
     }
 
     pub fn default_tenant(&self) -> String {
-        self.conf.query.tenant_id.clone()
+        self.conf.query.tenant_id.to_string()
     }
 
     pub fn default_db_name(&self) -> String {
@@ -301,7 +301,7 @@ impl TestFixture {
 
     pub fn default_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            create_option: CreateOption::CreateIfNotExists(false),
+            create_option: CreateOption::None,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -326,7 +326,7 @@ impl TestFixture {
     // create a normal table without cluster key.
     pub fn normal_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            create_option: CreateOption::CreateIfNotExists(false),
+            create_option: CreateOption::None,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -362,7 +362,7 @@ impl TestFixture {
     // create a variant table
     pub fn variant_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            create_option: CreateOption::CreateIfNotExists(false),
+            create_option: CreateOption::None,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -407,7 +407,7 @@ impl TestFixture {
     // create a table with computed column
     pub fn computed_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            create_option: CreateOption::CreateIfNotExists(false),
+            create_option: CreateOption::None,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -459,8 +459,8 @@ impl TestFixture {
         let db_name = gen_db_name(&self.prefix);
         let plan = CreateDatabasePlan {
             catalog: "default".to_owned(),
-            tenant,
-            create_option: CreateOption::CreateIfNotExists(false),
+            tenant: tenant.to_string(),
+            create_option: CreateOption::None,
             database: db_name,
             meta: DatabaseMeta {
                 engine: "".to_string(),

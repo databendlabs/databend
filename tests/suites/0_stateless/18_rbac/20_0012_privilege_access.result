@@ -45,7 +45,7 @@ Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does n
 Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
 1
 0
-1	64	373
+1	64	378
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'default'.'t' for user 'b'@'%' with roles [public]

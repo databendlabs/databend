@@ -40,47 +40,36 @@ select a from s_append_only;
 2
 3
 
-onlyif mysql
 statement ok
 BEGIN;
 
-onlyif mysql
 statement ok
 INSERT INTO t_append_only VALUES(4), (5);
 
-onlyif mysql
 statement ok
 INSERT INTO t_consume_append_only_1 SELECT a FROM s_append_only;
 
-onlyif mysql
 statement ok
 INSERT INTO t_consume_append_only_2 SELECT a FROM s_append_only;
 
-onlyif mysql
 statement ok
 INSERT INTO t_append_only VALUES(6), (7);
 
-onlyif mysql
 statement ok
 INSERT INTO t_consume_append_only_3 SELECT a FROM s_append_only;
 
-onlyif mysql
 statement ok
 INSERT INTO t_consume_append_only_4 SELECT a FROM s_append_only_1;
 
-onlyif mysql
 statement ok
 COMMIT;
 
-onlyif mysql
 statement ok
 INSERT INTO t_consume_append_only_5 SELECT a FROM s_append_only;
 
-onlyif mysql
 statement ok
 INSERT INTO t_consume_append_only_6 SELECT a FROM s_append_only_1;
 
-onlyif mysql
 query I
 SELECT * FROM t_consume_append_only_1 order by b;  -- 2,3,4,5
 ----
@@ -89,7 +78,6 @@ SELECT * FROM t_consume_append_only_1 order by b;  -- 2,3,4,5
 4
 5
 
-onlyif mysql
 query I
 SELECT * FROM t_consume_append_only_2 order by b; -- 2,3,4,5
 ----
@@ -98,7 +86,6 @@ SELECT * FROM t_consume_append_only_2 order by b; -- 2,3,4,5
 4
 5
 
-onlyif mysql
 query I
 SELECT * FROM t_consume_append_only_3 order by b; -- 2,3,4,5
 ----
@@ -107,7 +94,6 @@ SELECT * FROM t_consume_append_only_3 order by b; -- 2,3,4,5
 4
 5
 
-onlyif mysql
 query I
 SELECT * FROM t_consume_append_only_4 order by b; -- 2,3,4,5,6,7
 ----
@@ -118,14 +104,12 @@ SELECT * FROM t_consume_append_only_4 order by b; -- 2,3,4,5,6,7
 6
 7
 
-onlyif mysql
 query I
 SELECT * FROM t_consume_append_only_5 order by b; -- 6,7
 ----
 6
 7
 
-onlyif mysql
 query I
 SELECT * FROM t_consume_append_only_6; -- empty
 ----

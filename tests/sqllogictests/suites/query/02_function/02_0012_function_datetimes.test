@@ -4,12 +4,34 @@ drop table if exists t all
 statement ok
 set timezone = 'UTC'
 
+query I
+select to_string(today())=substr(to_string(now()),1,10);
+----
+1
+
+statement ok
+set timezone = 'Asia/Shanghai'
+
+query I
+select to_string(today())=substr(to_string(now()),1,10);
+----
+1
+
+statement ok
+set timezone = 'America/Los_Angeles'
+
+query I
+select to_string(today())=substr(to_string(now()),1,10);
+----
+1
+
+statement ok
+set timezone = 'UTC'
+
 query B
 SELECT today() >= 18869::DATE
 ----
 1
-
-
 
 query B
 SELECT now() >= 1630295616::TIMESTAMP

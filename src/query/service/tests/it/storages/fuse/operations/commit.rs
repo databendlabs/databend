@@ -107,6 +107,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
@@ -542,7 +543,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_tenant(&self) -> String {
+    fn get_tenant(&self) -> NonEmptyString {
         self.ctx.get_tenant()
     }
 

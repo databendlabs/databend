@@ -25,6 +25,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_txn::TxnManagerRef;
@@ -76,7 +77,7 @@ impl Session {
         let mut properties = vec![
             ("session_id", self.id.clone()),
             ("session_database", self.get_current_database()),
-            ("session_tenant", self.get_current_tenant()),
+            ("session_tenant", self.get_current_tenant().to_string()),
         ];
         if let Some(query_id) = self.get_current_query_id() {
             properties.push(("query_id", query_id));
@@ -187,7 +188,7 @@ impl Session {
         self.session_ctx.get_current_catalog()
     }
 
-    pub fn get_current_tenant(self: &Arc<Self>) -> String {
+    pub fn get_current_tenant(self: &Arc<Self>) -> NonEmptyString {
         self.session_ctx.get_current_tenant()
     }
 
@@ -313,6 +314,9 @@ impl Session {
 
     pub fn txn_mgr(&self) -> TxnManagerRef {
         self.session_ctx.txn_mgr()
+    }
+    pub fn set_txn_mgr(&self, txn_mgr: TxnManagerRef) {
+        self.session_ctx.set_txn_mgr(txn_mgr)
     }
 }
 

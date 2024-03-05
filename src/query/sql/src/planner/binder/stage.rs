@@ -69,7 +69,7 @@ impl BindContext {
         for (i, expr) in exprs.iter().enumerate() {
             // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
             if let AExpr::ColumnRef { column, .. } = expr {
-                if column.name().eq_ignore_ascii_case("default") {
+                if column.column.name().eq_ignore_ascii_case("default") {
                     let field = schema.field(i);
                     map_exprs.push(scalar_binder.get_default_value(field, schema).await?);
                     continue;

@@ -31,7 +31,6 @@ use anyhow::anyhow;
 use databend_common_base::base::tokio;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
-use databend_common_meta_raft_store::key_spaces::RaftStoreEntryCompat;
 use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
@@ -39,7 +38,6 @@ use databend_common_meta_raft_store::sm_v002::SnapshotStoreV002;
 use databend_common_meta_raft_store::state::RaftState;
 use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::init_sled_db;
-use databend_common_meta_sled_store::openraft::compat::Upgrade;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
 use databend_common_meta_sled_store::openraft::RaftStorage;
 use databend_common_meta_types::Cmd;
@@ -103,8 +101,13 @@ async fn import_lines<B: BufRead + 'static>(
     let version = reading::validate_version(&mut it)?;
 
     let max_log_id = match version {
-        DataVersion::V0 => import_v0_or_v001(config, it)?,
-        DataVersion::V001 => import_v0_or_v001(config, it)?,
+        DataVersion::V0 => {
+            return Err(anyhow::anyhow!(
+                "importing from V0 is not supported since 2024-03-01,
+                 please use an older version to import from V0"
+            ));
+        }
+        DataVersion::V001 => import_v001(config, it)?,
         DataVersion::V002 => import_v002(config, it).await?,
     };
 
@@ -114,7 +117,7 @@ async fn import_lines<B: BufRead + 'static>(
 /// Import serialized lines for `DataVersion::V0` and `DataVersion::V001`
 ///
 /// While importing, the max log id is also returned.
-fn import_v0_or_v001(
+fn import_v001(
     _config: &Config,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
@@ -125,8 +128,7 @@ fn import_v0_or_v001(
 
     for line in lines {
         let l = line?;
-        let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(&l)?;
-        let kv_entry = kv_entry.upgrade();
+        let (tree_name, kv_entry): (String, RaftStoreEntry) = serde_json::from_str(&l)?;
 
         if !trees.contains_key(&tree_name) {
             let tree = db.open_tree(&tree_name)?;
@@ -175,8 +177,7 @@ async fn import_v002(
 
     for line in lines {
         let l = line?;
-        let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(&l)?;
-        let kv_entry = kv_entry.upgrade();
+        let (tree_name, kv_entry): (String, RaftStoreEntry) = serde_json::from_str(&l)?;
 
         if tree_name.starts_with("state_machine/") {
             // Write to snapshot

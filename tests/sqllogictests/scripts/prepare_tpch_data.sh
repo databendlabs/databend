@@ -122,6 +122,7 @@ for t in customer lineitem nation orders partsupp part region supplier; do
     curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${data_dir}'/tests/suites/0_stateless/13_tpch/data/'$t'.tbl"' >/dev/null 2>&1
 done
 
+
 if [ -d "tests/sqllogictests/data" ]; then
     rm -rf tests/sqllogictests/data
 fi

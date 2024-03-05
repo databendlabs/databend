@@ -58,6 +58,7 @@ macro_rules! with_match_integer_double_type {
             Float16 => unreachable! {},
             DaysMs => unreachable!(),
             MonthDayNano => unreachable!(),
+            UInt128 => unimplemented!(),
         }
     }};
 }

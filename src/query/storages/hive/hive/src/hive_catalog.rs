@@ -217,10 +217,7 @@ impl HiveCatalog {
             .await
             .map_err(from_thrift_error)?;
 
-        Ok(partition_names
-            .into_iter()
-            .map(|v| v.into_string())
-            .collect())
+        Ok(partition_names.into_iter().map(|v| v.to_string()).collect())
     }
 
     fn handle_table_meta(table_meta: &hive_metastore::Table) -> Result<()> {

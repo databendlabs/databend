@@ -20,8 +20,10 @@ use async_recursion::async_recursion;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnPosition;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Expr::Array;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Join;
@@ -35,7 +37,6 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SetOperator;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::Visitor;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
@@ -44,6 +45,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use derive_visitor::Drive;
+use derive_visitor::Visitor;
 use log::warn;
 
 use super::sort::OrderItem;
@@ -111,7 +114,7 @@ impl Binder {
             self.bind_one_table(bind_context, select_list).await?
         } else {
             let mut max_column_position = MaxColumnPosition::new();
-            max_column_position.visit_select_stmt(stmt);
+            stmt.drive(&mut max_column_position);
             self.metadata
                 .write()
                 .set_max_column_position(max_column_position.max_pos);
@@ -292,8 +295,12 @@ impl Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
-        // rewrite udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone());
+        // rewrite udf for interpreter udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
+
+        // rewrite udf for server udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
         s_expr = udf_rewriter.rewrite(&s_expr)?;
 
         // rewrite variant inner fields as virtual columns
@@ -943,7 +950,10 @@ impl<'a> SelectRewriter<'a> {
     }
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
-            Expr::FunctionCall { name, args, .. } => Ok((name, args)),
+            Expr::FunctionCall {
+                func: FunctionCall { name, args, .. },
+                ..
+            } => Ok((name, args)),
             _ => Err(ErrorCode::SyntaxException("Aggregate function is required")),
         }
     }
@@ -960,10 +970,12 @@ impl<'a> SelectRewriter<'a> {
         Expr::BinaryOp {
             span: None,
             left: Box::new(Expr::ColumnRef {
-                column: ColumnID::Name(col),
                 span: None,
-                database: None,
-                table: None,
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: ColumnID::Name(col),
+                },
             }),
             op: BinaryOperator::Eq,
             right: Box::new(value),
@@ -978,12 +990,14 @@ impl<'a> SelectRewriter<'a> {
         SelectTarget::AliasedExpr {
             expr: Box::new(Expr::FunctionCall {
                 span: Span::default(),
-                distinct: false,
-                name,
-                args,
-                params: vec![],
-                window: None,
-                lambda: None,
+                func: FunctionCall {
+                    distinct: false,
+                    name,
+                    args,
+                    params: vec![],
+                    window: None,
+                    lambda: None,
+                },
             }),
             alias,
         }
@@ -1009,9 +1023,11 @@ impl<'a> SelectRewriter<'a> {
                 .into_iter()
                 .map(|expr| Expr::ColumnRef {
                     span: None,
-                    column: ColumnID::Name(expr),
-                    database: None,
-                    table: None,
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(expr),
+                    },
                 })
                 .collect(),
         }
@@ -1060,7 +1076,7 @@ impl<'a> SelectRewriter<'a> {
             .ok_or_else(|| ErrorCode::SyntaxException("Aggregate column not found"))?;
         let aggregate_column_names = aggregate_columns
             .iter()
-            .map(|col| col.name())
+            .map(|col| col.column.name())
             .collect::<Vec<_>>();
         let new_group_by = stmt.group_by.clone().unwrap_or_else(|| {
             GroupBy::Normal(
@@ -1085,7 +1101,7 @@ impl<'a> SelectRewriter<'a> {
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
             let mut exclude_columns: Vec<_> = aggregate_columns
                 .iter()
-                .map(|c| Identifier::from_name(c.name()))
+                .map(|c| Identifier::from_name(c.column.name()))
                 .collect();
             exclude_columns.push(pivot.value_column.clone());
             star.exclude(exclude_columns);
@@ -1158,6 +1174,8 @@ impl<'a> SelectRewriter<'a> {
     }
 }
 
+#[derive(Visitor)]
+#[visitor(ColumnPosition(enter))]
 pub struct MaxColumnPosition {
     pub max_pos: usize,
 }
@@ -1168,8 +1186,8 @@ impl MaxColumnPosition {
     }
 }
 
-impl<'a> Visitor<'a> for MaxColumnPosition {
-    fn visit_column_position(&mut self, pos: &ColumnPosition) {
+impl MaxColumnPosition {
+    fn enter_column_position(&mut self, pos: &ColumnPosition) {
         if pos.pos > self.max_pos {
             self.max_pos = pos.pos;
         }

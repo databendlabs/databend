@@ -104,8 +104,7 @@ impl PipelineBuilder {
 
         let enable_experimental_aggregate_hashtable = self
             .settings
-            .get_enable_experimental_aggregate_hashtable()?
-            && self.ctx.get_cluster().is_empty();
+            .get_enable_experimental_aggregate_hashtable()?;
 
         let params = Self::build_aggregator_params(
             aggregate.input.output_schema()?,
@@ -165,7 +164,7 @@ impl PipelineBuilder {
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
         if self.ctx.get_cluster().is_empty() {
             let operator = DataOperator::instance().operator();
-            let location_prefix = query_spill_prefix(&self.ctx.get_tenant());
+            let location_prefix = query_spill_prefix(self.ctx.get_tenant().as_str());
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(
                     match params.aggregate_functions.is_empty() {
@@ -213,8 +212,7 @@ impl PipelineBuilder {
         let max_block_size = self.settings.get_max_block_size()?;
         let enable_experimental_aggregate_hashtable = self
             .settings
-            .get_enable_experimental_aggregate_hashtable()?
-            && self.ctx.get_cluster().is_empty();
+            .get_enable_experimental_aggregate_hashtable()?;
 
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),

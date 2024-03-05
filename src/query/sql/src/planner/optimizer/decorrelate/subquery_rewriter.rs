@@ -48,8 +48,8 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
-use crate::plans::UDFServerCall;
 use crate::plans::WindowFuncType;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -346,7 +346,7 @@ impl SubqueryRewriter {
                 self.derived_columns.clear();
                 Ok((scalar, s_expr))
             }
-            ScalarExpr::UDFServerCall(udf) => {
+            ScalarExpr::UDFCall(udf) => {
                 let mut args = vec![];
                 let mut s_expr = s_expr.clone();
                 for arg in udf.arguments.iter() {
@@ -355,12 +355,12 @@ impl SubqueryRewriter {
                     args.push(res.0);
                 }
 
-                let expr: ScalarExpr = UDFServerCall {
+                let expr: ScalarExpr = UDFCall {
                     span: udf.span,
                     name: udf.name.clone(),
                     func_name: udf.func_name.clone(),
                     display_name: udf.display_name.clone(),
-                    server_addr: udf.server_addr.clone(),
+                    udf_type: udf.udf_type.clone(),
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),
                     arguments: args,
@@ -369,6 +369,7 @@ impl SubqueryRewriter {
 
                 Ok((expr, s_expr))
             }
+
             ScalarExpr::UDFLambdaCall(udf) => {
                 let mut s_expr = s_expr.clone();
                 let res = self.try_rewrite_subquery(&udf.scalar, &s_expr, false)?;

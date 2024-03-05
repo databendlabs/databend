@@ -46,13 +46,13 @@ runs:
             flags="-C target-feature=+sse4.2"
             ;;
           x86_64-unknown-linux-musl)
-            flags="-C target-feature=+sse4.2 -C link-arg=--max-memory=4294967296"
+            flags="-C target-feature=+sse4.2"
             ;;
           aarch64-unknown-linux-gnu)
             flags=""
             ;;
           aarch64-unknown-linux-musl)
-            flags="-C link-arg=--max-memory=4294967296"
+            flags=""
             ;;
           *)
             flags=""

@@ -112,6 +112,11 @@ The following is an illustration of current query-meta compatibility:
 
 The on-disk data of Databend-meta evolves over time while maintaining backward compatibility.
 
+| DataVersion | Databend-version | Min Compatible with |
+|:------------|:-----------------|:--------------------|
+| V002        | 1.2.53           | V001                | 
+| V001        | 1.1.40           | V0                  |
+
 ### Identifying the versions
 
 Upon startup, Databend-meta will display the on-disk data version:

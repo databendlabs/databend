@@ -13,12 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod basic;
+pub(super) mod basic;
 mod dictionary;
-mod nested;
+pub(super) mod nested;
 mod utils;
 
 pub use basic::Iter;
 pub use dictionary::DictIter;
 pub use dictionary::NestedDictIter;
 pub use nested::NestedIter;
+pub use utils::SizedBinaryIter;

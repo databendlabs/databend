@@ -55,7 +55,7 @@ impl FlightSqlServiceImpl {
 
     pub fn block_to_flight_data(block: DataBlock, data_schema: &DataSchema) -> Result<FlightData> {
         let batch = block
-            .to_record_batch(data_schema)
+            .to_record_batch_with_dataschema(data_schema)
             .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
         let options = IpcWriteOptions::default();
         let data_gen = writer::IpcDataGenerator::default();

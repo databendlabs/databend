@@ -16,21 +16,33 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
 use crate::ast::ShowLimit;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTaskStmt {
+    #[drive(skip)]
     pub if_not_exists: bool,
+    #[drive(skip)]
     pub name: String,
     pub warehouse_opts: WarehouseOptions,
     pub schedule_opts: Option<ScheduleOptions>,
+    #[drive(skip)]
     pub session_parameters: BTreeMap<String, String>,
+    #[drive(skip)]
     pub suspend_task_after_num_failures: Option<u64>,
     // notification_integration name for error
+    #[drive(skip)]
     pub error_integration: Option<String>,
+    #[drive(skip)]
     pub comments: String,
+    #[drive(skip)]
     pub after: Vec<String>,
+    #[drive(skip)]
     pub when_condition: Option<String>,
+    #[drive(skip)]
     pub sql: String,
 }
 
@@ -81,8 +93,9 @@ impl Display for CreateTaskStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct WarehouseOptions {
+    #[drive(skip)]
     pub warehouse: Option<String>,
 }
 
@@ -95,10 +108,10 @@ impl Display for WarehouseOptions {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ScheduleOptions {
-    IntervalSecs(u64),
-    CronExpression(String, Option<String>),
+    IntervalSecs(#[drive(skip)] u64),
+    CronExpression(#[drive(skip)] String, #[drive(skip)] Option<String>),
 }
 
 impl Display for ScheduleOptions {
@@ -118,33 +131,41 @@ impl Display for ScheduleOptions {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterTaskStmt {
+    #[drive(skip)]
     pub if_exists: bool,
+    #[drive(skip)]
     pub name: String,
     pub options: AlterTaskOptions,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AlterTaskOptions {
     Resume,
     Suspend,
     Set {
+        #[drive(skip)]
         warehouse: Option<String>,
         schedule: Option<ScheduleOptions>,
+        #[drive(skip)]
         suspend_task_after_num_failures: Option<u64>,
+        #[drive(skip)]
         comments: Option<String>,
+        #[drive(skip)]
         session_parameters: Option<BTreeMap<String, String>>,
+        #[drive(skip)]
         error_integration: Option<String>,
     },
     Unset {
+        #[drive(skip)]
         warehouse: bool,
     },
     // Change SQL
-    ModifyAs(String),
-    ModifyWhen(String),
-    AddAfter(Vec<String>),
-    RemoveAfter(Vec<String>),
+    ModifyAs(#[drive(skip)] String),
+    ModifyWhen(#[drive(skip)] String),
+    AddAfter(#[drive(skip)] Vec<String>),
+    RemoveAfter(#[drive(skip)] Vec<String>),
 }
 
 impl Display for AlterTaskOptions {
@@ -208,9 +229,11 @@ impl Display for AlterTaskStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropTaskStmt {
+    #[drive(skip)]
     pub if_exists: bool,
+    #[drive(skip)]
     pub name: String,
 }
 
@@ -224,7 +247,7 @@ impl Display for DropTaskStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowTasksStmt {
     pub limit: Option<ShowLimit>,
 }
@@ -241,8 +264,9 @@ impl Display for ShowTasksStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ExecuteTaskStmt {
+    #[drive(skip)]
     pub name: String,
 }
 
@@ -252,8 +276,9 @@ impl Display for ExecuteTaskStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DescribeTaskStmt {
+    #[drive(skip)]
     pub name: String,
 }
 

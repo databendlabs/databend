@@ -230,7 +230,6 @@ impl Processor for ReadParquetDataSource<false> {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         let parts = self.partitions.steal(self.id, self.batch_size);
-
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
             let mut filters = self

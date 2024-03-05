@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
@@ -275,6 +275,10 @@ impl Settings {
 
     pub fn get_join_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_bytes_threshold_per_proc")? as usize)
+    }
+
+    pub fn get_join_spilling_partition_bits(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_partition_bits")? as usize)
     }
 
     pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
@@ -615,7 +619,11 @@ impl Settings {
         self.try_set_u64("enable_geo_create_table", u64::from(val))
     }
 
-    pub fn get_enable_experimental_new_executor(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_new_executor")? == 1)
+    pub fn get_idle_transaction_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("idle_transaction_timeout_secs")
+    }
+
+    pub fn get_enable_experimental_queries_executor(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_queries_executor")? == 1)
     }
 }

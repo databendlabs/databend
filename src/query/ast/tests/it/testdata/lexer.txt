@@ -5,6 +5,12 @@
 
 
 ---------- Input ----------
+$$ab$cd$$  $$ab$$
+---------- Output ---------
+[(CodeString, "$$ab$cd$$", 0..9), (CodeString, "$$ab$$", 11..17), (EOI, "", 17..17)]
+
+
+---------- Input ----------
 x'deadbeef' -- a hex string\n 'a string literal\n escape quote by '' or \\\'. '
 ---------- Output ---------
 [(PGLiteralHex, "x'deadbeef'", 0..11), (EOI, "", 79..79)]

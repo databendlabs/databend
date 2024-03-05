@@ -51,6 +51,7 @@ fn test_lexer() {
 
     let cases = vec![
         r#""#,
+        r#"$$ab$cd$$  $$ab$$"#,
         r#"x'deadbeef' -- a hex string\n 'a string literal\n escape quote by '' or \\\'. '"#,
         r#"'中文' '日本語'"#,
         r#"@abc 123"#,

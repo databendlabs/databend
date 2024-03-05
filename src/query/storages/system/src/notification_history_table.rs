@@ -123,7 +123,7 @@ impl AsyncSystemTable for NotificationHistoryTable {
         }
 
         let req = ListNotificationHistoryRequest {
-            tenant_id: tenant.clone(),
+            tenant_id: tenant.to_string(),
             result_limit,
             notification_name,
             ..Default::default()
@@ -131,7 +131,8 @@ impl AsyncSystemTable for NotificationHistoryTable {
 
         let cloud_api = CloudControlApiProvider::instance();
         let notification_client = cloud_api.get_notification_client();
-        let mut cfg = build_client_config(tenant, user, query_id, cloud_api.get_timeout());
+        let mut cfg =
+            build_client_config(tenant.to_string(), user, query_id, cloud_api.get_timeout());
         cfg.add_notification_version_info();
         let req = make_request(req, cfg);
 

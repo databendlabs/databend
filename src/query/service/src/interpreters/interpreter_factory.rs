@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_exception::Result;
+use databend_common_sql::binder::ExplainConfig;
 use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
@@ -101,25 +102,29 @@ impl InterpreterFactory {
                 formatted_ast.clone(),
                 *ignore_result,
             )?)),
-            Plan::Explain { kind, plan } => Ok(Arc::new(ExplainInterpreter::try_create(
+            Plan::Explain { kind, config, plan } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
                 kind.clone(),
+                config.clone(),
             )?)),
             Plan::ExplainAst { formatted_string } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 plan.clone(),
                 ExplainKind::Ast(formatted_string.clone()),
+                ExplainConfig::default(),
             )?)),
             Plan::ExplainSyntax { formatted_sql } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 plan.clone(),
                 ExplainKind::Syntax(formatted_sql.clone()),
+                ExplainConfig::default(),
             )?)),
             Plan::ExplainAnalyze { plan } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
                 ExplainKind::AnalyzePlan,
+                ExplainConfig::default(),
             )?)),
 
             Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
@@ -377,15 +382,15 @@ impl InterpreterFactory {
                 ctx,
                 *revoke_role.clone(),
             )?)),
-            Plan::CreateUDF(create_user_udf) => Ok(Arc::new(CreateUserUDFInterpreter::try_create(
+            Plan::CreateUDF(create_user_udf) => Ok(Arc::new(CreateUserUDFScript::try_create(
                 ctx,
                 *create_user_udf.clone(),
             )?)),
-            Plan::AlterUDF(alter_udf) => Ok(Arc::new(AlterUserUDFInterpreter::try_create(
+            Plan::AlterUDF(alter_udf) => Ok(Arc::new(AlterUserUDFScript::try_create(
                 ctx,
                 *alter_udf.clone(),
             )?)),
-            Plan::DropUDF(drop_udf) => Ok(Arc::new(DropUserUDFInterpreter::try_create(
+            Plan::DropUDF(drop_udf) => Ok(Arc::new(DropUserUDFScript::try_create(
                 ctx,
                 *drop_udf.clone(),
             )?)),

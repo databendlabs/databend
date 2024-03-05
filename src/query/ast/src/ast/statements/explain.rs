@@ -12,22 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum ExplainKind {
-    Ast(String),
-    Syntax(String),
+    Ast(#[drive(skip)] String),
+    Syntax(#[drive(skip)] String),
     // The display string will be filled by optimizer, as we
     // don't want to expose `Memo` to other crates.
-    Memo(String),
+    Memo(#[drive(skip)] String),
     Graph,
     Pipeline,
     Fragments,
+
+    // `EXPLAIN RAW` and `EXPLAIN OPTIMIZED` will be deprecated in the future,
+    // use explain options instead
     Raw,
     Optimized,
+
     Plan,
 
-    JOIN,
+    Join,
 
     // Explain analyze plan
     AnalyzePlan,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum ExplainOption {
+    Verbose(#[drive(skip)] bool),
+    Logical(#[drive(skip)] bool),
+    Optimized(#[drive(skip)] bool),
 }

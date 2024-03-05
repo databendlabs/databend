@@ -62,7 +62,11 @@ impl Interpreter for CreateFileFormatInterpreter {
 
         let tenant = self.ctx.get_tenant();
         let _create_file_format = user_mgr
-            .add_file_format(&tenant, user_defined_file_format, &plan.create_option)
+            .add_file_format(
+                tenant.as_str(),
+                user_defined_file_format,
+                &plan.create_option,
+            )
             .await?;
 
         Ok(PipelineBuildResult::create())

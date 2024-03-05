@@ -16,7 +16,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
-use databend_common_ast::display_parser_error;
+use databend_common_ast::parser::display_parser_error;
 use databend_common_ast::parser::expr::*;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::query::*;
@@ -24,11 +24,11 @@ use databend_common_ast::parser::quote::quote_ident;
 use databend_common_ast::parser::quote::unquote_ident;
 use databend_common_ast::parser::token::*;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::parser::Backtrace;
+use databend_common_ast::parser::Dialect;
+use databend_common_ast::parser::IResult;
+use databend_common_ast::parser::Input;
 use databend_common_ast::rule;
-use databend_common_ast::Backtrace;
-use databend_common_ast::Dialect;
-use databend_common_ast::IResult;
-use databend_common_ast::Input;
 use goldenfile::Mint;
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
@@ -97,6 +97,7 @@ fn test_statement() {
         r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
         r#"explain pipeline select a from b;"#,
         r#"explain pipeline select a from t1 ignore_result;"#,
+        r#"explain(verbose, logical, optimized) select * from t where a = 1"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
@@ -581,6 +582,15 @@ fn test_statement() {
         "CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';",
         "CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
         "CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
+        r#"create or replace function addone(int)
+returns int
+language python
+handler = 'addone_py'
+as
+$$
+def addone_py(i):
+  return i+1
+$$;"#,
         "DROP FUNCTION binary_reverse;",
         "DROP FUNCTION isnotempty;",
     ];
@@ -787,6 +797,7 @@ fn test_expr() {
         r#"char(0xD0, 0xBF, 0xD1)"#,
         r#"[42, 3.5, 4., .001, 5e2, 1.925e-3, .38e+7, 1.e-01, 0xfff, x'deedbeef']"#,
         r#"123456789012345678901234567890"#,
+        r#"$$ab123c$$"#,
         r#"x'123456789012345678901234567890'"#,
         r#"1e100000000000000"#,
         r#"100_100_000"#,

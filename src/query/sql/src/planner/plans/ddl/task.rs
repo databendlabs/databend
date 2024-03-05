@@ -76,7 +76,7 @@ pub fn task_run_schema() -> DataSchemaRef {
     ]))
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CreateTaskPlan {
     pub if_not_exists: bool,
     pub tenant: String,
@@ -98,7 +98,7 @@ impl CreateTaskPlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AlterTaskPlan {
     pub if_exists: bool,
     pub tenant: String,
@@ -112,7 +112,7 @@ impl AlterTaskPlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DropTaskPlan {
     pub if_exists: bool,
     pub tenant: String,
@@ -125,7 +125,7 @@ impl DropTaskPlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DescribeTaskPlan {
     pub tenant: String,
     pub task_name: String,
@@ -137,7 +137,7 @@ impl DescribeTaskPlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ExecuteTaskPlan {
     pub tenant: String,
     pub task_name: String,

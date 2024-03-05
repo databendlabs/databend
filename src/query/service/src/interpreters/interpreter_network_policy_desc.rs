@@ -54,7 +54,7 @@ impl Interpreter for DescNetworkPolicyInterpreter {
         let user_mgr = UserApiProvider::instance();
 
         let network_policy = user_mgr
-            .get_network_policy(&tenant, self.plan.name.as_str())
+            .get_network_policy(tenant.as_str(), self.plan.name.as_str())
             .await?;
 
         let names = vec![network_policy.name.clone()];

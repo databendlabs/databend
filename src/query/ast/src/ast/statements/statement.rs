@@ -19,6 +19,9 @@ use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::schema::CreateOption;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+use itertools::Itertools;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
@@ -31,11 +34,12 @@ use crate::ast::Query;
 
 // SQL statement
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Statement {
     Query(Box<Query>),
     Explain {
         kind: ExplainKind,
+        options: Vec<ExplainOption>,
         query: Box<Statement>,
     },
     ExplainAnalyze {
@@ -75,10 +79,12 @@ pub enum Statement {
 
     KillStmt {
         kill_target: KillTarget,
+        #[drive(skip)]
         object_id: String,
     },
 
     SetVariable {
+        #[drive(skip)]
         is_global: bool,
         variable: Identifier,
         value: Box<Expr>,
@@ -87,7 +93,9 @@ pub enum Statement {
     UnSetVariable(UnSetStmt),
 
     SetRole {
+        #[drive(skip)]
         is_default: bool,
+        #[drive(skip)]
         role_name: String,
     },
 
@@ -138,6 +146,7 @@ pub enum Statement {
     VacuumTemporaryFiles(VacuumTemporaryFiles),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
+
     // Columns
     ShowColumns(ShowColumnsStmt),
 
@@ -169,20 +178,27 @@ pub enum Statement {
     CreateUser(CreateUserStmt),
     AlterUser(AlterUserStmt),
     DropUser {
+        #[drive(skip)]
         if_exists: bool,
+        #[drive(skip)]
         user: UserIdentity,
     },
     ShowRoles,
     CreateRole {
+        #[drive(skip)]
         if_not_exists: bool,
+        #[drive(skip)]
         role_name: String,
     },
     DropRole {
+        #[drive(skip)]
         if_exists: bool,
+        #[drive(skip)]
         role_name: String,
     },
     Grant(GrantStmt),
     ShowGrants {
+        #[drive(skip)]
         principal: Option<PrincipalIdentity>,
     },
     Revoke(RevokeStmt),
@@ -190,6 +206,7 @@ pub enum Statement {
     // UDF
     CreateUDF(CreateUDFStmt),
     DropUDF {
+        #[drive(skip)]
         if_exists: bool,
         udf_name: Identifier,
     },
@@ -199,18 +216,25 @@ pub enum Statement {
     CreateStage(CreateStageStmt),
     ShowStages,
     DropStage {
+        #[drive(skip)]
         if_exists: bool,
+        #[drive(skip)]
         stage_name: String,
     },
     DescribeStage {
+        #[drive(skip)]
         stage_name: String,
     },
     RemoveStage {
+        #[drive(skip)]
         location: String,
+        #[drive(skip)]
         pattern: String,
     },
     ListStage {
+        #[drive(skip)]
         location: String,
+        #[drive(skip)]
         pattern: Option<String>,
     },
     // Connection
@@ -221,12 +245,17 @@ pub enum Statement {
 
     // UserDefinedFileFormat
     CreateFileFormat {
+        #[drive(skip)]
         create_option: CreateOption,
+        #[drive(skip)]
         name: String,
+        #[drive(skip)]
         file_format_options: FileFormatOptionsAst,
     },
     DropFileFormat {
+        #[drive(skip)]
         if_exists: bool,
+        #[drive(skip)]
         name: String,
     },
     ShowFileFormats,
@@ -340,8 +369,34 @@ impl Statement {
 impl Display for Statement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Statement::Explain { kind, query } => {
+            Statement::Explain {
+                options,
+                kind,
+                query,
+            } => {
                 write!(f, "EXPLAIN")?;
+                if !options.is_empty() {
+                    write!(
+                        f,
+                        "({})",
+                        options
+                            .iter()
+                            .map(|opt| {
+                                match opt {
+                                    ExplainOption::Verbose(v) => {
+                                        format!("VERBOSE = {}", v)
+                                    }
+                                    ExplainOption::Logical(v) => {
+                                        format!("LOGICAL = {}", v)
+                                    }
+                                    ExplainOption::Optimized(v) => {
+                                        format!("OPTIMIZED = {}", v)
+                                    }
+                                }
+                            })
+                            .join(", ")
+                    )?;
+                }
                 match *kind {
                     ExplainKind::Ast(_) => write!(f, " AST")?,
                     ExplainKind::Syntax(_) => write!(f, " SYNTAX")?,
@@ -352,7 +407,7 @@ impl Display for Statement {
                     ExplainKind::Optimized => write!(f, " Optimized")?,
                     ExplainKind::Plan => (),
                     ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
-                    ExplainKind::JOIN => write!(f, " JOIN")?,
+                    ExplainKind::Join => write!(f, " JOIN")?,
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
                 }
                 write!(f, " {query}")?;
@@ -590,10 +645,8 @@ impl Display for Statement {
                     write!(f, " OR REPLACE")?;
                 }
                 write!(f, " FILE_FORMAT")?;
-                if let CreateOption::CreateIfNotExists(if_not_exists) = create_option {
-                    if *if_not_exists {
-                        write!(f, " IF NOT EXISTS")?;
-                    }
+                if let CreateOption::CreateIfNotExists = create_option {
+                    write!(f, " IF NOT EXISTS")?;
                 }
                 write!(f, " {name}")?;
                 write!(f, " {file_format_options}")?;

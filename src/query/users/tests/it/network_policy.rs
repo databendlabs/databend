@@ -24,14 +24,16 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_network_policy() -> Result<()> {
     let conf = RpcClientConf::default();
-    let tenant = "test";
+    let tenant_name = "test";
+    let tenant = NonEmptyString::new(tenant_name.to_string()).unwrap();
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf, tenant_name).await?;
     let username = "test-user1";
     let hostname = "%";
     let pwd = "test-pwd";
@@ -50,11 +52,7 @@ async fn test_network_policy() -> Result<()> {
         update_on: None,
     };
     user_mgr
-        .add_network_policy(
-            tenant,
-            network_policy,
-            &CreateOption::CreateIfNotExists(false),
-        )
+        .add_network_policy(tenant_name, network_policy, &CreateOption::None)
         .await?;
 
     // add user
@@ -68,29 +66,29 @@ async fn test_network_policy() -> Result<()> {
     option = option.with_network_policy(Some(policy_name.clone()));
     user_info.update_auth_option(None, Some(option));
     user_mgr
-        .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(false))
+        .add_user(&tenant, user_info, &CreateOption::None)
         .await?;
 
     let user = UserIdentity::new(username, hostname);
 
     // check get user with client ip
     let res = user_mgr
-        .get_user_with_client_ip(tenant, user.clone(), Some("192.168.0.1"))
+        .get_user_with_client_ip(&tenant, user.clone(), Some("192.168.0.1"))
         .await;
     assert!(res.is_ok());
 
     let res = user_mgr
-        .get_user_with_client_ip(tenant, user.clone(), Some("192.168.0.10"))
+        .get_user_with_client_ip(&tenant, user.clone(), Some("192.168.0.10"))
         .await;
     assert!(res.is_err());
 
     let res = user_mgr
-        .get_user_with_client_ip(tenant, user.clone(), Some("192.168.0.20"))
+        .get_user_with_client_ip(&tenant, user.clone(), Some("192.168.0.20"))
         .await;
     assert!(res.is_err());
 
     let res = user_mgr
-        .get_user_with_client_ip(tenant, user.clone(), Some("127.0.0.1"))
+        .get_user_with_client_ip(&tenant, user.clone(), Some("127.0.0.1"))
         .await;
     assert!(res.is_err());
 
@@ -99,7 +97,7 @@ async fn test_network_policy() -> Result<()> {
     let new_blocked_ip_list = vec!["127.0.0.10".to_string()];
     user_mgr
         .update_network_policy(
-            tenant,
+            tenant_name,
             policy_name.as_ref(),
             Some(new_allowed_ip_list),
             Some(new_blocked_ip_list),
@@ -110,30 +108,32 @@ async fn test_network_policy() -> Result<()> {
 
     // check get user with client ip
     let res = user_mgr
-        .get_user_with_client_ip(tenant, user.clone(), Some("192.168.0.1"))
+        .get_user_with_client_ip(&tenant, user.clone(), Some("192.168.0.1"))
         .await;
     assert!(res.is_err());
 
     let res = user_mgr
-        .get_user_with_client_ip(tenant, user.clone(), Some("127.0.0.1"))
+        .get_user_with_client_ip(&tenant, user.clone(), Some("127.0.0.1"))
         .await;
     assert!(res.is_ok());
 
     let res = user_mgr
-        .get_user_with_client_ip(tenant, user.clone(), Some("127.0.0.10"))
+        .get_user_with_client_ip(&tenant, user.clone(), Some("127.0.0.10"))
         .await;
     assert!(res.is_err());
 
     // drop network policy
     let res = user_mgr
-        .drop_network_policy(tenant, policy_name.as_ref(), false)
+        .drop_network_policy(&tenant, policy_name.as_ref(), false)
         .await;
     assert!(res.is_err());
 
-    user_mgr.drop_user(tenant, user.clone(), false).await?;
+    user_mgr
+        .drop_user(tenant.clone(), user.clone(), false)
+        .await?;
 
     let res = user_mgr
-        .drop_network_policy(tenant, policy_name.as_ref(), false)
+        .drop_network_policy(&tenant, policy_name.as_ref(), false)
         .await;
     assert!(res.is_ok());
 

@@ -114,9 +114,11 @@ pub struct HashJoinBuildState {
     /// Wait all processors finish read spilled data, then go to new round build
     pub(crate) restore_barrier: Barrier,
     // Max memory usage for join
-    pub max_memory_usage: usize,
+    pub(crate) max_memory_usage: usize,
     // Spilling threshold for each processor
-    pub spilling_threshold_per_proc: usize,
+    pub(crate) spilling_threshold_per_proc: usize,
+    /// Spilled partition set, it contains all spilled_partition_sets from all processors
+    pub(crate) spilled_partition_set: RwLock<HashSet<u8>>,
 
     /// Runtime filter related states
     pub(crate) enable_inlist_runtime_filter: bool,
@@ -185,6 +187,7 @@ impl HashJoinBuildState {
             enable_inlist_runtime_filter,
             enable_min_max_runtime_filter,
             spilling_threshold_per_proc,
+            spilled_partition_set: Default::default(),
         }))
     }
 
@@ -774,6 +777,9 @@ impl HashJoinBuildState {
             .hash_table_builders
             .fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {
+            self.hash_join_state
+                .set_spilled_partition(&self.spilled_partition_set.read());
+
             let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
             let build_num_rows = build_state.generation_state.build_num_rows;
             info!("finish build hash table with {} rows", build_num_rows);
@@ -931,9 +937,7 @@ impl HashJoinBuildState {
         build_key: &Expr,
         probe_key: &Expr<String>,
     ) -> Result<()> {
-        if !build_key.data_type().remove_nullable().is_numeric()
-            && !build_key.data_type().remove_nullable().is_string()
-        {
+        if !build_key.runtime_filter_supported_types() {
             return Ok(());
         }
         if let Expr::ColumnRef { .. } = probe_key {
@@ -1015,6 +1019,11 @@ impl HashJoinBuildState {
                     let max = Scalar::String(domain.max.unwrap());
                     min_max_filter(min, max, probe_key)?
                 }
+                Domain::Date(date_domain) => {
+                    let min = Scalar::Date(date_domain.min);
+                    let max = Scalar::Date(date_domain.max);
+                    min_max_filter(min, max, probe_key)?
+                }
                 _ => unreachable!(),
             };
             if let Some(min_max_filter) = min_max_filter {
@@ -1022,6 +1031,10 @@ impl HashJoinBuildState {
             }
         }
         Ok(())
+    }
+
+    pub(crate) fn join_type(&self) -> JoinType {
+        self.hash_join_state.hash_join_desc.join_type.clone()
     }
 }
 

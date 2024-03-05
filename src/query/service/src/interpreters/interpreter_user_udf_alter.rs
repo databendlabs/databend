@@ -25,21 +25,21 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 #[derive(Debug)]
-pub struct AlterUserUDFInterpreter {
+pub struct AlterUserUDFScript {
     ctx: Arc<QueryContext>,
     plan: AlterUDFPlan,
 }
 
-impl AlterUserUDFInterpreter {
+impl AlterUserUDFScript {
     pub fn try_create(ctx: Arc<QueryContext>, plan: AlterUDFPlan) -> Result<Self> {
-        Ok(AlterUserUDFInterpreter { ctx, plan })
+        Ok(AlterUserUDFScript { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for AlterUserUDFInterpreter {
+impl Interpreter for AlterUserUDFScript {
     fn name(&self) -> &str {
-        "AlterUserUDFInterpreter"
+        "AlterUserUDFScript"
     }
 
     fn is_ddl(&self) -> bool {
@@ -56,7 +56,7 @@ impl Interpreter for AlterUserUDFInterpreter {
 
         let tenant = self.ctx.get_tenant();
         UserApiProvider::instance()
-            .update_udf(&tenant, plan.udf)
+            .update_udf(tenant.as_str(), plan.udf)
             .await?;
 
         Ok(PipelineBuildResult::create())

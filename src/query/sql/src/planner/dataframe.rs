@@ -15,7 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Join;
@@ -176,12 +178,14 @@ impl Dataframe {
         let select_list = [SelectTarget::AliasedExpr {
             expr: Box::new(Expr::FunctionCall {
                 span: None,
-                distinct: false,
-                name: Identifier::from_name("count"),
-                args: vec![],
-                params: vec![],
-                window: None,
-                lambda: None,
+                func: FunctionCall {
+                    distinct: false,
+                    name: Identifier::from_name("count"),
+                    args: vec![],
+                    params: vec![],
+                    window: None,
+                    lambda: None,
+                },
             }),
             alias: None,
         }];
@@ -575,9 +579,11 @@ fn parse_cols(schema: DataSchemaRef, columns: &[&str]) -> Result<Vec<SelectTarge
         .map(|c| SelectTarget::AliasedExpr {
             expr: Box::new(Expr::ColumnRef {
                 span: None,
-                database: None,
-                table: None,
-                column: ColumnID::Name(Identifier::from_name_with_quoted(*c, Some('`'))),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: ColumnID::Name(Identifier::from_name_with_quoted(*c, Some('`'))),
+                },
             }),
             alias: None,
         })

@@ -129,7 +129,11 @@ impl ShareEndpointManager {
         );
         let bs = Bytes::from(serde_json::to_vec(&tables)?);
         let auth = endpoint_config.token.to_header().await?;
-        let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
+        let requester = GlobalConfig::instance()
+            .as_ref()
+            .query
+            .tenant_id
+            .to_string();
         let req = Request::builder()
             .method(Method::POST)
             .uri(&url)
@@ -190,7 +194,11 @@ impl ShareEndpointManager {
             let url = format!("{}tenant/{}/share_spec", endpoint_config.url, from_tenant);
             let bs = Bytes::from(serde_json::to_vec(&share_names)?);
             let auth = endpoint_config.token.to_header().await?;
-            let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
+            let requester = GlobalConfig::instance()
+                .as_ref()
+                .query
+                .tenant_id
+                .to_string();
             let req = Request::builder()
                 .method(Method::POST)
                 .uri(&url)

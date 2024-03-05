@@ -19,18 +19,23 @@ use std::fmt::Formatter;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 use itertools::Itertools;
 
 use super::UriLocation;
 use crate::ast::Identifier;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateShareEndpointStmt {
+    #[drive(skip)]
     pub create_option: CreateOption,
     pub endpoint: Identifier,
     pub url: UriLocation,
     pub tenant: Identifier,
+    #[drive(skip)]
     pub args: BTreeMap<String, String>,
+    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -41,10 +46,8 @@ impl Display for CreateShareEndpointStmt {
             write!(f, "OR REPLACE ")?;
         }
         write!(f, "SHARE ENDPOINT ")?;
-        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
-            if if_not_exists {
-                write!(f, "IF NOT EXISTS ")?;
-            }
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, "IF NOT EXISTS ")?;
         }
         write!(f, "{}", self.endpoint)?;
         write!(f, " URL={}", self.url)?;
@@ -60,10 +63,12 @@ impl Display for CreateShareEndpointStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateShareStmt {
+    #[drive(skip)]
     pub if_not_exists: bool,
     pub share: Identifier,
+    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -81,8 +86,9 @@ impl Display for CreateShareStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropShareStmt {
+    #[drive(skip)]
     pub if_exists: bool,
     pub share: Identifier,
 }
@@ -99,10 +105,12 @@ impl Display for DropShareStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct GrantShareObjectStmt {
     pub share: Identifier,
+    #[drive(skip)]
     pub object: ShareGrantObjectName,
+    #[drive(skip)]
     pub privilege: ShareGrantObjectPrivilege,
 }
 
@@ -118,10 +126,12 @@ impl Display for GrantShareObjectStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct RevokeShareObjectStmt {
     pub share: Identifier,
+    #[drive(skip)]
     pub object: ShareGrantObjectName,
+    #[drive(skip)]
     pub privilege: ShareGrantObjectPrivilege,
 }
 
@@ -137,11 +147,13 @@ impl Display for RevokeShareObjectStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct AlterShareTenantsStmt {
     pub share: Identifier,
+    #[drive(skip)]
     pub if_exists: bool,
     pub tenants: Vec<Identifier>,
+    #[drive(skip)]
     pub is_add: bool,
 }
 
@@ -167,7 +179,7 @@ impl Display for AlterShareTenantsStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DescShareStmt {
     pub share: Identifier,
 }
@@ -180,7 +192,7 @@ impl Display for DescShareStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowSharesStmt {}
 
 impl Display for ShowSharesStmt {
@@ -191,7 +203,7 @@ impl Display for ShowSharesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowShareEndpointStmt {}
 
 impl Display for ShowShareEndpointStmt {
@@ -202,8 +214,9 @@ impl Display for ShowShareEndpointStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropShareEndpointStmt {
+    #[drive(skip)]
     pub if_exists: bool,
     pub endpoint: Identifier,
 }
@@ -216,8 +229,9 @@ impl Display for DropShareEndpointStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowObjectGrantPrivilegesStmt {
+    #[drive(skip)]
     pub object: ShareGrantObjectName,
 }
 
@@ -229,8 +243,9 @@ impl Display for ShowObjectGrantPrivilegesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowGrantsOfShareStmt {
+    #[drive(skip)]
     pub share_name: String,
 }
 

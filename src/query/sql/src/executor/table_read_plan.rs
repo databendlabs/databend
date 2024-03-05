@@ -209,7 +209,7 @@ impl ToReadDataSourcePlan for dyn Table {
                             if let Ok(policy) = handler
                                 .get_data_mask(
                                     meta_api.clone(),
-                                    tenant.clone(),
+                                    tenant.to_string(),
                                     mask_policy.clone(),
                                 )
                                 .await

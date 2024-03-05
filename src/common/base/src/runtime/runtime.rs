@@ -271,12 +271,12 @@ impl Runtime {
                 ErrorCode::Internal(format!("semaphore closed, acquire permit failure. {}", e))
             })?;
             #[expect(clippy::disallowed_methods)]
-            let handler = self
-                .handle
-                .spawn(async_backtrace::location!().frame(async move {
+            let handler = self.handle.spawn(ThreadTracker::tracking_future(
+                async_backtrace::location!().frame(async move {
                     // take the ownership of the permit, (implicitly) drop it when task is done
                     fut(permit).await
-                }));
+                }),
+            ));
             handlers.push(handler)
         }
 
@@ -292,7 +292,11 @@ impl Runtime {
         R: Send + 'static,
     {
         #[allow(clippy::disallowed_methods)]
-        match_join_handle(self.handle.spawn_blocking(f)).await
+        match_join_handle(
+            self.handle
+                .spawn_blocking(ThreadTracker::tracking_function(f)),
+        )
+        .await
     }
 }
 
@@ -303,6 +307,7 @@ impl TrySpawn for Runtime {
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
+        let task = ThreadTracker::tracking_future(task);
         let id = id.into();
         let task = match id == GLOBAL_TASK {
             true => async_backtrace::location!(String::from(GLOBAL_TASK_DESC)).frame(task),
@@ -426,7 +431,7 @@ where
     R: Send + 'static,
 {
     #[expect(clippy::disallowed_methods)]
-    tokio::runtime::Handle::current().spawn_blocking(f)
+    tokio::runtime::Handle::current().spawn_blocking(ThreadTracker::tracking_function(f))
 }
 
 #[track_caller]
@@ -438,7 +443,7 @@ where
     match tokio::runtime::Handle::try_current() {
         Err(_) => Err(f),
         #[expect(clippy::disallowed_methods)]
-        Ok(handler) => Ok(handler.spawn_blocking(f)),
+        Ok(handler) => Ok(handler.spawn_blocking(ThreadTracker::tracking_function(f))),
     }
 }
 
@@ -472,6 +477,9 @@ where
     // NOTE:
     // Frame name: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=689fbc84ab4be894c0cdd285bea24845
     // Frame location: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=3ae3a2295607628ce95f0a34a566847b
+
+    // TODO: tracking payload
+    let future = ThreadTracker::tracking_future(future);
 
     let frame_name = std::any::type_name::<F>()
         .trim_end_matches("::{{closure}}")

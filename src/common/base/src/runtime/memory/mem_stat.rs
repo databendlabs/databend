@@ -34,9 +34,6 @@ const MINIMUM_MEMORY_LIMIT: i64 = 256 * 1024 * 1024;
 /// - Every stat that is fed to a child is also fed to its parent.
 /// - A MemStat has at most one parent.
 pub struct MemStat {
-    #[allow(dead_code)]
-    global: bool,
-
     name: Option<String>,
 
     pub(crate) used: AtomicI64,
@@ -48,34 +45,36 @@ pub struct MemStat {
     /// Set to 0 to disable the limit.
     limit: AtomicI64,
 
-    parent_memory_stat: Option<Arc<MemStat>>,
+    parent_memory_stat: Vec<Arc<MemStat>>,
 }
 
 impl MemStat {
     pub const fn global() -> Self {
         Self {
             name: None,
-            global: true,
             used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
             peak_used: AtomicI64::new(0),
-            parent_memory_stat: None,
+            parent_memory_stat: vec![],
         }
     }
 
     pub fn create(name: String) -> Arc<MemStat> {
-        MemStat::create_child(name, None)
+        MemStat::create_child(name, vec![])
     }
 
-    pub fn create_child(name: String, parent_memory_stat: Option<Arc<MemStat>>) -> Arc<MemStat> {
+    pub fn create_child(name: String, parent_memory_stat: Vec<Arc<MemStat>>) -> Arc<MemStat> {
         Arc::new(MemStat {
-            global: false,
             name: Some(name),
             used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
             peak_used: AtomicI64::new(0),
             parent_memory_stat,
         })
+    }
+
+    pub fn get_parent_memory_stat(&self) -> Vec<Arc<MemStat>> {
+        self.parent_memory_stat.clone()
     }
 
     pub fn set_limit(&self, mut size: i64) {
@@ -101,15 +100,17 @@ impl MemStat {
         used += batch_memory_used;
         self.peak_used.fetch_max(used, Ordering::Relaxed);
 
-        if let Some(parent_memory_stat) = self.parent_memory_stat.as_deref() {
+        for (idx, parent_memory_stat) in self.parent_memory_stat.iter().enumerate() {
             if let Err(cause) = parent_memory_stat
                 .record_memory::<NEED_ROLLBACK>(batch_memory_used, current_memory_alloc)
             {
                 if NEED_ROLLBACK {
                     // We only roll back the memory that alloc failed
                     self.used.fetch_sub(current_memory_alloc, Ordering::Relaxed);
-                    self.peak_used
-                        .store(used - current_memory_alloc, Ordering::Relaxed);
+
+                    for index in 0..idx {
+                        self.parent_memory_stat[index].rollback(current_memory_alloc);
+                    }
                 }
 
                 return Err(cause);
@@ -132,9 +133,18 @@ impl MemStat {
     pub fn rollback(&self, memory_usage: i64) {
         self.used.fetch_sub(memory_usage, Ordering::Relaxed);
 
-        if let Some(parent_memory_stat) = self.parent_memory_stat.as_deref() {
+        for parent_memory_stat in &self.parent_memory_stat {
             parent_memory_stat.rollback(memory_usage)
         }
+    }
+
+    pub fn movein_memory(&self, size: i64) {
+        let used = self.used.fetch_add(size, Ordering::Relaxed);
+        self.peak_used.fetch_max(used + size, Ordering::Relaxed);
+    }
+
+    pub fn moveout_memory(&self, size: i64) {
+        self.used.fetch_sub(size, Ordering::Relaxed);
     }
 
     /// Check if used memory is out of the limit.
@@ -306,7 +316,7 @@ mod tests {
     fn test_multiple_level_mem_stat() -> Result<()> {
         let mem_stat = MemStat::create("TEST".to_string());
         let child_mem_stat =
-            MemStat::create_child("TEST_CHILD".to_string(), Some(mem_stat.clone()));
+            MemStat::create_child("TEST_CHILD".to_string(), vec![mem_stat.clone()]);
 
         mem_stat.record_memory::<false>(1, 1).unwrap();
         mem_stat.record_memory::<false>(2, 2).unwrap();
@@ -334,7 +344,7 @@ mod tests {
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2);
         let child_mem_stat =
-            MemStat::create_child("TEST_CHILD".to_string(), Some(mem_stat.clone()));
+            MemStat::create_child("TEST_CHILD".to_string(), vec![mem_stat.clone()]);
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT);
 
         mem_stat.record_memory::<false>(1, 1).unwrap();
@@ -381,7 +391,7 @@ mod tests {
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT);
         let child_mem_stat =
-            MemStat::create_child("TEST_CHILD".to_string(), Some(mem_stat.clone()));
+            MemStat::create_child("TEST_CHILD".to_string(), vec![mem_stat.clone()]);
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2);
 
         assert!(
@@ -398,7 +408,7 @@ mod tests {
         let mem_stat = MemStat::create("TEST".to_string());
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2);
         let child_mem_stat =
-            MemStat::create_child("TEST_CHILD".to_string(), Some(mem_stat.clone()));
+            MemStat::create_child("TEST_CHILD".to_string(), vec![mem_stat.clone()]);
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT);
 
         assert!(

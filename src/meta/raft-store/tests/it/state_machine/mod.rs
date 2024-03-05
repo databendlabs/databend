@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -123,6 +124,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
+    #[derive(Debug)]
     struct T {
         // input:
         key: String,
@@ -141,8 +143,10 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
         meta: Option<u64>,
         prev: Option<(u64, &'static str)>,
         result: Option<(u64, &'static str)>,
+        // The time when it is applied to sm.
+        now_ms: u64,
     ) -> T {
-        let m = meta.map(MetaSpec::new_expire);
+        let m = meta.map(|x| MetaSpec::new_ttl(Duration::from_secs(x)));
         T {
             key: name.to_string(),
             seq,
@@ -152,21 +156,26 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             result: result.map(|(a, b)| {
                 SeqV::with_meta(
                     a,
-                    m.map(|m| m.to_kv_meta(&CmdContext::from_millis(0))),
+                    m.map(|m| m.to_kv_meta(&CmdContext::from_millis(now_ms))),
                     b.into(),
                 )
             }),
         }
     }
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let now_ms = SeqV::<()>::now_ms();
 
     let cases: Vec<T> = vec![
-        case("foo", MatchSeq::Exact(5), "b", None, None, None),
-        case("foo", MatchSeq::GE(0), "a", None, None, Some((1, "a"))),
+        case("foo", MatchSeq::Exact(5), "b", None, None, None, now_ms),
+        case(
+            "foo",
+            MatchSeq::GE(0),
+            "a",
+            None,
+            None,
+            Some((1, "a")),
+            now_ms,
+        ),
         case(
             "foo",
             MatchSeq::GE(0),
@@ -174,6 +183,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             None,
             Some((1, "a")),
             Some((2, "b")),
+            now_ms,
         ),
         case(
             "foo",
@@ -182,8 +192,17 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             None,
             Some((2, "b")),
             Some((2, "b")),
+            now_ms,
         ),
-        case("bar", MatchSeq::Exact(0), "x", None, None, Some((3, "x"))),
+        case(
+            "bar",
+            MatchSeq::Exact(0),
+            "x",
+            None,
+            None,
+            Some((3, "x")),
+            now_ms,
+        ),
         case(
             "bar",
             MatchSeq::Exact(0),
@@ -191,6 +210,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             None,
             Some((3, "x")),
             Some((3, "x")),
+            now_ms,
         ),
         case(
             "bar",
@@ -199,17 +219,27 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             None,
             Some((3, "x")),
             Some((4, "y")),
+            now_ms,
         ),
         // expired at once
-        case("wow", MatchSeq::GE(0), "y", Some(0), None, Some((5, "y"))),
+        case(
+            "wow",
+            MatchSeq::GE(0),
+            "y",
+            Some(0),
+            None,
+            Some((5, "y")),
+            now_ms,
+        ),
         // expired value does not exist
         case(
             "wow",
             MatchSeq::GE(0),
             "y",
-            Some(now + 1000),
+            Some(1000),
             None,
             Some((6, "y")),
+            now_ms,
         ),
     ];
 
@@ -228,7 +258,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
                     }),
                     &mut t,
                     None,
-                    SeqV::<()>::now_ms(),
+                    now_ms,
                 )
                 .unwrap())
         })?;
@@ -250,7 +280,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             None => None,
             Some(ref w) => {
                 // trick: in this test all expired timestamps are all 0
-                if w.eval_expire_at_ms() < now {
+                if w.eval_expire_at_ms() < now_ms {
                     None
                 } else {
                     want
@@ -279,6 +309,8 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
         .unwrap()
         .as_secs();
 
+    let now_ms = SeqV::<()>::now_ms();
+
     let key = "value_meta_foo".to_string();
 
     info!("--- update meta of a nonexistent record");
@@ -290,11 +322,11 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     key: key.clone(),
                     seq: MatchSeq::GE(0),
                     value: Operation::AsIs,
-                    value_meta: Some(MetaSpec::new_expire(now + 10)),
+                    value_meta: Some(MetaSpec::new_ttl(Duration::from_secs(10))),
                 }),
                 &mut t,
                 None,
-                0,
+                now_ms,
             )
             .unwrap())
     })?;
@@ -315,14 +347,17 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     key: key.clone(),
                     seq: MatchSeq::GE(0),
                     value: Operation::Update(b"value_meta_bar".to_vec()),
-                    value_meta: Some(MetaSpec::new_expire(now + 10)),
+                    value_meta: Some(MetaSpec::new_ttl(Duration::from_secs(10))),
                 }),
                 &mut t,
                 None,
-                0,
+                now_ms,
             )
             .unwrap())
     })?;
+
+    let got = sm.get_kv(&key).await?;
+    println!("after first upsert: got: {:?}", got);
 
     // update the meta of the record
     sm.sm_tree.txn(true, |mut t| {
@@ -332,11 +367,11 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                     key: key.clone(),
                     seq: MatchSeq::GE(0),
                     value: Operation::AsIs,
-                    value_meta: Some(MetaSpec::new_expire(now + 20)),
+                    value_meta: Some(MetaSpec::new_ttl(Duration::from_secs(20))),
                 }),
                 &mut t,
                 None,
-                0,
+                now_ms,
             )
             .unwrap())
     })?;
