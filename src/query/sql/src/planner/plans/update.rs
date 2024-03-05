@@ -63,7 +63,6 @@ impl UpdatePlan {
         ctx: Arc<dyn TableContext>,
         schema: DataSchema,
         col_indices: Vec<usize>,
-        use_column_name_index: Option<usize>,
     ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
         generate_update_list(
             ctx,
@@ -71,7 +70,7 @@ impl UpdatePlan {
             &self.update_list,
             schema,
             col_indices,
-            use_column_name_index,
+            None,
             Some(&self.database),
             &self.table,
         )
@@ -113,6 +112,7 @@ impl UpdatePlan {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn generate_update_list(
     ctx: Arc<dyn TableContext>,
     bind_context: &BindContext,
