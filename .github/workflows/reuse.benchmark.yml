@@ -140,10 +140,11 @@ jobs:
         run: |
           sudo apt-get update -yq
           sudo apt-get install -yq python3-jinja2
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: benchmark
           path: benchmark/clickbench/results
+          pattern: benchmark-*
+          merge-multiple: true
       - name: Get Report Prefix
         run: |
           for result in benchmark/clickbench/results/*.json; do
@@ -192,10 +193,11 @@ jobs:
         run: |
           sudo apt-get update -yq
           sudo apt-get install -yq python3-jinja2
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: benchmark
           path: benchmark/clickbench/results
+          pattern: benchmark-*
+          merge-multiple: true
       - name: Generate report and upload to R2
         working-directory: benchmark/clickbench
         env:
