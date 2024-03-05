@@ -47,6 +47,11 @@ pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 5f64;
 pub const SMALL_SELECTIVITY: f64 = 1f64 / 2500f64;
 pub const MAX_SELECTIVITY: f64 = 1f64;
 
+/// Some constants for like predicate selectivity estimation.
+const FIXED_CHAR_SEL: f64 = 0.5;
+const ANY_CHAR_SEL: f64 = 0.9; // not 1, since it won't match end-of-string
+const FULL_WILDCARD_SEL: f64 = 2.0;
+
 pub struct SelectivityEstimator<'a> {
     pub input_stat: &'a mut Statistics,
     pub updated_column_indexes: HashSet<IndexType>,
@@ -95,6 +100,9 @@ impl<'a> SelectivityEstimator<'a> {
             }
 
             ScalarExpr::FunctionCall(func) => {
+                if func.func_name.eq("like") {
+                    return self.compute_like_selectivity(func);
+                }
                 if let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) {
                     return self.compute_selectivity_comparison_expr(
                         op,
@@ -109,6 +117,47 @@ impl<'a> SelectivityEstimator<'a> {
 
             _ => DEFAULT_SELECTIVITY,
         })
+    }
+
+    // The method uses probability predication to compute like selectivity.
+    // The core idea is from postgresql.
+    fn compute_like_selectivity(&mut self, func: &FunctionCall) -> Result<f64> {
+        let right = &func.arguments[1];
+        if let ScalarExpr::ConstantExpr(ConstantExpr {
+            value: Scalar::String(patt),
+            ..
+        }) = right
+        {
+            let mut sel = 1.0_f64;
+
+            // Skip any leading %; it's already factored into initial sel
+            let mut chars = patt.chars().peekable();
+            if matches!(chars.peek(), Some(&'%') | Some(&'_')) {
+                chars.next(); // consume the leading %
+            }
+
+            while let Some(c) = chars.next() {
+                match c {
+                    '%' => sel *= FULL_WILDCARD_SEL,
+                    '_' => sel *= ANY_CHAR_SEL,
+                    '\\' => {
+                        if chars.peek().is_some() {
+                            chars.next();
+                        }
+                        sel *= FIXED_CHAR_SEL;
+                    }
+                    _ => sel *= FIXED_CHAR_SEL,
+                }
+            }
+
+            // Could get sel > 1 if multiple wildcards
+            if sel > 1.0 {
+                sel = 1.0;
+            }
+            Ok(sel)
+        } else {
+            Ok(DEFAULT_SELECTIVITY)
+        }
     }
 
     fn compute_selectivity_comparison_expr(
