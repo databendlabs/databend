@@ -22,6 +22,7 @@ use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::PayloadFlushState;
 use databend_common_functions::aggregates::StateAddr;
 use databend_common_hashtable::HashtableEntryRefLike;
 use databend_common_hashtable::HashtableLike;
@@ -31,15 +32,15 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 
+use super::SerializePayload;
 use crate::pipelines::processors::transforms::aggregator::create_state_serializer;
+use crate::pipelines::processors::transforms::aggregator::empty_block;
 use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::HashTablePayload;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
-
 pub struct TransformAggregateSerializer<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
@@ -137,15 +138,23 @@ impl<Method: HashMethodBounds> TransformAggregateSerializer<Method> {
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
+                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::HashTable(payload) => {
                         self.input_data = Some(SerializeAggregateStream::create(
                             &self.method,
                             &self.params,
-                            payload,
+                            SerializePayload::<Method, usize>::HashTablePayload(payload),
                         ));
                         return Ok(Event::Sync);
                     }
-                    AggregateMeta::AggregateHashTable(_) => todo!("AGG_HASHTABLE"),
+                    AggregateMeta::AggregatePayload(p) => {
+                        self.input_data = Some(SerializeAggregateStream::create(
+                            &self.method,
+                            &self.params,
+                            SerializePayload::<Method, usize>::AggregatePayload(p),
+                        ));
+                        return Ok(Event::Sync);
+                    }
                 }
             }
         }
@@ -198,8 +207,9 @@ pub fn serialize_aggregate<Method: HashMethodBounds>(
 pub struct SerializeAggregateStream<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
-    pub payload: Pin<Box<HashTablePayload<Method, usize>>>,
-    iter: <Method::HashTable<usize> as HashtableLike>::Iterator<'static>,
+    pub payload: Pin<Box<SerializePayload<Method, usize>>>,
+    // old hashtable' iter
+    iter: Option<<Method::HashTable<usize> as HashtableLike>::Iterator<'static>>,
     end_iter: bool,
 }
 
@@ -211,13 +221,16 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
     pub fn create(
         method: &Method,
         params: &Arc<AggregatorParams>,
-        payload: HashTablePayload<Method, usize>,
+        payload: SerializePayload<Method, usize>,
     ) -> Self {
         unsafe {
             let payload = Box::pin(payload);
 
-            let point = NonNull::from(&payload.cell.hashtable);
-            let iter = point.as_ref().iter();
+            let iter = if let SerializePayload::HashTablePayload(p) = payload.as_ref().get_ref() {
+                Some(NonNull::from(&p.cell.hashtable).as_ref().iter())
+            } else {
+                None
+            };
 
             SerializeAggregateStream::<Method> {
                 iter,
@@ -244,49 +257,100 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
             return Ok(None);
         }
 
-        let max_block_rows = std::cmp::min(8192, self.payload.cell.hashtable.len());
-        let max_block_bytes = std::cmp::min(
-            8 * 1024 * 1024 + 1024,
-            self.payload
-                .cell
-                .hashtable
-                .unsize_key_size()
-                .unwrap_or(usize::MAX),
-        );
+        match self.payload.as_ref().get_ref() {
+            SerializePayload::HashTablePayload(p) => {
+                let max_block_rows = std::cmp::min(8192, p.cell.hashtable.len());
+                let max_block_bytes = std::cmp::min(
+                    8 * 1024 * 1024 + 1024,
+                    p.cell.hashtable.unsize_key_size().unwrap_or(usize::MAX),
+                );
 
-        let funcs = &self.params.aggregate_functions;
-        let offsets_aggregate_states = &self.params.offsets_aggregate_states;
+                let funcs = &self.params.aggregate_functions;
+                let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
-        let mut state_builders: Vec<BinaryColumnBuilder> = funcs
-            .iter()
-            .map(|func| create_state_serializer(func, max_block_rows))
-            .collect();
+                let mut state_builders: Vec<BinaryColumnBuilder> = funcs
+                    .iter()
+                    .map(|func| create_state_serializer(func, max_block_rows))
+                    .collect();
 
-        let mut group_key_builder = self
-            .method
-            .keys_column_builder(max_block_rows, max_block_bytes);
+                let mut group_key_builder = self
+                    .method
+                    .keys_column_builder(max_block_rows, max_block_bytes);
 
-        #[allow(clippy::while_let_on_iterator)]
-        while let Some(group_entity) = self.iter.next() {
-            let mut bytes = 0;
-            let place = Into::<StateAddr>::into(*group_entity.get());
+                #[allow(clippy::while_let_on_iterator)]
+                while let Some(group_entity) = self.iter.as_mut().and_then(|iter| iter.next()) {
+                    let mut bytes = 0;
+                    let place = Into::<StateAddr>::into(*group_entity.get());
 
-            for (idx, func) in funcs.iter().enumerate() {
-                let arg_place = place.next(offsets_aggregate_states[idx]);
-                func.serialize(arg_place, &mut state_builders[idx].data)?;
-                state_builders[idx].commit_row();
-                bytes += state_builders[idx].memory_size();
+                    for (idx, func) in funcs.iter().enumerate() {
+                        let arg_place = place.next(offsets_aggregate_states[idx]);
+                        func.serialize(arg_place, &mut state_builders[idx].data)?;
+                        state_builders[idx].commit_row();
+                        bytes += state_builders[idx].memory_size();
+                    }
+
+                    group_key_builder.append_value(group_entity.key());
+
+                    if bytes >= 8 * 1024 * 1024 {
+                        return self.finish(state_builders, group_key_builder);
+                    }
+                }
+
+                self.end_iter = true;
+                self.finish(state_builders, group_key_builder)
             }
+            SerializePayload::AggregatePayload(p) => {
+                let mut state = PayloadFlushState::default();
+                let mut blocks = vec![];
 
-            group_key_builder.append_value(group_entity.key());
+                while p.payload.flush(&mut state) {
+                    let row_count = state.row_count;
 
-            if bytes >= 8 * 1024 * 1024 {
-                return self.finish(state_builders, group_key_builder);
+                    let mut state_builders: Vec<BinaryColumnBuilder> = p
+                        .payload
+                        .aggrs
+                        .iter()
+                        .map(|agg| create_state_serializer(agg, row_count))
+                        .collect();
+
+                    for place in state.state_places.as_slice()[0..row_count].iter() {
+                        for (idx, (addr_offset, aggr)) in p
+                            .payload
+                            .state_addr_offsets
+                            .iter()
+                            .zip(p.payload.aggrs.iter())
+                            .enumerate()
+                        {
+                            let arg_place = place.next(*addr_offset);
+                            aggr.serialize(arg_place, &mut state_builders[idx].data)?;
+                            state_builders[idx].commit_row();
+                        }
+                    }
+
+                    let mut cols =
+                        Vec::with_capacity(p.payload.aggrs.len() + p.payload.group_types.len());
+                    for builder in state_builders.into_iter() {
+                        let col = Column::Binary(builder.build());
+                        cols.push(col);
+                    }
+
+                    cols.extend_from_slice(&state.take_group_columns());
+
+                    blocks.push(DataBlock::new_from_columns(cols));
+                }
+
+                self.end_iter = true;
+
+                let data_block = if blocks.is_empty() {
+                    empty_block(p)
+                } else {
+                    DataBlock::concat(&blocks).unwrap()
+                };
+                Ok(Some(data_block.add_meta(Some(
+                    AggregateSerdeMeta::create_agg_payload(p.bucket, p.max_partition_count),
+                ))?))
             }
         }
-
-        self.end_iter = true;
-        self.finish(state_builders, group_key_builder)
     }
 
     fn finish(
@@ -300,7 +364,12 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
             columns.push(Column::Binary(builder.build()));
         }
 
-        let bucket = self.payload.bucket;
+        let bucket = if let SerializePayload::HashTablePayload(p) = self.payload.as_ref().get_ref()
+        {
+            p.bucket
+        } else {
+            0
+        };
         columns.push(group_key_builder.finish());
         let block = DataBlock::new_from_columns(columns);
         Ok(Some(
