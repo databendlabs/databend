@@ -41,10 +41,7 @@ impl Indexer {
         schema: DataSchema,
         segment_locs: Option<Vec<Location>>,
     ) -> Result<String> {
-        let snapshot_opt = fuse_table.read_table_snapshot().await?;
-        let snapshot = if let Some(val) = snapshot_opt {
-            val
-        } else {
+        let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
             // no snapshot
             return Ok("".to_string());
         };
