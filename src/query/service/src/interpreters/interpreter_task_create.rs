@@ -15,15 +15,15 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::CreateTaskRequest;
-use databend_common_cloud_control::task_client::make_request;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::CreateTaskPlan;
 
-use crate::interpreters::common::get_client_config;
+use crate::interpreters::common::get_task_client_config;
 use crate::interpreters::common::make_schedule_options;
 use crate::interpreters::common::make_warehouse_options;
 use crate::interpreters::Interpreter;
@@ -59,6 +59,7 @@ impl CreateTaskInterpreter {
             comment: Some(plan.comment),
             schedule_options: plan.schedule_opts.map(make_schedule_options),
             warehouse_options: Some(make_warehouse_options(plan.warehouse_opts)),
+            error_integration: plan.error_integration,
             suspend_task_after_num_failures: plan.suspend_task_after_num_failures.map(|x| x as i32),
             if_not_exist: plan.if_not_exists,
             after: plan.after,
@@ -90,7 +91,7 @@ impl Interpreter for CreateTaskInterpreter {
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
         let req = self.build_request();
-        let config = get_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
+        let config = get_task_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);
         task_client.create_task(req).await?;
         Ok(PipelineBuildResult::create())

@@ -26,6 +26,8 @@ pub struct CreateTaskStmt {
     pub schedule_opts: Option<ScheduleOptions>,
     pub session_parameters: BTreeMap<String, String>,
     pub suspend_task_after_num_failures: Option<u64>,
+    // notification_integration name for error
+    pub error_integration: Option<String>,
     pub comments: String,
     pub after: Vec<String>,
     pub when_condition: Option<String>,
@@ -60,11 +62,18 @@ impl Display for CreateTaskStmt {
         }
 
         if !self.after.is_empty() {
-            write!(f, "AFTER = '{:?}'", self.after)?;
+            write!(f, " AFTER = '{:?}'", self.after)?;
         }
 
         if self.when_condition.is_some() {
-            write!(f, "WHEN = '{:?}'", self.when_condition)?;
+            write!(f, " WHEN = '{:?}'", self.when_condition)?;
+        }
+        if self.error_integration.is_some() {
+            write!(
+                f,
+                " ERROR INTEGRATION = '{}'",
+                self.error_integration.as_ref().unwrap()
+            )?;
         }
 
         write!(f, " AS {}", self.sql)?;
@@ -126,6 +135,7 @@ pub enum AlterTaskOptions {
         suspend_task_after_num_failures: Option<u64>,
         comments: Option<String>,
         session_parameters: Option<BTreeMap<String, String>>,
+        error_integration: Option<String>,
     },
     Unset {
         warehouse: bool,
@@ -147,6 +157,7 @@ impl Display for AlterTaskOptions {
                 schedule,
                 suspend_task_after_num_failures,
                 session_parameters,
+                error_integration,
                 comments,
             } => {
                 if let Some(wh) = warehouse {
@@ -154,6 +165,9 @@ impl Display for AlterTaskOptions {
                 }
                 if let Some(schedule) = schedule {
                     write!(f, " SET {}", schedule)?;
+                }
+                if let Some(error_integration) = error_integration {
+                    write!(f, " ERROR INTEGRATION = '{}'", error_integration)?;
                 }
                 if let Some(num) = suspend_task_after_num_failures {
                     write!(f, " SUSPEND TASK AFTER {} FAILURES", num)?;

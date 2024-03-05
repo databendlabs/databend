@@ -19,6 +19,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::notification_client::NotificationClient;
 use crate::task_client::TaskClient;
 
 pub const CLOUD_REQUEST_TIMEOUT_SEC: u64 = 5; // 5 seconds
@@ -30,6 +31,7 @@ pub const QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 
 pub struct CloudControlApiProvider {
     pub task_client: Arc<TaskClient>,
+    pub notification_client: Arc<NotificationClient>,
     pub timeout: Duration,
 }
 
@@ -42,10 +44,12 @@ impl CloudControlApiProvider {
         };
 
         let endpoint = Self::get_endpoint(endpoint, timeout).await?;
-        let task_client = TaskClient::new(endpoint).await?;
-
+        let channel = endpoint.connect_lazy();
+        let task_client = TaskClient::new(channel.clone()).await?;
+        let notification_client = NotificationClient::new(channel).await?;
         Ok(Arc::new(CloudControlApiProvider {
             task_client,
+            notification_client,
             timeout,
         }))
     }
@@ -60,7 +64,9 @@ impl CloudControlApiProvider {
                     "Invalid cloud control Server address: {err}"
                 ))
             })?
-            .connect_timeout(timeout);
+            .connect_timeout(timeout)
+            .tcp_nodelay(true)
+            .tcp_keepalive(None);
 
         Ok(endpoint)
     }
@@ -78,6 +84,10 @@ impl CloudControlApiProvider {
 
     pub fn get_task_client(&self) -> Arc<TaskClient> {
         self.task_client.clone()
+    }
+
+    pub fn get_notification_client(&self) -> Arc<NotificationClient> {
+        self.notification_client.clone()
     }
     pub fn get_timeout(&self) -> Duration {
         self.timeout

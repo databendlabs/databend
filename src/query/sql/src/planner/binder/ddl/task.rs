@@ -95,6 +95,7 @@ impl Binder {
             comments,
             after,
             when_condition,
+            error_integration,
             sql,
             session_parameters,
         } = stmt;
@@ -119,6 +120,7 @@ impl Binder {
             when_condition: when_condition.clone(),
             comment: comments.clone(),
             session_parameters: session_parameters.clone(),
+            error_integration: error_integration.clone(),
             sql: sql.clone(),
         };
         Ok(Plan::CreateTask(Box::new(plan)))
@@ -141,6 +143,7 @@ impl Binder {
             suspend_task_after_num_failures,
             comments,
             session_parameters,
+            error_integration,
         } = options
         {
             if warehouse.is_none()
@@ -148,6 +151,7 @@ impl Binder {
                 && suspend_task_after_num_failures.is_none()
                 && comments.is_none()
                 && session_parameters.is_none()
+                && error_integration.is_none()
             {
                 return Err(ErrorCode::SyntaxException(
                     "alter task must set at least one option".to_string(),

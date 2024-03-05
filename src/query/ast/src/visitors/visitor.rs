@@ -702,6 +702,10 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_alter_task(&mut self, _stmt: &'ast AlterTaskStmt) {}
 
+    fn visit_create_notification(&mut self, _stmt: &'ast CreateNotificationStmt) {}
+    fn visit_drop_notification(&mut self, _stmt: &'ast DropNotificationStmt) {}
+    fn visit_describe_notification(&mut self, _stmt: &'ast DescribeNotificationStmt) {}
+    fn visit_alter_notification(&mut self, _stmt: &'ast AlterNotificationStmt) {}
     fn visit_with(&mut self, with: &'ast With) {
         let With { ctes, .. } = with;
         for cte in ctes.iter() {

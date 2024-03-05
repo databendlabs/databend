@@ -203,6 +203,12 @@ impl Plan {
             Plan::Begin => Ok("Begin".to_string()),
             Plan::Commit => Ok("commit".to_string()),
             Plan::Abort => Ok("Abort".to_string()),
+
+            // Notification
+            Plan::CreateNotification(_) => Ok("CreateNotification".to_string()),
+            Plan::DropNotification(_) => Ok("DropNotification".to_string()),
+            Plan::DescNotification(_) => Ok("DescNotification".to_string()),
+            Plan::AlterNotification(_) => Ok("AlterNotification".to_string()),
         }
     }
 }

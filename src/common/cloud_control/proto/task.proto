@@ -34,6 +34,7 @@ message CreateTaskRequest {
   repeated string after = 11; //
   optional string when_condition = 12;
   map<string, string> session_parameters = 13;
+  optional string error_integration = 14;
 }
 
 message TaskError {
@@ -92,6 +93,7 @@ message Task {
   repeated string after = 17;
   optional string when_condition = 18;
   map<string, string> session_parameters = 19;
+  optional string error_integration = 20;
 }
 
 
@@ -138,6 +140,7 @@ message AlterTaskRequest {
   repeated string remove_after = 13;
   bool set_session_parameters = 14;
   map<string, string> session_parameters = 15;
+  optional string error_integration = 16;
 }
 
 message AlterTaskResponse {

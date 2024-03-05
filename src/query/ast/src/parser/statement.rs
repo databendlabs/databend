@@ -114,6 +114,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             ~ (AFTER ~ #comma_separated_list0(literal_string))?
             ~ (WHEN ~ #expr )?
             ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
+            ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ (#set_table_option)?
             ~ AS ~ #statement
@@ -128,6 +129,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             after_tasks,
             when_conditions,
             suspend_opt,
+            error_integration,
             comment_opt,
             session_opts,
             _,
@@ -146,6 +148,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     Some((_, tasks)) => tasks,
                     None => Vec::new(),
                 },
+                error_integration: error_integration.map(|(_, _, name)| name.to_string()),
                 when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
                 sql,
                 session_parameters: session_opts,
@@ -1873,6 +1876,79 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             })
         },
     );
+    let create_notification = map(
+        rule! {
+            CREATE ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ TYPE ~ "=" ~ #ident
+            ~ ENABLED ~ "=" ~ #literal_bool
+            ~ (#notification_webhook_clause)?
+            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+        },
+        |(
+            _,
+            _,
+            _,
+            if_not_exists,
+            name,
+            _,
+            _,
+            notification_type,
+            _,
+            _,
+            enabled,
+            webhook,
+            comment,
+        )| {
+            Statement::CreateNotification(CreateNotificationStmt {
+                if_not_exists: if_not_exists.is_some(),
+                name: name.to_string(),
+                notification_type: notification_type.to_string(),
+                enabled,
+                webhook_opts: webhook,
+                comments: comment.map(|v| v.2).unwrap_or_default(),
+            })
+        },
+    );
+
+    let drop_notification = map(
+        rule! {
+            DROP ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+        },
+        |(_, _, _, if_exists, name)| {
+            Statement::DropNotification(DropNotificationStmt {
+                if_exists: if_exists.is_some(),
+                name: name.to_string(),
+            })
+        },
+    );
+
+    let alter_notification = map(
+        rule! {
+            ALTER ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+            ~ #alter_notification_options
+        },
+        |(_, _, _, if_exists, name, options)| {
+            Statement::AlterNotification(AlterNotificationStmt {
+                if_exists: if_exists.is_some(),
+                name: name.to_string(),
+                options,
+            })
+        },
+    );
+
+    let desc_notification = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ NOTIFICATION ~ INTEGRATION ~ #ident
+        },
+        |(_, _, _, name)| {
+            Statement::DescribeNotification(DescribeNotificationStmt {
+                name: name.to_string(),
+            })
+        },
+    );
 
     let begin = map(rule!(BEGIN), |_| Statement::Begin);
     let commit = map(rule!(COMMIT), |_| Statement::Commit);
@@ -2052,6 +2128,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
   [ AFTER <string>, <string>...]
   [ WHEN boolean_expr ]
   [ SUSPEND_TASK_AFTER_NUM_FAILURES = <num> ]
+  [ ERROR_INTEGRATION = <string_literal> ]
   [ COMMENT = '<string_literal>' ]
 AS
   <sql>`"
@@ -2070,7 +2147,14 @@ AS
             | #drop_pipe : "`DROP PIPE [ IF EXISTS ] <name>`"
             | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
             | #desc_pipe : "`DESC | DESCRIBE PIPE <name>`"
-
+            | #create_notification : "`CREATE NOTIFICATION INTEGRATION [ IF NOT EXISTS ] <name>
+    TYPE = <type>
+    ENABLED = <bool>
+    [ WEBHOOK = ( url = <string_literal>, method = <string_literal>, authorization_header = <string_literal> ) ]
+    [ COMMENT = '<string_literal>' ]`"
+            | #alter_notification : "`ALTER NOTIFICATION INTEGRATION [ IF EXISTS ] <name> SET <option> = <value>`"
+            | #desc_notification : "`DESC | DESCRIBE NOTIFICATION INTEGRATION <name>`"
+            | #drop_notification : "`DROP NOTIFICATION INTEGRATION [ IF EXISTS ] <name>`"
         ),
         rule!(
             #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
@@ -2106,6 +2190,81 @@ pub fn parse_create_option(
     } else {
         Ok(CreateOption::CreateIfNotExists(opt_if_not_exists))
     }
+}
+
+pub fn notification_webhook_options(i: Input) -> IResult<NotificationWebhookOptions> {
+    let url_option = map(
+        rule! {
+            URL ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("url".to_string(), v.to_string()),
+    );
+    let method_option = map(
+        rule! {
+            METHOD ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("method".to_string(), v.to_string()),
+    );
+    let auth_option = map(
+        rule! {
+            AUTHORIZATION_HEADER ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("authorization_header".to_string(), v.to_string()),
+    );
+
+    map(
+        rule! { ((
+        #url_option
+        | #method_option
+        | #auth_option) ~ ","?)* },
+        |opts| {
+            NotificationWebhookOptions::from_iter(
+                opts.iter().map(|((k, v), _)| (k.to_uppercase(), v.clone())),
+            )
+        },
+    )(i)
+}
+
+pub fn notification_webhook_clause(i: Input) -> IResult<NotificationWebhookOptions> {
+    map(
+        rule! { WEBHOOK ~ ^"=" ~ ^"(" ~ ^#notification_webhook_options ~ ^")" },
+        |(_, _, _, opts, _)| opts,
+    )(i)
+}
+
+pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions> {
+    let enabled = map(
+        rule! {
+            SET ~ ENABLED ~ ^"=" ~ #literal_bool
+        },
+        |(_, _, _, enabled)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::enabled(enabled))
+        },
+    );
+    let webhook = map(
+        rule! {
+            SET ~ #notification_webhook_clause
+        },
+        |(_, webhook)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::webhook_opts(webhook))
+        },
+    );
+    let comment = map(
+        rule! {
+            SET ~ (COMMENT | COMMENTS) ~ ^"=" ~ #literal_string
+        },
+        |(_, _, _, comment)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::comments(comment))
+        },
+    );
+    map(
+        rule! {
+            #enabled
+            | #webhook
+            | #comment
+        },
+        |opts| opts,
+    )(i)
 }
 
 // `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
@@ -3117,14 +3276,24 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
              ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
              ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
              ~ ( COMMENT ~ "=" ~ #literal_string )?
+             ~ ( ERROR_INTEGRATION  ~ "=" ~ #literal_string )?
              ~ (#set_table_option)?
         },
-        |(_, warehouse_opts, schedule_opts, suspend_opts, comment, session_opts)| {
+        |(
+            _,
+            warehouse_opts,
+            schedule_opts,
+            suspend_opts,
+            comment,
+            err_integration,
+            session_opts,
+        )| {
             AlterTaskOptions::Set {
                 warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
                 schedule: schedule_opts.map(|(_, _, schedule)| schedule),
                 suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
                 comments: comment.map(|(_, _, comment)| comment),
+                error_integration: err_integration.map(|(_, _, integration)| integration),
                 session_parameters: session_opts,
             }
         },

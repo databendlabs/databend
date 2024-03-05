@@ -16,33 +16,44 @@ use std::sync::Arc;
 
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
-use databend_common_cloud_control::pb::ExecuteTaskRequest;
+use databend_common_cloud_control::pb::GetNotificationRequest;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_sql::plans::ExecuteTaskPlan;
+use databend_common_sql::plans::DescNotificationPlan;
+use databend_common_storages_system::parse_notifications_to_datablock;
 
-use crate::interpreters::common::get_task_client_config;
+use crate::interpreters::common::get_notification_client_config;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct ExecuteTaskInterpreter {
+pub struct DescNotificationInterpreter {
     ctx: Arc<QueryContext>,
-    plan: ExecuteTaskPlan,
+    plan: DescNotificationPlan,
 }
 
-impl ExecuteTaskInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ExecuteTaskPlan) -> Result<Self> {
-        Ok(ExecuteTaskInterpreter { ctx, plan })
+impl DescNotificationInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DescNotificationPlan) -> Result<Self> {
+        Ok(DescNotificationInterpreter { ctx, plan })
+    }
+}
+
+impl DescNotificationInterpreter {
+    fn build_request(&self) -> GetNotificationRequest {
+        let plan = self.plan.clone();
+        GetNotificationRequest {
+            tenant_id: plan.tenant,
+            name: plan.name,
+        }
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for ExecuteTaskInterpreter {
+impl Interpreter for DescNotificationInterpreter {
     fn name(&self) -> &str {
-        "ExecuteTaskInterpreter"
+        "DescNotificationInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -55,19 +66,21 @@ impl Interpreter for ExecuteTaskInterpreter {
         let config = GlobalConfig::instance();
         if config.query.cloud_control_grpc_server_address.is_none() {
             return Err(ErrorCode::CloudControlNotEnabled(
-                "cannot execute task without cloud control enabled, please set cloud_control_grpc_server_address in config",
+                "cannot describe notification without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
         }
         let cloud_api = CloudControlApiProvider::instance();
-        let task_client = cloud_api.get_task_client();
-        let req = ExecuteTaskRequest {
-            task_name: self.plan.task_name.clone(),
-            tenant_id: self.plan.tenant.clone(),
-        };
-        let config = get_task_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
+        let notification_cli = cloud_api.get_notification_client();
+        let req = self.build_request();
+        let config = get_notification_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);
 
-        task_client.execute_task(req).await?;
-        Ok(PipelineBuildResult::create())
+        let resp = notification_cli.desc_notification(req).await?;
+        if resp.notification.is_none() {
+            return Ok(PipelineBuildResult::create());
+        }
+        let tasks = vec![resp.notification.unwrap()];
+        let result = parse_notifications_to_datablock(tasks)?;
+        PipelineBuildResult::from_blocks(vec![result])
     }
 }

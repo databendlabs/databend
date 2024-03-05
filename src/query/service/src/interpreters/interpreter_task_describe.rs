@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
+use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::DescribeTaskRequest;
-use databend_common_cloud_control::task_client::make_request;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::DescribeTaskPlan;
 use databend_common_storages_system::parse_tasks_to_datablock;
 
-use crate::interpreters::common::get_client_config;
+use crate::interpreters::common::get_task_client_config;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -73,7 +73,7 @@ impl Interpreter for DescribeTaskInterpreter {
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
         let req = self.build_request();
-        let config = get_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
+        let config = get_task_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);
         let resp = task_client.describe_task(req).await?;
         if resp.task.is_none() {

@@ -16,33 +16,44 @@ use std::sync::Arc;
 
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
-use databend_common_cloud_control::pb::ExecuteTaskRequest;
+use databend_common_cloud_control::pb::DropNotificationRequest;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_sql::plans::ExecuteTaskPlan;
+use databend_common_sql::plans::DropNotificationPlan;
 
-use crate::interpreters::common::get_task_client_config;
+use crate::interpreters::common::get_notification_client_config;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct ExecuteTaskInterpreter {
+pub struct DropNotificationInterpreter {
     ctx: Arc<QueryContext>,
-    plan: ExecuteTaskPlan,
+    plan: DropNotificationPlan,
 }
 
-impl ExecuteTaskInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ExecuteTaskPlan) -> Result<Self> {
-        Ok(ExecuteTaskInterpreter { ctx, plan })
+impl DropNotificationInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropNotificationPlan) -> Result<Self> {
+        Ok(DropNotificationInterpreter { ctx, plan })
+    }
+}
+
+impl DropNotificationInterpreter {
+    fn build_request(&self) -> DropNotificationRequest {
+        let plan = self.plan.clone();
+        DropNotificationRequest {
+            tenant_id: plan.tenant,
+            name: plan.name,
+            if_exists: plan.if_exists,
+        }
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for ExecuteTaskInterpreter {
+impl Interpreter for DropNotificationInterpreter {
     fn name(&self) -> &str {
-        "ExecuteTaskInterpreter"
+        "DropNotificationInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -55,19 +66,15 @@ impl Interpreter for ExecuteTaskInterpreter {
         let config = GlobalConfig::instance();
         if config.query.cloud_control_grpc_server_address.is_none() {
             return Err(ErrorCode::CloudControlNotEnabled(
-                "cannot execute task without cloud control enabled, please set cloud_control_grpc_server_address in config",
+                "cannot drop notification without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
         }
         let cloud_api = CloudControlApiProvider::instance();
-        let task_client = cloud_api.get_task_client();
-        let req = ExecuteTaskRequest {
-            task_name: self.plan.task_name.clone(),
-            tenant_id: self.plan.tenant.clone(),
-        };
-        let config = get_task_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
+        let task_client = cloud_api.get_notification_client();
+        let req = self.build_request();
+        let config = get_notification_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);
-
-        task_client.execute_task(req).await?;
+        task_client.drop_notification(req).await?;
         Ok(PipelineBuildResult::create())
     }
 }
