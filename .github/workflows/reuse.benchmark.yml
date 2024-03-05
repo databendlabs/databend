@@ -140,7 +140,7 @@ jobs:
         run: |
           sudo apt-get update -yq
           sudo apt-get install -yq python3-jinja2
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: benchmark
           path: benchmark/clickbench/results
@@ -192,7 +192,7 @@ jobs:
         run: |
           sudo apt-get update -yq
           sudo apt-get install -yq python3-jinja2
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: benchmark
           path: benchmark/clickbench/results
