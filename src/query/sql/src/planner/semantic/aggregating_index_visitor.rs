@@ -38,7 +38,7 @@ use itertools::Itertools;
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
 #[derive(Debug, Clone, VisitorMut)]
-#[visitor(Expr(exit), SelectStmt(enter))]
+#[visitor(Expr(exit), SelectStmt(exit))]
 pub struct AggregatingIndexRewriter {
     pub sql_dialect: Dialect,
     has_agg_function: bool,
@@ -88,7 +88,7 @@ impl AggregatingIndexRewriter {
         };
     }
 
-    fn enter_select_stmt(&mut self, stmt: &mut SelectStmt) {
+    fn exit_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             group_by,
