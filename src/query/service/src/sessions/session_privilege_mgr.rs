@@ -86,7 +86,7 @@ impl SessionPrivilegeManagerImpl {
     async fn ensure_current_role(&self) -> Result<()> {
         let tenant = self.session_ctx.get_current_tenant();
         let public_role = RoleCacheManager::instance()
-            .find_role(tenant.as_str(), BUILTIN_ROLE_PUBLIC)
+            .find_role(&tenant, BUILTIN_ROLE_PUBLIC)
             .await?
             .unwrap_or_else(|| RoleInfo::new(BUILTIN_ROLE_PUBLIC));
 
@@ -208,9 +208,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         // find their related roles as the final effective roles
         let role_cache = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
-        let effective_roles = role_cache
-            .find_related_roles(tenant.as_str(), &role_names)
-            .await?;
+        let effective_roles = role_cache.find_related_roles(&tenant, &role_names).await?;
         Ok(effective_roles)
     }
 
@@ -233,7 +231,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
 
         let tenant = self.session_ctx.get_current_tenant();
         let mut related_roles = RoleCacheManager::instance()
-            .find_related_roles(tenant.as_str(), &roles)
+            .find_related_roles(&tenant, &roles)
             .await?;
         related_roles.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(related_roles)
@@ -272,7 +270,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
         let owner_role_name = role_mgr
-            .find_object_owner(tenant.as_str(), object)
+            .find_object_owner(&tenant, object)
             .await?
             .unwrap_or_else(|| BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
 

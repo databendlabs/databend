@@ -1203,6 +1203,7 @@ dependencies = [
  "databend-common-license",
  "databend-common-meta-app",
  "databend-common-meta-embedded",
+ "databend-common-meta-types",
  "databend-common-users",
  "databend-query",
  "pyo3",

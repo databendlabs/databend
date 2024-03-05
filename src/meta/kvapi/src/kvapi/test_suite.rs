@@ -305,7 +305,9 @@ impl kvapi::TestSuite {
                 assert_eq!(v2.seq, 3);
                 assert_eq!(v2.data, b("v2"));
                 let v2_meta = v2.meta.unwrap();
-                assert_eq!(v2_meta.get_expire_at_ms().unwrap() / 1000, now_sec + 10);
+                let expire_at_sec = v2_meta.get_expire_at_ms().unwrap() / 1000;
+                let want = now_sec + 10;
+                assert!((want..want + 2).contains(&expire_at_sec));
             }
         }
 

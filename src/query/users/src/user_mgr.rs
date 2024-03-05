@@ -53,7 +53,7 @@ impl UserApiProvider {
             user_info.option.set_all_flag();
             Ok(user_info)
         } else {
-            let client = self.get_user_api_client(tenant);
+            let client = self.user_api(tenant);
             let get_user = client.get_user(user, MatchSeq::GE(0));
             Ok(get_user.await?.data)
         }
@@ -110,7 +110,7 @@ impl UserApiProvider {
     // Get the tenant all users list.
     #[async_backtrace::framed]
     pub async fn get_users(&self, tenant: &NonEmptyString) -> Result<Vec<UserInfo>> {
-        let client = self.get_user_api_client(tenant);
+        let client = self.user_api(tenant);
         let get_users = client.get_users();
 
         let mut res = vec![];
@@ -164,7 +164,7 @@ impl UserApiProvider {
                 user_info.name
             )));
         }
-        let client = self.get_user_api_client(tenant);
+        let client = self.user_api(tenant);
         client.add_user(user_info, create_option).await
     }
 
@@ -182,7 +182,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.get_user_api_client(&tenant);
+        let client = self.user_api(&tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.grants.grant_privileges(&object, privileges)
@@ -205,7 +205,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.get_user_api_client(tenant);
+        let client = self.user_api(tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.grants.revoke_privileges(&object, privileges)
@@ -227,7 +227,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.get_user_api_client(&tenant);
+        let client = self.user_api(&tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.grants.grant_role(grant_role)
@@ -249,7 +249,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.get_user_api_client(tenant);
+        let client = self.user_api(tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.grants.revoke_role(&revoke_role)
@@ -272,7 +272,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.get_user_api_client(&tenant);
+        let client = self.user_api(&tenant);
         let drop_user = client.drop_user(user, MatchSeq::GE(1));
         match drop_user.await {
             Ok(res) => Ok(res),
@@ -327,7 +327,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.get_user_api_client(tenant);
+        let client = self.user_api(tenant);
         let update_user = client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.update_auth_option(auth_info.clone(), user_option);
@@ -365,7 +365,7 @@ impl UserApiProvider {
         if self.get_configured_user(&user.username).is_some() {
             return Ok(());
         }
-        let client = self.get_user_api_client(&tenant);
+        let client = self.user_api(&tenant);
         let update_user = client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 if authed {
@@ -392,7 +392,7 @@ impl UserApiProvider {
         if self.get_configured_user(&user.username).is_some() {
             return Ok(());
         }
-        let client = self.get_user_api_client(tenant);
+        let client = self.user_api(tenant);
         let update_user = client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.update_lockout_time(lockout_time);

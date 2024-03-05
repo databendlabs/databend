@@ -23,6 +23,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_types::NonEmptyString;
 use log::warn;
 use parking_lot::RwLock;
 
@@ -36,7 +37,7 @@ struct CachedRoles {
 
 pub struct RoleCacheManager {
     user_manager: Arc<UserApiProvider>,
-    cache: Arc<RwLock<HashMap<String, CachedRoles>>>,
+    cache: Arc<RwLock<HashMap<NonEmptyString, CachedRoles>>>,
     polling_interval: Duration,
     polling_join_handle: Option<JoinHandle<()>>,
 }
@@ -72,9 +73,9 @@ impl RoleCacheManager {
         let user_manager = self.user_manager.clone();
         self.polling_join_handle = Some(databend_common_base::runtime::spawn(async move {
             loop {
-                let tenants: Vec<String> = {
+                let tenants = {
                     let cached = cache.read();
-                    cached.keys().cloned().collect()
+                    cached.keys().cloned().collect::<Vec<_>>()
                 };
                 for tenant in tenants {
                     match load_roles_data(&user_manager, &tenant).await {
@@ -86,7 +87,7 @@ impl RoleCacheManager {
                         }
                         Ok(data) => {
                             let mut cached = cache.write();
-                            cached.insert(tenant.to_string(), data);
+                            cached.insert(tenant, data);
                         }
                     }
                 }
@@ -95,13 +96,13 @@ impl RoleCacheManager {
         }));
     }
 
-    pub fn invalidate_cache(&self, tenant: &str) {
+    pub fn invalidate_cache(&self, tenant: &NonEmptyString) {
         let mut cached = self.cache.write();
         cached.remove(tenant);
     }
 
     #[async_backtrace::framed]
-    pub async fn find_role(&self, tenant: &str, role: &str) -> Result<Option<RoleInfo>> {
+    pub async fn find_role(&self, tenant: &NonEmptyString, role: &str) -> Result<Option<RoleInfo>> {
         let cached = self.cache.read();
         let cached_roles = match cached.get(tenant) {
             None => return Ok(None),
@@ -114,7 +115,7 @@ impl RoleCacheManager {
     #[async_backtrace::framed]
     pub async fn find_object_owner(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         object: &OwnershipObject,
     ) -> Result<Option<String>> {
         match self.user_manager.get_ownership(tenant, object).await? {
@@ -127,7 +128,7 @@ impl RoleCacheManager {
     #[async_backtrace::framed]
     pub async fn find_related_roles(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         roles: &[String],
     ) -> Result<Vec<RoleInfo>> {
         self.maybe_reload(tenant).await?;
@@ -140,17 +141,17 @@ impl RoleCacheManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn force_reload(&self, tenant: &str) -> Result<()> {
+    pub async fn force_reload(&self, tenant: &NonEmptyString) -> Result<()> {
         let data = load_roles_data(&self.user_manager, tenant).await?;
         let mut cached = self.cache.write();
-        cached.insert(tenant.to_string(), data);
+        cached.insert(tenant.clone(), data);
         Ok(())
     }
 
     // Load roles data if not found in cache. Watch this tenant's role data in background if
     // once it loads successfully.
     #[async_backtrace::framed]
-    async fn maybe_reload(&self, tenant: &str) -> Result<()> {
+    async fn maybe_reload(&self, tenant: &NonEmptyString) -> Result<()> {
         let need_reload = {
             let cached = self.cache.read();
             match cached.get(tenant) {
@@ -172,7 +173,10 @@ impl RoleCacheManager {
     }
 }
 
-async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Result<CachedRoles> {
+async fn load_roles_data(
+    user_api: &Arc<UserApiProvider>,
+    tenant: &NonEmptyString,
+) -> Result<CachedRoles> {
     let roles = user_api.get_roles(tenant).await?;
     let roles_map = roles
         .into_iter()

@@ -80,10 +80,7 @@ pub async fn validate_grant_object_exists(
             }
         }
         GrantObject::UDF(udf) => {
-            if !UserApiProvider::instance()
-                .exists_udf(tenant.as_str(), udf)
-                .await?
-            {
+            if !UserApiProvider::instance().exists_udf(&tenant, udf).await? {
                 return Err(databend_common_exception::ErrorCode::UnknownStage(format!(
                     "udf {udf} not exists"
                 )));
