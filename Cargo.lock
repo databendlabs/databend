@@ -8489,7 +8489,7 @@ dependencies = [
 [[package]]
 name = "macros"
 version = "0.9.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.7#685fe8d11831adbaacf895f63f06b9a674fc1d49"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.8#884f0da65ec10ce5777165e6906c61c326f2394b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9340,7 +9340,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.9.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.7#685fe8d11831adbaacf895f63f06b9a674fc1d49"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.8#884f0da65ec10ce5777165e6906c61c326f2394b"
 dependencies = [
  "anyerror",
  "byte-unit",
