@@ -102,8 +102,11 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2024-01-25: since 1.2.315:
 ///   server: add export_v1() to let client specify export chunk size;
 ///
-/// - 2024-03-01: since: TODO(update me when merged):
+/// - 2024-03-01: since: 1.2.358:
 ///   server: add `server_time` to `get_client_info() -> ClientInfo`,
+///
+/// - 2024-03-01: since: TODO(update me when merged):
+///   client: `MetaSpec` use `ttl`, remove `expire_at`, require 1.2.258
 ///
 /// Server feature set:
 /// ```yaml
@@ -115,8 +118,15 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 pub static MIN_METASRV_SEMVER: Version = Version {
     major: 1,
     minor: 2,
-    // [1.2.163, 1.2.226) are removed from release download, due to some known bugs found in these versions.
-    patch: 226,
+    // The binary in the https://github.com/datafuselabs/databend/releases/tag/v1.2.258-nightly
+    // outputs version 1.2.257;
+    // ```
+    // ./databend-meta  --single
+    // Databend Metasrv
+    // Version: v1.2.257-nightly-188426e3e6-simd(1.75.0-nightly-2023-12-17T22:09:06.675156000Z)
+    // ```
+    // Skip 1.2.258 use the next 1.2.259
+    patch: 259,
     pre: Prerelease::EMPTY,
     build: BuildMetadata::EMPTY,
 };
