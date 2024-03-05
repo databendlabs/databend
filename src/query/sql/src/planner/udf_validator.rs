@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
+use databend_common_ast::ast::Lambda;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::is_builtin_function;
@@ -24,7 +25,7 @@ use derive_visitor::Drive;
 use derive_visitor::Visitor;
 
 #[derive(Default, Visitor)]
-#[visitor(ColumnRef(enter), FunctionCall(enter))]
+#[visitor(ColumnRef(enter), FunctionCall(enter), Lambda(enter))]
 pub struct UDFValidator {
     pub name: String,
     pub parameters: Vec<String>,
@@ -44,6 +45,11 @@ impl UDFValidator {
         if !is_builtin_function(name) && self.name.eq_ignore_ascii_case(name) {
             self.has_recursive = true;
         }
+    }
+
+    fn enter_lambda(&mut self, lambda: &Lambda) {
+        self.lambda_parameters
+            .extend(lambda.params.iter().map(|v| v.name().to_string()));
     }
 
     pub fn verify_definition_expr(&mut self, definition_expr: &Expr) -> Result<()> {
