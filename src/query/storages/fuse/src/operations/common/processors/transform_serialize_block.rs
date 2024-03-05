@@ -88,7 +88,10 @@ impl TransformSerializeBlock {
             .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
             .cloned()
             .collect::<Vec<_>>();
-        if !matches!(kind, MutationKind::Insert | MutationKind::Replace | MutationKind::MergeInto) {
+        if !matches!(
+            kind,
+            MutationKind::Insert | MutationKind::Replace | MutationKind::MergeInto
+        ) {
             // add stream fields.
             for stream_column in table.stream_columns().iter() {
                 fields.push(stream_column.table_field());

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::plan::StreamColumnMeta;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,7 +24,6 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
-use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::StreamContext;
 
 pub struct TransformAddStreamColumns {
@@ -57,7 +55,7 @@ impl Transform for TransformAddStreamColumns {
                 let meta = StreamColumnMeta::downcast_from(meta)
                     .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
 
-                block = self.stream_ctx.apply(block, meta)?.add_meta(meta.inner)?;
+                block = self.stream_ctx.apply(block, &meta)?.add_meta(meta.inner)?;
             }
         }
 

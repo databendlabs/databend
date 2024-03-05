@@ -24,7 +24,6 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::Projection;
-use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -44,7 +43,7 @@ use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::OnConflictField;
-use databend_common_sql::gen_mutation_stream_operator;
+use databend_common_sql::StreamContext;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::Xor8Filter;
@@ -101,8 +100,8 @@ struct AggregationContext {
     block_builder: BlockBuilder,
     io_request_semaphore: Arc<Semaphore>,
     query_id: String,
-    stream_columns: Vec<StreamColumn>,
-    stream_operators: Vec<BlockOperator>,
+    // generate stream columns if necessary
+    stream_ctx: Option<StreamContext>,
 }
 
 // Apply MergeIntoOperations to segments
@@ -185,10 +184,15 @@ impl MergeIntoOperationAggregator {
         };
         let query_id = ctx.get_id();
 
-        let (stream_columns, stream_operators) = if update_stream_columns {
-            gen_mutation_stream_operator(table_schema, table.get_table_info().ident.seq, true)?
+        let stream_ctx = if update_stream_columns {
+            Some(StreamContext::try_create(
+                ctx.get_function_context()?,
+                table_schema,
+                table.get_table_info().ident.seq,
+                true,
+            )?)
         } else {
-            (vec![], vec![])
+            None
         };
 
         Ok(Self {
@@ -209,8 +213,7 @@ impl MergeIntoOperationAggregator {
                 block_builder,
                 io_request_semaphore,
                 query_id,
-                stream_columns,
-                stream_operators,
+                stream_ctx,
             }),
         })
     }
@@ -530,7 +533,7 @@ impl AggregationContext {
             }
         };
 
-        if self.key_column_reader.update_stream_columns {
+        if let Some(stream_ctx) = &self.stream_ctx {
             // generate row id column
             let mut row_ids = Vec::with_capacity(num_rows);
             for i in 0..num_rows {
@@ -544,15 +547,7 @@ impl AggregationContext {
             new_block.add_column(row_num);
 
             let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0)?;
-            for stream_column in self.stream_columns.iter() {
-                let entry = stream_column.generate_column_values(&stream_meta, num_rows);
-                new_block.add_column(entry);
-            }
-            let func_ctx = self.block_builder.ctx.get_function_context()?;
-            new_block = self
-                .stream_operators
-                .iter()
-                .try_fold(new_block, |input, op| op.execute(&func_ctx, input))?;
+            new_block = stream_ctx.apply(new_block, &stream_meta)?;
         }
 
         // serialization and compression is cpu intensive, send them to dedicated thread pool

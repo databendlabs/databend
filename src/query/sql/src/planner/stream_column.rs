@@ -231,11 +231,11 @@ impl StreamContext {
         })
     }
 
-    pub fn apply(&self, block: DataBlock, meta: StreamColumnMeta) -> Result<DataBlock> {
+    pub fn apply(&self, block: DataBlock, meta: &StreamColumnMeta) -> Result<DataBlock> {
         let num_rows = block.num_rows();
         let mut new_block = block;
         for stream_column in self.stream_columns.iter() {
-            let entry = stream_column.generate_column_values(&meta, num_rows);
+            let entry = stream_column.generate_column_values(meta, num_rows);
             new_block.add_column(entry);
         }
 

@@ -147,7 +147,7 @@ impl Processor for CompactSource {
 
                         if let Some(stream_ctx) = &self.stream_ctx {
                             let stream_meta = gen_mutation_stream_meta(None, &meta.location.0)?;
-                            block = stream_ctx.apply(block, stream_meta)?;
+                            block = stream_ctx.apply(block, &stream_meta)?;
                         }
                         Ok(block)
                     })
