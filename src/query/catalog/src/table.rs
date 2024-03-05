@@ -122,6 +122,7 @@ pub trait Table: Sync + Send {
     }
 
     fn schema_with_stream(&self) -> Arc<TableSchema> {
+        // TODO check if stream enabled first, avoid clone
         let mut fields = self.schema().fields().clone();
         for stream_column in self.stream_columns().iter() {
             fields.push(stream_column.table_field());

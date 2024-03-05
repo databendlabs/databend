@@ -69,13 +69,13 @@ impl PipelineBuilder {
                         // 2. Try to purge copied files if purge option is true, if error will skip.
                         // If a file is already copied(status with AlreadyCopied) we will try to purge them.
                         if !is_active && copy_purge_option {
-                            let start = Instant::now();
+                            let purge_start = Instant::now();
                             Self::try_purge_files(ctx.clone(), &stage_info, &files).await;
 
                             // Perf.
                             {
                                 metrics_inc_copy_purge_files_counter(files.len() as u32);
-                                let elapsed = start.elapsed().as_millis();
+                                let elapsed = purge_start.elapsed().as_millis();
                                 metrics_inc_copy_purge_files_cost_milliseconds(elapsed as u32);
                                 metrics_inc_copy_into_timings_ms_purge_files(elapsed as u64)
                             }

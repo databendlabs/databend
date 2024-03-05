@@ -152,7 +152,11 @@ impl CopyIntoTablePlan {
         metrics_inc_copy_collect_files_get_all_source_files_milliseconds(list_file_used_time_ms);
 
         metrics_inc_copy_into_timings_ms_list_files(list_file_used_time_ms);
-        ctx.set_status_info(&format!("end list files: got {} files", num_all_files));
+
+        ctx.set_status_info(&format!(
+            "end list files: got {} files, time used {} ms",
+            num_all_files, list_file_used_time_ms
+        ));
 
         let need_copy_file_infos = if self.force {
             if !self.stage_table_info.stage_info.copy_options.purge
@@ -180,23 +184,25 @@ impl CopyIntoTablePlan {
                     max_files,
                 )
                 .await?;
-            ctx.set_status_info(&format!(
-                "end filtering out copied files: {}",
-                num_all_files
-            ));
 
             let filter_used_time_ms = filter_start.elapsed().as_millis() as u64;
             metrics_inc_copy_filter_out_copied_files_entire_milliseconds(filter_used_time_ms);
             metrics_inc_copy_into_timings_ms_filter_files(filter_used_time_ms);
+
+            ctx.set_status_info(&format!(
+                "end filtering out copied files: {}, time used {filter_used_time_ms} ms",
+                num_all_files
+            ));
+
             files
         };
 
         info!(
-            "copy: collect_files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{}",
+            "copy: collect_files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{} ms",
             max_files,
             num_all_files,
             need_copy_file_infos.len(),
-            start.elapsed().as_secs()
+            start.elapsed().as_millis()
         );
 
         Ok(need_copy_file_infos)

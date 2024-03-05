@@ -36,6 +36,7 @@ use databend_common_settings::Settings;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
 use log::debug;
+use log::info;
 use opendal::Operator;
 
 use crate::input_formats::input_pipeline::AligningStateTrait;
@@ -401,7 +402,7 @@ impl<T: InputFormatTextBase> InputFormat for T {
             {
                 let split_offsets = split_by_size(size, split_size);
                 let num_file_splits = split_offsets.len();
-                debug!(
+                info!(
                     "split file {} of size {} to {} {} bytes splits",
                     path, size, num_file_splits, split_size
                 );
