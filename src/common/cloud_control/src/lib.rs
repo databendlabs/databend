@@ -29,4 +29,8 @@ pub mod pb {
     tonic::include_proto!("notificationproto");
 }
 
+pub mod utils {
+    tonic::include_proto!("utils");
+}
+
 pub use prost;

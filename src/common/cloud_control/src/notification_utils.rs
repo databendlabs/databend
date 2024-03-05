@@ -49,12 +49,7 @@ pub struct Notification {
     pub updated_time: DateTime<Utc>,
 }
 
-pub fn parse_micro_sec_to_timestamp(micros: i64) -> prost_types::Timestamp {
-    let seconds = micros / 1_000_000;
-    let nanos = (micros % 1_000_000) as i32 * 1000;
-    prost_types::Timestamp { seconds, nanos }
-}
-pub fn parse_timestamp(timestamp: Option<prost_types::Timestamp>) -> Result<DateTime<Utc>> {
+pub fn parse_timestamp(timestamp: Option<crate::utils::Timestamp>) -> Result<DateTime<Utc>> {
     match timestamp {
         Some(ts) => {
             let seconds = ts.seconds;

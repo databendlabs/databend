@@ -2737,7 +2737,6 @@ dependencies = [
  "lenient_semver",
  "prost 0.12.3",
  "prost-build",
- "prost-types",
  "semver",
  "serde",
  "tonic 0.10.2",

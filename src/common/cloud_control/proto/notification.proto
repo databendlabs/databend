@@ -1,6 +1,6 @@
 syntax = "proto3";
 option go_package = "databend.com/cloudcontrol/notification/proto";
-import "google/protobuf/timestamp.proto";
+import "utils.proto";
 
 package notificationproto;
 
@@ -52,9 +52,9 @@ message Notification {
   optional string webhook_authorization_header = 8;
 
   optional string comments = 90;
-  google.protobuf.Timestamp created_time = 91;
+  utils.Timestamp created_time = 91;
   string created_by = 92;
-  google.protobuf.Timestamp updated_time = 93;
+  utils.Timestamp updated_time = 93;
   string updated_by = 94;
 }
 
@@ -94,8 +94,8 @@ message AlterNotificationResponse {
 }
 
 message NotificationHistory {
-  google.protobuf.Timestamp created_time = 1;
-  google.protobuf.Timestamp processed_time = 2;
+  utils.Timestamp created_time = 1;
+  utils.Timestamp processed_time = 2;
   string message_source = 3;
   string name = 4;
   string message = 5;
@@ -106,8 +106,8 @@ message NotificationHistory {
 message ListNotificationHistoryRequest {
   string tenant_id = 1;
   optional string notification_name = 2;
-  optional google.protobuf.Timestamp start_time = 3;
-  optional google.protobuf.Timestamp end_time = 4;
+  optional utils.Timestamp start_time = 3;
+  optional utils.Timestamp end_time = 4;
   optional int32 result_limit = 5;
   optional int32 page_size = 6; // 100 by default
   optional int64 next_page_token = 7;
