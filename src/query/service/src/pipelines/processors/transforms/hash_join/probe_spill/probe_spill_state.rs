@@ -57,6 +57,7 @@ impl ProbeSpillState {
             block,
             keys,
             &self.probe_state.hash_method,
+            None,
             hashes,
         )
     }

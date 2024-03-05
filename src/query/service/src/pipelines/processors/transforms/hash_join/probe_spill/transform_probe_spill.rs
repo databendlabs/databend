@@ -145,8 +145,7 @@ impl TransformHashJoinProbe {
         self.step = HashJoinProbeStep::Running;
         self.step_logs.push(HashJoinProbeStep::Running);
         self.probe_state.reset();
-        if (self.join_probe_state.hash_join_state.need_outer_scan()
-            || self.join_probe_state.hash_join_state.need_mark_scan())
+        if self.join_probe_state.hash_join_state.need_final_scan()
             && self.join_probe_state.probe_workers.load(Ordering::Relaxed) == 0
         {
             self.join_probe_state

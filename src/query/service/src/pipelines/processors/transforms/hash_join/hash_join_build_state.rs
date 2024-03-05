@@ -1032,6 +1032,10 @@ impl HashJoinBuildState {
         }
         Ok(())
     }
+
+    pub(crate) fn join_type(&self) -> JoinType {
+        self.hash_join_state.hash_join_desc.join_type.clone()
+    }
 }
 
 pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {

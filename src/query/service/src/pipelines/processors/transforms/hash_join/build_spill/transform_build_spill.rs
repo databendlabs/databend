@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_sql::plans::JoinType;
 use log::info;
 
 use crate::pipelines::processors::transforms::BuildSpillState;
@@ -91,12 +92,12 @@ impl BuildSpillHandler {
     }
 
     // Spill pending data block
-    pub(crate) async fn spill(&mut self) -> Result<()> {
+    pub(crate) async fn spill(&mut self, join_type: &JoinType) -> Result<()> {
         let pending_spill_data = self.pending_spill_data.clone();
         for block in pending_spill_data.iter() {
             let mut hashes = Vec::with_capacity(block.num_rows());
             let spill_state = self.spill_state_mut();
-            spill_state.get_hashes(block, &mut hashes)?;
+            spill_state.get_hashes(block, Some(join_type), &mut hashes)?;
             spill_state
                 .spiller
                 .spill_input(block.clone(), &hashes, None)
