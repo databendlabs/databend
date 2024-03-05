@@ -38,8 +38,8 @@ use databend_common_meta_raft_store::sm_v002::SnapshotStoreV002;
 use databend_common_meta_raft_store::state::RaftState;
 use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::init_sled_db;
+use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
-use databend_common_meta_sled_store::openraft::RaftStorage;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::CommittedLeaderId;
 use databend_common_meta_types::Endpoint;
@@ -360,7 +360,7 @@ async fn init_new_cluster(
             payload: EntryPayload::Membership(membership),
         };
 
-        sto.append_to_log([entry]).await?;
+        sto.blocking_append([entry]).await?;
 
         // insert AddNodes logs
         for (node_id, node) in nodes {
@@ -381,7 +381,7 @@ async fn init_new_cluster(
                 }),
             };
 
-            sto.append_to_log([entry]).await?;
+            sto.blocking_append([entry]).await?;
         }
     }
 
