@@ -236,42 +236,37 @@ jobs:
           category: testsuite
 
   hdfs:
-    runs-on: [self-hosted, X64, Linux, 16c32g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
     needs: create_release
     env:
       RUNNER_PROVIDER: gcp
     strategy:
       fail-fast: false
       matrix:
-        arch:
-          - x86_64
-        libc:
-          - gnu
+        include:
+          - {target: x86_64-unknown-linux-gnu, runner: X64}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ needs.create_release.outputs.version }}
-      - name: Get target
-        id: target
-        run: echo 'target=${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}' >> $GITHUB_OUTPUT
       - name: Setup Build Tool
         uses: ./.github/actions/setup_build_tool
         with:
-          target: ${{ steps.target.outputs.target }}
+          target: ${{ matrix.target }}
       - name: Build Release
         uses: ./.github/actions/build_linux
         with:
           sha: ${{ github.sha }}
-          target: ${{ steps.target.outputs.target }}
+          target: ${{ matrix.target }}
           artifacts: meta,query
           category: hdfs
           features: storage-hdfs
           upload: false
       - name: Pack binaries
         run: |
-          target=${{ steps.target.outputs.target }}
+          target=${{ matrix.target }}
           version=${{ needs.create_release.outputs.version }}
           mkdir -p release/${target}/{bin,configs,systemd,scripts}
           cp ./target/${target}/release/databend-* release/${target}/bin/
@@ -286,7 +281,7 @@ jobs:
       - name: post sha256
         uses: actions/upload-artifact@v4
         with:
-          name: sha256sums-${{ steps.target.outputs.target }}
+          name: sha256sums-hdfs-${{ matrix.target }}
           path: sha256-*.txt
           retention-days: 1
       - name: Publish Binaries
@@ -299,7 +294,7 @@ jobs:
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         with:
           version: ${{ needs.create_release.outputs.version }}
-          target: ${{ steps.target.outputs.target }}
+          target: ${{ matrix.target }}
           category: hdfs
 
   docker_combined:
