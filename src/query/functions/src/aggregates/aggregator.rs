@@ -40,6 +40,7 @@ use super::AggregateIfCombinator;
 use crate::aggregates::aggregate_array_agg_function_desc;
 use crate::aggregates::aggregate_array_moving_avg_function_desc;
 use crate::aggregates::aggregate_array_moving_sum_function_desc;
+use crate::aggregates::aggregate_histogram_function_desc;
 use crate::aggregates::aggregate_kurtosis_function_desc;
 use crate::aggregates::aggregate_median_function_desc;
 use crate::aggregates::aggregate_median_tdigest_function_desc;
@@ -134,6 +135,8 @@ impl Aggregators {
             "intersect_count",
             aggregate_bitmap_intersect_count_function_desc(),
         );
+
+        factory.register("histogram", aggregate_histogram_function_desc());
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {
