@@ -98,6 +98,81 @@ select * from t1 order by a;
 14
 15
 
+## test stage table
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a int);
+
+statement ok
+create stage ss FILE_FORMAT = (TYPE = CSV);
+
+statement ok
+create table t2(a int);
+
+statement ok
+insert into t2 values(1),(2),(3);
+
+statement ok
+insert into t2 values(4),(5),(6);
+
+statement ok
+copy into @ss from (select * from t2);
+
+statement ok
+insert into t1 values(9),(10);
+
+query T
+explain merge into t1 using (select $1 as a from @ss) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
+----
+MergeInto:
+target_table: default.default.t1
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set a = a (#0)]
+├── unmatched insert: [condition: None,insert into (a) values(CAST(a (#0) AS Int32 NULL))]
+└── Exchange(Merge)
+    └── Join(Right)
+        ├── build keys: [t2.a (#0)]
+        ├── probe keys: [t1.a (#1)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.t1
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Exchange(Broadcast)
+            └── AddRowNumber(AddRowNumber)
+                └── EvalScalar
+                    ├── scalars: [stage._$1 (#0) AS (#0)]
+                    └── Scan
+                        ├── table: system.stage
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+query TT
+merge into t1 using (select $1 as a from @ss) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
+----
+6 0
+
+query T
+select * from t1 order by a;
+----
+1
+2
+3
+4
+5
+6
+9
+10
+
 statement ok
 set enable_experimental_merge_into = 0;
 

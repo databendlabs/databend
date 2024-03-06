@@ -232,18 +232,19 @@ impl SMV002 {
         Applier::new(self)
     }
 
-    pub async fn apply_entries<'a>(
+    pub async fn apply_entries(
         &mut self,
-        entries: impl IntoIterator<Item = &'a Entry>,
+        entries: impl IntoIterator<Item = Entry>,
     ) -> Result<Vec<AppliedState>, StorageIOError> {
         let mut applier = Applier::new(self);
 
         let mut res = vec![];
 
         for ent in entries.into_iter() {
+            info!("apply: {}", *ent.get_log_id());
             let log_id = *ent.get_log_id();
             let r = applier
-                .apply(ent)
+                .apply(&ent)
                 .await
                 .map_err(|e| StorageIOError::apply(log_id, &e))?;
             res.push(r);

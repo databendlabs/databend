@@ -685,9 +685,11 @@ async fn test_system_tables() -> Result<()> {
         .collect::<Vec<_>>();
 
     let skipped = [
-        "credits",      // slow for ci (> 1s) and maybe flaky
-        "metrics",      // QueryError: "Prometheus recorder is not initialized yet"
-        "tasks",        // need to connect grpc server, tested on sqllogic test
+        "credits", // slow for ci (> 1s) and maybe flaky
+        "metrics", // QueryError: "Prometheus recorder is not initialized yet"
+        "tasks",   // need to connect grpc server, tested on sqllogic test
+        "notifications",
+        "notification_history",
         "task_history", // same with tasks
         "tracing",      // Could be very large.
     ];

@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
+use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::ExecuteTaskRequest;
-use databend_common_cloud_control::task_client::make_request;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::ExecuteTaskPlan;
 
-use crate::interpreters::common::get_client_config;
+use crate::interpreters::common::get_task_client_config;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -64,7 +64,7 @@ impl Interpreter for ExecuteTaskInterpreter {
             task_name: self.plan.task_name.clone(),
             tenant_id: self.plan.tenant.clone(),
         };
-        let config = get_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
+        let config = get_task_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);
 
         task_client.execute_task(req).await?;

@@ -39,6 +39,10 @@ use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
+use crate::interpreters::interpreter_notification_alter::AlterNotificationInterpreter;
+use crate::interpreters::interpreter_notification_create::CreateNotificationInterpreter;
+use crate::interpreters::interpreter_notification_desc::DescNotificationInterpreter;
+use crate::interpreters::interpreter_notification_drop::DropNotificationInterpreter;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
@@ -529,6 +533,22 @@ impl InterpreterFactory {
             Plan::Begin => Ok(Arc::new(BeginInterpreter::try_create(ctx)?)),
             Plan::Commit => Ok(Arc::new(CommitInterpreter::try_create(ctx)?)),
             Plan::Abort => Ok(Arc::new(AbortInterpreter::try_create(ctx)?)),
+            Plan::CreateNotification(p) => Ok(Arc::new(CreateNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::AlterNotification(p) => Ok(Arc::new(AlterNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropNotification(p) => Ok(Arc::new(DropNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescNotification(p) => Ok(Arc::new(DescNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }

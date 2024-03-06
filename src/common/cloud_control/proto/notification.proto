@@ -1,0 +1,132 @@
+syntax = "proto3";
+option go_package = "databend.com/cloudcontrol/notification/proto";
+import "timestamp.proto";
+
+package notificationproto;
+
+message NotificationError {
+  string kind = 1;
+  string message = 2;
+  int32 code = 3;
+}
+enum NotificationType {
+  WEBHOOK = 0;
+}
+message CreateNotificationRequest {
+
+  string tenant_id = 1;
+  bool if_not_exists = 2;
+  string name = 3;
+  NotificationType notification_type = 4;
+  bool   enabled = 6;
+  string webhook_url = 7;
+  optional string webhook_method = 8;
+  optional string webhook_authorization_header = 9;
+
+  optional string comments = 90;
+}
+
+message CreateNotificationResponse {
+  optional NotificationError error = 1;
+  uint64   notification_id = 2;
+}
+
+message DropNotificationRequest {
+  string tenant_id = 1;
+  string name = 2;
+  bool if_exists = 3;
+}
+
+message DropNotificationResponse {
+  optional NotificationError error = 1;
+}
+
+message Notification {
+  uint64 notification_id = 1;
+  string tenant_id = 2;
+  string name = 3;
+  NotificationType notification_type = 4;
+  bool enabled = 5;
+  string webhook_url = 6;
+  optional string webhook_method = 7;
+  optional string webhook_authorization_header = 8;
+
+  optional string comments = 90;
+  utils.Timestamp created_time = 91;
+  string created_by = 92;
+  utils.Timestamp updated_time = 93;
+  string updated_by = 94;
+}
+
+message ListNotificationRequest {
+  string tenant_id = 1;
+}
+
+message ListNotificationResponse {
+  optional NotificationError error = 1;
+  repeated Notification notifications = 5;
+}
+
+message GetNotificationRequest {
+  string tenant_id = 1;
+  string name = 2;
+}
+
+message GetNotificationResponse {
+  optional NotificationError error = 1;
+  Notification notification = 5;
+}
+
+message AlterNotificationRequest {
+  string tenant_id = 1;
+  string name = 2;
+  string operation_type = 3;
+  optional bool enabled = 4;
+  optional string webhook_url = 5;
+  optional string webhook_method = 6;
+  optional string webhook_authorization_header = 7;
+  optional string comments = 8;
+}
+
+message AlterNotificationResponse {
+  optional NotificationError error = 1;
+  uint64   notification_id = 2;
+}
+
+message NotificationHistory {
+  utils.Timestamp created_time = 1;
+  utils.Timestamp processed_time = 2;
+  string message_source = 3;
+  string name = 4;
+  string message = 5;
+  string status = 6;
+  string error_message = 7; // if notification failed, provide failed message
+}
+
+message ListNotificationHistoryRequest {
+  string tenant_id = 1;
+  optional string notification_name = 2;
+  optional utils.Timestamp start_time = 3;
+  optional utils.Timestamp end_time = 4;
+  optional int32 result_limit = 5;
+  optional int32 page_size = 6; // 100 by default
+  optional int64 next_page_token = 7;
+  optional int64 previous_page_token = 8;
+}
+
+message ListNotificationHistoryResponse {
+  optional NotificationError error = 1;
+  repeated NotificationHistory notification_histories = 5;
+  // you can pass the next_page_token to the list request to get the next page. so does previous_page_token.
+  int64 next_page_token = 6;
+  int64 previous_page_token = 7;
+}
+
+service NotificationService {
+  rpc CreateNotification(CreateNotificationRequest) returns (CreateNotificationResponse);
+  rpc DropNotification(DropNotificationRequest) returns (DropNotificationResponse);
+  rpc ListNotification(ListNotificationRequest) returns (ListNotificationResponse);
+  rpc GetNotification(GetNotificationRequest) returns (GetNotificationResponse);
+  rpc AlterNotification(AlterNotificationRequest) returns (AlterNotificationResponse);
+  rpc ListNotificationHistory(ListNotificationHistoryRequest) returns (ListNotificationHistoryResponse);
+}

@@ -1055,6 +1055,10 @@ pub enum TokenKind {
     UNSIGNED,
     #[token("URL", ignore(ascii_case))]
     URL,
+    #[token("METHOD", ignore(ascii_case))]
+    METHOD,
+    #[token("AUTHORIZATION_HEADER", ignore(ascii_case))]
+    AUTHORIZATION_HEADER,
     #[token("USE", ignore(ascii_case))]
     USE,
     #[token("USER", ignore(ascii_case))]
@@ -1159,6 +1163,16 @@ pub enum TokenKind {
     RESUME,
     #[token("PIPE", ignore(ascii_case))]
     PIPE,
+    #[token("NOTIFICATION", ignore(ascii_case))]
+    NOTIFICATION,
+    #[token("INTEGRATION", ignore(ascii_case))]
+    INTEGRATION,
+    #[token("ENABLED", ignore(ascii_case))]
+    ENABLED,
+    #[token("WEBHOOK", ignore(ascii_case))]
+    WEBHOOK,
+    #[token("ERROR_INTEGRATION", ignore(ascii_case))]
+    ERROR_INTEGRATION,
     #[token("AUTO_INGEST", ignore(ascii_case))]
     AUTO_INGEST,
     #[token("PIPE_EXECUTION_PAUSED", ignore(ascii_case))]
@@ -1541,6 +1555,7 @@ impl TokenKind {
             | TokenKind::TASK
             | TokenKind::PIPE
             | TokenKind::STREAM
+            | TokenKind::NOTIFICATION
             if !after_as => true,
             _ => false
         }

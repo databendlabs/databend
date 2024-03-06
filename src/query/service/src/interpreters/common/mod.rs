@@ -14,6 +14,7 @@
 
 mod grant;
 mod metrics;
+mod notification;
 mod query_log;
 mod stream;
 mod table;
@@ -21,10 +22,11 @@ mod task;
 mod util;
 
 pub use grant::validate_grant_object_exists;
+pub use notification::get_notification_client_config;
 pub use query_log::InterpreterQueryLog;
 pub use stream::build_update_stream_meta_seq;
 pub use table::check_referenced_computed_columns;
-pub use task::get_client_config;
+pub use task::get_task_client_config;
 pub use task::make_schedule_options;
 pub use task::make_warehouse_options;
 pub use util::check_deduplicate_label;

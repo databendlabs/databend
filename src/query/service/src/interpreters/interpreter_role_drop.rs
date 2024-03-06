@@ -67,7 +67,7 @@ impl Interpreter for DropRoleInterpreter {
         }
         let tenant = self.ctx.get_tenant();
         UserApiProvider::instance()
-            .drop_role(tenant.as_str(), plan.role_name, plan.if_exists)
+            .drop_role(&tenant, plan.role_name, plan.if_exists)
             .await?;
 
         let session = self.ctx.get_current_session();
@@ -77,9 +77,7 @@ impl Interpreter for DropRoleInterpreter {
             }
         }
 
-        RoleCacheManager::instance()
-            .force_reload(tenant.as_str())
-            .await?;
+        RoleCacheManager::instance().force_reload(&tenant).await?;
         Ok(PipelineBuildResult::create())
     }
 }
