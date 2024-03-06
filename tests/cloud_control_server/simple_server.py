@@ -11,7 +11,7 @@ import task_pb2
 import task_pb2_grpc
 import notification_pb2
 import notification_pb2_grpc
-import utils_pb2
+import timestamp_pb2
 
 # Simple in-memory database
 TASK_DB = {}
@@ -95,7 +95,7 @@ def create_notification_request_to_notification(id, create_notification_request)
         create_notification_request.webhook_authorization_header
     )
     notification.comments = create_notification_request.comments
-    t = utils_pb2.Timestamp()
+    t = timestamp_pb2.Timestamp()
     dt = datetime.utcnow()
     seconds = calendar.timegm(dt.utctimetuple())
     nanos = dt.microsecond * 1000

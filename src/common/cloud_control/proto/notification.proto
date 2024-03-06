@@ -1,6 +1,6 @@
 syntax = "proto3";
 option go_package = "databend.com/cloudcontrol/notification/proto";
-import "utils.proto";
+import "timestamp.proto";
 
 package notificationproto;
 
