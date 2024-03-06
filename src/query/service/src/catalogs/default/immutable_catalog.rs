@@ -93,7 +93,7 @@ use crate::storages::Table;
 /// System Catalog contains ... all the system databases (no surprise :)
 #[derive(Clone)]
 pub struct ImmutableCatalog {
-    // it's case sensitive, so we will need two same database only with the name's case
+    // IT'S CASE SENSITIVE, SO WE WILL NEED TWO SAME DATABASE ONLY WITH THE NAME'S CASE
     info_schema_db: Arc<InformationSchemaDatabase>,
     sys_db: Arc<SystemDatabase>,
     sys_db_meta: Arc<InMemoryMetas>,
@@ -198,6 +198,22 @@ impl Catalog for ImmutableCatalog {
         Ok(table.name().to_string())
     }
 
+    async fn list_tables_name_by_id(
+        &self,
+        table_id: Vec<MetaId>,
+    ) -> databend_common_exception::Result<Vec<String>> {
+        let mut table_name = Vec::with_capacity(table_id.len());
+        for id in table_id {
+            let table = self
+                .sys_db_meta
+                .get_by_id(&id)
+                .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table id: '{}'", id)))?;
+            table_name.push(table.name().to_string());
+        }
+
+        Ok(table_name)
+    }
+
     async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
         if self.sys_db.get_db_info().ident.db_id == db_id {
             Ok("system".to_string())
@@ -209,6 +225,23 @@ impl Catalog for ImmutableCatalog {
                 db_id
             )))
         }
+    }
+
+    async fn list_dbs_name_by_id(&self, db_id: Vec<MetaId>) -> Result<Vec<String>> {
+        let mut res = Vec::new();
+        for id in db_id {
+            if self.sys_db.get_db_info().ident.db_id == id {
+                res.push("system".to_string());
+            } else if self.info_schema_db.get_db_info().ident.db_id == id {
+                res.push("information_schema".to_string());
+            } else {
+                return Err(ErrorCode::UnknownDatabaseId(format!(
+                    "Unknown immutable database id {}",
+                    id
+                )));
+            }
+        }
+        Ok(res)
     }
 
     #[async_backtrace::framed]

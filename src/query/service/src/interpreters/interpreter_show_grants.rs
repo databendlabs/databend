@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_meta_app::principal::GrantEntry;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserPrivilegeSet;
@@ -86,41 +88,88 @@ impl Interpreter for ShowGrantsInterpreter {
             .entries();
 
         let mut grant_list: Vec<String> = Vec::new();
+
+        // must split with two hashmap, hashmap key is catalog name.
+        // maybe contain: default.db1 and default.db2.t,
+        // It will re-write the exists key.
+        let mut catalog_db_ids: HashMap<String, Vec<(u64, String)>> = HashMap::new();
+        let mut catalog_table_ids: HashMap<String, Vec<(u64, u64, String)>> = HashMap::new();
+
+        fn get_priv_str(grant_entry: &GrantEntry) -> String {
+            if grant_entry.has_all_available_privileges() {
+                "ALL".to_string()
+            } else {
+                let privileges: UserPrivilegeSet = (*grant_entry.privileges()).into();
+                privileges.to_string()
+            }
+        }
+
         for grant_entry in grant_entries {
             let object = grant_entry.object();
             match object {
                 GrantObject::TableById(catalog_name, db_id, table_id) => {
-                    let privileges_str = if grant_entry.has_all_available_privileges() {
-                        "ALL".to_string()
+                    let privileges_str = get_priv_str(&grant_entry);
+                    if let Some(tables_id_priv) = catalog_table_ids.get(catalog_name) {
+                        let mut tables_id_priv = tables_id_priv.clone();
+                        tables_id_priv.push((*db_id, *table_id, privileges_str));
+                        catalog_table_ids.insert(catalog_name.clone(), tables_id_priv.clone());
                     } else {
-                        let privileges: UserPrivilegeSet = (*grant_entry.privileges()).into();
-                        privileges.to_string()
-                    };
-                    let catalog = self.ctx.get_catalog(catalog_name).await?;
-                    let db_name = catalog.get_db_name_by_id(*db_id).await?;
-                    let table_name = catalog.get_table_name_by_id(*table_id).await?;
-                    grant_list.push(format!(
-                        "GRANT {} ON '{}'.'{}'.'{}' TO {}",
-                        &privileges_str, catalog_name, db_name, table_name, identity
-                    ));
+                        catalog_table_ids.insert(catalog_name.clone(), vec![(
+                            *db_id,
+                            *table_id,
+                            privileges_str,
+                        )]);
+                    }
                 }
                 GrantObject::DatabaseById(catalog_name, db_id) => {
-                    let privileges_str = if grant_entry.has_all_available_privileges() {
-                        "ALL".to_string()
+                    let privileges_str = get_priv_str(&grant_entry);
+                    if let Some(dbs_id_priv) = catalog_db_ids.get(catalog_name) {
+                        let mut dbs_id_priv = dbs_id_priv.clone();
+                        dbs_id_priv.push((*db_id, privileges_str));
+                        catalog_db_ids.insert(catalog_name.clone(), dbs_id_priv.clone());
                     } else {
-                        let privileges: UserPrivilegeSet = (*grant_entry.privileges()).into();
-                        privileges.to_string()
-                    };
-                    let catalog = self.ctx.get_catalog(catalog_name).await?;
-                    let db_name = catalog.get_db_name_by_id(*db_id).await?;
-                    grant_list.push(format!(
-                        "GRANT {} ON '{}'.'{}'.* TO {}",
-                        &privileges_str, catalog_name, db_name, identity
-                    ));
+                        catalog_db_ids.insert(catalog_name.clone(), vec![(*db_id, privileges_str)]);
+                    }
                 }
                 _ => {
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
+            }
+        }
+
+        for (catalog_name, tables_priv_id) in catalog_table_ids {
+            let catalog = self.ctx.get_catalog(&catalog_name).await?;
+            let db_ids = tables_priv_id.iter().map(|res| res.0).collect::<Vec<u64>>();
+            let table_ids = tables_priv_id.iter().map(|res| res.1).collect::<Vec<u64>>();
+            let privileges_strs = tables_priv_id
+                .iter()
+                .map(|res| res.2.clone())
+                .collect::<Vec<String>>();
+            let dbs_name = catalog.list_dbs_name_by_id(db_ids).await?;
+            let tables_name = catalog.list_tables_name_by_id(table_ids).await?;
+
+            for (i, table_name) in tables_name.iter().enumerate() {
+                grant_list.push(format!(
+                    "GRANT {} ON '{}'.'{}'.'{}' TO {}",
+                    &privileges_strs[i], catalog_name, dbs_name[i], table_name, identity
+                ));
+            }
+        }
+
+        for (catalog_name, dbs_priv_id) in catalog_db_ids {
+            let catalog = self.ctx.get_catalog(&catalog_name).await?;
+            let db_ids = dbs_priv_id.iter().map(|res| res.0).collect::<Vec<u64>>();
+            let privileges_strs = dbs_priv_id
+                .iter()
+                .map(|res| res.1.clone())
+                .collect::<Vec<String>>();
+            let dbs_name = catalog.list_dbs_name_by_id(db_ids).await?;
+
+            for (i, db_name) in dbs_name.iter().enumerate() {
+                grant_list.push(format!(
+                    "GRANT {} ON '{}'.'{}'.* TO {}",
+                    &privileges_strs[i], catalog_name, db_name, identity
+                ));
             }
         }
 

@@ -297,6 +297,20 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn list_tables_name_by_id(&self, table_id: Vec<MetaId>) -> Result<Vec<String>> {
+        let res = self
+            .immutable_catalog
+            .list_tables_name_by_id(table_id.clone())
+            .await;
+
+        if let Ok(x) = res {
+            Ok(x)
+        } else {
+            self.mutable_catalog.list_tables_name_by_id(table_id).await
+        }
+    }
+
+    #[async_backtrace::framed]
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         let res = self.immutable_catalog.get_db_name_by_id(db_id).await;
 
@@ -304,6 +318,20 @@ impl Catalog for DatabaseCatalog {
             Ok(x)
         } else {
             self.mutable_catalog.get_db_name_by_id(db_id).await
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn list_dbs_name_by_id(&self, db_id: Vec<MetaId>) -> Result<Vec<String>> {
+        let res = self
+            .immutable_catalog
+            .list_dbs_name_by_id(db_id.clone())
+            .await;
+
+        if let Ok(x) = res {
+            Ok(x)
+        } else {
+            self.mutable_catalog.list_dbs_name_by_id(db_id).await
         }
     }
 

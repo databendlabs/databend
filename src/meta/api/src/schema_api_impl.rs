@@ -2433,6 +2433,37 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
+    async fn list_tables_name_by_id(
+        &self,
+        table_id: Vec<MetaId>,
+    ) -> Result<Vec<String>, KVAppError> {
+        debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
+
+        let mut kv_keys = Vec::with_capacity(table_id.len());
+        for id in &table_id {
+            let k = TableIdToName { table_id: *id }.to_string_key();
+            kv_keys.push(k);
+        }
+
+        // Batch get all table-name by id
+        let seq_names = self.mget_kv(&kv_keys).await?;
+        let mut table_names = Vec::with_capacity(kv_keys.len());
+
+        for (i, seq_name_opt) in seq_names.iter().enumerate() {
+            if let Some(seq_name) = seq_name_opt {
+                let name_ident: DBIdTableName = deserialize_struct(&seq_name.data)?;
+                table_names.push(name_ident.table_name);
+            } else {
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(table_id[i], "list_tables_name_by_id"),
+                )));
+            }
+        }
+        Ok(table_names)
+    }
+
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
     async fn get_db_name_by_id(&self, db_id: u64) -> Result<String, KVAppError> {
         debug!(req :? =(&db_id); "SchemaApi: {}", func_name!());
 
@@ -2450,6 +2481,34 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         Ok(db_name.unwrap().db_name)
+    }
+
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
+    async fn list_dbs_name_by_id(&self, db_id: Vec<MetaId>) -> Result<Vec<String>, KVAppError> {
+        debug!(req :? =(&db_id); "SchemaApi: {}", func_name!());
+
+        let mut kv_keys = Vec::with_capacity(db_id.len());
+        for id in &db_id {
+            let k = DatabaseIdToName { db_id: *id }.to_string_key();
+            kv_keys.push(k);
+        }
+
+        // Batch get all table-name by id
+        let seq_names = self.mget_kv(&kv_keys).await?;
+        let mut db_names = Vec::with_capacity(kv_keys.len());
+
+        for (i, seq_name_opt) in seq_names.iter().enumerate() {
+            if let Some(seq_name) = seq_name_opt {
+                let name_ident: DatabaseNameIdent = deserialize_struct(&seq_name.data)?;
+                db_names.push(name_ident.db_name);
+            } else {
+                return Err(KVAppError::AppError(AppError::UnknownDatabaseId(
+                    UnknownDatabaseId::new(db_id[i], "list_dbs_name_by_id"),
+                )));
+            }
+        }
+        Ok(db_names)
     }
 
     #[logcall::logcall("debug")]

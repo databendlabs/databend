@@ -356,9 +356,21 @@ impl Catalog for HiveCatalog {
         ))
     }
 
+    async fn list_tables_name_by_id(&self, _table_id: Vec<MetaId>) -> Result<Vec<String>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot list tables name by id in HIVE catalog",
+        ))
+    }
+
     async fn get_db_name_by_id(&self, _db_id: MetaId) -> Result<String> {
         Err(ErrorCode::Unimplemented(
             "Cannot get db name by id in HIVE catalog",
+        ))
+    }
+
+    async fn list_dbs_name_by_id(&self, _db_id: Vec<MetaId>) -> Result<Vec<String>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot list dbs name by id in HIVE catalog",
         ))
     }
 
