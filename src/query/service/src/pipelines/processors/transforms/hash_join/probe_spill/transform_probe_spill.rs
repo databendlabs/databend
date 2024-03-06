@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
+use databend_common_sql::plans::JoinType;
 use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::transform_hash_join_probe::HashJoinProbeStep;
@@ -30,6 +31,8 @@ pub struct ProbeSpillHandler {
     spill_state: Option<Box<ProbeSpillState>>,
     // If the processor has finished spill, set it to true.
     spill_done: bool,
+    // If needs to probe first round hash table, default is false
+    probe_first_round_hashtable: bool,
 }
 
 impl ProbeSpillHandler {
@@ -37,7 +40,16 @@ impl ProbeSpillHandler {
         Self {
             spill_state,
             spill_done: false,
+            probe_first_round_hashtable: true,
         }
+    }
+
+    pub fn set_probe_first_round_hashtable(&mut self, probe_first_round_hashtable: bool) {
+        self.probe_first_round_hashtable = probe_first_round_hashtable;
+    }
+
+    pub fn probe_first_round_hashtable(&self) -> bool {
+        self.probe_first_round_hashtable
     }
 
     pub fn is_spill_enabled(&self) -> bool {
@@ -119,7 +131,16 @@ impl TransformHashJoinProbe {
             "probe processor-{:?}: spill finished with spilled partitions {:?}",
             processor_id, spilled_partition_set
         );
-        if !spilled_partition_set.is_empty() {
+        if self.join_probe_state.hash_join_state.need_final_scan() {
+            // Assign build spilled partitions to `self.join_probe_state.spill_partitions`
+            let mut spill_partitions = self.join_probe_state.spill_partitions.write();
+            *spill_partitions = self
+                .join_probe_state
+                .hash_join_state
+                .build_spilled_partitions
+                .read()
+                .clone();
+        } else if !spilled_partition_set.is_empty() {
             let mut spill_partitions = self.join_probe_state.spill_partitions.write();
             spill_partitions.extend(spilled_partition_set);
         }
@@ -174,10 +195,15 @@ impl TransformHashJoinProbe {
     pub(crate) async fn spill_action(&mut self) -> Result<()> {
         // Before spilling, if there is a hash table, probe the hash table first
         self.try_probe_first_round_hashtable(self.input_data.clone())?;
+        let left_related_join_type = matches!(
+            self.join_probe_state.join_type(),
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full
+        );
+        let mut unmatched_data_blocks = vec![];
         for data in self.input_data.drain(..) {
             let spill_state = self.spill_handler.spill_state_mut();
             let mut hashes = Vec::with_capacity(data.num_rows());
-            spill_state.get_hashes(&data, &mut hashes)?;
+            spill_state.get_hashes(&data, &self.join_probe_state.join_type(), &mut hashes)?;
             // Pass build spilled partition set, we only need to spill data in build spilled partition set
             let build_spilled_partitions = self
                 .join_probe_state
@@ -185,10 +211,24 @@ impl TransformHashJoinProbe {
                 .build_spilled_partitions
                 .read()
                 .clone();
-            spill_state
+            let unmatched_data_block = spill_state
                 .spiller
-                .spill_input(data, &hashes, Some(&build_spilled_partitions))
+                .spill_input(
+                    data,
+                    &hashes,
+                    left_related_join_type,
+                    Some(&build_spilled_partitions),
+                )
                 .await?;
+            if let Some(unmatched_data_block) = unmatched_data_block {
+                unmatched_data_blocks.push(unmatched_data_block);
+            }
+        }
+
+        if left_related_join_type {
+            for unmatched_data_block in unmatched_data_blocks {
+                self.probe(unmatched_data_block)?;
+            }
         }
 
         // Back to Running step and try to pull input data
@@ -243,6 +283,7 @@ impl TransformHashJoinProbe {
             return Ok(());
         }
 
+        self.spill_handler.set_probe_first_round_hashtable(true);
         for data in input_data.iter() {
             let data = data.convert_to_full();
             self.probe(data)?;

@@ -1,47 +1,52 @@
 --- force = false, purge = false
-6
-f1.parquet	2	0	NULL	NULL
-f3.parquet	2	0	NULL	NULL
-4
+--- --- 'copy max_files=2' 1
+copied 2 files
 remain 3 files
-f2.parquet	2	0	NULL	NULL
-6
+remain 4 rows
+--- --- 'copy max_files=2' 2
+copied 1 files
 remain 3 files
-6
+remain 6 rows
+--- --- 'copy max_files=2' 3
+copied 0 files
 remain 3 files
+remain 6 rows
 --- force = false, purge = true
-6
-f1.parquet	2	0	NULL	NULL
-f3.parquet	2	0	NULL	NULL
-4
+--- --- 'copy max_files=2' 1
+copied 2 files
 remain 1 files
-f2.parquet	2	0	NULL	NULL
-6
+remain 4 rows
+--- --- 'copy max_files=2' 2
+copied 1 files
 remain 0 files
-6
+remain 6 rows
+--- --- 'copy max_files=2' 3
+copied 0 files
 remain 0 files
+remain 6 rows
 --- force = true, purge = false
-6
-f1.parquet	2	0	NULL	NULL
-f3.parquet	2	0	NULL	NULL
-4
+--- --- 'copy max_files=2' 1
+copied 2 files
 remain 3 files
-f1.parquet	2	0	NULL	NULL
-f3.parquet	2	0	NULL	NULL
-8
+remain 4 rows
+--- --- 'copy max_files=2' 2
+copied 2 files
 remain 3 files
-f1.parquet	2	0	NULL	NULL
-f3.parquet	2	0	NULL	NULL
-12
+remain 8 rows
+--- --- 'copy max_files=2' 3
+copied 2 files
 remain 3 files
+remain 12 rows
 --- force = true, purge = true
-6
-f1.parquet	2	0	NULL	NULL
-f3.parquet	2	0	NULL	NULL
-4
+--- --- 'copy max_files=2' 1
+copied 2 files
 remain 1 files
-f2.parquet	2	0	NULL	NULL
-6
+remain 4 rows
+--- --- 'copy max_files=2' 2
+copied 1 files
 remain 0 files
-6
+remain 6 rows
+--- --- 'copy max_files=2' 3
+copied 0 files
 remain 0 files
+remain 6 rows
