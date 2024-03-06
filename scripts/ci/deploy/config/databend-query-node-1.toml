@@ -70,7 +70,6 @@ auth_type = "no_password"
 aggregate_spilling_memory_ratio = 60
 join_spilling_memory_ratio = 60
 
-
 [log]
 
 [log.file]

@@ -29,6 +29,9 @@ pub struct BuildSpillHandler {
     // Data need to spill. If all input data has processed but spilling doesn't happen
     // Add data to row space.
     pending_spill_data: Vec<DataBlock>,
+    // The flag indicates whether the build side has happened spilling.
+    // If any of build processors has happened spilling, the flag is true.
+    spilled: bool,
 }
 
 impl BuildSpillHandler {
@@ -37,12 +40,21 @@ impl BuildSpillHandler {
             after_spill: false,
             spill_state,
             pending_spill_data: vec![],
+            spilled: false,
         }
     }
 
     // If spilling is enabled, return true
     pub(crate) fn enabled_spill(&self) -> bool {
         self.spill_state.is_some()
+    }
+
+    pub(crate) fn get_spilled(&self) -> bool {
+        self.spilled
+    }
+
+    pub(crate) fn set_spilled(&mut self, val: bool) {
+        self.spilled = val;
     }
 
     // Note: the caller should ensure `spill_state` is Some
@@ -119,10 +131,12 @@ impl BuildSpillHandler {
             "build processor-{:?}: spill finished with spilled partitions {:?}",
             processor_id, spilled_partition_set
         );
-        build_state
-            .spilled_partition_set
-            .write()
-            .extend(spilled_partition_set);
+        if !spilled_partition_set.is_empty() {
+            build_state
+                .spilled_partition_set
+                .write()
+                .extend(spilled_partition_set);
+        }
         // The processor has accepted all data from downstream
         // If there is still pending spill data, add to row space.
         for data in self.pending_spill_data.iter() {

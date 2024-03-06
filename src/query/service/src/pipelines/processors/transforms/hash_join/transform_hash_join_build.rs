@@ -145,7 +145,8 @@ impl Processor for TransformHashJoinBuild {
                         self.spill_handler
                             .finalize_spill(&self.build_state, self.processor_id)?;
                     }
-                    self.build_state.row_space_build_done()?;
+                    self.build_state
+                        .row_space_build_done(&mut self.spill_handler)?;
                     return Ok(Event::Async);
                 }
 
@@ -170,7 +171,7 @@ impl Processor for TransformHashJoinBuild {
                     // If join spill is enabled, we should wait probe to spill even if the processor didn't spill really.
                     // It needs to consume the barrier in next steps.
                     // Then restore data from disk and build hash table, util all spilled data are processed.
-                    if self.spill_handler.enabled_spill() {
+                    if self.spill_handler.get_spilled() {
                         self.step = HashJoinBuildStep::WaitProbe;
                         Ok(Event::Async)
                     } else {
