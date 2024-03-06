@@ -136,13 +136,10 @@ impl HashJoinState {
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
-            JoinType::Left | JoinType::LeftSingle
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full
         ) {
             build_schema = build_schema_wrap_nullable(&build_schema);
         };
-        if hash_join_desc.join_type == JoinType::Full {
-            build_schema = build_schema_wrap_nullable(&build_schema);
-        }
         let (build_done_watcher, _build_done_dummy_receiver) = watch::channel(0);
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
         let mut enable_spill = false;
