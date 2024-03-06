@@ -19,7 +19,6 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::hash_join::build_spill::BuildSpillHandler;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
@@ -28,7 +27,7 @@ use crate::pipelines::processors::Event;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::Processor;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum HashJoinBuildStep {
     // The running step of the build phase.
     Running,
@@ -131,19 +130,12 @@ impl Processor for TransformHashJoinBuild {
 
                 if self.input_port.is_finished() {
                     if self.spill_handler.enabled_spill() && !self.spill_handler.after_spill() {
-                        // For left-related join, will spill all build input blocks which means there isn't first-round hash table.
-                        // Because first-round hash table will make left join generate wrong results.
-                        // Todo: make left-related join leverage first-round hash table to reduce I/O.
-                        if matches!(
-                            self.build_state.join_type(),
-                            JoinType::Left | JoinType::LeftSingle | JoinType::Full
-                        ) && !self.spill_handler.pending_spill_data().is_empty()
-                        {
-                            self.step = HashJoinBuildStep::Spill;
+                        self.step = self
+                            .spill_handler
+                            .finalize_spill(&self.build_state, self.processor_id)?;
+                        if self.step == HashJoinBuildStep::Spill {
                             return Ok(Event::Async);
                         }
-                        self.spill_handler
-                            .finalize_spill(&self.build_state, self.processor_id)?;
                     }
                     self.build_state
                         .row_space_build_done(&mut self.spill_handler)?;
