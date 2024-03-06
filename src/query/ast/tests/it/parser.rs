@@ -239,6 +239,7 @@ fn test_statement() {
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
         r#"VACUUM TABLE t;"#,
         r#"VACUUM TABLE t DRY RUN;"#,
+        r#"VACUUM TABLE t DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE;"#,
         r#"VACUUM DROP TABLE DRY RUN;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
