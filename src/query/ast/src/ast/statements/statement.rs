@@ -314,6 +314,12 @@ pub enum Statement {
     Begin,
     Commit,
     Abort,
+
+    // Notifications
+    CreateNotification(CreateNotificationStmt),
+    AlterNotification(AlterNotificationStmt),
+    DropNotification(DropNotificationStmt),
+    DescribeNotification(DescribeNotificationStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -702,6 +708,10 @@ impl Display for Statement {
             Statement::Begin => write!(f, "BEGIN")?,
             Statement::Commit => write!(f, "COMMIT")?,
             Statement::Abort => write!(f, "ABORT")?,
+            Statement::CreateNotification(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterNotification(stmt) => write!(f, "{stmt}")?,
+            Statement::DropNotification(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeNotification(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

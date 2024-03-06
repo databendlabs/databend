@@ -16,8 +16,8 @@ chrono = { workspace = true }
 databend-common-base = { path = "../base" }
 databend-common-exception = { path = "../exception" }
 prost = { workspace = true }
+serde = { workspace = true }
 tonic = { workspace = true }
-
 [build-dependencies]
 lenient_semver = "0.4.2"
 prost-build = { workspace = true }

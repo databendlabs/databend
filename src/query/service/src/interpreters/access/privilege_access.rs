@@ -959,6 +959,10 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropConnection(_)
             | Plan::CreateUDF(_)
             | Plan::CreateIndex(_)
+            | Plan::CreateNotification(_)
+            | Plan::DropNotification(_)
+            | Plan::DescNotification(_)
+            | Plan::AlterNotification(_)
             | Plan::CreateTask(_)   // TODO: need to build ownership info for task
             | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task
