@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::escape_for_key;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::reply::txn_reply_to_api_result;
