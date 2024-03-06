@@ -1,0 +1,119 @@
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use spill_test;
+
+statement ok
+set join_spilling_memory_ratio = 10;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 1024;
+
+statement ok
+set disable_join_reorder = 1;
+
+query I
+select
+    c_custkey, count(o_orderkey) as c_count
+from
+    customer
+        right join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+group by
+    c_custkey
+order by c_custkey
+limit 20;
+----
+101 12
+103 18
+104 7
+106 18
+107 12
+109 25
+110 9
+112 19
+113 17
+115 28
+116 4
+118 18
+119 10
+NULL 149803
+
+query I
+select
+    o_custkey
+from
+    customer
+    right semi join
+    orders
+on c_custkey = o_custkey
+    and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by o_custkey
+    limit 20;
+----
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+103
+103
+103
+103
+103
+103
+103
+103
+
+query I
+select
+    o_custkey
+from
+    customer
+    right anti join
+    orders
+on c_custkey = o_custkey
+    and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by o_custkey
+    limit 20;
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+2
+2
+2
+2
+2
+2
+2
+2
+2
+2
+2
+
+statement ok
+set disable_join_reorder = 0;
+
+statement ok
+set join_spilling_memory_ratio = 0;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 0;
+

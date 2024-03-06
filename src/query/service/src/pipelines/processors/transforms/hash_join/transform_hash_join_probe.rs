@@ -241,9 +241,7 @@ impl TransformHashJoinProbe {
     // 2. After spilling done, it will use restored data to proceed normal probe.
     fn run(&mut self) -> Result<Event> {
         if self.output_port.is_finished() {
-            if self.join_probe_state.hash_join_state.need_outer_scan()
-                || self.join_probe_state.hash_join_state.need_mark_scan()
-            {
+            if self.join_probe_state.hash_join_state.need_final_scan() {
                 return Ok(Event::Async);
             }
 
@@ -295,6 +293,13 @@ impl TransformHashJoinProbe {
 
         // Input port is finished, make spilling finished
         if self.need_spill() && !self.spill_handler.spill_done() {
+            // For the first round probe hash table, before finishing spilling, we should check if needs final scan.
+            if self.join_probe_state.hash_join_state.need_final_scan()
+                && self.spill_handler.probe_first_round_hashtable()
+            {
+                self.join_probe_state.probe_done()?;
+                return Ok(Event::Async);
+            }
             return self.spill_finished(self.processor_id);
         }
 
@@ -325,6 +330,12 @@ impl TransformHashJoinProbe {
     // FinalScan
     fn final_scan(&mut self) -> Result<Event> {
         if self.output_port.is_finished() {
+            if self.join_probe_state.hash_join_state.enable_spill {
+                if !self.spill_handler.spill_done() {
+                    return self.spill_finished(self.processor_id);
+                }
+                return self.next_round();
+            }
             self.input_port.finish();
             return Ok(Event::Finished);
         }
@@ -350,6 +361,9 @@ impl TransformHashJoinProbe {
                 if !self.join_probe_state.hash_join_state.enable_spill {
                     self.output_port.finish();
                     return Ok(Event::Finished);
+                }
+                if !self.spill_handler.spill_done() {
+                    return self.spill_finished(self.processor_id);
                 }
                 // If spill is enabled, go to next round.
                 self.next_round()

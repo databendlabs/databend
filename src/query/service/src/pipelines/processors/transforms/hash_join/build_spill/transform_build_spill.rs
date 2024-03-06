@@ -97,7 +97,7 @@ impl BuildSpillHandler {
         for block in pending_spill_data.iter() {
             let mut hashes = Vec::with_capacity(block.num_rows());
             let spill_state = self.spill_state_mut();
-            spill_state.get_hashes(block, Some(join_type), &mut hashes)?;
+            spill_state.get_hashes(block, join_type, &mut hashes)?;
             spill_state
                 .spiller
                 .spill_input(block.clone(), &hashes, None)

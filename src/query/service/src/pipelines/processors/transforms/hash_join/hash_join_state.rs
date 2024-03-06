@@ -245,7 +245,7 @@ impl HashJoinState {
     }
 
     // Reset the state for next round run.
-    // It only be called when spill is enable.
+    // It's only called when spill is enable.
     pub(crate) fn reset(&self) {
         self.row_space.reset();
         let build_state = unsafe { &mut *self.build_state.get() };
