@@ -100,7 +100,7 @@ impl BuildSpillHandler {
             spill_state.get_hashes(block, join_type, &mut hashes)?;
             spill_state
                 .spiller
-                .spill_input(block.clone(), &hashes, None)
+                .spill_input(block.clone(), &hashes, false, None)
                 .await?;
         }
         self.pending_spill_data.clear();

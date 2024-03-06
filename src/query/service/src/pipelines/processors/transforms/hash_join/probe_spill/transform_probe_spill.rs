@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
+use databend_common_sql::plans::JoinType;
 use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::transform_hash_join_probe::HashJoinProbeStep;
@@ -194,6 +195,11 @@ impl TransformHashJoinProbe {
     pub(crate) async fn spill_action(&mut self) -> Result<()> {
         // Before spilling, if there is a hash table, probe the hash table first
         self.try_probe_first_round_hashtable(self.input_data.clone())?;
+        let left_related_join_type = matches!(
+            self.join_probe_state.join_type(),
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full
+        );
+        let mut unmatched_data_blocks = vec![];
         for data in self.input_data.drain(..) {
             let spill_state = self.spill_handler.spill_state_mut();
             let mut hashes = Vec::with_capacity(data.num_rows());
@@ -205,10 +211,24 @@ impl TransformHashJoinProbe {
                 .build_spilled_partitions
                 .read()
                 .clone();
-            spill_state
+            let unmatched_data_block = spill_state
                 .spiller
-                .spill_input(data, &hashes, Some(&build_spilled_partitions))
+                .spill_input(
+                    data,
+                    &hashes,
+                    left_related_join_type,
+                    Some(&build_spilled_partitions),
+                )
                 .await?;
+            if let Some(unmatched_data_block) = unmatched_data_block {
+                unmatched_data_blocks.push(unmatched_data_block);
+            }
+        }
+
+        if left_related_join_type {
+            for unmatched_data_block in unmatched_data_blocks {
+                self.probe(unmatched_data_block)?;
+            }
         }
 
         // Back to Running step and try to pull input data
