@@ -16,7 +16,9 @@ use databend_common_exception::Range;
 use databend_common_exception::Span;
 use nom::branch::alt;
 use nom::combinator::map;
+use nom::multi::many1;
 use nom::Offset;
+use nom::sequence::terminated;
 use nom::Slice;
 use pratt::PrattError;
 use pratt::PrattParser;
@@ -254,6 +256,12 @@ pub fn comma_separated_list0_ignore_trailing<'a, T>(
     item: impl FnMut(Input<'a>) -> IResult<'a, T>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
     nom::multi::separated_list0(match_text(","), item)
+}
+
+pub fn task_statements<'a, T>(
+    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
+) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    many1(terminated(item, match_text(";")))
 }
 
 pub fn comma_separated_list1<'a, T>(

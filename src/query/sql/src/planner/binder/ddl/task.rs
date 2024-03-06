@@ -16,7 +16,7 @@ use std::str::FromStr;
 
 use chrono_tz;
 use cron;
-use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_ast::ast::{AlterTaskOptions, TaskSql};
 use databend_common_ast::ast::AlterTaskStmt;
 use databend_common_ast::ast::CreateTaskStmt;
 use databend_common_ast::ast::DescribeTaskStmt;
@@ -39,7 +39,7 @@ use crate::plans::Plan;
 use crate::plans::ShowTasksPlan;
 use crate::Binder;
 
-fn verify_task_sql(sql: &String) -> Result<()> {
+fn verify_single_statement(sql: &String) -> Result<()> {
     let tokens = tokenize_sql(sql.as_str()).map_err(|e| {
         ErrorCode::SyntaxException(format!(
             "syntax error for task formatted sql: {}, error: {:?}",
@@ -53,6 +53,17 @@ fn verify_task_sql(sql: &String) -> Result<()> {
         ))
     })?;
     Ok(())
+}
+fn verify_task_sql(sql: &TaskSql) -> Result<()> {
+    match sql {
+        TaskSql::SingleStatement(stmt) => verify_single_statement(stmt),
+        TaskSql::ScriptBlock(stmts) => {
+            for stmt in stmts {
+                verify_single_statement(stmt)?;
+            }
+            Ok(())
+        }
+    }
 }
 
 fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()> {
@@ -163,7 +174,8 @@ impl Binder {
         }
 
         if let AlterTaskOptions::ModifyAs(sql) = options {
-            verify_task_sql(sql)?;
+            todo!();
+
         }
 
         let tenant = self.ctx.get_tenant();

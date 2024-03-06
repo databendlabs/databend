@@ -118,7 +118,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ (#set_table_option)?
-            ~ AS ~ #statement
+            ~ AS ~ #task_sql_block
         },
         |(
             _,
@@ -136,7 +136,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             _,
             sql,
         )| {
-            let sql = format!("{}", sql.stmt);
             let session_opts = session_opts.unwrap_or_default();
             Statement::CreateTask(CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
@@ -3224,6 +3223,34 @@ pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
             dry_run: opt_dry_run.is_some(),
         },
     ),))(i)
+}
+
+
+pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
+    let single_statement = map(
+        rule! {
+            #statement
+        },
+        |stmt| {
+            let sql = format!("{}", stmt.stmt);
+            TaskSql::SingleStatement(sql)
+        },
+    );
+    let task_block = map(
+        rule! {
+            BEGIN
+            ~ #task_statements(statement)
+            ~ END
+        },
+        |(_, stmts, _)| {
+            let sql = stmts
+                .iter()
+                .map(|stmt| format!("{}", stmt.stmt))
+                .collect::<Vec<String>>();
+            TaskSql::ScriptBlock(sql)
+        },
+    );
+    alt((single_statement, task_block))(i)
 }
 
 pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {

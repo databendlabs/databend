@@ -51,21 +51,22 @@ impl CreateTaskInterpreter {
             .unwrap_or_default()
             .identity()
             .to_string();
-        CreateTaskRequest {
-            task_name: plan.task_name,
-            tenant_id: plan.tenant,
-            query_text: plan.sql,
-            owner,
-            comment: Some(plan.comment),
-            schedule_options: plan.schedule_opts.map(make_schedule_options),
-            warehouse_options: Some(make_warehouse_options(plan.warehouse_opts)),
-            error_integration: plan.error_integration,
-            suspend_task_after_num_failures: plan.suspend_task_after_num_failures.map(|x| x as i32),
-            if_not_exist: plan.if_not_exists,
-            after: plan.after,
-            when_condition: plan.when_condition,
-            session_parameters: plan.session_parameters,
-        }
+        todo!();
+        // CreateTaskRequest {
+        //     task_name: plan.task_name,
+        //     tenant_id: plan.tenant,
+        //     query_text: plan.sql,
+        //     owner,
+        //     comment: Some(plan.comment),
+        //     schedule_options: plan.schedule_opts.map(make_schedule_options),
+        //     warehouse_options: Some(make_warehouse_options(plan.warehouse_opts)),
+        //     error_integration: plan.error_integration,
+        //     suspend_task_after_num_failures: plan.suspend_task_after_num_failures.map(|x| x as i32),
+        //     if_not_exist: plan.if_not_exists,
+        //     after: plan.after,
+        //     when_condition: plan.when_condition,
+        //     session_parameters: plan.session_parameters,
+        // }
     }
 }
 

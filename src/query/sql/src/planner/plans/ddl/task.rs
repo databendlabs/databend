@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_ast::ast::{AlterTaskOptions, TaskSql};
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::WarehouseOptions;
@@ -88,7 +88,7 @@ pub struct CreateTaskPlan {
     pub suspend_task_after_num_failures: Option<u64>,
     pub error_integration: Option<String>,
     pub session_parameters: BTreeMap<String, String>,
-    pub sql: String,
+    pub sql: TaskSql,
     pub comment: String,
 }
 
