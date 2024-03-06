@@ -61,17 +61,6 @@ pub trait Interpreter: Sync + Send {
         InterpreterMetrics::record_query_start(&ctx);
         log_query_start(&ctx);
 
-        {
-            let txn_mgr = ctx.txn_mgr();
-            let guard = txn_mgr.lock();
-            info!(
-                "txn_id: {:?}, query_id: {:?}, txn_state: {:?}",
-                guard.txn_id(),
-                ctx.get_id(),
-                guard.state()
-            );
-        }
-
         if let Err(err) = ctx.check_aborting() {
             log_query_finished(&ctx, Some(err.clone()), false);
             return Err(err);
