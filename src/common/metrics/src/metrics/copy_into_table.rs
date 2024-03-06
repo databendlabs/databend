@@ -21,40 +21,40 @@ use crate::Counter;
 use crate::Family;
 
 #[derive(Clone, Debug, EncodeLabelSet, Hash, PartialEq, Eq)]
-struct CacheLabels {
-    cache_name: String,
+struct Labels {
+    phase: String,
 }
-static METRIC_COPY_INTO_TIMINGS_MS: LazyLock<Family<CacheLabels, Counter>> =
+static METRIC_COPY_INTO_TIMINGS_MS: LazyLock<Family<Labels, Counter>> =
     LazyLock::new(|| register_counter_family("copy_into_table_timings_ms"));
 
 pub fn metrics_inc_copy_into_timings_ms_bind(c: u64) {
     METRIC_COPY_INTO_TIMINGS_MS
-        .get_or_create(&CacheLabels {
-            cache_name: "bind".to_owned(),
+        .get_or_create(&Labels {
+            phase: "bind".to_owned(),
         })
         .inc_by(c);
 }
 
 pub fn metrics_inc_copy_into_timings_ms_list_files(c: u64) {
     METRIC_COPY_INTO_TIMINGS_MS
-        .get_or_create(&CacheLabels {
-            cache_name: "list_files".to_owned(),
+        .get_or_create(&Labels {
+            phase: "list_files".to_owned(),
         })
         .inc_by(c);
 }
 
 pub fn metrics_inc_copy_into_timings_ms_filter_files(c: u64) {
     METRIC_COPY_INTO_TIMINGS_MS
-        .get_or_create(&CacheLabels {
-            cache_name: "filter_files".to_owned(),
+        .get_or_create(&Labels {
+            phase: "filter_files".to_owned(),
         })
         .inc_by(c);
 }
 
 pub fn metrics_inc_copy_into_timings_ms_build_physical_plan(c: u64) {
     METRIC_COPY_INTO_TIMINGS_MS
-        .get_or_create(&CacheLabels {
-            cache_name: "build_physical_plan".to_owned(),
+        .get_or_create(&Labels {
+            phase: "build_physical_plan".to_owned(),
         })
         .inc_by(c);
 }
