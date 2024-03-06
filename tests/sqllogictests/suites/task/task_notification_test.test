@@ -1,0 +1,78 @@
+# Please start the UDF Server first before running this test:
+#   python3 tests/cloud-control-server/simple_server.py
+#
+statement ok
+DROP NOTIFICATION INTEGRATION IF EXISTS notify;
+
+statement ok
+DROP TASK IF EXISTS alert_task;
+
+statement ok
+create notification integration notify
+  type = webhook
+  enabled = true
+  webhook = (
+    url = 'http://localhost:8080/notify'
+  );
+
+query SSSS
+select name, type, enabled, webhook_options from system.notifications where name = 'notify';
+----
+notify webhook 1 {"url":"http://localhost:8080/notify","method":"GET","authorization_header":""}
+
+statement ok
+alter notification integration notify SET
+  webhook = (
+    url = 'http://localhost:8080/notify/v2'
+  );
+
+query SSSS
+select name, type, enabled, webhook_options from system.notifications where name = 'notify';
+----
+notify webhook 1 {"url":"http://localhost:8080/notify/v2","method":"GET","authorization_header":""}
+
+statement ok
+alter notification integration notify SET
+    enabled = false
+
+query S
+select enabled from system.notifications where name = 'notify';
+----
+0
+
+statement ok
+alter notification integration notify SET
+    webhook = (method = 'POST', authorization_header = 'Bearer 123')
+
+query SSSS
+select name, type, enabled, webhook_options from system.notifications where name = 'notify';
+----
+notify webhook 0 {"url":"http://localhost:8080/notify/v2","method":"POST","authorization_header":"Bearer 123"}
+
+statement ok
+create task alert_task
+  schedule = using cron '*/5 * * * * * *'
+  error_integration = 'notify'
+  comment = 'test task'
+  as
+    select 1 as id, 'test' as name;
+
+query SS
+select name, error_integration from system.tasks where name = 'alert_task';
+----
+alert_task notify
+
+statement ok
+alter task alert_task set
+  error_integration = 'notification_2';
+
+query SS
+select name, error_integration from system.tasks where name = 'alert_task';
+----
+alert_task notification_2
+
+query SS
+select message_source from system.notification_history;
+----
+webhook
+webhook

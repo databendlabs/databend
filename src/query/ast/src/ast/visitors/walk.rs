@@ -549,6 +549,10 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::AlterPipe(_) => todo!(),
         Statement::DropPipe(_) => todo!(),
         Statement::DescribePipe(_) => todo!(),
+        Statement::CreateNotification(stmt) => visitor.visit_create_notification(stmt),
+        Statement::AlterNotification(stmt) => visitor.visit_alter_notification(stmt),
+        Statement::DropNotification(stmt) => visitor.visit_drop_notification(stmt),
+        Statement::DescribeNotification(stmt) => visitor.visit_describe_notification(stmt),
         Statement::Begin => {}
         Statement::Commit => {}
         Statement::Abort => {}

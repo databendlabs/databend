@@ -15,6 +15,8 @@
 use std::fmt::Debug;
 use std::time::Duration;
 
+use tonic::Request;
+
 use crate::cloud_api::CLOUD_REQUEST_TIMEOUT_SEC;
 use crate::cloud_api::QUERY_ID;
 use crate::cloud_api::REQUESTER;
@@ -42,6 +44,19 @@ impl ClientConfig {
         self.metadata.push((key.into(), value.into()));
     }
 
+    pub fn add_task_version_info(&mut self) {
+        self.add_metadata(
+            crate::task_client::TASK_CLIENT_VERSION_NAME,
+            crate::task_client::TASK_CLIENT_VERSION,
+        );
+    }
+
+    pub fn add_notification_version_info(&mut self) {
+        self.add_metadata(
+            crate::notification_client::NOTIFICATION_CLIENT_VERSION_NAME,
+            crate::notification_client::NOTIFICATION_CLIENT_VERSION,
+        );
+    }
     pub fn get_metadata(&self) -> &Vec<(String, String)> {
         &self.metadata
     }
@@ -71,4 +86,26 @@ pub fn build_client_config(
     config.add_metadata(REQUESTER, user);
     config.add_metadata(QUERY_ID, query_id);
     config
+}
+
+// add necessary metadata and client request setup for auditing and tracing purpose
+pub fn make_request<T>(t: T, config: ClientConfig) -> Request<T> {
+    let mut request = Request::new(t);
+    request.set_timeout(config.get_timeout());
+    let metadata = request.metadata_mut();
+    let config_meta = config.get_metadata().clone();
+    for (k, v) in config_meta {
+        let key = k
+            .parse::<tonic::metadata::MetadataKey<tonic::metadata::Ascii>>()
+            .unwrap();
+        metadata.insert(key, v.parse().unwrap());
+    }
+    // metadata.insert(
+    //     TASK_CLIENT_VERSION_NAME
+    //         .to_string()
+    //         .parse::<tonic::metadata::MetadataKey<tonic::metadata::Ascii>>()
+    //         .unwrap(),
+    //     TASK_CLIENT_VERSION.to_string().parse().unwrap(),
+    // );
+    request
 }

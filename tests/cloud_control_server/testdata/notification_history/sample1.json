@@ -1,0 +1,15 @@
+{
+  "created_time": {
+    "seconds": 1646312700,
+    "nanos": 0
+  },
+  "processed_time": {
+    "seconds": 1646312700,
+    "nanos": 0
+  },
+  "message_source": "webhook",
+  "name": "AlertNotification",
+  "message": "Temperature threshold exceeded",
+  "status": "success",
+  "error_message": ""
+}

@@ -2745,6 +2745,7 @@ dependencies = [
  "prost 0.12.3",
  "prost-build",
  "semver",
+ "serde",
  "tonic 0.10.2",
  "tonic-build",
  "tower",
