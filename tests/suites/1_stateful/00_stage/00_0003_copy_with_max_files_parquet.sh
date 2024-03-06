@@ -36,14 +36,16 @@ do
 	do
 	  gen_files
 		echo "--- force = ${force}, purge = ${purge}"
-	  echo "select count(*) from @s5" | $BENDSQL_CLIENT_CONNECT
 		for i in {1..3}
 		do
+			echo "--- --- 'copy max_files=2' ${i}"
 			table="test_max_files_force_${force}_purge_${purge}"
-			echo "copy into ${table} from (select * from @s5 t) max_files=2 force=${force} purge=${purge}" | $BENDSQL_CLIENT_CONNECT
-			echo "select count(*) from ${table}" | $BENDSQL_CLIENT_CONNECT
+			copied=$(echo "copy into ${table} from (select * from @s5 t) max_files=2 force=${force} purge=${purge}" | $BENDSQL_CLIENT_CONNECT | wc -l  |  sed 's/ //g')
+			echo "copied ${copied} files"
 		  remain=$(ls -1 $TMP | wc -l |  sed 's/ //g')
 			echo "remain ${remain} files"
+			remain=$(echo "select count(*) from ${table}" | $BENDSQL_CLIENT_CONNECT)
+			echo "remain ${remain} rows"
 		done
 	done
 done
