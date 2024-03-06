@@ -139,11 +139,9 @@ impl TransformHashJoinProbe {
                 .build_spilled_partitions
                 .read()
                 .clone();
-        } else {
-            if !spilled_partition_set.is_empty() {
-                let mut spill_partitions = self.join_probe_state.spill_partitions.write();
-                spill_partitions.extend(spilled_partition_set);
-            }
+        } else if !spilled_partition_set.is_empty() {
+            let mut spill_partitions = self.join_probe_state.spill_partitions.write();
+            spill_partitions.extend(spilled_partition_set);
         }
 
         self.spill_handler.set_spill_done();
