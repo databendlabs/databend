@@ -30,6 +30,7 @@ use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
@@ -49,18 +50,23 @@ pub struct StageMgr {
 }
 
 impl StageMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &str) -> Result<Self> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while role mgr create)",
-            ));
-        }
-
-        Ok(StageMgr {
+    pub fn create(
+        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
+        tenant: &NonEmptyString,
+    ) -> Self {
+        StageMgr {
             kv_api,
-            stage_prefix: format!("{}/{}", USER_STAGE_API_KEY_PREFIX, escape_for_key(tenant)?),
-            stage_file_prefix: format!("{}/{}", STAGE_FILE_API_KEY_PREFIX, escape_for_key(tenant)?),
-        })
+            stage_prefix: format!(
+                "{}/{}",
+                USER_STAGE_API_KEY_PREFIX,
+                escape_for_key(tenant.as_str()).unwrap()
+            ),
+            stage_file_prefix: format!(
+                "{}/{}",
+                STAGE_FILE_API_KEY_PREFIX,
+                escape_for_key(tenant.as_str()).unwrap()
+            ),
+        }
     }
 }
 
