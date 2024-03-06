@@ -156,6 +156,11 @@ target_table: default.default.t1
                         ├── order by: []
                         └── limit: NONE
 
+query TT
+merge into t1 using (select $1 as a from @ss) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
+----
+6 0
+
 query T
 select * from t1 order by a;
 ----
