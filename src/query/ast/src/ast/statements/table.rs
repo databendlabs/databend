@@ -698,13 +698,17 @@ pub enum CompactTarget {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTableOption {
     #[drive(skip)]
-    pub dry_run: bool,
+    // Some(true) means summary
+    pub dry_run: Option<bool>,
 }
 
 impl Display for VacuumTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if self.dry_run {
+        if let Some(summary) = self.dry_run {
             write!(f, "DRY RUN")?;
+            if summary {
+                write!(f, " SUMMARY")?;
+            }
         }
         Ok(())
     }

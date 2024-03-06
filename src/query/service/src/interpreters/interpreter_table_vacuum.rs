@@ -132,7 +132,12 @@ impl Interpreter for VacuumTableInterpreter {
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let handler = get_vacuum_handler();
         let purge_files_opt = handler
-            .do_vacuum(fuse_table, ctx, retention_time, self.plan.option.dry_run)
+            .do_vacuum(
+                fuse_table,
+                ctx,
+                retention_time,
+                self.plan.option.dry_run.is_some(),
+            )
             .await?;
 
         match purge_files_opt {
@@ -161,9 +166,25 @@ impl Interpreter for VacuumTableInterpreter {
                     ])])
                 };
             }
-            Some(purge_files) => PipelineBuildResult::from_blocks(vec![
-                DataBlock::new_from_columns(vec![StringType::from_data(purge_files)]),
-            ]),
+            Some(purge_files) => {
+                let mut file_sizes = vec![];
+                let operator = fuse_table.get_operator();
+                for file in &purge_files {
+                    file_sizes.push(operator.stat(file).await?.content_length());
+                }
+
+                if self.plan.option.dry_run.unwrap() {
+                    PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                        UInt64Type::from_data(vec![purge_files.len() as u64]),
+                        UInt64Type::from_data(vec![file_sizes.into_iter().sum()]),
+                    ])])
+                } else {
+                    PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                        StringType::from_data(purge_files),
+                        UInt64Type::from_data(file_sizes),
+                    ])])
+                }
+            }
         }
     }
 }

@@ -3218,10 +3218,14 @@ pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN)?
+            (DRY ~ ^RUN ~ SUMMARY?)?
         },
         |opt_dry_run| VacuumTableOption {
-            dry_run: opt_dry_run.is_some(),
+            dry_run: if let Some(dry_run) = opt_dry_run {
+                Some(dry_run.2.is_some())
+            } else {
+                None
+            },
         },
     ),))(i)
 }

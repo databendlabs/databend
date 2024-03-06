@@ -107,6 +107,11 @@ if [[ "$count" != "4" ]]; then
   echo "vacuum table, count:$count"
   exit 1
 fi
+count=$(echo "set data_retention_time_in_days=0; vacuum table test_vacuum_drop_4.c dry run summary" | $BENDSQL_CLIENT_CONNECT | wc -l
+if [[ "$count" != "1" ]]; then
+  echo "vacuum table dry run summary, count:$count"
+  exit 1
+fi
 
 echo "drop database if exists test_vacuum_drop_4" | $BENDSQL_CLIENT_CONNECT
 
