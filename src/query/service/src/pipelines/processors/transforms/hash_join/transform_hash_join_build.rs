@@ -28,7 +28,7 @@ use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::Processor;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum HashJoinBuildStep {
+pub enum HashJoinBuildStep {
     // The running step of the build phase.
     Running,
     // The finalize step is waiting all build threads to finish and build the hash table.
@@ -137,8 +137,7 @@ impl Processor for TransformHashJoinBuild {
                             return Ok(Event::Async);
                         }
                     }
-                    self.build_state
-                        .row_space_build_done(&mut self.spill_handler)?;
+                    self.build_state.row_space_build_done()?;
                     return Ok(Event::Async);
                 }
 
@@ -163,7 +162,7 @@ impl Processor for TransformHashJoinBuild {
                     // If join spill is enabled, we should wait probe to spill even if the processor didn't spill really.
                     // It needs to consume the barrier in next steps.
                     // Then restore data from disk and build hash table, util all spilled data are processed.
-                    if self.spill_handler.get_spilled() {
+                    if !self.build_state.spilled_partition_set.read().is_empty() {
                         self.step = HashJoinBuildStep::WaitProbe;
                         Ok(Event::Async)
                     } else {

@@ -62,7 +62,6 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
-use crate::pipelines::processors::transforms::hash_join::build_spill::BuildSpillHandler;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::util::dedup_build_key_column;
@@ -299,12 +298,9 @@ impl HashJoinBuildState {
 
     /// Detach to state: `row_space_builders`,
     /// create finalize task and initialize the hash table.
-    pub(crate) fn row_space_build_done(&self, spill_handler: &mut BuildSpillHandler) -> Result<()> {
+    pub(crate) fn row_space_build_done(&self) -> Result<()> {
         let old_count = self.row_space_builders.fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {
-            if !self.spilled_partition_set.read().is_empty() && !spill_handler.get_spilled() {
-                spill_handler.set_spilled(true);
-            }
             {
                 let mut buffer = self.hash_join_state.row_space.buffer.write();
                 if !buffer.is_empty() {

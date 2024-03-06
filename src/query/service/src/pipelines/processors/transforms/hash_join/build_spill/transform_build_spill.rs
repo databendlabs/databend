@@ -19,7 +19,7 @@ use databend_common_expression::DataBlock;
 use databend_common_sql::plans::JoinType;
 use log::info;
 
-use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashJoinBuildStep;
+use crate::pipelines::processors::transforms::hash_join::HashJoinBuildStep;
 use crate::pipelines::processors::transforms::BuildSpillState;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 
@@ -30,9 +30,6 @@ pub struct BuildSpillHandler {
     // Data need to spill. If all input data has processed but spilling doesn't happen
     // Add data to row space.
     pending_spill_data: Vec<DataBlock>,
-    // The flag indicates whether the build side has happened spilling.
-    // If any of build processors has happened spilling, the flag is true.
-    spilled: bool,
 }
 
 impl BuildSpillHandler {
@@ -41,21 +38,12 @@ impl BuildSpillHandler {
             after_spill: false,
             spill_state,
             pending_spill_data: vec![],
-            spilled: false,
         }
     }
 
     // If spilling is enabled, return true
     pub(crate) fn enabled_spill(&self) -> bool {
         self.spill_state.is_some()
-    }
-
-    pub(crate) fn get_spilled(&self) -> bool {
-        self.spilled
-    }
-
-    pub(crate) fn set_spilled(&mut self, val: bool) {
-        self.spilled = val;
     }
 
     // Note: the caller should ensure `spill_state` is Some
