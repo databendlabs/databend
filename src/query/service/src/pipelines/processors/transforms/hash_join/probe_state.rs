@@ -149,6 +149,7 @@ impl ProbeState {
     pub fn reset(&mut self) {
         self.num_keys = 1;
         self.num_keys_hash_matched = 1;
+        self.selection = vec![0; self.max_block_size];
     }
 }
 
