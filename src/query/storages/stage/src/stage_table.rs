@@ -167,6 +167,10 @@ impl Table for StageTable {
         }
     }
 
+    fn is_local(&self) -> bool {
+        false
+    }
+
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
