@@ -173,6 +173,7 @@ impl Interpreter for VacuumTableInterpreter {
                     file_sizes.push(operator.stat(file).await?.content_length());
                 }
 
+                // when `purge_files_opt` is some, it means `dry_run` is some, so safe to unwrap()
                 if self.plan.option.dry_run.unwrap() {
                     PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
                         UInt64Type::from_data(vec![purge_files.len() as u64]),

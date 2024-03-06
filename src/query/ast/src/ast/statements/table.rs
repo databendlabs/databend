@@ -698,7 +698,7 @@ pub enum CompactTarget {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTableOption {
     #[drive(skip)]
-    // Some(true) means summary
+    // Some(true) means dry run with summary option
     pub dry_run: Option<bool>,
 }
 
