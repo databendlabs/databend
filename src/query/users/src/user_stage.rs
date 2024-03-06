@@ -16,6 +16,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_types::NonEmptyString;
 
 use crate::UserApiProvider;
 
@@ -25,23 +26,23 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_stage(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         info: StageInfo,
         create_option: &CreateOption,
     ) -> Result<()> {
-        let stage_api_provider = self.get_stage_api_client(tenant)?;
+        let stage_api_provider = self.stage_api(tenant);
         stage_api_provider.add_stage(info, create_option).await
     }
 
     // Get one stage from by tenant.
     #[async_backtrace::framed]
-    pub async fn get_stage(&self, tenant: &str, stage_name: &str) -> Result<StageInfo> {
-        let stage_api_provider = self.get_stage_api_client(tenant)?;
+    pub async fn get_stage(&self, tenant: &NonEmptyString, stage_name: &str) -> Result<StageInfo> {
+        let stage_api_provider = self.stage_api(tenant);
         stage_api_provider.get_stage(stage_name).await
     }
 
     #[async_backtrace::framed]
-    pub async fn exists_stage(&self, tenant: &str, stage_name: &str) -> Result<bool> {
+    pub async fn exists_stage(&self, tenant: &NonEmptyString, stage_name: &str) -> Result<bool> {
         match self.get_stage(tenant, stage_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
@@ -56,8 +57,8 @@ impl UserApiProvider {
 
     // Get the tenant all stage list.
     #[async_backtrace::framed]
-    pub async fn get_stages(&self, tenant: &str) -> Result<Vec<StageInfo>> {
-        let stage_api_provider = self.get_stage_api_client(tenant)?;
+    pub async fn get_stages(&self, tenant: &NonEmptyString) -> Result<Vec<StageInfo>> {
+        let stage_api_provider = self.stage_api(tenant);
         let get_stages = stage_api_provider.get_stages();
 
         match get_stages.await {
@@ -68,8 +69,13 @@ impl UserApiProvider {
 
     // Drop a stage by name.
     #[async_backtrace::framed]
-    pub async fn drop_stage(&self, tenant: &str, name: &str, if_exists: bool) -> Result<()> {
-        let stage_api_provider = self.get_stage_api_client(tenant)?;
+    pub async fn drop_stage(
+        &self,
+        tenant: &NonEmptyString,
+        name: &str,
+        if_exists: bool,
+    ) -> Result<()> {
+        let stage_api_provider = self.stage_api(tenant);
         let drop_stage = stage_api_provider.drop_stage(name);
         match drop_stage.await {
             Ok(res) => Ok(res),
