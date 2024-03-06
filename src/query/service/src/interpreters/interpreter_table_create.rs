@@ -34,6 +34,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::BloomIndexColumns;
@@ -100,6 +101,9 @@ impl Interpreter for CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.plan.tenant.clone();
+        let tenant = NonEmptyString::new(tenant).map_err(|_e| {
+            ErrorCode::TenantIsEmpty("tenant is empty when CreateTableInterpreter")
+        })?;
         let has_computed_column = self
             .plan
             .schema
@@ -186,7 +190,7 @@ impl CreateTableInterpreter {
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
 
-            let role_api = UserApiProvider::instance().get_role_api_client(tenant.as_str())?;
+            let role_api = UserApiProvider::instance().role_api(&tenant);
             role_api
                 .grant_ownership(
                     &OwnershipObject::Table {
@@ -197,7 +201,7 @@ impl CreateTableInterpreter {
                     &current_role.name,
                 )
                 .await?;
-            RoleCacheManager::instance().invalidate_cache(tenant.as_str());
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
@@ -278,7 +282,7 @@ impl CreateTableInterpreter {
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
 
-            let role_api = UserApiProvider::instance().get_role_api_client(tenant.as_str())?;
+            let role_api = UserApiProvider::instance().role_api(&tenant);
             role_api
                 .grant_ownership(
                     &OwnershipObject::Table {
@@ -289,7 +293,7 @@ impl CreateTableInterpreter {
                     &current_role.name,
                 )
                 .await?;
-            RoleCacheManager::instance().invalidate_cache(tenant.as_str());
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         // update share spec if needed

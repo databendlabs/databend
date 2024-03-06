@@ -1562,17 +1562,17 @@ HashJoin: INNER
 │       │       └── Probe
 │       │           └── Scan: default.tpch_test.supplier (#1) (read rows: 1000)
 │       └── Probe
-│           └── Scan: default.tpch_test.partsupp (#3) (read rows: 80000)
+│           └── HashJoin: INNER
+│               ├── Build
+│               │   └── HashJoin: INNER
+│               │       ├── Build
+│               │       │   └── Scan: default.tpch_test.part (#0) (read rows: 20000)
+│               │       └── Probe
+│               │           └── Scan: default.tpch_test.lineitem (#2) (read rows: 600572)
+│               └── Probe
+│                   └── Scan: default.tpch_test.orders (#4) (read rows: 150000)
 └── Probe
-    └── HashJoin: INNER
-        ├── Build
-        │   └── HashJoin: INNER
-        │       ├── Build
-        │       │   └── Scan: default.tpch_test.part (#0) (read rows: 20000)
-        │       └── Probe
-        │           └── Scan: default.tpch_test.lineitem (#2) (read rows: 600572)
-        └── Probe
-            └── Scan: default.tpch_test.orders (#4) (read rows: 150000)
+    └── Scan: default.tpch_test.partsupp (#3) (read rows: 80000)
 
 # Q10
 query I

@@ -60,22 +60,22 @@ impl Interpreter for DropUserUDFScript {
         // we should do `drop ownership` after actually drop udf, and udf maybe not exists.
         // drop the ownership
         if UserApiProvider::instance()
-            .exists_udf(tenant.as_str(), &self.plan.udf)
+            .exists_udf(&tenant, &self.plan.udf)
             .await?
         {
-            let role_api = UserApiProvider::instance().get_role_api_client(tenant.as_str())?;
+            let role_api = UserApiProvider::instance().role_api(&tenant);
             let owner_object = OwnershipObject::UDF {
                 name: self.plan.udf.clone(),
             };
 
             role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(tenant.as_str());
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         // TODO: if it is appropriate to return an ErrorCode that contains either meta-service error and UdfNotFound error?
 
         UserApiProvider::instance()
-            .drop_udf(tenant.as_str(), plan.udf.as_str(), plan.if_exists)
+            .drop_udf(&tenant, plan.udf.as_str(), plan.if_exists)
             .await??;
 
         Ok(PipelineBuildResult::create())

@@ -232,7 +232,7 @@ impl Binder {
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
             create_option: *create_option,
-            tenant: tenant.to_string(),
+            tenant,
             catalog,
             database,
             meta,

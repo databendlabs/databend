@@ -764,7 +764,7 @@ impl Binder {
 
         Ok(Plan::DropTable(Box::new(DropTablePlan {
             if_exists: *if_exists,
-            tenant: tenant.to_string(),
+            tenant,
             catalog,
             database,
             table,

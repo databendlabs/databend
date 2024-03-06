@@ -58,14 +58,14 @@ impl Interpreter for DropDatabaseInterpreter {
             .get_database(tenant.as_str(), &self.plan.database)
             .await;
         if let Ok(db) = db {
-            let role_api = UserApiProvider::instance().get_role_api_client(tenant.as_str())?;
+            let role_api = UserApiProvider::instance().role_api(&tenant);
             let owner_object = OwnershipObject::Database {
                 catalog_name: self.plan.catalog.clone(),
                 db_id: db.get_db_info().ident.db_id,
             };
 
             role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(tenant.as_str());
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         // actual drop database

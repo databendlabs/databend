@@ -30,6 +30,7 @@ use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::index::filters::BlockFilter;
 use crate::FUSE_TBL_AGG_INDEX_PREFIX;
+use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 
@@ -162,6 +163,13 @@ impl TableMetaLocationGenerator {
         let prefix = splits[..len - 2].join("/");
         let block_name = splits[len - 1];
         format!("{prefix}/{FUSE_TBL_AGG_INDEX_PREFIX}/{index_id}/{block_name}")
+    }
+
+    pub fn gen_inverted_index_location(&self, id: String) -> String {
+        format!(
+            "{}/{}/{}.index",
+            &self.prefix, FUSE_TBL_INVERTED_INDEX_PREFIX, id
+        )
     }
 }
 

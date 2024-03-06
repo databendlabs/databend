@@ -27,6 +27,7 @@ use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::number::Int32Type;
 use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
@@ -384,6 +385,42 @@ impl TestFixture {
         }
     }
 
+    pub fn string_schema() -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("title", DataType::String),
+            DataField::new("content", DataType::String),
+        ])
+    }
+
+    pub fn string_table_schema() -> TableSchemaRef {
+        infer_table_schema(&Self::string_schema()).unwrap()
+    }
+
+    // create a string table for inverted index
+    pub fn string_create_table_plan(&self) -> CreateTablePlan {
+        CreateTablePlan {
+            create_option: CreateOption::None,
+            tenant: self.default_tenant(),
+            catalog: self.default_catalog_name(),
+            database: self.default_db_name(),
+            table: self.default_table_name(),
+            schema: TestFixture::string_table_schema(),
+            engine: Engine::Fuse,
+            engine_options: Default::default(),
+            storage_params: None,
+            read_only_attach: false,
+            part_prefix: "".to_string(),
+            options: [
+                // database id is required for FUSE
+                (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+            ]
+            .into(),
+            field_comments: vec![],
+            as_select: None,
+            cluster_key: None,
+        }
+    }
+
     pub fn computed_schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
             DataField::new("id", DataType::Number(NumberDataType::Int32)),
@@ -453,13 +490,21 @@ impl TestFixture {
         Ok(())
     }
 
+    pub async fn create_string_table(&self) -> Result<()> {
+        let create_table_plan = self.string_create_table_plan();
+        let interpreter =
+            CreateTableInterpreter::try_create(self.default_ctx.clone(), create_table_plan)?;
+        let _ = interpreter.execute(self.default_ctx.clone()).await?;
+        Ok(())
+    }
+
     /// Create database with prefix.
     pub async fn create_default_database(&self) -> Result<()> {
         let tenant = self.default_ctx.get_tenant();
         let db_name = gen_db_name(&self.prefix);
         let plan = CreateDatabasePlan {
             catalog: "default".to_owned(),
-            tenant: tenant.to_string(),
+            tenant,
             create_option: CreateOption::None,
             database: db_name,
             meta: DatabaseMeta {
@@ -614,6 +659,82 @@ impl TestFixture {
 
     pub fn gen_variant_sample_blocks_stream(num: usize, start: i32) -> SendableDataBlockStream {
         let (_, blocks) = Self::gen_variant_sample_blocks(num, start);
+        Box::pin(futures::stream::iter(blocks))
+    }
+
+    pub fn gen_string_sample_blocks(
+        num_of_blocks: usize,
+        start: i32,
+    ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
+        Self::gen_string_sample_blocks_ex(num_of_blocks, 3, start)
+    }
+
+    pub fn gen_string_sample_blocks_ex(
+        num_of_block: usize,
+        rows_per_block: usize,
+        _start: i32,
+    ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("title", TableDataType::String),
+            TableField::new("content", TableDataType::String),
+        ]);
+
+        let sample_books = [
+            (
+                "The Rust Programming Language",
+                "The Rust Programming Language is the official book on Rust: an open source systems programming language that helps you write faster, more reliable software. Rust offers control over low-level details (such as memory usage) in combination with high-level ergonomics, eliminating the hassle traditionally associated with low-level languages.",
+            ),
+            (
+                "Rust Atomics and Locks",
+                "The Rust programming language is extremely well suited for concurrency, and its ecosystem has many libraries that include lots of concurrent data structures, locks, and more. But implementing those structures correctly can be very difficult. Even in the most well-used libraries, memory ordering bugs are not uncommon.",
+            ),
+            (
+                "Effective Java",
+                "Java has changed dramatically since the previous edition of Effective Java was published shortly after the release of Java 6. This Jolt award-winning classic has now been thoroughly updated to take full advantage of the latest language and library features. The support in modern Java for multiple paradigms increases the need for specific best-practices advice, and this book delivers.",
+            ),
+            (
+                "Database Internals",
+                "When it comes to choosing, using, and maintaining a database, understanding its internals is essential. But with so many distributed databases and tools available today, it’s often difficult to understand what each one offers and how they differ. With this practical guide, Alex Petrov guides developers through the concepts behind modern database and storage engine internals.",
+            ),
+            (
+                "Designing Data-Intensive Applications",
+                "Data is at the center of many challenges in system design today. Difficult issues need to be figured out, such as scalability, consistency, reliability, efficiency, and maintainability. In addition, we have an overwhelming variety of tools, including relational databases, NoSQL datastores, stream or batch processors, and message brokers. What are the right choices for your application? How do you make sense of all these buzzwords?",
+            ),
+            (
+                "Elasticsearch in Action",
+                "Modern search seems like magic—you type a few words and the search engine appears to know what you want. With the Elasticsearch real-time search and analytics engine, you can give your users this magical experience without having to do complex low-level programming or understand advanced data science algorithms. You just install it, tweak it, and get on with your work.",
+            ),
+        ];
+
+        (
+            schema,
+            (0..num_of_block)
+                .map(|idx| {
+                    let mut title_builder =
+                        StringColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
+                    let mut content_builder =
+                        StringColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
+
+                    for i in 0..rows_per_block {
+                        let j = (idx * rows_per_block + i) % sample_books.len();
+                        title_builder.put_str(sample_books[j].0);
+                        title_builder.commit_row();
+                        content_builder.put_str(sample_books[j].1);
+                        content_builder.commit_row();
+                    }
+                    let title_column = Column::String(title_builder.build());
+                    let content_column = Column::String(content_builder.build());
+
+                    let columns = vec![title_column, content_column];
+
+                    Ok(DataBlock::new_from_columns(columns))
+                })
+                .collect(),
+        )
+    }
+
+    pub fn gen_string_sample_blocks_stream(num: usize, start: i32) -> SendableDataBlockStream {
+        let (_, blocks) = Self::gen_string_sample_blocks(num, start);
         Box::pin(futures::stream::iter(blocks))
     }
 

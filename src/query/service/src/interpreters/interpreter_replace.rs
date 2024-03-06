@@ -132,13 +132,6 @@ impl ReplaceInterpreter {
 
         // check mutability
         table.check_mutable()?;
-        // check change tracking
-        if table.change_tracking_enabled() {
-            return Err(ErrorCode::Unimplemented(format!(
-                "change tracking is enabled for table '{}', does not support REPLACE",
-                table.name(),
-            )));
-        }
 
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
         let schema = table.schema();
