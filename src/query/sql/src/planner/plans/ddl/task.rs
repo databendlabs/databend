@@ -15,9 +15,10 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use databend_common_ast::ast::{AlterTaskOptions, TaskSql};
+use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::TaskSql;
 use databend_common_ast::ast::WarehouseOptions;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType::Int32;

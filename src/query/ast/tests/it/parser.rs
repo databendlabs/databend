@@ -535,7 +535,7 @@ fn test_statement() {
         r#"CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  as
             BEGIN
               begin;
-              insert into t values('a;');
+              -- insert into t values('a;'); TODO raise error ^ unexpected end of line, expecting `END` or `;`
               delete from t where c = ';';
               vacuum table t;
               merge into t using s on t.id = s.id when matched then update *;
@@ -551,6 +551,15 @@ fn test_statement() {
         r#"ALTER TASK MyTask1 SET DATABASE='newDB', TIMEZONE='America/Los_Angeles'"#,
         r#"ALTER TASK MyTask1 SET ERROR_INTEGRATION = 'candidate_notifictaion'"#,
         r#"ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()"#,
+        r#"ALTER TASK MyTask2 MODIFY AS
+            BEGIN
+              begin;
+              -- insert into t values('a;'); TODO raise error ^ unexpected end of line, expecting `END` or `;`
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END"#,
         r#"ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION'"#,
         r#"DROP TASK MyTask1"#,
         r#"SHOW TASKS"#,

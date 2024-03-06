@@ -16,7 +16,7 @@ use std::str::FromStr;
 
 use chrono_tz;
 use cron;
-use databend_common_ast::ast::{AlterTaskOptions, TaskSql};
+use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::AlterTaskStmt;
 use databend_common_ast::ast::CreateTaskStmt;
 use databend_common_ast::ast::DescribeTaskStmt;
@@ -24,6 +24,7 @@ use databend_common_ast::ast::DropTaskStmt;
 use databend_common_ast::ast::ExecuteTaskStmt;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowTasksStmt;
+use databend_common_ast::ast::TaskSql;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
@@ -174,8 +175,7 @@ impl Binder {
         }
 
         if let AlterTaskOptions::ModifyAs(sql) = options {
-            todo!();
-
+            verify_task_sql(sql)?;
         }
 
         let tenant = self.ctx.get_tenant();

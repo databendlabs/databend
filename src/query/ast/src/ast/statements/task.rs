@@ -32,9 +32,9 @@ impl Display for TaskSql {
         match self {
             TaskSql::SingleStatement(stmt) => write!(f, "{}", stmt),
             TaskSql::ScriptBlock(stmts) => {
-                write!(f, "BEGIN")?;
+                writeln!(f, "BEGIN")?;
                 for stmt in stmts {
-                    write!(f, "{};", stmt)?;
+                    writeln!(f, "{};", stmt)?;
                 }
                 write!(f, "END;")?;
                 Ok(())
@@ -184,7 +184,7 @@ pub enum AlterTaskOptions {
         warehouse: bool,
     },
     // Change SQL
-    ModifyAs(#[drive(skip)] String),
+    ModifyAs(#[drive(skip)] TaskSql),
     ModifyWhen(#[drive(skip)] String),
     AddAfter(#[drive(skip)] Vec<String>),
     RemoveAfter(#[drive(skip)] Vec<String>),
