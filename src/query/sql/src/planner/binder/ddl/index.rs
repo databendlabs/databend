@@ -258,7 +258,7 @@ impl Binder {
             )));
         }
         let table_schema = table.schema();
-        let mut index_fileds = Vec::with_capacity(columns.len());
+        let mut index_fields = Vec::with_capacity(columns.len());
         for column in columns {
             match table_schema.field_with_name(&column.name) {
                 Ok(field) => {
@@ -276,9 +276,9 @@ impl Binder {
                     )));
                 }
             }
-            index_fileds.push(TableField::new(&column.name, TableDataType::String));
+            index_fields.push(TableField::new(&column.name, TableDataType::String));
         }
-        let index_schema = Arc::new(TableSchema::new(index_fileds));
+        let index_schema = Some(Arc::new(TableSchema::new(index_fields)));
         let table_id = table.get_id();
 
         let index_name = self.normalize_object_identifier(index_name);
@@ -289,7 +289,7 @@ impl Binder {
             index_name,
             original_query: "".to_string(),
             query: "".to_string(),
-            index_schema: Some(index_schema),
+            index_schema,
             table_id,
             sync_creation: *sync_creation,
         };
