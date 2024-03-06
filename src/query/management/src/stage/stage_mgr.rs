@@ -75,6 +75,7 @@ impl StageApi for StageMgr {
             escape_for_key(&info.stage_name)?
         );
 
+        // Add stage
         let val = Operation::Update(serialize_struct(
             &info,
             ErrorCode::IllegalUserStageFormat,
