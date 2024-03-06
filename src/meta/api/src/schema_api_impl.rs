@@ -2454,9 +2454,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let name_ident: DBIdTableName = deserialize_struct(&seq_name.data)?;
                 table_names.push(name_ident.table_name);
             } else {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(table_id[i], "list_tables_name_by_id"),
-                )));
+                debug!(
+                    k = &kv_keys[i];
+                    "table_name not found, maybe immuteable table id"
+                );
             }
         }
         Ok(table_names)
@@ -2503,9 +2504,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let name_ident: DatabaseNameIdent = deserialize_struct(&seq_name.data)?;
                 db_names.push(name_ident.db_name);
             } else {
-                return Err(KVAppError::AppError(AppError::UnknownDatabaseId(
-                    UnknownDatabaseId::new(db_id[i], "list_dbs_name_by_id"),
-                )));
+                debug!(
+                    k = &kv_keys[i];
+                    "db_name not found, maybe immuteable database id"
+                );
             }
         }
         Ok(db_names)

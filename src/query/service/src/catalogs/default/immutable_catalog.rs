@@ -204,13 +204,10 @@ impl Catalog for ImmutableCatalog {
     ) -> databend_common_exception::Result<Vec<String>> {
         let mut table_name = Vec::with_capacity(table_id.len());
         for id in table_id {
-            let table = self
-                .sys_db_meta
-                .get_by_id(&id)
-                .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table id: '{}'", id)))?;
-            table_name.push(table.name().to_string());
+            if let Some(table) = self.sys_db_meta.get_by_id(&id) {
+                table_name.push(table.name().to_string());
+            }
         }
-
         Ok(table_name)
     }
 
@@ -234,11 +231,6 @@ impl Catalog for ImmutableCatalog {
                 res.push("system".to_string());
             } else if self.info_schema_db.get_db_info().ident.db_id == id {
                 res.push("information_schema".to_string());
-            } else {
-                return Err(ErrorCode::UnknownDatabaseId(format!(
-                    "Unknown immutable database id {}",
-                    id
-                )));
             }
         }
         Ok(res)

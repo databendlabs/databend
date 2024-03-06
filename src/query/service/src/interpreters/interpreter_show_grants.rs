@@ -137,6 +137,23 @@ impl Interpreter for ShowGrantsInterpreter {
             }
         }
 
+        for (catalog_name, dbs_priv_id) in catalog_db_ids {
+            let catalog = self.ctx.get_catalog(&catalog_name).await?;
+            let db_ids = dbs_priv_id.iter().map(|res| res.0).collect::<Vec<u64>>();
+            let privileges_strs = dbs_priv_id
+                .iter()
+                .map(|res| res.1.clone())
+                .collect::<Vec<String>>();
+            let dbs_name = catalog.list_dbs_name_by_id(db_ids).await?;
+
+            for (i, db_name) in dbs_name.iter().enumerate() {
+                grant_list.push(format!(
+                    "GRANT {} ON '{}'.'{}'.* TO {}",
+                    &privileges_strs[i], catalog_name, db_name, identity
+                ));
+            }
+        }
+
         for (catalog_name, tables_priv_id) in catalog_table_ids {
             let catalog = self.ctx.get_catalog(&catalog_name).await?;
             let db_ids = tables_priv_id.iter().map(|res| res.0).collect::<Vec<u64>>();
@@ -152,23 +169,6 @@ impl Interpreter for ShowGrantsInterpreter {
                 grant_list.push(format!(
                     "GRANT {} ON '{}'.'{}'.'{}' TO {}",
                     &privileges_strs[i], catalog_name, dbs_name[i], table_name, identity
-                ));
-            }
-        }
-
-        for (catalog_name, dbs_priv_id) in catalog_db_ids {
-            let catalog = self.ctx.get_catalog(&catalog_name).await?;
-            let db_ids = dbs_priv_id.iter().map(|res| res.0).collect::<Vec<u64>>();
-            let privileges_strs = dbs_priv_id
-                .iter()
-                .map(|res| res.1.clone())
-                .collect::<Vec<String>>();
-            let dbs_name = catalog.list_dbs_name_by_id(db_ids).await?;
-
-            for (i, db_name) in dbs_name.iter().enumerate() {
-                grant_list.push(format!(
-                    "GRANT {} ON '{}'.'{}'.* TO {}",
-                    &privileges_strs[i], catalog_name, db_name, identity
                 ));
             }
         }
