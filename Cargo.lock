@@ -3984,6 +3984,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "bstr 1.9.1",
  "csv-core",
  "dashmap",
  "databend-common-base",
@@ -4000,10 +4001,12 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-storages-parquet",
+ "enum-as-inner 0.6.0",
  "log",
  "opendal",
  "parking_lot 0.12.1",
  "serde",
+ "serde_json",
  "typetag",
  "uuid",
 ]

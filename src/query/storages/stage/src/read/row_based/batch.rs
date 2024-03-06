@@ -13,8 +13,36 @@
 // limitations under the License.
 
 use databend_common_expression::BlockMetaInfo;
+use enum_as_inner::EnumAsInner;
+use serde::Deserialize;
+use serde::Serialize;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Position {
+    pub path: String,
+    pub rows: usize,
+    pub offset: usize,
+}
+
+impl Position {
+    pub fn new(path: String) -> Self {
+        Self {
+            path,
+            rows: 0,
+            offset: 0,
+        }
+    }
+
+    pub fn from_bytes_batch(batch: &BytesBatch, start_row_id: usize) -> Self {
+        Self {
+            path: batch.path.clone(),
+            rows: start_row_id,
+            offset: batch.offset,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct BytesBatch {
     pub data: Vec<u8>,
 
@@ -45,8 +73,42 @@ impl BlockMetaInfo for BytesBatch {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct RowBatchWithPosition {
+    pub data: RowBatch,
+    pub start_pos: Position,
+}
+
+impl RowBatchWithPosition {
+    pub fn new(data: RowBatch, start_pos: Position) -> Self {
+        Self { data, start_pos }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, EnumAsInner)]
+pub enum RowBatch {
+    Csv(CSVRowBatch),
+    NDJson(NdjsonRowBatch),
+}
+
+impl RowBatch {
+    pub fn rows(&self) -> usize {
+        match self {
+            RowBatch::Csv(b) => b.rows(),
+            RowBatch::NDJson(b) => b.rows(),
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        match self {
+            RowBatch::Csv(b) => b.size(),
+            RowBatch::NDJson(b) => b.size(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Default)]
-pub struct RowBatch {
+pub struct CSVRowBatch {
     /// row[i] starts at row_ends[i-1] and ends at row_ends[i]
     /// has num_fields[i] fields
     /// field[j] starts at field_ends[i-1][j] and ends at field_ends[i-1][j]
@@ -54,23 +116,34 @@ pub struct RowBatch {
     pub row_ends: Vec<usize>,
     pub field_ends: Vec<usize>,
     pub num_fields: Vec<usize>,
-
-    pub path: String,
-    pub offset: usize,
-    // start from 0
-    pub start_row_id: usize,
 }
 
-impl RowBatch {
-    pub fn new(raw: &BytesBatch, start_row_id: usize) -> Self {
-        Self {
-            path: raw.path.clone(),
-            offset: raw.offset,
-            start_row_id,
-            ..Default::default()
-        }
+#[derive(serde::Serialize, serde::Deserialize, Debug, Default)]
+pub struct NdjsonRowBatch {
+    pub tail_of_last_batch: Vec<u8>,
+
+    // ignore data[..start]
+    pub data: Vec<u8>,
+    pub start: usize,
+    pub row_ends: Vec<usize>,
+}
+
+impl NdjsonRowBatch {
+    pub fn rows(&self) -> usize {
+        self.row_ends.len()
+            + if self.tail_of_last_batch.is_empty() {
+                0
+            } else {
+                1
+            }
     }
 
+    pub fn size(&self) -> usize {
+        self.data.len() + self.tail_of_last_batch.len() - self.start
+    }
+}
+
+impl CSVRowBatch {
     pub fn rows(&self) -> usize {
         self.row_ends.len()
     }
@@ -81,7 +154,7 @@ impl RowBatch {
 }
 
 #[typetag::serde(name = "row_batch")]
-impl BlockMetaInfo for RowBatch {
+impl BlockMetaInfo for RowBatchWithPosition {
     fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
         unreachable!("RowBatch as BlockMetaInfo is not expected to be compared.")
     }
