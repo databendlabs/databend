@@ -48,7 +48,7 @@ mod kvapi_key_impl {
         }
 
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_str(&self.tenant_name()).push_str(&self.name)
+            b.push_str(self.tenant_name()).push_str(&self.name)
         }
 
         fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
