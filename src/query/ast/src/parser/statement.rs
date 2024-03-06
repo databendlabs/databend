@@ -3221,11 +3221,7 @@ pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
             (DRY ~ ^RUN ~ SUMMARY?)?
         },
         |opt_dry_run| VacuumTableOption {
-            dry_run: if let Some(dry_run) = opt_dry_run {
-                Some(dry_run.2.is_some())
-            } else {
-                None
-            },
+            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
         },
     ),))(i)
 }
