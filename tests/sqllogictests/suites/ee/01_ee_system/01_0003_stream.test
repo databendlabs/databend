@@ -457,7 +457,7 @@ statement ok
 replace into t7 on(a, b) delete when a = 3 select * from t8
 
 query IITB
-select a, b, change$action, change$is_update from s7 order by a, b
+select a, b, change$action, change$is_update from s7 order by a, change$action
 ----
 2 2 DELETE 0
 2 2 INSERT 0
