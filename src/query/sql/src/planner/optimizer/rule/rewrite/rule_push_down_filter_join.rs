@@ -188,18 +188,27 @@ pub fn try_push_down_filter_join(
                 left_push_down.push(predicate.clone());
                 right_push_down.push(predicate);
             }
-            JoinPredicate::Left(_) => {
+            JoinPredicate::Left(_)
+                if !matches!(
+                    join.join_type,
+                    JoinType::Right | JoinType::RightSingle | JoinType::Full
+                ) =>
+            {
                 left_push_down.push(predicate);
             }
-            JoinPredicate::Right(_) => {
+            JoinPredicate::Right(_)
+                if !matches!(
+                    join.join_type,
+                    JoinType::Left | JoinType::LeftSingle | JoinType::Full
+                ) =>
+            {
                 right_push_down.push(predicate);
             }
-            JoinPredicate::Other(_) => original_predicates.push(predicate),
-
             JoinPredicate::Both { left, right, .. } => {
                 join.left_conditions.push(left.clone());
                 join.right_conditions.push(right.clone());
             }
+            _ => original_predicates.push(predicate),
         }
     }
     join.non_equi_conditions.extend(non_equi_predicates);

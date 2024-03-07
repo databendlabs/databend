@@ -471,6 +471,7 @@ impl InferFilterOptimizer {
                 Ok(())
             }
         }
+
         struct ReplaceColumnBindings<'a> {
             equal_to: &'a ColumnBinding,
         }
