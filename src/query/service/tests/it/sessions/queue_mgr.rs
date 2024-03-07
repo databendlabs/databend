@@ -33,8 +33,8 @@ impl QueueData for TestData {
         self.0.clone()
     }
 
-    fn remove_error_message(key: Self::Key) -> ErrorCode {
-        ErrorCode::Internal(key)
+    fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {
+        ErrorCode::Internal(format!("{:?}", key))
     }
 }
 
@@ -112,6 +112,41 @@ async fn test_concurrent_acquire() -> Result<()> {
 
     assert!(instant.elapsed() >= Duration::from_secs((test_count / 2) as u64));
     assert!(instant.elapsed() < Duration::from_secs((test_count) as u64));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_list_acquire() -> Result<()> {
+    let test_count = (SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+        % 5) as usize
+        + 5;
+
+    let barrier = Arc::new(tokio::sync::Barrier::new(test_count));
+    let queue = QueueManager::<TestData>::create(1);
+    let mut join_handles = Vec::with_capacity(test_count);
+
+    for index in 0..test_count {
+        join_handles.push({
+            let queue = queue.clone();
+            let barrier = barrier.clone();
+            databend_common_base::runtime::spawn(async move {
+                barrier.wait().await;
+                let _guard = queue
+                    .acquire(TestData(format!("TestData{}", index)))
+                    .await?;
+
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                Result::<(), ErrorCode>::Ok(())
+            })
+        })
+    }
+
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert_eq!(queue.list().len(), test_count - 1);
 
     Ok(())
 }

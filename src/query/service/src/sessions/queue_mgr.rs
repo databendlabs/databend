@@ -16,9 +16,12 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::hash::Hash;
 use std::pin::Pin;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
+use std::task::Waker;
 use std::time::SystemTime;
 
 use databend_common_base::base::GlobalInstance;
@@ -40,12 +43,18 @@ pub trait QueueData: Send + Sync + 'static {
 
     fn get_key(&self) -> Self::Key;
 
-    fn remove_error_message(key: Self::Key) -> ErrorCode;
+    fn remove_error_message(key: Option<Self::Key>) -> ErrorCode;
+}
+
+pub(crate) struct Inner<Data: QueueData> {
+    pub data: Arc<Data>,
+    pub waker: Waker,
+    pub is_abort: Arc<AtomicBool>,
 }
 
 pub struct QueueManager<Data: QueueData> {
     semaphore: Arc<Semaphore>,
-    queue: Mutex<HashMap<Data::Key, Arc<Data>>>,
+    queue: Mutex<HashMap<Data::Key, Inner<Data>>>,
 }
 
 impl<Data: QueueData> QueueManager<Data> {
@@ -71,12 +80,15 @@ impl<Data: QueueData> QueueManager<Data> {
 
     pub fn list(&self) -> Vec<Arc<Data>> {
         let queue = self.queue.lock();
-        queue.values().cloned().collect::<Vec<_>>()
+        queue.values().map(|x| x.data.clone()).collect::<Vec<_>>()
     }
 
     pub fn remove(&self, key: Data::Key) {
         let mut queue = self.queue.lock();
-        queue.remove(&key);
+        if let Some(inner) = queue.remove(&key) {
+            inner.waker.wake();
+            inner.is_abort.store(true, Ordering::SeqCst);
+        }
     }
 
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
@@ -89,16 +101,16 @@ impl<Data: QueueData> QueueManager<Data> {
         future.await
     }
 
-    pub(crate) fn add_entity(&self, data: Arc<Data>) -> Data::Key {
-        let key = data.get_key();
+    pub(crate) fn add_entity(&self, inner: Inner<Data>) -> Data::Key {
+        let key = inner.data.get_key();
         let mut queue = self.queue.lock();
-        queue.insert(key.clone(), data);
+        queue.insert(key.clone(), inner);
         key
     }
 
     pub(crate) fn remove_entity(&self, key: &Data::Key) -> Option<Arc<Data>> {
         let mut queue = self.queue.lock();
-        queue.remove(key)
+        queue.remove(key).map(|inner| inner.data.clone())
     }
 }
 
@@ -120,7 +132,9 @@ where T: Future<Output = Result<OwnedSemaphorePermit, AcquireError>>
     #[pin]
     inner: T,
 
+
     has_pending: bool,
+    is_abort: Arc<AtomicBool>,
     data: Option<Arc<Data>>,
     key: Option<Data::Key>,
     manager: Arc<QueueManager<Data>>,
@@ -137,6 +151,7 @@ where T: Future<Output = Result<OwnedSemaphorePermit, AcquireError>>
             manager: mgr,
             data: Some(data),
             has_pending: false,
+            is_abort: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -149,11 +164,15 @@ where T: Future<Output = Result<OwnedSemaphorePermit, AcquireError>>
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
 
+        if this.is_abort.load(Ordering::SeqCst) {
+            return Poll::Ready(Err(Data::remove_error_message(this.key.take())));
+        }
+
         match this.inner.poll(cx) {
             Poll::Ready(res) => {
                 if let Some(key) = this.key.take() {
                     if this.manager.remove_entity(&key).is_none() {
-                        return Poll::Ready(Err(Data::remove_error_message(key)));
+                        return Poll::Ready(Err(Data::remove_error_message(Some(key))));
                     }
                 }
 
@@ -168,7 +187,12 @@ where T: Future<Output = Result<OwnedSemaphorePermit, AcquireError>>
                 }
 
                 if let Some(data) = this.data.take() {
-                    *this.key = Some(this.manager.add_entity(data));
+                    let waker = cx.waker().clone();
+                    *this.key = Some(this.manager.add_entity(Inner {
+                        data,
+                        waker,
+                        is_abort: this.is_abort.clone(),
+                    }));
                 }
 
                 Poll::Pending
@@ -200,11 +224,14 @@ impl QueueData for QueryEntry {
         self.query_id.clone()
     }
 
-    fn remove_error_message(key: Self::Key) -> ErrorCode {
-        ErrorCode::AbortedQuery(format!(
-            "The query {} has be kill while in queries queue",
-            key
-        ))
+    fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {
+        match key {
+            None => ErrorCode::AbortedQuery("The query has be kill while in queries queue"),
+            Some(key) => ErrorCode::AbortedQuery(format!(
+                "The query {} has be kill while in queries queue",
+                key
+            )),
+        }
     }
 }
 

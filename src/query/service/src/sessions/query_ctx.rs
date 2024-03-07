@@ -103,6 +103,7 @@ use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
@@ -658,6 +659,20 @@ impl TableContext for QueryContext {
     // Get all the processes list info.
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         SessionManager::instance().processes_info()
+    }
+
+    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
+        let queries = QueriesQueueManager::instants()
+            .list()
+            .iter()
+            .map(|x| x.query_id.clone())
+            .collect::<HashSet<_>>();
+
+        SessionManager::instance()
+            .processes_info()
+            .into_iter()
+            .filter(|x| queries.contains(&x.id))
+            .collect::<Vec<_>>()
     }
 
     // Get Stage Attachment.

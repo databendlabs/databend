@@ -740,6 +740,10 @@ impl TableContext for CtxDelegation {
     fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
         todo!()
     }
+
+    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]
