@@ -190,18 +190,18 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String>;
 
     // List the tables name by meta ids.
-    async fn list_tables_name_by_id(
+    async fn mget_tables_name_by_id(
         &self,
-        table_id: Vec<MetaId>,
+        table_ids: Vec<MetaId>,
     ) -> databend_common_exception::Result<Vec<String>>;
 
     // Get the db name by meta id.
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String>;
+    async fn get_db_name_by_id(&self, db_ids: MetaId) -> databend_common_exception::Result<String>;
 
     // List the dbs name by meta ids.
-    async fn list_dbs_name_by_id(
+    async fn mget_dbs_name_by_id(
         &self,
-        db_id: Vec<MetaId>,
+        db_ids: Vec<MetaId>,
     ) -> databend_common_exception::Result<Vec<String>>;
 
     // Get one table by db and table name.

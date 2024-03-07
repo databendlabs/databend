@@ -2433,14 +2433,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
-    async fn list_tables_name_by_id(
+    async fn mget_tables_name_by_id(
         &self,
-        table_id: Vec<MetaId>,
+        table_ids: Vec<MetaId>,
     ) -> Result<Vec<String>, KVAppError> {
-        debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&table_ids); "SchemaApi: {}", func_name!());
 
-        let mut kv_keys = Vec::with_capacity(table_id.len());
-        for id in &table_id {
+        let mut kv_keys = Vec::with_capacity(table_ids.len());
+        for id in &table_ids {
             let k = TableIdToName { table_id: *id }.to_string_key();
             kv_keys.push(k);
         }
@@ -2450,14 +2450,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let mut table_names = Vec::with_capacity(kv_keys.len());
 
         for (i, seq_name_opt) in seq_names.iter().enumerate() {
+            // None means table_name not found, maybe immuteable table id
             if let Some(seq_name) = seq_name_opt {
                 let name_ident: DBIdTableName = deserialize_struct(&seq_name.data)?;
                 table_names.push(name_ident.table_name);
-            } else {
-                debug!(
-                    k = &kv_keys[i];
-                    "table_name not found, maybe immuteable table id"
-                );
             }
         }
         Ok(table_names)
@@ -2486,11 +2482,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
-    async fn list_dbs_name_by_id(&self, db_id: Vec<MetaId>) -> Result<Vec<String>, KVAppError> {
-        debug!(req :? =(&db_id); "SchemaApi: {}", func_name!());
+    async fn mget_dbs_name_by_id(&self, db_ids: Vec<MetaId>) -> Result<Vec<String>, KVAppError> {
+        debug!(req :? =(&db_ids); "SchemaApi: {}", func_name!());
 
-        let mut kv_keys = Vec::with_capacity(db_id.len());
-        for id in &db_id {
+        let mut kv_keys = Vec::with_capacity(db_ids.len());
+        for id in &db_ids {
             let k = DatabaseIdToName { db_id: *id }.to_string_key();
             kv_keys.push(k);
         }
@@ -2500,14 +2496,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let mut db_names = Vec::with_capacity(kv_keys.len());
 
         for (i, seq_name_opt) in seq_names.iter().enumerate() {
+            // None means db_name not found, maybe immuteable database id
             if let Some(seq_name) = seq_name_opt {
                 let name_ident: DatabaseNameIdent = deserialize_struct(&seq_name.data)?;
                 db_names.push(name_ident.db_name);
-            } else {
-                debug!(
-                    k = &kv_keys[i];
-                    "db_name not found, maybe immuteable database id"
-                );
             }
         }
         Ok(db_names)

@@ -209,13 +209,13 @@ pub trait SchemaApi: Send + Sync {
         table_id: MetaId,
     ) -> Result<(TableIdent, Arc<TableMeta>), KVAppError>;
 
-    async fn list_tables_name_by_id(
+    async fn mget_tables_name_by_id(
         &self,
-        table_id: Vec<MetaId>,
+        table_ids: Vec<MetaId>,
     ) -> Result<Vec<String>, KVAppError>;
 
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String, KVAppError>;
-    async fn list_dbs_name_by_id(&self, db_id: Vec<MetaId>) -> Result<Vec<String>, KVAppError>;
+    async fn mget_dbs_name_by_id(&self, db_ids: Vec<MetaId>) -> Result<Vec<String>, KVAppError>;
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String, KVAppError>;
 

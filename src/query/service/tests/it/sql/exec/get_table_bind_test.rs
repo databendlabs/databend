@@ -182,16 +182,16 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_name_by_id(table_id).await
     }
 
-    async fn list_tables_name_by_id(&self, table_id: Vec<MetaId>) -> Result<Vec<String>> {
-        self.cat.list_tables_name_by_id(table_id).await
+    async fn mget_tables_name_by_id(&self, table_ids: Vec<MetaId>) -> Result<Vec<String>> {
+        self.cat.mget_tables_name_by_id(table_id).await
     }
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         self.cat.get_db_name_by_id(db_id).await
     }
 
-    async fn list_dbs_name_by_id(&self, db_id: Vec<MetaId>) -> Result<Vec<String>> {
-        self.cat.list_dbs_name_by_id(db_id).await
+    async fn mget_dbs_name_by_id(&self, db_ids: Vec<MetaId>) -> Result<Vec<String>> {
+        self.cat.mget_dbs_name_by_id(db_ids).await
     }
 
     async fn get_table(
