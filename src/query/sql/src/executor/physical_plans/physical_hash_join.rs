@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_cast;
@@ -24,6 +27,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::ROW_NUMBER_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
@@ -31,11 +35,13 @@ use crate::executor::physical_plans::FragmentKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 
@@ -72,6 +78,8 @@ pub struct HashJoin {
 
     // probe keys for runtime filter, and record the index of table that used in probe keys.
     pub probe_keys_rt: Vec<Option<(RemoteExpr<String>, IndexType)>>,
+    // If enable bloom runtime filter
+    pub enable_bloom_runtime_filter: bool,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
     // Original join type. Left/Right single join may be convert to inner join
@@ -191,6 +199,7 @@ impl PhysicalPlanBuilder {
         let mut right_join_conditions = Vec::new();
         let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
+        let mut table_index = None;
         for (left_condition, right_condition) in join
             .left_conditions
             .iter()
@@ -213,18 +222,21 @@ impl PhysicalPlanBuilder {
             }) {
                 if let Some(column_idx) = left_condition.used_columns().iter().next() {
                     // Safe to unwrap because we have checked the column is a base table column.
-                    let table_index = self
-                        .metadata
-                        .read()
-                        .column(*column_idx)
-                        .table_index()
-                        .unwrap();
+                    if table_index.is_none() {
+                        table_index = Some(
+                            self.metadata
+                                .read()
+                                .column(*column_idx)
+                                .table_index()
+                                .unwrap(),
+                        );
+                    }
                     Some((
                         left_condition
                             .as_raw_expr()
                             .type_check(&*self.metadata.read())?
                             .project_column_ref(|col| col.column_name.clone()),
-                        table_index,
+                        table_index.unwrap(),
                     ))
                 } else {
                     None
@@ -468,7 +480,7 @@ impl PhysicalPlanBuilder {
         let output_schema = DataSchemaRefExt::create(output_fields);
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             projections,
             build_projections,
             probe_projections,
@@ -499,6 +511,41 @@ impl PhysicalPlanBuilder {
             stat_info: Some(stat_info),
             broadcast: is_broadcast,
             original_join_type: join.original_join_type.clone(),
+            enable_bloom_runtime_filter: adjust_bloom_runtime_filter(
+                self.ctx.clone(),
+                &self.metadata,
+                table_index,
+                s_expr,
+            )
+            .await?,
         }))
     }
+}
+
+// Check if enable bloom runtime filter
+async fn adjust_bloom_runtime_filter(
+    ctx: Arc<dyn TableContext>,
+    metadata: &MetadataRef,
+    table_index: Option<IndexType>,
+    s_expr: &SExpr,
+) -> Result<bool> {
+    // The setting of `enable_bloom_runtime_filter` is true by default.
+    if !ctx.get_settings().get_bloom_runtime_filter()? {
+        return Ok(false);
+    }
+    if let Some(table_index) = table_index {
+        let table_entry = metadata.read().table(table_index).clone();
+        let change_type = get_change_type(table_entry.alias_name());
+        let table = table_entry.table();
+        if let Some(stats) = table.table_statistics(ctx.clone(), change_type).await? {
+            if let Some(num_rows) = stats.num_rows {
+                let join_cardinality = RelExpr::with_s_expr(s_expr)
+                    .derive_cardinality()?
+                    .cardinality;
+                // If the filtered data reduces to less than 1/1000 of the original dataset, we will enable bloom runtime filter.
+                return Ok(join_cardinality <= (num_rows / 1000) as f64);
+            }
+        }
+    }
+    Ok(false)
 }

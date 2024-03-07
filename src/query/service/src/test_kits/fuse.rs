@@ -270,8 +270,12 @@ pub async fn append_sample_data(num_blocks: usize, fixture: &TestFixture) -> Res
 }
 
 pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
-    let table = fixture.latest_default_table().await?;
-    table.analyze(fixture.default_ctx.clone()).await
+    let query = format!(
+        "analyze table {}.{}",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+    fixture.execute_command(&query).await
 }
 
 pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()> {
@@ -302,6 +306,16 @@ pub async fn append_sample_data_overwrite(
 
 pub async fn append_variant_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
     let stream = TestFixture::gen_variant_sample_blocks_stream(num_blocks, 1);
+    let table = fixture.latest_default_table().await?;
+
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, true, true)
+        .await
+}
+
+pub async fn append_string_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
+    let stream = TestFixture::gen_string_sample_blocks_stream(num_blocks, 1);
     let table = fixture.latest_default_table().await?;
 
     let blocks = stream.try_collect().await?;

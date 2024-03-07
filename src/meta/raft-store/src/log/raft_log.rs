@@ -21,7 +21,6 @@ use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::Entry;
 use databend_common_meta_types::LogId;
 use databend_common_meta_types::LogIndex;
-use log::as_debug;
 use log::info;
 
 use crate::config::RaftConfig;
@@ -43,7 +42,7 @@ impl RaftLog {
     /// Open RaftLog
     #[minitrace::trace]
     pub async fn open(db: &sled::Db, config: &RaftConfig) -> Result<RaftLog, MetaStorageError> {
-        info!(config = as_debug!(config); "open RaftLog");
+        info!(config :? =(config); "open RaftLog");
 
         let tree_name = config.tree_name(TREE_RAFT_LOG);
         let inner = SledTree::open(db, tree_name, config.is_sync())?;

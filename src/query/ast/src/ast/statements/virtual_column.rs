@@ -15,15 +15,20 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_meta_app::schema::CreateOption;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateVirtualColumnStmt {
-    pub if_not_exists: bool,
+    #[drive(skip)]
+    pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -33,8 +38,12 @@ pub struct CreateVirtualColumnStmt {
 
 impl Display for CreateVirtualColumnStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CREATE VIRTUAL COLUMN ")?;
-        if self.if_not_exists {
+        write!(f, "CREATE ")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, "OR REPLACE ")?;
+        }
+        write!(f, "VIRTUAL COLUMN ")?;
+        if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, "IF NOT EXISTS ")?;
         }
         write!(f, "(")?;
@@ -51,8 +60,9 @@ impl Display for CreateVirtualColumnStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterVirtualColumnStmt {
+    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -81,8 +91,9 @@ impl Display for AlterVirtualColumnStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropVirtualColumnStmt {
+    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -107,7 +118,7 @@ impl Display for DropVirtualColumnStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct RefreshVirtualColumnStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -129,7 +140,7 @@ impl Display for RefreshVirtualColumnStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowVirtualColumnsStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,

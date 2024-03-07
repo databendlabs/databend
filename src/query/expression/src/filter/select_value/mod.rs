@@ -17,6 +17,7 @@ use databend_common_exception::Result;
 
 use crate::types::AnyType;
 use crate::types::ValueType;
+use crate::with_mapped_cmp_method;
 use crate::SelectOp;
 use crate::SelectStrategy;
 use crate::Selector;
@@ -28,7 +29,7 @@ mod select_scalar;
 
 impl<'a> Selector<'a> {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_type_values<T: ValueType>(
+    pub(crate) fn select_type_values_cmp<T: ValueType>(
         &self,
         op: &SelectOp,
         left: Value<AnyType>,
@@ -41,10 +42,43 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
+        with_mapped_cmp_method!(|OP| match op {
+            SelectOp::OP => self.select_type_values::<T, _>(
+                T::OP,
+                left,
+                right,
+                validity,
+                true_selection,
+                false_selection,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            ),
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn select_type_values<
+        T: ValueType,
+        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
+    >(
+        &self,
+        cmp: C,
+        left: Value<AnyType>,
+        right: Value<AnyType>,
+        validity: Option<Bitmap>,
+        true_selection: &mut [u32],
+        false_selection: (&mut [u32], bool),
+        mutable_true_idx: &mut usize,
+        mutable_false_idx: &mut usize,
+        select_strategy: SelectStrategy,
+        count: usize,
+    ) -> Result<usize> {
         let has_false = false_selection.1;
         match (left, right) {
-            (Value::Scalar(left), Value::Scalar(right)) => self.select_scalars::<T>(
-                op,
+            (Value::Scalar(left), Value::Scalar(right)) => self.select_scalars::<T, C>(
+                cmp,
                 left,
                 right,
                 true_selection,
@@ -59,8 +93,8 @@ impl<'a> Selector<'a> {
                 let right = T::try_downcast_column(&right).unwrap();
 
                 if has_false {
-                    self.select_columns::<T, true>(
-                        op,
+                    self.select_columns::<T, C, true>(
+                        cmp,
                         left,
                         right,
                         validity,
@@ -72,8 +106,8 @@ impl<'a> Selector<'a> {
                         count,
                     )
                 } else {
-                    self.select_columns::<T, false>(
-                        op,
+                    self.select_columns::<T, C, false>(
+                        cmp,
                         left,
                         right,
                         validity,
@@ -93,8 +127,8 @@ impl<'a> Selector<'a> {
                 let scalar = T::try_downcast_scalar(&scalar).unwrap();
 
                 if has_false {
-                    self.select_column_scalar::<T, true>(
-                        op,
+                    self.select_column_scalar::<T, C, true>(
+                        cmp,
                         column,
                         scalar,
                         validity,
@@ -106,8 +140,8 @@ impl<'a> Selector<'a> {
                         count,
                     )
                 } else {
-                    self.select_column_scalar::<T, false>(
-                        op,
+                    self.select_column_scalar::<T, C, false>(
+                        cmp,
                         column,
                         scalar,
                         validity,

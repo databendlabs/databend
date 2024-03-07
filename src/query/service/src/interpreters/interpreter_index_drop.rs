@@ -14,11 +14,14 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::DropIndexPlan;
 use databend_enterprise_aggregating_index::get_agg_index_handler;
 
@@ -44,9 +47,20 @@ impl Interpreter for DropIndexInterpreter {
         "DropIndexInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
+        let tenant_name = self.ctx.get_tenant();
+
+        let non_empty = NonEmptyString::new(tenant_name).map_err(|_| {
+            ErrorCode::TenantIsEmpty("tenant is empty(when drop index)".to_string())
+        })?;
+
+        let tenant = Tenant::new_nonempty(non_empty);
+
         let license_manager = get_license_manager();
         license_manager
             .manager
@@ -59,7 +73,7 @@ impl Interpreter for DropIndexInterpreter {
             .await?;
         let drop_index_req = DropIndexReq {
             if_exists: self.plan.if_exists,
-            name_ident: IndexNameIdent { tenant, index_name },
+            name_ident: IndexNameIdent::new(tenant, index_name),
         };
 
         let handler = get_agg_index_handler();

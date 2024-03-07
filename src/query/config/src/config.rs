@@ -43,6 +43,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
@@ -1490,7 +1491,7 @@ pub struct QueryConfig {
     pub table_engine_memory_enabled: bool,
 
     #[clap(long, value_name = "VALUE", default_value = "5000")]
-    pub wait_timeout_mills: u64,
+    pub shutdown_wait_timeout_ms: u64,
 
     #[clap(long, value_name = "VALUE", default_value = "10000")]
     pub max_query_log_size: usize,
@@ -1667,7 +1668,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
 
     fn try_into(self) -> Result<InnerQueryConfig> {
         Ok(InnerQueryConfig {
-            tenant_id: self.tenant_id,
+            tenant_id: NonEmptyString::new(self.tenant_id)
+                .map_err(|_e| ErrorCode::InvalidConfig("tenant-id can not be empty"))?,
             cluster_id: self.cluster_id,
             node_id: "".to_string(),
             num_cpus: self.num_cpus,
@@ -1703,7 +1705,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             rpc_tls_query_service_domain_name: self.rpc_tls_query_service_domain_name,
             rpc_client_timeout_secs: self.rpc_client_timeout_secs,
             table_engine_memory_enabled: self.table_engine_memory_enabled,
-            wait_timeout_mills: self.wait_timeout_mills,
+            shutdown_wait_timeout_ms: self.shutdown_wait_timeout_ms,
             max_query_log_size: self.max_query_log_size,
             databend_enterprise_license: self.databend_enterprise_license,
             management_mode: self.management_mode,
@@ -1746,7 +1748,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
 impl From<InnerQueryConfig> for QueryConfig {
     fn from(inner: InnerQueryConfig) -> Self {
         Self {
-            tenant_id: inner.tenant_id,
+            tenant_id: inner.tenant_id.to_string(),
             cluster_id: inner.cluster_id,
             num_cpus: inner.num_cpus,
             mysql_handler_host: inner.mysql_handler_host,
@@ -1787,7 +1789,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             rpc_tls_query_service_domain_name: inner.rpc_tls_query_service_domain_name,
             rpc_client_timeout_secs: inner.rpc_client_timeout_secs,
             table_engine_memory_enabled: inner.table_engine_memory_enabled,
-            wait_timeout_mills: inner.wait_timeout_mills,
+            shutdown_wait_timeout_ms: inner.shutdown_wait_timeout_ms,
             max_query_log_size: inner.max_query_log_size,
             databend_enterprise_license: inner.databend_enterprise_license,
             management_mode: inner.management_mode,

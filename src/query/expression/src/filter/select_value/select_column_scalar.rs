@@ -15,7 +15,6 @@
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 
-use crate::filter::SelectOp;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
 use crate::types::ValueType;
@@ -23,9 +22,13 @@ use crate::types::ValueType;
 impl<'a> Selector<'a> {
     // Select indices by comparing scalar and column.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_column_scalar<T: ValueType, const FALSE: bool>(
+    pub(crate) fn select_column_scalar<
+        T: ValueType,
+        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
+        const FALSE: bool,
+    >(
         &self,
-        op: &SelectOp,
+        cmp: C,
         column: T::Column,
         scalar: T::ScalarRef<'a>,
         validity: Option<Bitmap>,
@@ -39,7 +42,6 @@ impl<'a> Selector<'a> {
         let mut true_idx = *mutable_true_idx;
         let mut false_idx = *mutable_false_idx;
 
-        let cmp = T::compare_operation(op);
         match select_strategy {
             SelectStrategy::True => unsafe {
                 let start = *mutable_true_idx;

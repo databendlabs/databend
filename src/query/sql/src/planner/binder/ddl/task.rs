@@ -24,9 +24,10 @@ use databend_common_ast::ast::DropTaskStmt;
 use databend_common_ast::ast::ExecuteTaskStmt;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowTasksStmt;
+use databend_common_ast::ast::TaskSql;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -39,7 +40,7 @@ use crate::plans::Plan;
 use crate::plans::ShowTasksPlan;
 use crate::Binder;
 
-fn verify_task_sql(sql: &String) -> Result<()> {
+fn verify_single_statement(sql: &String) -> Result<()> {
     let tokens = tokenize_sql(sql.as_str()).map_err(|e| {
         ErrorCode::SyntaxException(format!(
             "syntax error for task formatted sql: {}, error: {:?}",
@@ -53,6 +54,17 @@ fn verify_task_sql(sql: &String) -> Result<()> {
         ))
     })?;
     Ok(())
+}
+fn verify_task_sql(sql: &TaskSql) -> Result<()> {
+    match sql {
+        TaskSql::SingleStatement(stmt) => verify_single_statement(stmt),
+        TaskSql::ScriptBlock(stmts) => {
+            for stmt in stmts {
+                verify_single_statement(stmt)?;
+            }
+            Ok(())
+        }
+    }
 }
 
 fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()> {
@@ -95,6 +107,7 @@ impl Binder {
             comments,
             after,
             when_condition,
+            error_integration,
             sql,
             session_parameters,
         } = stmt;
@@ -110,7 +123,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let plan = CreateTaskPlan {
             if_not_exists: *if_not_exists,
-            tenant,
+            tenant: tenant.to_string(),
             task_name: name.to_string(),
             warehouse_opts: warehouse_opts.clone(),
             schedule_opts: schedule_opts.clone(),
@@ -119,6 +132,7 @@ impl Binder {
             when_condition: when_condition.clone(),
             comment: comments.clone(),
             session_parameters: session_parameters.clone(),
+            error_integration: error_integration.clone(),
             sql: sql.clone(),
         };
         Ok(Plan::CreateTask(Box::new(plan)))
@@ -141,6 +155,7 @@ impl Binder {
             suspend_task_after_num_failures,
             comments,
             session_parameters,
+            error_integration,
         } = options
         {
             if warehouse.is_none()
@@ -148,6 +163,7 @@ impl Binder {
                 && suspend_task_after_num_failures.is_none()
                 && comments.is_none()
                 && session_parameters.is_none()
+                && error_integration.is_none()
             {
                 return Err(ErrorCode::SyntaxException(
                     "alter task must set at least one option".to_string(),
@@ -165,7 +181,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let plan = AlterTaskPlan {
             if_exists: *if_exists,
-            tenant,
+            tenant: tenant.to_string(),
             task_name: name.to_string(),
             alter_options: options.clone(),
         };
@@ -183,7 +199,7 @@ impl Binder {
 
         let plan = DropTaskPlan {
             if_exists: *if_exists,
-            tenant,
+            tenant: tenant.to_string(),
             task_name: name.to_string(),
         };
         Ok(Plan::DropTask(Box::new(plan)))
@@ -199,7 +215,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = DescribeTaskPlan {
-            tenant,
+            tenant: tenant.to_string(),
             task_name: name.to_string(),
         };
         Ok(Plan::DescribeTask(Box::new(plan)))
@@ -215,7 +231,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = ExecuteTaskPlan {
-            tenant,
+            tenant: tenant.to_string(),
             task_name: name.to_string(),
         };
         Ok(Plan::ExecuteTask(Box::new(plan)))
@@ -231,7 +247,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = ShowTasksPlan {
-            tenant,
+            tenant: tenant.to_string(),
             limit: limit.clone(),
         };
         Ok(Plan::ShowTasks(Box::new(plan)))

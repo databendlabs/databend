@@ -13,5 +13,8 @@
 // limitations under the License.
 
 mod quota;
+#[allow(clippy::module_inception)]
+mod tenant;
 
 pub use quota::TenantQuota;
+pub use tenant::Tenant;

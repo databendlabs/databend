@@ -15,12 +15,13 @@
 use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::state_machine::testing::snapshot_logs;
 use databend_common_meta_sled_store::openraft::entry::RaftEntry;
-use databend_common_meta_sled_store::openraft::storage::Adaptor;
 use databend_common_meta_sled_store::openraft::storage::RaftLogReaderExt;
+use databend_common_meta_sled_store::openraft::storage::RaftLogStorage;
+use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
+use databend_common_meta_sled_store::openraft::storage::RaftStateMachine;
 use databend_common_meta_sled_store::openraft::testing::log_id;
 use databend_common_meta_sled_store::openraft::testing::StoreBuilder;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
-use databend_common_meta_sled_store::openraft::RaftStorage;
 use databend_common_meta_types::new_log_id;
 use databend_common_meta_types::Entry;
 use databend_common_meta_types::Membership;
@@ -52,8 +53,7 @@ impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaSto
         let sto = RaftStore::open_create(&tc.config.raft_config, None, Some(()))
             .await
             .expect("fail to create store");
-        let (log_store, sm_store) = Adaptor::new(sto);
-        Ok((tc, log_store, sm_store))
+        Ok((tc, sto.clone(), sto))
     }
 }
 
@@ -90,13 +90,12 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
         sto.save_vote(&Vote::new(10, 5)).await?;
 
-        sto.append_to_log([Entry::new_blank(log_id(1, 2, 1))])
+        sto.blocking_append([Entry::new_blank(log_id(1, 2, 1))])
             .await?;
 
         sto.save_committed(Some(log_id(1, 2, 2))).await?;
 
-        sto.apply_to_state_machine(&[Entry::new_blank(log_id(1, 2, 2))])
-            .await?;
+        sto.apply([Entry::new_blank(log_id(1, 2, 2))]).await?;
     }
 
     info!("--- reopen meta store");
@@ -110,7 +109,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
         assert_eq!(Some(log_id(1, 2, 2)), sto.read_committed().await?);
         assert_eq!(
             None,
-            sto.last_applied_state().await?.0,
+            sto.applied_state().await?.0,
             "state machine is not persisted"
         );
     }
@@ -134,7 +133,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     let (logs, want) = snapshot_logs();
 
     sto.log.write().await.append(logs.clone()).await?;
-    sto.state_machine.write().await.apply_entries(&logs).await?;
+    sto.state_machine.write().await.apply_entries(logs).await?;
 
     let curr_snap = sto.build_snapshot().await?;
     assert_eq!(Some(new_log_id(1, 0, 9)), curr_snap.meta.last_log_id);
@@ -183,7 +182,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     sto.log.write().await.append(logs.clone()).await?;
     {
         let mut sm = sto.state_machine.write().await;
-        sm.apply_entries(&logs).await?;
+        sm.apply_entries(logs).await?;
     }
 
     sto.build_snapshot().await?;
@@ -226,7 +225,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
         info!("--- feed logs and state machine");
 
         sto.log.write().await.append(logs.clone()).await?;
-        sto.state_machine.write().await.apply_entries(&logs).await?;
+        sto.state_machine.write().await.apply_entries(logs).await?;
 
         snap = sto.build_snapshot().await?;
     }

@@ -28,7 +28,7 @@ CREATE TRANSIENT TABLE hits (
     NetMajor SMALLINT NOT NULL,
     NetMinor SMALLINT NOT NULL,
     UserAgentMajor SMALLINT NOT NULL,
-    UserAgentMinor BINARY NOT NULL,
+    UserAgentMinor VARCHAR NOT NULL,
     CookieEnable SMALLINT NOT NULL,
     JavascriptEnable SMALLINT NOT NULL,
     IsMobile SMALLINT NOT NULL,

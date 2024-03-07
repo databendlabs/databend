@@ -157,6 +157,10 @@ pub struct QueryLogElement {
     pub extra: String,
 
     pub has_profiles: bool,
+
+    // Transaction
+    pub txn_state: String,
+    pub txn_id: String,
 }
 
 impl SystemLogElement for QueryLogElement {

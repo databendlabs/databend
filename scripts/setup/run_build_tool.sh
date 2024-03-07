@@ -19,12 +19,26 @@ TOOLCHAIN_VERSION=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain
 
 _UID=$(id -u)
 _GID=$(id -g)
+USER=${USER:-$(whoami)}
+
+case $TARGET in
+x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu)
+	RUNNER_BASE="debian"
+	;;
+x86_64-unknown-linux-musl | aarch64-unknown-linux-musl)
+	RUNNER_BASE=${TARGET}
+	;;
+*)
+	RUNNER_BASE="dev"
+	TARGET=x86_64-unknown-linux-gnu
+	;;
+esac
+
 # skip building temporary image for root
 if [[ ${_UID} == 0 ]]; then
-	IMAGE="datafuselabs/build-tool:${TARGET}-${TOOLCHAIN_VERSION}"
+	IMAGE="datafuselabs/build-tool:${RUNNER_BASE}-${TOOLCHAIN_VERSION}"
 else
-	USER=${USER:-$(whoami)}
-	IMAGE="${USER}/build-tool:${TARGET}-${TOOLCHAIN_VERSION}"
+	IMAGE="${USER}/build-tool:${RUNNER_BASE}-${TOOLCHAIN_VERSION}"
 
 	if [[ $(docker image ls "${IMAGE}" --format="true") ]]; then
 		echo "==> build-tool using image ${IMAGE}"
@@ -32,8 +46,9 @@ else
 		echo "==> preparing temporary build-tool image ${IMAGE} ..."
 		tmpdir=$(mktemp -d)
 		cat >"${tmpdir}/Dockerfile" <<EOF
-FROM datafuselabs/build-tool:${TARGET}-${TOOLCHAIN_VERSION}
-RUN useradd -u ${_UID} ${USER}
+FROM datafuselabs/build-tool:${RUNNER_BASE}-${TOOLCHAIN_VERSION}
+RUN useradd -u ${_UID} -M -s /bin/bash ${USER}
+RUN chown -R ${USER} /opt/rust/
 RUN printf "${USER} ALL=(ALL:ALL) NOPASSWD:ALL\\n" > /etc/sudoers.d/databend
 EOF
 		docker build -t "${IMAGE}" "${tmpdir}"

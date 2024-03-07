@@ -71,8 +71,18 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 statement error 1065
 select change$is_update from t
 
-statement error 1002
-replace into t on(a) values(7)
+statement ok
+replace into t on(a) values(6),(7)
+
+query IBBII
+select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t order by a
+----
+1 0 0 0 0
+2 0 0 1 0
+3 0 0 1 1
+5 0 0 0 0
+6 0 0 0 0
+7 0 0 1 0
 
 statement ok
 create table t2(a int)

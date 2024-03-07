@@ -131,13 +131,13 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the maximum byte size of a single data block that can be read.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("parquet_max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8192),
                     desc: "Max block size for parquet reader",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("max_threads", DefaultSettingValue {
                     value: UserSettingValue::UInt64(num_cpus),
@@ -205,6 +205,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
+                ("enable_new_copy_for_text_formats", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Use new implementation for loading CSV files.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
                 ("timezone", DefaultSettingValue {
                     value: UserSettingValue::String("UTC".to_owned()),
                     desc: "Sets the timezone.",
@@ -259,14 +265,26 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("join_spilling_threshold", DefaultSettingValue {
+                ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Maximum amount of memory can use for hash join, 0 is unlimited.",
+                    desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
                     mode: SettingMode::Both,
                     range: None,
                 }),
-                ("enable_runtime_filter", DefaultSettingValue {
+                ("join_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum amount of memory in bytes that one join processor can use before spilling data to storage during query execution, 0 is unlimited.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
+                ("join_spilling_partition_bits", DefaultSettingValue{
+                    value: UserSettingValue::UInt64(4),
+                    desc: "Set the number of partitions for join spilling. Default value is 4, it means 2^4 partitions.",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
+                ("enable_bloom_runtime_filter", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables runtime filter optimization for JOIN.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -505,7 +523,7 @@ impl DefaultSettings {
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Use parquet2 instead of parquet_rs when infer_schema().",
+                    desc: "This setting is deprecated",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -606,13 +624,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                 ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
+                ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
                         value: UserSettingValue::UInt64(0),
                         desc: "Enables experimental aggregate hashtable",
                         mode: SettingMode::Both,
-                        range: None,
+                        range: Some(SettingRange::Numeric(0..=1)),
                 }),
-
                 ("numeric_cast_option", DefaultSettingValue {
                     value: UserSettingValue::String("rounding".to_string()),
                     desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",
@@ -672,7 +689,26 @@ impl DefaultSettings {
                     desc: "Cost factor of transmit via network for a data row",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                })
+                }),
+                // this setting will be removed when geometry type stable.
+                ("enable_geo_create_table", DefaultSettingValue{
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Create and alter table with geometry type",
+                    mode:SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1))
+                }),
+                ("idle_transaction_timeout_secs", DefaultSettingValue{
+                    value: UserSettingValue::UInt64(4 * 60 * 60),
+                    desc: "Set the timeout in seconds for active session without any query",
+                    mode:SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX))
+                }),
+                ("enable_experimental_queries_executor", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental new executor",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

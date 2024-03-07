@@ -109,6 +109,17 @@ impl<KV: SledKeySpace> SledItem<KV> {
 
 #[allow(clippy::type_complexity)]
 impl SledTree {
+    /// Return true if the tree exists.
+    pub fn has_tree<N: AsRef<[u8]> + Display>(db: &sled::Db, tree_name: N) -> bool {
+        // During testing, every tree name must be unique.
+        if cfg!(test) {
+            let x = tree_name.as_ref();
+            let x = &x[0..5];
+            assert_eq!(x, b"test-");
+        }
+        db.contains_tree(&tree_name)
+    }
+
     /// Open SledTree
     pub fn open<N: AsRef<[u8]> + Display>(
         db: &sled::Db,

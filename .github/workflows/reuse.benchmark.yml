@@ -49,7 +49,7 @@ jobs:
       matrix:
         dataset:
           - internal
-          - hits
+          # - hits
       fail-fast: true
       max-parallel: 1
     steps:
@@ -140,14 +140,16 @@ jobs:
         run: |
           sudo apt-get update -yq
           sudo apt-get install -yq python3-jinja2
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: benchmark
           path: benchmark/clickbench/results
+          pattern: benchmark-*
+          merge-multiple: true
       - name: Get Report Prefix
         run: |
-          for result in benchmark/clickbench/results/hits/*.json; do
-            dataset=$(echo $result | sed -E 's/.*result-(.*)-.*\.json/\1/')
+          for result in benchmark/clickbench/results/*.json; do
+            dataset=$(echo $result | sed -E 's/.*result-(\w+)-.*\.json/\1/')
+            mkdir -p benchmark/clickbench/results/${dataset}/
             mv $result benchmark/clickbench/results/${dataset}/$(basename $result)
           done
           echo "REPORT_S3_PREFIX=s3://benchmark/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}" >> $GITHUB_ENV
@@ -160,22 +162,21 @@ jobs:
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         working-directory: benchmark/clickbench
         run: |
-          body="## ClickBench Report\n"
+          echo -e "## ClickBench Report\n" > /tmp/body
           for p in results/*; do
             dataset=$(basename $p)
             aws s3 sync results/$dataset/ ${REPORT_S3_PREFIX}/ --include "*.json"
             aws s3 sync "s3://benchmark/clickbench/release/${dataset}/latest/" ./results/${dataset}/ --exclude "*" --include "*.json"
             ./update_results.py --dataset $dataset --pr ${{ inputs.source_id }}
             aws s3 cp ./results/${dataset}.html ${REPORT_S3_PREFIX}/${dataset}.html
-            body+="* **${dataset}**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/${dataset}.html\n"
+            echo "* **${dataset}**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/${dataset}.html" >> /tmp/body
           done
-          echo "body=$body" >> $GITHUB_OUTPUT
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1
         with:
-          number: ${{ inputs.source_id }}
           token: ${{ github.token }}
-          body: ${{ steps.result.outputs.body }}
+          files: /tmp/body
+          number: ${{ inputs.source_id }}
 
   archive:
     needs: [local, cloud]
@@ -192,10 +193,11 @@ jobs:
         run: |
           sudo apt-get update -yq
           sudo apt-get install -yq python3-jinja2
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: benchmark-${{ matrix.dataset }}
-          path: benchmark/clickbench/results/${{ matrix.dataset }}
+          path: benchmark/clickbench/results
+          pattern: benchmark-*
+          merge-multiple: true
       - name: Generate report and upload to R2
         working-directory: benchmark/clickbench
         env:
@@ -204,6 +206,12 @@ jobs:
           AWS_DEFAULT_REGION: auto
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         run: |
+          for result in results/*.json; do
+            dataset=$(echo $result | sed -E 's/.*result-(\w+)-.*\.json/\1/')
+            mkdir -p results/${dataset}/
+            mv $result results/${dataset}/$(basename $result)
+          done
+
           aws s3 sync s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date --date='-1 month' -u +%Y)/$(date --date='-1 month' -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
           aws s3 sync s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
           ./update_results.py --dataset ${{ matrix.dataset }} --release ${{ inputs.source_id }}

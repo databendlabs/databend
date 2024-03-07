@@ -44,6 +44,10 @@ impl Interpreter for RevokeRoleInterpreter {
         "RevokeRoleInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {

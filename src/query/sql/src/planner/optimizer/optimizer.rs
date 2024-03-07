@@ -176,14 +176,15 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             formatted_ast,
             ignore_result,
         }),
-        Plan::Explain { kind, plan } => match kind {
-            ExplainKind::Raw | ExplainKind::Ast(_) | ExplainKind::Syntax(_) => {
-                Ok(Plan::Explain { kind, plan })
+        Plan::Explain { kind, config, plan } => match kind {
+            ExplainKind::Ast(_) | ExplainKind::Syntax(_) => {
+                Ok(Plan::Explain { config, kind, plan })
             }
             ExplainKind::Memo(_) => {
                 if let box Plan::Query { ref s_expr, .. } = plan {
                     let memo = get_optimized_memo(opt_ctx, *s_expr.clone())?;
                     Ok(Plan::Explain {
+                        config,
                         kind: ExplainKind::Memo(display_memo(&memo)?),
                         plan,
                     })
@@ -193,10 +194,18 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
                     ))
                 }
             }
-            _ => Ok(Plan::Explain {
-                kind,
-                plan: Box::new(optimize(opt_ctx, *plan)?),
-            }),
+            _ => {
+                if config.optimized || !config.logical {
+                    let optimized_plan = optimize(opt_ctx.clone(), *plan)?;
+                    Ok(Plan::Explain {
+                        kind,
+                        config,
+                        plan: Box::new(optimized_plan),
+                    })
+                } else {
+                    Ok(Plan::Explain { kind, config, plan })
+                }
+            }
         },
         Plan::ExplainAnalyze { plan } => Ok(Plan::ExplainAnalyze {
             plan: Box::new(optimize(opt_ctx, *plan)?),
@@ -249,8 +258,8 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
     // Cost based optimization
     let mut dphyp_optimized = false;
     if opt_ctx.enable_dphyp && opt_ctx.enable_join_reorder {
-        let (dp_res, optimized) = DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
-            .optimize(Arc::new(s_expr.clone()))?;
+        let (dp_res, optimized) =
+            DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone()).optimize(&s_expr)?;
         if optimized {
             s_expr = (*dp_res).clone();
             s_expr = RecursiveOptimizer::new(&[RuleID::CommuteJoin], &opt_ctx).run(&s_expr)?;
@@ -334,8 +343,8 @@ fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Me
     // Cost based optimization
     let mut dphyp_optimized = false;
     if opt_ctx.enable_dphyp && opt_ctx.enable_join_reorder {
-        let (dp_res, optimized) = DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
-            .optimize(Arc::new(s_expr.clone()))?;
+        let (dp_res, optimized) =
+            DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone()).optimize(&s_expr)?;
         if optimized {
             s_expr = (*dp_res).clone();
             dphyp_optimized = true;
@@ -418,7 +427,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         && opt_ctx
             .table_ctx
             .get_settings()
-            .get_join_spilling_threshold()?
+            .get_join_spilling_memory_ratio()?
             == 0
         && flag
     {
@@ -455,7 +464,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         let (optimized_distributed_merge_into_join_sexpr, distributed) = if opt_ctx
             .table_ctx
             .get_settings()
-            .get_join_spilling_threshold()?
+            .get_join_spilling_memory_ratio()?
             == 0
             && !change_join_order
             && merge_source_optimizer

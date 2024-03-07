@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -63,9 +64,11 @@ impl<T: AccumulatingTransform + 'static> AccumulatingTransformer<T> {
 
 impl<T: AccumulatingTransform + 'static> Drop for AccumulatingTransformer<T> {
     fn drop(&mut self) {
-        if !self.called_on_finish {
-            self.inner.on_finish(false).unwrap();
-        }
+        drop_guard(move || {
+            if !self.called_on_finish {
+                self.inner.on_finish(false).unwrap();
+            }
+        })
     }
 }
 
@@ -183,9 +186,11 @@ impl<B: BlockMetaInfo, T: BlockMetaAccumulatingTransform<B>> Drop
     for BlockMetaAccumulatingTransformer<B, T>
 {
     fn drop(&mut self) {
-        if !self.called_on_finish {
-            self.inner.on_finish(false).unwrap();
-        }
+        drop_guard(move || {
+            if !self.called_on_finish {
+                self.inner.on_finish(false).unwrap();
+            }
+        })
     }
 }
 

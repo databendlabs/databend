@@ -14,17 +14,22 @@
 
 mod api;
 mod helper;
+mod item;
 mod key;
 mod key_builder;
 mod key_parser;
 mod message;
 mod prefix;
 mod test_suite;
+mod value;
 
 pub use api::ApiBuilder;
 pub use api::AsKVApi;
 pub use api::KVApi;
 pub use api::KVStream;
+pub use item::Item;
+pub use item::NonEmptyItem;
+pub use key::DirName;
 pub use key::Key;
 pub use key::KeyError;
 pub use key_builder::KeyBuilder;
@@ -39,3 +44,4 @@ pub use message::UpsertKVReply;
 pub use message::UpsertKVReq;
 pub use prefix::prefix_to_range;
 pub use test_suite::TestSuite;
+pub use value::Value;

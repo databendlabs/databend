@@ -39,10 +39,11 @@ use crate::plans::Sort;
 pub struct RulePushDownLimitSort {
     id: RuleID,
     matchers: Vec<Matcher>,
+    max_limit: usize,
 }
 
 impl RulePushDownLimitSort {
-    pub fn new() -> Self {
+    pub fn new(max_limit: usize) -> Self {
         Self {
             id: RuleID::PushDownLimitSort,
             matchers: vec![Matcher::MatchOp {
@@ -52,6 +53,7 @@ impl RulePushDownLimitSort {
                     children: vec![Matcher::Leaf],
                 }],
             }],
+            max_limit,
         }
     }
 }
@@ -71,15 +73,19 @@ impl Rule for RulePushDownLimitSort {
             count += limit.offset;
             let sort = s_expr.child(0)?;
             let mut sort_limit: Sort = sort.plan().clone().try_into()?;
-            sort_limit.limit = Some(sort_limit.limit.map_or(count, |c| cmp::max(c, count)));
-            let sort = SExpr::create_unary(
-                Arc::new(RelOperator::Sort(sort_limit)),
-                Arc::new(sort.child(0)?.clone()),
-            );
+            let limit = sort_limit.limit.map_or(count, |c| cmp::max(c, count));
 
-            let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
-            result.set_applied_rule(&self.id);
-            state.add_result(result);
+            if limit <= self.max_limit {
+                sort_limit.limit = Some(limit);
+                let sort = SExpr::create_unary(
+                    Arc::new(RelOperator::Sort(sort_limit)),
+                    Arc::new(sort.child(0)?.clone()),
+                );
+
+                let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
+                result.set_applied_rule(&self.id);
+                state.add_result(result);
+            }
         }
         Ok(())
     }

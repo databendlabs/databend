@@ -20,6 +20,8 @@ use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::base::tokio::time::Duration;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -37,8 +39,6 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::processors::Profile;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use log::debug;
 use opendal::Operator;
 

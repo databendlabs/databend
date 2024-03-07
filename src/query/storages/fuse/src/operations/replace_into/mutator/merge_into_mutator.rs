@@ -22,19 +22,29 @@ use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::StreamColumn;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableSchema;
+use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::OnConflictField;
+use databend_common_sql::gen_mutation_stream_operator;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::Xor8Filter;
@@ -68,6 +78,7 @@ use crate::operations::replace_into::meta::MergeIntoOperation;
 use crate::operations::replace_into::meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::row_hash_of_columns;
 use crate::operations::replace_into::mutator::DeletionAccumulator;
+use crate::FuseTable;
 
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
@@ -89,6 +100,9 @@ struct AggregationContext {
     segment_reader: CompactSegmentInfoReader,
     block_builder: BlockBuilder,
     io_request_semaphore: Arc<Semaphore>,
+    query_id: String,
+    stream_columns: Vec<StreamColumn>,
+    stream_operators: Vec<BlockOperator>,
 }
 
 // Apply MergeIntoOperations to segments
@@ -106,13 +120,16 @@ impl MergeIntoOperationAggregator {
         bloom_filter_column_indexes: Vec<FieldIndex>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         block_slots: Option<BlockSlotDescription>,
-        data_accessor: Operator,
-        table_schema: Arc<TableSchema>,
-        write_settings: WriteSettings,
+        table: &FuseTable,
         read_settings: ReadSettings,
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Self> {
+        let data_accessor = table.get_operator();
+        let table_schema = table.schema_with_stream();
+        let write_settings = table.get_write_settings();
+        let update_stream_columns = table.change_tracking_enabled();
+
         let deletion_accumulator = DeletionAccumulator::default();
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), table_schema.clone());
@@ -144,7 +161,7 @@ impl MergeIntoOperationAggregator {
                 table_schema.clone(),
                 projection,
                 false,
-                false,
+                update_stream_columns,
                 false,
             )
         }?;
@@ -157,14 +174,21 @@ impl MergeIntoOperationAggregator {
                 let reader = BlockReader::create(
                     ctx.clone(),
                     data_accessor.clone(),
-                    table_schema,
+                    table_schema.clone(),
                     projection,
                     false,
-                    false,
+                    update_stream_columns,
                     false,
                 )?;
                 Some(reader)
             }
+        };
+        let query_id = ctx.get_id();
+
+        let (stream_columns, stream_operators) = if update_stream_columns {
+            gen_mutation_stream_operator(table_schema, table.get_table_info().ident.seq, true)?
+        } else {
+            (vec![], vec![])
         };
 
         Ok(Self {
@@ -184,6 +208,9 @@ impl MergeIntoOperationAggregator {
                 segment_reader,
                 block_builder,
                 io_request_semaphore,
+                query_id,
+                stream_columns,
+                stream_operators,
             }),
         })
     }
@@ -392,6 +419,7 @@ impl AggregationContext {
             &self.key_column_reader,
             block_meta,
             &self.read_settings,
+            self.query_id.clone(),
         )
         .await?;
 
@@ -468,7 +496,7 @@ impl AggregationContext {
         let bitmap = bitmap.into();
         let mut key_columns_data_after_deletion = key_columns_data.filter_with_bitmap(&bitmap)?;
 
-        let new_block = match &self.remain_column_reader {
+        let mut new_block = match &self.remain_column_reader {
             None => key_columns_data_after_deletion,
             Some(remain_columns_reader) => {
                 metrics_inc_replace_block_number_totally_loaded(1);
@@ -502,19 +530,50 @@ impl AggregationContext {
             }
         };
 
+        if self.key_column_reader.update_stream_columns {
+            // generate row id column
+            let mut row_ids = Vec::with_capacity(num_rows);
+            for i in 0..num_rows {
+                row_ids.push(i as u64);
+            }
+            let value = Value::Column(Column::filter(&UInt64Type::from_data(row_ids), &bitmap));
+            let row_num = BlockEntry::new(
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                value.wrap_nullable(None),
+            );
+            new_block.add_column(row_num);
+
+            let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0)?;
+            for stream_column in self.stream_columns.iter() {
+                let entry = stream_column.generate_column_values(&stream_meta, num_rows);
+                new_block.add_column(entry);
+            }
+            let func_ctx = self.block_builder.ctx.get_function_context()?;
+            new_block = self
+                .stream_operators
+                .iter()
+                .try_fold(new_block, |input, op| op.execute(&func_ctx, input))?;
+        }
+
         // serialization and compression is cpu intensive, send them to dedicated thread pool
         // and wait (asyncly, which will NOT block the executor thread)
         let block_builder = self.block_builder.clone();
         let origin_stats = block_meta.cluster_stats.clone();
         let serialized = GlobalIORuntime::instance()
-            .spawn_blocking(move || {
+            .spawn(self.query_id.clone(), async move {
                 block_builder.build(new_block, |block, generator| {
                     let cluster_stats =
                         generator.gen_with_origin_stats(&block, origin_stats.clone())?;
                     Ok((cluster_stats, block))
                 })
             })
-            .await?;
+            .await
+            .map_err(|e| {
+                ErrorCode::Internal(
+                    "unexpected, failed to join apply delete tasks for replace into.",
+                )
+                .add_message_back(e.to_string())
+            })??;
 
         // persistent data
         let new_block_meta = serialized.block_meta;
@@ -600,7 +659,7 @@ impl AggregationContext {
         let block_meta_ptr = block_meta.clone();
         let reader = reader.clone();
         GlobalIORuntime::instance()
-            .spawn_blocking(move || {
+            .spawn(self.query_id.clone(), async move {
                 let column_chunks = merged_io_read_result.columns_chunks()?;
                 reader.deserialize_chunks(
                     block_meta_ptr.location.0.as_str(),
@@ -612,6 +671,12 @@ impl AggregationContext {
                 )
             })
             .await
+            .map_err(|e| {
+                ErrorCode::Internal(
+                    "unexpected, failed to join aggregation context read block tasks for replace into.",
+                )
+                .add_message_back(e.to_string())
+            })?
     }
 
     // return true if the block is pruned, otherwise false
@@ -734,6 +799,7 @@ mod tests {
     use databend_common_expression::types::NumberScalar;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
 
     use super::*;
 

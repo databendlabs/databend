@@ -59,7 +59,6 @@ use databend_common_meta_types::StorageError;
 use databend_common_meta_types::StorageIOError;
 use databend_common_meta_types::Vote;
 use futures::Stream;
-use log::as_display;
 use log::debug;
 use log::info;
 use log::warn;
@@ -128,7 +127,7 @@ impl StoreInner {
         open: Option<()>,
         create: Option<()>,
     ) -> Result<StoreInner, MetaStartupError> {
-        info!(config_id = as_display!(&config.config_id); "open: {:?}, create: {:?}", open, create);
+        info!(config_id :% =(&config.config_id); "open: {:?}, create: {:?}", open, create);
 
         let db = get_sled_db();
 
@@ -248,7 +247,7 @@ impl StoreInner {
             }
         })?;
 
-        info!(snapshot_size = as_display!(snapshot_size); "do_build_snapshot complete");
+        info!(snapshot_size :% =(snapshot_size); "do_build_snapshot complete");
 
         snapshot_store.clean_old_snapshots().await?;
 

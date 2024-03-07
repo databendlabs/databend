@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::walk_statement_mut;
 use databend_common_ast::ast::CreateIndexStmt;
 use databend_common_ast::ast::DropIndexStmt;
 use databend_common_ast::ast::ExplainKind;
@@ -21,11 +22,10 @@ use databend_common_ast::ast::RefreshIndexStmt;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::Visitor;
+use databend_common_ast::ast::VisitorMut;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::walk_statement_mut;
-use databend_common_ast::Visitor;
-use databend_common_ast::VisitorMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::AggregateIndex;
@@ -33,6 +33,8 @@ use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NonEmptyString;
 use databend_storages_common_table_meta::meta::Location;
 
 use crate::binder::Binder;
@@ -60,7 +62,7 @@ impl Binder {
             Plan::Query { metadata, .. } => {
                 self.do_bind_query_index(bind_context, metadata).await?;
             }
-            Plan::Explain { kind, plan }
+            Plan::Explain { kind, plan, .. }
                 if matches!(kind, ExplainKind::Plan) && matches!(**plan, Plan::Query { .. }) =>
             {
                 match **plan {
@@ -148,7 +150,7 @@ impl Binder {
     ) -> Result<Plan> {
         let CreateIndexStmt {
             index_type,
-            if_not_exists,
+            create_option,
             index_name,
             query,
             sync_creation,
@@ -206,7 +208,7 @@ impl Binder {
         Self::rewrite_query_with_database(&mut query, table_entry.database());
 
         let plan = CreateIndexPlan {
-            if_not_exists: *if_not_exists,
+            create_option: *create_option,
             index_type: *index_type,
             index_name,
             original_query: original_query.to_string(),
@@ -251,11 +253,19 @@ impl Binder {
             .ctx
             .get_catalog(&self.ctx.get_current_catalog())
             .await?;
+
+        let tenant_name = self.ctx.get_tenant();
+
+        let non_empty = NonEmptyString::new(tenant_name.to_string()).map_err(|_| {
+            ErrorCode::TenantIsEmpty(
+                "Tenant is empty(when Binder::build_refresh_index()".to_string(),
+            )
+        })?;
+
+        let tenant = Tenant::new_nonempty(non_empty);
+
         let get_index_req = GetIndexReq {
-            name_ident: IndexNameIdent {
-                tenant: self.ctx.get_tenant(),
-                index_name: index_name.clone(),
-            },
+            name_ident: IndexNameIdent::new(tenant, &index_name),
         };
 
         let res = catalog.get_index(get_index_req).await?;

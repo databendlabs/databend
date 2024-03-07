@@ -12,12 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use crate::processors::profiles::ProfileStatisticsName;
+use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileLabel;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
+
+pub struct PlanScopeGuard {
+    idx: usize,
+    scope_size: Arc<AtomicUsize>,
+}
+
+impl PlanScopeGuard {
+    pub fn create(scope_size: Arc<AtomicUsize>, idx: usize) -> PlanScopeGuard {
+        PlanScopeGuard { idx, scope_size }
+    }
+}
+
+impl Drop for PlanScopeGuard {
+    fn drop(&mut self) {
+        drop_guard(move || {
+            if self.scope_size.fetch_sub(1, Ordering::SeqCst) != self.idx + 1
+                && !std::thread::panicking()
+            {
+                panic!("Broken pipeline scope stack.");
+            }
+        })
+    }
+}
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PlanProfile {
@@ -84,27 +109,6 @@ impl PlanProfile {
     }
 }
 
-pub struct PlanScopeGuard {
-    idx: usize,
-    scope_size: Arc<AtomicUsize>,
-}
-
-impl PlanScopeGuard {
-    pub fn create(scope_size: Arc<AtomicUsize>, idx: usize) -> PlanScopeGuard {
-        PlanScopeGuard { idx, scope_size }
-    }
-}
-
-impl Drop for PlanScopeGuard {
-    fn drop(&mut self) {
-        if self.scope_size.fetch_sub(1, Ordering::SeqCst) != self.idx + 1
-            && !std::thread::panicking()
-        {
-            panic!("Broken pipeline scope stack.");
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct PlanScope {
     pub id: u32,
@@ -128,77 +132,5 @@ impl PlanScope {
             parent_id: None,
             name,
         }
-    }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct ProfileLabel {
-    pub name: String,
-    pub value: Vec<String>,
-}
-
-impl ProfileLabel {
-    pub fn create(name: String, value: Vec<String>) -> ProfileLabel {
-        ProfileLabel { name, value }
-    }
-}
-
-pub struct Profile {
-    /// The id of processor
-    pub pid: usize,
-    /// The name of processor
-    pub p_name: String,
-
-    pub plan_id: Option<u32>,
-    pub plan_name: Option<String>,
-    pub plan_parent_id: Option<u32>,
-    pub labels: Arc<Vec<ProfileLabel>>,
-    pub title: Arc<String>,
-
-    pub statistics: [AtomicUsize; std::mem::variant_count::<ProfileStatisticsName>()],
-}
-
-thread_local! {
-    static CURRENT_PROFILE: RefCell<Option<Arc<Profile>>> = const { RefCell::new(None) };
-}
-
-impl Profile {
-    fn create_items() -> [AtomicUsize; std::mem::variant_count::<ProfileStatisticsName>()] {
-        std::array::from_fn(|_| AtomicUsize::new(0))
-    }
-    pub fn create(pid: usize, p_name: String, scope: Option<PlanScope>) -> Profile {
-        Profile {
-            pid,
-            p_name,
-            plan_id: scope.as_ref().map(|x| x.id),
-            plan_name: scope.as_ref().map(|x| x.name.clone()),
-            plan_parent_id: scope.as_ref().and_then(|x| x.parent_id),
-            statistics: Self::create_items(),
-            labels: scope
-                .as_ref()
-                .map(|x| x.labels.clone())
-                .unwrap_or(Arc::new(vec![])),
-            title: scope
-                .as_ref()
-                .map(|x| x.title.clone())
-                .unwrap_or(Arc::new(String::new())),
-        }
-    }
-
-    pub fn track_profile(profile: &Arc<Profile>) {
-        CURRENT_PROFILE.set(Some(profile.clone()))
-    }
-
-    pub fn record_usize_profile(name: ProfileStatisticsName, value: usize) {
-        CURRENT_PROFILE.with(|x| match x.borrow().as_ref() {
-            None => {}
-            Some(profile) => {
-                profile.statistics[name as usize].fetch_add(value, Ordering::SeqCst);
-            }
-        });
-    }
-
-    pub fn load_profile(&self, name: ProfileStatisticsName) -> usize {
-        self.statistics[name as usize].load(Ordering::SeqCst)
     }
 }

@@ -1,0 +1,68 @@
+# Please start the UDF Server first before running this test:
+#   python3 tests/cloud-control-server/simple_server.py
+#
+statement ok
+DROP TASK IF EXISTS transactionTask
+
+statement ok
+DROP TASK IF EXISTS sessionTask
+
+statement ok
+CREATE TASK transactionTask
+  WAREHOUSE = 'mywh'
+  SCHEDULE = USING CRON '0 0 0 1 1 ? 2100'
+  AS BEGIN
+    SELECT 1;
+    BEGIN;
+    delete from t where c = ';';
+    vacuum table t;
+    merge into t using s on t.id = s.id when matched then update *;
+    COMMIT;
+  END;
+
+
+query SSSS
+select name, warehouse, schedule, SPLIT(definition, '\n') from system.tasks where name = 'transactionTask'
+----
+transactionTask mywh CRON 0 0 0 1 1 ? 2100 ['BEGIN','SELECT 1;','BEGIN;','DELETE FROM t WHERE (c = '';'');','VACUUM TABLE t ;','MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;','COMMIT;','END;']
+
+query S
+select state from system.tasks where name = 'transactionTask'
+----
+Suspended
+
+statement ok
+ALTER TASK transactionTask RESUME
+
+query S
+select state from system.tasks where name = 'transactionTask'
+----
+Started
+
+statement ok
+ALTER TASK transactionTask SUSPEND
+
+query S
+select state from system.tasks where name = 'transactionTask'
+----
+Suspended
+
+statement ok
+ALTER TASK transactionTask MODIFY AS BEGIN
+                                         SELECT 2024;
+                                         BEGIN;
+                                         merge into t using s on t.id = s.id when matched then update *;
+                                         delete from t where c = ';';
+                                         ABORT;
+                                       END;
+
+query S
+select SPLIT(definition, '\n') from system.tasks where name = 'transactionTask'
+----
+['BEGIN','SELECT 2024;','BEGIN;','MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;','DELETE FROM t WHERE (c = '';'');','ABORT;','END;']
+
+
+
+
+statement ok
+DROP TASK transactionTask

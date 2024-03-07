@@ -63,7 +63,7 @@ jobs:
   standalone_udf_server:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Start UDF Server
         run: |
           pip install databend-udf
@@ -84,7 +84,7 @@ jobs:
   standalone_cloud:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Start Cloud Control Server
         run: |
           pip install grpcio grpcio-reflection protobuf grpcio-tools

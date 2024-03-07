@@ -23,6 +23,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyString;
 
 use crate::role_util::find_all_related_roles;
 use crate::UserApiProvider;
@@ -33,23 +34,23 @@ pub const BUILTIN_ROLE_PUBLIC: &str = "public";
 impl UserApiProvider {
     // Get one role from by tenant.
     #[async_backtrace::framed]
-    pub async fn get_role(&self, tenant: &str, role: String) -> Result<RoleInfo> {
+    pub async fn get_role(&self, tenant: &NonEmptyString, role: String) -> Result<RoleInfo> {
         let builtin_roles = self.builtin_roles();
         if let Some(role_info) = builtin_roles.get(&role) {
             return Ok(role_info.clone());
         }
 
-        let client = self.get_role_api_client(tenant)?;
+        let client = self.role_api(tenant);
         let role_data = client.get_role(&role, MatchSeq::GE(0)).await?.data;
         Ok(role_data)
     }
 
     // Get the tenant all roles list.
     #[async_backtrace::framed]
-    pub async fn get_roles(&self, tenant: &str) -> Result<Vec<RoleInfo>> {
+    pub async fn get_roles(&self, tenant: &NonEmptyString) -> Result<Vec<RoleInfo>> {
         let builtin_roles = self.builtin_roles();
         let seq_roles = self
-            .get_role_api_client(tenant)?
+            .role_api(tenant)
             .get_roles()
             .await
             .map_err(|e| e.add_message_back("(while get roles)."))?;
@@ -83,9 +84,12 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_ownerships(&self, tenant: &str) -> Result<HashMap<OwnershipObject, String>> {
+    pub async fn get_ownerships(
+        &self,
+        tenant: &NonEmptyString,
+    ) -> Result<HashMap<OwnershipObject, String>> {
         let seq_owns = self
-            .get_role_api_client(tenant)?
+            .role_api(tenant)
             .get_ownerships()
             .await
             .map_err(|e| e.add_message_back("(while get ownerships)."))?;
@@ -98,7 +102,7 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
-    pub async fn exists_role(&self, tenant: &str, role: String) -> Result<bool> {
+    pub async fn exists_role(&self, tenant: &NonEmptyString, role: String) -> Result<bool> {
         match self.get_role(tenant, role).await {
             Ok(_) => Ok(true),
             Err(e) => {
@@ -115,7 +119,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_role(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         role_info: RoleInfo,
         if_not_exists: bool,
     ) -> Result<u64> {
@@ -123,7 +127,7 @@ impl UserApiProvider {
             return Ok(0);
         }
 
-        let client = self.get_role_api_client(tenant)?;
+        let client = self.role_api(tenant);
         let add_role = client.add_role(role_info);
         match add_role.await {
             Ok(res) => Ok(res),
@@ -140,14 +144,14 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn grant_ownership_to_role(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         object: &OwnershipObject,
         new_role: &str,
     ) -> Result<()> {
         // from and to role must exists
         self.get_role(tenant, new_role.to_string()).await?;
 
-        let client = self.get_role_api_client(tenant)?;
+        let client = self.role_api(tenant);
         client
             .grant_ownership(object, new_role)
             .await
@@ -157,26 +161,43 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_ownership(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         object: &OwnershipObject,
     ) -> Result<Option<OwnershipInfo>> {
-        let client = self.get_role_api_client(tenant)?;
+        let client = self.role_api(tenant);
         let ownership = client
             .get_ownership(object)
             .await
             .map_err(|e| e.add_message_back("(while get ownership)"))?;
-        Ok(ownership)
+        if let Some(owner) = ownership {
+            // if object has ownership, but the owner role is not exists, set owner role to ACCOUNT_ADMIN,
+            // only account_admin can access this object.
+            // Note: get_ownerships no need to do this check.
+            // Because this can cause system.table queries to slow down
+            // The intention is that the account admin can grant ownership.
+            // So system.tables will display dropped role. It's by design.
+            if !self.exists_role(tenant, owner.role.clone()).await? {
+                Ok(Some(OwnershipInfo {
+                    role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
+                    object: object.clone(),
+                }))
+            } else {
+                Ok(Some(owner))
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     #[async_backtrace::framed]
     pub async fn grant_privileges_to_role(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         role: &String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
-        let client = self.get_role_api_client(tenant)?;
+        let client = self.role_api(tenant);
         client
             .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
                 ri.grants.grant_privileges(&object, privileges)
@@ -188,12 +209,12 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn revoke_privileges_from_role(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         role: &String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
-        let client = self.get_role_api_client(tenant)?;
+        let client = self.role_api(tenant);
         client
             .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
                 ri.grants.revoke_privileges(&object, privileges)
@@ -206,7 +227,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn grant_role_to_role(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         target_role: &String,
         grant_role: String,
     ) -> Result<Option<u64>> {
@@ -221,7 +242,7 @@ impl UserApiProvider {
             )));
         }
 
-        let client = self.get_role_api_client(tenant)?;
+        let client = self.role_api(tenant);
         client
             .update_role_with(target_role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
                 ri.grants.grant_role(grant_role)
@@ -233,11 +254,11 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn revoke_role_from_role(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         role: &String,
         revoke_role: &String,
     ) -> Result<Option<u64>> {
-        let client = self.get_role_api_client(tenant)?;
+        let client = self.role_api(tenant);
         client
             .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
                 ri.grants.revoke_role(revoke_role)
@@ -248,8 +269,13 @@ impl UserApiProvider {
 
     // Drop a role by name
     #[async_backtrace::framed]
-    pub async fn drop_role(&self, tenant: &str, role: String, if_exists: bool) -> Result<()> {
-        let client = self.get_role_api_client(tenant)?;
+    pub async fn drop_role(
+        &self,
+        tenant: &NonEmptyString,
+        role: String,
+        if_exists: bool,
+    ) -> Result<()> {
+        let client = self.role_api(tenant);
         let drop_role = client.drop_role(role, MatchSeq::GE(1));
         match drop_role.await {
             Ok(res) => Ok(res),
@@ -268,7 +294,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     async fn find_related_roles(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         role_identities: &[String],
     ) -> Result<Vec<RoleInfo>> {
         let tenant_roles_map = self

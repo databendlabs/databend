@@ -64,8 +64,6 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use futures::stream::StreamExt;
-use log::as_debug;
-use log::as_display;
 use log::debug;
 use log::error;
 use log::info;
@@ -264,7 +262,7 @@ impl ClientHandle {
             };
 
             debug!(
-                request = as_debug!(&req);
+                request :? =(&req);
                 "Meta ClientHandle send request to meta client worker"
             );
 
@@ -281,7 +279,7 @@ impl ClientHandle {
                 grpc_metrics::incr_meta_grpc_client_request_inflight(-1);
 
                 error!(
-                    error = as_debug!(&err);
+                    error :? =(&err);
                     "Meta ClientHandle send request to meta client worker failed"
                 );
 
@@ -292,7 +290,7 @@ impl ClientHandle {
                 grpc_metrics::incr_meta_grpc_client_request_inflight(-1);
 
                 error!(
-                    error = as_debug!(&e);
+                    error :? =(&e);
                     "Meta ClientHandle recv response from meta client worker failed"
                 );
 
@@ -460,13 +458,13 @@ impl MetaGrpcClient {
                 Some(x) => x,
             };
 
-            debug!(worker_request = as_debug!(&worker_request); "MetaGrpcClient worker handle request");
+            debug!(worker_request :? =(&worker_request); "MetaGrpcClient worker handle request");
 
             let span = Span::enter_with_parent(full_name!(), &worker_request.span);
 
             if worker_request.resp_tx.is_closed() {
                 info!(
-                    req = as_debug!(&worker_request.req);
+                    req :? =(&worker_request.req);
                     "MetaGrpcClient request.resp_tx is closed, cancel handling this request"
                 );
                 continue;
@@ -569,16 +567,16 @@ impl MetaGrpcClient {
 
     fn send_response(tx: OneSend<message::Response>, request_id: u64, resp: message::Response) {
         debug!(
-            request_id = as_debug!(&request_id),
-            resp = as_debug!(&resp);
+            request_id :? =(&request_id),
+            resp :? =(&resp);
             "MetaGrpcClient send response to the handle"
         );
 
         let send_res = tx.send(resp);
         if let Err(err) = send_res {
             error!(
-                request_id = as_display!(request_id),
-                err = as_debug!(&err);
+                request_id :% =(request_id),
+                err :? =(&err);
                 "MetaGrpcClient failed to send response to the handle. recv-end closed"
             );
         }
@@ -605,7 +603,7 @@ impl MetaGrpcClient {
 
             if elapsed > 1000_f64 {
                 warn!(
-                    request_id = as_display!(request_id);
+                    request_id :% =(request_id);
                     "MetaGrpcClient slow request {} to {} takes {} ms: {}",
                     req_name,
                     endpoint,
@@ -619,7 +617,7 @@ impl MetaGrpcClient {
         if let Some(err) = resp_err {
             grpc_metrics::incr_meta_grpc_client_request_failed(&endpoint, req_name, err);
             error!(
-                request_id = as_display!(request_id);
+                request_id :% =(request_id);
                 "MetaGrpcClient error: {:?}", err
             );
         } else {
@@ -813,8 +811,8 @@ impl MetaGrpcClient {
         password: &str,
     ) -> Result<(Vec<u8>, u64), MetaHandshakeError> {
         debug!(
-            client_ver = as_display!(client_ver),
-            min_metasrv_ver = as_display!(min_metasrv_ver);
+            client_ver :% =(client_ver),
+            min_metasrv_ver :% =(min_metasrv_ver);
             "client version"
         );
 
@@ -885,7 +883,7 @@ impl MetaGrpcClient {
         watch_request: WatchRequest,
     ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaError> {
         debug!(
-            watch_request = as_debug!(&watch_request);
+            watch_request :? =(&watch_request);
             "MetaGrpcClient worker: handle watch request"
         );
 
@@ -901,7 +899,7 @@ impl MetaGrpcClient {
         export_request: message::ExportReq,
     ) -> Result<tonic::codec::Streaming<ExportedChunk>, MetaError> {
         debug!(
-            export_request = as_debug!(&export_request);
+            export_request :? =(&export_request);
             "MetaGrpcClient worker: handle export request"
         );
 
@@ -949,7 +947,7 @@ impl MetaGrpcClient {
         let grpc_req: MetaGrpcReq = v.into();
 
         debug!(
-            req = as_debug!(&grpc_req);
+            req :? =(&grpc_req);
             "MetaGrpcClient::kv_api request"
         );
 
@@ -971,20 +969,20 @@ impl MetaGrpcClient {
                 .await;
 
             debug!(
-                result = as_debug!(&result);
+                result :? =(&result);
                 "MetaGrpcClient::kv_api result, {}-th try", i
             );
 
             if let Err(ref e) = result {
                 warn!(
-                    req = as_debug!(&raft_req),
-                    error = as_debug!(&e);
+                    req :? =(&raft_req),
+                    error :? =(&e);
                     "MetaGrpcClient::kv_api error");
 
                 if status_is_retryable(e) {
                     warn!(
-                        req = as_debug!(&raft_req),
-                        error = as_debug!(&e);
+                        req :? =(&raft_req),
+                        error :? =(&e);
                         "MetaGrpcClient::kv_api error is retryable");
 
                     self.choose_next_endpoint();
@@ -1016,7 +1014,7 @@ impl MetaGrpcClient {
         grpc_req: MetaGrpcReadReq,
     ) -> Result<BoxStream<pb::StreamItem>, MetaError> {
         debug!(
-            req = as_debug!(&grpc_req);
+            req :? =(&grpc_req);
             "MetaGrpcClient::kv_read_v1 request"
         );
 
@@ -1037,21 +1035,21 @@ impl MetaGrpcClient {
                 .await;
 
             debug!(
-                result = as_debug!(&result);
+                result :? =(&result);
                 "MetaGrpcClient::kv_read_v1 result, {}-th try", i
             );
 
             if let Err(ref e) = result {
                 warn!(
-                    req = as_debug!(&grpc_req),
-                    error = as_debug!(&e);
+                    req :? =(&grpc_req),
+                    error :? =(&e);
                     "MetaGrpcClient::kv_read_v1 error"
                 );
 
                 if status_is_retryable(e) {
                     warn!(
-                        req = as_debug!(&grpc_req),
-                        error = as_debug!(&e);
+                        req :? =(&grpc_req),
+                        error :? =(&e);
                         "MetaGrpcClient::kv_read_v1 error is retryable");
 
                     self.choose_next_endpoint();
@@ -1081,7 +1079,7 @@ impl MetaGrpcClient {
         let txn: TxnRequest = req;
 
         debug!(
-            req = as_display!(&txn);
+            req :% =(&txn);
             "MetaGrpcClient::transaction request"
         );
 
@@ -1110,7 +1108,7 @@ impl MetaGrpcClient {
         let reply = result?;
 
         debug!(
-            reply = as_display!(&reply);
+            reply :% =(&reply);
             "MetaGrpcClient::transaction reply"
         );
 
@@ -1172,8 +1170,8 @@ fn threshold() -> Duration {
 fn info_spent(msg: impl Display) -> impl Fn(Duration, Duration) {
     move |total, busy| {
         info!(
-            total = as_debug!(&total),
-            busy = as_debug!(&busy);
+            total :? =(&total),
+            busy :? =(&busy);
             "{} spent", msg
         );
     }

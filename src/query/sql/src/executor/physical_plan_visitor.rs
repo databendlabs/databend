@@ -178,6 +178,7 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::AggregatePartial(AggregatePartial {
             plan_id: plan.plan_id,
             input: Box::new(input),
+            enable_experimental_aggregate_hashtable: plan.enable_experimental_aggregate_hashtable,
             group_by: plan.group_by.clone(),
             group_by_display: plan.group_by_display.clone(),
             agg_funcs: plan.agg_funcs.clone(),
@@ -237,6 +238,7 @@ pub trait PhysicalPlanReplacer {
             need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
             probe_keys_rt: plan.probe_keys_rt.clone(),
+            enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
             broadcast: plan.broadcast,
             original_join_type: plan.original_join_type.clone(),
         }))
@@ -494,6 +496,7 @@ pub trait PhysicalPlanReplacer {
             input: Box::new(input),
             udf_funcs: plan.udf_funcs.clone(),
             stat_info: plan.stat_info.clone(),
+            script_udf: plan.script_udf,
         }))
     }
 }

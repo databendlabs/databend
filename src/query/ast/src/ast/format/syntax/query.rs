@@ -320,6 +320,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             table,
             alias,
             travel_point,
+            since_point,
             pivot,
             unpivot,
         } => if let Some(catalog) = catalog {
@@ -347,6 +348,13 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             RcDoc::text(format!(" AT (SNAPSHOT => {sid})"))
         } else if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {
             RcDoc::text(format!(" AT (TIMESTAMP => {ts})"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(if let Some(TimeTravelPoint::Snapshot(sid)) = since_point {
+            RcDoc::text(format!(" SINCE (SNAPSHOT => {sid})"))
+        } else if let Some(TimeTravelPoint::Timestamp(ts)) = since_point {
+            RcDoc::text(format!(" SINCE (TIMESTAMP => {ts})"))
         } else {
             RcDoc::nil()
         })
@@ -394,7 +402,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             .append(inline_comma(params.into_iter().map(pretty_expr)))
             .append(separator)
             .append(inline_comma(named_params.into_iter().map(|(k, v)| {
-                RcDoc::text(k)
+                RcDoc::text(k.to_string())
                     .append(RcDoc::text("=>"))
                     .append(pretty_expr(v))
             })))

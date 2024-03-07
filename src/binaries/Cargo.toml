@@ -58,7 +58,6 @@ databend-storages-common-table-meta = { path = "../query/storages/common/table_m
 # Crates.io dependencies
 anyerror = { workspace = true }
 anyhow = { workspace = true }
-async-backtrace = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 futures = { workspace = true }
@@ -67,7 +66,7 @@ log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
 poem = { workspace = true }
-sentry = { version = "0.31.5", default-features = false, features = [
+sentry = { version = "0.32.2", default-features = false, features = [
     "backtrace",
     "contexts",
     "panic",

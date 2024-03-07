@@ -44,13 +44,17 @@ impl Interpreter for DescNetworkPolicyInterpreter {
         "DescNetworkPolicyInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
 
         let network_policy = user_mgr
-            .get_network_policy(&tenant, self.plan.name.as_str())
+            .get_network_policy(tenant.as_str(), self.plan.name.as_str())
             .await?;
 
         let names = vec![network_policy.name.clone()];

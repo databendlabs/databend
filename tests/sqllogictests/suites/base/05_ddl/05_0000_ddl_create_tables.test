@@ -432,3 +432,25 @@ select a, to_string(b), c from t_default
 ----
 1 1,2 {"k":"v"}
 2 1,2 {"k":"v"}
+
+statement ok
+drop table if exists crt1
+
+statement ok
+create or replace table crt1 as select * from numbers(10);
+
+query I
+select count(*) from crt1;
+----
+10
+
+statement ok
+create or replace table crt1 as select * from numbers(10);
+
+query I
+select count(*) from crt1;
+----
+10
+
+statement ok
+drop table if exists crt1

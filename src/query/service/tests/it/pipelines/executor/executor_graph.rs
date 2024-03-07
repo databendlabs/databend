@@ -30,7 +30,7 @@ use databend_common_pipeline_sources::BlocksSource;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::ExecutorWorkerContext;
-use databend_query::pipelines::executor::PipelineExecutor;
+use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::executor::WorkersCondvar;
 use databend_query::pipelines::processors::InputPort;
@@ -187,9 +187,9 @@ async fn test_simple_schedule_queue() -> Result<()> {
     let pipeline = create_simple_pipeline(ctx)?;
 
     // init queue and result should be sink node
-    let init_queue = unsafe { pipeline.init_schedule_queue(0)? };
+    let init_queue = unsafe { pipeline.clone().init_schedule_queue(0)? };
     unsafe {
-        let _ = init_queue.sync_queue.front().unwrap().process();
+        let _ = init_queue.sync_queue.front().unwrap().processor.process();
     }
 
     // node_indices is input of schedule_queue
@@ -198,7 +198,7 @@ async fn test_simple_schedule_queue() -> Result<()> {
     let scheduled_result = [1, 0, 1, 2];
 
     for (i, &index) in node_indices.iter().enumerate() {
-        let scheduled = unsafe { pipeline.schedule_queue(NodeIndex::new(index))? };
+        let scheduled = unsafe { pipeline.clone().schedule_queue(NodeIndex::new(index))? };
 
         assert_eq!(scheduled.sync_queue.len(), if i == 4 { 0 } else { 1 });
         assert_eq!(scheduled.async_queue.len(), 0);
@@ -207,9 +207,9 @@ async fn test_simple_schedule_queue() -> Result<()> {
             continue;
         }
         unsafe {
-            let _ = scheduled.sync_queue.front().unwrap().process();
+            let _ = scheduled.sync_queue.front().unwrap().processor.process();
             assert_eq!(
-                scheduled.sync_queue.front().unwrap().id().index(),
+                scheduled.sync_queue.front().unwrap().processor.id().index(),
                 scheduled_result[i]
             );
         }
@@ -225,12 +225,12 @@ async fn test_parallel_schedule_queue() -> Result<()> {
     let pipeline = create_parallel_simple_pipeline(ctx)?;
 
     // init queue and result should be two sink nodes
-    let init_queue = unsafe { pipeline.init_schedule_queue(0)? };
+    let init_queue = unsafe { pipeline.clone().init_schedule_queue(0)? };
     unsafe {
-        let _ = init_queue.sync_queue[0].process();
+        let _ = init_queue.sync_queue[0].processor.process();
     }
     unsafe {
-        let _ = init_queue.sync_queue[1].process();
+        let _ = init_queue.sync_queue[1].processor.process();
     }
 
     // node_indices is input of schedule_queue
@@ -239,7 +239,7 @@ async fn test_parallel_schedule_queue() -> Result<()> {
     let scheduled_result = [2, 3, 0, 1, 2, 3, 4, 5];
 
     for (i, &index) in node_indices.iter().enumerate() {
-        let scheduled = unsafe { pipeline.schedule_queue(NodeIndex::new(index))? };
+        let scheduled = unsafe { pipeline.clone().schedule_queue(NodeIndex::new(index))? };
 
         assert_eq!(
             scheduled.sync_queue.len(),
@@ -251,9 +251,9 @@ async fn test_parallel_schedule_queue() -> Result<()> {
             continue;
         }
         unsafe {
-            let _ = scheduled.sync_queue.front().unwrap().process();
+            let _ = scheduled.sync_queue.front().unwrap().processor.process();
             assert_eq!(
-                scheduled.sync_queue.front().unwrap().id().index(),
+                scheduled.sync_queue.front().unwrap().processor.id().index(),
                 scheduled_result[i]
             );
         }
@@ -269,10 +269,10 @@ async fn test_resize_schedule_queue() -> Result<()> {
     let pipeline = create_resize_pipeline(ctx)?;
 
     // init queue and result should be two sink nodes
-    let init_queue = unsafe { pipeline.init_schedule_queue(0)? };
+    let init_queue = unsafe { pipeline.clone().init_schedule_queue(0)? };
     unsafe {
-        let _ = init_queue.sync_queue[0].process();
-        let _ = init_queue.sync_queue[1].process();
+        let _ = init_queue.sync_queue[0].processor.process();
+        let _ = init_queue.sync_queue[1].processor.process();
     }
 
     // node_indices is input of schedule_queue
@@ -283,26 +283,29 @@ async fn test_resize_schedule_queue() -> Result<()> {
     let scheduled_result = [5, 2, 3, 0, 2, 3, 5, 7, 8];
     let mut acc = 0;
     for (i, &index) in node_indices.iter().enumerate() {
-        let scheduled = unsafe { pipeline.schedule_queue(NodeIndex::new(index))? };
+        let scheduled = unsafe { pipeline.clone().schedule_queue(NodeIndex::new(index))? };
         assert_eq!(scheduled.sync_queue.len(), sync_length[i]);
         assert_eq!(scheduled.async_queue.len(), 0);
 
         match sync_length[i] {
             0 => continue,
             1 => unsafe {
-                let _ = scheduled.sync_queue.front().unwrap().process();
+                let _ = scheduled.sync_queue.front().unwrap().processor.process();
                 assert_eq!(
-                    scheduled.sync_queue.front().unwrap().id().index(),
+                    scheduled.sync_queue.front().unwrap().processor.id().index(),
                     scheduled_result[acc]
                 );
                 acc += 1;
             },
             2 => unsafe {
-                let _ = scheduled.sync_queue[0].process();
-                let _ = scheduled.sync_queue[1].process();
-                assert_eq!(scheduled.sync_queue[0].id().index(), scheduled_result[acc]);
+                let _ = scheduled.sync_queue[0].processor.process();
+                let _ = scheduled.sync_queue[1].processor.process();
                 assert_eq!(
-                    scheduled.sync_queue[1].id().index(),
+                    scheduled.sync_queue[0].processor.id().index(),
+                    scheduled_result[acc]
+                );
+                assert_eq!(
+                    scheduled.sync_queue[1].processor.id().index(),
                     scheduled_result[acc + 1]
                 );
                 acc += 2;
@@ -320,16 +323,16 @@ async fn test_schedule_queue_twice_without_processing() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let pipeline = create_simple_pipeline(ctx)?;
 
-    let init_queue = unsafe { pipeline.init_schedule_queue(0)? };
+    let init_queue = unsafe { pipeline.clone().init_schedule_queue(0)? };
     unsafe {
-        let _ = init_queue.sync_queue.front().unwrap().process();
+        let _ = init_queue.sync_queue.front().unwrap().processor.process();
     }
 
-    let scheduled = unsafe { pipeline.schedule_queue(NodeIndex::new(2))? };
+    let scheduled = unsafe { pipeline.clone().schedule_queue(NodeIndex::new(2))? };
     assert_eq!(scheduled.sync_queue.len(), 1);
 
     // schedule a need data node twice, the second time should be ignored and return empty queue
-    let scheduled = unsafe { pipeline.schedule_queue(NodeIndex::new(2))? };
+    let scheduled = unsafe { pipeline.clone().schedule_queue(NodeIndex::new(2))? };
     assert_eq!(scheduled.sync_queue.len(), 0);
 
     Ok(())
@@ -347,7 +350,7 @@ async fn test_schedule_with_one_tasks() -> Result<()> {
     let mut context =
         ExecutorWorkerContext::create(1, WorkersCondvar::create(1), Arc::new("".to_string()));
 
-    let init_queue = unsafe { graph.init_schedule_queue(0)? };
+    let init_queue = unsafe { graph.clone().init_schedule_queue(0)? };
     assert_eq!(init_queue.sync_queue.len(), 1);
     init_queue.schedule(&executor.global_tasks_queue, &mut context, &executor);
     assert!(context.has_task());
@@ -371,7 +374,7 @@ async fn test_schedule_with_two_tasks() -> Result<()> {
     let mut context =
         ExecutorWorkerContext::create(1, WorkersCondvar::create(1), Arc::new("".to_string()));
 
-    let init_queue = unsafe { graph.init_schedule_queue(0)? };
+    let init_queue = unsafe { graph.clone().init_schedule_queue(0)? };
     assert_eq!(init_queue.sync_queue.len(), 2);
     init_queue.schedule(&executor.global_tasks_queue, &mut context, &executor);
     assert!(context.has_task());
@@ -383,7 +386,7 @@ async fn test_schedule_with_two_tasks() -> Result<()> {
     Ok(())
 }
 
-fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
+fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     let (_rx, sink_pipe) = create_sink_pipe(1)?;
     let (_tx, source_pipe) = create_source_pipe(ctx, 1)?;
     let mut pipeline = Pipeline::create();
@@ -391,10 +394,10 @@ fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
     pipeline.add_pipe(create_transform_pipe(1)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline)
+    RunningGraph::create(pipeline, 1)
 }
 
-fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
+fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     let (_rx, sink_pipe) = create_sink_pipe(2)?;
     let (_tx, source_pipe) = create_source_pipe(ctx, 2)?;
 
@@ -403,10 +406,10 @@ fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGrap
     pipeline.add_pipe(create_transform_pipe(2)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline)
+    RunningGraph::create(pipeline, 1)
 }
 
-fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
+fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     let (_rx, sink_pipe) = create_sink_pipe(2)?;
     let (_tx, source_pipe) = create_source_pipe(ctx, 1)?;
 
@@ -419,7 +422,7 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
     pipeline.try_resize(2)?;
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline)
+    RunningGraph::create(pipeline, 1)
 }
 
 fn create_source_pipe(
@@ -483,7 +486,7 @@ fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pi
 async fn create_executor_with_simple_pipeline(
     ctx: Arc<QueryContext>,
     size: usize,
-) -> Result<Arc<PipelineExecutor>> {
+) -> Result<Arc<QueryPipelineExecutor>> {
     let (_rx, sink_pipe) = create_sink_pipe(size)?;
     let (_tx, source_pipe) = create_source_pipe(ctx, size)?;
     let mut pipeline = Pipeline::create();
@@ -494,6 +497,7 @@ async fn create_executor_with_simple_pipeline(
     let settings = ExecutorSettings {
         query_id: Arc::new("".to_string()),
         max_execute_time_in_seconds: Default::default(),
+        enable_new_executor: false,
     };
-    PipelineExecutor::create(pipeline, settings)
+    QueryPipelineExecutor::create(pipeline, settings)
 }

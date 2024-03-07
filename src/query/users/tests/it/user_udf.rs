@@ -18,15 +18,17 @@ use databend_common_expression::types::DataType;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_lambda_udf() -> Result<()> {
     let conf = RpcClientConf::default();
-    let tenant = "test";
+    let tenant_name = "test";
+    let tenant = NonEmptyString::new(tenant_name).unwrap();
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let description = "this is a description";
     let isempty = "isempty";
     let isnotempty = "isnotempty";
@@ -39,11 +41,7 @@ async fn test_user_lambda_udf() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(
-            tenant,
-            isempty_udf.clone(),
-            &CreateOption::CreateIfNotExists(false),
-        )
+        .add_udf(&tenant, isempty_udf.clone(), &CreateOption::None)
         .await?;
 
     // add isnotempty.
@@ -54,41 +52,37 @@ async fn test_user_lambda_udf() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(
-            tenant,
-            isnotempty_udf.clone(),
-            &CreateOption::CreateIfNotExists(false),
-        )
+        .add_udf(&tenant, isnotempty_udf.clone(), &CreateOption::None)
         .await?;
 
     // get all.
     {
-        let udfs = user_mgr.get_udfs(tenant).await?;
+        let udfs = user_mgr.get_udfs(&tenant).await?;
         assert_eq!(udfs, vec![isempty_udf.clone(), isnotempty_udf.clone()]);
     }
 
     // get.
     {
-        let udf = user_mgr.get_udf(tenant, isempty).await?;
-        assert_eq!(udf, isempty_udf.clone());
+        let udf = user_mgr.get_udf(&tenant, isempty).await?;
+        assert_eq!(udf, Some(isempty_udf.clone()));
     }
 
     // drop.
     {
-        user_mgr.drop_udf(tenant, isnotempty, false).await?;
-        let udfs = user_mgr.get_udfs(tenant).await?;
+        user_mgr.drop_udf(&tenant, isnotempty, false).await??;
+        let udfs = user_mgr.get_udfs(&tenant).await?;
         assert_eq!(udfs, vec![isempty_udf]);
     }
 
     // repeat drop same one not with if exist.
     {
-        let res = user_mgr.drop_udf(tenant, isnotempty, false).await;
+        let res = user_mgr.drop_udf(&tenant, isnotempty, false).await?;
         assert!(res.is_err());
     }
 
     // repeat drop same one with if exist.
     {
-        let res = user_mgr.drop_udf(tenant, isnotempty, true).await;
+        let res = user_mgr.drop_udf(&tenant, isnotempty, true).await?;
         assert!(res.is_ok());
     }
 
@@ -98,9 +92,10 @@ async fn test_user_lambda_udf() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_udf_server() -> Result<()> {
     let conf = RpcClientConf::default();
-    let tenant = "test";
+    let tenant_name = "test";
+    let tenant = NonEmptyString::new(tenant_name).unwrap();
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let address = "http://127.0.0.1:8888";
     let arg_types = vec![DataType::String];
     let return_type = DataType::Boolean;
@@ -119,11 +114,7 @@ async fn test_user_udf_server() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(
-            tenant,
-            isempty_udf.clone(),
-            &CreateOption::CreateIfNotExists(false),
-        )
+        .add_udf(&tenant, isempty_udf.clone(), &CreateOption::None)
         .await?;
 
     // add isnotempty.
@@ -137,41 +128,37 @@ async fn test_user_udf_server() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(
-            tenant,
-            isnotempty_udf.clone(),
-            &CreateOption::CreateIfNotExists(false),
-        )
+        .add_udf(&tenant, isnotempty_udf.clone(), &CreateOption::None)
         .await?;
 
     // get all.
     {
-        let udfs = user_mgr.get_udfs(tenant).await?;
+        let udfs = user_mgr.get_udfs(&tenant).await?;
         assert_eq!(udfs, vec![isempty_udf.clone(), isnotempty_udf.clone()]);
     }
 
     // get.
     {
-        let udf = user_mgr.get_udf(tenant, isempty).await?;
-        assert_eq!(udf, isempty_udf.clone());
+        let udf = user_mgr.get_udf(&tenant, isempty).await?;
+        assert_eq!(udf, Some(isempty_udf.clone()));
     }
 
     // drop.
     {
-        user_mgr.drop_udf(tenant, isnotempty, false).await?;
-        let udfs = user_mgr.get_udfs(tenant).await?;
+        user_mgr.drop_udf(&tenant, isnotempty, false).await??;
+        let udfs = user_mgr.get_udfs(&tenant).await?;
         assert_eq!(udfs, vec![isempty_udf]);
     }
 
     // repeat drop same one not with if exist.
     {
-        let res = user_mgr.drop_udf(tenant, isnotempty, false).await;
+        let res = user_mgr.drop_udf(&tenant, isnotempty, false).await?;
         assert!(res.is_err());
     }
 
     // repeat drop same one with if exist.
     {
-        let res = user_mgr.drop_udf(tenant, isnotempty, true).await;
+        let res = user_mgr.drop_udf(&tenant, isnotempty, true).await?;
         assert!(res.is_ok());
     }
 

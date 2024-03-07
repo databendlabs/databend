@@ -35,6 +35,8 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
@@ -68,10 +70,9 @@ use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_metrics::storage::*;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
-use databend_common_pipeline_core::processors::profile::Profile;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
+use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
@@ -84,13 +85,13 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_iceberg::IcebergTable;
-use databend_common_storages_parquet::Parquet2Table;
 use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
 use parking_lot::RwLock;
@@ -134,7 +135,7 @@ impl QueryContext {
     pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
         debug!("Create QueryContext");
 
-        let tenant = GlobalConfig::instance().query.tenant_id.clone();
+        let tenant = GlobalConfig::instance().query.tenant_id.to_string();
         let query_settings = Settings::create(tenant);
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
@@ -304,6 +305,10 @@ impl QueryContext {
     pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
         self.shared.evict_table_from_cache(catalog, database, table)
     }
+
+    pub fn clear_tables_cache(&self) {
+        self.shared.clear_tables_cache()
+    }
 }
 
 #[async_trait::async_trait]
@@ -327,7 +332,6 @@ impl TableContext for QueryContext {
                 stage_info,
                 plan.tbl_args.clone(),
             ),
-            DataSourceInfo::Parquet2Source(table_info) => Parquet2Table::from_info(table_info),
             DataSourceInfo::ParquetSource(table_info) => ParquetRSTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
         }
@@ -508,12 +512,18 @@ impl TableContext for QueryContext {
     async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_catalog(&self.get_tenant(), catalog_name.as_ref())
+            .get_catalog(
+                self.get_tenant().as_str(),
+                catalog_name.as_ref(),
+                self.txn_mgr(),
+            )
             .await
     }
 
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
-        self.shared.catalog_manager.get_default_catalog()
+        self.shared
+            .catalog_manager
+            .get_default_catalog(self.txn_mgr())
     }
 
     fn get_id(&self) -> String {
@@ -581,7 +591,7 @@ impl TableContext for QueryContext {
         Ok(format)
     }
 
-    fn get_tenant(&self) -> String {
+    fn get_tenant(&self) -> NonEmptyString {
         self.shared.get_tenant()
     }
 
@@ -723,7 +733,7 @@ impl TableContext for QueryContext {
                 let user_mgr = UserApiProvider::instance();
                 let tenant = self.get_tenant();
                 Ok(user_mgr
-                    .get_file_format(&tenant, name)
+                    .get_file_format(tenant.as_str(), name)
                     .await?
                     .file_format_params)
             }
@@ -778,7 +788,7 @@ impl TableContext for QueryContext {
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
-            .get_table(&tenant, database_name, table_name)
+            .get_table(tenant.as_str(), database_name, table_name)
             .await?;
         let table_id = table.get_id();
 
@@ -793,7 +803,7 @@ impl TableContext for QueryContext {
             let req = GetTableCopiedFileReq { table_id, files };
             let start_request = Instant::now();
             let copied_files = catalog
-                .get_table_copied_file_info(&tenant, database_name, req)
+                .get_table_copied_file_info(tenant.as_str(), database_name, req)
                 .await?
                 .file_info;
 
@@ -993,6 +1003,10 @@ impl TableContext for QueryContext {
             return !runtime_filter.get_bloom().is_empty();
         }
         false
+    }
+
+    fn txn_mgr(&self) -> TxnManagerRef {
+        self.shared.session.session_ctx.txn_mgr()
     }
 }
 

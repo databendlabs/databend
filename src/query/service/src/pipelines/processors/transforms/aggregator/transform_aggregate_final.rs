@@ -109,12 +109,12 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
             }
 
             if blocks.is_empty() {
-                return Ok(DataBlock::empty());
+                return Ok(self.params.empty_result_block());
             }
             return DataBlock::concat(&blocks);
         }
 
-        Ok(DataBlock::empty())
+        Ok(self.params.empty_result_block())
     }
 }
 
@@ -240,6 +240,7 @@ where Method: HashMethodBounds
                         }
                     },
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
+                    AggregateMeta::AggregatePayload(_) => unreachable!(),
                 }
             }
 

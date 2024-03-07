@@ -49,6 +49,10 @@ impl Interpreter for DropUserStageInterpreter {
         "DropUserStageInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -73,7 +77,7 @@ impl Interpreter for DropUserStageInterpreter {
         if let Ok(stage) = stage {
             // we should do `drop ownership` after actually drop stage,
             // drop the ownership
-            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            let role_api = UserApiProvider::instance().role_api(&tenant);
             let owner_object = OwnershipObject::Stage {
                 name: self.plan.name.clone(),
             };

@@ -17,7 +17,7 @@ use std::sync::atomic::Ordering;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::KeyAccessor;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
@@ -60,7 +60,7 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (mut match_count, mut incomplete_ptr) =
+                let (match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -69,29 +69,14 @@ impl HashJoinProbeState {
                 matched_idx += match_count;
 
                 while matched_idx == max_block_size {
-                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                        return Err(ErrorCode::AbortedQuery(
-                            "Aborted query, because the server is shutting down or the query was killed.",
-                        ));
-                    }
-
-                    for row_ptr in build_indexes.iter() {
-                        unsafe {
-                            *outer_scan_map
-                                .get_unchecked_mut(row_ptr.chunk_index as usize)
-                                .get_unchecked_mut(row_ptr.row_index as usize) = true
-                        };
-                    }
-
-                    matched_idx = 0;
-                    (match_count, incomplete_ptr) = hash_table.next_probe(
+                    self.process_right_semi_anti_join_block(build_indexes, outer_scan_map)?;
+                    (matched_idx, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         build_indexes_ptr,
-                        matched_idx,
+                        0,
                         max_block_size,
                     );
-                    matched_idx += match_count;
                 }
             }
         } else {
@@ -100,7 +85,7 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(idx) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (mut match_count, mut incomplete_ptr) =
+                let (match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -108,39 +93,23 @@ impl HashJoinProbeState {
 
                 matched_idx += match_count;
                 while matched_idx == max_block_size {
-                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                        return Err(ErrorCode::AbortedQuery(
-                            "Aborted query, because the server is shutting down or the query was killed.",
-                        ));
-                    }
-
-                    for row_ptr in build_indexes.iter() {
-                        unsafe {
-                            *outer_scan_map
-                                .get_unchecked_mut(row_ptr.chunk_index as usize)
-                                .get_unchecked_mut(row_ptr.row_index as usize) = true
-                        };
-                    }
-
-                    matched_idx = 0;
-                    (match_count, incomplete_ptr) = hash_table.next_probe(
+                    self.process_right_semi_anti_join_block(build_indexes, outer_scan_map)?;
+                    (matched_idx, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         build_indexes_ptr,
-                        matched_idx,
+                        0,
                         max_block_size,
                     );
-                    matched_idx += match_count;
                 }
             }
         }
 
-        for row_ptr in build_indexes[0..matched_idx].iter() {
-            unsafe {
-                *outer_scan_map
-                    .get_unchecked_mut(row_ptr.chunk_index as usize)
-                    .get_unchecked_mut(row_ptr.row_index as usize) = true
-            };
+        if matched_idx > 0 {
+            self.process_right_semi_anti_join_block(
+                &build_indexes[0..matched_idx],
+                outer_scan_map,
+            )?;
         }
 
         Ok(vec![])
@@ -167,12 +136,7 @@ impl HashJoinProbeState {
         // Build states.
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
         let outer_scan_map = &mut build_state.outer_scan_map;
-        let other_predicate = self
-            .hash_join_state
-            .hash_join_desc
-            .other_predicate
-            .as_ref()
-            .unwrap();
+        let filter_executor = probe_state.filter_executor.as_mut().unwrap();
 
         // Results.
         let mut matched_idx = 0;
@@ -185,7 +149,7 @@ impl HashJoinProbeState {
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
 
                 // Probe hash table and fill `build_indexes`.
-                let (mut match_count, mut incomplete_ptr) =
+                let (match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -198,7 +162,7 @@ impl HashJoinProbeState {
                 }
 
                 while matched_idx == max_block_size {
-                    self.process_right_semi_anti_join_block(
+                    self.process_right_semi_anti_join_with_conjunct_block(
                         matched_idx,
                         input,
                         probe_indexes,
@@ -206,27 +170,24 @@ impl HashJoinProbeState {
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
                         outer_scan_map,
-                        other_predicate,
+                        filter_executor,
                     )?;
-                    matched_idx = 0;
-                    (match_count, incomplete_ptr) = hash_table.next_probe(
+                    (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
+                        hash_table,
                         key,
                         incomplete_ptr,
+                        *idx,
+                        probe_indexes,
                         build_indexes_ptr,
-                        matched_idx,
                         max_block_size,
-                    );
-                    for _ in 0..match_count {
-                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
-                        matched_idx += 1;
-                    }
+                    )?;
                 }
             }
         } else {
             for idx in 0..input.num_rows() {
                 let key = unsafe { keys.key_unchecked(idx) };
                 let ptr = unsafe { *pointers.get_unchecked(idx) };
-                let (mut match_count, mut incomplete_ptr) =
+                let (match_count, mut incomplete_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
                     continue;
@@ -238,7 +199,7 @@ impl HashJoinProbeState {
                 }
 
                 while matched_idx == max_block_size {
-                    self.process_right_semi_anti_join_block(
+                    self.process_right_semi_anti_join_with_conjunct_block(
                         matched_idx,
                         input,
                         probe_indexes,
@@ -246,26 +207,23 @@ impl HashJoinProbeState {
                         &mut probe_state.generation_state,
                         &build_state.generation_state,
                         outer_scan_map,
-                        other_predicate,
+                        filter_executor,
                     )?;
-                    matched_idx = 0;
-                    (match_count, incomplete_ptr) = hash_table.next_probe(
+                    (matched_idx, incomplete_ptr) = self.fill_probe_and_build_indexes::<_, false>(
+                        hash_table,
                         key,
                         incomplete_ptr,
+                        idx as u32,
+                        probe_indexes,
                         build_indexes_ptr,
-                        matched_idx,
                         max_block_size,
-                    );
-                    for _ in 0..match_count {
-                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
-                        matched_idx += 1;
-                    }
+                    )?;
                 }
             }
         }
 
         if matched_idx > 0 {
-            self.process_right_semi_anti_join_block(
+            self.process_right_semi_anti_join_with_conjunct_block(
                 matched_idx,
                 input,
                 probe_indexes,
@@ -273,7 +231,7 @@ impl HashJoinProbeState {
                 &mut probe_state.generation_state,
                 &build_state.generation_state,
                 outer_scan_map,
-                other_predicate,
+                filter_executor,
             )?;
         }
 
@@ -284,6 +242,30 @@ impl HashJoinProbeState {
     #[allow(clippy::too_many_arguments)]
     fn process_right_semi_anti_join_block(
         &self,
+        build_indexes: &[RowPtr],
+        outer_scan_map: &mut [Vec<bool>],
+    ) -> Result<()> {
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed.",
+            ));
+        }
+
+        for row_ptr in build_indexes.iter() {
+            unsafe {
+                *outer_scan_map
+                    .get_unchecked_mut(row_ptr.chunk_index as usize)
+                    .get_unchecked_mut(row_ptr.row_index as usize) = true
+            };
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    #[allow(clippy::too_many_arguments)]
+    fn process_right_semi_anti_join_with_conjunct_block(
+        &self,
         matched_idx: usize,
         input: &DataBlock,
         probe_indexes: &[u32],
@@ -291,7 +273,7 @@ impl HashJoinProbeState {
         probe_state: &mut ProbeBlockGenerationState,
         build_state: &BuildBlockGenerationState,
         outer_scan_map: &mut [Vec<bool>],
-        other_predicate: &Expr,
+        filter_executor: &mut FilterExecutor,
     ) -> Result<()> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
@@ -323,8 +305,8 @@ impl HashJoinProbeState {
         let result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
 
         if !result_block.is_empty() {
-            let (bm, all_true, all_false) =
-                self.get_other_filters(&result_block, other_predicate, &self.func_ctx)?;
+            let (selection, all_true, all_false) =
+                self.get_other_predicate_selection(filter_executor, &result_block)?;
 
             if all_true {
                 for row_ptr in &build_indexes[0..matched_idx] {
@@ -335,20 +317,13 @@ impl HashJoinProbeState {
                     };
                 }
             } else if !all_false {
-                // Safe to unwrap.
-                let validity = bm.unwrap();
-                let mut idx = 0;
-                while idx < matched_idx {
+                for idx in selection {
                     unsafe {
-                        let valid = validity.get_bit_unchecked(idx);
-                        if valid {
-                            let row_ptr = build_indexes.get_unchecked(idx);
-                            *outer_scan_map
-                                .get_unchecked_mut(row_ptr.chunk_index as usize)
-                                .get_unchecked_mut(row_ptr.row_index as usize) = true;
-                        }
+                        let row_ptr = build_indexes.get_unchecked(*idx as usize);
+                        *outer_scan_map
+                            .get_unchecked_mut(row_ptr.chunk_index as usize)
+                            .get_unchecked_mut(row_ptr.row_index as usize) = true;
                     }
-                    idx += 1;
                 }
             }
         }

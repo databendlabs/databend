@@ -109,7 +109,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Magic happens here. We will add a layer upon original
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
-        .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
+        .layer(RuntimeLayer::new(GlobalIORuntime::instance()))
         .layer({
             let retry_timeout = env::var("_DATABEND_INTERNAL_RETRY_TIMEOUT")
                 .ok()
@@ -480,7 +480,14 @@ impl DataOperator {
         // IO hang on reuse connection.
         let op = operator.clone();
         if let Err(cause) = GlobalIORuntime::instance()
-            .spawn(GLOBAL_TASK, async move { op.check().await })
+            .spawn(GLOBAL_TASK, async move {
+                let res = op.stat("/").await;
+                match res {
+                    Ok(_) => Ok(()),
+                    Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(()),
+                    Err(e) => Err(e),
+                }
+            })
             .await
             .expect("join must succeed")
         {

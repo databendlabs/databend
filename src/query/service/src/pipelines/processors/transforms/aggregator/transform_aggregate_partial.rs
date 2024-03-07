@@ -297,11 +297,33 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     let group_columns: Vec<Column> =
                         group_columns.into_iter().map(|c| c.0).collect();
 
-                    let params_columns = Self::aggregate_arguments(&block, &self.params)?;
+                    let (params_columns, agg_states) = if is_agg_index_block {
+                        (
+                            vec![],
+                            (0..self.params.aggregate_functions.len())
+                                .map(|index| {
+                                    block
+                                        .get_by_offset(
+                                            block.num_columns()
+                                                - self.params.aggregate_functions.len()
+                                                + index,
+                                        )
+                                        .value
+                                        .as_column()
+                                        .cloned()
+                                        .unwrap()
+                                })
+                                .collect(),
+                        )
+                    } else {
+                        (Self::aggregate_arguments(&block, &self.params)?, vec![])
+                    };
+
                     let _ = hashtable.add_groups(
                         &mut self.probe_state,
                         &group_columns,
                         &params_columns,
+                        &agg_states,
                         rows_num,
                     )?;
                     Ok(())
@@ -397,9 +419,22 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
 
                 blocks
             }
-            HashTable::AggregateHashTable(hashtable) => vec![DataBlock::empty_with_meta(
-                AggregateMeta::<Method, usize>::create_agg_hashtable(hashtable.payload),
-            )],
+            HashTable::AggregateHashTable(hashtable) => {
+                let partition_count = hashtable.payload.partition_count();
+                let mut blocks = Vec::with_capacity(partition_count);
+                for (bucket, mut payload) in hashtable.payload.payloads.into_iter().enumerate() {
+                    payload.arenas.extend_from_slice(&hashtable.payload.arenas);
+                    blocks.push(DataBlock::empty_with_meta(
+                        AggregateMeta::<Method, usize>::create_agg_payload(
+                            bucket as isize,
+                            payload,
+                            partition_count,
+                        ),
+                    ));
+                }
+
+                blocks
+            }
         })
     }
 }

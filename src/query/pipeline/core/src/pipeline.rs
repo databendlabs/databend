@@ -18,21 +18,22 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
-use crate::processors::profile::PlanScope;
-use crate::processors::profile::Profile;
 use crate::processors::DuplicateProcessor;
 use crate::processors::InputPort;
 use crate::processors::OutputPort;
+use crate::processors::PlanScope;
+use crate::processors::PlanScopeGuard;
 use crate::processors::ProcessorPtr;
 use crate::processors::ResizeProcessor;
 use crate::processors::ShuffleProcessor;
 use crate::LockGuard;
-use crate::PlanScopeGuard;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
@@ -103,9 +104,9 @@ impl Pipeline {
         }
     }
 
-    pub fn reset_scopes(&mut self, scopes: Vec<PlanScope>) {
-        self.scope_size = Arc::new(AtomicUsize::new(scopes.len()));
-        self.plans_scope = scopes;
+    pub fn reset_scopes(&mut self, other: &Self) {
+        self.scope_size = other.scope_size.clone();
+        self.plans_scope = other.plans_scope.clone();
     }
 
     pub fn is_empty(&self) -> bool {
@@ -476,14 +477,16 @@ impl Pipeline {
 
 impl Drop for Pipeline {
     fn drop(&mut self) {
-        // An error may have occurred before the executor was created.
-        if let Some(on_finished) = self.on_finished.take() {
-            let cause = Err(ErrorCode::Internal(
-                "Pipeline illegal state: not successfully shutdown.",
-            ));
+        drop_guard(move || {
+            // An error may have occurred before the executor was created.
+            if let Some(on_finished) = self.on_finished.take() {
+                let cause = Err(ErrorCode::Internal(
+                    "Pipeline illegal state: not successfully shutdown.",
+                ));
 
-            let _ = (on_finished)(&cause);
-        }
+                let _ = (on_finished)(&cause);
+            }
+        })
     }
 }
 

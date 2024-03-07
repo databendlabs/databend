@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::TaskSql;
 use databend_common_ast::ast::WarehouseOptions;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType::Int32;
@@ -45,6 +46,7 @@ pub fn task_schema() -> DataSchemaRef {
             "suspend_task_after_num_failures",
             DataType::Number(UInt64).wrap_nullable(),
         ),
+        DataField::new("error_integration", DataType::String.wrap_nullable()),
         DataField::new("next_schedule_time", DataType::Timestamp.wrap_nullable()),
         DataField::new("last_committed_on", DataType::Timestamp),
         DataField::new("last_suspended_on", DataType::Timestamp.wrap_nullable()),
@@ -75,7 +77,7 @@ pub fn task_run_schema() -> DataSchemaRef {
     ]))
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CreateTaskPlan {
     pub if_not_exists: bool,
     pub tenant: String,
@@ -85,8 +87,9 @@ pub struct CreateTaskPlan {
     pub after: Vec<String>,
     pub when_condition: Option<String>,
     pub suspend_task_after_num_failures: Option<u64>,
+    pub error_integration: Option<String>,
     pub session_parameters: BTreeMap<String, String>,
-    pub sql: String,
+    pub sql: TaskSql,
     pub comment: String,
 }
 
@@ -96,7 +99,7 @@ impl CreateTaskPlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AlterTaskPlan {
     pub if_exists: bool,
     pub tenant: String,
@@ -110,7 +113,7 @@ impl AlterTaskPlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DropTaskPlan {
     pub if_exists: bool,
     pub tenant: String,
@@ -123,7 +126,7 @@ impl DropTaskPlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DescribeTaskPlan {
     pub tenant: String,
     pub task_name: String,
@@ -135,7 +138,7 @@ impl DescribeTaskPlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ExecuteTaskPlan {
     pub tenant: String,
     pub task_name: String,

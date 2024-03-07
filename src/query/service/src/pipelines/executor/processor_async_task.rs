@@ -16,19 +16,19 @@ use std::future::Future;
 use std::intrinsics::assume;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::Weak;
 use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::catch_unwind;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::processors::Profile;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use futures_util::FutureExt;
@@ -37,18 +37,57 @@ use log::warn;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::CompletedAsyncTask;
-use crate::pipelines::executor::ExecutorTasksQueue;
-use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::QueriesExecutorTasksQueue;
+use crate::pipelines::executor::QueryExecutorTasksQueue;
+use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
+
+pub enum ExecutorTasksQueue {
+    QueryExecutorTasksQueue(Arc<QueryExecutorTasksQueue>),
+    QueriesExecutorTasksQueue(Arc<QueriesExecutorTasksQueue>),
+}
+
+impl ExecutorTasksQueue {
+    pub fn get_finished_notify(&self) -> Arc<WatchNotify> {
+        match &self {
+            ExecutorTasksQueue::QueryExecutorTasksQueue(executor) => executor.get_finished_notify(),
+            ExecutorTasksQueue::QueriesExecutorTasksQueue(executor) => {
+                executor.get_finished_notify()
+            }
+        }
+    }
+    pub fn active_workers(&self) -> usize {
+        match &self {
+            ExecutorTasksQueue::QueryExecutorTasksQueue(executor) => executor.active_workers(),
+            ExecutorTasksQueue::QueriesExecutorTasksQueue(executor) => executor.active_workers(),
+        }
+    }
+    pub fn is_finished(&self) -> bool {
+        match &self {
+            ExecutorTasksQueue::QueryExecutorTasksQueue(executor) => executor.is_finished(),
+            ExecutorTasksQueue::QueriesExecutorTasksQueue(executor) => executor.is_finished(),
+        }
+    }
+    pub fn completed_async_task(&self, condvar: Arc<WorkersCondvar>, task: CompletedAsyncTask) {
+        match &self {
+            ExecutorTasksQueue::QueryExecutorTasksQueue(executor) => {
+                executor.completed_async_task(condvar, task)
+            }
+            ExecutorTasksQueue::QueriesExecutorTasksQueue(executor) => {
+                executor.completed_async_task(condvar, task)
+            }
+        }
+    }
+}
 
 pub struct ProcessorAsyncTask {
     worker_id: usize,
     processor_id: NodeIndex,
     queue: Arc<ExecutorTasksQueue>,
     workers_condvar: Arc<WorkersCondvar>,
-    profile: Arc<Profile>,
     instant: Instant,
     last_nanos: usize,
+    graph: Arc<RunningGraph>,
     inner: BoxFuture<'static, Result<()>>,
 }
 
@@ -59,8 +98,7 @@ impl ProcessorAsyncTask {
         processor: ProcessorPtr,
         queue: Arc<ExecutorTasksQueue>,
         workers_condvar: Arc<WorkersCondvar>,
-        weak_executor: Weak<PipelineExecutor>,
-        profile: Arc<Profile>,
+        graph: Arc<RunningGraph>,
         inner: Inner,
     ) -> ProcessorAsyncTask {
         let finished_notify = queue.get_finished_notify();
@@ -79,6 +117,7 @@ impl ProcessorAsyncTask {
         let processor_id = unsafe { processor.id() };
         let processor_name = unsafe { processor.name() };
         let queue_clone = queue.clone();
+        let graph_clone = graph.clone();
         let inner = async move {
             let start = Instant::now();
             let mut inner = inner.boxed();
@@ -103,17 +142,15 @@ impl ProcessorAsyncTask {
                             }
                             true => {
                                 log_graph = true;
-                                if let Some(executor) = weak_executor.upgrade() {
-                                    error!(
-                                        "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}, {}",
-                                        query_id,
-                                        processor_id,
-                                        processor_name,
-                                        elapsed,
-                                        active_workers,
-                                        executor.graph.format_graph_nodes()
-                                    );
-                                }
+                                error!(
+                                    "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}, {}",
+                                    query_id,
+                                    processor_id,
+                                    processor_name,
+                                    elapsed,
+                                    active_workers,
+                                    graph_clone.format_graph_nodes()
+                                );
                             }
                         };
                     }
@@ -130,9 +167,9 @@ impl ProcessorAsyncTask {
             processor_id,
             queue,
             workers_condvar,
-            profile,
             last_nanos: instant.elapsed().as_nanos() as usize,
             instant,
+            graph,
             inner: inner.boxed(),
         }
     }
@@ -145,8 +182,6 @@ impl Future for ProcessorAsyncTask {
         if self.queue.is_finished() {
             return Poll::Ready(());
         }
-
-        Profile::track_profile(&self.profile);
 
         let last_nanos = self.last_nanos;
         let last_instant = self.instant;
@@ -172,14 +207,24 @@ impl Future for ProcessorAsyncTask {
             Ok(Poll::Ready(res)) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, res),
+                    CompletedAsyncTask::create(
+                        self.processor_id,
+                        self.worker_id,
+                        res,
+                        self.graph.clone(),
+                    ),
                 );
                 Poll::Ready(())
             }
             Err(cause) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
-                    CompletedAsyncTask::create(self.processor_id, self.worker_id, Err(cause)),
+                    CompletedAsyncTask::create(
+                        self.processor_id,
+                        self.worker_id,
+                        Err(cause),
+                        self.graph.clone(),
+                    ),
                 );
 
                 Poll::Ready(())

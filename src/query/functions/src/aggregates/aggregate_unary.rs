@@ -14,7 +14,6 @@
 
 use std::alloc::Layout;
 use std::any::Any;
-use std::any::TypeId;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
@@ -23,10 +22,8 @@ use std::sync::Arc;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_base::base::take_mut;
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::Decimal128Type;
-use databend_common_expression::types::decimal::Decimal256Type;
-use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateFunctionRef;
@@ -35,7 +32,8 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 
-pub trait UnaryState<T, R>: Send + Sync + Default
+pub trait UnaryState<T, R>:
+    Send + Sync + Default + borsh::BorshSerialize + borsh::BorshDeserialize
 where
     T: ValueType,
     R: ValueType,
@@ -49,11 +47,6 @@ where
         builder: &mut R::ColumnBuilder,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()>;
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
-
-    fn deserialize(reader: &mut &[u8]) -> Result<Self>
-    where Self: Sized;
 }
 
 pub trait FunctionData: Send + Sync {
@@ -137,36 +130,33 @@ where
     }
 
     fn do_merge_result(&self, state: &mut S, builder: &mut ColumnBuilder) -> Result<()> {
-        match builder {
-            // current decimal implementation hard do upcast_builder, we do downcast manually.
-            ColumnBuilder::Decimal(b) => match b {
-                DecimalColumnBuilder::Decimal128(_, _) => {
-                    debug_assert!(TypeId::of::<R>() == TypeId::of::<Decimal128Type>());
-                    let builder = R::try_downcast_builder(builder).unwrap();
-                    state.merge_result(builder, self.function_data.as_deref())
-                }
-                DecimalColumnBuilder::Decimal256(_, _) => {
-                    debug_assert!(TypeId::of::<R>() == TypeId::of::<Decimal256Type>());
-                    let builder = R::try_downcast_builder(builder).unwrap();
-                    state.merge_result(builder, self.function_data.as_deref())
-                }
-            },
-            _ => {
-                // some `ValueType` like `NullableType` need ownership to downcast builder,
-                // so here we using an unsafe way to take the ownership of builder.
-                // See [`take_mut`] for details.
-                if let Some(builder) = R::try_downcast_builder(builder) {
-                    state.merge_result(builder, self.function_data.as_deref())
-                } else {
-                    take_mut(builder, |builder| {
-                        let mut builder = R::try_downcast_owned_builder(builder).unwrap();
-                        let res = state.merge_result(&mut builder, self.function_data.as_deref());
+        let decimal_size = check_decimal(builder);
+        // some `ValueType` like `NullableType` need ownership to downcast builder,
+        // so here we using an unsafe way to take the ownership of builder.
+        // See [`take_mut`] for details.
+        if let Some(builder) = R::try_downcast_builder(builder) {
+            state.merge_result(builder, self.function_data.as_deref())
+        } else {
+            take_mut(builder, |builder| {
+                let mut builder = R::try_downcast_owned_builder(builder).unwrap();
+                let res = state.merge_result(&mut builder, self.function_data.as_deref());
 
-                        (res, R::try_upcast_column_builder(builder).unwrap())
-                    })
-                }
-            }
+                (
+                    res,
+                    R::try_upcast_column_builder(builder, decimal_size).unwrap(),
+                )
+            })
         }
+    }
+}
+
+fn check_decimal(builder: &ColumnBuilder) -> Option<DecimalSize> {
+    match builder {
+        ColumnBuilder::Decimal(b) => Some(b.decimal_size()),
+        ColumnBuilder::Array(box b) => check_decimal(&b.builder),
+        ColumnBuilder::Nullable(box b) => check_decimal(&b.builder),
+        ColumnBuilder::Map(box b) => check_decimal(&b.builder),
+        _ => None,
     }
 }
 
@@ -248,12 +238,12 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state: &mut S = place.get::<S>();
-        state.serialize(writer)
+        Ok(borsh::to_writer(writer, state)?)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state: &mut S = place.get::<S>();
-        let rhs = S::deserialize(reader)?;
+        let rhs = S::deserialize_reader(reader)?;
         state.merge(&rhs)
     }
 

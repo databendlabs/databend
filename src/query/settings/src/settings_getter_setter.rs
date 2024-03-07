@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
@@ -223,6 +223,10 @@ impl Settings {
         self.try_get_u64("input_read_buffer_size")
     }
 
+    pub fn get_enable_new_copy_for_text_formats(&self) -> Result<u64> {
+        self.try_get_u64("enable_new_copy_for_text_formats")
+    }
+
     pub fn get_enable_bushy_join(&self) -> Result<u64> {
         self.try_get_u64("enable_bushy_join")
     }
@@ -265,12 +269,20 @@ impl Settings {
         Ok(self.unchecked_try_get_u64("disable_join_reorder")? != 0)
     }
 
-    pub fn get_join_spilling_threshold(&self) -> Result<usize> {
-        Ok(self.try_get_u64("join_spilling_threshold")? as usize)
+    pub fn get_join_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_memory_ratio")? as usize)
     }
 
-    pub fn get_runtime_filter(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_runtime_filter")? != 0)
+    pub fn get_join_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_bytes_threshold_per_proc")? as usize)
+    }
+
+    pub fn get_join_spilling_partition_bits(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_partition_bits")? as usize)
+    }
+
+    pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_bloom_runtime_filter")? != 0)
     }
 
     pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
@@ -597,5 +609,21 @@ impl Settings {
 
     pub fn get_cost_factor_network_per_row(&self) -> Result<u64> {
         self.try_get_u64("cost_factor_network_per_row")
+    }
+
+    pub fn get_enable_geo_create_table(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_geo_create_table")? != 0)
+    }
+
+    pub fn set_enable_geo_create_table(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_geo_create_table", u64::from(val))
+    }
+
+    pub fn get_idle_transaction_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("idle_transaction_timeout_secs")
+    }
+
+    pub fn get_enable_experimental_queries_executor(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_queries_executor")? == 1)
     }
 }

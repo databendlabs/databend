@@ -13,6 +13,7 @@ test = true
 [dependencies]
 databend-common-expression = { path = "../../query/expression" }
 databend-common-meta-app = { path = "../app" }
+databend-common-meta-types = { path = "../types" }
 databend-common-protos = { path = "../protos" }
 
 chrono = { workspace = true }

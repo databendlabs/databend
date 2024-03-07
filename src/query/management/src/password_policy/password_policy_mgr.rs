@@ -18,6 +18,7 @@ use databend_common_base::base::escape_for_key;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordPolicy;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
@@ -67,8 +68,12 @@ impl PasswordPolicyMgr {
 impl PasswordPolicyApi for PasswordPolicyMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_password_policy(&self, password_policy: PasswordPolicy) -> Result<u64> {
-        let match_seq = MatchSeq::Exact(0);
+    async fn add_password_policy(
+        &self,
+        password_policy: PasswordPolicy,
+        create_option: &CreateOption,
+    ) -> Result<()> {
+        let seq = MatchSeq::from(*create_option);
         let key = self.make_password_policy_key(password_policy.name.as_str())?;
         let value = Operation::Update(serialize_struct(
             &password_policy,
@@ -77,16 +82,20 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
         )?);
 
         let kv_api = self.kv_api.clone();
-        let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(&key, match_seq, value, None));
+        let res = kv_api
+            .upsert_kv(UpsertKVReq::new(&key, seq, value, None))
+            .await?;
 
-        let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
-            ErrorCode::PasswordPolicyAlreadyExists(format!(
-                "Password policy '{}' already exists.",
-                password_policy.name
-            ))
-        })?;
+        if let CreateOption::None = create_option {
+            if res.prev.is_some() {
+                return Err(ErrorCode::PasswordPolicyAlreadyExists(format!(
+                    "Password policy '{}' already exists.",
+                    password_policy.name
+                )));
+            }
+        }
 
-        Ok(res_seq)
+        Ok(())
     }
 
     #[async_backtrace::framed]

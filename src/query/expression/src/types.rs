@@ -65,7 +65,6 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
-use crate::SelectOp;
 
 pub type GenericMap = [DataType];
 
@@ -346,7 +345,10 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder>;
 
-    fn try_upcast_column_builder(builder: Self::ColumnBuilder) -> Option<ColumnBuilder>;
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        decimal_size: Option<DecimalSize>,
+    ) -> Option<ColumnBuilder>;
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
     fn upcast_column(col: Self::Column) -> Column;
@@ -382,19 +384,6 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     #[inline(always)]
     fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Option<Ordering> {
         None
-    }
-
-    /// Return the comparison function for the given select operation, some data types not support comparison.
-    #[inline(always)]
-    fn compare_operation(op: &SelectOp) -> fn(Self::ScalarRef<'_>, Self::ScalarRef<'_>) -> bool {
-        match op {
-            SelectOp::Equal => Self::equal,
-            SelectOp::NotEqual => Self::not_equal,
-            SelectOp::Gt => Self::greater_than,
-            SelectOp::Gte => Self::greater_than_equal,
-            SelectOp::Lt => Self::less_than,
-            SelectOp::Lte => Self::less_than_equal,
-        }
     }
 
     /// Equal comparison between two scalars, some data types not support comparison.

@@ -28,6 +28,7 @@ use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_users::idm_config::IDMConfig;
@@ -147,7 +148,7 @@ impl Debug for InnerConfig {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
-    pub tenant_id: String,
+    pub tenant_id: NonEmptyString,
     /// ID for construct the cluster.
     pub cluster_id: String,
     // ID for the query node.
@@ -190,7 +191,8 @@ pub struct QueryConfig {
     pub rpc_client_timeout_secs: u64,
     /// Table engine memory enabled
     pub table_engine_memory_enabled: bool,
-    pub wait_timeout_mills: u64,
+    /// Graceful shutdown timeout
+    pub shutdown_wait_timeout_ms: u64,
     pub max_query_log_size: usize,
     pub databend_enterprise_license: Option<String>,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
@@ -234,7 +236,7 @@ pub struct QueryConfig {
 impl Default for QueryConfig {
     fn default() -> Self {
         Self {
-            tenant_id: "admin".to_string(),
+            tenant_id: NonEmptyString::new("admin").unwrap(),
             cluster_id: "".to_string(),
             node_id: "".to_string(),
             num_cpus: 0,
@@ -269,7 +271,7 @@ impl Default for QueryConfig {
             rpc_tls_query_service_domain_name: "localhost".to_string(),
             rpc_client_timeout_secs: 0,
             table_engine_memory_enabled: true,
-            wait_timeout_mills: 5000,
+            shutdown_wait_timeout_ms: 5000,
             max_query_log_size: 10_000,
             databend_enterprise_license: None,
             management_mode: false,

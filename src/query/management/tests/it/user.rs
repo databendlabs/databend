@@ -82,6 +82,7 @@ fn default_test_auth_info() -> AuthInfo {
 mod add {
     use databend_common_meta_app::principal::UserInfo;
     use databend_common_meta_app::schema::CreateOption;
+    use databend_common_meta_types::NonEmptyStr;
     use databend_common_meta_types::Operation;
 
     use super::*;
@@ -119,8 +120,8 @@ mod add {
                 .times(1)
                 .return_once(|_u| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, v)))));
             let api = Arc::new(api);
-            let user_mgr = UserMgr::create(api, "tenant1")?;
-            let res = user_mgr.add_user(user_info, &CreateOption::CreateIfNotExists(false));
+            let user_mgr = UserMgr::create(api, NonEmptyStr::new("tenant1").unwrap());
+            let res = user_mgr.add_user(user_info, &CreateOption::None);
 
             assert!(res.await.is_ok());
         }
@@ -145,13 +146,11 @@ mod add {
                 });
 
             let api = Arc::new(api);
-            let user_mgr = UserMgr::create(api, "tenant1")?;
+            let user_mgr = UserMgr::create(api, NonEmptyStr::new("tenant1").unwrap());
 
             let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-            let res = user_mgr
-                .add_user(user_info, &CreateOption::CreateIfNotExists(false))
-                .await;
+            let res = user_mgr.add_user(user_info, &CreateOption::None).await;
 
             assert_eq!(
                 res.unwrap_err().code(),
@@ -165,6 +164,7 @@ mod add {
 
 mod get {
     use databend_common_meta_app::principal::UserInfo;
+    use databend_common_meta_types::NonEmptyStr;
 
     use super::*;
 
@@ -187,7 +187,7 @@ mod get {
             .return_once(move |_k| Ok(Some(SeqV::new(1, value))));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
         let res = user_mgr.get_user(user_info.identity(), MatchSeq::Exact(1));
         assert!(res.await.is_ok());
 
@@ -213,7 +213,7 @@ mod get {
             .return_once(move |_k| Ok(Some(SeqV::new(100, value))));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
         let res = user_mgr.get_user(user_info.identity(), MatchSeq::GE(0));
         assert!(res.await.is_ok());
         Ok(())
@@ -235,7 +235,7 @@ mod get {
             .return_once(move |_k| Ok(None));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
         let res = user_mgr
             .get_user(
                 UserIdentity::new(test_user_name, test_hostname),
@@ -263,7 +263,7 @@ mod get {
             .return_once(move |_k| Ok(Some(SeqV::new(1, vec![]))));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
         let res = user_mgr
             .get_user(
                 UserIdentity::new(test_user_name, test_hostname),
@@ -291,7 +291,7 @@ mod get {
             .return_once(move |_k| Ok(Some(SeqV::new(1, vec![]))));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
         let res = user_mgr.get_user(
             UserIdentity::new(test_user_name, test_hostname),
             MatchSeq::GE(0),
@@ -307,6 +307,7 @@ mod get {
 
 mod get_users {
     use databend_common_meta_app::principal::UserInfo;
+    use databend_common_meta_types::NonEmptyStr;
 
     use super::*;
 
@@ -347,7 +348,7 @@ mod get_users {
         let (res, user_infos) = prepare()?;
         let mut kv = MockKV::new();
         {
-            let k = "__fd_users/tenant1";
+            let k = "__fd_users/tenant1/";
             kv.expect_prefix_list_kv()
                 .with(predicate::eq(k))
                 .times(1)
@@ -355,7 +356,7 @@ mod get_users {
         }
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
         let res = user_mgr.get_users();
         assert_eq!(res.await?, user_infos);
 
@@ -376,7 +377,7 @@ mod get_users {
 
         let mut kv = MockKV::new();
         {
-            let k = "__fd_users/tenant1";
+            let k = "__fd_users/tenant1/";
             kv.expect_prefix_list_kv()
                 .with(predicate::eq(k))
                 .times(1)
@@ -384,7 +385,7 @@ mod get_users {
         }
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
         let res = user_mgr.get_users();
         assert_eq!(
             res.await.unwrap_err().code(),
@@ -396,6 +397,7 @@ mod get_users {
 }
 
 mod drop {
+    use databend_common_meta_types::NonEmptyStr;
 
     use super::*;
 
@@ -418,7 +420,7 @@ mod drop {
             .times(1)
             .returning(|_k| Ok(UpsertKVReply::new(Some(SeqV::new(1, vec![])), None)));
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
         let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), MatchSeq::GE(1));
         assert!(res.await.is_ok());
 
@@ -444,7 +446,7 @@ mod drop {
             .times(1)
             .returning(|_k| Ok(UpsertKVReply::new(None, None)));
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
         let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), MatchSeq::GE(1));
         assert_eq!(
             res.await.unwrap_err().code(),
@@ -457,6 +459,7 @@ mod drop {
 mod update {
     use databend_common_meta_app::principal::AuthInfo;
     use databend_common_meta_app::principal::UserInfo;
+    use databend_common_meta_types::NonEmptyStr;
 
     use super::*;
 
@@ -520,7 +523,7 @@ mod update {
             .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, vec![])))));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
 
         let res = user_mgr.update_user_with(user_info.identity(), test_seq, |ui: &mut UserInfo| {
             ui.update_auth_option(Some(new_test_auth_info(full)), None)
@@ -549,7 +552,7 @@ mod update {
             .return_once(move |_k| Ok(None));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
 
         let res = user_mgr.update_user_with(
             UserIdentity::new(test_user_name, test_hostname),
@@ -594,7 +597,7 @@ mod update {
             .returning(|_| Ok(UpsertKVReply::new(None, None)));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
 
         let _ = user_mgr
             .update_user_with(user_info.identity(), MatchSeq::GE(1), |_x| {})
@@ -608,6 +611,7 @@ mod set_user_privileges {
     use databend_common_meta_app::principal::UserInfo;
     use databend_common_meta_app::principal::UserPrivilegeSet;
     use databend_common_meta_app::principal::UserPrivilegeType;
+    use databend_common_meta_types::NonEmptyStr;
 
     use super::*;
 
@@ -651,7 +655,7 @@ mod set_user_privileges {
             .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, vec![])))));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, "tenant1")?;
+        let user_mgr = UserMgr::create(kv, NonEmptyStr::new("tenant1").unwrap());
 
         let res = user_mgr.update_user_with(
             user_info.identity(),

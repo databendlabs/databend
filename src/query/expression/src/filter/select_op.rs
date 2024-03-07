@@ -53,3 +53,20 @@ impl SelectOp {
         }
     }
 }
+
+#[macro_export]
+macro_rules! with_mapped_cmp_method {
+    ( | $t:tt | $($tail:tt)* ) => {
+        match_template::match_template! {
+            $t = [
+                Equal => equal,
+                NotEqual => not_equal,
+                Gt => greater_than,
+                Lt => less_than,
+                Gte => greater_than_equal,
+                Lte => less_than_equal,
+            ],
+            $($tail)*
+        }
+    }
+}

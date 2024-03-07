@@ -59,6 +59,10 @@ impl Interpreter for AddTableColumnInterpreter {
         "AddTableColumnInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.as_str();
@@ -131,7 +135,7 @@ impl Interpreter for AddTableColumnInterpreter {
 
             if let Some(share_table_info) = res.share_table_info {
                 save_share_table_info(
-                    &self.ctx.get_tenant(),
+                    self.ctx.get_tenant().as_str(),
                     self.ctx.get_data_operator()?.operator(),
                     share_table_info,
                 )

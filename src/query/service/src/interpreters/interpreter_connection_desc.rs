@@ -45,13 +45,17 @@ impl Interpreter for DescConnectionInterpreter {
         "DescConnectionInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
 
         let mut connection = user_mgr
-            .get_connection(&tenant, self.plan.name.as_str())
+            .get_connection(tenant.as_str(), self.plan.name.as_str())
             .await?;
 
         let names = vec![connection.name.clone()];

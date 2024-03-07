@@ -21,6 +21,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType::Ownership;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::GrantPrivilegePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -111,7 +112,7 @@ impl GrantPrivilegeInterpreter {
     async fn grant_ownership(
         &self,
         ctx: &Arc<QueryContext>,
-        tenant: &str,
+        tenant: &NonEmptyString,
         owner_object: &OwnershipObject,
         new_role: &str,
     ) -> Result<()> {
@@ -167,6 +168,10 @@ impl Interpreter for GrantPrivilegeInterpreter {
         "GrantPrivilegeInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -186,13 +191,13 @@ impl Interpreter for GrantPrivilegeInterpreter {
         match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr
-                    .grant_privileges_to_user(&tenant, user, plan.on, plan.priv_types)
+                    .grant_privileges_to_user(tenant.clone(), user, plan.on, plan.priv_types)
                     .await?;
             }
             PrincipalIdentity::Role(role) => {
                 if plan.priv_types.has_privilege(Ownership) && plan.priv_types.len() == 1 {
                     let owner_object = self
-                        .convert_to_ownerobject(&tenant, &plan.on, plan.on.catalog())
+                        .convert_to_ownerobject(tenant.as_str(), &plan.on, plan.on.catalog())
                         .await?;
                     if self.ctx.get_current_role().is_some() {
                         self.grant_ownership(&self.ctx, &tenant, &owner_object, &role)

@@ -13,10 +13,12 @@ doctest = false
 # Workspace dependencies
 databend-common-base = { path = "../../common/base" }
 databend-common-exception = { path = "../../common/exception" }
+databend-common-functions = { path = "../functions" }
 databend-common-io = { path = "../../common/io" }
 databend-common-meta-app = { path = "../../meta/app" }
 
 # Crates.io dependencies
+derive-visitor = { workspace = true }
 enum-as-inner = "0.5.1"
 ethnum = { workspace = true }
 fast-float = "0.2.0"

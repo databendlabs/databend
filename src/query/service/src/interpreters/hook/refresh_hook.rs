@@ -167,7 +167,7 @@ async fn generate_refresh_index_plan(
     let mut plans = vec![];
     let indexes = catalog
         .list_indexes_by_table_id(ListIndexesByIdReq {
-            tenant: ctx.get_tenant(),
+            tenant: ctx.get_tenant().to_string(),
             table_id,
         })
         .await?;
@@ -235,7 +235,7 @@ async fn generate_refresh_virtual_column_plan(
     let catalog = ctx.get_catalog(&desc.catalog).await?;
     let res = catalog
         .list_virtual_columns(ListVirtualColumnsReq {
-            tenant: ctx.get_tenant(),
+            tenant: ctx.get_tenant().to_string(),
             table_id: Some(table_info.get_id()),
         })
         .await?;

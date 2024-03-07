@@ -129,7 +129,7 @@ impl PyDataFrame {
             .into_iter()
             .map(|block| {
                 block
-                    .to_record_batch(self.df.schema().as_ref())
+                    .to_record_batch_with_dataschema(self.df.schema().as_ref())
                     .unwrap()
                     .to_pyarrow(py)
             })

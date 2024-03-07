@@ -20,7 +20,11 @@ use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Thread;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayload;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -28,7 +32,6 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::Sink;
 use databend_common_pipeline_sinks::Sinker;
-use log::warn;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use parking_lot::Condvar;
@@ -36,6 +39,8 @@ use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::QueriesPipelineExecutor;
+use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::ProcessorPtr;
 use crate::pipelines::PipelineBuildResult;
@@ -94,18 +99,37 @@ pub struct PipelinePullingExecutor {
     state: Arc<State>,
     executor: Arc<PipelineExecutor>,
     receiver: Receiver<DataBlock>,
+    tracking_payload: TrackingPayload,
 }
 
 impl PipelinePullingExecutor {
-    fn wrap_pipeline(pipeline: &mut Pipeline, tx: SyncSender<DataBlock>) -> Result<()> {
+    fn execution_tracking_payload(query_id: &str) -> TrackingPayload {
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.mem_stat = Some(MemStat::create(format!(
+            "QueryExecutionMemStat-{}",
+            query_id
+        )));
+        tracking_payload
+    }
+
+    fn wrap_pipeline(
+        pipeline: &mut Pipeline,
+        tx: SyncSender<DataBlock>,
+        mem_stat: Arc<MemStat>,
+    ) -> Result<()> {
         if pipeline.is_pushing_pipeline()? || !pipeline.is_pulling_pipeline()? {
             return Err(ErrorCode::Internal(
                 "Logical error, PipelinePullingExecutor can only work on pulling pipeline.",
             ));
         }
 
-        pipeline
-            .add_sink(|input| Ok(ProcessorPtr::create(PullingSink::create(tx.clone(), input))))?;
+        pipeline.add_sink(|input| {
+            Ok(ProcessorPtr::create(PullingSink::create(
+                tx.clone(),
+                mem_stat.clone(),
+                input,
+            )))
+        })?;
 
         pipeline.set_on_finished(move |_may_error| {
             drop(tx);
@@ -119,15 +143,31 @@ impl PipelinePullingExecutor {
         mut pipeline: Pipeline,
         settings: ExecutorSettings,
     ) -> Result<PipelinePullingExecutor> {
+        let tracking_payload = Self::execution_tracking_payload(settings.query_id.as_ref());
+        let _guard = ThreadTracker::tracking(tracking_payload.clone());
+
         let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
 
-        Self::wrap_pipeline(&mut pipeline, sender)?;
+        Self::wrap_pipeline(
+            &mut pipeline,
+            sender,
+            tracking_payload.mem_stat.clone().unwrap(),
+        )?;
+        let executor = if settings.enable_new_executor {
+            PipelineExecutor::QueriesPipelineExecutor(QueriesPipelineExecutor::create(
+                pipeline, settings,
+            )?)
+        } else {
+            PipelineExecutor::QueryPipelineExecutor(QueryPipelineExecutor::create(
+                pipeline, settings,
+            )?)
+        };
 
-        let executor = PipelineExecutor::create(pipeline, settings)?;
         Ok(PipelinePullingExecutor {
             receiver,
-            executor,
+            executor: Arc::new(executor),
             state: State::create(),
+            tracking_payload,
         })
     }
 
@@ -135,23 +175,41 @@ impl PipelinePullingExecutor {
         build_res: PipelineBuildResult,
         settings: ExecutorSettings,
     ) -> Result<PipelinePullingExecutor> {
+        let tracking_payload = Self::execution_tracking_payload(settings.query_id.as_ref());
+        let _guard = ThreadTracker::tracking(tracking_payload.clone());
+
         let mut main_pipeline = build_res.main_pipeline;
         let (sender, receiver) = std::sync::mpsc::sync_channel(main_pipeline.output_len());
 
-        Self::wrap_pipeline(&mut main_pipeline, sender)?;
+        Self::wrap_pipeline(
+            &mut main_pipeline,
+            sender,
+            tracking_payload.mem_stat.clone().unwrap(),
+        )?;
 
         let mut pipelines = build_res.sources_pipelines;
         pipelines.push(main_pipeline);
-
+        let executor = if settings.enable_new_executor {
+            PipelineExecutor::QueriesPipelineExecutor(QueriesPipelineExecutor::from_pipelines(
+                pipelines, settings,
+            )?)
+        } else {
+            PipelineExecutor::QueryPipelineExecutor(QueryPipelineExecutor::from_pipelines(
+                pipelines, settings,
+            )?)
+        };
         Ok(PipelinePullingExecutor {
             receiver,
             state: State::create(),
-            executor: PipelineExecutor::from_pipelines(pipelines, settings)?,
+            tracking_payload,
+            executor: Arc::new(executor),
         })
     }
 
     #[minitrace::trace]
     pub fn start(&mut self) {
+        let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
+
         let state = self.state.clone();
         let threads_executor = self.executor.clone();
         let thread_function = Self::thread_function(state, threads_executor);
@@ -184,6 +242,8 @@ impl PipelinePullingExecutor {
     }
 
     pub fn finish(&self, cause: Option<ErrorCode>) {
+        let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
+
         self.executor.finish(cause);
     }
 
@@ -215,8 +275,6 @@ impl PipelinePullingExecutor {
                     continue;
                 }
                 Err(RecvTimeoutError::Disconnected) => {
-                    warn!("receiver has been disconnected, finish executor now");
-
                     if !self.executor.is_finished() {
                         self.executor.finish(None);
                     }
@@ -235,17 +293,29 @@ impl PipelinePullingExecutor {
 
 impl Drop for PipelinePullingExecutor {
     fn drop(&mut self) {
-        self.finish(None);
+        drop_guard(move || {
+            let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
+
+            self.finish(None);
+        })
     }
 }
 
 struct PullingSink {
     sender: Option<SyncSender<DataBlock>>,
+    query_execution_mem_stat: Arc<MemStat>,
 }
 
 impl PullingSink {
-    pub fn create(tx: SyncSender<DataBlock>, input: Arc<InputPort>) -> Box<dyn Processor> {
-        Sinker::create(input, PullingSink { sender: Some(tx) })
+    pub fn create(
+        tx: SyncSender<DataBlock>,
+        mem_stat: Arc<MemStat>,
+        input: Arc<InputPort>,
+    ) -> Box<dyn Processor> {
+        Sinker::create(input, PullingSink {
+            sender: Some(tx),
+            query_execution_mem_stat: mem_stat,
+        })
     }
 }
 
@@ -258,6 +328,12 @@ impl Sink for PullingSink {
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
+        let memory_size = data_block.memory_size() as i64;
+        // TODO: need moveout memory for plan tracker
+        ThreadTracker::moveout_memory(memory_size);
+
+        self.query_execution_mem_stat.moveout_memory(memory_size);
+
         if let Some(sender) = &self.sender {
             if let Err(cause) = sender.send(data_block) {
                 return Err(ErrorCode::Internal(format!(

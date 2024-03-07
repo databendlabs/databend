@@ -55,9 +55,20 @@ pub struct UDFServer {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UDFScript {
+    pub code: String,
+    pub handler: String,
+    pub language: String,
+    pub arg_types: Vec<DataType>,
+    pub return_type: DataType,
+    pub runtime_version: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UDFDefinition {
     LambdaUDF(LambdaUDF),
     UDFServer(UDFServer),
+    UDFScript(UDFScript),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -108,6 +119,31 @@ impl UserDefinedFunction {
             created_on: Utc::now(),
         }
     }
+
+    pub fn create_udf_script(
+        name: &str,
+        code: &str,
+        handler: &str,
+        language: &str,
+        arg_types: Vec<DataType>,
+        return_type: DataType,
+        runtime_version: &str,
+        description: &str,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            description: description.to_string(),
+            definition: UDFDefinition::UDFScript(UDFScript {
+                code: code.to_string(),
+                handler: handler.to_string(),
+                language: language.to_string(),
+                arg_types,
+                return_type,
+                runtime_version: runtime_version.to_string(),
+            }),
+            created_on: Utc::now(),
+        }
+    }
 }
 
 impl Display for UDFDefinition {
@@ -144,6 +180,26 @@ impl Display for UDFDefinition {
                     ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler} ADDRESS = {address}"
                 )?;
             }
+
+            UDFDefinition::UDFScript(UDFScript {
+                code,
+                arg_types,
+                return_type,
+                handler,
+                language,
+                runtime_version,
+            }) => {
+                for (i, item) in arg_types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{item}")?;
+                }
+                write!(
+                    f,
+                    ") RETURNS {return_type} LANGUAGE {language} RUNTIME_VERSION = {runtime_version} HANDLER = {handler} AS $${code}$$"
+                )?;
+            }
         }
         Ok(())
     }
@@ -154,11 +210,17 @@ mod kv_api_impl {
 
     use super::UdfName;
     use crate::principal::UserDefinedFunction;
+    use crate::tenant::Tenant;
 
     impl kvapi::Key for UdfName {
         const PREFIX: &'static str = "__fd_udfs";
 
         type ValueType = UserDefinedFunction;
+
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -175,6 +237,12 @@ mod kv_api_impl {
             p.done()?;
 
             Ok(UdfName { tenant, name })
+        }
+    }
+
+    impl kvapi::Value for UserDefinedFunction {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
         }
     }
 }

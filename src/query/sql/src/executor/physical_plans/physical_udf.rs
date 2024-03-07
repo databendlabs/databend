@@ -26,6 +26,7 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
+use crate::plans::UDFType;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
@@ -36,7 +37,7 @@ pub struct Udf {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub udf_funcs: Vec<UdfFunctionDesc>,
-
+    pub script_udf: bool,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -56,12 +57,14 @@ impl Udf {
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UdfFunctionDesc {
+    pub name: String,
     pub func_name: String,
-    pub server_addr: String,
     pub output_column: IndexType,
     pub arg_indices: Vec<IndexType>,
     pub arg_exprs: Vec<String>,
     pub data_type: Box<DataType>,
+
+    pub udf_type: UDFType,
 }
 
 impl PhysicalPlanBuilder {
@@ -86,7 +89,10 @@ impl PhysicalPlanBuilder {
         if used.is_empty() {
             return self.build(s_expr.child(0)?, required).await;
         }
-        let udf = crate::plans::Udf { items: used };
+        let udf = crate::plans::Udf {
+            items: used,
+            script_udf: udf.script_udf,
+        };
         let input = self.build(s_expr.child(0)?, required).await?;
         let input_schema = input.output_schema()?;
         let mut index = input_schema.num_fields();
@@ -95,9 +101,10 @@ impl PhysicalPlanBuilder {
             .items
             .iter()
             .map(|item| {
-                if let ScalarExpr::UDFServerCall(func) = &item.scalar {
-                    let arg_indices = func
-                        .arguments
+                if let ScalarExpr::UDFCall(func) = &item.scalar {
+                    let (arguments, display_name) = (&func.arguments, &func.display_name);
+
+                    let arg_indices = arguments
                         .iter()
                         .map(|arg| match arg {
                             ScalarExpr::BoundColumnRef(col) => {
@@ -119,11 +126,10 @@ impl PhysicalPlanBuilder {
                         })
                         .collect::<Result<Vec<_>>>()?;
 
-                    udf_index_map.insert(func.display_name.clone(), index);
+                    udf_index_map.insert(display_name.clone(), index);
                     index += 1;
 
-                    let arg_exprs = func
-                        .arguments
+                    let arg_exprs = arguments
                         .iter()
                         .map(|arg| {
                             let expr = arg.as_expr()?;
@@ -133,12 +139,13 @@ impl PhysicalPlanBuilder {
                         .collect::<Result<Vec<_>>>()?;
 
                     let udf_func = UdfFunctionDesc {
+                        name: func.name.clone(),
                         func_name: func.func_name.clone(),
-                        server_addr: func.server_addr.clone(),
                         output_column: item.index,
                         arg_indices,
                         arg_exprs,
                         data_type: func.return_type.clone(),
+                        udf_type: func.udf_type.clone(),
                     };
                     Ok(udf_func)
                 } else {
@@ -148,9 +155,10 @@ impl PhysicalPlanBuilder {
             .collect::<Result<Vec<_>>>()?;
 
         Ok(PhysicalPlan::Udf(Udf {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             input: Box::new(input),
             udf_funcs,
+            script_udf: udf.script_udf,
             stat_info: Some(stat_info),
         }))
     }

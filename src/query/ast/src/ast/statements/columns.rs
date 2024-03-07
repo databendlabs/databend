@@ -15,14 +15,18 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
 
-#[derive(Debug, Clone, PartialEq)] // Columns
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowColumnsStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    #[drive(skip)]
     pub full: bool,
     pub limit: Option<ShowLimit>,
 }

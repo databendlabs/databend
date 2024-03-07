@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::TableIndexType;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_types::MetaId;
@@ -22,7 +23,7 @@ use crate::plans::Plan;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateIndexPlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub index_type: TableIndexType,
     pub index_name: String,
     pub original_query: String,

@@ -28,6 +28,7 @@ pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MergeIntoSource {
+    pub plan_id: u32,
     // join result:  source_columns, target_columns, target_table._row_id
     pub input: Box<PhysicalPlan>,
     pub row_id_idx: u32,
@@ -37,6 +38,7 @@ pub struct MergeIntoSource {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MergeInto {
+    pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
@@ -59,6 +61,7 @@ pub struct MergeInto {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MergeIntoAppendNotMatched {
+    pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,

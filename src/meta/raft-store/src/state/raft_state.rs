@@ -22,7 +22,6 @@ use databend_common_meta_types::LogId;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::NodeId;
 use databend_common_meta_types::Vote;
-use log::as_debug;
 use log::debug;
 use log::info;
 
@@ -67,7 +66,7 @@ impl RaftState {
         open: Option<()>,
         create: Option<()>,
     ) -> Result<RaftState, MetaStartupError> {
-        info!(config = as_debug!(config); "open: {:?}, create: {:?}", open, create);
+        info!(config :? =(config); "open: {:?}, create: {:?}", open, create);
 
         let tree_name = config.tree_name(TREE_RAFT_STATE);
         let inner = SledTree::open(db, &tree_name, config.is_sync())?;

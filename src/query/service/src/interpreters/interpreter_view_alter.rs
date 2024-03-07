@@ -48,6 +48,10 @@ impl Interpreter for AlterViewInterpreter {
         "AlterViewInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // drop view
@@ -93,7 +97,7 @@ impl Interpreter for AlterViewInterpreter {
             options.insert("query".to_string(), subquery);
 
             let plan = CreateTableReq {
-                create_option: CreateOption::CreateIfNotExists(true),
+                create_option: CreateOption::CreateIfNotExists,
                 name_ident: TableNameIdent {
                     tenant: self.plan.tenant.clone(),
                     db_name: self.plan.database.clone(),

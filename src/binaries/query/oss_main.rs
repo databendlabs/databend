@@ -19,6 +19,7 @@ mod entry;
 
 use databend_common_base::mem_allocator::GlobalAllocator;
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
@@ -32,13 +33,15 @@ use crate::entry::start_services;
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 
 fn main() {
+    ThreadTracker::init();
+
     match Runtime::with_default_worker_threads() {
         Err(cause) => {
             eprintln!("Databend Query start failure, cause: {:?}", cause);
             std::process::exit(cause.code() as i32);
         }
         Ok(rt) => {
-            if let Err(cause) = rt.block_on(async_backtrace::location!().frame(main_entrypoint())) {
+            if let Err(cause) = rt.block_on(main_entrypoint()) {
                 eprintln!("Databend Query start failure, cause: {:?}", cause);
                 std::process::exit(cause.code() as i32);
             }
@@ -54,6 +57,6 @@ async fn main_entrypoint() -> Result<()> {
 
     init_services(&conf).await?;
     // init oss license manager
-    OssLicenseManager::init(conf.query.tenant_id.clone())?;
+    OssLicenseManager::init(conf.query.tenant_id.to_string())?;
     start_services(&conf).await
 }

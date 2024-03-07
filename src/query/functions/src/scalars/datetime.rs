@@ -837,19 +837,19 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
     registry.register_0_arg_core::<DateType, _, _>(
         "today",
         |_| FunctionDomain::Full,
-        |_| Value::Scalar(today_date()),
+        |ctx| Value::Scalar(today_date(ctx.func_ctx.tz)),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "yesterday",
         |_| FunctionDomain::Full,
-        |_| Value::Scalar(today_date() - 1),
+        |ctx| Value::Scalar(today_date(ctx.func_ctx.tz) - 1),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "tomorrow",
         |_| FunctionDomain::Full,
-        |_| Value::Scalar(today_date() + 1),
+        |ctx| Value::Scalar(today_date(ctx.func_ctx.tz) + 1),
     );
 }
 

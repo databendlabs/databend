@@ -204,7 +204,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
                 ));
             }
 
-            let mut writer = DFQueryResultWriter::create(writer);
+            let mut writer = DFQueryResultWriter::create(writer, self.base.session.clone());
 
             let instant = Instant::now();
             let query_result = self
@@ -271,7 +271,7 @@ impl InteractiveWorkerBase {
 
         let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
         UserApiProvider::instance()
-            .update_user_login_result(&ctx.get_tenant(), identity, authed)
+            .update_user_login_result(ctx.get_tenant(), identity, authed)
             .await?;
         if authed {
             self.session.set_authed_user(user_info, None).await?;

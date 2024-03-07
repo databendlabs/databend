@@ -20,27 +20,30 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_manager() -> Result<()> {
     let conf = RpcClientConf::default();
-    let tenant = "tenant1";
-    let role_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
+    let tenant_name = "tenant1";
+    let tenant = NonEmptyString::new(tenant_name).unwrap();
+
+    let role_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
 
     let role_name = "test-role1".to_string();
 
     // add role
     {
         let role_info = RoleInfo::new(&role_name);
-        role_mgr.add_role(tenant, role_info, false).await?;
+        role_mgr.add_role(&tenant, role_info, false).await?;
     }
 
     // add role again, error
     {
         let role_info = RoleInfo::new(&role_name);
-        let res = role_mgr.add_role(tenant, role_info, false).await;
+        let res = role_mgr.add_role(&tenant, role_info, false).await;
         assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::ROLE_ALREADY_EXISTS,);
     }
@@ -48,19 +51,19 @@ async fn test_role_manager() -> Result<()> {
     // add role
     {
         let role_info = RoleInfo::new(&role_name);
-        role_mgr.add_role(tenant, role_info, true).await?;
+        role_mgr.add_role(&tenant, role_info, true).await?;
     }
 
     // get role
     {
-        let role = role_mgr.get_role(tenant, role_name.clone()).await?;
+        let role = role_mgr.get_role(&tenant, role_name.clone()).await?;
         assert_eq!(role.name, "test-role1");
     }
 
     // get all roles
     {
         let mut role_names = role_mgr
-            .get_roles(tenant)
+            .get_roles(&tenant)
             .await?
             .into_iter()
             .map(|r| r.name)
@@ -73,13 +76,13 @@ async fn test_role_manager() -> Result<()> {
     {
         role_mgr
             .grant_privileges_to_role(
-                tenant,
+                &tenant,
                 &role_name,
                 GrantObject::Global,
                 UserPrivilegeSet::all_privileges(),
             )
             .await?;
-        let role = role_mgr.get_role(tenant, role_name.clone()).await?;
+        let role = role_mgr.get_role(&tenant, role_name.clone()).await?;
         assert!(
             role.grants
                 .verify_privilege(&GrantObject::Global, vec![UserPrivilegeType::Alter])
@@ -90,14 +93,14 @@ async fn test_role_manager() -> Result<()> {
     {
         role_mgr
             .revoke_privileges_from_role(
-                tenant,
+                &tenant,
                 &role_name,
                 GrantObject::Global,
                 UserPrivilegeSet::all_privileges(),
             )
             .await?;
 
-        let role = role_mgr.get_role(tenant, role_name.clone()).await?;
+        let role = role_mgr.get_role(&tenant, role_name.clone()).await?;
         assert_eq!(role.grants.entries().len(), 0);
     }
 

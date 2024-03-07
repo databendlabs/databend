@@ -60,10 +60,11 @@ pub fn make_warehouse_options(
     ret
 }
 
-pub fn get_client_config(ctx: Arc<QueryContext>, timeout: Duration) -> Result<ClientConfig> {
+pub fn get_task_client_config(ctx: Arc<QueryContext>, timeout: Duration) -> Result<ClientConfig> {
     let tenant = ctx.get_tenant();
     let user = ctx.get_current_user()?.identity().to_string();
     let query_id = ctx.get_id();
-
-    Ok(build_client_config(tenant, user, query_id, timeout))
+    let mut cfg = build_client_config(tenant.to_string(), user, query_id, timeout);
+    cfg.add_task_version_info();
+    Ok(cfg)
 }

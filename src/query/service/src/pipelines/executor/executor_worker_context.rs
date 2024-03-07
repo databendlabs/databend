@@ -18,21 +18,52 @@ use std::intrinsics::assume;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::Profile;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
+use minitrace::future::FutureExt;
+use minitrace::Span;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::CompletedAsyncTask;
+use crate::pipelines::executor::executor_graph::ProcessorWrapper;
+use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
+use crate::pipelines::executor::ProcessorAsyncTask;
+use crate::pipelines::executor::QueriesExecutorTasksQueue;
+use crate::pipelines::executor::QueriesPipelineExecutor;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
-use crate::pipelines::processors::ProcessorPtr;
 
 pub enum ExecutorTask {
     None,
-    Sync(ProcessorPtr),
+    Sync(ProcessorWrapper),
+    Async(ProcessorWrapper),
     AsyncCompleted(CompletedAsyncTask),
+}
+
+pub struct CompletedAsyncTask {
+    pub id: NodeIndex,
+    pub worker_id: usize,
+    pub res: Result<()>,
+    pub graph: Arc<RunningGraph>,
+}
+
+impl CompletedAsyncTask {
+    pub fn create(
+        id: NodeIndex,
+        worker_id: usize,
+        res: Result<()>,
+        graph: Arc<RunningGraph>,
+    ) -> Self {
+        CompletedAsyncTask {
+            id,
+            worker_id,
+            res,
+            graph,
+        }
+    }
 }
 
 pub struct ExecutorWorkerContext {
@@ -73,12 +104,28 @@ impl ExecutorWorkerContext {
     }
 
     /// # Safety
-    pub unsafe fn execute_task(&mut self, graph: &RunningGraph) -> Result<NodeIndex> {
+    pub unsafe fn execute_task(
+        &mut self,
+        executor: Option<&Arc<QueriesPipelineExecutor>>,
+    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
-            ExecutorTask::Sync(processor) => self.execute_sync_task(processor, graph),
+            ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
+            ExecutorTask::Async(processor) => {
+                if let Some(executor) = executor {
+                    self.execute_async_task(
+                        processor,
+                        executor,
+                        executor.global_tasks_queue.clone(),
+                    )
+                } else {
+                    Err(ErrorCode::Internal(
+                        "Async task should only be executed on queries executor",
+                    ))
+                }
+            }
             ExecutorTask::AsyncCompleted(task) => match task.res {
-                Ok(_) => Ok(task.id),
+                Ok(_) => Ok(Some((task.id, task.graph))),
                 Err(cause) => Err(cause),
             },
         }
@@ -87,19 +134,54 @@ impl ExecutorWorkerContext {
     /// # Safety
     unsafe fn execute_sync_task(
         &mut self,
-        proc: ProcessorPtr,
-        graph: &RunningGraph,
-    ) -> Result<NodeIndex> {
-        Profile::track_profile(graph.get_node_profile(proc.id()));
+        proc: ProcessorWrapper,
+    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
+        let payload = proc.graph.get_node_tracking_payload(proc.processor.id());
+        let _guard = ThreadTracker::tracking(payload.clone());
 
         let instant = Instant::now();
 
-        proc.process()?;
+        proc.processor.process()?;
 
         let nanos = instant.elapsed().as_nanos();
         assume(nanos < 18446744073709551615_u128);
         Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
-        Ok(proc.id())
+        Ok(Some((proc.processor.id(), proc.graph)))
+    }
+
+    pub fn execute_async_task(
+        &mut self,
+        proc: ProcessorWrapper,
+        executor: &Arc<QueriesPipelineExecutor>,
+        global_queue: Arc<QueriesExecutorTasksQueue>,
+    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
+        unsafe {
+            let workers_condvar = self.workers_condvar.clone();
+            workers_condvar.inc_active_async_worker();
+            let query_id = self.query_id.clone();
+            let wakeup_worker_id = self.worker_id;
+            let process_future = proc.processor.async_process();
+            let graph = proc.graph;
+            let node_index = proc.processor.id();
+            let tracking_payload = graph.get_node_tracking_payload(node_index);
+            let _guard = ThreadTracker::tracking(tracking_payload.clone());
+            executor.async_runtime.spawn(
+                query_id.as_ref().clone(),
+                ProcessorAsyncTask::create(
+                    query_id,
+                    wakeup_worker_id,
+                    proc.processor.clone(),
+                    Arc::new(ExecutorTasksQueue::QueriesExecutorTasksQueue(global_queue)),
+                    workers_condvar,
+                    graph,
+                    process_future,
+                )
+                .in_span(Span::enter_with_local_parent(std::any::type_name::<
+                    ProcessorAsyncTask,
+                >())),
+            );
+        }
+        Ok(None)
     }
 
     pub fn get_workers_condvar(&self) -> &Arc<WorkersCondvar> {
@@ -115,8 +197,14 @@ impl Debug for ExecutorTask {
                 ExecutorTask::Sync(p) => write!(
                     f,
                     "ExecutorTask::Sync {{ id: {}, name: {}}}",
-                    p.id().index(),
-                    p.name()
+                    p.processor.id().index(),
+                    p.processor.name()
+                ),
+                ExecutorTask::Async(p) => write!(
+                    f,
+                    "ExecutorTask::Async {{ id: {}, name: {}}}",
+                    p.processor.id().index(),
+                    p.processor.name()
                 ),
                 ExecutorTask::AsyncCompleted(_) => write!(f, "ExecutorTask::CompletedAsync"),
             }

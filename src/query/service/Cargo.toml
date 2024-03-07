@@ -92,11 +92,16 @@ databend-storages-common-cache = { path = "../storages/common/cache" }
 databend-storages-common-cache-manager = { path = "../storages/common/cache_manager" }
 databend-storages-common-index = { path = "../storages/common/index" }
 databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
+databend-storages-common-txn = { path = "../storages/common/txn" }
 jsonb = { workspace = true }
 
 # GitHub dependencies
 
 # Crates.io dependencies
+## TODO add python support
+# arrow-udf-python = {package = "arrow-udf-python", git = "https://github.com/risingwavelabs/arrow-udf", rev = "6c32f71" }
+arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/risingwavelabs/arrow-udf", rev = "6c32f71" }
+
 arrow-array = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-ipc = { workspace = true }

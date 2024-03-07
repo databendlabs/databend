@@ -16,8 +16,11 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::format;
+use std::time::Duration;
 
 use databend_common_meta_app::schema::CreateOption;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
@@ -31,12 +34,14 @@ use crate::ast::TimeTravelPoint;
 use crate::ast::TypeName;
 use crate::ast::UriLocation;
 
-#[derive(Debug, Clone, PartialEq)] // Tables
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowTablesStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
+    #[drive(skip)]
     pub full: bool,
     pub limit: Option<ShowLimit>,
+    #[drive(skip)]
     pub with_history: bool,
 }
 
@@ -65,7 +70,7 @@ impl Display for ShowTablesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowCreateTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -85,7 +90,7 @@ impl Display for ShowCreateTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowTablesStatusStmt {
     pub database: Option<Identifier>,
     pub limit: Option<ShowLimit>,
@@ -105,7 +110,7 @@ impl Display for ShowTablesStatusStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowDropTablesStmt {
     pub database: Option<Identifier>,
     pub limit: Option<ShowLimit>,
@@ -125,8 +130,9 @@ impl Display for ShowDropTablesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTableStmt {
+    #[drive(skip)]
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -135,8 +141,10 @@ pub struct CreateTableStmt {
     pub engine: Option<Engine>,
     pub uri_location: Option<UriLocation>,
     pub cluster_by: Vec<Expr>,
+    #[drive(skip)]
     pub table_options: BTreeMap<String, String>,
     pub as_query: Option<Box<Query>>,
+    #[drive(skip)]
     pub transient: bool,
 }
 
@@ -150,10 +158,8 @@ impl Display for CreateTableStmt {
             write!(f, "TRANSIENT ")?;
         }
         write!(f, "TABLE ")?;
-        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
-            if if_not_exists {
-                write!(f, "IF NOT EXISTS ")?;
-            }
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, "IF NOT EXISTS ")?;
         }
         write_dot_separated_list(
             f,
@@ -191,12 +197,13 @@ impl Display for CreateTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AttachTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub uri_location: UriLocation,
+    #[drive(skip)]
     pub read_only: bool,
 }
 
@@ -221,7 +228,7 @@ impl Display for AttachTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CreateTableSource {
     Columns(Vec<ColumnDefinition>),
     Like {
@@ -251,7 +258,7 @@ impl Display for CreateTableSource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DescribeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -270,12 +277,14 @@ impl Display for DescribeTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropTableStmt {
+    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    #[drive(skip)]
     pub all: bool,
 }
 
@@ -300,7 +309,7 @@ impl Display for DropTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct UndropTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -320,8 +329,9 @@ impl Display for UndropTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterTableStmt {
+    #[drive(skip)]
     pub if_exists: bool,
     pub table_reference: TableReference,
     pub action: AlterTableAction,
@@ -338,7 +348,7 @@ impl Display for AlterTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AlterTableAction {
     RenameTable {
         new_table: Identifier,
@@ -362,14 +372,17 @@ pub enum AlterTableAction {
     },
     DropTableClusterKey,
     ReclusterTable {
+        #[drive(skip)]
         is_final: bool,
         selection: Option<Expr>,
+        #[drive(skip)]
         limit: Option<u64>,
     },
     RevertTo {
         point: TimeTravelPoint,
     },
     SetOptions {
+        #[drive(skip)]
         set_options: BTreeMap<String, String>,
     },
 }
@@ -431,7 +444,7 @@ impl Display for AlterTableAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AddColumnOption {
     End,
     First,
@@ -448,8 +461,9 @@ impl Display for AddColumnOption {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct RenameTableStmt {
+    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -483,7 +497,7 @@ impl Display for RenameTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct TruncateTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -504,7 +518,7 @@ impl Display for TruncateTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -528,7 +542,7 @@ impl Display for VacuumTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumDropTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -549,12 +563,43 @@ impl Display for VacuumDropTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct VacuumTemporaryFiles {
+    #[drive(skip)]
+    pub limit: Option<u64>,
+    #[drive(skip)]
+    pub retain: Option<Duration>,
+}
+
+impl Display for crate::ast::VacuumTemporaryFiles {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM TEMPORARY FILES ")?;
+        if let Some(retain) = &self.retain {
+            let days = Duration::from_secs(60 * 60 * 24);
+            if retain >= &days {
+                let days = retain.as_secs() / (60 * 60 * 24);
+                write!(f, "RETAIN {days} DAYS ")?;
+            } else {
+                let seconds = retain.as_secs();
+                write!(f, "RETAIN {seconds} SECONDS ")?;
+            }
+        }
+
+        if let Some(limit) = &self.limit {
+            write!(f, " LIMIT {limit}")?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct OptimizeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub action: OptimizeTableAction,
+    #[drive(skip)]
     pub limit: Option<u64>,
 }
 
@@ -577,7 +622,7 @@ impl Display for OptimizeTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AnalyzeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -599,7 +644,7 @@ impl Display for AnalyzeTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ExistsTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -619,7 +664,7 @@ impl Display for ExistsTableStmt {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut)]
 pub enum Engine {
     Null,
     Memory,
@@ -644,36 +689,47 @@ impl Display for Engine {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum CompactTarget {
     Block,
     Segment,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTableOption {
-    pub dry_run: Option<()>,
+    #[drive(skip)]
+    // Some(true) means dry run with summary option
+    pub dry_run: Option<bool>,
 }
 
 impl Display for VacuumTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if self.dry_run.is_some() {
+        if let Some(summary) = self.dry_run {
             write!(f, "DRY RUN")?;
+            if summary {
+                write!(f, " SUMMARY")?;
+            }
         }
         Ok(())
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumDropTableOption {
-    pub dry_run: Option<()>,
+    #[drive(skip)]
+    // Some(true) means dry run with summary option
+    pub dry_run: Option<bool>,
+    #[drive(skip)]
     pub limit: Option<usize>,
 }
 
 impl Display for VacuumDropTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if self.dry_run.is_some() {
+        if let Some(summary) = self.dry_run {
             write!(f, "DRY RUN")?;
+            if summary {
+                write!(f, " SUMMARY")?;
+            }
         }
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {}", limit)?;
@@ -682,7 +738,7 @@ impl Display for VacuumDropTableOption {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum OptimizeTableAction {
     All,
     Purge { before: Option<TimeTravelPoint> },
@@ -715,7 +771,7 @@ impl Display for OptimizeTableAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ColumnExpr {
     Default(Box<Expr>),
     Virtual(Box<Expr>),
@@ -739,17 +795,18 @@ impl Display for ColumnExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum NullableConstraint {
     Null,
     NotNull,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ColumnDefinition {
     pub name: Identifier,
     pub data_type: TypeName,
     pub expr: Option<ColumnExpr>,
+    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -766,10 +823,10 @@ impl Display for ColumnDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ModifyColumnAction {
     // (column name id, masking policy name)
-    SetMaskingPolicy(Identifier, String),
+    SetMaskingPolicy(Identifier, #[drive(skip)] String),
     // column name id
     UnsetMaskingPolicy(Identifier),
     // vec<ColumnDefinition>

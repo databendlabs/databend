@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -41,7 +42,7 @@ impl ResultCacheMetaManager {
         key: String,
         value: ResultCacheValue,
         seq: MatchSeq,
-        expire_at: u64,
+        ttl: Duration,
     ) -> Result<()> {
         let value = serde_json::to_vec(&value)?;
         let _ = self
@@ -50,7 +51,7 @@ impl ResultCacheMetaManager {
                 key,
                 seq,
                 value: Operation::Update(value),
-                value_meta: Some(MetaSpec::new_expire(expire_at)),
+                value_meta: Some(MetaSpec::new_ttl(ttl)),
             })
             .await?;
         Ok(())

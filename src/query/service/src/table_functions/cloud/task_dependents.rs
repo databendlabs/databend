@@ -27,10 +27,10 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_cloud_control::client_config::build_client_config;
+use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::GetTaskDependentsRequest;
 use databend_common_cloud_control::pb::Task;
-use databend_common_cloud_control::task_client::make_request;
 use databend_common_cloud_control::task_utils;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -262,7 +262,7 @@ impl AsyncSource for TaskDependentsSource {
         let user = self.ctx.get_current_user()?.identity().to_string();
         let query_id = self.ctx.get_id();
 
-        let cfg = build_client_config(tenant, user, query_id, cloud_api.get_timeout());
+        let cfg = build_client_config(tenant.to_string(), user, query_id, cloud_api.get_timeout());
 
         let dependents = cloud_api
             .get_task_client()

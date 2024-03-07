@@ -129,6 +129,12 @@ pub struct TableId {
     pub table_id: u64,
 }
 
+impl TableId {
+    pub fn new(table_id: u64) -> Self {
+        TableId { table_id }
+    }
+}
+
 impl Display for TableId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "TableId{{{}}}", self.table_id)
@@ -464,25 +470,31 @@ impl CreateTableReq {
 
 impl Display for CreateTableReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
-            write!(
+        match self.create_option {
+            CreateOption::None => write!(
                 f,
-                "create_table(if_not_exists={}):{}/{}-{}={}",
-                if_not_exists,
+                "create_table:{}/{}-{}={}",
                 self.tenant(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
-            )
-        } else {
-            write!(
+            ),
+            CreateOption::CreateIfNotExists => write!(
+                f,
+                "create_table_if_not_exists:{}/{}-{}={}",
+                self.tenant(),
+                self.db_name(),
+                self.table_name(),
+                self.table_meta
+            ),
+            CreateOption::CreateOrReplace => write!(
                 f,
                 "create_or_replace_table:{}/{}-{}={}",
                 self.tenant(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
-            )
+            ),
         }
     }
 }
@@ -631,6 +643,13 @@ pub struct UpdateTableMetaReq {
     pub copied_files: Option<UpsertTableCopiedFileReq>,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub deduplicated_label: Option<String>,
+}
+
+pub struct UpdateMultiTableMetaReq {
+    pub update_table_metas: Vec<UpdateTableMetaReq>,
+    pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
+    pub update_stream_metas: Vec<UpdateStreamMetaReq>,
+    pub deduplicated_labels: Vec<String>,
 }
 
 impl UpsertTableOptionReq {
@@ -881,10 +900,12 @@ pub struct EmptyProto {}
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::primitive::Id;
     use crate::schema::CountTablesKey;
     use crate::schema::DBIdTableName;
+    use crate::schema::DatabaseId;
     use crate::schema::LeastVisibleTime;
     use crate::schema::LeastVisibleTimeKey;
     use crate::schema::TableCopiedFileInfo;
@@ -894,19 +915,17 @@ mod kvapi_key_impl {
     use crate::schema::TableIdListKey;
     use crate::schema::TableIdToName;
     use crate::schema::TableMeta;
-    use crate::schema::PREFIX_TABLE;
-    use crate::schema::PREFIX_TABLE_BY_ID;
-    use crate::schema::PREFIX_TABLE_COPIED_FILES;
-    use crate::schema::PREFIX_TABLE_COUNT;
-    use crate::schema::PREFIX_TABLE_ID_LIST;
-    use crate::schema::PREFIX_TABLE_ID_TO_NAME;
-    use crate::schema::PREFIX_TABLE_LVT;
+    use crate::tenant::Tenant;
 
     /// "__fd_table/<db_id>/<tb_name>"
     impl kvapi::Key for DBIdTableName {
-        const PREFIX: &'static str = PREFIX_TABLE;
+        const PREFIX: &'static str = "__fd_table";
 
         type ValueType = TableId;
+
+        fn parent(&self) -> Option<String> {
+            Some(DatabaseId::new(self.db_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -928,9 +947,13 @@ mod kvapi_key_impl {
 
     /// "__fd_table_id_to_name/<table_id> -> DBIdTableName"
     impl kvapi::Key for TableIdToName {
-        const PREFIX: &'static str = PREFIX_TABLE_ID_TO_NAME;
+        const PREFIX: &'static str = "__fd_table_id_to_name";
 
         type ValueType = DBIdTableName;
+
+        fn parent(&self) -> Option<String> {
+            Some(TableId::new(self.table_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -950,9 +973,13 @@ mod kvapi_key_impl {
 
     /// "__fd_table_by_id/<tb_id> -> TableMeta"
     impl kvapi::Key for TableId {
-        const PREFIX: &'static str = PREFIX_TABLE_BY_ID;
+        const PREFIX: &'static str = "__fd_table_by_id";
 
         type ValueType = TableMeta;
+
+        fn parent(&self) -> Option<String> {
+            None
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -972,9 +999,13 @@ mod kvapi_key_impl {
 
     /// "_fd_table_id_list/<db_id>/<tb_name> -> id_list"
     impl kvapi::Key for TableIdListKey {
-        const PREFIX: &'static str = PREFIX_TABLE_ID_LIST;
+        const PREFIX: &'static str = "__fd_table_id_list";
 
         type ValueType = TableIdList;
+
+        fn parent(&self) -> Option<String> {
+            Some(DatabaseId::new(self.db_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -996,9 +1027,13 @@ mod kvapi_key_impl {
 
     /// "__fd_table_count/<tenant>" -> <table_count>
     impl kvapi::Key for CountTablesKey {
-        const PREFIX: &'static str = PREFIX_TABLE_COUNT;
+        const PREFIX: &'static str = "__fd_table_count";
 
         type ValueType = Id;
+
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -1018,9 +1053,13 @@ mod kvapi_key_impl {
 
     // __fd_table_copied_files/table_id/file_name -> TableCopiedFileInfo
     impl kvapi::Key for TableCopiedFileNameIdent {
-        const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
+        const PREFIX: &'static str = "__fd_table_copied_files";
 
         type ValueType = TableCopiedFileInfo;
+
+        fn parent(&self) -> Option<String> {
+            Some(TableId::new(self.table_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             // TODO: file is not escaped!!!
@@ -1044,9 +1083,13 @@ mod kvapi_key_impl {
 
     /// "__fd_table_lvt/table_id"
     impl kvapi::Key for LeastVisibleTimeKey {
-        const PREFIX: &'static str = PREFIX_TABLE_LVT;
+        const PREFIX: &'static str = "__fd_table_lvt";
 
         type ValueType = LeastVisibleTime;
+
+        fn parent(&self) -> Option<String> {
+            Some(TableId::new(self.table_id).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -1061,6 +1104,44 @@ mod kvapi_key_impl {
             p.done()?;
 
             Ok(LeastVisibleTimeKey { table_id })
+        }
+    }
+
+    impl kvapi::Value for TableId {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
+
+    impl kvapi::Value for DBIdTableName {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
+
+    impl kvapi::Value for TableMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
+
+    impl kvapi::Value for TableIdList {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            self.id_list
+                .iter()
+                .map(|id| TableId::new(*id).to_string_key())
+        }
+    }
+
+    impl kvapi::Value for TableCopiedFileInfo {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
+
+    impl kvapi::Value for LeastVisibleTime {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
         }
     }
 }

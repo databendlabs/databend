@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::VisitorMut;
+use databend_common_ast::ast::VisitorMut;
 use databend_common_settings::Settings;
 
 #[derive(Debug, Clone)]

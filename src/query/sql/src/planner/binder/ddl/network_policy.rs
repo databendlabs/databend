@@ -32,7 +32,7 @@ impl Binder {
         stmt: &CreateNetworkPolicyStmt,
     ) -> Result<Plan> {
         let CreateNetworkPolicyStmt {
-            if_not_exists,
+            create_option,
             name,
             allowed_ip_list,
             blocked_ip_list,
@@ -60,8 +60,8 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
         let plan = CreateNetworkPolicyPlan {
-            if_not_exists: *if_not_exists,
-            tenant,
+            create_option: *create_option,
+            tenant: tenant.to_string(),
             name: name.to_string(),
             allowed_ip_list: allowed_ip_list.clone(),
             blocked_ip_list: blocked_ip_list.clone().unwrap_or_default(),
@@ -107,7 +107,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let plan = AlterNetworkPolicyPlan {
             if_exists: *if_exists,
-            tenant,
+            tenant: tenant.to_string(),
             name: name.to_string(),
             allowed_ip_list: allowed_ip_list.clone(),
             blocked_ip_list: blocked_ip_list.clone(),
@@ -126,7 +126,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let plan = DropNetworkPolicyPlan {
             if_exists: *if_exists,
-            tenant,
+            tenant: tenant.to_string(),
             name: name.to_string(),
         };
         Ok(Plan::DropNetworkPolicy(Box::new(plan)))

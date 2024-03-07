@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_base::base::tokio::io::AsyncWrite;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -29,6 +31,7 @@ use futures_util::StreamExt;
 use log::error;
 use opensrv_mysql::*;
 
+use crate::sessions::Session;
 /// Reports progress information as string, intend to be put into the mysql Ok packet.
 /// Mainly for decoupling with concrete type like `QueryContext`
 ///
@@ -67,6 +70,7 @@ impl QueryResult {
 
 pub struct DFQueryResultWriter<'a, W: AsyncWrite + Send + Unpin> {
     inner: Option<QueryResultWriter<'a, W>>,
+    session: Arc<Session>,
 }
 
 fn write_field<W: AsyncWrite + Unpin>(
@@ -83,8 +87,14 @@ fn write_field<W: AsyncWrite + Unpin>(
 }
 
 impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
-    pub fn create(inner: QueryResultWriter<'a, W>) -> DFQueryResultWriter<'a, W> {
-        DFQueryResultWriter::<'a, W> { inner: Some(inner) }
+    pub fn create(
+        inner: QueryResultWriter<'a, W>,
+        session: Arc<Session>,
+    ) -> DFQueryResultWriter<'a, W> {
+        DFQueryResultWriter::<'a, W> {
+            inner: Some(inner),
+            session,
+        }
     }
 
     #[async_backtrace::framed]
@@ -97,12 +107,12 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             match query_result {
                 Ok((query_result, query_format)) => {
                     if let Some(format) = query_format {
-                        Self::ok(query_result, writer, &format).await?
+                        self.ok(query_result, writer, &format).await?
                     } else {
-                        Self::ok(query_result, writer, format).await?
+                        self.ok(query_result, writer, format).await?
                     }
                 }
-                Err(error) => Self::err(&error, writer).await?,
+                Err(error) => self.err(&error, writer).await?,
             }
         }
         Ok(())
@@ -110,6 +120,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
 
     #[async_backtrace::framed]
     async fn ok(
+        &self,
         mut query_result: QueryResult,
         dataset_writer: QueryResultWriter<'a, W>,
         format: &FormatSettings,
@@ -176,6 +187,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 DataType::Bitmap => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Tuple(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                DataType::Geometry => Ok(ColumnType::MYSQL_TYPE_GEOMETRY),
                 DataType::Decimal(_) => Ok(ColumnType::MYSQL_TYPE_DECIMAL),
                 _ => Err(ErrorCode::Unimplemented(format!(
                     "Unsupported column type:{:?}",
@@ -199,7 +211,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
 
         let _tz = format.timezone;
         match convert_schema(&query_result.schema) {
-            Err(error) => Self::err(&error, dataset_writer).await,
+            Err(error) => self.err(&error, dataset_writer).await,
             Ok(columns) => {
                 let mut row_writer = dataset_writer.start(&columns).await?;
                 let blocks = &mut query_result.blocks;
@@ -304,7 +316,8 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
     }
 
     #[async_backtrace::framed]
-    async fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
+    async fn err(&self, error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
+        self.session.txn_mgr().lock().set_fail();
         if error.code() != ErrorCode::ABORTED_QUERY && error.code() != ErrorCode::ABORTED_SESSION {
             error!("OnQuery Error: {:?}", error);
             writer

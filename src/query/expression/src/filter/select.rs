@@ -95,7 +95,7 @@ impl<'a> Selector<'a> {
         match left_data_type.remove_nullable() {
             DataType::Number(ty) => {
                 with_number_mapped_type!(|T| match ty {
-                    NumberDataType::T => self.select_type_values::<NumberType<T>>(
+                    NumberDataType::T => self.select_type_values_cmp::<NumberType<T>>(
                         &op,
                         left,
                         right,
@@ -112,7 +112,7 @@ impl<'a> Selector<'a> {
 
             DataType::Decimal(ty) => {
                 with_decimal_mapped_type!(|T| match ty {
-                    DecimalDataType::T(_) => self.select_type_values::<DecimalType<T>>(
+                    DecimalDataType::T(_) => self.select_type_values_cmp::<DecimalType<T>>(
                         &op,
                         left,
                         right,
@@ -126,7 +126,7 @@ impl<'a> Selector<'a> {
                     ),
                 })
             }
-            DataType::Date => self.select_type_values::<DateType>(
+            DataType::Date => self.select_type_values_cmp::<DateType>(
                 &op,
                 left,
                 right,
@@ -138,7 +138,7 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             ),
-            DataType::Timestamp => self.select_type_values::<TimestampType>(
+            DataType::Timestamp => self.select_type_values_cmp::<TimestampType>(
                 &op,
                 left,
                 right,
@@ -150,7 +150,7 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             ),
-            DataType::String => self.select_type_values::<StringType>(
+            DataType::String => self.select_type_values_cmp::<StringType>(
                 &op,
                 left,
                 right,
@@ -162,7 +162,7 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             ),
-            DataType::Variant => self.select_type_values::<VariantType>(
+            DataType::Variant => self.select_type_values_cmp::<VariantType>(
                 &op,
                 left,
                 right,
@@ -174,7 +174,7 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             ),
-            DataType::Boolean => self.select_type_values::<BooleanType>(
+            DataType::Boolean => self.select_type_values_cmp::<BooleanType>(
                 &op,
                 left,
                 right,
@@ -186,7 +186,7 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             ),
-            DataType::EmptyArray => self.select_type_values::<EmptyArrayType>(
+            DataType::EmptyArray => self.select_type_values_cmp::<EmptyArrayType>(
                 &op,
                 left,
                 right,
@@ -198,7 +198,7 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             ),
-            _ => self.select_type_values::<AnyType>(
+            _ => self.select_type_values_cmp::<AnyType>(
                 &op,
                 left,
                 right,

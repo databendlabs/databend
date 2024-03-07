@@ -20,6 +20,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_types::MetaId;
 
+use super::CreateOption;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct VirtualColumnNameIdent {
     pub tenant: String,
@@ -56,7 +58,7 @@ pub struct VirtualColumnMeta {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateVirtualColumnReq {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub name_ident: VirtualColumnNameIdent,
     pub virtual_columns: Vec<String>,
 }
@@ -129,13 +131,18 @@ mod kvapi_key_impl {
 
     use crate::schema::VirtualColumnMeta;
     use crate::schema::VirtualColumnNameIdent;
-    use crate::schema::PREFIX_VIRTUAL_COLUMN;
+    use crate::tenant::Tenant;
 
     /// <prefix>/<tenant>/<table_id>
     impl kvapi::Key for VirtualColumnNameIdent {
-        const PREFIX: &'static str = PREFIX_VIRTUAL_COLUMN;
+        const PREFIX: &'static str = "__fd_virtual_column";
 
         type ValueType = VirtualColumnMeta;
+
+        /// It belongs to a tenant
+        fn parent(&self) -> Option<String> {
+            Some(Tenant::new(&self.tenant).to_string_key())
+        }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -152,6 +159,12 @@ mod kvapi_key_impl {
             p.done()?;
 
             Ok(VirtualColumnNameIdent { tenant, table_id })
+        }
+    }
+
+    impl kvapi::Value for VirtualColumnMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
         }
     }
 }

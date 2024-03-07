@@ -79,6 +79,10 @@ impl Interpreter for UpdateInterpreter {
         "UpdateInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -303,6 +307,7 @@ impl UpdateInterpreter {
             query_row_id_col,
             update_list,
             computed_list,
+            plan_id: u32::MAX,
         }));
 
         if is_distributed {
@@ -315,8 +320,7 @@ impl UpdateInterpreter {
                 ignore_exchange: false,
             });
         }
-
-        Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
+        let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             snapshot,
             table_info,
@@ -326,6 +330,9 @@ impl UpdateInterpreter {
             merge_meta,
             need_lock: false,
             deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
-        })))
+            plan_id: u32::MAX,
+        }));
+        plan.adjust_plan_id(&mut 0);
+        Ok(plan)
     }
 }

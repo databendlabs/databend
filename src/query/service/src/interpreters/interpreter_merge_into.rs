@@ -88,6 +88,10 @@ impl Interpreter for MergeIntoInterpreter {
         "MergeIntoInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let (physical_plan, _) = self.build_physical_plan().await?;
@@ -309,6 +313,7 @@ impl MergeIntoInterpreter {
                 row_id_idx: row_id_idx as u32,
                 merge_type: merge_type.clone(),
                 merge_into_split_idx: merge_into_split_idx as u32,
+                plan_id: u32::MAX,
             })
         } else {
             PhysicalPlan::MergeIntoSource(MergeIntoSource {
@@ -316,6 +321,7 @@ impl MergeIntoInterpreter {
                 row_id_idx: row_id_idx as u32,
                 merge_type: merge_type.clone(),
                 merge_into_split_idx: merge_into_split_idx as u32,
+                plan_id: u32::MAX,
             })
         };
 
@@ -462,6 +468,7 @@ impl MergeIntoInterpreter {
                 change_join_order: *change_join_order,
                 target_build_optimization,
                 can_try_update_column_only: *can_try_update_column_only,
+                plan_id: u32::MAX,
             }))
         } else {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -489,6 +496,7 @@ impl MergeIntoInterpreter {
                 change_join_order: *change_join_order,
                 target_build_optimization: false, // we don't support for distributed mode for now..
                 can_try_update_column_only: *can_try_update_column_only,
+                plan_id: u32::MAX,
             }));
             // if change_join_order = true, it means the target is build side,
             // in this way, we will do matched operation and not matched operation
@@ -514,11 +522,12 @@ impl MergeIntoInterpreter {
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
                 segments,
+                plan_id: u32::MAX,
             }))
         };
 
         // build mutation_aggregate
-        let physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+        let mut physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(commit_input),
             snapshot: base_snapshot,
             table_info: table_info.clone(),
@@ -529,8 +538,9 @@ impl MergeIntoInterpreter {
             merge_meta: false,
             need_lock: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+            plan_id: u32::MAX,
         }));
-
+        physical_plan.adjust_plan_id(&mut 0);
         Ok((physical_plan, table_info))
     }
 

@@ -15,12 +15,20 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
 use crate::ast::Expr;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ShowLimit {
-    Like { pattern: String },
-    Where { selection: Box<Expr> },
+    Like {
+        #[drive(skip)]
+        pattern: String,
+    },
+    Where {
+        selection: Box<Expr>,
+    },
 }
 
 impl Display for ShowLimit {
@@ -32,9 +40,10 @@ impl Display for ShowLimit {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowOptions {
     pub show_limit: Option<ShowLimit>,
+    #[drive(skip)]
     pub limit: Option<u64>,
 }
 

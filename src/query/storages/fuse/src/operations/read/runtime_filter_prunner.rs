@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberColumn;
@@ -33,8 +35,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
-use databend_common_pipeline_core::processors::Profile;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_storages_common_index::statistics_to_domain;
 use log::info;
 use xorf::BinaryFuse16;
@@ -71,8 +71,10 @@ pub fn runtime_filter_pruner(
                 debug_assert_eq!(stat.min().as_ref().infer_data_type(), ty.remove_nullable());
                 let stats = vec![stat];
                 let domain = statistics_to_domain(stats, ty);
+
                 let mut input_domains = HashMap::new();
-                input_domains.insert(name.to_string(), domain);
+                input_domains.insert(name.to_string(), domain.clone());
+
                 let (new_expr, _) = ConstantFolder::fold_with_domain(
                     filter,
                     &input_domains,

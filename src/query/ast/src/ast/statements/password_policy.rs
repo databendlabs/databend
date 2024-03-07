@@ -15,17 +15,27 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-#[derive(Debug, Clone, PartialEq)]
+use databend_common_meta_app::schema::CreateOption;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreatePasswordPolicyStmt {
-    pub if_not_exists: bool,
+    #[drive(skip)]
+    pub create_option: CreateOption,
+    #[drive(skip)]
     pub name: String,
     pub set_options: PasswordSetOptions,
 }
 
 impl Display for CreatePasswordPolicyStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE PASSWORD POLICY ")?;
-        if self.if_not_exists {
+        write!(f, "CREATE ")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f, "OR REPLACE ")?;
+        }
+        write!(f, "PASSWORD POLICY ")?;
+        if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, "IF NOT EXISTS ")?;
         }
         write!(f, "{}", self.name)?;
@@ -35,9 +45,11 @@ impl Display for CreatePasswordPolicyStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterPasswordPolicyStmt {
+    #[drive(skip)]
     pub if_exists: bool,
+    #[drive(skip)]
     pub name: String,
     pub action: AlterPasswordAction,
 }
@@ -55,7 +67,7 @@ impl Display for AlterPasswordPolicyStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AlterPasswordAction {
     SetOptions(PasswordSetOptions),
     UnSetOptions(PasswordUnSetOptions),
@@ -76,19 +88,31 @@ impl Display for AlterPasswordAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct PasswordSetOptions {
+    #[drive(skip)]
     pub min_length: Option<u64>,
+    #[drive(skip)]
     pub max_length: Option<u64>,
+    #[drive(skip)]
     pub min_upper_case_chars: Option<u64>,
+    #[drive(skip)]
     pub min_lower_case_chars: Option<u64>,
+    #[drive(skip)]
     pub min_numeric_chars: Option<u64>,
+    #[drive(skip)]
     pub min_special_chars: Option<u64>,
+    #[drive(skip)]
     pub min_age_days: Option<u64>,
+    #[drive(skip)]
     pub max_age_days: Option<u64>,
+    #[drive(skip)]
     pub max_retries: Option<u64>,
+    #[drive(skip)]
     pub lockout_time_mins: Option<u64>,
+    #[drive(skip)]
     pub history: Option<u64>,
+    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -143,19 +167,31 @@ impl Display for PasswordSetOptions {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct PasswordUnSetOptions {
+    #[drive(skip)]
     pub min_length: bool,
+    #[drive(skip)]
     pub max_length: bool,
+    #[drive(skip)]
     pub min_upper_case_chars: bool,
+    #[drive(skip)]
     pub min_lower_case_chars: bool,
+    #[drive(skip)]
     pub min_numeric_chars: bool,
+    #[drive(skip)]
     pub min_special_chars: bool,
+    #[drive(skip)]
     pub min_age_days: bool,
+    #[drive(skip)]
     pub max_age_days: bool,
+    #[drive(skip)]
     pub max_retries: bool,
+    #[drive(skip)]
     pub lockout_time_mins: bool,
+    #[drive(skip)]
     pub history: bool,
+    #[drive(skip)]
     pub comment: bool,
 }
 
@@ -202,9 +238,11 @@ impl Display for PasswordUnSetOptions {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DropPasswordPolicyStmt {
+    #[drive(skip)]
     pub if_exists: bool,
+    #[drive(skip)]
     pub name: String,
 }
 
@@ -220,8 +258,9 @@ impl Display for DropPasswordPolicyStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DescPasswordPolicyStmt {
+    #[drive(skip)]
     pub name: String,
 }
 

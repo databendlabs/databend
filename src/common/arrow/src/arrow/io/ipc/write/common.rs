@@ -56,7 +56,7 @@ fn encode_dictionary(
     use PhysicalType::*;
     match array.data_type().to_physical_type() {
         Utf8 | LargeUtf8 | Binary | LargeBinary | Primitive(_) | Boolean | Null
-        | FixedSizeBinary => Ok(()),
+        | FixedSizeBinary | BinaryView | Utf8View => Ok(()),
         Dictionary(key_type) => match_integer_type!(key_type, |$T| {
             let dict_id = field.dictionary_id
                 .ok_or_else(|| Error::InvalidArgumentError("Dictionaries must have an associated id".to_string()))?;
@@ -247,6 +247,41 @@ fn serialize_compression(
     }
 }
 
+fn set_variadic_buffer_counts(counts: &mut Vec<i64>, array: &dyn Array) {
+    match array.data_type() {
+        DataType::Utf8View => {
+            let array = array.as_any().downcast_ref::<Utf8ViewArray>().unwrap();
+            counts.push(array.data_buffers().len() as i64);
+        }
+        DataType::BinaryView => {
+            let array = array.as_any().downcast_ref::<BinaryViewArray>().unwrap();
+            counts.push(array.data_buffers().len() as i64);
+        }
+        DataType::Struct(_) => {
+            let array = array.as_any().downcast_ref::<StructArray>().unwrap();
+            for array in array.values() {
+                set_variadic_buffer_counts(counts, array.as_ref())
+            }
+        }
+        DataType::LargeList(_) => {
+            let array = array.as_any().downcast_ref::<ListArray<i64>>().unwrap();
+            set_variadic_buffer_counts(counts, array.values().as_ref())
+        }
+        DataType::FixedSizeList(_, _) => {
+            let array = array.as_any().downcast_ref::<FixedSizeListArray>().unwrap();
+            set_variadic_buffer_counts(counts, array.values().as_ref())
+        }
+        DataType::Dictionary(_, _, _) => {
+            let array = array
+                .as_any()
+                .downcast_ref::<DictionaryArray<u32>>()
+                .unwrap();
+            set_variadic_buffer_counts(counts, array.values().as_ref())
+        }
+        _ => (),
+    }
+}
+
 /// Write [`Chunk`] into two sets of bytes, one for the header (ipc::Schema::Message) and the
 /// other for the batch's data
 fn chunk_to_bytes_amortized(
@@ -260,7 +295,9 @@ fn chunk_to_bytes_amortized(
     arrow_data.clear();
 
     let mut offset = 0;
+    let mut variadic_buffer_counts = vec![];
     for array in chunk.arrays() {
+        set_variadic_buffer_counts(&mut variadic_buffer_counts, array.as_ref());
         write(
             array.as_ref(),
             &mut buffers,
@@ -272,6 +309,12 @@ fn chunk_to_bytes_amortized(
         )
     }
 
+    let variadic_buffer_counts = if variadic_buffer_counts.is_empty() {
+        None
+    } else {
+        Some(variadic_buffer_counts)
+    };
+
     let compression = serialize_compression(options.compression);
 
     let message = arrow_format::ipc::Message {
@@ -282,6 +325,7 @@ fn chunk_to_bytes_amortized(
                 nodes: Some(nodes),
                 buffers: Some(buffers),
                 compression,
+                variadic_buffer_counts,
             },
         ))),
         body_length: arrow_data.len() as i64,
@@ -306,6 +350,15 @@ fn dictionary_batch_to_bytes<K: DictionaryKey>(
     let mut buffers: Vec<arrow_format::ipc::Buffer> = vec![];
     let mut arrow_data: Vec<u8> = vec![];
 
+    let mut variadic_buffer_counts = vec![];
+    set_variadic_buffer_counts(&mut variadic_buffer_counts, array.values().as_ref());
+
+    let variadic_buffer_counts = if variadic_buffer_counts.is_empty() {
+        None
+    } else {
+        Some(variadic_buffer_counts)
+    };
+
     let length = write_dictionary(
         array,
         &mut buffers,
@@ -329,6 +382,7 @@ fn dictionary_batch_to_bytes<K: DictionaryKey>(
                     nodes: Some(nodes),
                     buffers: Some(buffers),
                     compression,
+                    variadic_buffer_counts,
                 })),
                 is_delta: false,
             },

@@ -12,6 +12,7 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 databend-common-arrow = { path = "../../common/arrow" }
+databend-common-base = { path = "../../common/base" }
 databend-common-datavalues = { path = "../datavalues" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-hashtable = { path = "../../common/hashtable" }
@@ -53,6 +54,7 @@ rust_decimal = "1.26"
 serde = { workspace = true }
 serde_json = { workspace = true }
 simdutf8 = "0.1.4"
+strength_reduce = "0.2.4"
 terminal_size = "0.2.6"
 tonic = { workspace = true }
 typetag = { workspace = true }

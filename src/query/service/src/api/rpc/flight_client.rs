@@ -23,6 +23,7 @@ use databend_common_arrow::arrow_format::flight::data::FlightData;
 use databend_common_arrow::arrow_format::flight::data::Ticket;
 use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::tokio::time::Duration;
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures::StreamExt;
@@ -187,7 +188,9 @@ pub struct FlightReceiver {
 
 impl Drop for FlightReceiver {
     fn drop(&mut self) {
-        self.close();
+        drop_guard(move || {
+            self.close();
+        })
     }
 }
 

@@ -13,6 +13,7 @@ test = false
 
 [dependencies]
 bytes = { workspace = true }
+databend-common-base = { path = "../../../../common/base" }
 databend-common-cache = { path = "../../../../common/cache" }
 databend-common-exception = { path = "../../../../common/exception" }
 databend-common-metrics = { path = "../../../../common/metrics" }

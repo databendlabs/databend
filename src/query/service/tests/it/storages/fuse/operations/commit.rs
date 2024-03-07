@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -21,6 +20,7 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -107,9 +107,9 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::MetaId;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
-use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_pipeline_core::InputError;
+use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
@@ -127,6 +127,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_txn::TxnManagerRef;
 use futures::TryStreamExt;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -371,6 +372,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn txn_mgr(&self) -> TxnManagerRef {
+        self.ctx.txn_mgr()
+    }
+
     fn incr_total_scan_value(&self, _value: ProgressValues) {
         todo!()
     }
@@ -538,7 +543,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_tenant(&self) -> String {
+    fn get_tenant(&self) -> NonEmptyString {
         self.ctx.get_tenant()
     }
 

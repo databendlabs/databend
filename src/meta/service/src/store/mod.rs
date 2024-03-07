@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod raft_log_storage_impl;
+mod raft_state_machine_impl;
 #[allow(clippy::module_inception)]
 mod store;
 mod store_inner;

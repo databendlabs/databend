@@ -42,6 +42,10 @@ impl Interpreter for AlterNetworkPolicyInterpreter {
         "AlterNetworkPolicyInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -53,7 +57,7 @@ impl Interpreter for AlterNetworkPolicyInterpreter {
         let user_mgr = UserApiProvider::instance();
         user_mgr
             .update_network_policy(
-                &tenant,
+                tenant.as_str(),
                 &plan.name,
                 plan.allowed_ip_list.clone(),
                 plan.blocked_ip_list.clone(),

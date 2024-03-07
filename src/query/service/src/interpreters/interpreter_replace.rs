@@ -75,6 +75,10 @@ impl Interpreter for ReplaceInterpreter {
         "ReplaceIntoInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if check_deduplicate_label(self.ctx.clone()).await? {
@@ -128,13 +132,6 @@ impl ReplaceInterpreter {
 
         // check mutability
         table.check_mutable()?;
-        // check change tracking
-        if table.change_tracking_enabled() {
-            return Err(ErrorCode::Unimplemented(format!(
-                "change tracking is enabled for table '{}', does not support REPLACE",
-                table.name(),
-            )));
-        }
 
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
         let schema = table.schema();
@@ -295,6 +292,7 @@ impl ReplaceInterpreter {
                 table_level_range_index,
                 need_insert: true,
                 delete_when,
+                plan_id: u32::MAX,
             },
         )));
         root = Box::new(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
@@ -312,6 +310,7 @@ impl ReplaceInterpreter {
                 .collect(),
             block_slots: None,
             need_insert: true,
+            plan_id: u32::MAX,
         })));
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
@@ -333,7 +332,9 @@ impl ReplaceInterpreter {
             merge_meta: false,
             need_lock: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+            plan_id: u32::MAX,
         })));
+        root.adjust_plan_id(&mut 0);
         Ok((root, purge_info))
     }
 
@@ -401,6 +402,7 @@ impl ReplaceInterpreter {
                 value_data: value_data.to_string(),
                 start: span_offset,
                 schema,
+                plan_id: u32::MAX,
             },
         )))
     }

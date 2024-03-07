@@ -28,21 +28,25 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 #[derive(Debug)]
-pub struct CreateUserUDFInterpreter {
+pub struct CreateUserUDFScript {
     ctx: Arc<QueryContext>,
     plan: CreateUDFPlan,
 }
 
-impl CreateUserUDFInterpreter {
+impl CreateUserUDFScript {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CreateUDFPlan) -> Result<Self> {
-        Ok(CreateUserUDFInterpreter { ctx, plan })
+        Ok(CreateUserUDFScript { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateUserUDFInterpreter {
+impl Interpreter for CreateUserUDFScript {
     fn name(&self) -> &str {
-        "CreateUserUDFInterpreter"
+        "CreateUserUDFScript"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
     }
 
     #[minitrace::trace]
@@ -59,7 +63,7 @@ impl Interpreter for CreateUserUDFInterpreter {
 
         // Grant ownership as the current role
         if let Some(current_role) = self.ctx.get_current_role() {
-            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            let role_api = UserApiProvider::instance().role_api(&tenant);
             role_api
                 .grant_ownership(
                     &OwnershipObject::UDF {

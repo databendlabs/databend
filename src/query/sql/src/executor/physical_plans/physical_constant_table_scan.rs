@@ -52,7 +52,7 @@ impl PhysicalPlanBuilder {
         };
         // 2. Build physical plan.
         Ok(PhysicalPlan::ConstantTableScan(ConstantTableScan {
-            plan_id: self.next_plan_id(),
+            plan_id: 0,
             values,
             num_rows: scan.num_rows,
             output_schema: DataSchemaRefExt::create(fields),

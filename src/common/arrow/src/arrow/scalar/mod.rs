@@ -43,8 +43,12 @@ mod fixed_size_list;
 pub use fixed_size_list::*;
 mod fixed_size_binary;
 pub use fixed_size_binary::*;
+mod binview;
 mod union;
+
 pub use union::UnionScalar;
+
+use crate::arrow::scalar::binview::BinaryViewScalar;
 
 /// Trait object declaring an optional value with a [`DataType`].
 /// This trait is often used in APIs that accept multiple scalar types.
@@ -85,6 +89,21 @@ macro_rules! dyn_new_binary {
             None
         };
         Box::new(BinaryScalar::<$type>::new(value))
+    }};
+}
+
+macro_rules! dyn_new_binview {
+    ($array:expr, $index:expr, $type:ty) => {{
+        let array = $array
+            .as_any()
+            .downcast_ref::<BinaryViewArrayGeneric<$type>>()
+            .unwrap();
+        let value = if array.is_valid($index) {
+            Some(array.value($index))
+        } else {
+            None
+        };
+        Box::new(BinaryViewScalar::<$type>::new(value))
     }};
 }
 
@@ -130,6 +149,8 @@ pub fn new_scalar(array: &dyn Array, index: usize) -> Box<dyn Scalar> {
         LargeUtf8 => dyn_new_utf8!(array, index, i64),
         Binary => dyn_new_binary!(array, index, i32),
         LargeBinary => dyn_new_binary!(array, index, i64),
+        BinaryView => dyn_new_binview!(array, index, [u8]),
+        Utf8View => dyn_new_binview!(array, index, str),
         List => dyn_new_list!(array, index, i32),
         LargeList => dyn_new_list!(array, index, i64),
         Struct => {

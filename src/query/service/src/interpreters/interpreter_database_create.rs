@@ -99,6 +99,10 @@ impl Interpreter for CreateDatabaseInterpreter {
         "CreateDatabaseInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -108,7 +112,7 @@ impl Interpreter for CreateDatabaseInterpreter {
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let databases = catalog.list_databases(&tenant).await?;
+        let databases = catalog.list_databases(tenant.as_str()).await?;
         if quota.max_databases != 0 && databases.len() >= quota.max_databases as usize {
             return Err(ErrorCode::TenantQuotaExceeded(format!(
                 "Max databases quota exceeded {}",
@@ -117,7 +121,7 @@ impl Interpreter for CreateDatabaseInterpreter {
         };
         // if create from other tenant, check from share endpoint
         if let Some(ref share_name) = self.plan.meta.from_share {
-            self.check_create_database_from_share(&tenant, share_name)
+            self.check_create_database_from_share(&tenant.to_string(), share_name)
                 .await?;
         }
 
@@ -126,7 +130,7 @@ impl Interpreter for CreateDatabaseInterpreter {
 
         // Grant ownership as the current role. The above create_db_req.meta.owner could be removed in
         // the future.
-        let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+        let role_api = UserApiProvider::instance().role_api(&tenant);
         if let Some(current_role) = self.ctx.get_current_role() {
             role_api
                 .grant_ownership(
@@ -148,7 +152,7 @@ impl Interpreter for CreateDatabaseInterpreter {
             }
 
             save_share_spec(
-                &self.ctx.get_tenant(),
+                &self.ctx.get_tenant().to_string(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_into),

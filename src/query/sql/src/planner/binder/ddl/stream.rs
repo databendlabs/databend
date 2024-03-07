@@ -74,7 +74,7 @@ impl Binder {
 
         let plan = CreateStreamPlan {
             create_option: *create_option,
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
             stream_name,
@@ -104,7 +104,7 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, stream);
         let plan = DropStreamPlan {
             if_exists: *if_exists,
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
             stream_name,

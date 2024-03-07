@@ -28,6 +28,7 @@ use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyString;
 
 use crate::role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;
@@ -35,7 +36,7 @@ use crate::UserApiProvider;
 impl UserApiProvider {
     // Get one user from by tenant.
     #[async_backtrace::framed]
-    pub async fn get_user(&self, tenant: &str, user: UserIdentity) -> Result<UserInfo> {
+    pub async fn get_user(&self, tenant: &NonEmptyString, user: UserIdentity) -> Result<UserInfo> {
         if let Some(auth_info) = self.get_configured_user(&user.username) {
             let mut user_info = UserInfo::new(&user.username, "%", auth_info.clone());
             user_info.grants.grant_privileges(
@@ -52,7 +53,7 @@ impl UserApiProvider {
             user_info.option.set_all_flag();
             Ok(user_info)
         } else {
-            let client = self.get_user_api_client(tenant)?;
+            let client = self.user_api(tenant);
             let get_user = client.get_user(user, MatchSeq::GE(0));
             Ok(get_user.await?.data)
         }
@@ -62,7 +63,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_user_with_client_ip(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         user: UserIdentity,
         client_ip: Option<&str>,
     ) -> Result<UserInfo> {
@@ -76,7 +77,9 @@ impl UserApiProvider {
                 }
             };
 
-            let network_policy = self.get_network_policy(tenant, name.as_str()).await?;
+            let network_policy = self
+                .get_network_policy(tenant.as_str(), name.as_str())
+                .await?;
             for blocked_ip in network_policy.blocked_ip_list {
                 let blocked_cidr: Ipv4Cidr = blocked_ip.parse().unwrap();
                 if blocked_cidr.contains(&ip_addr) {
@@ -106,8 +109,8 @@ impl UserApiProvider {
 
     // Get the tenant all users list.
     #[async_backtrace::framed]
-    pub async fn get_users(&self, tenant: &str) -> Result<Vec<UserInfo>> {
-        let client = self.get_user_api_client(tenant)?;
+    pub async fn get_users(&self, tenant: &NonEmptyString) -> Result<Vec<UserInfo>> {
+        let client = self.user_api(tenant);
         let get_users = client.get_users();
 
         let mut res = vec![];
@@ -127,12 +130,16 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_user(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         user_info: UserInfo,
         create_option: &CreateOption,
     ) -> Result<()> {
         if let Some(name) = user_info.option.network_policy() {
-            if self.get_network_policy(tenant, name).await.is_err() {
+            if self
+                .get_network_policy(tenant.as_str(), name)
+                .await
+                .is_err()
+            {
                 return Err(ErrorCode::UnknownNetworkPolicy(format!(
                     "network policy `{}` is not exist",
                     name
@@ -140,7 +147,11 @@ impl UserApiProvider {
             }
         }
         if let Some(name) = user_info.option.password_policy() {
-            if self.get_password_policy(tenant, name).await.is_err() {
+            if self
+                .get_password_policy(tenant.as_str(), name)
+                .await
+                .is_err()
+            {
                 return Err(ErrorCode::UnknownPasswordPolicy(format!(
                     "password policy `{}` is not exist",
                     name
@@ -153,14 +164,14 @@ impl UserApiProvider {
                 user_info.name
             )));
         }
-        let client = self.get_user_api_client(tenant)?;
+        let client = self.user_api(tenant);
         client.add_user(user_info, create_option).await
     }
 
     #[async_backtrace::framed]
     pub async fn grant_privileges_to_user(
         &self,
-        tenant: &str,
+        tenant: NonEmptyString,
         user: UserIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
@@ -171,7 +182,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.get_user_api_client(tenant)?;
+        let client = self.user_api(&tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.grants.grant_privileges(&object, privileges)
@@ -183,7 +194,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn revoke_privileges_from_user(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         user: UserIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
@@ -194,7 +205,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.get_user_api_client(tenant)?;
+        let client = self.user_api(tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.grants.revoke_privileges(&object, privileges)
@@ -206,7 +217,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn grant_role_to_user(
         &self,
-        tenant: &str,
+        tenant: NonEmptyString,
         user: UserIdentity,
         grant_role: String,
     ) -> Result<Option<u64>> {
@@ -216,7 +227,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.get_user_api_client(tenant)?;
+        let client = self.user_api(&tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.grants.grant_role(grant_role)
@@ -228,7 +239,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn revoke_role_from_user(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         user: UserIdentity,
         revoke_role: String,
     ) -> Result<Option<u64>> {
@@ -238,7 +249,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.get_user_api_client(tenant)?;
+        let client = self.user_api(tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.grants.revoke_role(&revoke_role)
@@ -249,14 +260,19 @@ impl UserApiProvider {
 
     // Drop a user by name and hostname.
     #[async_backtrace::framed]
-    pub async fn drop_user(&self, tenant: &str, user: UserIdentity, if_exists: bool) -> Result<()> {
+    pub async fn drop_user(
+        &self,
+        tenant: NonEmptyString,
+        user: UserIdentity,
+        if_exists: bool,
+    ) -> Result<()> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
                 "Configured user `{}` cannot be dropped",
                 user.username
             )));
         }
-        let client = self.get_user_api_client(tenant)?;
+        let client = self.user_api(&tenant);
         let drop_user = client.drop_user(user, MatchSeq::GE(1));
         match drop_user.await {
             Ok(res) => Ok(res),
@@ -274,14 +290,18 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn update_user(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         user: UserIdentity,
         auth_info: Option<AuthInfo>,
         user_option: Option<UserOption>,
     ) -> Result<Option<u64>> {
         if let Some(ref user_option) = user_option {
             if let Some(name) = user_option.network_policy() {
-                if self.get_network_policy(tenant, name).await.is_err() {
+                if self
+                    .get_network_policy(tenant.as_str(), name)
+                    .await
+                    .is_err()
+                {
                     return Err(ErrorCode::UnknownNetworkPolicy(format!(
                         "network policy `{}` is not exist",
                         name
@@ -289,7 +309,11 @@ impl UserApiProvider {
                 }
             }
             if let Some(name) = user_option.password_policy() {
-                if self.get_password_policy(tenant, name).await.is_err() {
+                if self
+                    .get_password_policy(tenant.as_str(), name)
+                    .await
+                    .is_err()
+                {
                     return Err(ErrorCode::UnknownPasswordPolicy(format!(
                         "password policy `{}` is not exist",
                         name
@@ -303,7 +327,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.get_user_api_client(tenant)?;
+        let client = self.user_api(tenant);
         let update_user = client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.update_auth_option(auth_info.clone(), user_option);
@@ -321,7 +345,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn update_user_default_role(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         user: UserIdentity,
         default_role: Option<String>,
     ) -> Result<Option<u64>> {
@@ -334,14 +358,14 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn update_user_login_result(
         &self,
-        tenant: &str,
+        tenant: NonEmptyString,
         user: UserIdentity,
         authed: bool,
     ) -> Result<()> {
         if self.get_configured_user(&user.username).is_some() {
             return Ok(());
         }
-        let client = self.get_user_api_client(tenant)?;
+        let client = self.user_api(&tenant);
         let update_user = client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 if authed {
@@ -361,14 +385,14 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn update_user_lockout_time(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         user: UserIdentity,
         lockout_time: DateTime<Utc>,
     ) -> Result<()> {
         if self.get_configured_user(&user.username).is_some() {
             return Ok(());
         }
-        let client = self.get_user_api_client(tenant)?;
+        let client = self.user_api(tenant);
         let update_user = client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.update_lockout_time(lockout_time);

@@ -26,14 +26,16 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_password_policy() -> Result<()> {
     let conf = RpcClientConf::default();
-    let tenant = "test";
+    let tenant_name = "test";
+    let tenant = NonEmptyString::new(tenant_name.to_string()).unwrap();
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let username = "test-user1";
     let hostname = "%";
     let pwd1 = "123456abcDEF!@#1";
@@ -66,7 +68,11 @@ async fn test_password_policy() -> Result<()> {
     };
 
     let res = user_mgr
-        .add_password_policy(tenant, password_policy.clone(), false)
+        .add_password_policy(
+            tenant_name,
+            password_policy.clone(),
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_ok());
 
@@ -74,7 +80,11 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy1 = password_policy.clone();
     invalid_password_policy1.min_length = 0;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy1, false)
+        .add_password_policy(
+            tenant_name,
+            invalid_password_policy1,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -82,7 +92,11 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy2 = password_policy.clone();
     invalid_password_policy2.max_length = 260;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy2, false)
+        .add_password_policy(
+            tenant_name,
+            invalid_password_policy2,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -91,7 +105,11 @@ async fn test_password_policy() -> Result<()> {
     invalid_password_policy3.min_length = 30;
     invalid_password_policy3.max_length = 20;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy3, false)
+        .add_password_policy(
+            tenant_name,
+            invalid_password_policy3,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -102,7 +120,11 @@ async fn test_password_policy() -> Result<()> {
     invalid_password_policy4.min_numeric_chars = 272;
     invalid_password_policy4.min_special_chars = 273;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy4, false)
+        .add_password_policy(
+            tenant_name,
+            invalid_password_policy4,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -114,7 +136,11 @@ async fn test_password_policy() -> Result<()> {
     invalid_password_policy5.min_numeric_chars = 12;
     invalid_password_policy5.min_special_chars = 13;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy5, false)
+        .add_password_policy(
+            tenant_name,
+            invalid_password_policy5,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -123,7 +149,11 @@ async fn test_password_policy() -> Result<()> {
     invalid_password_policy6.min_age_days = 20;
     invalid_password_policy6.max_age_days = 10;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy6, false)
+        .add_password_policy(
+            tenant_name,
+            invalid_password_policy6,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -131,7 +161,11 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy7 = password_policy.clone();
     invalid_password_policy7.max_retries = 20;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy7, false)
+        .add_password_policy(
+            tenant_name,
+            invalid_password_policy7,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -139,7 +173,11 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy8 = password_policy.clone();
     invalid_password_policy8.lockout_time_mins = 2000;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy8, false)
+        .add_password_policy(
+            tenant_name,
+            invalid_password_policy8,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -147,7 +185,11 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy9 = password_policy.clone();
     invalid_password_policy9.history = 50;
     let res = user_mgr
-        .add_password_policy(tenant, invalid_password_policy9, false)
+        .add_password_policy(
+            tenant_name,
+            invalid_password_policy9,
+            &CreateOption::CreateIfNotExists,
+        )
         .await;
     assert!(res.is_err());
 
@@ -158,7 +200,7 @@ async fn test_password_policy() -> Result<()> {
         password: Some(pwd1.to_string()),
     };
     let res = user_mgr
-        .verify_password(tenant, &user_option, &auth_option, None, None)
+        .verify_password(tenant_name, &user_option, &auth_option, None, None)
         .await;
     assert!(res.is_ok());
 
@@ -166,7 +208,7 @@ async fn test_password_policy() -> Result<()> {
     let mut auth_option1 = auth_option.clone();
     auth_option1.password = Some(invalid_pwd.to_string());
     let res = user_mgr
-        .verify_password(tenant, &user_option, &auth_option1, None, None)
+        .verify_password(tenant_name, &user_option, &auth_option1, None, None)
         .await;
     assert!(res.is_err());
 
@@ -178,7 +220,7 @@ async fn test_password_policy() -> Result<()> {
     user_info.update_auth_option(None, Some(option));
     let res = user_mgr
         .verify_password(
-            tenant,
+            tenant_name,
             &user_option,
             &auth_option,
             Some(&user_info),
@@ -193,7 +235,7 @@ async fn test_password_policy() -> Result<()> {
     let auth_info2 = AuthInfo::create2(&None, &Some(pwd2.to_string())).unwrap();
     let res = user_mgr
         .verify_password(
-            tenant,
+            tenant_name,
             &user_option,
             &auth_option,
             Some(&user_info),
@@ -206,7 +248,7 @@ async fn test_password_policy() -> Result<()> {
     user_info.password_update_on = Some(Utc::now().checked_sub_signed(Duration::days(3)).unwrap());
     let res = user_mgr
         .verify_password(
-            tenant,
+            tenant_name,
             &user_option,
             &auth_option,
             Some(&user_info),
@@ -221,7 +263,7 @@ async fn test_password_policy() -> Result<()> {
     let new_auth_info1 = AuthInfo::create2(&None, &Some(pwd1.to_string())).unwrap();
     let res = user_mgr
         .verify_password(
-            tenant,
+            tenant_name,
             &user_option,
             &auth_option,
             Some(&user_info),
@@ -247,7 +289,7 @@ async fn test_password_policy() -> Result<()> {
     user_info.password_update_on = Some(Utc::now().checked_sub_signed(Duration::days(3)).unwrap());
     let res = user_mgr
         .verify_password(
-            tenant,
+            tenant_name,
             &user_option,
             &auth_option,
             Some(&user_info),
@@ -259,7 +301,7 @@ async fn test_password_policy() -> Result<()> {
     // check login password success
     let identity = UserIdentity::new(username, hostname);
     let res = user_mgr
-        .check_login_password(tenant, identity.clone(), &user_info)
+        .check_login_password(&tenant, identity.clone(), &user_info)
         .await;
     assert!(res.is_ok());
 
@@ -269,7 +311,7 @@ async fn test_password_policy() -> Result<()> {
     }
     // user lockout because of too many login fails
     let res = user_mgr
-        .check_login_password(tenant, identity.clone(), &user_info)
+        .check_login_password(&tenant, identity.clone(), &user_info)
         .await;
     assert!(res.is_err());
 
@@ -281,7 +323,7 @@ async fn test_password_policy() -> Result<()> {
     );
     // user can't log in because of locked out
     let res = user_mgr
-        .check_login_password(tenant, identity.clone(), &user_info)
+        .check_login_password(&tenant, identity.clone(), &user_info)
         .await;
     assert!(res.is_err());
 
@@ -291,14 +333,14 @@ async fn test_password_policy() -> Result<()> {
     user_info.password_update_on = Some(Utc::now().checked_sub_signed(Duration::days(31)).unwrap());
     // user can't log in because of not change password more than max allowed days
     let res = user_mgr
-        .check_login_password(tenant, identity.clone(), &user_info)
+        .check_login_password(&tenant, identity.clone(), &user_info)
         .await;
     assert!(res.is_err());
 
     // update password policy
     let res = user_mgr
         .update_password_policy(
-            tenant,
+            tenant_name,
             &policy_name,
             Some(10),
             Some(20),
@@ -319,19 +361,19 @@ async fn test_password_policy() -> Result<()> {
 
     // add user
     user_mgr
-        .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(false))
+        .add_user(&tenant, user_info, &CreateOption::CreateIfNotExists)
         .await?;
 
     // drop password policy
     let res = user_mgr
-        .drop_password_policy(tenant, policy_name.as_ref(), false)
+        .drop_password_policy(&tenant, policy_name.as_ref(), false)
         .await;
     assert!(res.is_err());
 
-    user_mgr.drop_user(tenant, identity, false).await?;
+    user_mgr.drop_user(tenant.clone(), identity, false).await?;
 
     let res = user_mgr
-        .drop_password_policy(tenant, policy_name.as_ref(), false)
+        .drop_password_policy(&tenant, policy_name.as_ref(), false)
         .await;
     assert!(res.is_ok());
 

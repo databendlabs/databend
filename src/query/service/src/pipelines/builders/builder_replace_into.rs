@@ -100,6 +100,7 @@ impl PipelineBuilder {
             segments,
             block_slots,
             need_insert,
+            ..
         } = replace;
         let max_threads = self.settings.get_max_threads()?;
         let segment_partition_num = std::cmp::min(segments.len(), max_threads as usize);
@@ -119,7 +120,8 @@ impl PipelineBuilder {
             cluster_stats_gen,
             MutationKind::Replace,
         )?;
-        let block_builder = serialize_block_transform.get_block_builder();
+        let mut block_builder = serialize_block_transform.get_block_builder();
+        block_builder.source_schema = table.schema_with_stream();
 
         let serialize_segment_transform = TransformSerializeSegment::new(
             self.ctx.clone(),
@@ -262,6 +264,7 @@ impl PipelineBuilder {
             target_schema,
             need_insert,
             delete_when,
+            ..
         } = deduplicate;
 
         let tbl = self

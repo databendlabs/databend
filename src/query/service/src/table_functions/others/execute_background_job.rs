@@ -155,7 +155,7 @@ impl AsyncSource for ExecuteBackgroundJobSource {
         let background_handler = get_background_service_handler();
         background_handler
             .execute_scheduled_job(
-                self.ctx.get_tenant(),
+                self.ctx.get_tenant().to_string(),
                 self.ctx.get_current_user()?.identity(),
                 self.job_name.clone(),
             )

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -21,6 +22,9 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;
+
+// (TableName, file, file size)
+pub type VacuumDropFileInfo = (String, String, u64);
 
 #[async_trait::async_trait]
 pub trait VacuumHandler: Sync + Send {
@@ -36,7 +40,14 @@ pub trait VacuumHandler: Sync + Send {
         &self,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
-    ) -> Result<Option<Vec<(String, String)>>>;
+    ) -> Result<Option<Vec<VacuumDropFileInfo>>>;
+
+    async fn do_vacuum_temporary_files(
+        &self,
+        temporary_dir: String,
+        retain: Option<Duration>,
+        vacuum_limit: Option<usize>,
+    ) -> Result<Vec<String>>;
 }
 
 pub struct VacuumHandlerWrapper {
@@ -66,9 +77,21 @@ impl VacuumHandlerWrapper {
         &self,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
-    ) -> Result<Option<Vec<(String, String)>>> {
+    ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
         self.handler
             .do_vacuum_drop_tables(tables, dry_run_limit)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_vacuum_temporary_files(
+        &self,
+        temporary_dir: String,
+        retain: Option<Duration>,
+        vacuum_limit: Option<usize>,
+    ) -> Result<Vec<String>> {
+        self.handler
+            .do_vacuum_temporary_files(temporary_dir, retain, vacuum_limit)
             .await
     }
 }

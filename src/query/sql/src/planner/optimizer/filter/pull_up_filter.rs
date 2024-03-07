@@ -150,7 +150,7 @@ impl PullUpFilterOptimizer {
     }
 
     pub fn pull_up_others(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut children = Vec::with_capacity(s_expr.children().len());
+        let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
             let child = PullUpFilterOptimizer::new(self.metadata.clone()).run(child)?;
             children.push(Arc::new(child));
@@ -233,7 +233,7 @@ impl PullUpFilterOptimizer {
             ScalarExpr::CastExpr(cast) => {
                 Self::replace_predicate(&mut cast.argument, items, metadata)?;
             }
-            ScalarExpr::UDFServerCall(udf) => {
+            ScalarExpr::UDFCall(udf) => {
                 for arg in udf.arguments.iter_mut() {
                     Self::replace_predicate(arg, items, metadata)?;
                 }

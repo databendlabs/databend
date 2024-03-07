@@ -151,6 +151,9 @@ pub enum TokenKind {
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
     QuotedString,
 
+    #[regex(r#"\$\$([^\$]|(\$[^\$]))*\$\$"#)]
+    CodeString,
+
     #[regex(r#"@([^\s`;'"()]|\\\s|\\'|\\"|\\\\)+"#)]
     AtString,
 
@@ -597,6 +600,8 @@ pub enum TokenKind {
     FUSE,
     #[token("GENERATED", ignore(ascii_case))]
     GENERATED,
+    #[token("GEOMETRY", ignore(ascii_case))]
+    GEOMETRY,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
@@ -671,6 +676,8 @@ pub enum TokenKind {
     LOCATION_PREFIX,
     #[token("LOCKS", ignore(ascii_case))]
     LOCKS,
+    #[token("LOGICAL", ignore(ascii_case))]
+    LOGICAL,
     #[token("ACCOUNT", ignore(ascii_case))]
     ACCOUNT,
     #[token("SECONDARY", ignore(ascii_case))]
@@ -916,10 +923,14 @@ pub enum TokenKind {
     STAGES,
     #[token("STATISTIC", ignore(ascii_case))]
     STATISTIC,
+    #[token("SUMMARY", ignore(ascii_case))]
+    SUMMARY,
     #[token("SHA256_PASSWORD", ignore(ascii_case))]
     SHA256_PASSWORD,
     #[token("SHOW", ignore(ascii_case))]
     SHOW,
+    #[token("SINCE", ignore(ascii_case))]
+    SINCE,
     #[token("SIGNED", ignore(ascii_case))]
     SIGNED,
     #[token("SINGLE", ignore(ascii_case))]
@@ -1046,6 +1057,10 @@ pub enum TokenKind {
     UNSIGNED,
     #[token("URL", ignore(ascii_case))]
     URL,
+    #[token("METHOD", ignore(ascii_case))]
+    METHOD,
+    #[token("AUTHORIZATION_HEADER", ignore(ascii_case))]
+    AUTHORIZATION_HEADER,
     #[token("USE", ignore(ascii_case))]
     USE,
     #[token("USER", ignore(ascii_case))]
@@ -1066,6 +1081,8 @@ pub enum TokenKind {
     VARCHAR,
     #[token("VARIANT", ignore(ascii_case))]
     VARIANT,
+    #[token("VERBOSE", ignore(ascii_case))]
+    VERBOSE,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
     #[token("VIRTUAL", ignore(ascii_case))]
@@ -1148,6 +1165,16 @@ pub enum TokenKind {
     RESUME,
     #[token("PIPE", ignore(ascii_case))]
     PIPE,
+    #[token("NOTIFICATION", ignore(ascii_case))]
+    NOTIFICATION,
+    #[token("INTEGRATION", ignore(ascii_case))]
+    INTEGRATION,
+    #[token("ENABLED", ignore(ascii_case))]
+    ENABLED,
+    #[token("WEBHOOK", ignore(ascii_case))]
+    WEBHOOK,
+    #[token("ERROR_INTEGRATION", ignore(ascii_case))]
+    ERROR_INTEGRATION,
     #[token("AUTO_INGEST", ignore(ascii_case))]
     AUTO_INGEST,
     #[token("PIPE_EXECUTION_PAUSED", ignore(ascii_case))]
@@ -1156,6 +1183,20 @@ pub enum TokenKind {
     PREFIX,
     #[token("MODIFIED_AFTER", ignore(ascii_case))]
     MODIFIED_AFTER,
+    #[token("BEGIN", ignore(ascii_case))]
+    BEGIN,
+    #[token("COMMIT", ignore(ascii_case))]
+    COMMIT,
+    #[token("ABORT", ignore(ascii_case))]
+    ABORT,
+    #[token("ROLLBACK", ignore(ascii_case))]
+    ROLLBACK,
+    #[token("TEMPORARY", ignore(ascii_case))]
+    TEMPORARY,
+    #[token("SECONDS", ignore(ascii_case))]
+    SECONDS,
+    #[token("DAYS", ignore(ascii_case))]
+    DAYS,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -1163,7 +1204,12 @@ impl TokenKind {
     pub fn is_literal(&self) -> bool {
         matches!(
             self,
-            LiteralInteger | LiteralFloat | QuotedString | PGLiteralHex | MySQLLiteralHex
+            LiteralInteger
+                | LiteralFloat
+                | QuotedString
+                | CodeString
+                | PGLiteralHex
+                | MySQLLiteralHex
         )
     }
 
@@ -1172,6 +1218,7 @@ impl TokenKind {
             self,
             Ident
                 | QuotedString
+                | CodeString
                 | PGLiteralHex
                 | MySQLLiteralHex
                 | LiteralInteger
@@ -1510,6 +1557,7 @@ impl TokenKind {
             | TokenKind::TASK
             | TokenKind::PIPE
             | TokenKind::STREAM
+            | TokenKind::NOTIFICATION
             if !after_as => true,
             _ => false
         }

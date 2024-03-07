@@ -67,6 +67,10 @@ impl Interpreter for OptimizeTableInterpreter {
         "OptimizeTableInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let ctx = self.ctx.clone();
@@ -116,6 +120,7 @@ impl OptimizeTableInterpreter {
             table_info: table_info.clone(),
             catalog_info: catalog_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
+            plan_id: u32::MAX,
         }));
 
         if is_distributed {
@@ -139,6 +144,7 @@ impl OptimizeTableInterpreter {
             merge_meta,
             need_lock,
             deduplicated_label: None,
+            plan_id: u32::MAX,
         })))
     }
 

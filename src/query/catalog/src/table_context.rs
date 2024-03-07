@@ -24,6 +24,7 @@ use std::time::SystemTime;
 use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -35,8 +36,8 @@ use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
-use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_meta_types::NonEmptyString;
+use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
 use databend_common_storage::CopyStatus;
@@ -47,6 +48,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
@@ -170,7 +172,7 @@ pub trait TableContext: Send + Sync {
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
     fn get_format_settings(&self) -> Result<FormatSettings>;
-    fn get_tenant(&self) -> String;
+    fn get_tenant(&self) -> NonEmptyString;
     /// Get the kind of session running query.
     fn get_query_kind(&self) -> QueryKind;
     fn get_function_context(&self) -> Result<FunctionContext>;
@@ -257,4 +259,5 @@ pub trait TableContext: Send + Sync {
     fn get_min_max_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
+    fn txn_mgr(&self) -> TxnManagerRef;
 }

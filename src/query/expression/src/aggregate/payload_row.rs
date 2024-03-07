@@ -14,12 +14,15 @@
 
 use bumpalo::Bump;
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_io::prelude::bincode_deserialize_from_slice;
+use databend_common_io::prelude::bincode_serialize_into_buf;
 use ethnum::i256;
 
 use crate::store;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalType;
+use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::BinaryType;
 use crate::types::BooleanType;
@@ -32,6 +35,7 @@ use crate::types::ValueType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::Scalar;
 use crate::SelectVector;
 
 pub fn rowformat_size(data_type: &DataType) -> usize {
@@ -52,9 +56,7 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         | DataType::Variant
         | DataType::Geometry => 4 + 8, // u32 len + address
         DataType::Nullable(x) => rowformat_size(x),
-        DataType::Array(_) => todo!(),
-        DataType::Map(_) => todo!(),
-        DataType::Tuple(_) => todo!(),
+        DataType::Array(_) | DataType::Map(_) | DataType::Tuple(_) => 4 + 8,
         DataType::Generic(_) => unreachable!(),
     }
 }
@@ -67,7 +69,7 @@ pub unsafe fn serialize_column_to_rowformat(
     rows: usize,
     address: &[*const u8],
     offset: usize,
-    _scratch: &mut Vec<u8>,
+    scratch: &mut Vec<u8>,
 ) {
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
@@ -88,16 +90,18 @@ pub unsafe fn serialize_column_to_rowformat(
             })
         }
         Column::Boolean(v) => {
-            if v.unset_bits() == 0 {
+            if v.unset_bits() == 0 || v.unset_bits() == v.len() {
+                let val: u8 = if v.unset_bits() == 0 { 1 } else { 0 };
                 // faster path
                 for index in select_vector.iter().take(rows).copied() {
-                    store(1, address[index].add(offset) as *mut u8);
+                    store(val, address[index].add(offset) as *mut u8);
                 }
-            } else if v.unset_bits() != v.len() {
+            } else {
                 for index in select_vector.iter().take(rows).copied() {
-                    if v.get_bit(index) {
-                        store(1, address[index].add(offset) as *mut u8);
-                    }
+                    store(
+                        v.get_bit(index) as u8,
+                        address[index].add(offset) as *mut u8,
+                    );
                 }
             }
         }
@@ -138,14 +142,23 @@ pub unsafe fn serialize_column_to_rowformat(
             rows,
             address,
             offset,
-            _scratch,
+            scratch,
         ),
 
-        Column::Array(_array) | Column::Map(_array) => {
-            todo!("nested tuple/array/map not supported yet")
-        }
-        Column::Tuple(_fields) => {
-            todo!("nested tuple/array/map not supported yet")
+        // for complex column
+        other => {
+            for index in select_vector.iter().take(rows).copied() {
+                let s = other.index_unchecked(index).to_owned();
+                scratch.clear();
+                bincode_serialize_into_buf(scratch, &s).unwrap();
+
+                let data = arena.alloc_slice_copy(scratch);
+                store(data.len() as u32, address[index].add(offset) as *mut u8);
+                store(
+                    data.as_ptr() as u64,
+                    address[index].add(offset + 4) as *mut u8,
+                );
+            }
         }
     }
 }
@@ -315,10 +328,17 @@ pub unsafe fn row_match_column(
                 no_match_count,
             )
         }
-        Column::Nullable(_) => unreachable!(),
-        Column::Array(_) => todo!(),
-        Column::Map(_) => todo!(),
-        Column::Tuple(_) => todo!(),
+        Column::Nullable(_) => unreachable!("nullable is unwrapped"),
+        other => row_match_generic_column(
+            other,
+            address,
+            select_vector,
+            temp_vector,
+            count,
+            col_offset,
+            no_match,
+            no_match_count,
+        ),
     }
 }
 
@@ -463,6 +483,43 @@ unsafe fn row_match_column_type<T: ArgType>(
         }
     }
 
+    select_vector.clone_from_slice(temp_vector);
+    *count = match_count;
+}
+
+unsafe fn row_match_generic_column(
+    col: &Column,
+    address: &[*const u8],
+    select_vector: &mut SelectVector,
+    temp_vector: &mut SelectVector,
+    count: &mut usize,
+    col_offset: usize,
+    no_match: &mut SelectVector,
+    no_match_count: &mut usize,
+) {
+    let mut match_count = 0;
+
+    for idx in select_vector[..*count].iter() {
+        let idx = *idx;
+        let len_address = address[idx].add(col_offset);
+        let len = core::ptr::read::<u32>(len_address as _) as usize;
+
+        let address = address[idx].add(col_offset + 4);
+
+        let value = AnyType::index_column_unchecked(col, idx);
+        let data_address = core::ptr::read::<u64>(address as _) as usize as *const u8;
+
+        let scalar = std::slice::from_raw_parts(data_address, len);
+        let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
+
+        if scalar.as_ref() == value {
+            temp_vector[match_count] = idx;
+            match_count += 1;
+        } else {
+            no_match[*no_match_count] = idx;
+            *no_match_count += 1;
+        }
+    }
     select_vector.clone_from_slice(temp_vector);
     *count = match_count;
 }

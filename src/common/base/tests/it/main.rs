@@ -17,15 +17,14 @@
 use databend_common_base::mem_allocator::GlobalAllocator;
 
 mod fixed_heap;
+mod memory;
 mod pool;
 mod pool_retry;
 mod progress;
 mod range_merger;
 mod runtime;
-mod runtime_tracker;
 mod stoppable;
 mod string;
-mod thread_pool;
 
 // runtime tests depends on the memory stat collector.
 #[global_allocator]

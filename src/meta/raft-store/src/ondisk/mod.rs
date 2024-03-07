@@ -27,7 +27,6 @@ use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
 pub use header::Header;
-use log::as_debug;
 use log::debug;
 use log::info;
 use openraft::AnyError;
@@ -36,7 +35,6 @@ use tokio::io;
 use crate::config::RaftConfig;
 use crate::key_spaces::DataHeader;
 use crate::key_spaces::RaftStoreEntry;
-use crate::key_spaces::RaftStoreEntryCompat;
 use crate::log::TREE_RAFT_LOG;
 use crate::sm_v002::SnapshotStoreV002;
 use crate::state::TREE_RAFT_STATE;
@@ -81,7 +79,7 @@ impl OnDisk {
     /// Initialize data version for local store, returns the loaded version.
     #[minitrace::trace]
     pub async fn open(db: &sled::Db, config: &RaftConfig) -> Result<OnDisk, MetaStorageError> {
-        info!(config = as_debug!(config); "open and initialize data-version");
+        info!(config :? =(config); "open and initialize data-version");
 
         let tree_name = config.tree_name(TREE_HEADER);
         let tree = SledTree::open(db, &tree_name, config.is_sync())?;
@@ -94,12 +92,13 @@ impl OnDisk {
             return Ok(OnDisk::new(v, db, config));
         }
 
-        // Without header, by default it is V0.
+        // Without header, by default it is the oldest compatible version: V001.
 
         let header = Header {
-            version: DataVersion::V0,
+            version: DataVersion::V001,
             upgrading: None,
         };
+
         ks.insert(&Self::KEY_HEADER.to_string(), &header).await?;
 
         Ok(OnDisk::new(header, db, config))
@@ -186,7 +185,10 @@ impl OnDisk {
         while self.header.version != DATA_VERSION {
             match self.header.version {
                 DataVersion::V0 => {
-                    self.upgrade_v0_to_v001().await?;
+                    unreachable!(
+                        "{} is no longer supported, since 2024-03-01",
+                        self.header.version
+                    )
                 }
                 DataVersion::V001 => {
                     self.upgrade_v001_to_v002().await?;
@@ -196,56 +198,6 @@ impl OnDisk {
                 }
             }
         }
-
-        Ok(())
-    }
-
-    /// Upgrade the on-disk data form [`DataVersion::V0`] to [`DataVersion::V001`].
-    ///
-    /// `V0` data is openraft-v7 and v8 compatible.
-    /// `V001` data is only openraft-v8 compatible.
-    #[minitrace::trace]
-    async fn upgrade_v0_to_v001(&mut self) -> Result<(), MetaStorageError> {
-        self.begin_upgrading(DataVersion::V0).await?;
-
-        // 2. Upgrade data
-
-        let mut tree_names = self.tree_names().await?;
-        if Some(TREE_HEADER) == tree_names.first().map(|x| x.as_str()) {
-            tree_names.remove(0);
-        }
-
-        let mut cnt = 0;
-        for tree_name in tree_names {
-            let tree = self.db.open_tree(tree_name)?;
-
-            for ivec_pair_res in tree.iter() {
-                let kv_entry = {
-                    let (k_ivec, v_ivec) = ivec_pair_res?;
-                    // `deserialize` is able to load both openraft-v07 and openraft-v08 data.
-                    // And then serialize it to openraft-v08 data.
-                    RaftStoreEntryCompat::deserialize(&k_ivec, &v_ivec)?
-                };
-
-                debug!(
-                    kv_entry = as_debug!(&kv_entry);
-                    "upgrade kv from {:?}",
-                    self.header.version
-                );
-
-                let (k, v) = RaftStoreEntry::serialize(&kv_entry)?;
-                tree.insert(k, v)?;
-                cnt += 1;
-            }
-
-            tree.flush()?;
-        }
-
-        // 3. Finish upgrading: clear upgrading flag
-
-        self.progress(format_args!("Upgraded {} records", cnt));
-
-        self.finish_upgrading().await?;
 
         Ok(())
     }
@@ -341,7 +293,7 @@ impl OnDisk {
             };
 
             debug!(
-                kv_entry = as_debug!(&kv_entry);
+                kv_entry :? =(&kv_entry);
                 "upgrade kv from {:?}", self.header.version
             );
 

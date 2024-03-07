@@ -14,6 +14,8 @@
 
 use std::alloc::Allocator;
 
+use databend_common_base::runtime::drop_guard;
+
 use super::table0::Entry;
 
 type Ent<V> = Entry<[u8; 2], V>;
@@ -92,11 +94,13 @@ impl<V, A: Allocator + Clone> Table1<V, A> {
 
 impl<V, A: Allocator + Clone> Drop for Table1<V, A> {
     fn drop(&mut self) {
-        if std::mem::needs_drop::<V>() {
-            self.iter_mut().for_each(|e| unsafe {
-                e.val.assume_init_drop();
-            });
-        }
+        drop_guard(move || {
+            if std::mem::needs_drop::<V>() {
+                self.iter_mut().for_each(|e| unsafe {
+                    e.val.assume_init_drop();
+                });
+            }
+        })
     }
 }
 

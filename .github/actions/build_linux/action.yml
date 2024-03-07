@@ -108,8 +108,12 @@ runs:
         done
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
 
-    - shell: bash
-      run: readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
+    - name: Check Binary Info
+      shell: bash
+      continue-on-error: true
+      run: |
+        readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
+        ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
 
     # - name: Compress Binaries with UPX
     #   if: env.BUILD_PROFILE == 'debug'

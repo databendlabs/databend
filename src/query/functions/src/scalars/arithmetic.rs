@@ -47,6 +47,7 @@ use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::values::Value;
 use databend_common_expression::values::ValueRef;
 use databend_common_expression::vectorize_1_arg;
+use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_decimal_mapped_type;
@@ -193,7 +194,55 @@ macro_rules! register_divide {
     };
 }
 
-macro_rules! register_div {
+macro_rules! register_div0 {
+    ($lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        type T = F64;
+
+        $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+            "div0",
+            |_, _, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>>(
+                |a, b, output, _ctx| {
+                    let b: F64 = b.as_();
+                    if std::intrinsics::unlikely(b == 0.0) {
+                        output.push(T::default()); // Push the default value for type T
+                    } else {
+                        output.push(AsPrimitive::<T>::as_(a) / b);
+                    }
+                }
+            ),
+        );
+    };
+}
+
+macro_rules! register_divnull {
+    ($lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        type T = F64;
+
+        $registry.register_2_arg_core::<NullableType<NumberType<L>>, NullableType<NumberType<R>>, NullableType<NumberType<T>>, _, _>(
+            "divnull",
+            |_, _, _| FunctionDomain::Full,
+            vectorize_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>, NullableType<NumberType<T>>>(|a, b, _| {
+                match (a, b) {
+                    (Some(a), Some(b)) => {
+                        let b: F64 = b.as_();
+                        if std::intrinsics::unlikely(b == 0.0) {
+                            None
+                        } else {
+                            Some(AsPrimitive::<T>::as_(a) / b)
+                        }
+                    },
+                    _ => None,
+                }
+            }));
+    }
+}
+
+macro_rules! register_intdiv {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
         type R = $rt;
@@ -274,7 +323,13 @@ macro_rules! register_basic_arithmetic {
         register_divide!($lt, $rt, $registry);
     }
     {
-        register_div!($lt, $rt, $registry);
+        register_intdiv!($lt, $rt, $registry);
+    }
+    {
+        register_div0!($lt, $rt, $registry);
+    }
+    {
+        register_divnull!($lt, $rt, $registry);
     }
     {
         register_modulo!($lt, $rt, $registry);

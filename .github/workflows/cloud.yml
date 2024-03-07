@@ -43,12 +43,12 @@ jobs:
 
   build:
     needs: info
-    runs-on: [self-hosted, X64, Linux, 16c32g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
     strategy:
       matrix:
-        arch:
-          - x86_64
-          - aarch64
+        include:
+          - {arch: x86_64, runner: X64}
+          - {arch: aarch64, runner: ARM64}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -98,7 +98,7 @@ jobs:
           short_sha=$(echo "${{ needs.info.outputs.sha }}" | cut -c1-7)
           echo "tag=pr-${{ github.event.pull_request.number }}-${short_sha}" >> $GITHUB_OUTPUT
       - name: push service image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           push: true
           tags: ${{ steps.login.outputs.ecr_repo }}:${{ steps.prepare.outputs.tag }}

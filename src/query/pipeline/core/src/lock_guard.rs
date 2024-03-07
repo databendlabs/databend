@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
+
 pub trait UnlockApi: Sync + Send {
     fn unlock(&self, revision: u64);
 }
@@ -31,6 +33,8 @@ impl LockGuard {
 
 impl Drop for LockGuard {
     fn drop(&mut self) {
-        self.lock_mgr.unlock(self.revision);
+        drop_guard(move || {
+            self.lock_mgr.unlock(self.revision);
+        })
     }
 }

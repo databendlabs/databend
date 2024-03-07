@@ -25,6 +25,8 @@ use databend_common_arrow::native::read::ArrayIter;
 use databend_common_arrow::parquet::metadata::ColumnDescriptor;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -60,8 +62,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::processors::Profile;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_sql::IndexType;
 use xorf::BinaryFuse16;
 
@@ -984,7 +984,7 @@ impl NativeDeserializeDataTransform {
             let offset = self.read_state.offset;
             let offsets = if let Some(count) = self.read_state.filtered_count {
                 let filter_executor = self.filter_executor.as_mut().unwrap();
-                filter_executor.mut_true_selection()[0..count]
+                filter_executor.mutable_true_selection()[0..count]
                     .iter()
                     .map(|idx| *idx as usize + offset)
                     .collect::<Vec<_>>()

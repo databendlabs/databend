@@ -16,7 +16,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
-use databend_common_ast::display_parser_error;
+use databend_common_ast::parser::display_parser_error;
 use databend_common_ast::parser::expr::*;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::query::*;
@@ -24,11 +24,11 @@ use databend_common_ast::parser::quote::quote_ident;
 use databend_common_ast::parser::quote::unquote_ident;
 use databend_common_ast::parser::token::*;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::parser::Backtrace;
+use databend_common_ast::parser::Dialect;
+use databend_common_ast::parser::IResult;
+use databend_common_ast::parser::Input;
 use databend_common_ast::rule;
-use databend_common_ast::Backtrace;
-use databend_common_ast::Dialect;
-use databend_common_ast::IResult;
-use databend_common_ast::Input;
 use goldenfile::Mint;
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
@@ -97,8 +97,11 @@ fn test_statement() {
         r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
         r#"explain pipeline select a from b;"#,
         r#"explain pipeline select a from t1 ignore_result;"#,
+        r#"explain(verbose, logical, optimized) select * from t where a = 1"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
+        r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
+        r#"CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
         r#"create table a (c decimal(38, 0))"#,
         r#"create table a (c decimal(38))"#,
         r#"create or replace table a (c decimal(38))"#,
@@ -236,8 +239,10 @@ fn test_statement() {
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
         r#"VACUUM TABLE t;"#,
         r#"VACUUM TABLE t DRY RUN;"#,
+        r#"VACUUM TABLE t DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE;"#,
         r#"VACUUM DROP TABLE DRY RUN;"#,
+        r#"VACUUM DROP TABLE DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
         r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
@@ -458,6 +463,7 @@ fn test_statement() {
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200"#,
         r#"CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
+        r#"CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
         r#"CREATE SHARE t COMMENT='share comment';"#,
         r#"CREATE SHARE IF NOT EXISTS t;"#,
         r#"DROP SHARE a;"#,
@@ -508,16 +514,19 @@ fn test_statement() {
         r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
         r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
         r#"CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
+        r#"CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
         r#"DESC MASKING POLICY email_mask"#,
         r#"DROP MASKING POLICY IF EXISTS email_mask"#,
         r#"CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t"#,
+        r#"CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t"#,
         r#"ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t"#,
         r#"DROP VIRTUAL COLUMN FOR t"#,
         r#"REFRESH VIRTUAL COLUMN FOR t"#,
         r#"CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
+        r#"CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
         r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
         // tasks
-        r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)"#,
@@ -525,6 +534,15 @@ fn test_statement() {
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  as
+            BEGIN
+              begin;
+              -- insert into t values('a;'); TODO raise error ^ unexpected end of line, expecting `END` or `;`
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END"#,
         r#"ALTER TASK MyTask1 RESUME"#,
         r#"ALTER TASK MyTask1 SUSPEND"#,
         r#"ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'"#,
@@ -533,7 +551,17 @@ fn test_statement() {
         r#"ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 13 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'"#,
         r#"ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'"#,
         r#"ALTER TASK MyTask1 SET DATABASE='newDB', TIMEZONE='America/Los_Angeles'"#,
+        r#"ALTER TASK MyTask1 SET ERROR_INTEGRATION = 'candidate_notifictaion'"#,
         r#"ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()"#,
+        r#"ALTER TASK MyTask2 MODIFY AS
+            BEGIN
+              begin;
+              -- insert into t values('a;'); TODO raise error ^ unexpected end of line, expecting `END` or `;`
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END"#,
         r#"ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION'"#,
         r#"DROP TASK MyTask1"#,
         r#"SHOW TASKS"#,
@@ -555,6 +583,14 @@ fn test_statement() {
         r#"ALTER PIPE mypipe SET PIPE_EXECUTION_PAUSED = true"#,
         r#"DROP PIPE mypipe"#,
         r#"DESC PIPE mypipe"#,
+        // notification
+        r#"CREATE NOTIFICATION INTEGRATION IF NOT EXISTS SampleNotification type = webhook enabled = true webhook = (url = 'https://example.com', method = 'GET', authorization_header = 'bearer auth')"#,
+        r#"CREATE NOTIFICATION INTEGRATION SampleNotification type = webhook enabled = true webhook = (url = 'https://example.com') COMMENT = 'notify'"#,
+        r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET enabled = true"#,
+        r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET webhook = (url = 'https://example.com')"#,
+        r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET comment = '1'"#,
+        r#"DROP NOTIFICATION INTEGRATION SampleNotification"#,
+        r#"DESC NOTIFICATION INTEGRATION SampleNotification"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
@@ -566,6 +602,15 @@ fn test_statement() {
         "CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';",
         "CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
         "CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
+        r#"create or replace function addone(int)
+returns int
+language python
+handler = 'addone_py'
+as
+$$
+def addone_py(i):
+  return i+1
+$$;"#,
         "DROP FUNCTION binary_reverse;",
         "DROP FUNCTION isnotempty;",
     ];
@@ -772,6 +817,7 @@ fn test_expr() {
         r#"char(0xD0, 0xBF, 0xD1)"#,
         r#"[42, 3.5, 4., .001, 5e2, 1.925e-3, .38e+7, 1.e-01, 0xfff, x'deedbeef']"#,
         r#"123456789012345678901234567890"#,
+        r#"$$ab123c$$"#,
         r#"x'123456789012345678901234567890'"#,
         r#"1e100000000000000"#,
         r#"100_100_000"#,

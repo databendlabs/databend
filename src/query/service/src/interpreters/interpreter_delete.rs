@@ -91,6 +91,10 @@ impl Interpreter for DeleteInterpreter {
         "DeleteInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -260,6 +264,7 @@ impl DeleteInterpreter {
             col_indices,
             query_row_id_col,
             snapshot: snapshot.clone(),
+            plan_id: u32::MAX,
         }));
 
         if is_distributed {
@@ -272,8 +277,7 @@ impl DeleteInterpreter {
                 ignore_exchange: false,
             });
         }
-
-        Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
+        let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             snapshot,
             table_info,
@@ -283,7 +287,10 @@ impl DeleteInterpreter {
             merge_meta,
             need_lock: false,
             deduplicated_label: None,
-        })))
+            plan_id: u32::MAX,
+        }));
+        plan.adjust_plan_id(&mut 0);
+        Ok(plan)
     }
 }
 
@@ -407,7 +414,7 @@ fn do_replace_subquery(
                 }
             }
         }
-        ScalarExpr::UDFServerCall(udf) => {
+        ScalarExpr::UDFCall(udf) => {
             for arg in &mut udf.arguments {
                 if !do_replace_subquery(filters, arg)? {
                     replace_selection_with_filter = Some(filters.pop_back().unwrap());
@@ -415,6 +422,7 @@ fn do_replace_subquery(
                 }
             }
         }
+
         ScalarExpr::SubqueryExpr { .. } => {
             if data_type == DataType::Nullable(Box::new(DataType::Boolean)) {
                 let filter = filters.pop_back().unwrap();

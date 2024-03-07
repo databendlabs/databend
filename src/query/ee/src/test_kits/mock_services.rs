@@ -21,6 +21,7 @@ use databend_common_license::license_manager::LicenseManagerWrapper;
 
 use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::data_mask::RealDatamaskHandler;
+use crate::inverted_index::RealInvertedIndexHandler;
 use crate::license::RealLicenseManager;
 use crate::storages::fuse::operations::RealVacuumHandler;
 use crate::stream::RealStreamHandler;
@@ -30,7 +31,7 @@ pub struct MockServices;
 impl MockServices {
     #[async_backtrace::framed]
     pub async fn init(cfg: &InnerConfig, public_key: String) -> Result<()> {
-        let rm = RealLicenseManager::new(cfg.query.tenant_id.clone(), public_key);
+        let rm = RealLicenseManager::new(cfg.query.tenant_id.to_string(), public_key);
         let wrapper = LicenseManagerWrapper {
             manager: Box::new(rm),
         };
@@ -40,6 +41,7 @@ impl MockServices {
         RealDatamaskHandler::init()?;
         RealVirtualColumnHandler::init()?;
         RealStreamHandler::init()?;
+        RealInvertedIndexHandler::init()?;
         Ok(())
     }
 }

@@ -68,6 +68,10 @@ impl Interpreter for ReclusterTableInterpreter {
         "ReclusterTableInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
@@ -233,6 +237,7 @@ pub fn build_recluster_physical_plan(
         tasks,
         table_info: table_info.clone(),
         catalog_info: catalog_info.clone(),
+        plan_id: u32::MAX,
     }));
 
     if is_distributed {
@@ -245,8 +250,7 @@ pub fn build_recluster_physical_plan(
             ignore_exchange: false,
         });
     }
-
-    Ok(PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
+    let mut plan = PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
         input: Box::new(root),
         table_info,
         catalog_info,
@@ -254,5 +258,8 @@ pub fn build_recluster_physical_plan(
         remained_blocks,
         removed_segment_indexes,
         removed_segment_summary,
-    })))
+        plan_id: u32::MAX,
+    }));
+    plan.adjust_plan_id(&mut 0);
+    Ok(plan)
 }

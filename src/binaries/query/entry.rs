@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use std::env;
+use std::time::Duration;
 
 use databend_common_base::mem_allocator::GlobalAllocator;
+use databend_common_base::runtime::set_alloc_error_hook;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
-use databend_common_base::set_alloc_error_hook;
 use databend_common_config::Commands;
 use databend_common_config::InnerConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
@@ -348,7 +349,11 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         // for one shot background service, we need to drop it manually.
         drop(shutdown_handle);
     } else {
-        shutdown_handle.wait_for_termination_request().await;
+        let graceful_shutdown_timeout =
+            Some(Duration::from_millis(conf.query.shutdown_wait_timeout_ms));
+        shutdown_handle
+            .wait_for_termination_request(graceful_shutdown_timeout)
+            .await;
     }
     info!("Shutdown server.");
     Ok(())

@@ -18,6 +18,7 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::BitFlags;
 
@@ -25,7 +26,10 @@ use enumflags2::BitFlags;
 /// database or table.
 /// It is used in `SHOW DATABASES` and `SHOW TABLES` statements.
 pub struct GrantObjectVisibilityChecker {
-    granted_global: bool,
+    granted_global_udf: bool,
+    granted_global_db_table: bool,
+    granted_global_stage: bool,
+    granted_global_read_stage: bool,
     granted_databases: HashSet<(String, String)>,
     granted_databases_id: HashSet<(String, u64)>,
     granted_tables: HashSet<(String, String, String)>,
@@ -39,7 +43,10 @@ pub struct GrantObjectVisibilityChecker {
 
 impl GrantObjectVisibilityChecker {
     pub fn new(user: &UserInfo, available_roles: &Vec<RoleInfo>) -> Self {
-        let mut granted_global = false;
+        let mut granted_global_udf = false;
+        let mut granted_global_db_table = false;
+        let mut granted_global_stage = false;
+        let mut granted_global_read_stage = false;
         let mut granted_databases = HashSet::new();
         let mut granted_tables = HashSet::new();
         let mut granted_udfs = HashSet::new();
@@ -54,12 +61,54 @@ impl GrantObjectVisibilityChecker {
         for role in available_roles {
             grant_sets.push(&role.grants);
         }
-
         for grant_set in grant_sets {
             for ent in grant_set.entries() {
                 match ent.object() {
                     GrantObject::Global => {
-                        granted_global = true;
+                        // this check validates every granted entry's privileges
+                        // contains any privilege on *.* of database/table/stage/udf
+                        fn check_privilege<T, F>(granted: &mut bool, mut iter: T, condition: F)
+                        where
+                            T: Iterator<Item = UserPrivilegeType>,
+                            F: Fn(UserPrivilegeType) -> bool,
+                        {
+                            if !*granted {
+                                *granted |= iter.any(condition);
+                            }
+                        }
+
+                        check_privilege(
+                            &mut granted_global_udf,
+                            ent.privileges().iter(),
+                            |privilege| {
+                                UserPrivilegeSet::available_privileges_on_udf(false)
+                                    .has_privilege(privilege)
+                            },
+                        );
+
+                        check_privilege(
+                            &mut granted_global_stage,
+                            ent.privileges().iter(),
+                            |privilege| {
+                                UserPrivilegeSet::available_privileges_on_stage(false)
+                                    .has_privilege(privilege)
+                            },
+                        );
+
+                        check_privilege(
+                            &mut granted_global_read_stage,
+                            ent.privileges().iter(),
+                            |privilege| privilege == UserPrivilegeType::Read,
+                        );
+
+                        check_privilege(
+                            &mut granted_global_db_table,
+                            ent.privileges().iter(),
+                            |privilege| {
+                                UserPrivilegeSet::available_privileges_on_database(false)
+                                    .has_privilege(privilege)
+                            },
+                        );
                     }
                     GrantObject::Database(catalog, db) => {
                         granted_databases.insert((catalog.to_string(), db.to_string()));
@@ -103,7 +152,10 @@ impl GrantObjectVisibilityChecker {
         }
 
         Self {
-            granted_global,
+            granted_global_udf,
+            granted_global_db_table,
+            granted_global_stage,
+            granted_global_read_stage,
             granted_databases,
             granted_databases_id,
             granted_tables,
@@ -117,7 +169,7 @@ impl GrantObjectVisibilityChecker {
     }
 
     pub fn check_stage_visibility(&self, stage: &str) -> bool {
-        if self.granted_global {
+        if self.granted_global_stage {
             return true;
         }
 
@@ -128,7 +180,7 @@ impl GrantObjectVisibilityChecker {
     }
 
     pub fn check_stage_read_visibility(&self, stage: &str) -> bool {
-        if self.granted_global {
+        if self.granted_global_read_stage {
             return true;
         }
 
@@ -139,7 +191,7 @@ impl GrantObjectVisibilityChecker {
     }
 
     pub fn check_udf_visibility(&self, udf: &str) -> bool {
-        if self.granted_global {
+        if self.granted_global_udf {
             return true;
         }
 
@@ -151,11 +203,11 @@ impl GrantObjectVisibilityChecker {
 
     pub fn check_database_visibility(&self, catalog: &str, db: &str, db_id: u64) -> bool {
         // skip information_schema privilege check
-        if db.to_lowercase() == "information_schema" {
+        if db.to_lowercase() == "information_schema" || db.to_lowercase() == "system" {
             return true;
         }
 
-        if self.granted_global {
+        if self.granted_global_db_table {
             return true;
         }
 
@@ -200,11 +252,11 @@ impl GrantObjectVisibilityChecker {
         table_id: u64,
     ) -> bool {
         // skip information_schema privilege check
-        if database.to_lowercase() == "information_schema" {
+        if database.to_lowercase() == "information_schema" || database.to_lowercase() == "system" {
             return true;
         }
 
-        if self.granted_global {
+        if self.granted_global_db_table {
             return true;
         }
 

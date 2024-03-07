@@ -25,10 +25,12 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use super::SetSecondaryRolesPlan;
+use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterNetworkPolicyPlan;
+use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
 use crate::plans::AlterShareTenantsPlan;
 use crate::plans::AlterTableClusterKeyPlan;
@@ -47,6 +49,7 @@ use crate::plans::CreateDatamaskPolicyPlan;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateIndexPlan;
 use crate::plans::CreateNetworkPolicyPlan;
+use crate::plans::CreateNotificationPlan;
 use crate::plans::CreatePasswordPolicyPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateShareEndpointPlan;
@@ -63,6 +66,7 @@ use crate::plans::DeletePlan;
 use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
+use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
 use crate::plans::DescSharePlan;
 use crate::plans::DescribeTablePlan;
@@ -74,6 +78,7 @@ use crate::plans::DropDatamaskPolicyPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropIndexPlan;
 use crate::plans::DropNetworkPolicyPlan;
+use crate::plans::DropNotificationPlan;
 use crate::plans::DropPasswordPolicyPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropShareEndpointPlan;
@@ -135,6 +140,7 @@ use crate::plans::UpdatePlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
+use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
 use crate::MetadataRef;
 
@@ -153,6 +159,7 @@ pub enum Plan {
 
     Explain {
         kind: ExplainKind,
+        config: ExplainConfig,
         plan: Box<Plan>,
     },
     ExplainAst {
@@ -203,6 +210,7 @@ pub enum Plan {
     OptimizeTable(Box<OptimizeTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),
     VacuumDropTable(Box<VacuumDropTablePlan>),
+    VacuumTemporaryFiles(Box<VacuumTemporaryFilesPlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
     SetOptions(Box<SetOptionsPlan>),
@@ -318,6 +326,17 @@ pub enum Plan {
     DescribeTask(Box<DescribeTaskPlan>),
     ShowTasks(Box<ShowTasksPlan>),
     ExecuteTask(Box<ExecuteTaskPlan>),
+
+    // Txn
+    Begin,
+    Commit,
+    Abort,
+
+    // Notifications
+    CreateNotification(Box<CreateNotificationPlan>),
+    AlterNotification(Box<AlterNotificationPlan>),
+    DropNotification(Box<DropNotificationPlan>),
+    DescNotification(Box<DescNotificationPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -403,6 +422,7 @@ impl Plan {
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
             Plan::VacuumDropTable(plan) => plan.schema(),
+            Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
@@ -429,7 +449,7 @@ impl Plan {
             Plan::DescribeTask(plan) => plan.schema(),
             Plan::ShowTasks(plan) => plan.schema(),
             Plan::ExecuteTask(plan) => plan.schema(),
-
+            Plan::DescNotification(plan) => plan.schema(),
             Plan::DescConnection(plan) => plan.schema(),
             Plan::ShowConnections(plan) => plan.schema(),
 

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
+use databend_common_management::udf::UdfMgr;
 use databend_common_management::ConnectionApi;
 use databend_common_management::ConnectionMgr;
 use databend_common_management::FileFormatApi;
@@ -34,8 +35,6 @@ use databend_common_management::SettingApi;
 use databend_common_management::SettingMgr;
 use databend_common_management::StageApi;
 use databend_common_management::StageMgr;
-use databend_common_management::UdfApi;
-use databend_common_management::UdfMgr;
 use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_meta_app::principal::AuthInfo;
@@ -46,6 +45,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::NonEmptyString;
 
 use crate::idm_config::IDMConfig;
 use crate::BUILTIN_ROLE_PUBLIC;
@@ -61,7 +61,7 @@ impl UserApiProvider {
     pub async fn init(
         conf: RpcClientConf,
         idm_config: IDMConfig,
-        tenant: &str,
+        tenant: &NonEmptyString,
         quota: Option<TenantQuota>,
     ) -> Result<()> {
         GlobalInstance::set(Self::try_create(conf, idm_config, tenant).await?);
@@ -78,7 +78,7 @@ impl UserApiProvider {
     pub async fn try_create(
         conf: RpcClientConf,
         idm_config: IDMConfig,
-        tenant: &str,
+        tenant: &NonEmptyString,
     ) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).create_meta_store().await?;
         let user_mgr = UserApiProvider {
@@ -108,7 +108,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn try_create_simple(
         conf: RpcClientConf,
-        tenant: &str,
+        tenant: &NonEmptyString,
     ) -> Result<Arc<UserApiProvider>> {
         Self::try_create(conf, IDMConfig::default(), tenant).await
     }
@@ -117,16 +117,22 @@ impl UserApiProvider {
         GlobalInstance::get()
     }
 
-    pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<impl UserApi>> {
-        Ok(Arc::new(UserMgr::create(self.client.clone(), tenant)?))
+    pub fn udf_api(&self, tenant: &NonEmptyString) -> UdfMgr {
+        UdfMgr::create(self.client.clone(), tenant.as_non_empty_str())
     }
 
-    pub fn get_role_api_client(&self, tenant: &str) -> Result<Arc<impl RoleApi>> {
-        Ok(Arc::new(RoleMgr::create(self.client.clone(), tenant)?))
+    pub fn user_api(&self, tenant: &NonEmptyString) -> Arc<impl UserApi> {
+        let user_mgr = UserMgr::create(self.client.clone(), tenant.as_non_empty_str());
+        Arc::new(user_mgr)
     }
 
-    pub fn get_stage_api_client(&self, tenant: &str) -> Result<Arc<dyn StageApi>> {
-        Ok(Arc::new(StageMgr::create(self.client.clone(), tenant)?))
+    pub fn role_api(&self, tenant: &NonEmptyString) -> Arc<impl RoleApi> {
+        let role_mgr = RoleMgr::create(self.client.clone(), tenant.as_non_empty_str());
+        Arc::new(role_mgr)
+    }
+
+    pub fn stage_api(&self, tenant: &NonEmptyString) -> Arc<dyn StageApi> {
+        Arc::new(StageMgr::create(self.client.clone(), tenant))
     }
 
     pub fn get_file_format_api_client(&self, tenant: &str) -> Result<Arc<dyn FileFormatApi>> {
@@ -143,12 +149,14 @@ impl UserApiProvider {
         )?))
     }
 
-    pub fn get_udf_api_client(&self, tenant: &str) -> Result<Arc<dyn UdfApi>> {
-        Ok(Arc::new(UdfMgr::create(self.client.clone(), tenant)?))
-    }
-
-    pub fn get_tenant_quota_api_client(&self, tenant: &str) -> Result<Arc<dyn QuotaApi>> {
-        Ok(Arc::new(QuotaMgr::create(self.client.clone(), tenant)?))
+    pub fn get_tenant_quota_api_client(
+        &self,
+        tenant: &NonEmptyString,
+    ) -> Result<Arc<dyn QuotaApi>> {
+        Ok(Arc::new(QuotaMgr::create(
+            self.client.clone(),
+            tenant.as_str(),
+        )?))
     }
 
     pub fn get_setting_api_client(&self, tenant: &str) -> Result<Arc<dyn SettingApi>> {

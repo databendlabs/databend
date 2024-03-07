@@ -42,6 +42,8 @@ pub type Entry = u64;
 
 pub struct AggregateHashTable {
     pub payload: PartitionedPayload,
+    // use for append rows directly during deserialize
+    pub direct_append: bool,
     config: HashTableConfig,
     current_radix_bits: u64,
     entries: Vec<Entry>,
@@ -71,6 +73,7 @@ impl AggregateHashTable {
         Self {
             entries: vec![0u64; capacity],
             count: 0,
+            direct_append: false,
             current_radix_bits: config.initial_radix_bits,
             payload: PartitionedPayload::new(group_types, aggrs, 1 << config.initial_radix_bits),
             capacity,
@@ -87,10 +90,11 @@ impl AggregateHashTable {
         state: &mut ProbeState,
         group_columns: &[Column],
         params: &[Vec<Column>],
+        agg_states: &[Column],
         row_count: usize,
     ) -> Result<usize> {
         if row_count <= BATCH_ADD_SIZE {
-            self.add_groups_inner(state, group_columns, params, row_count)
+            self.add_groups_inner(state, group_columns, params, agg_states, row_count)
         } else {
             let mut new_count = 0;
             for start in (0..row_count).step_by(BATCH_ADD_SIZE) {
@@ -104,9 +108,18 @@ impl AggregateHashTable {
                     .iter()
                     .map(|c| c.iter().map(|x| x.slice(start..end)).collect())
                     .collect::<Vec<_>>();
+                let agg_states = agg_states
+                    .iter()
+                    .map(|c| c.slice(start..end))
+                    .collect::<Vec<_>>();
 
-                new_count +=
-                    self.add_groups_inner(state, &step_group_columns, &step_params, end - start)?;
+                new_count += self.add_groups_inner(
+                    state,
+                    &step_group_columns,
+                    &step_params,
+                    &agg_states,
+                    end - start,
+                )?;
             }
             Ok(new_count)
         }
@@ -118,12 +131,21 @@ impl AggregateHashTable {
         state: &mut ProbeState,
         group_columns: &[Column],
         params: &[Vec<Column>],
+        agg_states: &[Column],
         row_count: usize,
     ) -> Result<usize> {
         state.row_count = row_count;
         group_hash_columns(group_columns, &mut state.group_hashes);
 
-        let new_group_count = self.probe_and_create(state, group_columns, row_count);
+        let new_group_count = if self.direct_append {
+            for idx in 0..row_count {
+                state.empty_vector[idx] = idx;
+            }
+            self.payload.append_rows(state, row_count, group_columns);
+            row_count
+        } else {
+            self.probe_and_create(state, group_columns, row_count)
+        };
 
         if !self.payload.aggrs.is_empty() {
             for i in 0..row_count {
@@ -132,19 +154,30 @@ impl AggregateHashTable {
                         state.addresses[i].add(self.payload.state_offset) as _,
                     ) as usize)
                 };
-                debug_assert_eq!(usize::from(state.state_places[i]) % 8, 0);
             }
 
             let state_places = &state.state_places.as_slice()[0..row_count];
 
-            for ((aggr, params), addr_offset) in self
-                .payload
-                .aggrs
-                .iter()
-                .zip(params.iter())
-                .zip(self.payload.state_addr_offsets.iter())
-            {
-                aggr.accumulate_keys(state_places, *addr_offset, params, row_count)?;
+            if agg_states.is_empty() {
+                for ((aggr, params), addr_offset) in self
+                    .payload
+                    .aggrs
+                    .iter()
+                    .zip(params.iter())
+                    .zip(self.payload.state_addr_offsets.iter())
+                {
+                    aggr.accumulate_keys(state_places, *addr_offset, params, row_count)?;
+                }
+            } else {
+                for ((aggr, agg_state), addr_offset) in self
+                    .payload
+                    .aggrs
+                    .iter()
+                    .zip(agg_states.iter())
+                    .zip(self.payload.state_addr_offsets.iter())
+                {
+                    aggr.batch_merge(state_places, *addr_offset, agg_state)?;
+                }
             }
         }
 

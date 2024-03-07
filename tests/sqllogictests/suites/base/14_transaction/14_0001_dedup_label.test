@@ -1,0 +1,41 @@
+statement ok
+create or replace database test_txn_dedup_label;
+
+statement ok
+use test_txn_dedup_label;
+
+statement ok
+CREATE TABLE t1(a Int, b bool);
+
+statement ok
+begin;
+
+statement ok
+INSERT /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 (a, b) VALUES(1, false);
+
+statement ok
+UPDATE /*+ SET_VAR(deduplicate_label='databend') */ t1 SET a = 20 WHERE b = false;
+
+query II
+SELECT * FROM t1;
+----
+1 0
+
+statement ok
+commit;
+
+query II
+SELECT * FROM t1;
+----
+1 0
+
+statement ok
+REPLACE /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 on(a,b) VALUES(40, false);
+
+query II
+SELECT * FROM t1;
+----
+1 0
+
+statement ok
+drop database test_txn_dedup_label;

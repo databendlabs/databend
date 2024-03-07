@@ -20,9 +20,3 @@ fi
 
 echo "drop table if exists ontime" | $BENDSQL_CLIENT_CONNECT
 cat tests/data/ddl/ontime.sql | $BENDSQL_CLIENT_CONNECT
-
-if [ "$TEST_STAGE_PARQUET_LIB" == "parquet_rs" ]; then
-	echo "set global use_parquet2=0;" | $BENDSQL_CLIENT_CONNECT
-else
-	echo "set global use_parquet2=1;" | $BENDSQL_CLIENT_CONNECT
-fi

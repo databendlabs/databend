@@ -24,6 +24,9 @@ use crate::executor::PhysicalPlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceInto {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     pub block_thresholds: BlockThresholds,
     pub table_info: TableInfo,

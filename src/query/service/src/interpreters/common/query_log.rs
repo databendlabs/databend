@@ -140,11 +140,17 @@ impl InterpreterQueryLog {
             error_fields(LogType::Start, err);
         let log_type_name = log_type.as_string();
 
+        // Transaction.
+        let txn_mgr = ctx.txn_mgr();
+        let guard = txn_mgr.lock();
+        let txn_state = format!("{:?}", guard.state());
+        let txn_id = guard.txn_id().to_string();
+        drop(guard);
         Self::write_log(QueryLogElement {
             log_type,
             log_type_name,
             handler_type,
-            tenant_id,
+            tenant_id: tenant_id.to_string(),
             cluster_id,
             node_id,
             sql_user,
@@ -197,6 +203,8 @@ impl InterpreterQueryLog {
             session_settings,
             extra: "".to_string(),
             has_profiles: false,
+            txn_state,
+            txn_id,
         })
     }
 
@@ -209,7 +217,7 @@ impl InterpreterQueryLog {
         ctx.set_finish_time(now);
         // User.
         let handler_type = ctx.get_current_session().get_type().to_string();
-        let tenant_id = GlobalConfig::instance().query.tenant_id.clone();
+        let tenant_id = GlobalConfig::instance().query.tenant_id.to_string();
         let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
         let node_id = ctx.get_cluster().local_id.clone();
         let user = ctx.get_current_user()?;
@@ -288,6 +296,13 @@ impl InterpreterQueryLog {
             error_fields(LogType::Finish, err);
         let log_type_name = log_type.as_string();
 
+        // Transaction.
+        let txn_mgr = ctx.txn_mgr();
+        let guard = txn_mgr.lock();
+        let txn_state = format!("{:?}", guard.state());
+        let txn_id = guard.txn_id().to_string();
+        drop(guard);
+
         Self::write_log(QueryLogElement {
             log_type,
             log_type_name,
@@ -345,6 +360,8 @@ impl InterpreterQueryLog {
             session_settings,
             extra: "".to_string(),
             has_profiles,
+            txn_state,
+            txn_id,
         })
     }
 }

@@ -382,8 +382,8 @@ impl AddTimesImpl {
 }
 
 #[inline]
-pub fn today_date() -> i32 {
-    let now = Utc::now();
+pub fn today_date(tz: TzLUT) -> i32 {
+    let now = Utc::now().with_timezone(&tz.tz);
     NaiveDate::from_ymd_opt(now.year(), now.month(), now.day())
         .unwrap()
         .signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())

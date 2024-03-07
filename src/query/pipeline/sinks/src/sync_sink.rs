@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
@@ -47,10 +48,12 @@ pub struct Sinker<T: Sink + 'static> {
 
 impl<T: Sink + 'static> Drop for Sinker<T> {
     fn drop(&mut self) {
-        if !self.called_on_finish {
-            self.called_on_finish = true;
-            let _ = self.inner.on_finish();
-        }
+        drop_guard(move || {
+            if !self.called_on_finish {
+                self.called_on_finish = true;
+                let _ = self.inner.on_finish();
+            }
+        })
     }
 }
 

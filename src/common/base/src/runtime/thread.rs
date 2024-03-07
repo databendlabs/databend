@@ -18,7 +18,6 @@ use std::thread::JoinHandle;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::runtime::MemStat;
 use crate::runtime::ThreadTracker;
 
 pub struct Thread;
@@ -67,25 +66,19 @@ impl Thread {
             thread_builder = thread_builder.stack_size(5 * 1024 * 1024);
         }
 
-        let mut mem_stat_name = String::from("UnnamedThread");
-
         if let Some(named) = name.take() {
-            mem_stat_name = format!("{}Thread", named);
             thread_builder = thread_builder.name(named);
         }
 
-        ThreadJoinHandle::create(match MemStat::current() {
-            None => thread_builder.spawn(f).unwrap(),
-            Some(memory_tracker) => thread_builder
+        let f = ThreadTracker::tracking_function(f);
+        ThreadJoinHandle::create(
+            thread_builder
                 .spawn(move || {
-                    let c = MemStat::create_child(mem_stat_name, Some(memory_tracker));
-                    let s = ThreadTracker::replace_mem_stat(Some(c));
-                    debug_assert!(s.is_none(), "a new thread must have no tracker");
-
+                    ThreadTracker::init();
                     f()
                 })
                 .unwrap(),
-        })
+        )
     }
 
     pub fn spawn<F, T>(f: F) -> ThreadJoinHandle<T>

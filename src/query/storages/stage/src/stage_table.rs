@@ -13,18 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::io::Read;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use dashmap::DashMap;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
-use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::AppendMode;
@@ -33,21 +30,18 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
-use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::input_formats::InputContext;
-use databend_common_pipeline_sources::input_formats::SplitInfo;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
-use databend_common_storage::STDIN_FD;
 use databend_common_storages_parquet::ParquetTableForCopy;
-use log::debug;
 use opendal::Operator;
-use opendal::Scheme;
 use parking_lot::Mutex;
+
+use crate::one_file_partition::OneFilePartition;
+use crate::read::row_based::RowBasedReadPipelineBuilder;
 
 /// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {
@@ -92,9 +86,49 @@ impl StageTable {
         stage_info.list_files(max_files).await
     }
 
-    fn get_block_compact_thresholds_with_default(&self) -> BlockThresholds {
+    pub fn get_block_compact_thresholds_with_default(&self) -> BlockThresholds {
         let guard = self.block_compact_threshold.lock();
         guard.deref().unwrap_or_default()
+    }
+
+    pub async fn read_partitions_simple(
+        &self,
+        stage_table_info: &StageTableInfo,
+    ) -> Result<(PartStatistics, Partitions)> {
+        let files = if let Some(files) = &stage_table_info.files_to_copy {
+            files.clone()
+        } else {
+            StageTable::list_files(stage_table_info, None).await?
+        };
+        let size = files.iter().map(|f| f.size as usize).sum();
+        // assuming all fields are empty
+        let max_rows = std::cmp::max(size / (stage_table_info.schema.fields.len() + 1), 1);
+        let statistics = PartStatistics {
+            snapshot: None,
+            read_rows: max_rows,
+            read_bytes: size,
+            partitions_scanned: files.len(),
+            partitions_total: files.len(),
+            is_exact: false,
+            pruning_stats: Default::default(),
+        };
+
+        let partitions = files
+            .into_iter()
+            .map(|v| {
+                let part = OneFilePartition {
+                    path: v.path.clone(),
+                    size: v.size as usize,
+                };
+                let part_info: Box<dyn PartInfo> = Box::new(part);
+                Arc::new(part_info)
+            })
+            .collect::<Vec<_>>();
+
+        Ok((
+            statistics,
+            Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions),
+        ))
     }
 }
 
@@ -120,41 +154,21 @@ impl Table for StageTable {
         _push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        let stage_info = &self.table_info;
-        if matches!(
-            stage_info.stage_info.file_format_params,
-            FileFormatParams::Parquet(_)
-        ) {
-            return ParquetTableForCopy::do_read_partitions(stage_info, ctx, _push_downs).await;
+        let settings = ctx.get_settings();
+        let stage_table_info = &self.table_info;
+        match stage_table_info.stage_info.file_format_params {
+            FileFormatParams::Parquet(_) => {
+                ParquetTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
+            }
+            FileFormatParams::Csv(_) if settings.get_enable_new_copy_for_text_formats()? == 1 => {
+                self.read_partitions_simple(stage_table_info).await
+            }
+            _ => self.read_partition_old(&ctx).await,
         }
-        // User set the files.
-        let files = if let Some(files) = &stage_info.files_to_copy {
-            files.clone()
-        } else {
-            StageTable::list_files(stage_info, None).await?
-        };
-        let format = InputContext::get_input_format(&stage_info.stage_info.file_format_params)?;
-        let operator = StageTable::get_op(&stage_info.stage_info)?;
-        let splits = format
-            .get_splits(
-                files,
-                &stage_info.stage_info,
-                &operator,
-                &ctx.get_settings(),
-            )
-            .await?;
+    }
 
-        let partitions = splits
-            .into_iter()
-            .map(|v| {
-                let part_info: Box<dyn PartInfo> = Box::new((*v).clone());
-                Arc::new(part_info)
-            })
-            .collect::<Vec<_>>();
-        Ok((
-            PartStatistics::default(),
-            Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions),
-        ))
+    fn is_local(&self) -> bool {
+        false
     }
 
     fn read_data(
@@ -164,82 +178,27 @@ impl Table for StageTable {
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
+        let settings = ctx.get_settings();
         let stage_table_info =
             if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
                 stage_table_info
             } else {
                 return Err(ErrorCode::Internal(""));
             };
-
-        if matches!(
-            stage_table_info.stage_info.file_format_params,
-            FileFormatParams::Parquet(_)
-        ) {
-            return ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache);
-        }
-
-        let projection = if let Some(PushDownInfo {
-            projection: Some(Projection::Columns(columns)),
-            ..
-        }) = &plan.push_downs
-        {
-            Some(columns.clone())
-        } else {
-            None
-        };
-
-        let mut splits = vec![];
-        for part in &plan.parts.partitions {
-            if let Some(split) = part.as_any().downcast_ref::<SplitInfo>() {
-                splits.push(Arc::new(split.clone()));
+        match stage_table_info.stage_info.file_format_params {
+            FileFormatParams::Parquet(_) => {
+                ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
             }
+            FileFormatParams::Csv(_) if settings.get_enable_new_copy_for_text_formats()? == 1 => {
+                let compact_threshold = self.get_block_compact_thresholds_with_default();
+                RowBasedReadPipelineBuilder {
+                    stage_table_info,
+                    compact_threshold,
+                }
+                .read_data(ctx, plan, pipeline)
+            }
+            _ => self.read_data_old(ctx, plan, pipeline, stage_table_info),
         }
-
-        //  Build copy pipeline.
-        let settings = ctx.get_settings();
-        let fields = stage_table_info
-            .schema
-            .fields()
-            .iter()
-            .filter(|f| f.computed_expr().is_none())
-            .cloned()
-            .collect::<Vec<_>>();
-        let schema = TableSchemaRefExt::create(fields);
-        let stage_info = stage_table_info.stage_info.clone();
-        let operator = StageTable::get_op(&stage_table_info.stage_info)?;
-        let compact_threshold = self.get_block_compact_thresholds_with_default();
-        let on_error_map = ctx.get_on_error_map().unwrap_or_else(|| {
-            let m = Arc::new(DashMap::new());
-            ctx.set_on_error_map(m.clone());
-            m
-        });
-
-        // inject stdin to memory
-        if operator.info().scheme() == Scheme::Memory {
-            let mut buffer = vec![];
-            std::io::stdin().lock().read_to_end(&mut buffer)?;
-
-            let bop = operator.blocking();
-            bop.write(STDIN_FD, buffer)?;
-        }
-
-        let input_ctx = Arc::new(InputContext::try_create_from_copy(
-            ctx.clone(),
-            operator,
-            settings,
-            schema,
-            stage_info,
-            splits,
-            ctx.get_scan_progress(),
-            compact_threshold,
-            on_error_map,
-            self.table_info.is_select,
-            projection,
-            self.table_info.default_values.clone(),
-        )?);
-        debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
-        input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
-        Ok(())
     }
 
     fn append_data(

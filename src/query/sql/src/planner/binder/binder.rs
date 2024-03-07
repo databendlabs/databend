@@ -18,13 +18,12 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 use databend_common_ast::ast::format_statement;
-use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -217,12 +216,8 @@ impl<'a> Binder {
                 }
             }
 
-            Statement::Explain { query, kind } => {
-                match kind {
-                    ExplainKind::Ast(formatted_stmt) => Plan::ExplainAst { formatted_string: formatted_stmt.clone() },
-                    ExplainKind::Syntax(formatted_sql) => Plan::ExplainSyntax { formatted_sql: formatted_sql.clone() },
-                    _ => Plan::Explain { kind: kind.clone(), plan: Box::new(self.bind_statement(bind_context, query).await?) },
-                }
+            Statement::Explain { query, options, kind } => {
+                self.bind_explain(bind_context, kind, options, query).await?
             }
 
             Statement::ExplainAnalyze { query } => {
@@ -307,6 +302,7 @@ impl<'a> Binder {
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(bind_context, stmt).await?,
             Statement::VacuumTable(stmt) => self.bind_vacuum_table(bind_context, stmt).await?,
             Statement::VacuumDropTable(stmt) => self.bind_vacuum_drop_table(bind_context, stmt).await?,
+            Statement::VacuumTemporaryFiles(stmt) => self.bind_vacuum_temporary_files(bind_context, stmt).await?,
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
@@ -611,6 +607,21 @@ impl<'a> Binder {
             Statement::DropPipe(_) => {
                 todo!()
             }
+            Statement::CreateNotification(stmt) => {
+                self.bind_create_notification(stmt).await?
+            }
+            Statement::DropNotification(stmt) => {
+                self.bind_drop_notification(stmt).await?
+            }
+            Statement::AlterNotification(stmt) => {
+                self.bind_alter_notification(stmt).await?
+            }
+            Statement::DescribeNotification(stmt) => {
+                self.bind_desc_notification(stmt).await?
+            }
+            Statement::Begin => Plan::Begin,
+            Statement::Commit => Plan::Commit,
+            Statement::Abort => Plan::Abort,
         };
         Ok(plan)
     }
@@ -683,7 +694,7 @@ impl<'a> Binder {
                 scalar,
                 ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::UDFServerCall(_)
+                    | ScalarExpr::UDFCall(_)
                     | ScalarExpr::SubqueryExpr(_)
             )
         };
@@ -694,7 +705,7 @@ impl<'a> Binder {
 
     // add check for SExpr to disable invalid source for copy/insert/merge/replace
     pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr) -> Result<bool> {
-        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFServerCall(_));
+        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFCall(_));
         let mut finder = Finder::new(&f);
         Self::check_sexpr(s_expr, &mut finder)
     }
@@ -806,7 +817,7 @@ impl<'a> Binder {
                 scalar,
                 ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::UDFServerCall(_)
+                    | ScalarExpr::UDFCall(_)
             )
         };
         let mut finder = Finder::new(&f);

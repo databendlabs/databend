@@ -30,7 +30,7 @@ pub fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<ScalarExpr>> {
     for predicate in filter.predicates.iter() {
         match predicate {
             ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
-                for join_child in join.children().iter() {
+                for join_child in join.children() {
                     let rel_expr = RelExpr::with_s_expr(join_child);
                     let prop = rel_expr.derive_relational_prop()?;
                     if let Some(predicate) =

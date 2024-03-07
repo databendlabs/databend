@@ -42,13 +42,17 @@ impl Interpreter for CreateShareInterpreter {
         "CreateShareInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let resp = meta_api.create_share(self.plan.clone().into()).await?;
 
         save_share_spec(
-            &self.ctx.get_tenant(),
+            &self.ctx.get_tenant().to_string(),
             self.ctx.get_data_operator()?.operator(),
             resp.spec_vec,
             None,

@@ -13,11 +13,10 @@ permissions:
   contents: read
 
 jobs:
-  base:
+  debian:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: ./.github/actions/setup_docker
         id: login
         with:
@@ -25,40 +24,32 @@ jobs:
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Get rust toolchain version
         id: toolchain
         run: |
           version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
           echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
-
-      - name: Build and publish databend build base image
-        uses: docker/build-push-action@v3
+      - name: Build and publish databend build image
+        uses: docker/build-push-action@v5
         with:
           pull: true
           push: true
           tags: |
-            ${{ steps.login.outputs.dockerhub_repo }}:base
-            ${{ steps.login.outputs.dockerhub_repo }}:base-${{ steps.toolchain.outputs.TOOLCHAIN }}
-            ${{ steps.login.outputs.ecr_repo }}:base
-            ${{ steps.login.outputs.ecr_repo }}:base-${{ steps.toolchain.outputs.TOOLCHAIN }}
+            ${{ steps.login.outputs.dockerhub_repo }}:debian
+            ${{ steps.login.outputs.dockerhub_repo }}:debian-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: ./scripts/setup
-          file: ./docker/build-tool/base/Dockerfile
+          file: ./docker/build-tool/debian/Dockerfile
+          platforms: linux/amd64,linux/arm64
 
-  build:
+  musl:
     runs-on: ubuntu-latest
-    needs: base
     strategy:
       matrix:
         arch:
-          - x86_64
           - aarch64
-        libc:
-          - gnu
-          - musl
+          - x86_64
     steps:
       - uses: actions/checkout@v4
-
       - uses: ./.github/actions/setup_docker
         id: login
         with:
@@ -66,36 +57,30 @@ jobs:
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Get rust toolchain version
         id: toolchain
         run: |
-          # version=$(taplo get -f scripts/setup/rust-toolchain.toml '.toolchain.channel')
           version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
           echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
-
       - name: Build and publish databend build image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           pull: true
           push: true
           tags: |
-            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
-            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
-            ${{ steps.login.outputs.ecr_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
-            ${{ steps.login.outputs.ecr_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
-          context: ./docker/build-tool/${{ matrix.libc }}/
-          file: ./docker/build-tool/${{ matrix.libc }}/Dockerfile
+            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-musl
+            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-musl-${{ steps.toolchain.outputs.TOOLCHAIN }}
+          context: ./docker/build-tool/musl
+          file: ./docker/build-tool/musl/Dockerfile
           build-args: |
             ARCH=${{ matrix.arch }}
             RUST_TOOLCHAIN=${{ steps.toolchain.outputs.TOOLCHAIN }}
 
   dev:
     runs-on: ubuntu-latest
-    needs: base
+    needs: debian
     steps:
       - uses: actions/checkout@v4
-
       - uses: ./.github/actions/setup_docker
         id: login
         with:
@@ -103,23 +88,19 @@ jobs:
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Get rust toolchain version
         id: toolchain
         run: |
           version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
           echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
-
-      - name: Build and publish databend build base image
-        uses: docker/build-push-action@v3
+      - name: Build and publish databend build image
+        uses: docker/build-push-action@v5
         with:
           pull: true
           push: true
           tags: |
             ${{ steps.login.outputs.dockerhub_repo }}:dev
             ${{ steps.login.outputs.dockerhub_repo }}:dev-${{ steps.toolchain.outputs.TOOLCHAIN }}
-            ${{ steps.login.outputs.ecr_repo }}:dev
-            ${{ steps.login.outputs.ecr_repo }}:dev-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: ./scripts/setup
           file: ./docker/build-tool/dev/Dockerfile
           build-args: |

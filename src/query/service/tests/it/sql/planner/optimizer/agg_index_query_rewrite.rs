@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 use databend_common_base::base::tokio;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
@@ -61,7 +61,7 @@ struct TestSuite {
 
 fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
     CreateTablePlan {
-        create_option: CreateOption::CreateIfNotExists(false),
+        create_option: CreateOption::None,
         tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
         database: "default".to_string(),

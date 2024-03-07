@@ -28,21 +28,25 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 #[derive(Debug)]
-pub struct DropUserUDFInterpreter {
+pub struct DropUserUDFScript {
     ctx: Arc<QueryContext>,
     plan: DropUDFPlan,
 }
 
-impl DropUserUDFInterpreter {
+impl DropUserUDFScript {
     pub fn try_create(ctx: Arc<QueryContext>, plan: DropUDFPlan) -> Result<Self> {
-        Ok(DropUserUDFInterpreter { ctx, plan })
+        Ok(DropUserUDFScript { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropUserUDFInterpreter {
+impl Interpreter for DropUserUDFScript {
     fn name(&self) -> &str {
-        "DropUserUDFInterpreter"
+        "DropUserUDFScript"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
     }
 
     #[minitrace::trace]
@@ -59,7 +63,7 @@ impl Interpreter for DropUserUDFInterpreter {
             .exists_udf(&tenant, &self.plan.udf)
             .await?
         {
-            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            let role_api = UserApiProvider::instance().role_api(&tenant);
             let owner_object = OwnershipObject::UDF {
                 name: self.plan.udf.clone(),
             };
@@ -68,9 +72,11 @@ impl Interpreter for DropUserUDFInterpreter {
             RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
+        // TODO: if it is appropriate to return an ErrorCode that contains either meta-service error and UdfNotFound error?
+
         UserApiProvider::instance()
             .drop_udf(&tenant, plan.udf.as_str(), plan.if_exists)
-            .await?;
+            .await??;
 
         Ok(PipelineBuildResult::create())
     }
