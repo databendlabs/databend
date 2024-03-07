@@ -60,8 +60,9 @@ pub enum CreateDatabaseOption {
     FromShare(ShareNameIdent),
 }
 
-fn statement_with_config<F: Fn(Input) -> Input>(i: Input, f: F) -> IResult<StatementWithFormat> {
-    let new_i = f(i);
+pub fn statement_no_streaming_insert(i: Input) -> IResult<StatementWithFormat> {
+    let mut i = i.clone();
+    i.1.allow_streaming_insert_source = false;
     statement(i)
 }
 
@@ -111,14 +112,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let no_streaming_statement = |i: Input| {
-        statement_with_config(i, |i| {
-            let mut i = i.clone();
-            i.1.allow_streaming_insert_source = false;
-            i
-        })
-    };
-
     let create_task = map(
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -131,7 +124,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ (#set_table_option)?
-            ~ AS ~ #no_streaming_statement
+            ~ AS ~ #statement_no_streaming_insert
         },
         |(
             _,

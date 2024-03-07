@@ -16,7 +16,6 @@ use std::ops::Range;
 use std::ops::RangeFrom;
 use std::ops::RangeFull;
 use std::ops::RangeTo;
-use std::sync::atomic::AtomicBool;
 
 use enum_as_inner::EnumAsInner;
 
