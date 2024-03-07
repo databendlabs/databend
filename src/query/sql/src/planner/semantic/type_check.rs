@@ -2479,18 +2479,10 @@ impl<'a> TypeChecker<'a> {
                 )
             }
             ("ifnull", &[arg_x, arg_y]) => {
-                // Rewrite ifnull(x, y) to if(is_null(x), y, x)
+                // Rewrite ifnull(x, y) to coalesce(x, y)
                 Some(
-                    self.resolve_function(span, "if", vec![], &[
-                        &Expr::IsNull {
-                            span,
-                            expr: Box::new(arg_x.clone()),
-                            not: false,
-                        },
-                        arg_y,
-                        arg_x,
-                    ])
-                    .await,
+                    self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y])
+                        .await,
                 )
             }
             ("nvl", &[arg_x, arg_y]) => {
