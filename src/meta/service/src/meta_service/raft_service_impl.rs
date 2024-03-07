@@ -71,6 +71,7 @@ impl RaftServiceImpl {
         let is_req = GrpcHelper::parse_req(request)?;
         let raft = &self.meta_node.raft;
 
+        #[allow(deprecated)]
         let resp = raft
             .install_snapshot(is_req)
             .timed(observe_snapshot_recv_spent(&addr))
@@ -113,6 +114,7 @@ impl RaftServiceImpl {
 
         let raft = &self.meta_node.raft;
 
+        #[allow(deprecated)]
         let resp = raft
             .install_snapshot(install_snapshot_req)
             .timed(observe_snapshot_recv_spent(&addr))
