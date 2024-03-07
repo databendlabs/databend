@@ -43,10 +43,10 @@ impl ParserConfig {
     }
 }
 
-impl std::ops::Deref<Dialect> for ParserConfig {
+impl std::ops::Deref for ParserConfig {
     type Target = Dialect;
 
-    fn deref(&self) -> &Self::Dialect {
+    fn deref(&self) -> &Self::Target {
         &self.dialect
     }
 }
