@@ -310,7 +310,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
-│   ├── filters: [numbers.number (#1) = 0]
+│   ├── filters: [numbers.number (#1) < 10, numbers.number (#1) = 0]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.system.numbers
@@ -319,7 +319,7 @@ HashJoin
 │       ├── read bytes: 8
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
+│       ├── push downs: [filters: [and_filters(and_filters(numbers.number (#1) = 0, numbers.number (#1) < 10), numbers.number (#1) = 0)], limit: NONE]
 │       └── estimated rows: 1.00
 └── Filter(Probe)
     ├── output columns: [t.number (#0)]

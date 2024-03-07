@@ -1177,8 +1177,8 @@ Sort
 └── HashJoin
     ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
     ├── join type: INNER
-    ├── build keys: [b.number (#2), b.register_at (#3)]
-    ├── probe keys: [a.number (#0), a.pt (#1)]
+    ├── build keys: [b.register_at (#3), b.number (#2)]
+    ├── probe keys: [a.pt (#1), a.number (#0)]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)
