@@ -109,11 +109,18 @@ pub struct VacuumTablePlan {
 
 impl VacuumTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        if self.option.dry_run {
-            Arc::new(DataSchema::new(vec![DataField::new(
-                "Files",
-                DataType::String,
-            )]))
+        if let Some(summary) = self.option.dry_run {
+            if summary {
+                Arc::new(DataSchema::new(vec![
+                    DataField::new("total_files", DataType::Number(NumberDataType::UInt64)),
+                    DataField::new("total_size", DataType::Number(NumberDataType::UInt64)),
+                ]))
+            } else {
+                Arc::new(DataSchema::new(vec![
+                    DataField::new("file", DataType::String),
+                    DataField::new("file_size", DataType::Number(NumberDataType::UInt64)),
+                ]))
+            }
         } else {
             Arc::new(DataSchema::new(vec![
                 DataField::new("snapshot_files", DataType::Number(NumberDataType::UInt64)),
@@ -175,7 +182,7 @@ pub struct VacuumDropTableOption {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VacuumTableOption {
-    pub dry_run: bool,
+    pub dry_run: Option<bool>,
 }
 
 /// Optimize.

@@ -57,7 +57,7 @@ impl BuildSpillState {
     pub fn get_hashes(
         &self,
         block: &DataBlock,
-        join_type: Option<&JoinType>,
+        join_type: &JoinType,
         hashes: &mut Vec<u64>,
     ) -> Result<()> {
         let func_ctx = self.build_state.ctx.get_function_context()?;
@@ -68,6 +68,7 @@ impl BuildSpillState {
             keys,
             &self.build_state.method,
             join_type,
+            true,
             hashes,
         )
     }
