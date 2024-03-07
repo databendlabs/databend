@@ -80,7 +80,7 @@ impl InferFilterOptimizer {
         let mut remaining_predicates = vec![];
         for predicate in predicates.into_iter() {
             if let ScalarExpr::FunctionCall(func) = &predicate {
-                if let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) {
+                if let Some(mut op) = ComparisonOp::try_from_func_name(&func.func_name) {
                     match (&func.arguments[0], &func.arguments[1]) {
                         (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) => {
                             if op == ComparisonOp::Equal {
@@ -97,6 +97,9 @@ impl InferFilterOptimizer {
                             ScalarExpr::ConstantExpr(constant),
                             ScalarExpr::BoundColumnRef(column_ref),
                         ) => {
+                            if let ScalarExpr::BoundColumnRef(_) = &func.arguments[1] {
+                                op = op.reverse();
+                            }
                             let (is_adjusted, constant) = adjust_scalar(
                                 constant.value.clone(),
                                 *column_ref.column.data_type.clone(),
