@@ -18,18 +18,20 @@ use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
 use crate::optimizer::extract::Matcher;
+use crate::optimizer::filter::InferFilterOptimizer;
 use crate::optimizer::rule::constant::false_constant;
 use crate::optimizer::rule::constant::is_falsy;
 use crate::optimizer::rule::rewrite::filter_join::convert_mark_to_semi_join;
 use crate::optimizer::rule::rewrite::filter_join::outer_to_inner;
 use crate::optimizer::rule::rewrite::filter_join::rewrite_predicates;
-use crate::optimizer::rule::rewrite::filter_join::try_derive_predicates;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::ComparisonOp;
 use crate::plans::Filter;
+use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Operator;
@@ -124,66 +126,29 @@ pub fn try_push_down_filter_join(
     let left_prop = rel_expr.derive_relational_prop_child(0)?;
     let right_prop = rel_expr.derive_relational_prop_child(1)?;
 
-    let mut left_push_down = vec![];
-    let mut right_push_down = vec![];
+    let original_predicates_count = predicates.len();
     let mut original_predicates = vec![];
-
-    let mut need_push = false;
-
+    let mut push_down_predicates = vec![];
+    let mut non_equi_predicates = vec![];
     for predicate in predicates.into_iter() {
         if is_falsy(&predicate) {
-            left_push_down = vec![false_constant()];
-            right_push_down = vec![false_constant()];
-            need_push = true;
+            push_down_predicates = vec![false_constant()];
             break;
         }
         let pred = JoinPredicate::new(&predicate, &left_prop, &right_prop);
         match pred {
-            JoinPredicate::ALL(_) => {
-                need_push = true;
-                left_push_down.push(predicate.clone());
-                right_push_down.push(predicate.clone());
-            }
-            JoinPredicate::Left(_) => {
-                if matches!(
-                    join.join_type,
-                    JoinType::Right | JoinType::RightSingle | JoinType::Full
-                ) {
-                    original_predicates.push(predicate);
-                    continue;
-                }
-                need_push = true;
-                left_push_down.push(predicate);
-            }
-            JoinPredicate::Right(_) => {
-                if matches!(
-                    join.join_type,
-                    JoinType::Left | JoinType::LeftSingle | JoinType::Full
-                ) {
-                    original_predicates.push(predicate);
-                    continue;
-                }
-                need_push = true;
-                right_push_down.push(predicate);
+            JoinPredicate::ALL(_) | JoinPredicate::Left(_) | JoinPredicate::Right(_) => {
+                push_down_predicates.push(predicate);
             }
             JoinPredicate::Other(_) => original_predicates.push(predicate),
-
-            JoinPredicate::Both {
-                left,
-                right,
-                is_equal_op,
-            } => {
-                if is_equal_op {
-                    if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
-                        join.join_type = JoinType::Inner;
-                        join.left_conditions.push(left.clone());
-                        join.right_conditions.push(right.clone());
-                        need_push = true;
+            JoinPredicate::Both { is_equal_op, .. } => {
+                if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
+                    if is_equal_op {
+                        push_down_predicates.push(predicate);
+                    } else {
+                        non_equi_predicates.push(predicate);
                     }
-                } else if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
                     join.join_type = JoinType::Inner;
-                    join.non_equi_conditions.push(predicate.clone());
-                    need_push = true;
                 } else {
                     original_predicates.push(predicate);
                 }
@@ -191,12 +156,86 @@ pub fn try_push_down_filter_join(
         }
     }
 
-    if !need_push {
+    if original_predicates.len() == original_predicates_count {
         return Ok((false, s_expr.clone()));
     }
 
-    // try to derive new predicate and push down filter
-    let mut result = try_derive_predicates(s_expr, join, left_push_down, right_push_down)?;
+    // Infer new predicate and push down filter.
+    for (left_condition, right_condition) in join
+        .left_conditions
+        .iter()
+        .zip(join.right_conditions.iter())
+    {
+        push_down_predicates.push(ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: String::from(ComparisonOp::Equal.to_func_name()),
+            params: vec![],
+            arguments: vec![left_condition.clone(), right_condition.clone()],
+        }));
+    }
+    join.left_conditions.clear();
+    join.right_conditions.clear();
+
+    let infer_filter = InferFilterOptimizer::new();
+    let predicates = infer_filter.run(push_down_predicates)?;
+
+    let mut left_push_down = vec![];
+    let mut right_push_down = vec![];
+    for predicate in predicates.into_iter() {
+        let pred = JoinPredicate::new(&predicate, &left_prop, &right_prop);
+        match pred {
+            JoinPredicate::ALL(_) => {
+                left_push_down.push(predicate.clone());
+                right_push_down.push(predicate);
+            }
+            JoinPredicate::Left(_) => {
+                left_push_down.push(predicate);
+            }
+            JoinPredicate::Right(_) => {
+                right_push_down.push(predicate);
+            }
+            JoinPredicate::Other(_) => original_predicates.push(predicate),
+
+            JoinPredicate::Both { left, right, .. } => {
+                join.left_conditions.push(left.clone());
+                join.right_conditions.push(right.clone());
+            }
+        }
+    }
+    join.non_equi_conditions.extend(non_equi_predicates);
+
+    let mut left_child = join_expr.child(0)?.clone();
+    let mut right_child = join_expr.child(1)?.clone();
+
+    if !left_push_down.is_empty() {
+        left_child = SExpr::create_unary(
+            Arc::new(
+                Filter {
+                    predicates: left_push_down,
+                }
+                .into(),
+            ),
+            Arc::new(left_child),
+        );
+    }
+
+    if !right_push_down.is_empty() {
+        right_child = SExpr::create_unary(
+            Arc::new(
+                Filter {
+                    predicates: right_push_down,
+                }
+                .into(),
+            ),
+            Arc::new(right_child),
+        );
+    }
+
+    let mut result = SExpr::create_binary(
+        Arc::new(join.into()),
+        Arc::new(left_child),
+        Arc::new(right_child),
+    );
 
     if !original_predicates.is_empty() {
         result = SExpr::create_unary(
@@ -209,5 +248,6 @@ pub fn try_push_down_filter_join(
             Arc::new(result),
         );
     }
-    Ok((need_push, result))
+
+    Ok((true, result))
 }
