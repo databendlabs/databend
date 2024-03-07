@@ -19,6 +19,7 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_storages_fuse::FuseTable;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropFileInfo;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::EntryMode;
@@ -30,7 +31,7 @@ pub async fn do_vacuum_drop_table(
     table_info: &TableInfo,
     operator: &Operator,
     dry_run_limit: Option<usize>,
-) -> Result<Option<Vec<(String, String)>>> {
+) -> Result<Option<Vec<VacuumDropFileInfo>>> {
     // storage_params is_some means it is an external table, ignore
     if table_info.meta.storage_params.is_some() {
         info!("ignore external table {}", table_info.name);
@@ -51,12 +52,17 @@ pub async fn do_vacuum_drop_table(
                 .lister_with(&dir)
                 .recursive(true)
                 .metakey(Metakey::Mode)
+                .metakey(Metakey::ContentLength)
                 .await?;
             let mut list_files = Vec::new();
             while let Some(de) = ds.try_next().await? {
                 let meta = de.metadata();
                 if EntryMode::FILE == meta.mode() {
-                    list_files.push((table_info.name.clone(), de.name().to_string()));
+                    list_files.push((
+                        table_info.name.clone(),
+                        de.name().to_string(),
+                        meta.content_length(),
+                    ));
                     if list_files.len() >= dry_run_limit {
                         break;
                     }
@@ -80,7 +86,7 @@ pub async fn do_vacuum_drop_table(
 pub async fn do_vacuum_drop_tables(
     tables: Vec<Arc<dyn Table>>,
     dry_run_limit: Option<usize>,
-) -> Result<Option<Vec<(String, String)>>> {
+) -> Result<Option<Vec<VacuumDropFileInfo>>> {
     let start = Instant::now();
     let tables_len = tables.len();
     info!("do_vacuum_drop_tables {} tables", tables_len);
@@ -100,7 +106,6 @@ pub async fn do_vacuum_drop_tables(
             );
             continue;
         };
-
         if let Some(ret) = ret {
             list_files.extend(ret);
             if list_files.len() >= dry_run_limit.unwrap() {

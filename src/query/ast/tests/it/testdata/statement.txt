@@ -9880,7 +9880,7 @@ VacuumDropTable(
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            dry_run: false,
+            dry_run: None,
             limit: None,
         },
     },
@@ -9897,7 +9897,28 @@ VacuumDropTable(
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            dry_run: true,
+            dry_run: Some(
+                false,
+            ),
+            limit: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE DRY RUN SUMMARY;
+---------- Output ---------
+VACUUM DROP TABLE DRY RUN SUMMARY
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: None,
+        option: VacuumDropTableOption {
+            dry_run: Some(
+                true,
+            ),
             limit: None,
         },
     },
@@ -9922,7 +9943,7 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            dry_run: false,
+            dry_run: None,
             limit: None,
         },
     },
@@ -9947,7 +9968,7 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            dry_run: false,
+            dry_run: None,
             limit: Some(
                 10,
             ),
