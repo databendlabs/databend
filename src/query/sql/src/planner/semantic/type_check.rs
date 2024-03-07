@@ -2604,6 +2604,14 @@ impl<'a> TypeChecker<'a> {
                     span,
                     lit: Literal::Null,
                 });
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
                 let args_ref: Vec<&Expr> = new_args.iter().collect();
                 Some(self.resolve_function(span, "if", vec![], &args_ref).await)
             }
