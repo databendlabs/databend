@@ -16,6 +16,7 @@ use std::ops::Range;
 use std::ops::RangeFrom;
 use std::ops::RangeFull;
 use std::ops::RangeTo;
+use std::sync::atomic::AtomicBool;
 
 use enum_as_inner::EnumAsInner;
 
@@ -25,7 +26,30 @@ use crate::parser::Backtrace;
 /// Input tokens slice with a backtrace that records all errors including
 /// the optional branch.
 #[derive(Debug, Clone, Copy)]
-pub struct Input<'a>(pub &'a [Token<'a>], pub Dialect, pub &'a Backtrace);
+pub struct Input<'a>(pub &'a [Token<'a>], pub ParserConfig, pub &'a Backtrace);
+
+#[derive(Debug, Clone, Copy)]
+pub struct ParserConfig {
+    pub dialect: Dialect,
+    pub allow_streaming_insert_source: bool,
+}
+
+impl ParserConfig {
+    pub fn new(dialect: Dialect) -> Self {
+        Self {
+            dialect,
+            allow_streaming_insert_source: true,
+        }
+    }
+}
+
+impl std::ops::Deref<Dialect> for ParserConfig {
+    type Target = Dialect;
+
+    fn deref(&self) -> &Self::Dialect {
+        &self.dialect
+    }
+}
 
 impl<'a> std::ops::Deref for Input<'a> {
     type Target = [Token<'a>];

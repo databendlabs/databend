@@ -15,6 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::input::ParserConfig;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Statement;
@@ -79,7 +80,7 @@ pub fn run_parser<O>(
     mut parser: impl FnMut(Input) -> IResult<O>,
 ) -> Result<O> {
     let backtrace = Backtrace::new();
-    match parser(Input(sql_tokens, dialect, &backtrace)) {
+    match parser(Input(sql_tokens, ParserConfig::new(dialect), &backtrace)) {
         Ok((rest, res)) => {
             let is_complete = rest[0].kind == TokenKind::EOI;
             if is_complete || allow_partial {

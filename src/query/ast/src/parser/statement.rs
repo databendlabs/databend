@@ -60,6 +60,11 @@ pub enum CreateDatabaseOption {
     FromShare(ShareNameIdent),
 }
 
+fn statement_with_config<F: Fn(Input) -> Input>(i: Input, f: F) -> IResult<StatementWithFormat> {
+    let new_i = f(i);
+    statement(i)
+}
+
 pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let explain = map_res(
         rule! {
@@ -106,6 +111,14 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
+    let no_streaming_statement = |i: Input| {
+        statement_with_config(i, |i| {
+            let mut i = i.clone();
+            i.1.allow_streaming_insert_source = false;
+            i
+        })
+    };
+
     let create_task = map(
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -118,7 +131,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ (#set_table_option)?
-            ~ AS ~ #statement
+            ~ AS ~ #no_streaming_statement
         },
         |(
             _,
@@ -2311,16 +2324,22 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         },
         |(_, (rest_str, start))| InsertSource::Values { rest_str, start },
     );
-    let query = map(query, |query| InsertSource::Select {
+    let mut query = map(query, |query| InsertSource::Select {
         query: Box::new(query),
     });
 
-    rule!(
-        #streaming
-        | #streaming_v2
-        | #values
-        | #query
-    )(i)
+    if i.1.allow_streaming_insert_source {
+        rule!(
+            #streaming
+            | #streaming_v2
+            | #values
+            | #query
+        )(i)
+    } else {
+        rule!(
+             #query
+        )(i)
+    }
 }
 
 pub fn merge_source(i: Input) -> IResult<MergeSource> {
