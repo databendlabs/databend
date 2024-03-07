@@ -54,7 +54,9 @@ use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
+use crate::sessions::QueryEntry;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::stream::DataBlockStream;
@@ -354,6 +356,8 @@ impl InteractiveWorkerBase {
                 info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
 
+                let entry = QueryEntry::create(&context)?;
+                let _guard = QueriesQueueManager::instants().acquire(entry).await?;
                 let mut planner = Planner::new(context.clone());
                 let (plan, extras) = planner.plan_sql(query).await?;
 

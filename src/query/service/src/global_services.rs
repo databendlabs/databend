@@ -41,6 +41,7 @@ use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::locks::LockManager;
 use crate::servers::http::v1::HttpQueryManager;
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
 
 pub struct GlobalServices;
@@ -95,6 +96,7 @@ impl GlobalServices {
             CatalogManager::init(config, Arc::new(default_catalog), catalog_creator).await?;
         }
 
+        QueriesQueueManager::init(config)?;
         HttpQueryManager::init(config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
