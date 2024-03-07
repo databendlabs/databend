@@ -83,7 +83,12 @@ use jsonb::get_by_path;
 use jsonb::get_by_path_array;
 use jsonb::get_by_path_first;
 use jsonb::is_array;
+use jsonb::is_boolean;
+use jsonb::is_f64;
+use jsonb::is_i64;
+use jsonb::is_null;
 use jsonb::is_object;
+use jsonb::is_string;
 use jsonb::jsonpath::parse_json_path;
 use jsonb::jsonpath::JsonPath;
 use jsonb::keypath::parse_key_paths;
@@ -716,6 +721,104 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_null_value",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            output.push(is_null(val));
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_boolean",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            output.push(is_boolean(val));
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_integer",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            output.push(is_i64(val));
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_float",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            output.push(is_f64(val));
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_string",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            output.push(is_string(val));
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_array",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            output.push(is_array(val));
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_object",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            output.push(is_object(val));
+        }),
+    );
+
     registry.register_function_factory("to_variant", |_, args_type| {
         if args_type.len() != 1 {
             return None;
@@ -956,15 +1059,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match as_str(val) {
-                    Some(str_val) => {
-                        let timestamp = string_to_timestamp(str_val.as_bytes(), ctx.func_ctx.tz.tz)
-                            .map(|ts| ts.timestamp_micros());
-                        match timestamp {
-                            Some(timestamp) => output.push(timestamp),
-                            None => output.push_null(),
-                        }
-                    }
+                match as_str(val)
+                    .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.func_ctx.tz.tz))
+                {
+                    Some(ts) => output.push(ts.timestamp_micros()),
                     None => output.push_null(),
                 }
             },

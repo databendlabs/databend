@@ -2164,8 +2164,22 @@ Functions overloads:
 1 insert(String NULL, Int64 NULL, Int64 NULL, String NULL) :: String NULL
 0 instr(String, String) :: UInt64
 1 instr(String NULL, String NULL) :: UInt64 NULL
+0 is_array(Variant) :: Boolean
+1 is_array(Variant NULL) :: Boolean NULL
+0 is_boolean(Variant) :: Boolean
+1 is_boolean(Variant NULL) :: Boolean NULL
+0 is_float(Variant) :: Boolean
+1 is_float(Variant NULL) :: Boolean NULL
+0 is_integer(Variant) :: Boolean
+1 is_integer(Variant NULL) :: Boolean NULL
 0 is_not_null(NULL) :: Boolean
 1 is_not_null(T0 NULL) :: Boolean
+0 is_null_value(Variant) :: Boolean
+1 is_null_value(Variant NULL) :: Boolean NULL
+0 is_object(Variant) :: Boolean
+1 is_object(Variant NULL) :: Boolean NULL
+0 is_string(Variant) :: Boolean
+1 is_string(Variant NULL) :: Boolean NULL
 0 is_true(Boolean) :: Boolean
 1 is_true(Boolean NULL) :: Boolean
 0 json_array FACTORY
