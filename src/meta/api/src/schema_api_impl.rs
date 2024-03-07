@@ -2449,7 +2449,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let seq_names = self.mget_kv(&kv_keys).await?;
         let mut table_names = Vec::with_capacity(kv_keys.len());
 
-        for (i, seq_name_opt) in seq_names.iter().enumerate() {
+        for seq_name_opt in seq_names.iter() {
             // None means table_name not found, maybe immuteable table id
             if let Some(seq_name) = seq_name_opt {
                 let name_ident: DBIdTableName = deserialize_struct(&seq_name.data)?;
@@ -2495,7 +2495,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let seq_names = self.mget_kv(&kv_keys).await?;
         let mut db_names = Vec::with_capacity(kv_keys.len());
 
-        for (i, seq_name_opt) in seq_names.iter().enumerate() {
+        for seq_name_opt in seq_names.iter() {
             // None means db_name not found, maybe immuteable database id
             if let Some(seq_name) = seq_name_opt {
                 let name_ident: DatabaseNameIdent = deserialize_struct(&seq_name.data)?;
