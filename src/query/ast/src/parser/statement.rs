@@ -60,7 +60,7 @@ pub enum CreateDatabaseOption {
     FromShare(ShareNameIdent),
 }
 
-pub fn statement(i: Input) -> IResult<StatementWithFormat> {
+pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain = map_res(
         rule! {
             EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
@@ -118,7 +118,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ (#set_table_option)?
-            ~ AS ~ #statement
+            ~ AS ~ #task_sql_block
         },
         |(
             _,
@@ -136,7 +136,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             _,
             sql,
         )| {
-            let sql = format!("{}", sql.stmt);
             let session_opts = session_opts.unwrap_or_default();
             Statement::CreateTask(CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
@@ -1975,7 +1974,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let commit = value(Statement::Commit, rule! { COMMIT });
     let abort = value(Statement::Abort, rule! { ABORT | ROLLBACK });
 
-    let statement_body = alt((
+    alt((
         // query, explain,show
         rule!(
         #map(query, |query| Statement::Query(Box::new(query)))
@@ -2178,8 +2177,9 @@ AS
         | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
         | #show_connections: "`SHOW CONNECTIONS`"
         ),
-    ));
-
+    ))(i)
+}
+pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     map(
         rule! {
             #statement_body ~ ( FORMAT ~ ^#ident )? ~ ";"? ~ &EOI
@@ -3226,6 +3226,33 @@ pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     ),))(i)
 }
 
+pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
+    let single_statement = map(
+        rule! {
+            #statement
+        },
+        |stmt| {
+            let sql = format!("{}", stmt.stmt);
+            TaskSql::SingleStatement(sql)
+        },
+    );
+    let task_block = map(
+        rule! {
+            BEGIN
+            ~ #task_statements(statement_body)
+            ~ END
+        },
+        |(_, stmts, _)| {
+            let sql = stmts
+                .iter()
+                .map(|stmt| format!("{}", stmt))
+                .collect::<Vec<String>>();
+            TaskSql::ScriptBlock(sql)
+        },
+    );
+    alt((single_statement, task_block))(i)
+}
+
 pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
     let suspend = map(
         rule! {
@@ -3241,14 +3268,9 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
     );
     let modify_as = map(
         rule! {
-             MODIFY ~ AS ~ #statement
+             MODIFY ~ AS ~ #task_sql_block
         },
-        |(_, _, sql)| {
-            let sql = pretty_statement(sql.stmt, 10)
-                .map_err(|_| ErrorKind::Other("invalid statement"))
-                .expect("failed to alter task");
-            AlterTaskOptions::ModifyAs(sql)
-        },
+        |(_, _, sql)| AlterTaskOptions::ModifyAs(sql),
     );
     let modify_when = map(
         rule! {
