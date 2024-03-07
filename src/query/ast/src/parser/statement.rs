@@ -61,7 +61,7 @@ pub enum CreateDatabaseOption {
 }
 
 pub fn statement_no_streaming_insert(i: Input) -> IResult<StatementWithFormat> {
-    let mut i = i.clone();
+    let mut i = i;
     i.1.allow_streaming_insert_source = false;
     statement(i)
 }
