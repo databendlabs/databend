@@ -297,14 +297,14 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_table_names_by_id(&self, table_id: Vec<MetaId>) -> Result<Vec<String>> {
+    async fn mget_table_names_by_ids(&self, table_ids: Vec<MetaId>) -> Result<Vec<String>> {
         let mut tables = self
             .immutable_catalog
-            .mget_table_names_by_id(table_id.clone())
+            .mget_table_names_by_ids(table_ids.clone())
             .await?;
         let mut other = self
             .mutable_catalog
-            .mget_table_names_by_id(table_id)
+            .mget_table_names_by_ids(table_ids)
             .await?;
         tables.append(&mut other);
         Ok(tables)
@@ -322,12 +322,12 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_db_names_by_id(&self, db_ids: Vec<MetaId>) -> Result<Vec<String>> {
+    async fn mget_db_names_by_ids(&self, db_ids: Vec<MetaId>) -> Result<Vec<String>> {
         let mut dbs = self
             .immutable_catalog
-            .mget_db_names_by_id(db_ids.clone())
+            .mget_db_names_by_ids(db_ids.clone())
             .await?;
-        let mut other = self.mutable_catalog.mget_db_names_by_id(db_ids).await?;
+        let mut other = self.mutable_catalog.mget_db_names_by_ids(db_ids).await?;
         dbs.append(&mut other);
         Ok(dbs)
     }

@@ -2433,7 +2433,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
-    async fn mget_table_names_by_id(
+    async fn mget_table_names_by_ids(
         &self,
         table_ids: Vec<MetaId>,
     ) -> Result<Vec<String>, KVAppError> {
@@ -2480,7 +2480,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
-    async fn mget_db_names_by_id(&self, db_ids: Vec<MetaId>) -> Result<Vec<String>, KVAppError> {
+    async fn mget_db_names_by_ids(&self, db_ids: Vec<MetaId>) -> Result<Vec<String>, KVAppError> {
         debug!(req :? =(&db_ids); "SchemaApi: {}", func_name!());
 
         let mut kv_keys = Vec::with_capacity(db_ids.len());
