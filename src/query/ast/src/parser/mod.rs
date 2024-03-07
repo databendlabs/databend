@@ -26,6 +26,7 @@ pub mod unescape;
 mod input;
 pub use input::Dialect;
 pub use input::Input;
+pub use input::ParserConfig;
 
 mod common;
 pub use common::match_text;

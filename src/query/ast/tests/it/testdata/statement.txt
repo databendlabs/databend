@@ -15440,7 +15440,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 6 * * *' TIMEZONE 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 6 * * *' TIMEZONE 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO t (c1, c2) VALUES(1, 2), (3, 4)
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -15463,7 +15463,7 @@ CreateTask(
         comments: "serverless + cron",
         after: [],
         when_condition: None,
-        sql: "INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)",
+        sql: "INSERT INTO t (c1, c2) VALUES(1, 2), (3, 4)",
     },
 )
 
