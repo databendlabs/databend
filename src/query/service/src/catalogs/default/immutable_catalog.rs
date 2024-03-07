@@ -198,7 +198,7 @@ impl Catalog for ImmutableCatalog {
         Ok(table.name().to_string())
     }
 
-    async fn mget_tables_name_by_id(
+    async fn mget_table_names_by_id(
         &self,
         table_ids: Vec<MetaId>,
     ) -> databend_common_exception::Result<Vec<String>> {
@@ -224,7 +224,7 @@ impl Catalog for ImmutableCatalog {
         }
     }
 
-    async fn mget_dbs_name_by_id(&self, db_ids: Vec<MetaId>) -> Result<Vec<String>> {
+    async fn mget_db_names_by_id(&self, db_ids: Vec<MetaId>) -> Result<Vec<String>> {
         let mut res = Vec::new();
         for id in db_ids {
             if self.sys_db.get_db_info().ident.db_id == id {

@@ -262,7 +262,7 @@ impl Catalog for IcebergCatalog {
         ))
     }
 
-    async fn mget_tables_name_by_id(&self, _table_ids: Vec<MetaId>) -> Result<Vec<String>> {
+    async fn mget_table_names_by_id(&self, _table_ids: Vec<MetaId>) -> Result<Vec<String>> {
         Err(ErrorCode::Unimplemented(
             "Cannot list tables name by id in HIVE catalog",
         ))
@@ -275,7 +275,7 @@ impl Catalog for IcebergCatalog {
         ))
     }
 
-    async fn mget_dbs_name_by_id(&self, _db_ids: Vec<MetaId>) -> Result<Vec<String>> {
+    async fn mget_db_names_by_id(&self, _db_ids: Vec<MetaId>) -> Result<Vec<String>> {
         Err(ErrorCode::Unimplemented(
             "Cannot list dbs name by id in ICEBERG catalog",
         ))

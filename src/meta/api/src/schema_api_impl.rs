@@ -2433,7 +2433,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
-    async fn mget_tables_name_by_id(
+    async fn mget_table_names_by_id(
         &self,
         table_ids: Vec<MetaId>,
     ) -> Result<Vec<String>, KVAppError> {
@@ -2449,12 +2449,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let seq_names = self.mget_kv(&kv_keys).await?;
         let mut table_names = Vec::with_capacity(kv_keys.len());
 
-        for seq_name_opt in seq_names.iter() {
-            // None means table_name not found, maybe immuteable table id
-            if let Some(seq_name) = seq_name_opt {
-                let name_ident: DBIdTableName = deserialize_struct(&seq_name.data)?;
-                table_names.push(name_ident.table_name);
-            }
+        // None means table_name not found, maybe immuteable table id. Ignore it
+        for seq_name in seq_names.into_iter().flatten() {
+            let name_ident: DBIdTableName = deserialize_struct(&seq_name.data)?;
+            table_names.push(name_ident.table_name);
         }
         Ok(table_names)
     }
@@ -2482,7 +2480,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
-    async fn mget_dbs_name_by_id(&self, db_ids: Vec<MetaId>) -> Result<Vec<String>, KVAppError> {
+    async fn mget_db_names_by_id(&self, db_ids: Vec<MetaId>) -> Result<Vec<String>, KVAppError> {
         debug!(req :? =(&db_ids); "SchemaApi: {}", func_name!());
 
         let mut kv_keys = Vec::with_capacity(db_ids.len());
@@ -2495,12 +2493,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let seq_names = self.mget_kv(&kv_keys).await?;
         let mut db_names = Vec::with_capacity(kv_keys.len());
 
-        for seq_name_opt in seq_names.iter() {
-            // None means db_name not found, maybe immuteable database id
-            if let Some(seq_name) = seq_name_opt {
-                let name_ident: DatabaseNameIdent = deserialize_struct(&seq_name.data)?;
-                db_names.push(name_ident.db_name);
-            }
+        // None means db_name not found, maybe immuteable database id. Ignore it
+        for seq_name in seq_names.into_iter().flatten() {
+            let name_ident: DatabaseNameIdent = deserialize_struct(&seq_name.data)?;
+            db_names.push(name_ident.db_name);
         }
         Ok(db_names)
     }
