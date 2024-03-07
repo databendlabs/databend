@@ -237,6 +237,24 @@ impl From<GeozeroError> for ErrorCode {
     }
 }
 
+impl From<tantivy::TantivyError> for ErrorCode {
+    fn from(error: tantivy::TantivyError) -> Self {
+        ErrorCode::TantivyError(error.to_string())
+    }
+}
+
+impl From<tantivy::directory::error::OpenReadError> for ErrorCode {
+    fn from(error: tantivy::directory::error::OpenReadError) -> Self {
+        ErrorCode::TantivyOpenReadError(error.to_string())
+    }
+}
+
+impl From<tantivy::query::QueryParserError> for ErrorCode {
+    fn from(error: tantivy::query::QueryParserError) -> Self {
+        ErrorCode::TantivyQueryParserError(error.to_string())
+    }
+}
+
 // ===  prost error ===
 impl From<prost::EncodeError> for ErrorCode {
     fn from(error: prost::EncodeError) -> Self {

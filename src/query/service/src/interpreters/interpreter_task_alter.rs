@@ -15,18 +15,20 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_ast::ast::TaskSql;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb;
 use databend_common_cloud_control::pb::alter_task_request::AlterTaskType;
 use databend_common_cloud_control::pb::AlterTaskRequest;
 use databend_common_cloud_control::pb::WarehouseOptions;
-use databend_common_cloud_control::task_client::make_request;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::AlterTaskPlan;
 
-use crate::interpreters::common::get_client_config;
+use crate::interpreters::common::get_task_client_config;
 use crate::interpreters::common::make_schedule_options;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -59,7 +61,8 @@ impl AlterTaskInterpreter {
             owner,
             alter_task_type: 0,
             if_exist: plan.if_exists,
-
+            error_integration: None,
+            task_sql_type: 0,
             query_text: None,
             comment: None,
             schedule_options: None,
@@ -70,6 +73,7 @@ impl AlterTaskInterpreter {
             remove_after: vec![],
             set_session_parameters: false,
             session_parameters: Default::default(),
+            script_sql: None,
         };
         match plan.alter_options {
             AlterTaskOptions::Resume => {
@@ -83,6 +87,7 @@ impl AlterTaskInterpreter {
                 comments,
                 warehouse,
                 suspend_task_after_num_failures,
+                error_integration,
                 session_parameters,
             } => {
                 req.alter_task_type = AlterTaskType::Set as i32;
@@ -92,6 +97,7 @@ impl AlterTaskInterpreter {
                     warehouse: Some(w),
                     using_warehouse_size: None,
                 });
+                req.error_integration = error_integration;
                 req.suspend_task_after_num_failures =
                     suspend_task_after_num_failures.map(|i| i as i32);
                 if let Some(session_parameters) = session_parameters {
@@ -104,7 +110,17 @@ impl AlterTaskInterpreter {
             }
             AlterTaskOptions::ModifyAs(sql) => {
                 req.alter_task_type = AlterTaskType::ModifyAs as i32;
-                req.query_text = Some(sql);
+                match sql {
+                    TaskSql::SingleStatement(stmt) => {
+                        req.task_sql_type = i32::from(pb::TaskSqlType::Sql);
+                        req.query_text = Some(stmt);
+                    }
+                    TaskSql::ScriptBlock(ref sqls) => {
+                        req.task_sql_type = i32::from(pb::TaskSqlType::Script);
+                        req.query_text = Some(format!("{}", sql));
+                        req.script_sql = Some(pb::ScriptSql { sqls: sqls.clone() })
+                    }
+                }
             }
             AlterTaskOptions::AddAfter(tasks) => {
                 req.alter_task_type = AlterTaskType::AddAfter as i32;
@@ -145,7 +161,7 @@ impl Interpreter for AlterTaskInterpreter {
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
         let req = self.build_request();
-        let config = get_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
+        let config = get_task_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
         let req = make_request(req, config);
         task_client.alter_task(req).await?;
         Ok(PipelineBuildResult::create())

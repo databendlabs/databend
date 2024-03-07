@@ -21,6 +21,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_sql::plans::JoinType;
 use databend_common_storage::DataOperator;
 use log::info;
 
@@ -53,10 +54,23 @@ impl BuildSpillState {
     }
 
     // Get all hashes for build input data.
-    pub fn get_hashes(&self, block: &DataBlock, hashes: &mut Vec<u64>) -> Result<()> {
+    pub fn get_hashes(
+        &self,
+        block: &DataBlock,
+        join_type: &JoinType,
+        hashes: &mut Vec<u64>,
+    ) -> Result<()> {
         let func_ctx = self.build_state.ctx.get_function_context()?;
         let keys = &self.build_state.hash_join_state.hash_join_desc.build_keys;
-        get_hashes(&func_ctx, block, keys, &self.build_state.method, hashes)
+        get_hashes(
+            &func_ctx,
+            block,
+            keys,
+            &self.build_state.method,
+            join_type,
+            true,
+            hashes,
+        )
     }
 }
 

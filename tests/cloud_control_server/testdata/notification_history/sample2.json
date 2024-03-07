@@ -1,0 +1,13 @@
+{
+  "created_time": {
+    "seconds": 1646312700,
+    "nanos": 0
+  },
+  "processed_time": null,
+  "message_source": "webhook",
+  "name": "UpdateNotification",
+  "message": "Firmware update available",
+  "status": "pending",
+  "error_message": ""
+}
+

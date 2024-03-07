@@ -339,7 +339,6 @@ impl HashJoinBuildState {
                     self.hash_join_state.hash_join_desc.join_type,
                     JoinType::LeftMark | JoinType::RightMark
                 )
-                && self.ctx.get_cluster().is_empty()
                 && self.ctx.get_settings().get_join_spilling_memory_ratio()? == 0
             {
                 self.hash_join_state
@@ -1031,6 +1030,10 @@ impl HashJoinBuildState {
             }
         }
         Ok(())
+    }
+
+    pub(crate) fn join_type(&self) -> JoinType {
+        self.hash_join_state.hash_join_desc.join_type.clone()
     }
 }
 

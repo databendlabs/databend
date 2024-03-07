@@ -102,7 +102,7 @@ pub async fn upload_to_stage(
         )
     } else {
         UserApiProvider::instance()
-            .get_stage(context.get_tenant().as_str(), &args.stage_name)
+            .get_stage(&context.get_tenant(), &args.stage_name)
             .await
             .map_err(InternalServerError)?
     };

@@ -171,7 +171,7 @@ impl AsyncSystemTable for StreamsTable {
                         updated_on.push(stream_info.meta.updated_on.timestamp_micros());
                         owner.push(
                             user_api
-                                .get_ownership(tenant.as_str(), &OwnershipObject::Table {
+                                .get_ownership(&tenant, &OwnershipObject::Table {
                                     catalog_name: ctl_name.to_string(),
                                     db_id,
                                     table_id: t_id,

@@ -21,6 +21,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType::Ownership;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::GrantPrivilegePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -111,7 +112,7 @@ impl GrantPrivilegeInterpreter {
     async fn grant_ownership(
         &self,
         ctx: &Arc<QueryContext>,
-        tenant: &str,
+        tenant: &NonEmptyString,
         owner_object: &OwnershipObject,
         new_role: &str,
     ) -> Result<()> {
@@ -199,7 +200,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
                         .convert_to_ownerobject(tenant.as_str(), &plan.on, plan.on.catalog())
                         .await?;
                     if self.ctx.get_current_role().is_some() {
-                        self.grant_ownership(&self.ctx, tenant.as_str(), &owner_object, &role)
+                        self.grant_ownership(&self.ctx, &tenant, &owner_object, &role)
                             .await?;
                     } else {
                         return Err(databend_common_exception::ErrorCode::UnknownRole(
@@ -208,9 +209,9 @@ impl Interpreter for GrantPrivilegeInterpreter {
                     }
                 } else {
                     user_mgr
-                        .grant_privileges_to_role(tenant.as_str(), &role, plan.on, plan.priv_types)
+                        .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)
                         .await?;
-                    RoleCacheManager::instance().invalidate_cache(tenant.as_str());
+                    RoleCacheManager::instance().invalidate_cache(&tenant);
                 }
             }
         }

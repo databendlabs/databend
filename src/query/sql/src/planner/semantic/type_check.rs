@@ -379,7 +379,7 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                if list.len() >= 1024 {
+                if self.ctx.get_cluster().is_empty() && list.len() >= 1024 {
                     if *not {
                         return self
                             .resolve_unary_op(*span, &UnaryOperator::Not, &Expr::InList {
@@ -2956,7 +2956,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let udf = UserApiProvider::instance()
-            .get_udf(self.ctx.get_tenant().as_str(), udf_name)
+            .get_udf(&self.ctx.get_tenant(), udf_name)
             .await?;
 
         let Some(udf) = udf else {

@@ -60,7 +60,7 @@ pub enum CreateDatabaseOption {
     FromShare(ShareNameIdent),
 }
 
-pub fn statement(i: Input) -> IResult<StatementWithFormat> {
+pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain = map_res(
         rule! {
             EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
@@ -115,9 +115,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             ~ (AFTER ~ #comma_separated_list0(literal_string))?
             ~ (WHEN ~ #expr )?
             ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
+            ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ (#set_table_option)?
-            ~ AS ~ #statement
+            ~ AS ~ #task_sql_block
         },
         |(
             _,
@@ -129,12 +130,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             after_tasks,
             when_conditions,
             suspend_opt,
+            error_integration,
             comment_opt,
             session_opts,
             _,
             sql,
         )| {
-            let sql = format!("{}", sql.stmt);
             let session_opts = session_opts.unwrap_or_default();
             Statement::CreateTask(CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
@@ -147,6 +148,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     Some((_, tasks)) => tasks,
                     None => Vec::new(),
                 },
+                error_integration: error_integration.map(|(_, _, name)| name.to_string()),
                 when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
                 sql,
                 session_parameters: session_opts,
@@ -1894,12 +1896,85 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             })
         },
     );
+    let create_notification = map(
+        rule! {
+            CREATE ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ TYPE ~ "=" ~ #ident
+            ~ ENABLED ~ "=" ~ #literal_bool
+            ~ (#notification_webhook_clause)?
+            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+        },
+        |(
+            _,
+            _,
+            _,
+            if_not_exists,
+            name,
+            _,
+            _,
+            notification_type,
+            _,
+            _,
+            enabled,
+            webhook,
+            comment,
+        )| {
+            Statement::CreateNotification(CreateNotificationStmt {
+                if_not_exists: if_not_exists.is_some(),
+                name: name.to_string(),
+                notification_type: notification_type.to_string(),
+                enabled,
+                webhook_opts: webhook,
+                comments: comment.map(|v| v.2).unwrap_or_default(),
+            })
+        },
+    );
+
+    let drop_notification = map(
+        rule! {
+            DROP ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+        },
+        |(_, _, _, if_exists, name)| {
+            Statement::DropNotification(DropNotificationStmt {
+                if_exists: if_exists.is_some(),
+                name: name.to_string(),
+            })
+        },
+    );
+
+    let alter_notification = map(
+        rule! {
+            ALTER ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+            ~ #alter_notification_options
+        },
+        |(_, _, _, if_exists, name, options)| {
+            Statement::AlterNotification(AlterNotificationStmt {
+                if_exists: if_exists.is_some(),
+                name: name.to_string(),
+                options,
+            })
+        },
+    );
+
+    let desc_notification = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ NOTIFICATION ~ INTEGRATION ~ #ident
+        },
+        |(_, _, _, name)| {
+            Statement::DescribeNotification(DescribeNotificationStmt {
+                name: name.to_string(),
+            })
+        },
+    );
 
     let begin = value(Statement::Begin, rule! { BEGIN });
     let commit = value(Statement::Commit, rule! { COMMIT });
     let abort = value(Statement::Abort, rule! { ABORT | ROLLBACK });
 
-    let statement_body = alt((
+    alt((
         // query, explain,show
         rule!(
         #map(query, |query| Statement::Query(Box::new(query)))
@@ -1969,8 +2044,8 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
-            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN]`"
-            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN]`"
+            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
+            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
@@ -2068,6 +2143,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
   [ AFTER <string>, <string>...]
   [ WHEN boolean_expr ]
   [ SUSPEND_TASK_AFTER_NUM_FAILURES = <num> ]
+  [ ERROR_INTEGRATION = <string_literal> ]
   [ COMMENT = '<string_literal>' ]
 AS
   <sql>`"
@@ -2086,7 +2162,14 @@ AS
             | #drop_pipe : "`DROP PIPE [ IF EXISTS ] <name>`"
             | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
             | #desc_pipe : "`DESC | DESCRIBE PIPE <name>`"
-
+            | #create_notification : "`CREATE NOTIFICATION INTEGRATION [ IF NOT EXISTS ] <name>
+    TYPE = <type>
+    ENABLED = <bool>
+    [ WEBHOOK = ( url = <string_literal>, method = <string_literal>, authorization_header = <string_literal> ) ]
+    [ COMMENT = '<string_literal>' ]`"
+            | #alter_notification : "`ALTER NOTIFICATION INTEGRATION [ IF EXISTS ] <name> SET <option> = <value>`"
+            | #desc_notification : "`DESC | DESCRIBE NOTIFICATION INTEGRATION <name>`"
+            | #drop_notification : "`DROP NOTIFICATION INTEGRATION [ IF EXISTS ] <name>`"
         ),
         rule!(
             #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
@@ -2094,8 +2177,9 @@ AS
         | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
         | #show_connections: "`SHOW CONNECTIONS`"
         ),
-    ));
-
+    ))(i)
+}
+pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     map(
         rule! {
             #statement_body ~ ( FORMAT ~ ^#ident )? ~ ";"? ~ &EOI
@@ -2119,6 +2203,81 @@ pub fn parse_create_option(
             "option IF NOT EXISTS and OR REPLACE are incompatible.",
         ))),
     }
+}
+
+pub fn notification_webhook_options(i: Input) -> IResult<NotificationWebhookOptions> {
+    let url_option = map(
+        rule! {
+            URL ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("url".to_string(), v.to_string()),
+    );
+    let method_option = map(
+        rule! {
+            METHOD ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("method".to_string(), v.to_string()),
+    );
+    let auth_option = map(
+        rule! {
+            AUTHORIZATION_HEADER ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("authorization_header".to_string(), v.to_string()),
+    );
+
+    map(
+        rule! { ((
+        #url_option
+        | #method_option
+        | #auth_option) ~ ","?)* },
+        |opts| {
+            NotificationWebhookOptions::from_iter(
+                opts.iter().map(|((k, v), _)| (k.to_uppercase(), v.clone())),
+            )
+        },
+    )(i)
+}
+
+pub fn notification_webhook_clause(i: Input) -> IResult<NotificationWebhookOptions> {
+    map(
+        rule! { WEBHOOK ~ ^"=" ~ ^"(" ~ ^#notification_webhook_options ~ ^")" },
+        |(_, _, _, opts, _)| opts,
+    )(i)
+}
+
+pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions> {
+    let enabled = map(
+        rule! {
+            SET ~ ENABLED ~ ^"=" ~ #literal_bool
+        },
+        |(_, _, _, enabled)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::enabled(enabled))
+        },
+    );
+    let webhook = map(
+        rule! {
+            SET ~ #notification_webhook_clause
+        },
+        |(_, webhook)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::webhook_opts(webhook))
+        },
+    );
+    let comment = map(
+        rule! {
+            SET ~ (COMMENT | COMMENTS) ~ ^"=" ~ #literal_string
+        },
+        |(_, _, _, comment)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::comments(comment))
+        },
+    );
+    map(
+        rule! {
+            #enabled
+            | #webhook
+            | #comment
+        },
+        |opts| opts,
+    )(i)
 }
 
 // `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
@@ -3047,10 +3206,10 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
+            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)?
         },
         |(opt_dry_run, opt_limit)| VacuumDropTableOption {
-            dry_run: opt_dry_run.is_some(),
+            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
             limit: opt_limit.map(|(_, limit)| limit as usize),
         },
     ),))(i)
@@ -3059,12 +3218,39 @@ pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN)?
+            (DRY ~ ^RUN ~ SUMMARY?)?
         },
         |opt_dry_run| VacuumTableOption {
-            dry_run: opt_dry_run.is_some(),
+            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
         },
     ),))(i)
+}
+
+pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
+    let single_statement = map(
+        rule! {
+            #statement
+        },
+        |stmt| {
+            let sql = format!("{}", stmt.stmt);
+            TaskSql::SingleStatement(sql)
+        },
+    );
+    let task_block = map(
+        rule! {
+            BEGIN
+            ~ #task_statements(statement_body)
+            ~ END
+        },
+        |(_, stmts, _)| {
+            let sql = stmts
+                .iter()
+                .map(|stmt| format!("{}", stmt))
+                .collect::<Vec<String>>();
+            TaskSql::ScriptBlock(sql)
+        },
+    );
+    alt((single_statement, task_block))(i)
 }
 
 pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
@@ -3082,14 +3268,9 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
     );
     let modify_as = map(
         rule! {
-             MODIFY ~ AS ~ #statement
+             MODIFY ~ AS ~ #task_sql_block
         },
-        |(_, _, sql)| {
-            let sql = pretty_statement(sql.stmt, 10)
-                .map_err(|_| ErrorKind::Other("invalid statement"))
-                .expect("failed to alter task");
-            AlterTaskOptions::ModifyAs(sql)
-        },
+        |(_, _, sql)| AlterTaskOptions::ModifyAs(sql),
     );
     let modify_when = map(
         rule! {
@@ -3120,14 +3301,24 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
              ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
              ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
              ~ ( COMMENT ~ "=" ~ #literal_string )?
+             ~ ( ERROR_INTEGRATION  ~ "=" ~ #literal_string )?
              ~ #set_table_option?
         },
-        |(_, warehouse_opts, schedule_opts, suspend_opts, comment, session_opts)| {
+        |(
+            _,
+            warehouse_opts,
+            schedule_opts,
+            suspend_opts,
+            comment,
+            err_integration,
+            session_opts,
+        )| {
             AlterTaskOptions::Set {
                 warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
                 schedule: schedule_opts.map(|(_, _, schedule)| schedule),
                 suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
                 comments: comment.map(|(_, _, comment)| comment),
+                error_integration: err_integration.map(|(_, _, integration)| integration),
                 session_parameters: session_opts,
             }
         },

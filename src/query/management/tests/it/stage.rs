@@ -26,6 +26,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::SeqV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -138,7 +139,7 @@ fn create_test_stage_info() -> StageInfo {
 
 async fn new_stage_api() -> Result<(Arc<MetaEmbedded>, StageMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
-    let mgr = StageMgr::create(test_api.clone(), "admin")?;
+    let mgr = StageMgr::create(test_api.clone(), &NonEmptyString::new("admin").unwrap());
     Ok((test_api, mgr))
 }
 

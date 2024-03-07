@@ -32,6 +32,8 @@ mod user_privilege;
 mod user_quota;
 mod user_setting;
 mod user_stage;
+mod user_stage_file_ident;
+mod user_stage_ident;
 
 pub use connection::*;
 pub use file_format::*;
@@ -68,3 +70,5 @@ pub use user_quota::UserQuota;
 pub use user_setting::UserSetting;
 pub use user_setting::UserSettingValue;
 pub use user_stage::*;
+pub use user_stage_file_ident::StageFileIdent;
+pub use user_stage_ident::StageIdent;

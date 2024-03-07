@@ -26,6 +26,7 @@ use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::PresignAction;
@@ -507,7 +508,7 @@ impl AccessChecker for PrivilegeAccess {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let has_priv = has_priv(tenant.as_str(), database, None, db_id, table_id, grant_set).await?;
+                        let has_priv = has_priv(&tenant, database, None, db_id, table_id, grant_set).await?;
                         return if has_priv {
                             Ok(())
                         } else {
@@ -526,7 +527,7 @@ impl AccessChecker for PrivilegeAccess {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let has_priv = has_priv(tenant.as_str(), database, None, db_id, table_id, grant_set).await?;
+                        let has_priv = has_priv(&tenant, database, None, db_id, table_id, grant_set).await?;
                         return if has_priv {
                             Ok(())
                         } else {
@@ -545,7 +546,7 @@ impl AccessChecker for PrivilegeAccess {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        let has_priv = has_priv(tenant.as_str(), database, Some(table), db_id, table_id, grant_set).await?;
+                        let has_priv = has_priv(&tenant, database, Some(table), db_id, table_id, grant_set).await?;
                         return if has_priv {
                             Ok(())
                         } else {
@@ -628,7 +629,7 @@ impl AccessChecker for PrivilegeAccess {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
-                let has_priv = has_priv(tenant.as_str(), &plan.database, None, db_id, None, grant_set).await?;
+                let has_priv = has_priv(&tenant, &plan.database, None, db_id, None, grant_set).await?;
 
                 return if has_priv {
                     Ok(())
@@ -958,6 +959,10 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropConnection(_)
             | Plan::CreateUDF(_)
             | Plan::CreateIndex(_)
+            | Plan::CreateNotification(_)
+            | Plan::DropNotification(_)
+            | Plan::DescNotification(_)
+            | Plan::AlterNotification(_)
             | Plan::CreateTask(_)   // TODO: need to build ownership info for task
             | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task
@@ -1002,7 +1007,7 @@ impl AccessChecker for PrivilegeAccess {
 
 // TODO(liyz): replace it with verify_access
 async fn has_priv(
-    tenant: &str,
+    tenant: &NonEmptyString,
     db_name: &str,
     table_name: Option<&str>,
     db_id: u64,

@@ -607,7 +607,18 @@ impl<'a> Binder {
             Statement::DropPipe(_) => {
                 todo!()
             }
-
+            Statement::CreateNotification(stmt) => {
+                self.bind_create_notification(stmt).await?
+            }
+            Statement::DropNotification(stmt) => {
+                self.bind_drop_notification(stmt).await?
+            }
+            Statement::AlterNotification(stmt) => {
+                self.bind_alter_notification(stmt).await?
+            }
+            Statement::DescribeNotification(stmt) => {
+                self.bind_desc_notification(stmt).await?
+            }
             Statement::Begin => Plan::Begin,
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
