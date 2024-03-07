@@ -138,7 +138,7 @@ AggregateFinal
         ├── estimated rows: 0.00
         ├── EvalScalar
         │   ├── output columns: [t.id (#0), de (#8)]
-        │   ├── expressions: [if(CAST(is_not_null(sum(tb.de) (#7)) AS Boolean NULL), CAST(assume_not_null(sum(tb.de) (#7)) AS Int64 NULL), true, 0, NULL)]
+        │   ├── expressions: [if(CAST(is_not_null(sum(tb.de) (#7)) AS Boolean NULL), CAST(assume_not_null(sum(tb.de) (#7)) AS Int64 NULL), true, 0, NULL, NULL, NULL)]
         │   ├── estimated rows: 0.00
         │   └── AggregateFinal
         │       ├── output columns: [sum(tb.de) (#7), t.id (#0)]
