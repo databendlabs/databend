@@ -2044,7 +2044,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
-            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN]`"
+            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
             | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN]`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
@@ -3218,10 +3218,10 @@ pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN)?
+            (DRY ~ ^RUN ~ SUMMARY?)?
         },
         |opt_dry_run| VacuumTableOption {
-            dry_run: opt_dry_run.is_some(),
+            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
         },
     ),))(i)
 }

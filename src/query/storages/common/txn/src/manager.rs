@@ -33,6 +33,7 @@ use serde::Serialize;
 pub struct TxnManager {
     state: TxnState,
     txn_buffer: TxnBuffer,
+    txn_id: String,
 }
 
 pub type TxnManagerRef = Arc<Mutex<TxnManager>>;
@@ -104,18 +105,25 @@ impl TxnManager {
         Arc::new(Mutex::new(TxnManager {
             state: TxnState::AutoCommit,
             txn_buffer: TxnBuffer::default(),
+            txn_id: "".to_string(),
         }))
     }
 
     pub fn begin(&mut self) {
         if let TxnState::AutoCommit = self.state {
+            self.txn_id = uuid::Uuid::new_v4().to_string();
             self.state = TxnState::Active
         }
+    }
+
+    pub fn txn_id(&self) -> &str {
+        &self.txn_id
     }
 
     pub fn clear(&mut self) {
         self.state = TxnState::AutoCommit;
         self.txn_buffer.clear();
+        self.txn_id = "".to_string();
     }
 
     pub fn set_fail(&mut self) {
