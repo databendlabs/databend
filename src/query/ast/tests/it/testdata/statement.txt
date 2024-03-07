@@ -15582,7 +15582,13 @@ CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los A
               commit;
             END
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 database = 'target' timezone = 'America/Los Angeles' AS BEGINBEGIN;DELETE FROM t WHERE (c = ';');VACUUM TABLE t ;MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;COMMIT;END;
+CREATE TASK IF NOT EXISTS MyTask1 database = 'target' timezone = 'America/Los Angeles' AS BEGIN
+BEGIN;
+DELETE FROM t WHERE (c = ';');
+VACUUM TABLE t ;
+MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;
+COMMIT;
+END;
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -15851,7 +15857,13 @@ ALTER TASK MyTask2 MODIFY AS
               commit;
             END
 ---------- Output ---------
-ALTER TASK MyTask2 AS BEGINBEGIN;DELETE FROM t WHERE (c = ';');VACUUM TABLE t ;MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;COMMIT;END;
+ALTER TASK MyTask2 AS BEGIN
+BEGIN;
+DELETE FROM t WHERE (c = ';');
+VACUUM TABLE t ;
+MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;
+COMMIT;
+END;
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
