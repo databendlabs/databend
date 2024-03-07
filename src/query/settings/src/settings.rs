@@ -21,6 +21,7 @@ use dashmap::DashMap;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_meta_types::NonEmptyString;
 use itertools::Itertools;
 
 use crate::settings_default::DefaultSettingValue;
@@ -63,13 +64,13 @@ pub struct ChangeValue {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Settings {
-    pub(crate) tenant: String,
+    pub(crate) tenant: NonEmptyString,
     pub(crate) changes: DashMap<String, ChangeValue>,
     pub(crate) configs: HashMap<String, UserSettingValue>,
 }
 
 impl Settings {
-    pub fn create(tenant: String) -> Arc<Settings> {
+    pub fn create(tenant: NonEmptyString) -> Arc<Settings> {
         let configs = match GlobalConfig::try_get_instance() {
             Some(conf) => conf.query.settings.clone(),
             None => HashMap::new(),
