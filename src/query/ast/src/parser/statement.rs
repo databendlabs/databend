@@ -2045,7 +2045,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
-            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN]`"
+            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
@@ -3206,10 +3206,10 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
+            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)?
         },
         |(opt_dry_run, opt_limit)| VacuumDropTableOption {
-            dry_run: opt_dry_run.is_some(),
+            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
             limit: opt_limit.map(|(_, limit)| limit as usize),
         },
     ),))(i)
