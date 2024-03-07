@@ -2904,6 +2904,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-io",
  "databend-common-meta-app",
+ "databend-common-meta-types",
  "databend-common-settings",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",

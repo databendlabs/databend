@@ -23,6 +23,7 @@ use databend_common_meta_types::IntoSeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
@@ -37,12 +38,14 @@ pub struct SettingMgr {
 }
 
 impl SettingMgr {
-    #[allow(dead_code)]
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &str) -> Result<Self> {
-        Ok(SettingMgr {
+    pub fn create(
+        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
+        tenant: &NonEmptyString,
+    ) -> Self {
+        SettingMgr {
             kv_api,
-            setting_prefix: format!("{}/{}", USER_SETTING_API_KEY_PREFIX, tenant),
-        })
+            setting_prefix: format!("{}/{}", USER_SETTING_API_KEY_PREFIX, tenant.as_str()),
+        }
     }
 }
 
