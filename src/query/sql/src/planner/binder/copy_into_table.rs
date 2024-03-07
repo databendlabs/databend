@@ -470,7 +470,7 @@ impl<'a> Binder {
         let const_schema = Arc::new(DataSchema::new(const_fields));
         let const_values = bind_context
             .exprs_to_scalar(
-                exprs,
+                &exprs,
                 &const_schema,
                 self.ctx.clone(),
                 &name_resolution_ctx,

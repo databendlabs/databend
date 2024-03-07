@@ -216,7 +216,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ #insert_source
+            ~ #raw_insert_source
         },
         |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
             Statement::Insert(InsertStmt {
@@ -238,9 +238,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             REPLACE ~ #hint? ~ INTO?
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ (ON ~ CONFLICT? ~ "(" ~ #comma_separated_list1(ident) ~ ")")
-            ~ (DELETE ~ WHEN ~ ^#expr)?
-            ~ #insert_source
+            ~ ON ~ CONFLICT? ~ "(" ~ #comma_separated_list1(ident) ~ ")"
+            ~ ( DELETE ~ WHEN ~ ^#expr )?
+            ~ #raw_insert_source
         },
         |(
             _,
@@ -248,7 +248,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             _,
             (catalog, database, table),
             opt_columns,
-            (_, _, _, on_conflict_columns, _),
+            _,
+            _,
+            _,
+            on_conflict_columns,
+            _,
             opt_delete_when,
             source,
         )| {
@@ -269,8 +273,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let merge = map(
         rule! {
-            MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias? ~ USING
-            ~ #merge_source ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
+            MERGE ~ #hint?
+            ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias?
+            ~ USING ~ #merge_source
+            ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
             _,
@@ -1977,7 +1983,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     alt((
         // query, explain,show
         rule!(
-        #map(query, |query| Statement::Query(Box::new(query)))
+            #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
@@ -2179,6 +2185,7 @@ AS
         ),
     ))(i)
 }
+
 pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     map(
         rule! {
@@ -2280,11 +2287,27 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
     )(i)
 }
 
-// `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
-// stop the parser immediately and return the rest tokens by `InsertSource`.
-//
-// This is a hack to make it able to parse a large streaming insert statement.
+// `VALUES (expr, expr), (expr, expr)`
 pub fn insert_source(i: Input) -> IResult<InsertSource> {
+    let row = map(
+        rule! {
+            "(" ~ #comma_separated_list1(expr) ~ ")"
+        },
+        |(_, values, _)| values,
+    );
+    map(
+        rule! {
+            VALUES ~ #comma_separated_list0(row)
+        },
+        |(_, rows)| InsertSource::Values { rows },
+    )(i)
+}
+
+// `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
+// stop the parser immediately and return the rest tokens in `InsertSource`.
+//
+// This is a hack to parse large insert statements.
+pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     let streaming = map(
         rule! {
             FORMAT ~ #ident ~ #rest_str
@@ -2309,7 +2332,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         rule! {
             VALUES ~ #rest_str
         },
-        |(_, (rest_str, start))| InsertSource::Values { rest_str, start },
+        |(_, (rest_str, start))| InsertSource::RawValues { rest_str, start },
     );
     let query = map(query, |query| InsertSource::Select {
         query: Box::new(query),
