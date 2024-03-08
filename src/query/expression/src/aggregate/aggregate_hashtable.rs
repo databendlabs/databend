@@ -207,7 +207,6 @@ impl AggregateHashTable {
         group_columns: &[Column],
         row_count: usize,
     ) -> usize {
-        println!("{:p}",Arc::into_raw(self.payload.arenas[0].clone()));
         // exceed capacity or should resize
         if row_count + self.count > self.resize_threshold() {
             self.resize(self.capacity * 2);
@@ -279,7 +278,6 @@ impl AggregateHashTable {
                     debug_assert_eq!(entry.get_pointer(), state.addresses[index]);
                 }
             }
-            println!("new_entry_count={}",new_entry_count);
 
             // 3. set address of compare vector
             if need_compare_count > 0 {
@@ -295,7 +293,6 @@ impl AggregateHashTable {
 
                 // 4. compare
                 unsafe {
-                    println!("row match");
                     row_match_columns(
                         group_columns,
                         &state.addresses,
