@@ -255,7 +255,7 @@ pub struct TableMeta {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableIndex {
     pub name: String,
-    pub columns: Vec<String>,
+    pub column_ids: Vec<u32>,
 }
 
 impl TableMeta {
@@ -722,24 +722,24 @@ pub struct CreateTableIndexReq {
     pub create_option: CreateOption,
     pub table_id: u64,
     pub name: String,
-    pub columns: Vec<String>,
+    pub column_ids: Vec<u32>,
 }
 
 impl Display for CreateTableIndexReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
             CreateOption::None => {
-                write!(f, "create_table_index:{}={:?}", self.name, self.columns)
+                write!(f, "create_table_index:{}={:?}", self.name, self.column_ids)
             }
             CreateOption::CreateIfNotExists => write!(
                 f,
                 "create_table_index_if_not_exists:{}={:?}",
-                self.name, self.columns
+                self.name, self.column_ids
             ),
             CreateOption::CreateOrReplace => write!(
                 f,
                 "create_or_replace_table_index:{}={:?}",
-                self.name, self.columns
+                self.name, self.column_ids
             ),
         }
     }

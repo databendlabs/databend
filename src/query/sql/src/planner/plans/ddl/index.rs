@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::TableIndexType;
+use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::TableInfo;
@@ -56,7 +57,7 @@ pub struct CreateTableIndexPlan {
     pub create_option: CreateOption,
     pub catalog: String,
     pub index_name: String,
-    pub index_columns: Vec<String>,
+    pub column_ids: Vec<ColumnId>,
     pub table_id: MetaId,
     pub sync_creation: bool,
 }

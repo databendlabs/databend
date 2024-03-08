@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_ast::ast::walk_statement_mut;
 use databend_common_ast::ast::CreateIndexStmt;
 use databend_common_ast::ast::CreateInvertedIndexStmt;
@@ -390,16 +392,25 @@ impl Binder {
             )));
         }
         let table_schema = table.schema();
-        let mut index_columns = Vec::with_capacity(columns.len());
+        let mut column_set = HashSet::with_capacity(columns.len());
+        let mut column_ids = Vec::with_capacity(columns.len());
         for column in columns {
             match table_schema.field_with_name(&column.name) {
                 Ok(field) => {
                     if field.data_type.remove_nullable() != TableDataType::String {
                         return Err(ErrorCode::UnsupportedIndex(format!(
-                            "Inverted index currently only support string type, but the type of column {} is {}",
+                            "Inverted index currently only support String type, but the type of column {} is {}",
                             column, field.data_type
                         )));
                     }
+                    if column_set.contains(&column.name) {
+                        return Err(ErrorCode::UnsupportedIndex(format!(
+                            "Inverted index column must be unique, but column {} is duplicate",
+                            column.name
+                        )));
+                    }
+                    column_set.insert(column.name.clone());
+                    column_ids.push(field.column_id);
                 }
                 Err(_) => {
                     return Err(ErrorCode::UnsupportedIndex(format!(
@@ -408,17 +419,15 @@ impl Binder {
                     )));
                 }
             }
-            index_columns.push(column.name.clone());
         }
         let table_id = table.get_id();
-
         let index_name = self.normalize_object_identifier(index_name);
 
         let plan = CreateTableIndexPlan {
             create_option: *create_option,
             catalog,
             index_name,
-            index_columns,
+            column_ids,
             table_id,
             sync_creation: *sync_creation,
         };

@@ -55,7 +55,7 @@ impl Interpreter for CreateTableIndexInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
 
         let index_name = self.plan.index_name.clone();
-        let index_columns = self.plan.index_columns.clone();
+        let column_ids = self.plan.column_ids.clone();
         let table_id = self.plan.table_id;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
@@ -63,7 +63,7 @@ impl Interpreter for CreateTableIndexInterpreter {
             create_option: self.plan.create_option,
             table_id,
             name: index_name,
-            columns: index_columns,
+            column_ids,
         };
 
         let handler = get_inverted_index_handler();

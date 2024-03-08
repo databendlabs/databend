@@ -337,7 +337,7 @@ impl FromToProto for mt::TableIndex {
 
         let v = Self {
             name: p.name,
-            columns: p.columns,
+            column_ids: p.column_ids,
         };
         Ok(v)
     }
@@ -347,7 +347,7 @@ impl FromToProto for mt::TableIndex {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             name: self.name.clone(),
-            columns: self.columns.clone(),
+            column_ids: self.column_ids.clone(),
         };
         Ok(p)
     }

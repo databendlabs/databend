@@ -5781,9 +5781,9 @@ impl SchemaApiTestSuite {
         }
 
         let index_name_1 = "idx1".to_string();
-        let index_columns_1 = vec!["title".to_string(), "content".to_string()];
+        let index_column_ids_1 = vec![0, 1];
         let index_name_2 = "idx2".to_string();
-        let index_columns_2 = vec!["title".to_string()];
+        let index_column_ids_2 = vec![0];
 
         {
             info!("--- create table index");
@@ -5791,7 +5791,7 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::None,
                 table_id,
                 name: index_name_1.clone(),
-                columns: index_columns_1.clone(),
+                column_ids: index_column_ids_1.clone(),
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
@@ -5800,7 +5800,7 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::None,
                 table_id,
                 name: index_name_2.clone(),
-                columns: index_columns_2.clone(),
+                column_ids: index_column_ids_2.clone(),
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
@@ -5812,7 +5812,7 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::None,
                 table_id,
                 name: index_name_1.clone(),
-                columns: index_columns_1.clone(),
+                column_ids: index_column_ids_1.clone(),
             };
 
             let res = mt.create_table_index(req).await;
@@ -5829,7 +5829,7 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::CreateIfNotExists,
                 table_id,
                 name: index_name_1.clone(),
-                columns: index_columns_1.clone(),
+                column_ids: index_column_ids_1.clone(),
             };
 
             let res = mt.create_table_index(req).await;
@@ -5844,12 +5844,12 @@ impl SchemaApiTestSuite {
             let index1 = table_meta.indexes.get(&index_name_1);
             assert!(index1.is_some());
             let index1 = index1.unwrap();
-            assert_eq!(index1.columns, index_columns_1);
+            assert_eq!(index1.column_ids, index_column_ids_1);
 
             let index2 = table_meta.indexes.get(&index_name_2);
             assert!(index2.is_some());
             let index2 = index2.unwrap();
-            assert_eq!(index2.columns, index_columns_2);
+            assert_eq!(index2.column_ids, index_column_ids_2);
         }
 
         {
@@ -5890,7 +5890,7 @@ impl SchemaApiTestSuite {
             let index2 = table_meta.indexes.get(&index_name_2);
             assert!(index2.is_some());
             let index2 = index2.unwrap();
-            assert_eq!(index2.columns, index_columns_2);
+            assert_eq!(index2.column_ids, index_column_ids_2);
         }
 
         Ok(())

@@ -127,7 +127,7 @@ message TableIndex {
   uint64 min_reader_ver = 101;
 
   string name = 1;
-  repeated string columns = 2;
+  repeated uint32 column_ids = 2;
 }
 
 // Save table name id list history.
