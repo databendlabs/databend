@@ -16,8 +16,11 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::SettingIdent;
 use databend_common_meta_app::principal::UserSetting;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::IntoSeqV;
 use databend_common_meta_types::MatchSeq;
@@ -30,11 +33,9 @@ use databend_common_meta_types::SeqValue;
 
 use crate::setting::SettingApi;
 
-static USER_SETTING_API_KEY_PREFIX: &str = "__fd_settings";
-
 pub struct SettingMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-    setting_prefix: String,
+    tenant: Tenant,
 }
 
 impl SettingMgr {
@@ -44,11 +45,24 @@ impl SettingMgr {
     ) -> Self {
         SettingMgr {
             kv_api,
-            setting_prefix: format!("{}/{}", USER_SETTING_API_KEY_PREFIX, tenant.as_str()),
+            tenant: Tenant::new_nonempty(tenant.clone()),
         }
+    }
+
+    fn setting_ident(&self, name: &str) -> SettingIdent {
+        SettingIdent::new(self.tenant.clone(), name)
+    }
+
+    fn setting_key(&self, name: &str) -> String {
+        self.setting_ident(name).to_string_key()
+    }
+
+    fn setting_prefix(&self) -> String {
+        self.setting_ident("").to_string_key()
     }
 }
 
+// TODO: do not use json for setting value
 #[async_trait::async_trait]
 impl SettingApi for SettingMgr {
     #[async_backtrace::framed]
@@ -57,7 +71,7 @@ impl SettingApi for SettingMgr {
         // Upsert.
         let seq = MatchSeq::GE(0);
         let val = Operation::Update(serde_json::to_vec(&setting)?);
-        let key = format!("{}/{}", self.setting_prefix, setting.name);
+        let key = self.setting_key(&setting.name);
         let upsert = self
             .kv_api
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
@@ -70,7 +84,8 @@ impl SettingApi for SettingMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_settings(&self) -> Result<Vec<UserSetting>> {
-        let values = self.kv_api.prefix_list_kv(&self.setting_prefix).await?;
+        let prefix = self.setting_prefix();
+        let values = self.kv_api.prefix_list_kv(&prefix).await?;
 
         let mut settings = Vec::with_capacity(values.len());
         for (_, value) in values {
@@ -83,10 +98,9 @@ impl SettingApi for SettingMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_setting(&self, name: &str, seq: MatchSeq) -> Result<SeqV<UserSetting>> {
-        let key = format!("{}/{}", self.setting_prefix, name);
-        let kv_api = self.kv_api.clone();
-        let get_kv = async move { kv_api.get_kv(&key).await };
-        let res = get_kv.await?;
+        let key = self.setting_key(name);
+        let res = self.kv_api.get_kv(&key).await?;
+
         let seq_value = res.ok_or_else(|| {
             ErrorCode::UnknownVariable(format!("Setting '{}' does not exist.", name))
         })?;
@@ -103,14 +117,12 @@ impl SettingApi for SettingMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn try_drop_setting(&self, name: &str, seq: MatchSeq) -> Result<()> {
-        let key = format!("{}/{}", self.setting_prefix, name);
-        let kv_api = self.kv_api.clone();
-        let upsert_kv = async move {
-            kv_api
-                .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
-                .await
-        };
-        upsert_kv.await?;
+        let key = self.setting_key(name);
+        let _res = self
+            .kv_api
+            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
+            .await?;
+
         Ok(())
     }
 }
