@@ -63,7 +63,9 @@ use crate::interpreters::InterpreterPtr;
 use crate::servers::http::middleware::sanitize_request_headers;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::short_sql;
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
+use crate::sessions::QueryEntry;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
@@ -257,6 +259,11 @@ pub async fn clickhouse_handler_get(
             ));
         }
 
+        let query_entry = QueryEntry::create(&context).map_err(BadRequest)?;
+        let _guard = QueriesQueueManager::instance()
+            .acquire(query_entry)
+            .await
+            .map_err(BadRequest)?;
         let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
         let sql = params.query();
         let mut planner = Planner::new(context.clone());
@@ -336,6 +343,12 @@ pub async fn clickhouse_handler_post(
             sql.to_string()
         };
         info!("receive clickhouse http post, (query + body) = {}", &msg);
+
+        let entry = QueryEntry::create(&ctx).map_err(BadRequest)?;
+        let _guard = QueriesQueueManager::instance()
+            .acquire(entry)
+            .await
+            .map_err(BadRequest)?;
 
         let mut planner = Planner::new(ctx.clone());
         let (mut plan, extras) = planner

@@ -35,6 +35,7 @@ use poem::listener::RustlsConfig;
 use poem::Endpoint;
 use poem::Route;
 
+use crate::api::http::v1::queries_queue::queries_queue_handler;
 use crate::servers::Server;
 
 pub struct HttpService {
@@ -54,6 +55,7 @@ impl HttpService {
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))
+            .at("/v1/queries_queue", get(queries_queue_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
             .at("/v1/system", get(super::http::v1::system::system_handler))
             .at("/v1/logs", get(super::http::v1::logs::logs_handler))
