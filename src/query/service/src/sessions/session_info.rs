@@ -58,6 +58,7 @@ impl Session {
             status_info: shared_query_context
                 .as_ref()
                 .map(|qry_ctx| qry_ctx.get_status_info()),
+            current_query_id: self.get_current_query_id(),
         }
     }
 

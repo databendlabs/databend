@@ -82,6 +82,7 @@ pub struct ProcessInfo {
     pub mysql_connection_id: Option<u32>,
     pub created_time: SystemTime,
     pub status_info: Option<String>,
+    pub current_query_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -181,6 +182,7 @@ pub trait TableContext: Send + Sync {
     fn get_shared_settings(&self) -> Arc<Settings>;
     fn get_cluster(&self) -> Arc<Cluster>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
+    fn get_queued_queries(&self) -> Vec<ProcessInfo>;
     fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;
     fn get_last_query_id(&self, index: i32) -> String;
