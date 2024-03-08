@@ -82,6 +82,7 @@ pub struct ProcessInfo {
     pub mysql_connection_id: Option<u32>,
     pub created_time: SystemTime,
     pub status_info: Option<String>,
+    pub current_query_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

@@ -26,10 +26,10 @@ use std::time::SystemTime;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
+use log::info;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
 use tokio::sync::AcquireError;
@@ -58,18 +58,19 @@ pub struct QueueManager<Data: QueueData> {
 }
 
 impl<Data: QueueData> QueueManager<Data> {
-    pub fn init(conf: &InnerConfig) -> Result<()> {
-        GlobalInstance::set(Self::create(conf.query.max_active_sessions as usize));
+    pub fn init(permits: usize) -> Result<()> {
+        info!("queue manager permits: {:?}", permits);
+        GlobalInstance::set(Self::create(permits));
         Ok(())
     }
 
-    pub fn instants() -> Arc<Self> {
+    pub fn instance() -> Arc<Self> {
         GlobalInstance::get::<Arc<Self>>()
     }
 
     pub fn create(mut permits: usize) -> Arc<QueueManager<Data>> {
         if permits == 0 {
-            permits = usize::MAX;
+            permits = usize::MAX >> 4;
         }
 
         Arc::new(QueueManager {
@@ -83,12 +84,15 @@ impl<Data: QueueData> QueueManager<Data> {
         queue.values().map(|x| x.data.clone()).collect::<Vec<_>>()
     }
 
-    pub fn remove(&self, key: Data::Key) {
+    pub fn remove(&self, key: Data::Key) -> bool {
         let mut queue = self.queue.lock();
         if let Some(inner) = queue.remove(&key) {
             inner.waker.wake();
             inner.is_abort.store(true, Ordering::SeqCst);
+            return true;
         }
+
+        false
     }
 
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {

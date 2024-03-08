@@ -260,7 +260,7 @@ pub async fn clickhouse_handler_get(
         }
 
         let query_entry = QueryEntry::create(&context).map_err(BadRequest)?;
-        let _guard = QueriesQueueManager::instants()
+        let _guard = QueriesQueueManager::instance()
             .acquire(query_entry)
             .await
             .map_err(BadRequest)?;
@@ -345,7 +345,7 @@ pub async fn clickhouse_handler_post(
         info!("receive clickhouse http post, (query + body) = {}", &msg);
 
         let entry = QueryEntry::create(&ctx).map_err(BadRequest)?;
-        let _guard = QueriesQueueManager::instants()
+        let _guard = QueriesQueueManager::instance()
             .acquire(entry)
             .await
             .map_err(BadRequest)?;

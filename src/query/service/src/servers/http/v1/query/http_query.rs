@@ -447,7 +447,7 @@ impl HttpQuery {
         let query_id_clone = query_id.clone();
 
         let entry = QueryEntry::create(&ctx)?;
-        let guard = QueriesQueueManager::instants().acquire(entry).await?;
+        let guard = QueriesQueueManager::instance().acquire(entry).await?;
 
         let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone()).await?;
         let schema = plan.schema();

@@ -129,7 +129,7 @@ pub async fn streaming_load(
     }
 
     let entry = QueryEntry::create(&context).map_err(InternalServerError)?;
-    let _guard = QueriesQueueManager::instants()
+    let _guard = QueriesQueueManager::instance()
         .acquire(entry)
         .await
         .map_err(InternalServerError)?;

@@ -662,7 +662,7 @@ impl TableContext for QueryContext {
     }
 
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
-        let queries = QueriesQueueManager::instants()
+        let queries = QueriesQueueManager::instance()
             .list()
             .iter()
             .map(|x| x.query_id.clone())
@@ -671,7 +671,10 @@ impl TableContext for QueryContext {
         SessionManager::instance()
             .processes_info()
             .into_iter()
-            .filter(|x| queries.contains(&x.id))
+            .filter(|x| match &x.current_query_id {
+                None => false,
+                Some(query_id) => queries.contains(query_id),
+            })
             .collect::<Vec<_>>()
     }
 

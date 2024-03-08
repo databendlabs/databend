@@ -96,7 +96,7 @@ impl GlobalServices {
             CatalogManager::init(config, Arc::new(default_catalog), catalog_creator).await?;
         }
 
-        QueriesQueueManager::init(config)?;
+        QueriesQueueManager::init(config.query.max_running_queries as usize)?;
         HttpQueryManager::init(config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(config)?;

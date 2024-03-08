@@ -101,7 +101,9 @@ impl KillInterpreter {
             },
             Some(kill_session) if self.plan.kill_connection => {
                 if let Some(query_id) = kill_session.get_current_query_id() {
-                    QueriesQueueManager::instants().remove(query_id)
+                    if QueriesQueueManager::instance().remove(query_id) {
+                        return Ok(PipelineBuildResult::create());
+                    }
                 }
 
                 kill_session.force_kill_session();
@@ -109,7 +111,9 @@ impl KillInterpreter {
             }
             Some(kill_session) => {
                 if let Some(query_id) = kill_session.get_current_query_id() {
-                    QueriesQueueManager::instants().remove(query_id)
+                    if QueriesQueueManager::instance().remove(query_id) {
+                        return Ok(PipelineBuildResult::create());
+                    }
                 }
 
                 kill_session.force_kill_query(ErrorCode::AbortedQuery(

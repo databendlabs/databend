@@ -357,7 +357,7 @@ impl InteractiveWorkerBase {
                 let context = self.session.create_query_context().await?;
 
                 let entry = QueryEntry::create(&context)?;
-                let _guard = QueriesQueueManager::instants().acquire(entry).await?;
+                let _guard = QueriesQueueManager::instance().acquire(entry).await?;
                 let mut planner = Planner::new(context.clone());
                 let (plan, extras) = planner.plan_sql(query).await?;
 
