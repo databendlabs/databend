@@ -41,7 +41,7 @@ use crate::ScalarBinder;
 impl BindContext {
     pub async fn exprs_to_scalar(
         &mut self,
-        exprs: &[AExpr],
+        exprs: Vec<AExpr>,
         schema: &DataSchemaRef,
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &NameResolutionContext,

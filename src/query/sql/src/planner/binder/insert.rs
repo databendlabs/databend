@@ -30,7 +30,6 @@ use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
-use crate::plans::insert::InsertValue;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
@@ -102,10 +101,7 @@ impl Binder {
             } => {
                 if format.to_uppercase() == "VALUES" {
                     let data = rest_str.trim_end_matches(';').trim_start().to_owned();
-                    Ok(InsertInputSource::Values(InsertValue::RawValues {
-                        data,
-                        start,
-                    }))
+                    Ok(InsertInputSource::Values { data, start })
                 } else {
                     Ok(InsertInputSource::StreamingWithFormat(format, start, None))
                 }
@@ -125,25 +121,7 @@ impl Binder {
                     input_context_option: None,
                 })
             }
-            InsertSource::Values { rows } => {
-                let mut new_rows = Vec::with_capacity(rows.len());
-                for row in rows {
-                    let new_row = bind_context
-                        .exprs_to_scalar(
-                            &row,
-                            &Arc::new(schema.clone().into()),
-                            self.ctx.clone(),
-                            &self.name_resolution_ctx,
-                            self.metadata.clone(),
-                        )
-                        .await?;
-                    new_rows.push(new_row);
-                }
-                Ok(InsertInputSource::Values(InsertValue::Values {
-                    rows: new_rows,
-                }))
-            }
-            InsertSource::RawValues { rest_str, start } => {
+            InsertSource::Values { rest_str, start } => {
                 let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();
                 match self.ctx.get_stage_attachment() {
                     Some(attachment) => {
@@ -162,10 +140,10 @@ impl Binder {
                             )
                             .await;
                     }
-                    None => Ok(InsertInputSource::Values(InsertValue::RawValues {
+                    None => Ok(InsertInputSource::Values {
                         data: rest_str,
                         start,
-                    })),
+                    }),
                 }
             }
             InsertSource::Select { query } => {

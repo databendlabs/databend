@@ -15,8 +15,6 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::statement::insert_stmt;
-use super::statement::replace_stmt;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Statement;
@@ -67,19 +65,11 @@ pub fn parse_comma_separated_idents(
     })
 }
 
-pub fn parse_values_with_placeholder(
+pub fn parser_values_with_placeholder(
     sql_tokens: &[Token],
     dialect: Dialect,
 ) -> Result<Vec<Option<Expr>>> {
     run_parser(sql_tokens, dialect, false, values_with_placeholder)
-}
-
-pub fn parse_raw_insert_stmt(sql_tokens: &[Token], dialect: Dialect) -> Result<Statement> {
-    run_parser(sql_tokens, dialect, false, insert_stmt(true))
-}
-
-pub fn parse_raw_replace_stmt(sql_tokens: &[Token], dialect: Dialect) -> Result<Statement> {
-    run_parser(sql_tokens, dialect, false, replace_stmt(true))
 }
 
 pub fn run_parser<O>(

@@ -14,15 +14,13 @@
 
 use std::sync::Arc;
 
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_types::MetaId;
 use databend_common_pipeline_sources::input_formats::InputContext;
-use serde::Deserialize;
-use serde::Serialize;
 
 use super::Plan;
 
@@ -39,15 +37,18 @@ pub enum InsertInputSource {
         start: usize,
         input_context_option: Option<Arc<InputContext>>,
     },
-    Values(InsertValue),
+    // From cloned String and format
+    Values {
+        data: String,
+        start: usize,
+    },
     // From stage
     Stage(Box<Plan>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum InsertValue {
-    Values { rows: Vec<Vec<Scalar>> },
-    RawValues { data: String, start: usize },
+#[derive(Clone)]
+pub struct InsertValueBlock {
+    pub block: DataBlock,
 }
 
 #[derive(Clone)]

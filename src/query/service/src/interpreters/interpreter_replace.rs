@@ -33,7 +33,6 @@ use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::Replace;
@@ -166,7 +165,7 @@ impl ReplaceInterpreter {
         });
 
         let is_multi_node = !self.ctx.get_cluster().is_empty();
-        let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
+        let is_value_source = matches!(self.plan.source, InsertInputSource::Values { .. });
         let is_distributed = is_multi_node
             && !is_value_source
             && self.ctx.get_settings().get_enable_distributed_replace()?;
@@ -358,8 +357,8 @@ impl ReplaceInterpreter {
         purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo)>,
     ) -> Result<ReplaceSourceCtx> {
         match source {
-            InsertInputSource::Values(source) => self
-                .connect_value_source(schema.clone(), source)
+            InsertInputSource::Values { data, start } => self
+                .connect_value_source(schema.clone(), data, *start)
                 .map(|root| ReplaceSourceCtx {
                     root,
                     select_ctx: None,
@@ -395,13 +394,15 @@ impl ReplaceInterpreter {
     fn connect_value_source(
         &self,
         schema: DataSchemaRef,
-        source: &InsertValue,
+        value_data: &str,
+        span_offset: usize,
     ) -> Result<Box<PhysicalPlan>> {
         Ok(Box::new(PhysicalPlan::ReplaceAsyncSourcer(
             ReplaceAsyncSourcer {
+                value_data: value_data.to_string(),
+                start: span_offset,
                 schema,
                 plan_id: u32::MAX,
-                source: source.clone(),
             },
         )))
     }

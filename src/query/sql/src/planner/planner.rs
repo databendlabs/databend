@@ -18,8 +18,6 @@ use databend_common_ast::ast::walk_statement_mut;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Statement;
-use databend_common_ast::parser::parse_raw_insert_stmt;
-use databend_common_ast::parser::parse_raw_replace_stmt;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::token::Token;
 use databend_common_ast::parser::token::TokenKind;
@@ -70,20 +68,19 @@ impl Planner {
         // Step 1: Tokenize the SQL.
         let mut tokenizer = Tokenizer::new(sql).peekable();
 
-        // Only tokenize the beginning tokens for `INSERT INTO` statement because the rest tokens after `VALUES` is unused.
+        // Only tokenize the beginning tokens for `INSERT INTO` statement because the tokens of values is unused.
+        //
         // Stop the tokenizer on unrecognized token because some values inputs (e.g. CSV) may not be valid for the tokenizer.
         // See also: https://github.com/datafuselabs/databend/issues/6669
-        let first_token = tokenizer
+        let is_insert_stmt = tokenizer
             .peek()
-            .and_then(|token| Some(token.as_ref().ok()?.kind));
-        let is_insert_stmt = matches!(first_token, Some(TokenKind::INSERT));
-        let is_replace_stmt = matches!(first_token, Some(TokenKind::REPLACE));
-        let is_insert_or_replace_stmt = is_insert_stmt || is_replace_stmt;
-        let mut tokens: Vec<Token> = if is_insert_or_replace_stmt {
+            .and_then(|token| Some(token.as_ref().ok()?.kind))
+            == Some(TokenKind::INSERT);
+        let mut tokens: Vec<Token> = if is_insert_stmt {
             (&mut tokenizer)
                 .take(PROBE_INSERT_INITIAL_TOKENS)
                 .take_while(|token| token.is_ok())
-                // Make sure the token stream is always ended with EOI.
+                // Make sure the tokens stream is always ended with EOI.
                 .chain(std::iter::once(Ok(Token::new_eoi(sql))))
                 .collect::<Result<_>>()
                 .unwrap()
@@ -94,13 +91,7 @@ impl Planner {
         loop {
             let res = async {
                 // Step 2: Parse the SQL.
-                let (mut stmt, format) = if is_insert_stmt {
-                    (parse_raw_insert_stmt(&tokens, sql_dialect)?, None)
-                } else if is_replace_stmt {
-                    (parse_raw_replace_stmt(&tokens, sql_dialect)?, None)
-                } else {
-                    parse_sql(&tokens, sql_dialect)?
-                };
+                let (mut stmt, format) = parse_sql(&tokens, sql_dialect)?;
 
                 if matches!(stmt, Statement::CopyIntoLocation(_)) {
                     // Indicate binder there is no need to collect column statistics for the binding table.
@@ -139,7 +130,7 @@ impl Planner {
             .await;
 
             let mut maybe_partial_insert = false;
-            if is_insert_or_replace_stmt && matches!(tokenizer.peek(), Some(Ok(_))) {
+            if is_insert_stmt && matches!(tokenizer.peek(), Some(Ok(_))) {
                 if let Ok((
                     Plan::Insert(box Insert {
                         source: InsertInputSource::SelectPlan(_),
@@ -153,7 +144,7 @@ impl Planner {
             }
 
             if maybe_partial_insert || (res.is_err() && matches!(tokenizer.peek(), Some(Ok(_)))) {
-                // Remove the EOI.
+                // Remove the previous EOI.
                 tokens.pop();
                 // Tokenize more and try again.
                 if tokens.len() < PROBE_INSERT_MAX_TOKENS {
@@ -161,14 +152,14 @@ impl Planner {
                         .take(tokens.len() * 2)
                         .take_while(|token| token.is_ok())
                         .map(|token| token.unwrap())
-                        // Make sure the token stream is always ended with EOI.
+                        // Make sure the tokens stream is always ended with EOI.
                         .chain(std::iter::once(Token::new_eoi(sql)));
                     tokens.extend(iter);
                 } else {
                     let iter = (&mut tokenizer)
                         .take_while(|token| token.is_ok())
                         .map(|token| token.unwrap())
-                        // Make sure the token stream is always ended with EOI.
+                        // Make sure the tokens stream is always ended with EOI.
                         .chain(std::iter::once(Token::new_eoi(sql)));
                     tokens.extend(iter);
                 };

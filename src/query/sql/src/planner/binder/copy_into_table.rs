@@ -32,7 +32,7 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
-use databend_common_ast::parser::parse_values_with_placeholder;
+use databend_common_ast::parser::parser_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::StageAttachment;
@@ -442,7 +442,7 @@ impl<'a> Binder {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
-        let expr_or_placeholders = parse_values_with_placeholder(&tokens, sql_dialect)?;
+        let expr_or_placeholders = parser_values_with_placeholder(&tokens, sql_dialect)?;
 
         if source_schema.num_fields() != expr_or_placeholders.len() {
             return Err(ErrorCode::SemanticError(format!(
@@ -470,7 +470,7 @@ impl<'a> Binder {
         let const_schema = Arc::new(DataSchema::new(const_fields));
         let const_values = bind_context
             .exprs_to_scalar(
-                &exprs,
+                exprs,
                 &const_schema,
                 self.ctx.clone(),
                 &name_resolution_ctx,

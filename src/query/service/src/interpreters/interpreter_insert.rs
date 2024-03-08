@@ -25,7 +25,6 @@ use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
-use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Plan;
@@ -39,7 +38,6 @@ use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
-use crate::pipelines::RawValueSource;
 use crate::pipelines::ValueSource;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -103,23 +101,14 @@ impl Interpreter for InsertInterpreter {
             InsertInputSource::Stage(_) => {
                 unreachable!()
             }
-            InsertInputSource::Values(InsertValue::Values { rows }) => {
-                build_res.main_pipeline.add_source(
-                    |output| {
-                        let inner = ValueSource::new(rows.clone(), self.plan.schema());
-                        AsyncSourcer::create(self.ctx.clone(), output, inner)
-                    },
-                    1,
-                )?;
-            }
-            InsertInputSource::Values(InsertValue::RawValues { data, start }) => {
+            InsertInputSource::Values { data, start } => {
                 build_res.main_pipeline.add_source(
                     |output| {
                         let name_resolution_ctx = NameResolutionContext {
                             deny_column_reference: true,
                             ..Default::default()
                         };
-                        let inner = RawValueSource::new(
+                        let inner = ValueSource::new(
                             data.to_string(),
                             self.ctx.clone(),
                             name_resolution_ctx,
