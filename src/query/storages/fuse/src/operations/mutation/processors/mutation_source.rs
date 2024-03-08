@@ -197,6 +197,7 @@ impl Processor for MutationSource {
                             snapshot_location: None,
                             offsets: None,
                             base_block_ids: None,
+                            inner: None,
                         };
                         let internal_col = InternalColumn {
                             column_name: ROW_ID_COL_NAME.to_string(),
@@ -386,7 +387,6 @@ impl Processor for MutationSource {
                         self.index = BlockMetaIndex {
                             segment_idx: part.index.segment_idx,
                             block_idx: part.index.block_idx,
-                            inner: None,
                         };
                         if matches!(self.action, MutationAction::Deletion) {
                             self.stats_type =

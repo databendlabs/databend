@@ -46,11 +46,11 @@ use databend_common_sql::BindContext;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
-use databend_common_storages_fuse::operations::common::TransformSerializeSegment;
 use databend_common_storages_fuse::operations::processors::BroadcastProcessor;
 use databend_common_storages_fuse::operations::processors::ReplaceIntoProcessor;
 use databend_common_storages_fuse::operations::processors::UnbranchedReplaceIntoProcessor;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::FuseTable;
 use parking_lot::RwLock;
 

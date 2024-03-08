@@ -149,6 +149,7 @@ impl CopyIntoTableInterpreter {
                         None,
                         None,
                         false,
+                        false,
                     )
                     .await?,
             );

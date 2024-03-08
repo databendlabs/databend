@@ -32,8 +32,8 @@ use databend_common_sql::executor::physical_plans::ReclusterSink;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
 use databend_common_sql::StreamContext;
 use databend_common_storages_factory::Table;
-use databend_common_storages_fuse::operations::common::CommitSink;
-use databend_common_storages_fuse::operations::common::MutationGenerator;
+use databend_common_storages_fuse::operations::CommitSink;
+use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::ReclusterAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
@@ -100,7 +100,7 @@ impl PipelineBuilder {
 
                 let num_input_columns = schema.fields().len();
                 if table.change_tracking_enabled() {
-                    let stream_operators = StreamContext::try_create(
+                    let stream_ctx = StreamContext::try_create(
                         self.ctx.get_function_context()?,
                         schema,
                         table_info.ident.seq,
@@ -111,7 +111,7 @@ impl PipelineBuilder {
                             TransformAddStreamColumns::try_create(
                                 transform_input_port,
                                 transform_output_port,
-                                stream_operators.clone(),
+                                stream_ctx.clone(),
                             )
                         },
                     )?;

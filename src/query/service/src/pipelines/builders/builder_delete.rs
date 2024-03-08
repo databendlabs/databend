@@ -105,7 +105,7 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
         )?;
         if table.change_tracking_enabled() {
-            let stream_operators = StreamContext::try_create(
+            let stream_ctx = StreamContext::try_create(
                 self.ctx.get_function_context()?,
                 table.schema_with_stream(),
                 table.get_table_info().ident.seq,
@@ -116,7 +116,7 @@ impl PipelineBuilder {
                     TransformAddStreamColumns::try_create(
                         transform_input_port,
                         transform_output_port,
-                        stream_operators.clone(),
+                        stream_ctx.clone(),
                     )
                 })?;
         }

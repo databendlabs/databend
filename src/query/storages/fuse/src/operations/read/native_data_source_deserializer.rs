@@ -27,7 +27,6 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PushDownInfo;
@@ -65,8 +64,8 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::IndexType;
 use xorf::BinaryFuse16;
 
-use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::NativeDataSource;
+use super::util::add_data_block_meta;
 use super::util::need_reserve_block_info;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
@@ -74,7 +73,6 @@ use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::operations::read::runtime_filter_prunner::update_bitmap_with_bloom_filter;
-use crate::operations::read::util::add_row_prefix_meta;
 use crate::DEFAULT_ROW_PER_PAGE;
 
 /// A helper struct to store the intermediate state while reading a native partition.
@@ -582,19 +580,17 @@ impl NativeDeserializeDataTransform {
                 data_block.add_column(column);
             }
         }
-        if self.block_reader.query_internal_columns() {
-            data_block = fill_internal_column_meta(
-                data_block,
-                fuse_part,
-                None,
-                self.base_block_ids.clone(),
-            )?;
-        }
-        if self.block_reader.update_stream_columns() {
-            let inner_meta = data_block.take_meta();
-            let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
-            data_block = data_block.add_meta(Some(Box::new(meta)))?;
-        }
+
+        data_block = add_data_block_meta(
+            data_block,
+            fuse_part,
+            None,
+            self.base_block_ids.clone(),
+            self.block_reader.update_stream_columns(),
+            self.block_reader.query_internal_columns(),
+            self.need_reserve_block_info,
+        )?;
+
         data_block.resort(&self.src_schema, &self.output_schema)
     }
 
@@ -955,9 +951,7 @@ impl NativeDeserializeDataTransform {
             // All columns are default values, not need to read.
             let part = self.parts.front().unwrap();
             let fuse_part = FusePartInfo::from_part(part)?;
-            let mut block = self.build_default_block(fuse_part)?;
-            // for merge into target build
-            block = add_row_prefix_meta(self.need_reserve_block_info, fuse_part, block)?;
+            let block = self.build_default_block(fuse_part)?;
             self.add_output_block(block);
             self.finish_partition();
             return Ok(());
@@ -980,7 +974,8 @@ impl NativeDeserializeDataTransform {
         // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
         let mut block = block.resort(&self.src_schema, &self.output_schema)?;
         let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
-        if self.block_reader.query_internal_columns() {
+
+        let offsets = if self.block_reader.query_internal_columns() {
             let offset = self.read_state.offset;
             let offsets = if let Some(count) = self.read_state.filtered_count {
                 let filter_executor = self.filter_executor.as_mut().unwrap();
@@ -991,24 +986,19 @@ impl NativeDeserializeDataTransform {
             } else {
                 (offset..offset + origin_num_rows).collect()
             };
-
-            block = fill_internal_column_meta(
-                block,
-                fuse_part,
-                Some(offsets),
-                self.base_block_ids.clone(),
-            )?;
-        }
-
-        // we will do recluster for stream here.
-        if self.block_reader.update_stream_columns() {
-            let inner_meta = block.take_meta();
-            let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
-            block = block.add_meta(Some(Box::new(meta)))?;
-        }
-
-        // for merge into target build
-        block = add_row_prefix_meta(self.need_reserve_block_info, fuse_part, block)?;
+            Some(offsets)
+        } else {
+            None
+        };
+        block = add_data_block_meta(
+            block,
+            fuse_part,
+            offsets,
+            self.base_block_ids.clone(),
+            self.block_reader.update_stream_columns(),
+            self.block_reader.query_internal_columns(),
+            self.need_reserve_block_info,
+        )?;
 
         self.read_state.offset += origin_num_rows;
 
@@ -1094,16 +1084,15 @@ impl Processor for NativeDeserializeDataTransform {
                     let part = self.parts.front().unwrap();
                     let fuse_part = FusePartInfo::from_part(part)?;
                     let mut data_block = DataBlock::new(vec![], fuse_part.nums_rows);
-                    if self.block_reader.query_internal_columns() {
-                        data_block = fill_internal_column_meta(
-                            data_block,
-                            fuse_part,
-                            None,
-                            self.base_block_ids.clone(),
-                        )?;
-                    }
-                    data_block =
-                        add_row_prefix_meta(self.need_reserve_block_info, fuse_part, data_block)?;
+                    data_block = add_data_block_meta(
+                        data_block,
+                        fuse_part,
+                        None,
+                        self.base_block_ids.clone(),
+                        self.block_reader.update_stream_columns(),
+                        self.block_reader.query_internal_columns(),
+                        self.need_reserve_block_info,
+                    )?;
 
                     self.finish_partition();
                     self.add_output_block(data_block);

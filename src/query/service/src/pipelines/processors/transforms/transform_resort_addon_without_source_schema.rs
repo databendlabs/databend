@@ -25,6 +25,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::SourceSchemaIndex;
+use databend_common_expression::ROW_VERSION_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
@@ -76,7 +77,10 @@ pub fn build_expression_transform(
                 // 2. (a int), we give null
                 // but for pg or snowflake, if a field is non-null, it will return
                 // a non-null error (it means they will give a null as the default value).
-                if !f.is_nullable() {
+
+                // The type of stream column _row_version is UInt64, and the default value is 0.
+                // skip check for _row_version.
+                if !f.is_nullable() && f.name() != ROW_VERSION_COL_NAME {
                     // if we have a user-specified default expr, it must satisfy the non-null constraint
                     // in table-create phase. So we just consider default_expr is none.
                     return Err(ErrorCode::BadArguments(format!(
@@ -146,10 +150,9 @@ where Self: Transform
                 Err(err) => {
                     if err.code() != ErrorCode::BAD_ARGUMENTS {
                         return Err(err);
-                    } else {
-                        expression_transforms.push(None);
-                        trigger_non_null_errors.push(Some(err));
                     }
+                    expression_transforms.push(None);
+                    trigger_non_null_errors.push(Some(err));
                 }
             };
         }

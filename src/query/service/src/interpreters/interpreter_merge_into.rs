@@ -207,13 +207,6 @@ impl MergeIntoInterpreter {
         // check mutability
         let check_table = self.ctx.get_table(catalog, database, table_name).await?;
         check_table.check_mutable()?;
-        // check change tracking
-        if check_table.change_tracking_enabled() {
-            return Err(ErrorCode::Unimplemented(format!(
-                "change tracking is enabled for table '{}', does not support MERGE INTO",
-                check_table.name(),
-            )));
-        }
 
         let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), meta_data).await?;
 
@@ -387,7 +380,7 @@ impl MergeIntoInterpreter {
                     self.ctx.clone(),
                     bind_context,
                     update_list,
-                    fuse_table.schema().into(),
+                    fuse_table.schema_with_stream().into(),
                     col_indices,
                     Some(PREDICATE_COLUMN_INDEX),
                     database,
