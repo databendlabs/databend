@@ -21,9 +21,11 @@ use crate::optimizer::extract::Matcher;
 use crate::optimizer::filter::InferFilterOptimizer;
 use crate::optimizer::rule::constant::false_constant;
 use crate::optimizer::rule::constant::is_falsy;
-use crate::optimizer::rule::rewrite::filter_join::convert_mark_to_semi_join;
-use crate::optimizer::rule::rewrite::filter_join::outer_to_inner;
-use crate::optimizer::rule::rewrite::filter_join::rewrite_predicates;
+use crate::optimizer::rule::rewrite::push_down_filter_join::can_filter_null;
+use crate::optimizer::rule::rewrite::push_down_filter_join::convert_mark_to_semi_join;
+use crate::optimizer::rule::rewrite::push_down_filter_join::eliminate_outer_join_type;
+use crate::optimizer::rule::rewrite::push_down_filter_join::outer_join_to_inner_join;
+use crate::optimizer::rule::rewrite::push_down_filter_join::rewrite_predicates;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
@@ -76,7 +78,7 @@ impl Rule for RulePushDownFilterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
-        let (s_expr, outer_to_inner) = outer_to_inner(self.after_join_reorder(), s_expr)?;
+        let (s_expr, outer_to_inner) = outer_join_to_inner_join(s_expr, self.after_join_reorder())?;
         if self.after_join_reorder {
             // Don't need to continue
             if outer_to_inner {
@@ -100,7 +102,8 @@ impl Rule for RulePushDownFilterJoin {
         // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=2) and (t2.b=2 or t2.b=1)`
         // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
         let predicates = rewrite_predicates(&s_expr)?;
-        let (need_push, mut result) = try_push_down_filter_join(&s_expr, predicates)?;
+        let (need_push, mut result) =
+            try_push_down_filter_join(&s_expr, predicates, self.after_join_reorder())?;
         if !need_push && !outer_to_inner && !mark_to_semi {
             return Ok(());
         }
@@ -118,6 +121,7 @@ impl Rule for RulePushDownFilterJoin {
 pub fn try_push_down_filter_join(
     s_expr: &SExpr,
     predicates: Vec<ScalarExpr>,
+    after_join_reorder: bool,
 ) -> Result<(bool, SExpr)> {
     let join_expr = s_expr.child(0)?;
     let mut join: Join = join_expr.plan().clone().try_into()?;
@@ -179,6 +183,14 @@ pub fn try_push_down_filter_join(
     let infer_filter = InferFilterOptimizer::new();
     let predicates = infer_filter.run(push_down_predicates)?;
 
+    let mut can_filter_left_null = !matches!(
+        join.join_type,
+        JoinType::Right | JoinType::RightSingle | JoinType::Full
+    );
+    let mut can_filter_right_null = !matches!(
+        join.join_type,
+        JoinType::Left | JoinType::LeftSingle | JoinType::Full
+    );
     let mut left_push_down = vec![];
     let mut right_push_down = vec![];
     for predicate in predicates.into_iter() {
@@ -188,20 +200,16 @@ pub fn try_push_down_filter_join(
                 left_push_down.push(predicate.clone());
                 right_push_down.push(predicate);
             }
-            JoinPredicate::Left(_)
-                if !matches!(
-                    join.join_type,
-                    JoinType::Right | JoinType::RightSingle | JoinType::Full
-                ) =>
-            {
+            JoinPredicate::Left(_) => {
+                if !can_filter_left_null && can_filter_null(&predicate)? {
+                    can_filter_left_null = true;
+                }
                 left_push_down.push(predicate);
             }
-            JoinPredicate::Right(_)
-                if !matches!(
-                    join.join_type,
-                    JoinType::Left | JoinType::LeftSingle | JoinType::Full
-                ) =>
-            {
+            JoinPredicate::Right(_) => {
+                if !can_filter_right_null && can_filter_null(&predicate)? {
+                    can_filter_right_null = true;
+                }
                 right_push_down.push(predicate);
             }
             JoinPredicate::Both { left, right, .. } => {
@@ -212,6 +220,20 @@ pub fn try_push_down_filter_join(
         }
     }
     join.non_equi_conditions.extend(non_equi_predicates);
+    if !can_filter_left_null {
+        original_predicates.extend(left_push_down);
+        left_push_down = vec![];
+    }
+    if !can_filter_right_null {
+        original_predicates.extend(right_push_down);
+        right_push_down = vec![];
+    }
+    join.join_type = eliminate_outer_join_type(
+        join.join_type,
+        after_join_reorder,
+        can_filter_left_null,
+        can_filter_right_null,
+    );
 
     let mut left_child = join_expr.child(0)?.clone();
     let mut right_child = join_expr.child(1)?.clone();
