@@ -356,7 +356,7 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn mget_table_names_by_ids(&self, _table_ids: Vec<MetaId>) -> Result<Vec<String>> {
+    async fn mget_table_names_by_ids(&self, _table_ids: &[MetaId]) -> Result<Vec<String>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get tables name by ids in HIVE catalog",
         ))
@@ -368,7 +368,7 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn mget_db_names_by_ids(&self, _db_ids: Vec<MetaId>) -> Result<Vec<String>> {
+    async fn mget_database_names_by_ids(&self, _db_ids: &[MetaId]) -> Result<Vec<String>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get dbs name by ids in HIVE catalog",
         ))

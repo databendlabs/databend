@@ -244,25 +244,25 @@ impl Catalog for SessionCatalog {
         }
     }
 
-    // List the dbs name by meta ids.
+    // Mget the dbs name by meta ids.
     async fn mget_table_names_by_ids(
         &self,
-        table_ids: Vec<MetaId>,
+        table_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<String>> {
         self.inner.mget_table_names_by_ids(table_ids).await
     }
 
-    // Get the db name by meta id.
+    // Mget the db name by meta id.
     async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
         self.inner.get_db_name_by_id(db_id).await
     }
 
-    // List the dbs name by meta ids.
-    async fn mget_db_names_by_ids(
+    // Mget the dbs name by meta ids.
+    async fn mget_database_names_by_ids(
         &self,
-        db_ids: Vec<MetaId>,
+        db_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<String>> {
-        self.inner.mget_db_names_by_ids(db_ids).await
+        self.inner.mget_database_names_by_ids(db_ids).await
     }
 
     // Get one table by db and table name.

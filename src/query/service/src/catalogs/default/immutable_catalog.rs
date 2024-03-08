@@ -200,11 +200,11 @@ impl Catalog for ImmutableCatalog {
 
     async fn mget_table_names_by_ids(
         &self,
-        table_ids: Vec<MetaId>,
+        table_ids: &[MetaId],
     ) -> databend_common_exception::Result<Vec<String>> {
         let mut table_name = Vec::with_capacity(table_ids.len());
         for id in table_ids {
-            if let Some(table) = self.sys_db_meta.get_by_id(&id) {
+            if let Some(table) = self.sys_db_meta.get_by_id(id) {
                 table_name.push(table.name().to_string());
             }
         }
@@ -224,12 +224,12 @@ impl Catalog for ImmutableCatalog {
         }
     }
 
-    async fn mget_db_names_by_ids(&self, db_ids: Vec<MetaId>) -> Result<Vec<String>> {
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
         let mut res = Vec::new();
         for id in db_ids {
-            if self.sys_db.get_db_info().ident.db_id == id {
+            if self.sys_db.get_db_info().ident.db_id == *id {
                 res.push("system".to_string());
-            } else if self.info_schema_db.get_db_info().ident.db_id == id {
+            } else if self.info_schema_db.get_db_info().ident.db_id == *id {
                 res.push("information_schema".to_string());
             }
         }
