@@ -379,7 +379,7 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                if list.len() >= 1024 {
+                if self.ctx.get_cluster().is_empty() && list.len() >= 1024 {
                     if *not {
                         return self
                             .resolve_unary_op(*span, &UnaryOperator::Not, &Expr::InList {

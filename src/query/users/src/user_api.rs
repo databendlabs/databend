@@ -131,8 +131,8 @@ impl UserApiProvider {
         Arc::new(role_mgr)
     }
 
-    pub fn get_stage_api_client(&self, tenant: &str) -> Result<Arc<dyn StageApi>> {
-        Ok(Arc::new(StageMgr::create(self.client.clone(), tenant)?))
+    pub fn stage_api(&self, tenant: &NonEmptyString) -> Arc<dyn StageApi> {
+        Arc::new(StageMgr::create(self.client.clone(), tenant))
     }
 
     pub fn get_file_format_api_client(&self, tenant: &str) -> Result<Arc<dyn FileFormatApi>> {
@@ -159,8 +159,8 @@ impl UserApiProvider {
         )?))
     }
 
-    pub fn get_setting_api_client(&self, tenant: &str) -> Result<Arc<dyn SettingApi>> {
-        Ok(Arc::new(SettingMgr::create(self.client.clone(), tenant)?))
+    pub fn setting_api(&self, tenant: &NonEmptyString) -> Arc<dyn SettingApi> {
+        Arc::new(SettingMgr::create(self.client.clone(), tenant))
     }
 
     pub fn get_network_policy_api_client(

@@ -195,12 +195,14 @@ async fn test_task_client_success_cases() -> Result<()> {
         comment: None,
         schedule_options: None,
         error_integration: None,
+        task_sql_type: 0,
         warehouse_options: None,
         suspend_task_after_num_failures: None,
         if_not_exist: false,
         after: vec![],
         when_condition: None,
         session_parameters: Default::default(),
+        script_sql: None,
     });
 
     let response = client.create_task(request).await?;

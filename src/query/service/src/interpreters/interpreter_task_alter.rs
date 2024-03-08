@@ -15,9 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_ast::ast::TaskSql;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb;
 use databend_common_cloud_control::pb::alter_task_request::AlterTaskType;
 use databend_common_cloud_control::pb::AlterTaskRequest;
 use databend_common_cloud_control::pb::WarehouseOptions;
@@ -60,6 +62,7 @@ impl AlterTaskInterpreter {
             alter_task_type: 0,
             if_exist: plan.if_exists,
             error_integration: None,
+            task_sql_type: 0,
             query_text: None,
             comment: None,
             schedule_options: None,
@@ -70,6 +73,7 @@ impl AlterTaskInterpreter {
             remove_after: vec![],
             set_session_parameters: false,
             session_parameters: Default::default(),
+            script_sql: None,
         };
         match plan.alter_options {
             AlterTaskOptions::Resume => {
@@ -106,7 +110,17 @@ impl AlterTaskInterpreter {
             }
             AlterTaskOptions::ModifyAs(sql) => {
                 req.alter_task_type = AlterTaskType::ModifyAs as i32;
-                req.query_text = Some(sql);
+                match sql {
+                    TaskSql::SingleStatement(stmt) => {
+                        req.task_sql_type = i32::from(pb::TaskSqlType::Sql);
+                        req.query_text = Some(stmt);
+                    }
+                    TaskSql::ScriptBlock(ref sqls) => {
+                        req.task_sql_type = i32::from(pb::TaskSqlType::Script);
+                        req.query_text = Some(format!("{}", sql));
+                        req.script_sql = Some(pb::ScriptSql { sqls: sqls.clone() })
+                    }
+                }
             }
             AlterTaskOptions::AddAfter(tasks) => {
                 req.alter_task_type = AlterTaskType::AddAfter as i32;
