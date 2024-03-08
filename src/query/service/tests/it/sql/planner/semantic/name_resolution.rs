@@ -19,6 +19,7 @@ use databend_common_ast::parser::Dialect;
 use databend_query::sql::normalize_identifier;
 use databend_query::sql::IdentifierNormalizer;
 use databend_query::sql::NameResolutionContext;
+use derive_visitor::DriveMut;
 
 #[test]
 fn test_normalize_identifier_default() {
