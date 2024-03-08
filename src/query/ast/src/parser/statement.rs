@@ -211,66 +211,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let insert = map(
-        rule! {
-            INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
-            ~ #dot_separated_idents_1_to_3
-            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ #raw_insert_source
-        },
-        |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
-            Statement::Insert(InsertStmt {
-                hints: opt_hints,
-                catalog,
-                database,
-                table,
-                columns: opt_columns
-                    .map(|(_, columns, _)| columns)
-                    .unwrap_or_default(),
-                source,
-                overwrite: overwrite.kind == OVERWRITE,
-            })
-        },
-    );
-
-    let replace = map(
-        rule! {
-            REPLACE ~ #hint? ~ INTO?
-            ~ #dot_separated_idents_1_to_3
-            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ ON ~ CONFLICT? ~ "(" ~ #comma_separated_list1(ident) ~ ")"
-            ~ ( DELETE ~ WHEN ~ ^#expr )?
-            ~ #raw_insert_source
-        },
-        |(
-            _,
-            opt_hints,
-            _,
-            (catalog, database, table),
-            opt_columns,
-            _,
-            _,
-            _,
-            on_conflict_columns,
-            _,
-            opt_delete_when,
-            source,
-        )| {
-            Statement::Replace(ReplaceStmt {
-                hints: opt_hints,
-                catalog,
-                database,
-                table,
-                on_conflict_columns,
-                columns: opt_columns
-                    .map(|(_, columns, _)| columns)
-                    .unwrap_or_default(),
-                source,
-                delete_when: opt_delete_when.map(|(_, _, expr)| expr),
-            })
-        },
-    );
-
     let merge = map(
         rule! {
             MERGE ~ #hint?
@@ -2021,8 +1961,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"
         ),
         rule!(
-            #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
-            | #replace : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
@@ -2212,79 +2152,82 @@ pub fn parse_create_option(
     }
 }
 
-pub fn notification_webhook_options(i: Input) -> IResult<NotificationWebhookOptions> {
-    let url_option = map(
-        rule! {
-            URL ~ "=" ~ #literal_string
-        },
-        |(_, _, v)| ("url".to_string(), v.to_string()),
-    );
-    let method_option = map(
-        rule! {
-            METHOD ~ "=" ~ #literal_string
-        },
-        |(_, _, v)| ("method".to_string(), v.to_string()),
-    );
-    let auth_option = map(
-        rule! {
-            AUTHORIZATION_HEADER ~ "=" ~ #literal_string
-        },
-        |(_, _, v)| ("authorization_header".to_string(), v.to_string()),
-    );
-
-    map(
-        rule! { ((
-        #url_option
-        | #method_option
-        | #auth_option) ~ ","?)* },
-        |opts| {
-            NotificationWebhookOptions::from_iter(
-                opts.iter().map(|((k, v), _)| (k.to_uppercase(), v.clone())),
-            )
-        },
-    )(i)
+pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        let insert_source_parser = if allow_raw {
+            raw_insert_source
+        } else {
+            insert_source
+        };
+        map(
+            rule! {
+                INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
+                ~ #dot_separated_idents_1_to_3
+                ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+                ~ #insert_source_parser
+            },
+            |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
+                Statement::Insert(InsertStmt {
+                    hints: opt_hints,
+                    catalog,
+                    database,
+                    table,
+                    columns: opt_columns
+                        .map(|(_, columns, _)| columns)
+                        .unwrap_or_default(),
+                    source,
+                    overwrite: overwrite.kind == OVERWRITE,
+                })
+            },
+        )(i)
+    }
 }
 
-pub fn notification_webhook_clause(i: Input) -> IResult<NotificationWebhookOptions> {
-    map(
-        rule! { WEBHOOK ~ ^"=" ~ ^"(" ~ ^#notification_webhook_options ~ ^")" },
-        |(_, _, _, opts, _)| opts,
-    )(i)
-}
-
-pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions> {
-    let enabled = map(
-        rule! {
-            SET ~ ENABLED ~ ^"=" ~ #literal_bool
-        },
-        |(_, _, _, enabled)| {
-            AlterNotificationOptions::Set(AlterNotificationSetOptions::enabled(enabled))
-        },
-    );
-    let webhook = map(
-        rule! {
-            SET ~ #notification_webhook_clause
-        },
-        |(_, webhook)| {
-            AlterNotificationOptions::Set(AlterNotificationSetOptions::webhook_opts(webhook))
-        },
-    );
-    let comment = map(
-        rule! {
-            SET ~ (COMMENT | COMMENTS) ~ ^"=" ~ #literal_string
-        },
-        |(_, _, _, comment)| {
-            AlterNotificationOptions::Set(AlterNotificationSetOptions::comments(comment))
-        },
-    );
-    map(
-        rule! {
-            #enabled
-            | #webhook
-            | #comment
-        },
-        |opts| opts,
-    )(i)
+pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        let insert_source_parser = if allow_raw {
+            raw_insert_source
+        } else {
+            insert_source
+        };
+        map(
+            rule! {
+                REPLACE ~ #hint? ~ INTO?
+                ~ #dot_separated_idents_1_to_3
+                ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+                ~ ON ~ CONFLICT? ~ "(" ~ #comma_separated_list1(ident) ~ ")"
+                ~ ( DELETE ~ WHEN ~ ^#expr )?
+                ~ #insert_source_parser
+            },
+            |(
+                _,
+                opt_hints,
+                _,
+                (catalog, database, table),
+                opt_columns,
+                _,
+                _,
+                _,
+                on_conflict_columns,
+                _,
+                opt_delete_when,
+                source,
+            )| {
+                Statement::Replace(ReplaceStmt {
+                    hints: opt_hints,
+                    catalog,
+                    database,
+                    table,
+                    on_conflict_columns,
+                    columns: opt_columns
+                        .map(|(_, columns, _)| columns)
+                        .unwrap_or_default(),
+                    source,
+                    delete_when: opt_delete_when.map(|(_, _, expr)| expr),
+                })
+            },
+        )(i)
+    }
 }
 
 // `VALUES (expr, expr), (expr, expr)`
@@ -2295,11 +2238,20 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         },
         |(_, values, _)| values,
     );
-    map(
+    let values = map(
         rule! {
             VALUES ~ #comma_separated_list0(row)
         },
         |(_, rows)| InsertSource::Values { rows },
+    );
+
+    let query = map(query, |query| InsertSource::Select {
+        query: Box::new(query),
+    });
+
+    rule!(
+        #values
+        | #query
     )(i)
 }
 
@@ -3926,5 +3878,80 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
             OPTIMIZED => ExplainOption::Optimized(true),
             _ => unreachable!(),
         },
+    )(i)
+}
+
+pub fn notification_webhook_options(i: Input) -> IResult<NotificationWebhookOptions> {
+    let url_option = map(
+        rule! {
+            URL ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("url".to_string(), v.to_string()),
+    );
+    let method_option = map(
+        rule! {
+            METHOD ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("method".to_string(), v.to_string()),
+    );
+    let auth_option = map(
+        rule! {
+            AUTHORIZATION_HEADER ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("authorization_header".to_string(), v.to_string()),
+    );
+
+    map(
+        rule! { ((
+        #url_option
+        | #method_option
+        | #auth_option) ~ ","?)* },
+        |opts| {
+            NotificationWebhookOptions::from_iter(
+                opts.iter().map(|((k, v), _)| (k.to_uppercase(), v.clone())),
+            )
+        },
+    )(i)
+}
+
+pub fn notification_webhook_clause(i: Input) -> IResult<NotificationWebhookOptions> {
+    map(
+        rule! { WEBHOOK ~ ^"=" ~ ^"(" ~ ^#notification_webhook_options ~ ^")" },
+        |(_, _, _, opts, _)| opts,
+    )(i)
+}
+
+pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions> {
+    let enabled = map(
+        rule! {
+            SET ~ ENABLED ~ ^"=" ~ #literal_bool
+        },
+        |(_, _, _, enabled)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::enabled(enabled))
+        },
+    );
+    let webhook = map(
+        rule! {
+            SET ~ #notification_webhook_clause
+        },
+        |(_, webhook)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::webhook_opts(webhook))
+        },
+    );
+    let comment = map(
+        rule! {
+            SET ~ (COMMENT | COMMENTS) ~ ^"=" ~ #literal_string
+        },
+        |(_, _, _, comment)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::comments(comment))
+        },
+    );
+    map(
+        rule! {
+            #enabled
+            | #webhook
+            | #comment
+        },
+        |opts| opts,
     )(i)
 }

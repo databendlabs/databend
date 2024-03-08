@@ -1,0 +1,122 @@
+---------- Input ----------
+insert into t (c1, c2) values (1, 2), (3, 4);
+---------- Output ---------
+INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
+---------- AST ------------
+Insert(
+    InsertStmt {
+        hints: None,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                12..13,
+            ),
+            name: "t",
+            quote: None,
+        },
+        columns: [
+            Identifier {
+                span: Some(
+                    15..17,
+                ),
+                name: "c1",
+                quote: None,
+            },
+            Identifier {
+                span: Some(
+                    19..21,
+                ),
+                name: "c2",
+                quote: None,
+            },
+        ],
+        source: RawValues {
+            rest_str: "(1, 2), (3, 4);",
+            start: 30,
+        },
+        overwrite: false,
+    },
+)
+
+
+---------- Input ----------
+insert into t (c1, c2) values (1, 2);   
+---------- Output ---------
+INSERT INTO t (c1, c2) VALUES (1, 2);   
+---------- AST ------------
+Insert(
+    InsertStmt {
+        hints: None,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                12..13,
+            ),
+            name: "t",
+            quote: None,
+        },
+        columns: [
+            Identifier {
+                span: Some(
+                    15..17,
+                ),
+                name: "c1",
+                quote: None,
+            },
+            Identifier {
+                span: Some(
+                    19..21,
+                ),
+                name: "c2",
+                quote: None,
+            },
+        ],
+        source: RawValues {
+            rest_str: "(1, 2);   ",
+            start: 30,
+        },
+        overwrite: false,
+    },
+)
+
+
+---------- Input ----------
+insert into table t format json;
+---------- Output ---------
+INSERT INTO t FORMAT json ;
+---------- AST ------------
+Insert(
+    InsertStmt {
+        hints: None,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                18..19,
+            ),
+            name: "t",
+            quote: None,
+        },
+        columns: [],
+        source: Streaming {
+            format: "json",
+            rest_str: ";",
+            start: 31,
+        },
+        overwrite: false,
+    },
+)
+
+
+---------- Input ----------
+insert into table t select * from t2;
+---------- Output ---------
+error: 
+  --> SQL:1:37
+  |
+1 | insert into table t select * from t2;
+  |                                     ^ unexpected `;`, expecting `(`, `.`, `AT`, `SINCE`, <Ident>, <QuotedString>, `AS`, `PIVOT`, `UNPIVOT`, `AtString`, `LATERAL`, `NATURAL`, `INNER`, `LEFT`, `SEMI`, `RIGHT`, `ANTI`, `FULL`, `CROSS`, `JOIN`, `ON`, `USING`, `,`, `WHERE`, `GROUP`, `HAVING`, `WINDOW`, `QUALIFY`, `WITH`, `UNION`, `EXCEPT`, `INTERSECT`, `FROM`, `SELECT`, `VALUES`, `ORDER`, `LIMIT`, `OFFSET`, or `IGNORE_RESULT`
+
+

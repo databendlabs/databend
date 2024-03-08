@@ -1110,14 +1110,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
                 self.children.push(files_formats_node);
             }
-            InsertSource::RawValues { .. } => {
-                let values_name = "RawValueSource".to_string();
+            InsertSource::Values { .. } => {
+                let values_name = "ValueSource".to_string();
                 let values_format_ctx = AstFormatContext::new(values_name);
                 let values_node = FormatTreeNode::new(values_format_ctx);
                 self.children.push(values_node);
             }
-            InsertSource::Values { .. } => {
-                let values_name = "ValueSource".to_string();
+            InsertSource::RawValues { .. } => {
+                let values_name = "RawValueSource".to_string();
                 let values_format_ctx = AstFormatContext::new(values_name);
                 let values_node = FormatTreeNode::new(values_format_ctx);
                 self.children.push(values_node);

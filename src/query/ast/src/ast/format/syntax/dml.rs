@@ -115,11 +115,6 @@ fn pretty_source(source: InsertSource) -> RcDoc<'static> {
                         .append(RcDoc::text(format!("{:?}", on_error_mode))),
                 ),
         ),
-        InsertSource::RawValues { rest_str, .. } => RcDoc::text("VALUES").append(
-            RcDoc::line()
-                .nest(NEST_FACTOR)
-                .append(RcDoc::text(rest_str)),
-        ),
         InsertSource::Values { rows } => RcDoc::text("VALUES").append(
             RcDoc::line().nest(NEST_FACTOR).append(
                 interweave_comma(rows.into_iter().map(|row| {
@@ -130,6 +125,11 @@ fn pretty_source(source: InsertSource) -> RcDoc<'static> {
                 .nest(NEST_FACTOR)
                 .group(),
             ),
+        ),
+        InsertSource::RawValues { rest_str, .. } => RcDoc::text("VALUES").append(
+            RcDoc::line()
+                .nest(NEST_FACTOR)
+                .append(RcDoc::text(rest_str)),
         ),
         InsertSource::Select { query } => pretty_query(*query),
     })

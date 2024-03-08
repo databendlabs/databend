@@ -120,7 +120,6 @@ impl Display for InsertSource {
                     on_error_mode.as_ref().unwrap_or(&"Abort".to_string())
                 )
             }
-            InsertSource::RawValues { rest_str, .. } => write!(f, "VALUES {rest_str}"),
             InsertSource::Values { rows } => {
                 write!(f, "VALUES ")?;
                 for (i, row) in rows.iter().enumerate() {
@@ -133,6 +132,7 @@ impl Display for InsertSource {
                 }
                 Ok(())
             }
+            InsertSource::RawValues { rest_str, .. } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),
         }
     }
