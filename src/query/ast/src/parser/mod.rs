@@ -34,13 +34,7 @@ pub use common::IResult;
 
 #[allow(clippy::module_inception)]
 mod parser;
-pub use parser::parse_comma_separated_exprs;
-pub use parser::parse_comma_separated_idents;
-pub use parser::parse_expr;
-pub use parser::parse_sql;
-pub use parser::parser_values_with_placeholder;
-pub use parser::run_parser;
-pub use parser::tokenize_sql;
+pub use parser::*;
 
 pub mod token;
 pub use token::all_reserved_keywords;

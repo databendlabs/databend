@@ -19,6 +19,7 @@ pub mod processors;
 mod pipeline_build_res;
 mod pipeline_builder;
 
+pub use builders::RawValueSource;
 pub use builders::ValueSource;
 pub use pipeline_build_res::PipelineBuildResult;
 pub use pipeline_build_res::PipelineBuilderData;
