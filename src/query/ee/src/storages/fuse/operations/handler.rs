@@ -22,6 +22,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropFileInfo;
 use databend_enterprise_vacuum_handler::VacuumHandler;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 
@@ -47,7 +48,7 @@ impl VacuumHandler for RealVacuumHandler {
         &self,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
-    ) -> Result<Option<Vec<(String, String)>>> {
+    ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
         do_vacuum_drop_tables(tables, dry_run_limit).await
     }
 

@@ -136,7 +136,7 @@ impl QueryContext {
     pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
         debug!("Create QueryContext");
 
-        let tenant = GlobalConfig::instance().query.tenant_id.to_string();
+        let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let query_settings = Settings::create(tenant);
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),

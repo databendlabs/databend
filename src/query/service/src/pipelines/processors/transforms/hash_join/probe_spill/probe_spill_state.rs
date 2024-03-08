@@ -18,6 +18,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_sql::plans::JoinType;
 use databend_common_storage::DataOperator;
 
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
@@ -49,7 +50,12 @@ impl ProbeSpillState {
     }
 
     // Get all hashes for probe input data.
-    pub fn get_hashes(&self, block: &DataBlock, hashes: &mut Vec<u64>) -> Result<()> {
+    pub fn get_hashes(
+        &self,
+        block: &DataBlock,
+        join_type: &JoinType,
+        hashes: &mut Vec<u64>,
+    ) -> Result<()> {
         let func_ctx = self.probe_state.ctx.get_function_context()?;
         let keys = &self.probe_state.hash_join_state.hash_join_desc.probe_keys;
         get_hashes(
@@ -57,7 +63,8 @@ impl ProbeSpillState {
             block,
             keys,
             &self.probe_state.hash_method,
-            None,
+            join_type,
+            false,
             hashes,
         )
     }

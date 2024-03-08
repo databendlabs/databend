@@ -22,6 +22,28 @@ use derive_visitor::DriveMut;
 use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum TaskSql {
+    SingleStatement(#[drive(skip)] String),
+    ScriptBlock(#[drive(skip)] Vec<String>),
+}
+
+impl Display for TaskSql {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaskSql::SingleStatement(stmt) => write!(f, "{}", stmt),
+            TaskSql::ScriptBlock(stmts) => {
+                writeln!(f, "BEGIN")?;
+                for stmt in stmts {
+                    writeln!(f, "{};", stmt)?;
+                }
+                write!(f, "END;")?;
+                Ok(())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTaskStmt {
     #[drive(skip)]
     pub if_not_exists: bool,
@@ -43,7 +65,7 @@ pub struct CreateTaskStmt {
     #[drive(skip)]
     pub when_condition: Option<String>,
     #[drive(skip)]
-    pub sql: String,
+    pub sql: TaskSql,
 }
 
 impl Display for CreateTaskStmt {
@@ -162,7 +184,7 @@ pub enum AlterTaskOptions {
         warehouse: bool,
     },
     // Change SQL
-    ModifyAs(#[drive(skip)] String),
+    ModifyAs(#[drive(skip)] TaskSql),
     ModifyWhen(#[drive(skip)] String),
     AddAfter(#[drive(skip)] Vec<String>),
     RemoveAfter(#[drive(skip)] Vec<String>),

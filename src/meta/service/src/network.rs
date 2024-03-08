@@ -14,6 +14,7 @@
 
 use std::error::Error;
 use std::fmt::Display;
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,6 +27,7 @@ use databend_common_base::containers::Pool;
 use databend_common_base::future::TimingFutureExt;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::error::PayloadTooLarge;
+use databend_common_meta_sled_store::openraft::error::ReplicationClosed;
 use databend_common_meta_sled_store::openraft::error::Unreachable;
 use databend_common_meta_sled_store::openraft::network::RPCOption;
 use databend_common_meta_sled_store::openraft::MessageSummary;
@@ -34,6 +36,7 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::AppendEntriesRequest;
 use databend_common_meta_types::AppendEntriesResponse;
+use databend_common_meta_types::Fatal;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::InstallSnapshotError;
@@ -45,7 +48,11 @@ use databend_common_meta_types::NodeId;
 use databend_common_meta_types::RPCError;
 use databend_common_meta_types::RaftError;
 use databend_common_meta_types::RemoteError;
+use databend_common_meta_types::Snapshot;
+use databend_common_meta_types::SnapshotResponse;
+use databend_common_meta_types::StreamingError;
 use databend_common_meta_types::TypeConfig;
+use databend_common_meta_types::Vote;
 use databend_common_meta_types::VoteRequest;
 use databend_common_meta_types::VoteResponse;
 use databend_common_metrics::count::Count;
@@ -326,6 +333,24 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
             .map_err(|serde_err| new_net_err(&serde_err, || "parse append_entries reply"))?;
 
         raft_res.map_err(|e| self.to_rpc_err(e))
+    }
+
+    #[logcall::logcall(err = "debug")]
+    #[minitrace::trace]
+    async fn full_snapshot(
+        &mut self,
+        vote: Vote,
+        snapshot: Snapshot,
+        cancel: impl Future<Output = ReplicationClosed> + Send,
+        option: RPCOption,
+    ) -> Result<SnapshotResponse, StreamingError<Fatal>> {
+        // This implementation just delegates to `Chunked::send_snapshot`,
+        // which depends on `Self::install_snapshot()` to send chunks.
+        use openraft::network::snapshot_transport::Chunked;
+        use openraft::network::snapshot_transport::SnapshotTransport;
+
+        let resp = Chunked::send_snapshot(self, vote, snapshot, cancel, option).await?;
+        Ok(resp)
     }
 
     #[logcall::logcall(err = "debug")]
