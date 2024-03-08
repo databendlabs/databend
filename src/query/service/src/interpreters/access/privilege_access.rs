@@ -743,7 +743,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     InsertInputSource::StreamingWithFormat(..)
                     | InsertInputSource::StreamingWithFileFormat {..}
-                    | InsertInputSource::Values {..} => {}
+                    | InsertInputSource::Values(_) => {}
                 }
             }
             Plan::Replace(plan) => {
@@ -758,7 +758,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     InsertInputSource::StreamingWithFormat(..)
                     | InsertInputSource::StreamingWithFileFormat {..}
-                    | InsertInputSource::Values {..} => {}
+                    | InsertInputSource::Values(_) => {}
                 }
             }
             Plan::MergeInto(plan) => {

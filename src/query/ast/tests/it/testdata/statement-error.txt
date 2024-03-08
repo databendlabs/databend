@@ -139,11 +139,11 @@ error:
 insert into t format
 ---------- Output ---------
 error: 
-  --> SQL:1:21
+  --> SQL:1:15
   |
 1 | insert into t format
-  | ------              ^ unexpected end of line, expecting <Ident> or <QuotedString>
-  | |                   
+  | ------        ^^^^^^ unexpected `format`, expecting `FROM`, `ORDER`, `LIMIT`, `OFFSET`, `IGNORE_RESULT`, `WITH`, `VALUES`, `EXCEPT`, `SELECT`, `INTERSECT`, `(`, `UNION`, or `.`
+  | |              
   | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`
 
 

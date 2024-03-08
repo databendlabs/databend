@@ -8091,7 +8091,7 @@ Query(
 ---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
-INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
+INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
 ---------- AST ------------
 Insert(
     InsertStmt {
@@ -8122,8 +8122,44 @@ Insert(
             },
         ],
         source: Values {
-            rest_str: "(1, 2), (3, 4);",
-            start: 30,
+            rows: [
+                [
+                    Literal {
+                        span: Some(
+                            31..32,
+                        ),
+                        lit: UInt64(
+                            1,
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            34..35,
+                        ),
+                        lit: UInt64(
+                            2,
+                        ),
+                    },
+                ],
+                [
+                    Literal {
+                        span: Some(
+                            39..40,
+                        ),
+                        lit: UInt64(
+                            3,
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            42..43,
+                        ),
+                        lit: UInt64(
+                            4,
+                        ),
+                    },
+                ],
+            ],
         },
         overwrite: false,
     },
@@ -8133,7 +8169,7 @@ Insert(
 ---------- Input ----------
 insert into t (c1, c2) values (1, 2);   
 ---------- Output ---------
-INSERT INTO t (c1, c2) VALUES (1, 2);   
+INSERT INTO t (c1, c2) VALUES (1, 2)
 ---------- AST ------------
 Insert(
     InsertStmt {
@@ -8164,36 +8200,26 @@ Insert(
             },
         ],
         source: Values {
-            rest_str: "(1, 2);   ",
-            start: 30,
-        },
-        overwrite: false,
-    },
-)
-
-
----------- Input ----------
-insert into table t format json;
----------- Output ---------
-INSERT INTO t FORMAT json ;
----------- AST ------------
-Insert(
-    InsertStmt {
-        hints: None,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                18..19,
-            ),
-            name: "t",
-            quote: None,
-        },
-        columns: [],
-        source: Streaming {
-            format: "json",
-            rest_str: ";",
-            start: 31,
+            rows: [
+                [
+                    Literal {
+                        span: Some(
+                            31..32,
+                        ),
+                        lit: UInt64(
+                            1,
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            34..35,
+                        ),
+                        lit: UInt64(
+                            2,
+                        ),
+                    },
+                ],
+            ],
         },
         overwrite: false,
     },
@@ -15668,7 +15694,7 @@ CreateTask(
 CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  as
             BEGIN
               begin;
-              -- insert into t values('a;'); TODO raise error ^ unexpected end of line, expecting `END` or `;`
+              insert into t values('a;');
               delete from t where c = ';';
               vacuum table t;
               merge into t using s on t.id = s.id when matched then update *;
@@ -15677,6 +15703,7 @@ CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los A
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 database = 'target' timezone = 'America/Los Angeles' AS BEGIN
 BEGIN;
+INSERT INTO t VALUES ('a;');
 DELETE FROM t WHERE (c = ';');
 VACUUM TABLE t ;
 MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;
@@ -15703,6 +15730,7 @@ CreateTask(
         sql: ScriptBlock(
             [
                 "BEGIN",
+                "INSERT INTO t VALUES ('a;')",
                 "DELETE FROM t WHERE (c = ';')",
                 "VACUUM TABLE t ",
                 "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *",
@@ -15943,7 +15971,7 @@ AlterTask(
 ALTER TASK MyTask2 MODIFY AS
             BEGIN
               begin;
-              -- insert into t values('a;'); TODO raise error ^ unexpected end of line, expecting `END` or `;`
+              insert into t values('a;');
               delete from t where c = ';';
               vacuum table t;
               merge into t using s on t.id = s.id when matched then update *;
@@ -15952,6 +15980,7 @@ ALTER TASK MyTask2 MODIFY AS
 ---------- Output ---------
 ALTER TASK MyTask2 AS BEGIN
 BEGIN;
+INSERT INTO t VALUES ('a;');
 DELETE FROM t WHERE (c = ';');
 VACUUM TABLE t ;
 MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;
@@ -15966,6 +15995,7 @@ AlterTask(
             ScriptBlock(
                 [
                     "BEGIN",
+                    "INSERT INTO t VALUES ('a;')",
                     "DELETE FROM t WHERE (c = ';')",
                     "VACUUM TABLE t ",
                     "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *",
