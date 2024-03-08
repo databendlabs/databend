@@ -75,8 +75,43 @@ impl Display for CreateIndexStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct DropIndexStmt {
+    #[drive(skip)]
+    pub if_exists: bool,
+    pub index: Identifier,
+}
+
+impl Display for DropIndexStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DROP AGGREGATING INDEX")?;
+        if self.if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+
+        write!(f, " {index}", index = self.index)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct RefreshIndexStmt {
+    pub index: Identifier,
+    #[drive(skip)]
+    pub limit: Option<u64>,
+}
+
+impl Display for RefreshIndexStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "REFRESH AGGREGATING INDEX {index}", index = self.index)?;
+        if let Some(limit) = self.limit {
+            write!(f, " LIMIT {limit}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateInvertedIndexStmt {
-    pub index_type: TableIndexType,
     #[drive(skip)]
     pub create_option: CreateOption,
 
@@ -98,7 +133,7 @@ impl Display for CreateInvertedIndexStmt {
             write!(f, "OR REPLACE ")?;
         }
         let sync = if self.sync_creation { "SYNC" } else { "ASYNC" };
-        write!(f, "{} {} INDEX", sync, self.index_type)?;
+        write!(f, "{} INVERTED INDEX", sync)?;
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
@@ -119,44 +154,31 @@ impl Display for CreateInvertedIndexStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct DropIndexStmt {
-    pub index_type: TableIndexType,
+pub struct DropInvertedIndexStmt {
     #[drive(skip)]
     pub if_exists: bool,
-    pub index: Identifier,
+    pub index_name: Identifier,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
 }
 
-impl Display for DropIndexStmt {
+impl Display for DropInvertedIndexStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DROP {} INDEX", self.index_type)?;
+        write!(f, "DROP INVERTED INDEX")?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;
         }
 
-        write!(f, " {index}", index = self.index)?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct RefreshIndexStmt {
-    pub index_type: TableIndexType,
-    pub index: Identifier,
-    #[drive(skip)]
-    pub limit: Option<u64>,
-}
-
-impl Display for RefreshIndexStmt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
+        write!(f, " {}", self.index_name)?;
+        write!(f, " ON ")?;
+        write_dot_separated_list(
             f,
-            "REFRESH {} INDEX {index}",
-            self.index_type,
-            index = self.index
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
         )?;
-        if let Some(limit) = self.limit {
-            write!(f, " LIMIT {limit}")?;
-        }
         Ok(())
     }
 }

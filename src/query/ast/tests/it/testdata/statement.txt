@@ -1193,7 +1193,6 @@ CREATE OR REPLACE SYNC INVERTED INDEX idx2 ON t1 (a, b)
 ---------- AST ------------
 CreateInvertedIndex(
     CreateInvertedIndexStmt {
-        index_type: Inverted,
         create_option: CreateOrReplace,
         index_name: Identifier {
             span: Some(

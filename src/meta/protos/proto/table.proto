@@ -118,6 +118,16 @@ message TableMeta {
   // Now the owner is stored independently in the meta. Prefix with __fd_object_owners
   // optional Ownership owner = 30;
   reserved 30;
+
+  map<string, TableIndex> indexes = 31;
+}
+
+message TableIndex {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string name = 1;
+  repeated string columns = 2;
 }
 
 // Save table name id list history.

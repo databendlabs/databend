@@ -581,10 +581,13 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_create_index(&mut self, _stmt: &'ast CreateIndexStmt) {}
 
+    fn visit_drop_index(&mut self, _stmt: &'ast DropIndexStmt) {}
+
+    fn visit_refresh_index(&mut self, _stmt: &'ast RefreshIndexStmt) {}
+
     fn visit_create_inverted_index(&mut self, _stmt: &'ast CreateInvertedIndexStmt) {}
 
-    fn visit_drop_index(&mut self, _stmt: &'ast DropIndexStmt) {}
-    fn visit_refresh_index(&mut self, _stmt: &'ast RefreshIndexStmt) {}
+    fn visit_drop_inverted_index(&mut self, _stmt: &'ast DropInvertedIndexStmt) {}
 
     fn visit_create_virtual_column(&mut self, _stmt: &'ast CreateVirtualColumnStmt) {}
 

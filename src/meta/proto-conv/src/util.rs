@@ -111,7 +111,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (79, "2024-01-31: Add: udf.proto/UserDefinedFunction add created_on field", ),
     (80, "2024-02-01: Add: datatype.proto/DataType Geometry type"),
     (81, "2024-03-04: Add: udf.udf_script"),
-    (82, "2024-03-06: Add: index.inverted_index")
+    (82, "2024-03-08: Add: table.inverted_index")
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

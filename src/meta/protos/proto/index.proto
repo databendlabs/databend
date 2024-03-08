@@ -17,7 +17,6 @@
 // same instance.
 
 syntax = "proto3";
-import "metadata.proto";
 
 package databend_proto;
 
@@ -38,7 +37,6 @@ message IndexMeta {
     None = 0;
     AGGREGATING = 1;
     JOIN = 2;
-    INVERTED = 3;
   }
 
   uint64 ver = 100;
@@ -66,7 +64,4 @@ message IndexMeta {
   bool sync_creation = 7;
 
   string original_query = 8;
-
-  // Index schema, i.e., columns definition.
-  optional DataSchema index_schema = 9;
 }

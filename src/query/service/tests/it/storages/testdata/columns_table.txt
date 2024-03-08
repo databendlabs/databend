@@ -334,7 +334,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'scheduled_job_cron_timezone'     | 'system'             | 'background_jobs'      | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'scheduled_job_interval_secs'     | 'system'             | 'background_jobs'      | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'scheduled_time'                  | 'system'             | 'task_history'         | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'schema'                          | 'system'             | 'indexes'              | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'schema_name'                     | 'information_schema' | 'schemata'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'schema_owner'                    | 'information_schema' | 'schemata'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'seq_in_index'                    | 'information_schema' | 'statistics'           | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |

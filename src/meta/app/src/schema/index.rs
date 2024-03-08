@@ -15,11 +15,9 @@
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_expression::TableSchema;
 use databend_common_meta_types::MetaId;
 
 use super::CreateOption;
@@ -93,7 +91,6 @@ pub enum IndexType {
     #[default]
     AGGREGATING = 1,
     JOIN = 2,
-    INVERTED = 3,
 }
 
 impl Display for IndexType {
@@ -101,7 +98,6 @@ impl Display for IndexType {
         match self {
             IndexType::AGGREGATING => write!(f, "AGGREGATING"),
             IndexType::JOIN => write!(f, "JOIN"),
-            IndexType::INVERTED => write!(f, "INVERTED"),
         }
     }
 }
@@ -120,7 +116,6 @@ pub struct IndexMeta {
     // if true, index will create after data written to databend,
     // no need execute refresh index manually.
     pub sync_creation: bool,
-    pub index_schema: Option<Arc<TableSchema>>,
 }
 
 impl Default for IndexMeta {
@@ -134,7 +129,6 @@ impl Default for IndexMeta {
             original_query: "".to_string(),
             query: "".to_string(),
             sync_creation: false,
-            index_schema: None,
         }
     }
 }
@@ -176,7 +170,6 @@ pub struct CreateIndexReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropIndexReq {
     pub if_exists: bool,
-    pub index_type: IndexType,
     pub name_ident: IndexNameIdent,
 }
 
@@ -184,9 +177,8 @@ impl Display for DropIndexReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "drop_index(if_exists={}):{}{}/{}",
+            "drop_index(if_exists={}):{}/{}",
             self.if_exists,
-            self.index_type,
             self.name_ident.tenant_name(),
             self.name_ident.index_name
         )
@@ -232,19 +224,13 @@ pub struct UpdateIndexReply {}
 pub struct ListIndexesReq {
     pub tenant: String,
     pub table_id: Option<MetaId>,
-    pub index_type: Option<IndexType>,
 }
 
 impl ListIndexesReq {
-    pub fn new(
-        tenant: impl Into<String>,
-        table_id: Option<MetaId>,
-        index_type: Option<IndexType>,
-    ) -> ListIndexesReq {
+    pub fn new(tenant: impl Into<String>, table_id: Option<MetaId>) -> ListIndexesReq {
         ListIndexesReq {
             tenant: tenant.into(),
             table_id,
-            index_type,
         }
     }
 }
@@ -253,15 +239,13 @@ impl ListIndexesReq {
 pub struct ListIndexesByIdReq {
     pub tenant: String,
     pub table_id: MetaId,
-    pub index_type: Option<IndexType>,
 }
 
 impl ListIndexesByIdReq {
-    pub fn new(tenant: impl Into<String>, table_id: MetaId, index_type: Option<IndexType>) -> Self {
+    pub fn new(tenant: impl Into<String>, table_id: MetaId) -> Self {
         Self {
             tenant: tenant.into(),
             table_id,
-            index_type,
         }
     }
 }

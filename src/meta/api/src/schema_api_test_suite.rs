@@ -44,6 +44,7 @@ use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
@@ -60,6 +61,7 @@ use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
@@ -330,6 +332,7 @@ impl SchemaApiTestSuite {
         suite
             .update_table_with_copied_files(&b.build().await)
             .await?;
+        suite.table_index_create_drop(&b.build().await).await?;
         suite.index_create_list_drop(&b.build().await).await?;
         suite.table_lock_revision(&b.build().await).await?;
         suite
@@ -3702,7 +3705,6 @@ impl SchemaApiTestSuite {
                 original_query: "select sum(number) from tb1".to_string(),
                 query: "select sum(number) from tb1".to_string(),
                 sync_creation: false,
-                index_schema: None,
             },
         };
 
@@ -5728,6 +5730,173 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
+    async fn table_index_create_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+        let table_id;
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![
+                TableField::new("title", TableDataType::String),
+                TableField::new("content", TableDataType::String),
+            ]))
+        };
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        let created_on = Utc::now();
+
+        info!("--- prepare db and table");
+        {
+            let plan = CreateDatabaseReq {
+                create_option: CreateOption::None,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let _ = mt.create_database(plan).await?;
+
+            let req = CreateTableReq {
+                create_option: CreateOption::None,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+            let resp = mt.create_table(req.clone()).await?;
+            table_id = resp.table_id;
+        }
+
+        let index_name_1 = "idx1".to_string();
+        let index_columns_1 = vec!["title".to_string(), "content".to_string()];
+        let index_name_2 = "idx2".to_string();
+        let index_columns_2 = vec!["title".to_string()];
+
+        {
+            info!("--- create table index");
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::None,
+                table_id,
+                name: index_name_1.clone(),
+                columns: index_columns_1.clone(),
+            };
+            let res = mt.create_table_index(req).await;
+            assert!(res.is_ok());
+
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::None,
+                table_id,
+                name: index_name_2.clone(),
+                columns: index_columns_2.clone(),
+            };
+            let res = mt.create_table_index(req).await;
+            assert!(res.is_ok());
+        }
+
+        {
+            info!("--- create table index again with if_not_exists = false");
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::None,
+                table_id,
+                name: index_name_1.clone(),
+                columns: index_columns_1.clone(),
+            };
+
+            let res = mt.create_table_index(req).await;
+            assert!(res.is_err());
+            let status = res.err().unwrap();
+            let err_code = ErrorCode::from(status);
+
+            assert_eq!(ErrorCode::IndexAlreadyExists("").code(), err_code.code());
+        }
+
+        {
+            info!("--- create table index again with if_not_exists = true");
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::CreateIfNotExists,
+                table_id,
+                name: index_name_1.clone(),
+                columns: index_columns_1.clone(),
+            };
+
+            let res = mt.create_table_index(req).await;
+            assert!(res.is_ok());
+        }
+
+        {
+            info!("--- check table index");
+            let (_, table_meta) = mt.get_table_by_id(table_id).await?;
+            assert_eq!(table_meta.indexes.len(), 2);
+
+            let index1 = table_meta.indexes.get(&index_name_1);
+            assert!(index1.is_some());
+            let index1 = index1.unwrap();
+            assert_eq!(index1.columns, index_columns_1);
+
+            let index2 = table_meta.indexes.get(&index_name_2);
+            assert!(index2.is_some());
+            let index2 = index2.unwrap();
+            assert_eq!(index2.columns, index_columns_2);
+        }
+
+        {
+            info!("--- drop table index");
+            let req = DropTableIndexReq {
+                if_exists: false,
+                table_id,
+                name: index_name_1.clone(),
+            };
+            let res = mt.drop_table_index(req).await;
+            assert!(res.is_ok());
+
+            let req = DropTableIndexReq {
+                if_exists: false,
+                table_id,
+                name: index_name_1.clone(),
+            };
+            let res = mt.drop_table_index(req).await;
+            assert!(res.is_err());
+
+            let req = DropTableIndexReq {
+                if_exists: true,
+                table_id,
+                name: index_name_1.clone(),
+            };
+            let res = mt.drop_table_index(req).await;
+            assert!(res.is_ok());
+        }
+
+        {
+            info!("--- check table index after drop");
+            let (_, table_meta) = mt.get_table_by_id(table_id).await?;
+            assert_eq!(table_meta.indexes.len(), 1);
+
+            let index1 = table_meta.indexes.get(&index_name_1);
+            assert!(index1.is_none());
+
+            let index2 = table_meta.indexes.get(&index_name_2);
+            assert!(index2.is_some());
+            let index2 = index2.unwrap();
+            assert_eq!(index2.columns, index_columns_2);
+        }
+
+        Ok(())
+    }
+
+    #[minitrace::trace]
     async fn index_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant_name = "tenant1";
@@ -5735,8 +5904,7 @@ impl SchemaApiTestSuite {
 
         let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;
-        let index_id_1;
-        let index_id_3;
+        let index_id;
 
         info!("--- prepare db and table");
         {
@@ -5757,7 +5925,6 @@ impl SchemaApiTestSuite {
             original_query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
             query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
             sync_creation: false,
-            index_schema: None,
         };
 
         let index_name_2 = "idx2";
@@ -5770,25 +5937,6 @@ impl SchemaApiTestSuite {
             original_query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
             query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
             sync_creation: false,
-            index_schema: None,
-        };
-
-        let fields = vec![
-            TableField::new("a", TableDataType::String),
-            TableField::new("b", TableDataType::String),
-        ];
-        let index_schema = Some(Arc::new(TableSchema::new(fields)));
-        let index_name_3 = "idx3";
-        let index_meta_3 = IndexMeta {
-            table_id,
-            index_type: IndexType::INVERTED,
-            created_on,
-            dropped_on: None,
-            updated_on: None,
-            original_query: "".to_string(),
-            query: "".to_string(),
-            sync_creation: false,
-            index_schema,
         };
 
         let name_ident_1 = IndexNameIdent {
@@ -5801,17 +5949,11 @@ impl SchemaApiTestSuite {
             index_name: index_name_2.to_string(),
         };
 
-        let name_ident_3 = IndexNameIdent {
-            tenant: tenant.clone(),
-            index_name: index_name_3.to_string(),
-        };
-
         {
             info!("--- list index with no create before");
             let req = ListIndexesReq {
                 tenant: tenant_name.to_string(),
                 table_id: Some(table_id),
-                index_type: None,
             };
 
             let res = mt.list_indexes(req).await?;
@@ -5827,7 +5969,7 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_index(req).await?;
-            index_id_1 = res.index_id;
+            index_id = res.index_id;
 
             let req = CreateIndexReq {
                 create_option: CreateOption::None,
@@ -5836,15 +5978,6 @@ impl SchemaApiTestSuite {
             };
 
             mt.create_index(req).await?;
-
-            let req = CreateIndexReq {
-                create_option: CreateOption::None,
-                name_ident: name_ident_3.clone(),
-                meta: index_meta_3.clone(),
-            };
-
-            let res = mt.create_index(req).await?;
-            index_id_3 = res.index_id;
         }
 
         {
@@ -5871,7 +6004,7 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.create_index(req).await?;
-            assert_eq!(index_id_1, res.index_id);
+            assert_eq!(index_id, res.index_id);
         }
 
         {
@@ -5879,16 +6012,6 @@ impl SchemaApiTestSuite {
             let req = ListIndexesReq {
                 tenant: tenant_name.to_string(),
                 table_id: None,
-                index_type: None,
-            };
-
-            let res = mt.list_indexes(req).await?;
-            assert_eq!(3, res.len());
-
-            let req = ListIndexesReq {
-                tenant: tenant_name.to_string(),
-                table_id: None,
-                index_type: Some(IndexType::AGGREGATING),
             };
 
             let res = mt.list_indexes(req).await?;
@@ -5896,17 +6019,7 @@ impl SchemaApiTestSuite {
 
             let req = ListIndexesReq {
                 tenant: tenant_name.to_string(),
-                table_id: None,
-                index_type: Some(IndexType::INVERTED),
-            };
-
-            let res = mt.list_indexes(req).await?;
-            assert_eq!(1, res.len());
-
-            let req = ListIndexesReq {
-                tenant: tenant_name.to_string(),
                 table_id: Some(u64::MAX),
-                index_type: None,
             };
 
             let res = mt.list_indexes(req).await?;
@@ -5918,50 +6031,21 @@ impl SchemaApiTestSuite {
             let req = ListIndexesByIdReq {
                 tenant: tenant_name.to_string(),
                 table_id,
-                index_type: None,
-            };
-
-            let res = mt.list_indexes_by_table_id(req).await?;
-            assert_eq!(3, res.len());
-
-            let req = ListIndexesByIdReq {
-                tenant: tenant_name.to_string(),
-                table_id,
-                index_type: Some(IndexType::AGGREGATING),
             };
 
             let res = mt.list_indexes_by_table_id(req).await?;
             assert_eq!(2, res.len());
-
-            let req = ListIndexesByIdReq {
-                tenant: tenant_name.to_string(),
-                table_id,
-                index_type: Some(IndexType::INVERTED),
-            };
-
-            let res = mt.list_indexes_by_table_id(req).await?;
-            assert_eq!(1, res.len());
         }
 
         {
             info!("--- drop index");
             let req = DropIndexReq {
                 if_exists: false,
-                index_type: IndexType::INVERTED,
                 name_ident: name_ident_2.clone(),
             };
 
             let res = mt.drop_index(req).await;
-            assert!(res.is_err());
-
-            let req = DropIndexReq {
-                if_exists: false,
-                index_type: IndexType::AGGREGATING,
-                name_ident: name_ident_2.clone(),
-            };
-
-            let res = mt.drop_index(req).await;
-            assert!(res.is_ok());
+            assert!(res.is_ok())
         }
 
         {
@@ -5969,11 +6053,10 @@ impl SchemaApiTestSuite {
             let req = ListIndexesReq {
                 tenant: tenant_name.to_string(),
                 table_id: Some(table_id),
-                index_type: None,
             };
 
             let res = mt.list_indexes(req).await?;
-            assert_eq!(2, res.len());
+            assert_eq!(1, res.len());
         }
 
         {
@@ -5981,16 +6064,12 @@ impl SchemaApiTestSuite {
             let req = ListIndexesReq {
                 tenant: tenant_name.to_string(),
                 table_id: Some(table_id),
-                index_type: None,
             };
 
             let res = mt.list_indexes(req).await?;
-            assert_eq!(2, res.len());
+            assert_eq!(1, res.len());
             assert_eq!(
-                vec![
-                    (index_id_1, index_name_1.to_string(), index_meta_1.clone()),
-                    (index_id_3, index_name_3.to_string(), index_meta_3.clone())
-                ],
+                vec![(index_id, index_name_1.to_string(), index_meta_1.clone())],
                 res
             );
         }
@@ -5999,7 +6078,6 @@ impl SchemaApiTestSuite {
             info!("--- list index after drop all");
             let req = DropIndexReq {
                 if_exists: false,
-                index_type: IndexType::AGGREGATING,
                 name_ident: name_ident_1.clone(),
             };
 
@@ -6009,25 +6087,6 @@ impl SchemaApiTestSuite {
             let req = ListIndexesReq {
                 tenant: tenant_name.to_string(),
                 table_id: Some(table_id),
-                index_type: Some(IndexType::AGGREGATING),
-            };
-
-            let res = mt.list_indexes(req).await?;
-            assert!(res.is_empty());
-
-            let req = DropIndexReq {
-                if_exists: false,
-                index_type: IndexType::INVERTED,
-                name_ident: name_ident_3.clone(),
-            };
-
-            let res = mt.drop_index(req).await;
-            assert!(res.is_ok());
-
-            let req = ListIndexesReq {
-                tenant: tenant_name.to_string(),
-                table_id: Some(table_id),
-                index_type: None,
             };
 
             let res = mt.list_indexes(req).await?;
@@ -6038,7 +6097,6 @@ impl SchemaApiTestSuite {
             info!("--- drop index with if exists = false");
             let req = DropIndexReq {
                 if_exists: false,
-                index_type: IndexType::AGGREGATING,
                 name_ident: name_ident_1.clone(),
             };
 
@@ -6050,7 +6108,6 @@ impl SchemaApiTestSuite {
             info!("--- drop index with if exists = true");
             let req = DropIndexReq {
                 if_exists: true,
-                index_type: IndexType::AGGREGATING,
                 name_ident: name_ident_1.clone(),
             };
 

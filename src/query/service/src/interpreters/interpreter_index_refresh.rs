@@ -29,7 +29,6 @@ use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::IndexMeta;
-use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::evaluator::BlockOperator;
@@ -209,9 +208,24 @@ impl RefreshIndexInterpreter {
         index_meta.updated_on = fuse_part.create_on;
         Ok(index_meta)
     }
+}
+
+#[async_trait::async_trait]
+impl Interpreter for RefreshIndexInterpreter {
+    fn name(&self) -> &str {
+        "RefreshIndexInterpreter"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
+    }
 
     #[async_backtrace::framed]
-    async fn execute_agg_index(&self) -> Result<PipelineBuildResult> {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let license_manager = get_license_manager();
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
         let (mut query_plan, output_schema, select_columns) = match self.plan.query_plan.as_ref() {
             Plan::Query {
                 s_expr,
@@ -370,41 +384,6 @@ impl RefreshIndexInterpreter {
             });
 
         return Ok(build_res);
-    }
-
-    #[async_backtrace::framed]
-    async fn execute_inverted_index(&self) -> Result<PipelineBuildResult> {
-        todo!()
-    }
-}
-
-#[async_trait::async_trait]
-impl Interpreter for RefreshIndexInterpreter {
-    fn name(&self) -> &str {
-        "RefreshIndexInterpreter"
-    }
-
-    fn is_ddl(&self) -> bool {
-        true
-    }
-
-    #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let feature = match self.plan.index_meta.index_type {
-            IndexType::AGGREGATING => Feature::AggregateIndex,
-            IndexType::INVERTED => Feature::InvertedIndex,
-            IndexType::JOIN => unimplemented!(),
-        };
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
-            .check_enterprise_enabled(self.ctx.get_license_key(), feature)?;
-
-        match self.plan.index_meta.index_type {
-            IndexType::AGGREGATING => self.execute_agg_index().await,
-            IndexType::INVERTED => self.execute_inverted_index().await,
-            IndexType::JOIN => unimplemented!(),
-        }
     }
 }
 

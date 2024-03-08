@@ -14,19 +14,16 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::TableIndexType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::IndexNameIdent;
-use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::DropIndexPlan;
 use databend_enterprise_aggregating_index::get_agg_index_handler;
-use databend_enterprise_inverted_index::get_inverted_index_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -64,40 +61,23 @@ impl Interpreter for DropIndexInterpreter {
 
         let tenant = Tenant::new_nonempty(non_empty);
 
-        let feature = match self.plan.index_type {
-            TableIndexType::Aggregating => Feature::AggregateIndex,
-            TableIndexType::Inverted => Feature::InvertedIndex,
-        };
         let license_manager = get_license_manager();
         license_manager
             .manager
-            .check_enterprise_enabled(self.ctx.get_license_key(), feature)?;
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
 
         let index_name = self.plan.index.clone();
         let catalog = self
             .ctx
             .get_catalog(&self.ctx.get_current_catalog())
             .await?;
-        let index_type = match self.plan.index_type {
-            TableIndexType::Aggregating => IndexType::AGGREGATING,
-            TableIndexType::Inverted => IndexType::INVERTED,
-        };
         let drop_index_req = DropIndexReq {
             if_exists: self.plan.if_exists,
-            index_type,
             name_ident: IndexNameIdent::new(tenant, index_name),
         };
 
-        match self.plan.index_type {
-            TableIndexType::Aggregating => {
-                let handler = get_agg_index_handler();
-                let _ = handler.do_drop_index(catalog, drop_index_req).await?;
-            }
-            TableIndexType::Inverted => {
-                let handler = get_inverted_index_handler();
-                let _ = handler.do_drop_index(catalog, drop_index_req).await?;
-            }
-        }
+        let handler = get_agg_index_handler();
+        let _ = handler.do_drop_index(catalog, drop_index_req).await?;
 
         Ok(PipelineBuildResult::create())
     }

@@ -15,6 +15,7 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -184,6 +185,10 @@ impl FromToProto for mt::TableMeta {
         } else {
             p.catalog
         };
+        let mut indexes = BTreeMap::new();
+        for (name, index) in p.indexes {
+            indexes.insert(name, mt::TableIndex::from_pb(index)?);
+        }
 
         let v = Self {
             schema: Arc::new(ex::TableSchema::from_pb(schema)?),
@@ -218,11 +223,16 @@ impl FromToProto for mt::TableMeta {
             } else {
                 Some(p.column_mask_policy)
             },
+            indexes,
         };
         Ok(v)
     }
 
     fn to_pb(&self) -> Result<pb::TableMeta, Incompatible> {
+        let mut indexes = BTreeMap::new();
+        for (name, index) in &self.indexes {
+            indexes.insert(name.clone(), index.to_pb()?);
+        }
         let p = pb::TableMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -254,6 +264,7 @@ impl FromToProto for mt::TableMeta {
             statistics: Some(self.statistics.to_pb()?),
             shared_by: Vec::from_iter(self.shared_by.clone()),
             column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
+            indexes,
         };
         Ok(p)
     }
@@ -311,6 +322,32 @@ impl FromToProto for mt::TableIdList {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             ids: self.id_list.clone(),
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto for mt::TableIndex {
+    type PB = pb::TableIndex;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::TableIndex) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let v = Self {
+            name: p.name,
+            columns: p.columns,
+        };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::TableIndex, Incompatible> {
+        let p = pb::TableIndex {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            name: self.name.clone(),
+            columns: self.columns.clone(),
         };
         Ok(p)
     }

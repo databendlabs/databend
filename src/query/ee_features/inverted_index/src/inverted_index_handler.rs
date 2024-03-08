@@ -19,42 +19,26 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
-use databend_common_meta_app::schema::CreateIndexReply;
-use databend_common_meta_app::schema::CreateIndexReq;
-use databend_common_meta_app::schema::DropIndexReply;
-use databend_common_meta_app::schema::DropIndexReq;
-use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetIndexReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
+use databend_common_meta_app::schema::CreateTableIndexReply;
+use databend_common_meta_app::schema::CreateTableIndexReq;
+use databend_common_meta_app::schema::DropTableIndexReply;
+use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::Location;
 
 #[async_trait::async_trait]
 pub trait InvertedIndexHandler: Sync + Send {
-    async fn do_create_index(
+    async fn do_create_table_index(
         &self,
         catalog: Arc<dyn Catalog>,
-        req: CreateIndexReq,
-    ) -> Result<CreateIndexReply>;
+        req: CreateTableIndexReq,
+    ) -> Result<CreateTableIndexReply>;
 
-    async fn do_drop_index(
+    async fn do_drop_table_index(
         &self,
         catalog: Arc<dyn Catalog>,
-        req: DropIndexReq,
-    ) -> Result<DropIndexReply>;
-
-    async fn do_get_index(
-        &self,
-        catalog: Arc<dyn Catalog>,
-        req: GetIndexReq,
-    ) -> Result<GetIndexReply>;
-
-    async fn do_update_index(
-        &self,
-        catalog: Arc<dyn Catalog>,
-        req: UpdateIndexReq,
-    ) -> Result<UpdateIndexReply>;
+        req: DropTableIndexReq,
+    ) -> Result<DropTableIndexReply>;
 
     async fn do_refresh_index(
         &self,
@@ -75,42 +59,23 @@ impl InvertedIndexHandlerWrapper {
     }
 
     #[async_backtrace::framed]
-    pub async fn do_create_index(
+    pub async fn do_create_table_index(
         &self,
         catalog: Arc<dyn Catalog>,
-        req: CreateIndexReq,
-    ) -> Result<CreateIndexReply> {
-        self.handler.do_create_index(catalog, req).await
+        req: CreateTableIndexReq,
+    ) -> Result<CreateTableIndexReply> {
+        self.handler.do_create_table_index(catalog, req).await
     }
 
     #[async_backtrace::framed]
-    pub async fn do_drop_index(
+    pub async fn do_drop_table_index(
         &self,
         catalog: Arc<dyn Catalog>,
-        req: DropIndexReq,
-    ) -> Result<DropIndexReply> {
-        self.handler.do_drop_index(catalog, req).await
+        req: DropTableIndexReq,
+    ) -> Result<DropTableIndexReply> {
+        self.handler.do_drop_table_index(catalog, req).await
     }
 
-    #[async_backtrace::framed]
-    pub async fn do_get_index(
-        &self,
-        catalog: Arc<dyn Catalog>,
-        req: GetIndexReq,
-    ) -> Result<GetIndexReply> {
-        self.handler.do_get_index(catalog, req).await
-    }
-
-    #[async_backtrace::framed]
-    pub async fn do_update_index(
-        &self,
-        catalog: Arc<dyn Catalog>,
-        req: UpdateIndexReq,
-    ) -> Result<UpdateIndexReply> {
-        self.handler.do_update_index(catalog, req).await
-    }
-
-    #[async_backtrace::framed]
     pub async fn do_refresh_index(
         &self,
         fuse_table: &FuseTable,
