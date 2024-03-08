@@ -99,7 +99,6 @@ pub fn eliminate_outer_join_type(
     can_filter_left_null: bool,
     can_filter_right_null: bool,
 ) -> JoinType {
-    debug_assert!(join_type.is_outer_join());
     match join_type {
         JoinType::Left if can_filter_right_null => JoinType::Inner,
         JoinType::LeftSingle if can_filter_right_null && after_join_reorder => JoinType::Inner,
