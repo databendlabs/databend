@@ -151,14 +151,10 @@ fn scatter_paylaod(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
 
     for _ in 0..buckets.capacity() {
         buckets.push(Payload::new(
-            Arc::new(Bump::new()),
+            payload.arena.clone(),
             group_types.clone(),
             aggrs.clone(),
         ));
-    }
-
-    for bucket in buckets.iter_mut() {
-        bucket.arenas.extend_from_slice(&payload.arenas);
     }
 
     // scatter each page of the payload.

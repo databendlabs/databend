@@ -19,6 +19,7 @@ use std::marker::PhantomData;
 use std::mem::take;
 use std::sync::Arc;
 
+use bumpalo::Bump;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
@@ -242,12 +243,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         let radix_bits = p.max_partition_count.trailing_zeros() as u64;
                         let config = HashTableConfig::default().with_initial_radix_bits(radix_bits);
                         let mut state = ProbeState::default();
-                        let capacity = AggregateHashTable::get_capacity_for_count(rows_num);
                         let mut hashtable = AggregateHashTable::new_with_capacity(
                             self.params.group_data_types.clone(),
                             self.params.aggregate_functions.clone(),
                             config,
-                            capacity,
+                            rows_num,
+                            Arc::new(Bump::new()),
                         );
                         hashtable.direct_append = true;
 
@@ -511,12 +512,16 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                 group_types.clone(),
                 aggrs.clone(),
                 self.max_partition_count as u64,
+                vec![Arc::new(Bump::new())],
             );
 
             for agg_payload in self.agg_payloads.drain(0..) {
-                partitioned_payload
-                    .arenas
-                    .extend_from_slice(&agg_payload.payload.arenas);
+                if !partitioned_payload.include_arena(&agg_payload.payload.arena) {
+                    partitioned_payload
+                        .arenas
+                        .extend_from_slice(&vec![agg_payload.payload.arena.clone()]);
+                }
+
                 if agg_payload.max_partition_count != self.max_partition_count {
                     debug_assert!(agg_payload.max_partition_count < self.max_partition_count);
                     partitioned_payload.combine_single(agg_payload.payload, &mut self.flush_state);
@@ -527,8 +532,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             }
 
             for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
-                let mut part = PartitionedPayload::new(group_types.clone(), aggrs.clone(), 1);
-                part.arenas.extend_from_slice(&partitioned_payload.arenas);
+                let mut part = PartitionedPayload::new(group_types.clone(), aggrs.clone(), 1, partitioned_payload.arenas.clone());
                 part.combine_single(payload, &mut self.flush_state);
 
                 if part.len() != 0 {

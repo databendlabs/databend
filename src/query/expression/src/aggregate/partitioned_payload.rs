@@ -54,14 +54,13 @@ impl PartitionedPayload {
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
         partition_count: u64,
+        arenas: Vec<Arc<Bump>>,
     ) -> Self {
         let radix_bits = partition_count.trailing_zeros() as u64;
         debug_assert_eq!(1 << radix_bits, partition_count);
 
-        let arena = Arc::new(Bump::new());
-
         let payloads = (0..partition_count)
-            .map(|_| Payload::new(arena.clone(), group_types.clone(), aggrs.clone()))
+            .map(|_| Payload::new(arenas[0].clone(), group_types.clone(), aggrs.clone()))
             .collect_vec();
 
         let group_sizes = payloads[0].group_sizes.clone();
@@ -85,7 +84,7 @@ impl PartitionedPayload {
             state_layout,
             partition_count,
 
-            arenas: vec![arena],
+            arenas,
             mask_v: mask(radix_bits),
             shift_v: shift(radix_bits),
         }
@@ -145,13 +144,14 @@ impl PartitionedPayload {
             self.group_types.clone(),
             self.aggrs.clone(),
             new_partition_count as u64,
+            self.arenas.clone(),
         );
 
         new_partition_payload.combine(self, state);
         new_partition_payload
     }
 
-    pub fn combine(&mut self, mut other: PartitionedPayload, state: &mut PayloadFlushState) {
+    pub fn combine(&mut self, other: PartitionedPayload, state: &mut PayloadFlushState) {
         if other.partition_count == self.partition_count {
             for (l, r) in self.payloads.iter_mut().zip(other.payloads.into_iter()) {
                 l.combine(r);
@@ -163,7 +163,6 @@ impl PartitionedPayload {
                 self.combine_single(payload, state)
             }
         }
-        self.arenas.append(&mut other.arenas);
     }
 
     pub fn combine_single(&mut self, mut other: Payload, state: &mut PayloadFlushState) {
@@ -249,6 +248,16 @@ impl PartitionedPayload {
     #[allow(dead_code)]
     pub fn memory_size(&self) -> usize {
         self.payloads.iter().map(|x| x.memory_size()).sum()
+    }
+
+    pub fn include_arena(&self, other: &Arc<Bump>) -> bool {
+        for arena in self.arenas.iter() {
+            if Arc::ptr_eq(arena, other) {
+                return true;
+            }
+        }
+
+        false
     }
 }
 

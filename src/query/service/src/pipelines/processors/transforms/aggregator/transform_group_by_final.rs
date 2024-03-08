@@ -77,6 +77,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                                 self.params.aggregate_functions.clone(),
                                 HashTableConfig::default().with_initial_radix_bits(0),
                                 capacity,
+                                Arc::new(Bump::new()),
                             );
                             hashtable.combine_payloads(&payload, &mut self.flush_state)?;
                             agg_hashtable = Some(hashtable);

@@ -136,10 +136,12 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 )?),
             }
         } else {
+            let arena = Arc::new(Bump::new());
             HashTable::AggregateHashTable(AggregateHashTable::new(
                 params.group_data_types.clone(),
                 params.aggregate_functions.clone(),
                 config,
+                arena,
             ))
         };
 
@@ -422,8 +424,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             HashTable::AggregateHashTable(hashtable) => {
                 let partition_count = hashtable.payload.partition_count();
                 let mut blocks = Vec::with_capacity(partition_count);
-                for (bucket, mut payload) in hashtable.payload.payloads.into_iter().enumerate() {
-                    payload.arenas.extend_from_slice(&hashtable.payload.arenas);
+                for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
                     blocks.push(DataBlock::empty_with_meta(
                         AggregateMeta::<Method, usize>::create_agg_payload(
                             bucket as isize,
