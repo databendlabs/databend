@@ -111,7 +111,7 @@ Insert(
 
 
 ---------- Input ----------
-insert into table t select * from t2
+insert into table t select * from t2;
 ---------- Output ---------
 INSERT INTO t SELECT * FROM t2
 ---------- AST ------------

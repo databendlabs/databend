@@ -2286,9 +2286,14 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
         },
         |(_, (rest_str, start))| InsertSource::RawValues { rest_str, start },
     );
-    let query = map(query, |query| InsertSource::Select {
-        query: Box::new(query),
-    });
+    let query = map(
+        rule! {
+            #query ~ ";"? ~ &EOI
+        },
+        |(query, _, _)| InsertSource::Select {
+            query: Box::new(query),
+        },
+    );
 
     rule!(
         #streaming
