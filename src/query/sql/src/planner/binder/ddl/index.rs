@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::walk_statement_mut;
 use databend_common_ast::ast::CreateIndexStmt;
 use databend_common_ast::ast::DropIndexStmt;
 use databend_common_ast::ast::ExplainKind;
@@ -22,8 +21,6 @@ use databend_common_ast::ast::RefreshIndexStmt;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::ast::Visitor;
-use databend_common_ast::ast::VisitorMut;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
@@ -36,6 +33,8 @@ use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::NonEmptyString;
 use databend_storages_common_table_meta::meta::Location;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
 use crate::binder::Binder;
 use crate::optimizer::optimize;
@@ -159,7 +158,7 @@ impl Binder {
         // check if query support index
         {
             let mut agg_index_checker = AggregatingIndexChecker::default();
-            agg_index_checker.visit_query(query);
+            query.drive(&mut agg_index_checker);
             if !agg_index_checker.is_supported() {
                 return Err(ErrorCode::UnsupportedIndex(format!(
                     "Currently create aggregating index just support simple query, like: {}, \
@@ -177,7 +176,7 @@ impl Binder {
         let mut query = query.clone();
         // TODO(ariesdevil): unify the checker and rewriter.
         let mut agg_index_rewritter = AggregatingIndexRewriter::new(self.dialect);
-        agg_index_rewritter.visit_query(&mut query);
+        query.drive_mut(&mut agg_index_rewritter);
 
         let index_name = self.normalize_object_identifier(index_name);
 
@@ -304,7 +303,7 @@ impl Binder {
 
         // And we will rewrite the agg function to agg state func in this rewriter.
         let mut index_rewriter = RefreshAggregatingIndexRewriter::default();
-        walk_statement_mut(&mut index_rewriter, &mut stmt);
+        stmt.drive_mut(&mut index_rewriter);
 
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {

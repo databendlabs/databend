@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::walk_expr_mut;
 use databend_common_ast::ast::Expr as AExpr;
 use databend_common_ast::parser::parse_comma_separated_exprs;
 use databend_common_ast::parser::tokenize_sql;
@@ -43,6 +42,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_types::NonEmptyString;
 use databend_common_settings::Settings;
+use derive_visitor::DriveMut;
 use parking_lot::RwLock;
 
 use crate::binder::wrap_cast;
@@ -338,12 +338,10 @@ pub fn parse_computed_expr_to_string(
         )));
     }
     let mut ast = ast.clone();
-    walk_expr_mut(
-        &mut IdentifierNormalizer {
-            ctx: &name_resolution_ctx,
-        },
-        &mut ast,
-    );
+    let mut normalizer = IdentifierNormalizer {
+        ctx: &name_resolution_ctx,
+    };
+    ast.drive_mut(&mut normalizer);
     Ok(format!("{:#}", ast))
 }
 

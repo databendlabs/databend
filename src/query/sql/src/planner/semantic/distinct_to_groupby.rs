@@ -24,13 +24,14 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::ast::VisitorMut;
+use derive_visitor::VisitorMut;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, VisitorMut)]
+#[visitor(SelectStmt(enter))]
 pub struct DistinctToGroupBy {}
 
-impl VisitorMut for DistinctToGroupBy {
-    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
+impl DistinctToGroupBy {
+    fn enter_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             from,
