@@ -140,6 +140,12 @@ impl InterpreterQueryLog {
             error_fields(LogType::Start, err);
         let log_type_name = log_type.as_string();
 
+        // Transaction.
+        let txn_mgr = ctx.txn_mgr();
+        let guard = txn_mgr.lock();
+        let txn_state = format!("{:?}", guard.state());
+        let txn_id = guard.txn_id().to_string();
+        drop(guard);
         Self::write_log(QueryLogElement {
             log_type,
             log_type_name,
@@ -197,6 +203,8 @@ impl InterpreterQueryLog {
             session_settings,
             extra: "".to_string(),
             has_profiles: false,
+            txn_state,
+            txn_id,
         })
     }
 
@@ -288,6 +296,13 @@ impl InterpreterQueryLog {
             error_fields(LogType::Finish, err);
         let log_type_name = log_type.as_string();
 
+        // Transaction.
+        let txn_mgr = ctx.txn_mgr();
+        let guard = txn_mgr.lock();
+        let txn_state = format!("{:?}", guard.state());
+        let txn_id = guard.txn_id().to_string();
+        drop(guard);
+
         Self::write_log(QueryLogElement {
             log_type,
             log_type_name,
@@ -345,6 +360,8 @@ impl InterpreterQueryLog {
             session_settings,
             extra: "".to_string(),
             has_profiles,
+            txn_state,
+            txn_id,
         })
     }
 }

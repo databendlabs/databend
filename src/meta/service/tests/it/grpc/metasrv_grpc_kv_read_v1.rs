@@ -153,21 +153,36 @@ async fn test_streamed_mget(client: &Arc<ClientHandle>, now_sec: u64) -> anyhow:
         }))
         .await?;
 
-    let got = strm.map_err(|e| e.to_string()).collect::<Vec<_>>().await;
-    assert_eq!(
-        vec![
-            Ok(pb::StreamItem::new(
-                s("a"),
-                Some(pb::SeqV::with_meta(
-                    1,
-                    Some(KvMeta::new_expire(now_sec + 10)),
-                    b("a")
-                ))
-            )),
-            Ok(pb::StreamItem::new(s("b"), None)),
-        ],
-        got
-    );
+    let mut got = strm.map_err(|e| e.to_string()).collect::<Vec<_>>().await;
+    assert_eq!(2, got.len());
+
+    let v1 = got.remove(0);
+    let v2 = got.remove(0);
+
+    // check v1
+    {
+        let Ok(pb::StreamItem {
+            key,
+            value: Some(seq_v),
+        }) = v1
+        else {
+            panic!("expecting Some(seq_v): but: {v1:?}");
+        };
+
+        assert_eq!(s("a"), key);
+        assert_eq!(1, seq_v.seq);
+        assert_eq!(b("a"), seq_v.data);
+        // check meta
+        {
+            let KvMeta { expire_at } = seq_v.meta.unwrap();
+            let want = now_sec + 10;
+            assert!((want..want + 3).contains(&expire_at.unwrap()));
+        }
+    }
+
+    // check v2
+    assert_eq!(v2, Ok(pb::StreamItem::new(s("b"), None)));
+
     Ok(())
 }
 

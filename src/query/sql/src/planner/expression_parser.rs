@@ -41,6 +41,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_settings::Settings;
 use parking_lot::RwLock;
 
@@ -115,7 +116,7 @@ pub fn parse_exprs(
     sql: &str,
 ) -> Result<Vec<Expr>> {
     let (mut bind_context, metadata) = bind_one_table(table_meta)?;
-    let settings = Settings::create("".to_string());
+    let settings = Settings::create(NonEmptyString::new("dummy").unwrap());
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let mut type_checker = TypeChecker::try_create(
@@ -184,7 +185,7 @@ pub fn parse_computed_expr(
     schema: DataSchemaRef,
     sql: &str,
 ) -> Result<Expr> {
-    let settings = Settings::create("".to_string());
+    let settings = Settings::create(NonEmptyString::new("dummy").unwrap());
     let mut bind_context = BindContext::new();
     let mut metadata = Metadata::default();
     let table_schema = infer_table_schema(&schema)?;
@@ -240,7 +241,7 @@ pub fn parse_default_expr_to_string(
     ast: &AExpr,
     is_add_column: bool,
 ) -> Result<String> {
-    let settings = Settings::create("".to_string());
+    let settings = Settings::create(NonEmptyString::new("dummy").unwrap());
     let mut bind_context = BindContext::new();
     let metadata = Metadata::default();
 
@@ -286,7 +287,7 @@ pub fn parse_computed_expr_to_string(
     field: &TableField,
     ast: &AExpr,
 ) -> Result<String> {
-    let settings = Settings::create("".to_string());
+    let settings = Settings::create(NonEmptyString::new("dummy").unwrap());
     let mut bind_context = BindContext::new();
     let mut metadata = Metadata::default();
     for (index, field) in table_schema.fields().iter().enumerate() {
@@ -351,7 +352,7 @@ pub fn parse_lambda_expr(
     columns: &[(String, DataType)],
     ast: &AExpr,
 ) -> Result<Box<(ScalarExpr, DataType)>> {
-    let settings = Settings::create("".to_string());
+    let settings = Settings::create(NonEmptyString::new("dummy").unwrap());
     let mut bind_context = BindContext::new();
     let mut metadata = Metadata::default();
 

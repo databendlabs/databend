@@ -243,6 +243,7 @@ fn test_statement() {
         r#"VACUUM TABLE t DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE;"#,
         r#"VACUUM DROP TABLE DRY RUN;"#,
+        r#"VACUUM DROP TABLE DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
         r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
@@ -534,6 +535,15 @@ fn test_statement() {
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  as
+            BEGIN
+              begin;
+              -- insert into t values('a;'); TODO raise error ^ unexpected end of line, expecting `END` or `;`
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END"#,
         r#"ALTER TASK MyTask1 RESUME"#,
         r#"ALTER TASK MyTask1 SUSPEND"#,
         r#"ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'"#,
@@ -544,6 +554,15 @@ fn test_statement() {
         r#"ALTER TASK MyTask1 SET DATABASE='newDB', TIMEZONE='America/Los_Angeles'"#,
         r#"ALTER TASK MyTask1 SET ERROR_INTEGRATION = 'candidate_notifictaion'"#,
         r#"ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()"#,
+        r#"ALTER TASK MyTask2 MODIFY AS
+            BEGIN
+              begin;
+              -- insert into t values('a;'); TODO raise error ^ unexpected end of line, expecting `END` or `;`
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END"#,
         r#"ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION'"#,
         r#"DROP TASK MyTask1"#,
         r#"SHOW TASKS"#,

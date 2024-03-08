@@ -9926,7 +9926,7 @@ VacuumDropTable(
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            dry_run: false,
+            dry_run: None,
             limit: None,
         },
     },
@@ -9943,7 +9943,28 @@ VacuumDropTable(
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            dry_run: true,
+            dry_run: Some(
+                false,
+            ),
+            limit: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE DRY RUN SUMMARY;
+---------- Output ---------
+VACUUM DROP TABLE DRY RUN SUMMARY
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: None,
+        option: VacuumDropTableOption {
+            dry_run: Some(
+                true,
+            ),
             limit: None,
         },
     },
@@ -9968,7 +9989,7 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            dry_run: false,
+            dry_run: None,
             limit: None,
         },
     },
@@ -9993,7 +10014,7 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            dry_run: false,
+            dry_run: None,
             limit: Some(
                 10,
             ),
@@ -15414,7 +15435,9 @@ CreateTask(
         comments: "This is test task 1",
         after: [],
         when_condition: None,
-        sql: "SELECT * FROM MyTable1",
+        sql: SingleStatement(
+            "SELECT * FROM MyTable1",
+        ),
     },
 )
 
@@ -15446,7 +15469,9 @@ CreateTask(
         comments: "This is test task 1",
         after: [],
         when_condition: None,
-        sql: "SELECT * FROM MyTable1",
+        sql: SingleStatement(
+            "SELECT * FROM MyTable1",
+        ),
     },
 )
 
@@ -15478,7 +15503,9 @@ CreateTask(
         comments: "This is test task 1",
         after: [],
         when_condition: None,
-        sql: "SELECT * FROM MyTable1",
+        sql: SingleStatement(
+            "SELECT * FROM MyTable1",
+        ),
     },
 )
 
@@ -15509,7 +15536,9 @@ CreateTask(
         comments: "serverless + cron",
         after: [],
         when_condition: None,
-        sql: "INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)",
+        sql: SingleStatement(
+            "INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)",
+        ),
     },
 )
 
@@ -15538,7 +15567,9 @@ CreateTask(
         comments: "",
         after: [],
         when_condition: None,
-        sql: "COPY INTO streams_test.paper_table FROM @stream_stage FILE_FORMAT = (type = 'PARQUET') PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort",
+        sql: SingleStatement(
+            "COPY INTO streams_test.paper_table FROM @stream_stage FILE_FORMAT = (type = 'PARQUET') PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort",
+        ),
     },
 )
 
@@ -15567,7 +15598,9 @@ CreateTask(
         comments: "",
         after: [],
         when_condition: None,
-        sql: "COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (type = 'PARQUET') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false",
+        sql: SingleStatement(
+            "COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (type = 'PARQUET') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false",
+        ),
     },
 )
 
@@ -15596,7 +15629,9 @@ CreateTask(
         when_condition: Some(
             "(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')",
         ),
-        sql: "VACUUM TABLE t ",
+        sql: SingleStatement(
+            "VACUUM TABLE t ",
+        ),
     },
 )
 
@@ -15623,7 +15658,58 @@ CreateTask(
         comments: "",
         after: [],
         when_condition: None,
-        sql: "VACUUM TABLE t ",
+        sql: SingleStatement(
+            "VACUUM TABLE t ",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  as
+            BEGIN
+              begin;
+              -- insert into t values('a;'); TODO raise error ^ unexpected end of line, expecting `END` or `;`
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 database = 'target' timezone = 'America/Los Angeles' AS BEGIN
+BEGIN;
+DELETE FROM t WHERE (c = ';');
+VACUUM TABLE t ;
+MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;
+COMMIT;
+END;
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: None,
+        session_parameters: {
+            "database": "target",
+            "timezone": "America/Los Angeles",
+        },
+        suspend_task_after_num_failures: None,
+        error_integration: None,
+        comments: "",
+        after: [],
+        when_condition: None,
+        sql: ScriptBlock(
+            [
+                "BEGIN",
+                "DELETE FROM t WHERE (c = ';')",
+                "VACUUM TABLE t ",
+                "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *",
+                "COMMIT",
+            ],
+        ),
     },
 )
 
@@ -15846,7 +15932,47 @@ AlterTask(
         if_exists: false,
         name: "MyTask2",
         options: ModifyAs(
-            "SELECT CURRENT_VERSION()",
+            SingleStatement(
+                "SELECT CURRENT_VERSION()",
+            ),
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask2 MODIFY AS
+            BEGIN
+              begin;
+              -- insert into t values('a;'); TODO raise error ^ unexpected end of line, expecting `END` or `;`
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END
+---------- Output ---------
+ALTER TASK MyTask2 AS BEGIN
+BEGIN;
+DELETE FROM t WHERE (c = ';');
+VACUUM TABLE t ;
+MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;
+COMMIT;
+END;
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask2",
+        options: ModifyAs(
+            ScriptBlock(
+                [
+                    "BEGIN",
+                    "DELETE FROM t WHERE (c = ';')",
+                    "VACUUM TABLE t ",
+                    "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *",
+                    "COMMIT",
+                ],
+            ),
         ),
     },
 )
