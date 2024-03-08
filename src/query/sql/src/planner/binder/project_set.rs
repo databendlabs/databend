@@ -49,7 +49,7 @@ pub struct SrfCollector {
 impl SrfCollector {
     fn enter_function_call(&mut self, func: &FunctionCall) {
         // TODO(andylokandy/leisky): SRF in window function is not supported yet.
-        // This is a workaroud to skip SRF in window function.
+        // This is a workaround to skip SRF in window function.
         if self.in_window {
             return;
         }
