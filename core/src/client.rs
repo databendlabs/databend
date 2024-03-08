@@ -323,10 +323,10 @@ impl APIClient {
         }
 
         let resp: QueryResponse = resp.json().await?;
+        self.handle_session(&resp.session).await;
         if let Some(err) = resp.error {
             return Err(Error::InvalidResponse(err));
         }
-        self.handle_session(&resp.session).await;
         self.handle_warnings(&resp);
         Ok(resp)
     }
