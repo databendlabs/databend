@@ -33,6 +33,8 @@ pub struct ProbeSpillHandler {
     spill_done: bool,
     // If needs to probe first round hash table, default is false
     probe_first_round_hashtable: bool,
+    // Next restore file index, only used for cross join
+    next_restore_file: usize,
 }
 
 impl ProbeSpillHandler {
@@ -41,6 +43,7 @@ impl ProbeSpillHandler {
             spill_state,
             spill_done: false,
             probe_first_round_hashtable: true,
+            next_restore_file: 0,
         }
     }
 
@@ -50,6 +53,22 @@ impl ProbeSpillHandler {
 
     pub fn probe_first_round_hashtable(&self) -> bool {
         self.probe_first_round_hashtable
+    }
+
+    // The method only used for cross join
+    pub fn next_restore_file(&mut self) -> usize {
+        self.next_restore_file += 1;
+        return self.next_restore_file - 1;
+    }
+
+    // The method only need for cross join, will be called after finishing each round
+    pub fn reset_next_restore_file(&mut self) {
+        self.next_restore_file = 0;
+    }
+
+    // The method only need for cross join, check whether the next restore file exists
+    pub fn has_next_restore_file(&self) -> bool {
+        self.next_restore_file < self.spill_state().spiller.spilled_files().len()
     }
 
     pub fn is_spill_enabled(&self) -> bool {
@@ -99,6 +118,14 @@ impl TransformHashJoinProbe {
 
     // Go to next round hash join if still has the partition in `spill_partitions`
     pub(crate) fn next_round(&mut self) -> Result<Event> {
+        // For cross join, before go to next round, check if has restore all spilled file for the current round
+        if self.join_probe_state.join_type() == JoinType::Cross {
+            if self.spill_handler.has_next_restore_file() {
+                self.step = HashJoinProbeStep::Restore;
+                return Ok(Event::Async);
+            }
+            self.spill_handler.reset_next_restore_file();
+        }
         // If `spill_partitions` isn't empty, there are still spilled data which need to restore.
         if !self.join_probe_state.spill_partitions.read().is_empty() {
             self.join_probe_state.finish_final_probe()?;
@@ -121,31 +148,32 @@ impl TransformHashJoinProbe {
     //    then add spill_partitions to `spill_partition_set` and set `spill_done` to true.
     //    change current step to `WaitBuild`
     pub(crate) fn spill_finished(&mut self, processor_id: usize) -> Result<Event> {
-        // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
-        let spilled_partition_set = &self
-            .spill_handler
-            .spill_state()
-            .spiller
-            .spilled_partitions();
-        info!(
-            "probe processor-{:?}: spill finished with spilled partitions {:?}",
-            processor_id, spilled_partition_set
-        );
-        if self.join_probe_state.hash_join_state.need_final_scan() {
-            // Assign build spilled partitions to `self.join_probe_state.spill_partitions`
-            let mut spill_partitions = self.join_probe_state.spill_partitions.write();
-            *spill_partitions = self
-                .join_probe_state
-                .hash_join_state
-                .build_spilled_partitions
-                .read()
-                .clone();
-        } else if !spilled_partition_set.is_empty() {
-            let mut spill_partitions = self.join_probe_state.spill_partitions.write();
-            spill_partitions.extend(spilled_partition_set);
-        }
-
         self.spill_handler.set_spill_done();
+        if self.join_probe_state.join_type() != JoinType::Cross {
+            // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
+            let spilled_partition_set = &self
+                .spill_handler
+                .spill_state()
+                .spiller
+                .spilled_partitions();
+            info!(
+                "probe processor-{:?}: spill finished with spilled partitions {:?}",
+                processor_id, spilled_partition_set
+            );
+            if self.join_probe_state.hash_join_state.need_final_scan() {
+                // Assign build spilled partitions to `self.join_probe_state.spill_partitions`
+                let mut spill_partitions = self.join_probe_state.spill_partitions.write();
+                *spill_partitions = self
+                    .join_probe_state
+                    .hash_join_state
+                    .build_spilled_partitions
+                    .read()
+                    .clone();
+            } else if !spilled_partition_set.is_empty() {
+                let mut spill_partitions = self.join_probe_state.spill_partitions.write();
+                spill_partitions.extend(spilled_partition_set);
+            }
+        }
         self.join_probe_state.finish_spill()?;
         // Wait build side to build hash table
         self.step = HashJoinProbeStep::WaitBuild;
@@ -202,6 +230,12 @@ impl TransformHashJoinProbe {
         let mut unmatched_data_blocks = vec![];
         for data in self.input_data.drain(..) {
             let spill_state = self.spill_handler.spill_state_mut();
+            if self.join_probe_state.join_type() == JoinType::Cross {
+                spill_state.spiller.spill_block(data).await?;
+                // Add a dummy partition id to indicate spilling has happened.
+                spill_state.spiller.partition_location.insert(0, vec![]);
+                continue;
+            }
             let mut hashes = Vec::with_capacity(data.num_rows());
             spill_state.get_hashes(&data, &self.join_probe_state.join_type(), &mut hashes)?;
             // Pass build spilled partition set, we only need to spill data in build spilled partition set
@@ -237,9 +271,44 @@ impl TransformHashJoinProbe {
         Ok(())
     }
 
+    // Restore for cross join
+    pub(crate) async fn restore_cross_join(&mut self) -> Result<()> {
+        // First, check out if there is a hash table, if not, finish hash join.
+        if unsafe { &*self.join_probe_state.hash_join_state.build_state.get() }
+            .generation_state
+            .build_num_rows
+            == 0
+        {
+            return self.finish_cross_join_spill();
+        }
+
+        // Restore each spilled file and probe hash table.
+        let next_restore_file = self.spill_handler.next_restore_file();
+        let spill_state = self.spill_handler.spill_state_mut();
+        let spilled_files = spill_state.spiller.spilled_files();
+        let (spilled_data, _) = spill_state
+            .spiller
+            .read_spilled(&spilled_files[next_restore_file])
+            .await?;
+        debug_assert!(spilled_data.num_rows() <= self.max_block_size);
+        self.input_data.push_back(spilled_data);
+
+        if self.spill_handler.has_next_restore_file() {
+            self.step = HashJoinProbeStep::Running;
+            self.step_logs.push(HashJoinProbeStep::Running);
+            return Ok(());
+        }
+        self.join_probe_state.restore_barrier.wait().await;
+        self.reset().await?;
+        Ok(())
+    }
+
     // Async restore action
     pub(crate) async fn restore_action(&mut self) -> Result<()> {
         let spill_state = self.spill_handler.spill_state();
+        if self.join_probe_state.join_type() == JoinType::Cross {
+            return self.restore_cross_join().await;
+        }
         let p_id = self
             .join_probe_state
             .hash_join_state
@@ -288,6 +357,21 @@ impl TransformHashJoinProbe {
             let data = data.convert_to_full();
             self.probe(data)?;
         }
+        Ok(())
+    }
+
+    fn finish_cross_join_spill(&mut self) -> Result<()> {
+        self.step = HashJoinProbeStep::FastReturn;
+        self.step_logs.push(HashJoinProbeStep::FastReturn);
+        self.join_probe_state
+            .hash_join_state
+            .partition_id
+            .store(-1, Ordering::Relaxed);
+        self.join_probe_state
+            .hash_join_state
+            .continue_build_watcher
+            .send(true)
+            .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
         Ok(())
     }
 }

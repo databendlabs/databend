@@ -32,7 +32,7 @@ use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum HashJoinProbeStep {
     // The step is to wait build phase finished.
     WaitBuild,
