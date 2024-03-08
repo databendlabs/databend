@@ -33,7 +33,7 @@ use super::walk_window_definition_mut;
 use crate::ast::visitors::walk_column_id_mut;
 use crate::ast::*;
 
-// #[deprecated = "Use derive_visitor::VisitorMut instead"]
+#[deprecated = "Use derive_visitor::VisitorMut instead"]
 pub trait VisitorMut: Sized {
     fn visit_expr(&mut self, expr: &mut Expr) {
         walk_expr_mut(self, expr);

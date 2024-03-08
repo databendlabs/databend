@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::walk_statement_mut;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Statement;
@@ -27,6 +26,7 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use derive_visitor::DriveMut;
 use parking_lot::RwLock;
 
 use super::semantic::AggregateRewriter;
@@ -186,8 +186,8 @@ impl Planner {
     }
 
     fn replace_stmt(&self, stmt: &mut Statement, sql_dialect: Dialect) {
-        walk_statement_mut(&mut DistinctToGroupBy::default(), stmt);
-        walk_statement_mut(&mut AggregateRewriter { sql_dialect }, stmt);
+        stmt.drive_mut(&mut DistinctToGroupBy::default());
+        stmt.drive_mut(&mut AggregateRewriter { sql_dialect });
 
         self.add_max_rows_limit(stmt);
     }
