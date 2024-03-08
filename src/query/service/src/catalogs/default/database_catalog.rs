@@ -323,8 +323,14 @@ impl Catalog for DatabaseCatalog {
 
     #[async_backtrace::framed]
     async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
-        let mut dbs = self.immutable_catalog.mget_database_names_by_ids(db_ids).await?;
-        let mut other = self.mutable_catalog.mget_database_names_by_ids(db_ids).await?;
+        let mut dbs = self
+            .immutable_catalog
+            .mget_database_names_by_ids(db_ids)
+            .await?;
+        let mut other = self
+            .mutable_catalog
+            .mget_database_names_by_ids(db_ids)
+            .await?;
         dbs.append(&mut other);
         Ok(dbs)
     }
