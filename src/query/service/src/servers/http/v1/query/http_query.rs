@@ -64,6 +64,7 @@ use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryEntry;
+use crate::sessions::Session;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
@@ -263,6 +264,58 @@ pub struct HttpQuery {
     guard: AcquireQueueGuard,
 }
 
+fn try_set_txn(
+    query_id: &str,
+    session: &Arc<Session>,
+    session_conf: &HttpSessionConf,
+    http_query_manager: &Arc<HttpQueryManager>,
+) -> Result<()> {
+    match &session_conf.txn_state {
+        Some(TxnState::Active) => {
+            if let Some(ServerInfo { id, start_time }) = &session_conf.last_server_info {
+                if http_query_manager.server_info.id != *id {
+                    return Err(ErrorCode::InvalidSessionState(format!(
+                        "transaction is active, but the request routed to the wrong server: current server is {}, the last is {}.",
+                        http_query_manager.server_info.id, id
+                    )));
+                }
+                if http_query_manager.server_info.start_time != *start_time {
+                    return Err(ErrorCode::CurrentTransactionIsAborted(format!(
+                        "transaction is aborted because server restarted at {}.",
+                        start_time
+                    )));
+                }
+            } else {
+                return Err(ErrorCode::InvalidSessionState(
+                    "transaction is active but missing server_info".to_string(),
+                ));
+            }
+
+            let last_query_id = session_conf.last_query_ids.first().ok_or_else(|| {
+                ErrorCode::InvalidSessionState(
+                    "transaction is active but last_query_ids is empty".to_string(),
+                )
+            })?;
+            if let Some(txn_mgr) = http_query_manager.get_txn(last_query_id) {
+                session.set_txn_mgr(txn_mgr);
+                info!(
+                    "{}: continue transaction from last query {}",
+                    query_id, last_query_id
+                );
+            } else {
+                // the returned TxnState should be Fail
+                return Err(ErrorCode::TransactionTimeout(format!(
+                    "transaction timeout: last_query_id {} not found",
+                    last_query_id
+                )));
+            }
+        }
+        Some(TxnState::Fail) => session.txn_mgr().lock().force_set_fail(),
+        _ => {}
+    }
+    Ok(())
+}
+
 impl HttpQuery {
     #[async_backtrace::framed]
     #[minitrace::trace]
@@ -339,49 +392,8 @@ impl HttpQuery {
                         })?;
                 }
             }
-            match &session_conf.txn_state {
-                Some(TxnState::Active) => {
-                    if let Some(ServerInfo { id, start_time }) = &session_conf.last_server_info {
-                        if http_query_manager.server_info.id != *id {
-                            return Err(ErrorCode::InvalidSessionState(format!(
-                                "transaction is active, but the request routed to the wrong server: current server is {}, the last is {}.",
-                                http_query_manager.server_info.id, id
-                            )));
-                        }
-                        if http_query_manager.server_info.start_time != *start_time {
-                            return Err(ErrorCode::CurrentTransactionIsAborted(format!(
-                                "transaction is aborted because server restarted at {}.",
-                                start_time
-                            )));
-                        }
-                    } else {
-                        return Err(ErrorCode::InvalidSessionState(
-                            "transaction is active but missing server_info".to_string(),
-                        ));
-                    }
+            try_set_txn(&ctx.query_id, &session, &session_conf, &http_query_manager)?;
 
-                    let last_query_id = session_conf.last_query_ids.first().ok_or_else(|| {
-                        ErrorCode::InvalidSessionState(
-                            "transaction is active but last_query_ids is empty".to_string(),
-                        )
-                    })?;
-                    if let Some(txn_mgr) = http_query_manager.get_txn(last_query_id) {
-                        session.set_txn_mgr(txn_mgr);
-                        info!(
-                            "{}: continue transaction from last query {}",
-                            &ctx.query_id, last_query_id
-                        );
-                    } else {
-                        // the returned TxnState should be Fail
-                        return Err(ErrorCode::TransactionTimeout(format!(
-                            "transaction timeout: last_query_id {} not found",
-                            last_query_id
-                        )));
-                    }
-                }
-                Some(TxnState::Fail) => session.txn_mgr().lock().force_set_fail(),
-                _ => {}
-            }
             if let Some(secs) = session_conf.keep_server_session_secs {
                 if secs > 0 && request.session_id.is_none() {
                     http_query_manager
@@ -436,6 +448,7 @@ impl HttpQuery {
         };
 
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
+
         let state = Arc::new(RwLock::new(Executor {
             query_id: query_id.clone(),
             state: ExecuteState::Starting(ExecuteStarting { ctx: ctx.clone() }),
