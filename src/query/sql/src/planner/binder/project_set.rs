@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
+use databend_common_ast::ast::Window;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
@@ -39,13 +40,19 @@ use crate::ScalarExpr;
 use crate::Visibility;
 
 #[derive(Visitor)]
-#[visitor(FunctionCall(enter))]
+#[visitor(FunctionCall(enter), Window)]
 pub struct SrfCollector {
     srfs: Vec<Expr>,
+    in_window: bool,
 }
 
 impl SrfCollector {
     fn enter_function_call(&mut self, func: &FunctionCall) {
+        // TODO(leisky): SRF in window function is not supported yet.
+        if self.in_window {
+            return;
+        }
+
         let FunctionCall {
             distinct,
             name,
@@ -74,11 +81,22 @@ impl SrfCollector {
             });
         }
     }
+
+    fn enter_window(&mut self, _window: &Window) {
+        self.in_window = true;
+    }
+
+    fn exit_window(&mut self, _window: &Window) {
+        self.in_window = false;
+    }
 }
 
 impl SrfCollector {
     pub fn new() -> Self {
-        SrfCollector { srfs: vec![] }
+        SrfCollector {
+            srfs: vec![],
+            in_window: false,
+        }
     }
 
     pub fn visit(&mut self, expr: &Expr) {
