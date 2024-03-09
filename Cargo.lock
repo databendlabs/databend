@@ -2611,6 +2611,7 @@ dependencies = [
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "fast-float",
  "goldenfile",
+ "indent",
  "itertools 0.10.5",
  "logos",
  "minitrace",
@@ -2624,6 +2625,7 @@ dependencies = [
  "strsim 0.10.0",
  "strum 0.24.1",
  "strum_macros 0.24.3",
+ "unindent",
  "url",
 ]
 
@@ -7814,6 +7816,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "indent"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9f1a0777d972970f204fdf8ef319f1f4f8459131636d7e3c96c5d59570d0fa6"
+
+[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8325,7 +8333,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2caa5afb8bf9f3a2652760ce7d4f62d21c4d5a423e68466fca30df82f2330164"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.4",
 ]
 
 [[package]]
