@@ -19,6 +19,7 @@ use databend_common_exception::Span;
 
 use crate::ast::Expr;
 use crate::ast::Identifier;
+use crate::ast::Query;
 use crate::ast::Statement;
 use crate::ast::TypeName;
 
@@ -34,21 +35,21 @@ pub struct CreateStoredProceduer {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScriptBody {
-    delare: Vec<ScriptVariable>,
+    declare: Vec<VariableDeclare>,
     body: Vec<ScriptStatement>,
     exception_body: Option<ScriptStatement>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ScriptVariable {
+pub struct VariableDeclare {
     pub name: Identifier,
     pub data_type: Option<TypeName>,
     pub default: Expr,
 }
 
-impl Display for ScriptVariable {
+impl Display for VariableDeclare {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let ScriptVariable {
+        let VariableDeclare {
             name,
             data_type,
             default,
@@ -63,10 +64,27 @@ impl Display for ScriptVariable {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct QueryDeclare {
+    pub name: Identifier,
+    pub query: Query,
+}
+
+impl Display for QueryDeclare {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let QueryDeclare { name, query } = self;
+        write!(f, "{name} RESULTSET := {query}")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum ScriptStatement {
-    Let {
+    LetVar {
         span: Span,
-        declare: ScriptVariable,
+        declare: VariableDeclare,
+    },
+    LetQuery {
+        span: Span,
+        declare: QueryDeclare,
     },
     Assign {
         span: Span,
@@ -140,7 +158,8 @@ pub enum ScriptStatement {
 impl Display for ScriptStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ScriptStatement::Let { declare, .. } => write!(f, "LET {declare}"),
+            ScriptStatement::LetVar { declare, .. } => write!(f, "LET {declare}"),
+            ScriptStatement::LetQuery { declare, .. } => write!(f, "LET {declare}"),
             ScriptStatement::Assign { name, value, .. } => write!(f, "{name} := {value}"),
             ScriptStatement::Return { value, .. } => {
                 if let Some(value) = value {

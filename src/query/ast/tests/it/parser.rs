@@ -976,6 +976,7 @@ fn test_script() {
 
     let cases = &[
         r#"LET cost DECIMAL(38, 2) := 100.0"#,
+        r#"LET t1 RESULTSET := SELECT * FROM numbers(100)"#,
         r#"profit := revenue - cost"#,
         r#"RETURN profit"#,
         r#"RETURN"#,

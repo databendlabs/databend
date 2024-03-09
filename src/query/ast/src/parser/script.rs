@@ -15,22 +15,35 @@
 use nom::combinator::consumed;
 use nom::combinator::map;
 
-use super::statement::statement_body;
 use crate::ast::*;
 use crate::parser::common::*;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::token::*;
+use crate::parser::query::*;
+use crate::parser::statement::*;
 use crate::rule;
 
 pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
-    let let_stmt = map(
+    let let_query_stmt = map(
+        consumed(rule! {
+            LET ~^#ident ~ RESULTSET ~ ^":=" ~ ^#query
+        }),
+        |(span, (_, name, _, _, query))| ScriptStatement::LetQuery {
+            span: transform_span(span.0),
+            declare: QueryDeclare {
+                name,
+                query,
+            },
+        },
+    );
+    let let_var_stmt = map(
         consumed(rule! {
             LET ~^#ident ~ #type_name? ~ ^":=" ~ ^#expr
         }),
-        |(span, (_, name, data_type, _, default))| ScriptStatement::Let {
+        |(span, (_, name, data_type, _, default))| ScriptStatement::LetVar {
             span: transform_span(span.0),
-            declare: ScriptVariable {
+            declare: VariableDeclare {
                 name,
                 data_type,
                 default,
@@ -200,7 +213,8 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
     );
 
     rule!(
-        #let_stmt
+        #let_query_stmt
+        | #let_var_stmt
         | #assign_stmt
         | #return_stmt
         | #for_loop_stmt

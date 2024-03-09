@@ -907,6 +907,8 @@ pub enum TokenKind {
     RETURN,
     #[token("RETURNS", ignore(ascii_case))]
     RETURNS,
+    #[token("RESULTSET", ignore(ascii_case))]
+    RESULTSET,
     #[token("RUN", ignore(ascii_case))]
     RUN,
     #[token("GRANTS", ignore(ascii_case))]

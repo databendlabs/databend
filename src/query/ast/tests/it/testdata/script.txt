@@ -3,11 +3,11 @@ LET cost DECIMAL(38, 2) := 100.0
 ---------- Output ---------
 LET cost Decimal(38, 2) := 100.0
 ---------- AST ------------
-Let {
+LetVar {
     span: Some(
         0..32,
     ),
-    declare: ScriptVariable {
+    declare: VariableDeclare {
         name: Identifier {
             span: Some(
                 4..8,
@@ -30,6 +30,90 @@ Let {
                 precision: 76,
                 scale: 1,
             },
+        },
+    },
+}
+
+
+---------- Input ----------
+LET t1 RESULTSET := SELECT * FROM numbers(100)
+---------- Output ---------
+LET t1 RESULTSET := SELECT * FROM numbers(100)
+---------- AST ------------
+LetQuery {
+    span: Some(
+        0..46,
+    ),
+    declare: QueryDeclare {
+        name: Identifier {
+            span: Some(
+                4..6,
+            ),
+            name: "t1",
+            quote: None,
+        },
+        query: Query {
+            span: Some(
+                20..46,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        20..46,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        27..28,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        TableFunction {
+                            span: Some(
+                                34..46,
+                            ),
+                            lateral: false,
+                            name: Identifier {
+                                span: Some(
+                                    34..41,
+                                ),
+                                name: "numbers",
+                                quote: None,
+                            },
+                            params: [
+                                Literal {
+                                    span: Some(
+                                        42..45,
+                                    ),
+                                    lit: UInt64(
+                                        100,
+                                    ),
+                                },
+                            ],
+                            named_params: [],
+                            alias: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
         },
     },
 }
