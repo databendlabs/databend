@@ -121,6 +121,7 @@ chrono-tz = { workspace = true }
 config = { version = "0.13.4", features = [] }
 ctor = "0.1.26"
 dashmap = { workspace = true }
+derive-visitor = { workspace = true }
 ethnum = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
