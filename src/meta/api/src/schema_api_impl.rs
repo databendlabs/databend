@@ -3179,6 +3179,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     CreateOption::CreateOrReplace => {}
                 }
             }
+            // check the index column id exists
+            for column_id in &req.column_ids {
+                if table_meta.schema.is_column_deleted(*column_id) {
+                    return Err(KVAppError::AppError(AppError::UnknownIndex(
+                        UnknownIndex::new(
+                            &req.name,
+                            format!("table index column id {} is not exist", column_id),
+                        ),
+                    )));
+                }
+            }
             let index = TableIndex {
                 name: req.name.clone(),
                 column_ids: req.column_ids.clone(),

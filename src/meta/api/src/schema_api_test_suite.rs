@@ -5784,6 +5784,8 @@ impl SchemaApiTestSuite {
         let index_column_ids_1 = vec![0, 1];
         let index_name_2 = "idx2".to_string();
         let index_column_ids_2 = vec![0];
+        let index_name_3 = "idx2".to_string();
+        let index_column_ids_3 = vec![2];
 
         {
             info!("--- create table index");
@@ -5834,6 +5836,18 @@ impl SchemaApiTestSuite {
 
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
+        }
+
+        {
+            info!("--- create table index with invalid column id");
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::None,
+                table_id,
+                name: index_name_3.clone(),
+                column_ids: index_column_ids_3.clone(),
+            };
+            let res = mt.create_table_index(req).await;
+            assert!(res.is_err());
         }
 
         {
