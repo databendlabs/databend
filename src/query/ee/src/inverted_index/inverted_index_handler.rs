@@ -15,9 +15,14 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
+use databend_common_meta_app::schema::CreateTableIndexReply;
+use databend_common_meta_app::schema::CreateTableIndexReq;
+use databend_common_meta_app::schema::DropTableIndexReply;
+use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_inverted_index::InvertedIndexHandler;
 use databend_enterprise_inverted_index::InvertedIndexHandlerWrapper;
@@ -29,6 +34,24 @@ pub struct RealInvertedIndexHandler {}
 
 #[async_trait::async_trait]
 impl InvertedIndexHandler for RealInvertedIndexHandler {
+    #[async_backtrace::framed]
+    async fn do_create_table_index(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        req: CreateTableIndexReq,
+    ) -> Result<CreateTableIndexReply> {
+        catalog.create_table_index(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn do_drop_table_index(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        req: DropTableIndexReq,
+    ) -> Result<DropTableIndexReply> {
+        catalog.drop_table_index(req).await
+    }
+
     #[async_backtrace::framed]
     async fn do_refresh_index(
         &self,

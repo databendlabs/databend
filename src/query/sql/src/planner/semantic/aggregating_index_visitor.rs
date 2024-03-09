@@ -14,49 +14,41 @@
 
 use std::collections::HashSet;
 
-use databend_common_ast::ast::walk_expr;
-use databend_common_ast::ast::walk_expr_mut;
-use databend_common_ast::ast::walk_select_target;
-use databend_common_ast::ast::walk_select_target_mut;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::ast::Visitor;
-use databend_common_ast::ast::VisitorMut;
-use databend_common_ast::ast::Window;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
-use databend_common_exception::Span;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use derive_visitor::DriveMut;
+use derive_visitor::Visitor;
+use derive_visitor::VisitorMut;
 use itertools::Itertools;
 
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, VisitorMut)]
+#[visitor(Expr(exit), SelectStmt(enter))]
 pub struct AggregatingIndexRewriter {
     pub sql_dialect: Dialect,
-    has_agg_function: bool,
     extracted_aggs: HashSet<String>,
+    current_position: Option<usize>,
     agg_func_positions: HashSet<usize>,
 }
 
-impl VisitorMut for AggregatingIndexRewriter {
-    fn visit_expr(&mut self, expr: &mut Expr) {
-        // rewrite children
-        walk_expr_mut(self, expr);
-
+impl AggregatingIndexRewriter {
+    fn exit_expr(&mut self, expr: &mut Expr) {
         match expr {
             Expr::FunctionCall {
                 func:
@@ -75,7 +67,8 @@ impl VisitorMut for AggregatingIndexRewriter {
                 && window.is_none()
                 && lambda.is_none() =>
             {
-                self.has_agg_function = true;
+                self.agg_func_positions
+                    .insert(self.current_position.unwrap());
                 if name.name.eq_ignore_ascii_case("avg") {
                     self.extract_avg(args);
                 } else if name.name.eq_ignore_ascii_case("count") {
@@ -90,14 +83,15 @@ impl VisitorMut for AggregatingIndexRewriter {
                 }
             }
             Expr::CountAll { window, .. } if window.is_none() => {
-                self.has_agg_function = true;
+                self.agg_func_positions
+                    .insert(self.current_position.unwrap());
                 self.extracted_aggs.insert("COUNT()".to_string());
             }
             _ => {}
         };
     }
 
-    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
+    fn enter_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             group_by,
@@ -117,23 +111,14 @@ impl VisitorMut for AggregatingIndexRewriter {
         });
         let mut new_select_list: Vec<SelectTarget> = vec![];
         for (position, target) in select_list.iter_mut().enumerate() {
-            walk_select_target_mut(self, target);
-            if self.has_agg_function {
-                // if target has agg function, we will extract the func to a hashset
-                // see `visit_expr` above for detail.
-                // we save the position of target that has agg function here,
-                // so that we can skip this target after and replace this skipped
-                // target with extracted agg function.
-                self.agg_func_positions.insert(position);
-                self.has_agg_function = false;
-            }
-        }
+            // if target has agg function, we will extract the func to a hashset
+            // see `exit_expr` above for detail.
+            // we save the position of target that has agg function here,
+            // so that we can skip this target after and replace this skipped
+            // target with extracted agg function.
+            self.current_position = Some(position);
+            target.drive_mut(self);
 
-        if !self.agg_func_positions.is_empty() {
-            self.has_agg_function = true;
-        }
-
-        for (position, target) in select_list.iter().enumerate() {
             // add targets that not have agg function to new select list.
             if !self.agg_func_positions.contains(&position) {
                 new_select_list.push(target.clone());
@@ -182,8 +167,8 @@ impl AggregatingIndexRewriter {
     pub fn new(sql_dialect: Dialect) -> Self {
         Self {
             sql_dialect,
-            has_agg_function: false,
             extracted_aggs: Default::default(),
+            current_position: None,
             agg_func_positions: Default::default(),
         }
     }
@@ -210,7 +195,8 @@ impl AggregatingIndexRewriter {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Visitor)]
+#[visitor(FunctionCall(enter), SelectStmt(enter), Query(enter))]
 pub struct AggregatingIndexChecker {
     not_support: bool,
 }
@@ -219,19 +205,17 @@ impl AggregatingIndexChecker {
     pub fn is_supported(&self) -> bool {
         !self.not_support
     }
-}
 
-impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
-    fn visit_function_call(
-        &mut self,
-        _span: Span,
-        _distinct: bool,
-        name: &'ast Identifier,
-        args: &'ast [Expr],
-        params: &'ast [Expr],
-        _over: &'ast Option<Window>,
-        _lambda: &'ast Option<Lambda>,
-    ) {
+    fn enter_function_call(&mut self, func: &FunctionCall) {
+        let FunctionCall {
+            distinct: _,
+            name,
+            params: _,
+            args: _,
+            window: _,
+            lambda: _,
+        } = func;
+
         if self.not_support {
             return;
         }
@@ -248,16 +232,9 @@ impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
             .get_property(&name.name)
             .map(|p| p.non_deterministic)
             .unwrap_or(false);
-
-        for arg in args {
-            walk_expr(self, arg);
-        }
-        for param in params {
-            walk_expr(self, param);
-        }
     }
 
-    fn visit_select_stmt(&mut self, stmt: &'ast SelectStmt) {
+    fn enter_select_stmt(&mut self, stmt: &SelectStmt) {
         if self.not_support {
             return;
         }
@@ -265,61 +242,41 @@ impl<'ast> Visitor<'ast> for AggregatingIndexChecker {
             self.not_support = true;
             return;
         }
-        if let Some(selection) = &stmt.selection {
-            walk_expr(self, selection);
-        }
         match &stmt.group_by {
             None => {}
-            Some(group_by) => match group_by {
-                GroupBy::Normal(exprs) => {
-                    for expr in exprs {
-                        walk_expr(self, expr);
-                    }
-                }
-                _ => {
-                    self.not_support = true;
-                    return;
-                }
-            },
+            Some(GroupBy::Normal(_)) => {}
+            _ => {
+                self.not_support = true;
+                return;
+            }
         }
         for target in &stmt.select_list {
             if target.has_window() {
                 self.not_support = true;
                 return;
             }
-            walk_select_target(self, target);
         }
     }
 
-    fn visit_query(&mut self, query: &'ast Query) {
-        if self.not_support {
-            return;
-        }
-        if query.with.is_some() || !query.order_by.is_empty() || !query.limit.is_empty() {
+    fn enter_query(&mut self, query: &Query) {
+        if query.with.is_some()
+            || !query.order_by.is_empty()
+            || !query.limit.is_empty()
+            || !matches!(&query.body, SetExpr::Select(_))
+        {
             self.not_support = true;
-            return;
-        }
-
-        if !matches!(&query.body, SetExpr::Select(_)) {
-            self.not_support = true;
-            return;
-        }
-
-        self.visit_set_expr(&query.body);
-
-        for order_by in &query.order_by {
-            self.visit_order_by(order_by);
         }
     }
 }
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, VisitorMut)]
+#[visitor(Expr(exit), SelectStmt(exit))]
 pub struct RefreshAggregatingIndexRewriter {
     pub user_defined_block_name: bool,
     has_agg_function: bool,
 }
 
-impl VisitorMut for RefreshAggregatingIndexRewriter {
-    fn visit_expr(&mut self, expr: &mut Expr) {
+impl RefreshAggregatingIndexRewriter {
+    fn exit_expr(&mut self, expr: &mut Expr) {
         match expr {
             Expr::FunctionCall {
                 func:
@@ -360,17 +317,13 @@ impl VisitorMut for RefreshAggregatingIndexRewriter {
         }
     }
 
-    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
+    fn exit_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             from,
             group_by,
             ..
         } = stmt;
-
-        for target in select_list.iter_mut() {
-            walk_select_target_mut(self, target);
-        }
 
         let table = {
             let table_ref = from.first().unwrap();

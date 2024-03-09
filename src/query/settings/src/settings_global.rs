@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use log::warn;
 
@@ -30,12 +31,9 @@ impl Settings {
     #[async_backtrace::framed]
     pub async fn load_settings(
         user_api: Arc<UserApiProvider>,
-        tenant: String,
+        tenant: &NonEmptyString,
     ) -> Result<Vec<UserSetting>> {
-        user_api
-            .get_setting_api_client(&tenant)?
-            .get_settings()
-            .await
+        user_api.setting_api(tenant).get_settings().await
     }
 
     #[async_backtrace::framed]
@@ -43,7 +41,7 @@ impl Settings {
         self.changes.remove(key);
 
         UserApiProvider::instance()
-            .get_setting_api_client(&self.tenant)?
+            .setting_api(&self.tenant)
             .try_drop_setting(key, MatchSeq::GE(1))
             .await
     }
@@ -67,7 +65,7 @@ impl Settings {
         let default_settings = DefaultSettings::instance()?;
 
         let api = UserApiProvider::instance();
-        let global_settings = Settings::load_settings(api, self.tenant.clone()).await?;
+        let global_settings = Settings::load_settings(api, &self.tenant).await?;
 
         for global_setting in global_settings {
             let name = global_setting.name;

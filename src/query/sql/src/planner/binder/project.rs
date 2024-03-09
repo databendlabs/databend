@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::walk_expr_mut;
 use databend_common_ast::ast::ColumnFilter;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -26,7 +25,6 @@ use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::SelectTarget;
-use databend_common_ast::ast::VisitorMut;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
@@ -36,6 +34,8 @@ use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use derive_visitor::DriveMut;
+use derive_visitor::VisitorMut;
 use itertools::Itertools;
 
 use super::AggregateInfo;
@@ -65,10 +65,12 @@ use crate::IndexType;
 use crate::TypeChecker;
 use crate::WindowChecker;
 
+#[derive(VisitorMut)]
+#[visitor(Identifier(enter))]
 struct RemoveIdentifierQuote;
 
-impl VisitorMut for RemoveIdentifierQuote {
-    fn visit_identifier(&mut self, ident: &mut Identifier) {
+impl RemoveIdentifierQuote {
+    fn enter_identifier(&mut self, ident: &mut Identifier) {
         ident.quote = None
     }
 }
@@ -277,7 +279,7 @@ impl Binder {
                         _ => {
                             let mut expr = expr.clone();
                             let mut remove_quote_visitor = RemoveIdentifierQuote;
-                            walk_expr_mut(&mut remove_quote_visitor, &mut expr);
+                            expr.drive_mut(&mut remove_quote_visitor);
                             format!("{:#}", expr).to_lowercase()
                         }
                     };

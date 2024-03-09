@@ -30,6 +30,8 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateTableIndexReply;
+use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
@@ -40,6 +42,8 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableIndexReply;
+use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
@@ -93,7 +97,7 @@ use crate::storages::Table;
 /// System Catalog contains ... all the system databases (no surprise :)
 #[derive(Clone)]
 pub struct ImmutableCatalog {
-    // it's case sensitive, so we will need two same database only with the name's case
+    // IT'S CASE SENSITIVE, SO WE WILL NEED TWO SAME DATABASE ONLY WITH THE NAME'S CASE
     info_schema_db: Arc<InformationSchemaDatabase>,
     sys_db: Arc<SystemDatabase>,
     sys_db_meta: Arc<InMemoryMetas>,
@@ -198,6 +202,19 @@ impl Catalog for ImmutableCatalog {
         Ok(table.name().to_string())
     }
 
+    async fn mget_table_names_by_ids(
+        &self,
+        table_ids: &[MetaId],
+    ) -> databend_common_exception::Result<Vec<String>> {
+        let mut table_name = Vec::with_capacity(table_ids.len());
+        for id in table_ids {
+            if let Some(table) = self.sys_db_meta.get_by_id(id) {
+                table_name.push(table.name().to_string());
+            }
+        }
+        Ok(table_name)
+    }
+
     async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
         if self.sys_db.get_db_info().ident.db_id == db_id {
             Ok("system".to_string())
@@ -209,6 +226,18 @@ impl Catalog for ImmutableCatalog {
                 db_id
             )))
         }
+    }
+
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
+        let mut res = Vec::new();
+        for id in db_ids {
+            if self.sys_db.get_db_info().ident.db_id == *id {
+                res.push("system".to_string());
+            } else if self.info_schema_db.get_db_info().ident.db_id == *id {
+                res.push("information_schema".to_string());
+            }
+        }
+        Ok(res)
     }
 
     #[async_backtrace::framed]
@@ -270,6 +299,14 @@ impl Catalog for ImmutableCatalog {
         Err(ErrorCode::Unimplemented(
             "Cannot rename table in system database",
         ))
+    }
+
+    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+        unimplemented!()
+    }
+
+    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+        unimplemented!()
     }
 
     #[async_backtrace::framed]

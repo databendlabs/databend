@@ -22,6 +22,7 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::query::*;
 use databend_common_ast::parser::quote::quote_ident;
 use databend_common_ast::parser::quote::unquote_ident;
+use databend_common_ast::parser::statement::insert_stmt;
 use databend_common_ast::parser::token::*;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Backtrace;
@@ -102,6 +103,7 @@ fn test_statement() {
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
         r#"CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
+        r#"CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b);"#,
         r#"create table a (c decimal(38, 0))"#,
         r#"create table a (c decimal(38))"#,
         r#"create or replace table a (c decimal(38))"#,
@@ -193,7 +195,6 @@ fn test_statement() {
         r#"select '🦈'"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);   "#,
-        r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"CREATE STAGE ~"#,
@@ -241,6 +242,7 @@ fn test_statement() {
         r#"VACUUM TABLE t DRY RUN;"#,
         r#"VACUUM DROP TABLE;"#,
         r#"VACUUM DROP TABLE DRY RUN;"#,
+        r#"VACUUM DROP TABLE DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
         r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
@@ -532,6 +534,15 @@ fn test_statement() {
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  as
+            BEGIN
+              begin;
+              insert into t values('a;');
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END"#,
         r#"ALTER TASK MyTask1 RESUME"#,
         r#"ALTER TASK MyTask1 SUSPEND"#,
         r#"ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'"#,
@@ -542,6 +553,15 @@ fn test_statement() {
         r#"ALTER TASK MyTask1 SET DATABASE='newDB', TIMEZONE='America/Los_Angeles'"#,
         r#"ALTER TASK MyTask1 SET ERROR_INTEGRATION = 'candidate_notifictaion'"#,
         r#"ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()"#,
+        r#"ALTER TASK MyTask2 MODIFY AS
+            BEGIN
+              begin;
+              insert into t values('a;');
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END"#,
         r#"ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION'"#,
         r#"DROP TASK MyTask1"#,
         r#"SHOW TASKS"#,
@@ -698,6 +718,22 @@ fn test_statement_error() {
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
         writeln!(file, "{}", err.message()).unwrap();
+    }
+}
+
+#[test]
+fn test_raw_insert_stmt() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("raw_insert.txt").unwrap();
+    let cases = &[
+        r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
+        r#"insert into t (c1, c2) values (1, 2);   "#,
+        r#"insert into table t format json;"#,
+        r#"insert into table t select * from t2;"#,
+    ];
+
+    for case in cases {
+        run_parser(file, insert_stmt(true), case);
     }
 }
 

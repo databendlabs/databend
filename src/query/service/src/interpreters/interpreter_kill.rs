@@ -24,6 +24,7 @@ use crate::api::KillQueryPacket;
 use crate::api::Packet;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 
 pub struct KillInterpreter {
@@ -99,10 +100,22 @@ impl KillInterpreter {
                 ))),
             },
             Some(kill_session) if self.plan.kill_connection => {
+                if let Some(query_id) = kill_session.get_current_query_id() {
+                    if QueriesQueueManager::instance().remove(query_id) {
+                        return Ok(PipelineBuildResult::create());
+                    }
+                }
+
                 kill_session.force_kill_session();
                 Ok(PipelineBuildResult::create())
             }
             Some(kill_session) => {
+                if let Some(query_id) = kill_session.get_current_query_id() {
+                    if QueriesQueueManager::instance().remove(query_id) {
+                        return Ok(PipelineBuildResult::create());
+                    }
+                }
+
                 kill_session.force_kill_query(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed",
                 ));

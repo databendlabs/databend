@@ -56,6 +56,7 @@ use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
+use crate::plans::CreateTableIndexPlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
@@ -87,6 +88,7 @@ use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
+use crate::plans::DropTableIndexPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
@@ -234,6 +236,8 @@ pub enum Plan {
     CreateIndex(Box<CreateIndexPlan>),
     DropIndex(Box<DropIndexPlan>),
     RefreshIndex(Box<RefreshIndexPlan>),
+    CreateTableIndex(Box<CreateTableIndexPlan>),
+    DropTableIndex(Box<DropTableIndexPlan>),
 
     // Virtual Columns
     CreateVirtualColumn(Box<CreateVirtualColumnPlan>),

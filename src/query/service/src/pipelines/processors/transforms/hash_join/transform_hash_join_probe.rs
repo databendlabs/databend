@@ -241,15 +241,13 @@ impl TransformHashJoinProbe {
     // 2. After spilling done, it will use restored data to proceed normal probe.
     fn run(&mut self) -> Result<Event> {
         if self.output_port.is_finished() {
+            self.input_port.finish();
             if self.join_probe_state.hash_join_state.need_final_scan() {
                 return Ok(Event::Async);
             }
-
-            if self.join_probe_state.hash_join_state.enable_spill {
+            if self.need_spill() {
                 return self.next_round();
             }
-
-            self.input_port.finish();
             return Ok(Event::Finished);
         }
 
@@ -318,7 +316,7 @@ impl TransformHashJoinProbe {
             return Ok(Event::Async);
         }
 
-        if !self.join_probe_state.hash_join_state.enable_spill {
+        if !self.need_spill() {
             self.output_port.finish();
             return Ok(Event::Finished);
         }
@@ -330,7 +328,7 @@ impl TransformHashJoinProbe {
     // FinalScan
     fn final_scan(&mut self) -> Result<Event> {
         if self.output_port.is_finished() {
-            if self.join_probe_state.hash_join_state.enable_spill {
+            if self.need_spill() {
                 if !self.spill_handler.spill_done() {
                     return self.spill_finished(self.processor_id);
                 }
@@ -358,7 +356,7 @@ impl TransformHashJoinProbe {
             false => Ok(Event::Sync),
             true => {
                 self.input_port.finish();
-                if !self.join_probe_state.hash_join_state.enable_spill {
+                if !self.need_spill() {
                     self.output_port.finish();
                     return Ok(Event::Finished);
                 }

@@ -26,6 +26,8 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateTableIndexReply;
+use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
@@ -36,6 +38,8 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableIndexReply;
+use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
@@ -244,9 +248,25 @@ impl Catalog for SessionCatalog {
         }
     }
 
-    // Get the db name by meta id.
+    // Mget the dbs name by meta ids.
+    async fn mget_table_names_by_ids(
+        &self,
+        table_ids: &[MetaId],
+    ) -> databend_common_exception::Result<Vec<String>> {
+        self.inner.mget_table_names_by_ids(table_ids).await
+    }
+
+    // Mget the db name by meta id.
     async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
         self.inner.get_db_name_by_id(db_id).await
+    }
+
+    // Mget the dbs name by meta ids.
+    async fn mget_database_names_by_ids(
+        &self,
+        db_ids: &[MetaId],
+    ) -> databend_common_exception::Result<Vec<String>> {
+        self.inner.mget_database_names_by_ids(db_ids).await
     }
 
     // Get one table by db and table name.
@@ -359,6 +379,14 @@ impl Catalog for SessionCatalog {
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply> {
         self.inner.set_table_column_mask_policy(req).await
+    }
+
+    async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+        self.inner.create_table_index(req).await
+    }
+
+    async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+        self.inner.drop_table_index(req).await
     }
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {

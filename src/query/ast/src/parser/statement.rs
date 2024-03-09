@@ -60,7 +60,7 @@ pub enum CreateDatabaseOption {
     FromShare(ShareNameIdent),
 }
 
-pub fn statement(i: Input) -> IResult<StatementWithFormat> {
+pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain = map_res(
         rule! {
             EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
@@ -118,7 +118,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ (#set_table_option)?
-            ~ AS ~ #statement
+            ~ AS ~ #task_sql_block
         },
         |(
             _,
@@ -136,7 +136,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             _,
             sql,
         )| {
-            let sql = format!("{}", sql.stmt);
             let session_opts = session_opts.unwrap_or_default();
             Statement::CreateTask(CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
@@ -212,66 +211,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let insert = map(
-        rule! {
-            INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
-            ~ #dot_separated_idents_1_to_3
-            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ #insert_source
-        },
-        |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
-            Statement::Insert(InsertStmt {
-                hints: opt_hints,
-                catalog,
-                database,
-                table,
-                columns: opt_columns
-                    .map(|(_, columns, _)| columns)
-                    .unwrap_or_default(),
-                source,
-                overwrite: overwrite.kind == OVERWRITE,
-            })
-        },
-    );
-
-    let replace = map(
-        rule! {
-            REPLACE ~ #hint? ~ INTO?
-            ~ #dot_separated_idents_1_to_3
-            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ (ON ~ CONFLICT? ~ "(" ~ #comma_separated_list1(ident) ~ ")")
-            ~ (DELETE ~ WHEN ~ ^#expr)?
-            ~ #insert_source
-        },
-        |(
-            _,
-            opt_hints,
-            _,
-            (catalog, database, table),
-            opt_columns,
-            (_, _, _, on_conflict_columns, _),
-            opt_delete_when,
-            source,
-        )| {
-            Statement::Replace(ReplaceStmt {
-                hints: opt_hints,
-                catalog,
-                database,
-                table,
-                on_conflict_columns,
-                columns: opt_columns
-                    .map(|(_, columns, _)| columns)
-                    .unwrap_or_default(),
-                source,
-                delete_when: opt_delete_when.map(|(_, _, expr)| expr),
-            })
-        },
-    );
-
     let merge = map(
         rule! {
-            MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias? ~ USING
-            ~ #merge_source ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
+            MERGE ~ #hint?
+            ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias?
+            ~ USING ~ #merge_source
+            ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
             _,
@@ -1017,6 +962,61 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             Statement::RefreshIndex(RefreshIndexStmt {
                 index,
                 limit: opt_limit.map(|(_, limit)| limit),
+            })
+        },
+    );
+
+    let create_inverted_index = map_res(
+        rule! {
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ ASYNC?
+            ~ INVERTED ~ INDEX
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ ON ~ #dot_separated_idents_1_to_3
+            ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
+        },
+        |(
+            _,
+            opt_or_replace,
+            opt_async,
+            _,
+            _,
+            opt_if_not_exists,
+            index_name,
+            _,
+            (catalog, database, table),
+            _,
+            columns,
+            _,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateInvertedIndex(CreateInvertedIndexStmt {
+                create_option,
+                index_name,
+                catalog,
+                database,
+                table,
+                columns,
+                sync_creation: opt_async.is_none(),
+            }))
+        },
+    );
+
+    let drop_inverted_index = map(
+        rule! {
+            DROP ~ INVERTED ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
+            ~ ON ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, opt_if_exists, index_name, _, (catalog, database, table))| {
+            Statement::DropInvertedIndex(DropInvertedIndexStmt {
+                if_exists: opt_if_exists.is_some(),
+                index_name,
+                catalog,
+                database,
+                table,
             })
         },
     );
@@ -1975,10 +1975,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let commit = value(Statement::Commit, rule! { COMMIT });
     let abort = value(Statement::Abort, rule! { ABORT | ROLLBACK });
 
-    let statement_body = alt((
+    alt((
         // query, explain,show
         rule!(
-        #map(query, |query| Statement::Query(Box::new(query)))
+            #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
@@ -2016,8 +2016,8 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"
         ),
         rule!(
-            #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
-            | #replace : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
@@ -2045,8 +2045,8 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
-            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN]`"
-            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN]`"
+            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
+            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
@@ -2058,8 +2058,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #stream_table
             | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
-            | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
-            | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
+            | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
+            | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
+            | #create_inverted_index: "`CREATE [OR REPLACE] INVERTED INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
+            | #drop_inverted_index: "`DROP INVERTED INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
         ),
         rule!(
             #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
@@ -2178,8 +2180,10 @@ AS
         | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
         | #show_connections: "`SHOW CONNECTIONS`"
         ),
-    ));
+    ))(i)
+}
 
+pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     map(
         rule! {
             #statement_body ~ ( FORMAT ~ ^#ident )? ~ ";"? ~ &EOI
@@ -2205,86 +2209,114 @@ pub fn parse_create_option(
     }
 }
 
-pub fn notification_webhook_options(i: Input) -> IResult<NotificationWebhookOptions> {
-    let url_option = map(
-        rule! {
-            URL ~ "=" ~ #literal_string
-        },
-        |(_, _, v)| ("url".to_string(), v.to_string()),
-    );
-    let method_option = map(
-        rule! {
-            METHOD ~ "=" ~ #literal_string
-        },
-        |(_, _, v)| ("method".to_string(), v.to_string()),
-    );
-    let auth_option = map(
-        rule! {
-            AUTHORIZATION_HEADER ~ "=" ~ #literal_string
-        },
-        |(_, _, v)| ("authorization_header".to_string(), v.to_string()),
-    );
-
-    map(
-        rule! { ((
-        #url_option
-        | #method_option
-        | #auth_option) ~ ","?)* },
-        |opts| {
-            NotificationWebhookOptions::from_iter(
-                opts.iter().map(|((k, v), _)| (k.to_uppercase(), v.clone())),
-            )
-        },
-    )(i)
+pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        let insert_source_parser = if allow_raw {
+            raw_insert_source
+        } else {
+            insert_source
+        };
+        map(
+            rule! {
+                INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
+                ~ #dot_separated_idents_1_to_3
+                ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+                ~ #insert_source_parser
+            },
+            |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
+                Statement::Insert(InsertStmt {
+                    hints: opt_hints,
+                    catalog,
+                    database,
+                    table,
+                    columns: opt_columns
+                        .map(|(_, columns, _)| columns)
+                        .unwrap_or_default(),
+                    source,
+                    overwrite: overwrite.kind == OVERWRITE,
+                })
+            },
+        )(i)
+    }
 }
 
-pub fn notification_webhook_clause(i: Input) -> IResult<NotificationWebhookOptions> {
-    map(
-        rule! { WEBHOOK ~ ^"=" ~ ^"(" ~ ^#notification_webhook_options ~ ^")" },
-        |(_, _, _, opts, _)| opts,
-    )(i)
+pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        let insert_source_parser = if allow_raw {
+            raw_insert_source
+        } else {
+            insert_source
+        };
+        map(
+            rule! {
+                REPLACE ~ #hint? ~ INTO?
+                ~ #dot_separated_idents_1_to_3
+                ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+                ~ ON ~ CONFLICT? ~ "(" ~ #comma_separated_list1(ident) ~ ")"
+                ~ ( DELETE ~ WHEN ~ ^#expr )?
+                ~ #insert_source_parser
+            },
+            |(
+                _,
+                opt_hints,
+                _,
+                (catalog, database, table),
+                opt_columns,
+                _,
+                _,
+                _,
+                on_conflict_columns,
+                _,
+                opt_delete_when,
+                source,
+            )| {
+                Statement::Replace(ReplaceStmt {
+                    hints: opt_hints,
+                    catalog,
+                    database,
+                    table,
+                    on_conflict_columns,
+                    columns: opt_columns
+                        .map(|(_, columns, _)| columns)
+                        .unwrap_or_default(),
+                    source,
+                    delete_when: opt_delete_when.map(|(_, _, expr)| expr),
+                })
+            },
+        )(i)
+    }
 }
 
-pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions> {
-    let enabled = map(
+// `VALUES (expr, expr), (expr, expr)`
+pub fn insert_source(i: Input) -> IResult<InsertSource> {
+    let row = map(
         rule! {
-            SET ~ ENABLED ~ ^"=" ~ #literal_bool
+            "(" ~ #comma_separated_list1(expr) ~ ")"
         },
-        |(_, _, _, enabled)| {
-            AlterNotificationOptions::Set(AlterNotificationSetOptions::enabled(enabled))
-        },
+        |(_, values, _)| values,
     );
-    let webhook = map(
+    let values = map(
         rule! {
-            SET ~ #notification_webhook_clause
+            VALUES ~ #comma_separated_list0(row)
         },
-        |(_, webhook)| {
-            AlterNotificationOptions::Set(AlterNotificationSetOptions::webhook_opts(webhook))
-        },
+        |(_, rows)| InsertSource::Values { rows },
     );
-    let comment = map(
-        rule! {
-            SET ~ (COMMENT | COMMENTS) ~ ^"=" ~ #literal_string
-        },
-        |(_, _, _, comment)| {
-            AlterNotificationOptions::Set(AlterNotificationSetOptions::comments(comment))
-        },
-    );
-    map(
-        rule! {
-            #enabled
-            | #webhook
-            | #comment
-        },
-        |opts| opts,
+
+    let query = map(query, |query| InsertSource::Select {
+        query: Box::new(query),
+    });
+
+    rule!(
+        #values
+        | #query
     )(i)
 }
 
 // `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
-// stop the parser immediately and return the rest tokens by `InsertSource`.
+// stop the parser immediately and return the rest tokens in `InsertSource`.
 //
-// This is a hack to make it able to parse a large streaming insert statement.
-pub fn insert_source(i: Input) -> IResult<InsertSource> {
+// This is a hack to parse large insert statements.
+pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     let streaming = map(
         rule! {
             FORMAT ~ #ident ~ #rest_str
@@ -2309,11 +2341,16 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         rule! {
             VALUES ~ #rest_str
         },
-        |(_, (rest_str, start))| InsertSource::Values { rest_str, start },
+        |(_, (rest_str, start))| InsertSource::RawValues { rest_str, start },
     );
-    let query = map(query, |query| InsertSource::Select {
-        query: Box::new(query),
-    });
+    let query = map(
+        rule! {
+            #query ~ ";"? ~ &EOI
+        },
+        |(query, _, _)| InsertSource::Select {
+            query: Box::new(query),
+        },
+    );
 
     rule!(
         #streaming
@@ -3206,10 +3243,10 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
+            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)?
         },
         |(opt_dry_run, opt_limit)| VacuumDropTableOption {
-            dry_run: opt_dry_run.is_some(),
+            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
             limit: opt_limit.map(|(_, limit)| limit as usize),
         },
     ),))(i)
@@ -3224,6 +3261,33 @@ pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
             dry_run: opt_dry_run.is_some(),
         },
     ),))(i)
+}
+
+pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
+    let single_statement = map(
+        rule! {
+            #statement
+        },
+        |stmt| {
+            let sql = format!("{}", stmt.stmt);
+            TaskSql::SingleStatement(sql)
+        },
+    );
+    let task_block = map(
+        rule! {
+            BEGIN
+            ~ #task_statements(statement_body)
+            ~ END
+        },
+        |(_, stmts, _)| {
+            let sql = stmts
+                .iter()
+                .map(|stmt| format!("{}", stmt))
+                .collect::<Vec<String>>();
+            TaskSql::ScriptBlock(sql)
+        },
+    );
+    alt((single_statement, task_block))(i)
 }
 
 pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
@@ -3241,14 +3305,9 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
     );
     let modify_as = map(
         rule! {
-             MODIFY ~ AS ~ #statement
+             MODIFY ~ AS ~ #task_sql_block
         },
-        |(_, _, sql)| {
-            let sql = pretty_statement(sql.stmt, 10)
-                .map_err(|_| ErrorKind::Other("invalid statement"))
-                .expect("failed to alter task");
-            AlterTaskOptions::ModifyAs(sql)
-        },
+        |(_, _, sql)| AlterTaskOptions::ModifyAs(sql),
     );
     let modify_when = map(
         rule! {
@@ -3881,5 +3940,80 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
             OPTIMIZED => ExplainOption::Optimized(true),
             _ => unreachable!(),
         },
+    )(i)
+}
+
+pub fn notification_webhook_options(i: Input) -> IResult<NotificationWebhookOptions> {
+    let url_option = map(
+        rule! {
+            URL ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("url".to_string(), v.to_string()),
+    );
+    let method_option = map(
+        rule! {
+            METHOD ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("method".to_string(), v.to_string()),
+    );
+    let auth_option = map(
+        rule! {
+            AUTHORIZATION_HEADER ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("authorization_header".to_string(), v.to_string()),
+    );
+
+    map(
+        rule! { ((
+        #url_option
+        | #method_option
+        | #auth_option) ~ ","?)* },
+        |opts| {
+            NotificationWebhookOptions::from_iter(
+                opts.iter().map(|((k, v), _)| (k.to_uppercase(), v.clone())),
+            )
+        },
+    )(i)
+}
+
+pub fn notification_webhook_clause(i: Input) -> IResult<NotificationWebhookOptions> {
+    map(
+        rule! { WEBHOOK ~ ^"=" ~ ^"(" ~ ^#notification_webhook_options ~ ^")" },
+        |(_, _, _, opts, _)| opts,
+    )(i)
+}
+
+pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions> {
+    let enabled = map(
+        rule! {
+            SET ~ ENABLED ~ ^"=" ~ #literal_bool
+        },
+        |(_, _, _, enabled)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::enabled(enabled))
+        },
+    );
+    let webhook = map(
+        rule! {
+            SET ~ #notification_webhook_clause
+        },
+        |(_, webhook)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::webhook_opts(webhook))
+        },
+    );
+    let comment = map(
+        rule! {
+            SET ~ (COMMENT | COMMENTS) ~ ^"=" ~ #literal_string
+        },
+        |(_, _, _, comment)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::comments(comment))
+        },
+    );
+    map(
+        rule! {
+            #enabled
+            | #webhook
+            | #comment
+        },
+        |opts| opts,
     )(i)
 }

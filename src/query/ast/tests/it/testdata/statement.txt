@@ -817,7 +817,7 @@ Some(
 ---------- Input ----------
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
 ---------- Output ---------
-CREATE SYNC Aggregating INDEX Identifier { span: Some(25..29), name: "idx1", quote: None } AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
+CREATE SYNC AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
 ---------- AST ------------
 CreateIndex(
     CreateIndexStmt {
@@ -1003,7 +1003,7 @@ CreateIndex(
 ---------- Input ----------
 CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
 ---------- Output ---------
-CREATE OR REPLACE SYNC Aggregating INDEX Identifier { span: Some(36..40), name: "idx1", quote: None } AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
+CREATE OR REPLACE SYNC AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
 ---------- AST ------------
 CreateIndex(
     CreateIndexStmt {
@@ -1181,6 +1181,51 @@ CreateIndex(
             offset: None,
             ignore_result: false,
         },
+        sync_creation: true,
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b);
+---------- Output ---------
+CREATE OR REPLACE SYNC INVERTED INDEX idx2 ON t1 (a, b)
+---------- AST ------------
+CreateInvertedIndex(
+    CreateInvertedIndexStmt {
+        create_option: CreateOrReplace,
+        index_name: Identifier {
+            span: Some(
+                33..37,
+            ),
+            name: "idx2",
+            quote: None,
+        },
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                41..43,
+            ),
+            name: "t1",
+            quote: None,
+        },
+        columns: [
+            Identifier {
+                span: Some(
+                    45..46,
+                ),
+                name: "a",
+                quote: None,
+            },
+            Identifier {
+                span: Some(
+                    48..49,
+                ),
+                name: "b",
+                quote: None,
+            },
+        ],
         sync_creation: true,
     },
 )
@@ -8046,7 +8091,7 @@ Query(
 ---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
-INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
+INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
 ---------- AST ------------
 Insert(
     InsertStmt {
@@ -8077,8 +8122,44 @@ Insert(
             },
         ],
         source: Values {
-            rest_str: "(1, 2), (3, 4);",
-            start: 30,
+            rows: [
+                [
+                    Literal {
+                        span: Some(
+                            31..32,
+                        ),
+                        lit: UInt64(
+                            1,
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            34..35,
+                        ),
+                        lit: UInt64(
+                            2,
+                        ),
+                    },
+                ],
+                [
+                    Literal {
+                        span: Some(
+                            39..40,
+                        ),
+                        lit: UInt64(
+                            3,
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            42..43,
+                        ),
+                        lit: UInt64(
+                            4,
+                        ),
+                    },
+                ],
+            ],
         },
         overwrite: false,
     },
@@ -8088,7 +8169,7 @@ Insert(
 ---------- Input ----------
 insert into t (c1, c2) values (1, 2);   
 ---------- Output ---------
-INSERT INTO t (c1, c2) VALUES (1, 2);   
+INSERT INTO t (c1, c2) VALUES (1, 2)
 ---------- AST ------------
 Insert(
     InsertStmt {
@@ -8119,36 +8200,26 @@ Insert(
             },
         ],
         source: Values {
-            rest_str: "(1, 2);   ",
-            start: 30,
-        },
-        overwrite: false,
-    },
-)
-
-
----------- Input ----------
-insert into table t format json;
----------- Output ---------
-INSERT INTO t FORMAT json ;
----------- AST ------------
-Insert(
-    InsertStmt {
-        hints: None,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                18..19,
-            ),
-            name: "t",
-            quote: None,
-        },
-        columns: [],
-        source: Streaming {
-            format: "json",
-            rest_str: ";",
-            start: 31,
+            rows: [
+                [
+                    Literal {
+                        span: Some(
+                            31..32,
+                        ),
+                        lit: UInt64(
+                            1,
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            34..35,
+                        ),
+                        lit: UInt64(
+                            2,
+                        ),
+                    },
+                ],
+            ],
         },
         overwrite: false,
     },
@@ -9853,7 +9924,7 @@ VacuumDropTable(
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            dry_run: false,
+            dry_run: None,
             limit: None,
         },
     },
@@ -9870,7 +9941,28 @@ VacuumDropTable(
         catalog: None,
         database: None,
         option: VacuumDropTableOption {
-            dry_run: true,
+            dry_run: Some(
+                false,
+            ),
+            limit: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROP TABLE DRY RUN SUMMARY;
+---------- Output ---------
+VACUUM DROP TABLE DRY RUN SUMMARY
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: None,
+        option: VacuumDropTableOption {
+            dry_run: Some(
+                true,
+            ),
             limit: None,
         },
     },
@@ -9895,7 +9987,7 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            dry_run: false,
+            dry_run: None,
             limit: None,
         },
     },
@@ -9920,7 +10012,7 @@ VacuumDropTable(
             },
         ),
         option: VacuumDropTableOption {
-            dry_run: false,
+            dry_run: None,
             limit: Some(
                 10,
             ),
@@ -15341,7 +15433,9 @@ CreateTask(
         comments: "This is test task 1",
         after: [],
         when_condition: None,
-        sql: "SELECT * FROM MyTable1",
+        sql: SingleStatement(
+            "SELECT * FROM MyTable1",
+        ),
     },
 )
 
@@ -15373,7 +15467,9 @@ CreateTask(
         comments: "This is test task 1",
         after: [],
         when_condition: None,
-        sql: "SELECT * FROM MyTable1",
+        sql: SingleStatement(
+            "SELECT * FROM MyTable1",
+        ),
     },
 )
 
@@ -15405,7 +15501,9 @@ CreateTask(
         comments: "This is test task 1",
         after: [],
         when_condition: None,
-        sql: "SELECT * FROM MyTable1",
+        sql: SingleStatement(
+            "SELECT * FROM MyTable1",
+        ),
     },
 )
 
@@ -15436,7 +15534,9 @@ CreateTask(
         comments: "serverless + cron",
         after: [],
         when_condition: None,
-        sql: "INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)",
+        sql: SingleStatement(
+            "INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)",
+        ),
     },
 )
 
@@ -15465,7 +15565,9 @@ CreateTask(
         comments: "",
         after: [],
         when_condition: None,
-        sql: "COPY INTO streams_test.paper_table FROM @stream_stage FILE_FORMAT = (type = 'PARQUET') PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort",
+        sql: SingleStatement(
+            "COPY INTO streams_test.paper_table FROM @stream_stage FILE_FORMAT = (type = 'PARQUET') PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort",
+        ),
     },
 )
 
@@ -15494,7 +15596,9 @@ CreateTask(
         comments: "",
         after: [],
         when_condition: None,
-        sql: "COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (type = 'PARQUET') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false",
+        sql: SingleStatement(
+            "COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (type = 'PARQUET') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false",
+        ),
     },
 )
 
@@ -15523,7 +15627,9 @@ CreateTask(
         when_condition: Some(
             "(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')",
         ),
-        sql: "VACUUM TABLE t ",
+        sql: SingleStatement(
+            "VACUUM TABLE t ",
+        ),
     },
 )
 
@@ -15550,7 +15656,60 @@ CreateTask(
         comments: "",
         after: [],
         when_condition: None,
-        sql: "VACUUM TABLE t ",
+        sql: SingleStatement(
+            "VACUUM TABLE t ",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  as
+            BEGIN
+              begin;
+              insert into t values('a;');
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 database = 'target' timezone = 'America/Los Angeles' AS BEGIN
+BEGIN;
+INSERT INTO t VALUES ('a;');
+DELETE FROM t WHERE (c = ';');
+VACUUM TABLE t ;
+MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;
+COMMIT;
+END;
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: None,
+        session_parameters: {
+            "database": "target",
+            "timezone": "America/Los Angeles",
+        },
+        suspend_task_after_num_failures: None,
+        error_integration: None,
+        comments: "",
+        after: [],
+        when_condition: None,
+        sql: ScriptBlock(
+            [
+                "BEGIN",
+                "INSERT INTO t VALUES ('a;')",
+                "DELETE FROM t WHERE (c = ';')",
+                "VACUUM TABLE t ",
+                "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *",
+                "COMMIT",
+            ],
+        ),
     },
 )
 
@@ -15773,7 +15932,49 @@ AlterTask(
         if_exists: false,
         name: "MyTask2",
         options: ModifyAs(
-            "SELECT CURRENT_VERSION()",
+            SingleStatement(
+                "SELECT CURRENT_VERSION()",
+            ),
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER TASK MyTask2 MODIFY AS
+            BEGIN
+              begin;
+              insert into t values('a;');
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END
+---------- Output ---------
+ALTER TASK MyTask2 AS BEGIN
+BEGIN;
+INSERT INTO t VALUES ('a;');
+DELETE FROM t WHERE (c = ';');
+VACUUM TABLE t ;
+MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;
+COMMIT;
+END;
+---------- AST ------------
+AlterTask(
+    AlterTaskStmt {
+        if_exists: false,
+        name: "MyTask2",
+        options: ModifyAs(
+            ScriptBlock(
+                [
+                    "BEGIN",
+                    "INSERT INTO t VALUES ('a;')",
+                    "DELETE FROM t WHERE (c = ';')",
+                    "VACUUM TABLE t ",
+                    "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *",
+                    "COMMIT",
+                ],
+            ),
         ),
     },
 )

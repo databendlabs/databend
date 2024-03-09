@@ -47,7 +47,9 @@ use tokio::sync::mpsc::Sender;
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::http::middleware::sanitize_request_headers;
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
+use crate::sessions::QueryEntry;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
@@ -125,6 +127,12 @@ pub async fn streaming_load(
                 .map_err(InternalServerError)?
         }
     }
+
+    let entry = QueryEntry::create(&context).map_err(InternalServerError)?;
+    let _guard = QueriesQueueManager::instance()
+        .acquire(entry)
+        .await
+        .map_err(InternalServerError)?;
 
     let mut planner = Planner::new(context.clone());
     let (mut plan, extras) = planner

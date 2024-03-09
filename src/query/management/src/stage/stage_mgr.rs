@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::reply::txn_reply_to_api_result;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
@@ -27,17 +29,17 @@ use databend_common_meta_app::principal::StageIdent;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::NonEmptyString;
-use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::With;
+use futures::TryStreamExt;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
@@ -61,20 +63,23 @@ impl StageMgr {
         }
     }
 
-    fn stage_key(&self, stage: &str) -> String {
-        let si = StageIdent::new(self.tenant.clone(), stage);
-        si.to_string_key()
+    fn stage_ident(&self, stage: &str) -> StageIdent {
+        StageIdent::new(self.tenant.clone(), stage)
     }
 
-    fn stage_prefix(&self) -> String {
-        let dummy = StageIdent::new(self.tenant.clone(), "dummpy");
-        dummy.tenant_prefix()
+    fn stage_key(&self, stage: &str) -> String {
+        self.stage_ident(stage).to_string_key()
     }
 
     fn stage_file_key(&self, stage: &str, path: &str) -> String {
         let si = StageIdent::new(self.tenant.clone(), stage);
         let fi = StageFileIdent::new(si, path);
         fi.to_string_key()
+    }
+
+    fn stage_file_ident(&self, stage: impl ToString, name: impl ToString) -> StageFileIdent {
+        let si = StageIdent::new(self.tenant.clone(), stage);
+        StageFileIdent::new(si, name)
     }
 
     fn stage_file_prefix(&self, stage: &str) -> String {
@@ -84,26 +89,16 @@ impl StageMgr {
     }
 }
 
-// TODO: use KVPbApi
 #[async_trait::async_trait]
 impl StageApi for StageMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn add_stage(&self, info: StageInfo, create_option: &CreateOption) -> Result<()> {
-        let key = self.stage_key(&info.stage_name);
-
-        let val = Operation::Update(serialize_struct(
-            &info,
-            ErrorCode::IllegalUserStageFormat,
-            || "",
-        )?);
-
+        let ident = self.stage_ident(&info.stage_name);
         let seq = MatchSeq::from(*create_option);
+        let upsert = UpsertPB::update(ident, info.clone()).with(seq);
 
-        let res = self
-            .kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, val, None))
-            .await?;
+        let res = self.kv_api.upsert_pb(&upsert).await?;
 
         if let CreateOption::None = create_option {
             if res.prev.is_some() {
@@ -120,31 +115,23 @@ impl StageApi for StageMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_stage(&self, name: &str) -> Result<StageInfo> {
-        let key = self.stage_key(name);
-        let res = self.kv_api.get_kv(&key).await?;
+        let ident = self.stage_ident(name);
+        let res = self.kv_api.get_pb(&ident).await?;
         let seq_value = res
             .ok_or_else(|| ErrorCode::UnknownStage(format!("Stage '{}' does not exist.", name)))?;
 
-        Ok(deserialize_struct(
-            &seq_value.data,
-            ErrorCode::IllegalUserStageFormat,
-            || "",
-        )?)
+        Ok(seq_value.data)
     }
 
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_stages(&self) -> Result<Vec<StageInfo>> {
-        let prefix = self.stage_prefix();
-        let values = self.kv_api.prefix_list_kv(&prefix).await?;
+        let dir_name = DirName::new(self.stage_ident("dummy"));
 
-        let mut stage_infos = Vec::with_capacity(values.len());
-        for (_, value) in values {
-            let stage_info =
-                deserialize_struct(&value.data, ErrorCode::IllegalUserStageFormat, || "")?;
-            stage_infos.push(stage_info);
-        }
-        Ok(stage_infos)
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let stages = values.try_collect().await?;
+
+        Ok(stages)
     }
 
     #[async_backtrace::framed]
@@ -254,13 +241,11 @@ impl StageApi for StageMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn list_files(&self, name: &str) -> Result<Vec<StageFile>> {
-        let file_prefix = self.stage_file_prefix(name);
-        let values = self.kv_api.prefix_list_kv(&file_prefix).await?;
-        let mut files = Vec::with_capacity(values.len());
-        for (_, value) in values {
-            let file = deserialize_struct(&value.data, ErrorCode::IllegalStageFileFormat, || "")?;
-            files.push(file)
-        }
+        let dir_name = DirName::new(self.stage_file_ident(name, "dummy"));
+
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let files = values.try_collect().await?;
+
         Ok(files)
     }
 

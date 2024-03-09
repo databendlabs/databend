@@ -5,7 +5,13 @@ statement ok
 set enable_distributed_merge_into = 1;
 
 statement ok
+drop table if exists t1;
+
+statement ok
 create table t1(a int);
+
+statement ok
+drop table if exists t2;
 
 statement ok
 create table t2(a int);
@@ -131,7 +137,7 @@ explain merge into t1 using (select $1 as a from @ss) as t2 on t1.a = t2.a when 
 ----
 MergeInto:
 target_table: default.default.t1
-├── distributed: true
+├── distributed: false
 ├── target_build_optimization: false
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0)]
@@ -141,20 +147,22 @@ target_table: default.default.t1
         ├── build keys: [t2.a (#0)]
         ├── probe keys: [t1.a (#1)]
         ├── other filters: []
-        ├── Scan
-        │   ├── table: default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── Exchange(Broadcast)
-            └── AddRowNumber(AddRowNumber)
-                └── EvalScalar
-                    ├── scalars: [stage._$1 (#0) AS (#0)]
-                    └── Scan
-                        ├── table: system.stage
-                        ├── filters: []
-                        ├── order by: []
-                        └── limit: NONE
+        ├── Exchange(Hash)
+        │   ├── Exchange(Hash): keys: [t1.a (#1)]
+        │   └── Scan
+        │       ├── table: default.t1
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [t2.a (#0)]
+            └── EvalScalar
+                ├── scalars: [stage._$1 (#0) AS (#0)]
+                └── Scan
+                    ├── table: system.stage
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
 
 query TT
 merge into t1 using (select $1 as a from @ss) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;

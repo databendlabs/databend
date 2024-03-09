@@ -25,6 +25,8 @@ use super::interpreter_index_create::CreateIndexInterpreter;
 use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_merge_into::MergeIntoInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
+use super::interpreter_table_index_create::CreateTableIndexInterpreter;
+use super::interpreter_table_index_drop::DropTableIndexInterpreter;
 use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
@@ -268,12 +270,19 @@ impl InterpreterFactory {
                 ctx,
                 *index.clone(),
             )?)),
-
             Plan::DropIndex(index) => Ok(Arc::new(DropIndexInterpreter::try_create(
                 ctx,
                 *index.clone(),
             )?)),
             Plan::RefreshIndex(index) => Ok(Arc::new(RefreshIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
+            Plan::CreateTableIndex(index) => Ok(Arc::new(CreateTableIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
+            Plan::DropTableIndex(index) => Ok(Arc::new(DropTableIndexInterpreter::try_create(
                 ctx,
                 *index.clone(),
             )?)),

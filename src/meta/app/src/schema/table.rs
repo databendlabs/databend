@@ -249,6 +249,13 @@ pub struct TableMeta {
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
     pub column_mask_policy: Option<BTreeMap<String, String>>,
+    pub indexes: BTreeMap<String, TableIndex>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TableIndex {
+    pub name: String,
+    pub column_ids: Vec<u32>,
 }
 
 impl TableMeta {
@@ -363,6 +370,7 @@ impl Default for TableMeta {
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
+            indexes: BTreeMap::new(),
         }
     }
 }
@@ -385,12 +393,13 @@ impl Display for TableMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Engine: {}={:?}, Schema: {:?}, Options: {:?}, FieldComments: {:?} CreatedOn: {:?} DropOn: {:?}",
+            "Engine: {}={:?}, Schema: {:?}, Options: {:?}, FieldComments: {:?} Indexes: {:?} CreatedOn: {:?} DropOn: {:?}",
             self.engine,
             self.engine_options,
             self.schema,
             self.options,
             self.field_comments,
+            self.indexes,
             self.created_on,
             self.drop_on,
         )
@@ -707,6 +716,57 @@ pub struct UpsertTableOptionReply {
 pub struct UpdateTableMetaReply {
     pub share_table_info: Option<Vec<ShareTableInfoMap>>,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateTableIndexReq {
+    pub create_option: CreateOption,
+    pub table_id: u64,
+    pub name: String,
+    pub column_ids: Vec<u32>,
+}
+
+impl Display for CreateTableIndexReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.create_option {
+            CreateOption::None => {
+                write!(f, "create_table_index:{}={:?}", self.name, self.column_ids)
+            }
+            CreateOption::CreateIfNotExists => write!(
+                f,
+                "create_table_index_if_not_exists:{}={:?}",
+                self.name, self.column_ids
+            ),
+            CreateOption::CreateOrReplace => write!(
+                f,
+                "create_or_replace_table_index:{}={:?}",
+                self.name, self.column_ids
+            ),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct CreateTableIndexReply {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropTableIndexReq {
+    pub if_exists: bool,
+    pub table_id: u64,
+    pub name: String,
+}
+
+impl Display for DropTableIndexReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "drop_table_index(if_exists={}):{}/{}",
+            self.if_exists, self.table_id, self.name,
+        )
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DropTableIndexReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetTableReq {
