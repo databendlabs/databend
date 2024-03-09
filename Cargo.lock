@@ -2603,7 +2603,6 @@ dependencies = [
  "criterion",
  "databend-common-base",
  "databend-common-exception",
- "databend-common-functions",
  "databend-common-io",
  "databend-common-meta-app",
  "derive-visitor",

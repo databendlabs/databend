@@ -17,7 +17,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
-use databend_common_ast::ast::contain_agg_func;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -80,6 +79,8 @@ use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_users::UserApiProvider;
+use derive_visitor::Drive;
+use derive_visitor::Visitor;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use jsonb::keypath::KeyPath;
@@ -2362,7 +2363,21 @@ impl<'a> TypeChecker<'a> {
                 let select = &select_stmt.select_list[0];
                 if let SelectTarget::AliasedExpr { expr, .. } = select {
                     // Check if contain aggregation function
-                    contain_agg = Some(contain_agg_func(expr));
+                    #[derive(Visitor)]
+                    #[visitor(ASTFunctionCall(enter))]
+                    struct AggFuncVisitor {
+                        contain_agg: bool,
+                    }
+                    impl AggFuncVisitor {
+                        fn enter_ast_function_call(&mut self, func: &ASTFunctionCall) {
+                            self.contain_agg = self.contain_agg
+                                || AggregateFunctionFactory::instance()
+                                    .contains(func.name.to_string());
+                        }
+                    }
+                    let mut visitor = AggFuncVisitor { contain_agg: false };
+                    expr.drive(&mut visitor);
+                    contain_agg = Some(visitor.contain_agg);
                 }
             }
         }
