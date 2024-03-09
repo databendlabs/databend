@@ -966,6 +966,61 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let create_inverted_index = map_res(
+        rule! {
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ ASYNC?
+            ~ INVERTED ~ INDEX
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ ON ~ #dot_separated_idents_1_to_3
+            ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
+        },
+        |(
+            _,
+            opt_or_replace,
+            opt_async,
+            _,
+            _,
+            opt_if_not_exists,
+            index_name,
+            _,
+            (catalog, database, table),
+            _,
+            columns,
+            _,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateInvertedIndex(CreateInvertedIndexStmt {
+                create_option,
+                index_name,
+                catalog,
+                database,
+                table,
+                columns,
+                sync_creation: opt_async.is_none(),
+            }))
+        },
+    );
+
+    let drop_inverted_index = map(
+        rule! {
+            DROP ~ INVERTED ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
+            ~ ON ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, opt_if_exists, index_name, _, (catalog, database, table))| {
+            Statement::DropInvertedIndex(DropInvertedIndexStmt {
+                if_exists: opt_if_exists.is_some(),
+                index_name,
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+
     let create_virtual_column = map_res(
         rule! {
             CREATE
@@ -2003,8 +2058,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #stream_table
             | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
-            | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
-            | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
+            | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
+            | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
+            | #create_inverted_index: "`CREATE [OR REPLACE] INVERTED INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
+            | #drop_inverted_index: "`DROP INVERTED INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
         ),
         rule!(
             #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"

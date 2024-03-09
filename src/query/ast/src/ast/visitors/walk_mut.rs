@@ -453,6 +453,8 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::CreateIndex(stmt) => visitor.visit_create_index(stmt),
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
         Statement::RefreshIndex(stmt) => visitor.visit_refresh_index(stmt),
+        Statement::CreateInvertedIndex(stmt) => visitor.visit_create_inverted_index(stmt),
+        Statement::DropInvertedIndex(stmt) => visitor.visit_drop_inverted_index(stmt),
         Statement::CreateVirtualColumn(stmt) => visitor.visit_create_virtual_column(stmt),
         Statement::AlterVirtualColumn(stmt) => visitor.visit_alter_virtual_column(stmt),
         Statement::DropVirtualColumn(stmt) => visitor.visit_drop_virtual_column(stmt),

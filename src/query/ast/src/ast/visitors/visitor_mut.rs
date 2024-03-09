@@ -596,7 +596,12 @@ pub trait VisitorMut: Sized {
     fn visit_create_index(&mut self, _stmt: &mut CreateIndexStmt) {}
 
     fn visit_drop_index(&mut self, _stmt: &mut DropIndexStmt) {}
+
     fn visit_refresh_index(&mut self, _stmt: &mut RefreshIndexStmt) {}
+
+    fn visit_create_inverted_index(&mut self, _stmt: &mut CreateInvertedIndexStmt) {}
+
+    fn visit_drop_inverted_index(&mut self, _stmt: &mut DropInvertedIndexStmt) {}
 
     fn visit_create_virtual_column(&mut self, _stmt: &mut CreateVirtualColumnStmt) {}
 

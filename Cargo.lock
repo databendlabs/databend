@@ -4224,6 +4224,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-meta-app",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
 ]
@@ -4465,6 +4466,7 @@ dependencies = [
  "databend-enterprise-aggregating-index",
  "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-inverted-index",
  "databend-enterprise-stream-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",

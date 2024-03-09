@@ -652,6 +652,8 @@ pub enum TokenKind {
     INTERVAL,
     #[token("INTO", ignore(ascii_case))]
     INTO,
+    #[token("INVERTED", ignore(ascii_case))]
+    INVERTED,
     #[token("IS", ignore(ascii_case))]
     IS,
     #[token("ISODOW", ignore(ascii_case))]
