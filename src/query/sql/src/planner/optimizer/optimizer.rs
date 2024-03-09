@@ -266,7 +266,14 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             // After join reorder, we need to run push down filter join again.
             // There may be some changes to change join type, such as single join to inner join.
             s_expr.clear_applied_rules();
-            let mut optimizer = RecursiveOptimizer::new(&[RuleID::PushDownFilterJoin], &opt_ctx);
+            let mut optimizer = RecursiveOptimizer::new(
+                &[
+                    RuleID::PushDownFilterJoin,
+                    RuleID::MergeFilter,
+                    RuleID::EliminateFilter,
+                ],
+                &opt_ctx,
+            );
             optimizer.set_after_join_reorder(true);
             s_expr = optimizer.run(&s_expr)?;
             dphyp_optimized = true;

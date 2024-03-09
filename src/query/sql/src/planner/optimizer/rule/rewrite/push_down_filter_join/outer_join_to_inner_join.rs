@@ -59,6 +59,10 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, after_join_reorder: bool) -> Res
             JoinPredicate::Right(_) if can_filter_null(predicate)? => {
                 can_filter_right_null = true;
             }
+            JoinPredicate::Both { .. } if can_filter_null(predicate)? => {
+                can_filter_left_null = true;
+                can_filter_right_null = true;
+            }
             _ => (),
         }
     }

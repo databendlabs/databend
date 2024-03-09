@@ -52,7 +52,7 @@ impl RulePushDownFilterJoin {
             id: RuleID::PushDownFilterJoin,
             // Filter
             //  \
-            //   InnerJoin
+            //   Join
             //   | \
             //   |  *
             //   *
@@ -79,13 +79,6 @@ impl Rule for RulePushDownFilterJoin {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
         let (s_expr, outer_to_inner) = outer_join_to_inner_join(s_expr, self.after_join_reorder())?;
-        if self.after_join_reorder {
-            // Don't need to continue
-            if outer_to_inner {
-                state.add_result(s_expr);
-            }
-            return Ok(());
-        }
         // Second, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr)?;
         if s_expr.plan().rel_op() != RelOp::Filter {
@@ -191,14 +184,21 @@ pub fn try_push_down_filter_join(
         join.join_type,
         JoinType::Left | JoinType::LeftSingle | JoinType::Full
     );
+    let mut all_push_down = vec![];
     let mut left_push_down = vec![];
     let mut right_push_down = vec![];
     for predicate in predicates.into_iter() {
+        if is_falsy(&predicate) {
+            can_filter_left_null = true;
+            can_filter_right_null = true;
+            left_push_down = vec![false_constant()];
+            right_push_down = vec![false_constant()];
+            break;
+        }
         let pred = JoinPredicate::new(&predicate, &left_prop, &right_prop);
         match pred {
             JoinPredicate::ALL(_) => {
-                left_push_down.push(predicate.clone());
-                right_push_down.push(predicate);
+                all_push_down.push(predicate);
             }
             JoinPredicate::Left(_) => {
                 if !can_filter_left_null && can_filter_null(&predicate)? {
@@ -227,6 +227,10 @@ pub fn try_push_down_filter_join(
     if !can_filter_right_null {
         original_predicates.extend(right_push_down);
         right_push_down = vec![];
+    }
+    if !all_push_down.is_empty() {
+        left_push_down.extend(all_push_down.to_vec());
+        right_push_down.extend(all_push_down);
     }
     join.join_type = eliminate_outer_join_type(
         join.join_type,
