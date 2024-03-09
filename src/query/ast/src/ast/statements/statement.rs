@@ -104,6 +104,7 @@ pub enum Statement {
     },
 
     Insert(InsertStmt),
+    InsertMultiTable(InsertMultiTableStmt),
     Replace(ReplaceStmt),
     MergeInto(MergeIntoStmt),
     Delete(DeleteStmt),
@@ -417,6 +418,7 @@ impl Display for Statement {
             }
             Statement::Query(query) => write!(f, "{query}")?,
             Statement::Insert(insert) => write!(f, "{insert}")?,
+            Statement::InsertMultiTable(insert_multi_table) => write!(f, "{insert_multi_table}")?,
             Statement::Replace(replace) => write!(f, "{replace}")?,
             Statement::MergeInto(merge_into) => write!(f, "{merge_into}")?,
             Statement::Delete(delete) => write!(f, "{delete}")?,

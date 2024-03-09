@@ -379,6 +379,9 @@ impl<'a> Binder {
                 }
                 self.bind_insert(bind_context, stmt).await?
             }
+            Statement::InsertMultiTable(stmt) => {
+                todo!()
+            }
             Statement::Replace(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
