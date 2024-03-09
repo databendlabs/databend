@@ -544,6 +544,16 @@ fn test_statement() {
               merge into t using s on t.id = s.id when matched then update *;
               commit;
             END"#,
+        r#"CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND
+        AS BEGIN
+          MERGE INTO t USING s ON t.c = s.c
+            WHEN MATCHED THEN
+            UPDATE
+                *
+                WHEN NOT MATCHED THEN
+            INSERT
+                *;
+        END"#,
         r#"ALTER TASK MyTask1 RESUME"#,
         r#"ALTER TASK MyTask1 SUSPEND"#,
         r#"ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'"#,
