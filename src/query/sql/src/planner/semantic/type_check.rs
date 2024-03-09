@@ -2510,34 +2510,18 @@ impl<'a> TypeChecker<'a> {
                 )
             }
             ("ifnull", &[arg_x, arg_y]) => {
-                // Rewrite ifnull(x, y) to if(is_null(x), y, x)
+                // Rewrite ifnull(x, y) to coalesce(x, y)
                 Some(
-                    self.resolve_function(span, "if", vec![], &[
-                        &Expr::IsNull {
-                            span,
-                            expr: Box::new(arg_x.clone()),
-                            not: false,
-                        },
-                        arg_y,
-                        arg_x,
-                    ])
-                    .await,
+                    self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y])
+                        .await,
                 )
             }
             ("nvl", &[arg_x, arg_y]) => {
-                // Rewrite nvl(x, y) to if(is_not_null(x), x, y)
+                // Rewrite nvl(x, y) to coalesce(x, y)
                 // nvl is essentially an alias for ifnull.
                 Some(
-                    self.resolve_function(span, "if", vec![], &[
-                        &Expr::IsNull {
-                            span,
-                            expr: Box::new(arg_x.clone()),
-                            not: true,
-                        },
-                        arg_x,
-                        arg_y,
-                    ])
-                    .await,
+                    self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y])
+                        .await,
                 )
             }
             ("nvl2", &[arg_x, arg_y, arg_z]) => {
@@ -2616,6 +2600,14 @@ impl<'a> TypeChecker<'a> {
                     new_args.push(is_not_null_expr);
                     new_args.push(assume_not_null_expr);
                 }
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
                 new_args.push(Expr::Literal {
                     span,
                     lit: Literal::Null,
