@@ -9885,7 +9885,7 @@ VacuumTable(
             quote: None,
         },
         option: VacuumTableOption {
-            dry_run: false,
+            dry_run: None,
         },
     },
 )
@@ -9908,7 +9908,34 @@ VacuumTable(
             quote: None,
         },
         option: VacuumTableOption {
-            dry_run: true,
+            dry_run: Some(
+                false,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM TABLE t DRY RUN SUMMARY;
+---------- Output ---------
+VACUUM TABLE t DRY RUN SUMMARY
+---------- AST ------------
+VacuumTable(
+    VacuumTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+        },
+        option: VacuumTableOption {
+            dry_run: Some(
+                true,
+            ),
         },
     },
 )
