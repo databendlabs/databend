@@ -39,5 +39,6 @@ mod builder_update;
 mod builder_window;
 mod merge_into_join_optimizations;
 
+pub use builder_replace_into::RawValueSource;
 pub use builder_replace_into::ValueSource;
 pub use builder_sort::SortPipelineBuilder;

@@ -19,6 +19,7 @@ use databend_common_expression::DataBlock;
 use databend_common_sql::plans::JoinType;
 use log::info;
 
+use crate::pipelines::processors::transforms::hash_join::HashJoinBuildStep;
 use crate::pipelines::processors::transforms::BuildSpillState;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 
@@ -97,10 +98,10 @@ impl BuildSpillHandler {
         for block in pending_spill_data.iter() {
             let mut hashes = Vec::with_capacity(block.num_rows());
             let spill_state = self.spill_state_mut();
-            spill_state.get_hashes(block, Some(join_type), &mut hashes)?;
+            spill_state.get_hashes(block, join_type, &mut hashes)?;
             spill_state
                 .spiller
-                .spill_input(block.clone(), &hashes, None)
+                .spill_input(block.clone(), &hashes, false, None)
                 .await?;
         }
         self.pending_spill_data.clear();
@@ -112,24 +113,39 @@ impl BuildSpillHandler {
         &mut self,
         build_state: &Arc<HashJoinBuildState>,
         processor_id: usize,
-    ) -> Result<()> {
+    ) -> Result<HashJoinBuildStep> {
         // Add spilled partition ids to `spill_partitions` of `HashJoinBuildState`
         let spilled_partition_set = self.spill_state().spiller.spilled_partitions();
         info!(
             "build processor-{:?}: spill finished with spilled partitions {:?}",
             processor_id, spilled_partition_set
         );
-        build_state
-            .spilled_partition_set
-            .write()
-            .extend(spilled_partition_set);
+
+        // For left-related join, will spill all build input blocks which means there isn't first-round hash table.
+        // Because first-round hash table will make left join generate wrong results.
+        // Todo: make left-related join leverage first-round hash table to reduce I/O.
+        if matches!(
+            build_state.join_type(),
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full
+        ) && !spilled_partition_set.is_empty()
+            && !self.pending_spill_data().is_empty()
+        {
+            return Ok(HashJoinBuildStep::Spill);
+        }
+
+        if !spilled_partition_set.is_empty() {
+            build_state
+                .spilled_partition_set
+                .write()
+                .extend(spilled_partition_set);
+        }
         // The processor has accepted all data from downstream
         // If there is still pending spill data, add to row space.
         for data in self.pending_spill_data.iter() {
             build_state.build(data.clone())?;
         }
         self.pending_spill_data.clear();
-        Ok(())
+        Ok(HashJoinBuildStep::Running)
     }
 
     // Restore

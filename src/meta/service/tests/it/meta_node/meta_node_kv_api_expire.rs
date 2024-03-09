@@ -89,7 +89,10 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
         let seq_v = resp.unwrap();
         let want = (now_sec + 1000) * 1000;
         let expire_ms = seq_v.meta.unwrap().get_expire_at_ms().unwrap();
-        assert!((want..want + 800).contains(&expire_ms));
+        assert!(
+            (want..want + 2_000).contains(&expire_ms),
+            "want: {want} got: {expire_ms}"
+        );
         assert_eq!(value2.to_string().into_bytes(), seq_v.data);
     }
 

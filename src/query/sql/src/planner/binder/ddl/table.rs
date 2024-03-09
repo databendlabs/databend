@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::walk_expr_mut;
 use databend_common_ast::ast::AddColumnOption as AstAddColumnOption;
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
@@ -81,6 +80,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use derive_visitor::DriveMut;
 use log::debug;
 use log::error;
 
@@ -1516,12 +1516,10 @@ impl Binder {
             }
 
             let mut cluster_by = cluster_by.clone();
-            walk_expr_mut(
-                &mut IdentifierNormalizer {
-                    ctx: &self.name_resolution_ctx,
-                },
-                &mut cluster_by,
-            );
+            let mut normalizer = IdentifierNormalizer {
+                ctx: &self.name_resolution_ctx,
+            };
+            cluster_by.drive_mut(&mut normalizer);
             cluster_keys.push(format!("{:#}", &cluster_by));
         }
 

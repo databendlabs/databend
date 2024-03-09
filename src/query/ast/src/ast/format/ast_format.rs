@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(deprecated)]
+
 use std::fmt::Display;
 
 use databend_common_exception::Result;
@@ -1112,6 +1114,12 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
             InsertSource::Values { .. } => {
                 let values_name = "ValueSource".to_string();
+                let values_format_ctx = AstFormatContext::new(values_name);
+                let values_node = FormatTreeNode::new(values_format_ctx);
+                self.children.push(values_node);
+            }
+            InsertSource::RawValues { .. } => {
+                let values_name = "RawValueSource".to_string();
                 let values_format_ctx = AstFormatContext::new(values_name);
                 let values_node = FormatTreeNode::new(values_format_ctx);
                 self.children.push(values_node);

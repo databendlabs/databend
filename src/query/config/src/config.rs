@@ -1399,6 +1399,9 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "256")]
     pub max_active_sessions: u64,
 
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub max_running_queries: u64,
+
     /// The max total memory in bytes that can be used by this process.
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub max_server_memory_usage: u64,
@@ -1679,6 +1682,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             mysql_tls_server_cert: self.mysql_tls_server_cert,
             mysql_tls_server_key: self.mysql_tls_server_key,
             max_active_sessions: self.max_active_sessions,
+            max_running_queries: self.max_running_queries,
             max_server_memory_usage: self.max_server_memory_usage,
             max_memory_limit_enabled: self.max_memory_limit_enabled,
             clickhouse_http_handler_host: self.clickhouse_http_handler_host,
@@ -1758,6 +1762,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             mysql_tls_server_cert: inner.mysql_tls_server_cert,
             mysql_tls_server_key: inner.mysql_tls_server_key,
             max_active_sessions: inner.max_active_sessions,
+            max_running_queries: inner.max_running_queries,
             max_server_memory_usage: inner.max_server_memory_usage,
             max_memory_limit_enabled: inner.max_memory_limit_enabled,
 

@@ -24,6 +24,7 @@ use databend_common_ast::ast::DropTaskStmt;
 use databend_common_ast::ast::ExecuteTaskStmt;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowTasksStmt;
+use databend_common_ast::ast::TaskSql;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
@@ -39,7 +40,7 @@ use crate::plans::Plan;
 use crate::plans::ShowTasksPlan;
 use crate::Binder;
 
-fn verify_task_sql(sql: &String) -> Result<()> {
+fn verify_single_statement(sql: &String) -> Result<()> {
     let tokens = tokenize_sql(sql.as_str()).map_err(|e| {
         ErrorCode::SyntaxException(format!(
             "syntax error for task formatted sql: {}, error: {:?}",
@@ -53,6 +54,17 @@ fn verify_task_sql(sql: &String) -> Result<()> {
         ))
     })?;
     Ok(())
+}
+fn verify_task_sql(sql: &TaskSql) -> Result<()> {
+    match sql {
+        TaskSql::SingleStatement(stmt) => verify_single_statement(stmt),
+        TaskSql::ScriptBlock(stmts) => {
+            for stmt in stmts {
+                verify_single_statement(stmt)?;
+            }
+            Ok(())
+        }
+    }
 }
 
 fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()> {

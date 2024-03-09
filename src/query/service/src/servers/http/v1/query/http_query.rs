@@ -60,7 +60,10 @@ use crate::servers::http::v1::QueryError;
 use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
 use crate::sessions::short_sql;
+use crate::sessions::AcquireQueueGuard;
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryAffect;
+use crate::sessions::QueryEntry;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
@@ -256,6 +259,8 @@ pub struct HttpQuery {
     /// exceed this result_timeout_secs.
     pub(crate) result_timeout_secs: u64,
     pub(crate) is_txn_mgr_saved: AtomicBool,
+    #[allow(dead_code)]
+    guard: AcquireQueueGuard,
 }
 
 impl HttpQuery {
@@ -441,6 +446,9 @@ impl HttpQuery {
         let sql = request.sql.clone();
         let query_id_clone = query_id.clone();
 
+        let entry = QueryEntry::create(&ctx)?;
+        let guard = QueriesQueueManager::instance().acquire(entry).await?;
+
         let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone()).await?;
         let schema = plan.schema();
 
@@ -502,6 +510,7 @@ impl HttpQuery {
             node_id,
             request,
             state,
+            guard,
             page_manager: data,
             result_timeout_secs,
             expire_state: Arc::new(TokioMutex::new(ExpireState::Working)),

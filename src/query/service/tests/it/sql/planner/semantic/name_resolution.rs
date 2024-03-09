@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::walk_expr_mut;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
@@ -20,6 +19,7 @@ use databend_common_ast::parser::Dialect;
 use databend_query::sql::normalize_identifier;
 use databend_query::sql::IdentifierNormalizer;
 use databend_query::sql::NameResolutionContext;
+use derive_visitor::DriveMut;
 
 #[test]
 fn test_normalize_identifier_default() {
@@ -112,7 +112,7 @@ fn test_normalize_identifiers_in_expr() {
     let ctx = NameResolutionContext::default();
     let mut normalizer = IdentifierNormalizer { ctx: &ctx };
 
-    walk_expr_mut(&mut normalizer, &mut expr);
+    expr.drive_mut(&mut normalizer);
 
     assert_eq!(
         format!("{:#}", expr),

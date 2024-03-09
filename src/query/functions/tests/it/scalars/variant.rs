@@ -35,6 +35,7 @@ fn test_variant() {
     test_get_path(file);
     test_json_extract_path_text(file);
     test_as_type(file);
+    test_is_type(file);
     test_to_type(file);
     test_try_to_type(file);
     test_json_object(file);
@@ -502,6 +503,7 @@ fn test_as_type(file: &mut impl Write) {
     let columns = &[(
         "s",
         StringType::from_data(vec![
+            "null",
             "true",
             "123",
             "12.34",
@@ -511,17 +513,48 @@ fn test_as_type(file: &mut impl Write) {
         ]),
     )];
     run_ast(file, "as_boolean(parse_json(s))", columns);
-    run_ast(file, "as_boolean(try_parse_json(s))", columns);
     run_ast(file, "as_integer(parse_json(s))", columns);
-    run_ast(file, "as_integer(try_parse_json(s))", columns);
     run_ast(file, "as_float(parse_json(s))", columns);
-    run_ast(file, "as_float(try_parse_json(s))", columns);
     run_ast(file, "as_string(parse_json(s))", columns);
-    run_ast(file, "as_string(try_parse_json(s))", columns);
     run_ast(file, "as_array(parse_json(s))", columns);
-    run_ast(file, "as_array(try_parse_json(s))", columns);
     run_ast(file, "as_object(parse_json(s))", columns);
-    run_ast(file, "as_object(try_parse_json(s))", columns);
+}
+
+fn test_is_type(file: &mut impl Write) {
+    run_ast(file, "is_null_value(parse_json('null'))", &[]);
+    run_ast(file, "is_null_value(parse_json('[1,2]'))", &[]);
+    run_ast(file, "is_boolean(parse_json('true'))", &[]);
+    run_ast(file, "is_boolean(parse_json('123'))", &[]);
+    run_ast(file, "is_integer(parse_json('true'))", &[]);
+    run_ast(file, "is_integer(parse_json('123'))", &[]);
+    run_ast(file, "is_float(parse_json('\"ab\"'))", &[]);
+    run_ast(file, "is_float(parse_json('12.34'))", &[]);
+    run_ast(file, "is_string(parse_json('\"ab\"'))", &[]);
+    run_ast(file, "is_string(parse_json('12.34'))", &[]);
+    run_ast(file, "is_array(parse_json('[1,2,3]'))", &[]);
+    run_ast(file, "is_array(parse_json('{\"a\":\"b\"}'))", &[]);
+    run_ast(file, "is_object(parse_json('[1,2,3]'))", &[]);
+    run_ast(file, "is_object(parse_json('{\"a\":\"b\"}'))", &[]);
+
+    let columns = &[(
+        "s",
+        StringType::from_data(vec![
+            "null",
+            "true",
+            "123",
+            "12.34",
+            "\"ab\"",
+            "[1,2,3]",
+            "{\"a\":\"b\"}",
+        ]),
+    )];
+    run_ast(file, "is_null_value(parse_json(s))", columns);
+    run_ast(file, "is_boolean(parse_json(s))", columns);
+    run_ast(file, "is_integer(parse_json(s))", columns);
+    run_ast(file, "is_float(parse_json(s))", columns);
+    run_ast(file, "is_string(parse_json(s))", columns);
+    run_ast(file, "is_array(parse_json(s))", columns);
+    run_ast(file, "is_object(parse_json(s))", columns);
 }
 
 fn test_to_type(file: &mut impl Write) {

@@ -593,7 +593,7 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
-        Settings::create("fake_settings".to_string())
+        Settings::create(NonEmptyString::new("fake_settings").unwrap())
     }
 
     fn get_shared_settings(&self) -> Arc<Settings> {
@@ -796,6 +796,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
+        todo!()
+    }
+
+    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         todo!()
     }
 }
