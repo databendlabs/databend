@@ -923,8 +923,6 @@ pub enum TokenKind {
     STAGES,
     #[token("STATISTIC", ignore(ascii_case))]
     STATISTIC,
-    #[token("SUMMARY", ignore(ascii_case))]
-    SUMMARY,
     #[token("SHA256_PASSWORD", ignore(ascii_case))]
     SHA256_PASSWORD,
     #[token("SHOW", ignore(ascii_case))]

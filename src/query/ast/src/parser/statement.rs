@@ -60,12 +60,6 @@ pub enum CreateDatabaseOption {
     FromShare(ShareNameIdent),
 }
 
-pub fn statement_no_streaming_insert(i: Input) -> IResult<StatementWithFormat> {
-    let mut i = i;
-    i.1.allow_streaming_insert_source = false;
-    statement(i)
-}
-
 pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let explain = map_res(
         rule! {
@@ -124,7 +118,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ (#set_table_option)?
-            ~ AS ~ #statement_no_streaming_insert
+            ~ AS ~ #statement
         },
         |(
             _,
@@ -2051,7 +2045,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
-            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
+            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN]`"
             | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN]`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
@@ -2317,22 +2311,16 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         },
         |(_, (rest_str, start))| InsertSource::Values { rest_str, start },
     );
-    let mut query = map(query, |query| InsertSource::Select {
+    let query = map(query, |query| InsertSource::Select {
         query: Box::new(query),
     });
 
-    if i.1.allow_streaming_insert_source {
-        rule!(
-            #streaming
-            | #streaming_v2
-            | #values
-            | #query
-        )(i)
-    } else {
-        rule!(
-             #query
-        )(i)
-    }
+    rule!(
+        #streaming
+        | #streaming_v2
+        | #values
+        | #query
+    )(i)
 }
 
 pub fn merge_source(i: Input) -> IResult<MergeSource> {
@@ -3230,10 +3218,10 @@ pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN ~ SUMMARY?)?
+            (DRY ~ ^RUN)?
         },
         |opt_dry_run| VacuumTableOption {
-            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
+            dry_run: opt_dry_run.is_some(),
         },
     ),))(i)
 }

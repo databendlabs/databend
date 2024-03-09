@@ -28,7 +28,6 @@ use databend_common_ast::parser::Backtrace;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::IResult;
 use databend_common_ast::parser::Input;
-use databend_common_ast::parser::ParserConfig;
 use databend_common_ast::rule;
 use goldenfile::Mint;
 
@@ -49,7 +48,7 @@ where
     let backtrace = Backtrace::new();
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
-    match parser(Input(&tokens, ParserConfig::new(dialect), &backtrace)) {
+    match parser(Input(&tokens, dialect, &backtrace)) {
         Ok((i, (output, _))) => {
             assert_eq!(i[0].kind, TokenKind::EOI);
             writeln!(file, "---------- Input ----------").unwrap();
@@ -240,7 +239,6 @@ fn test_statement() {
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
         r#"VACUUM TABLE t;"#,
         r#"VACUUM TABLE t DRY RUN;"#,
-        r#"VACUUM TABLE t DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE;"#,
         r#"VACUUM DROP TABLE DRY RUN;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
