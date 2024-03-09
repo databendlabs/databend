@@ -144,6 +144,7 @@ impl Display for MergeIntoStmt {
                         write!(f, "AND {} ", e)?;
                     }
                     write!(f, "THEN INSERT")?;
+
                     if let Some(columns) = &unmatch_clause.insert_operation.columns {
                         if !columns.is_empty() {
                             write!(f, " (")?;
@@ -151,9 +152,17 @@ impl Display for MergeIntoStmt {
                             write!(f, ")")?;
                         }
                     }
-                    write!(f, " VALUES(")?;
-                    write_comma_separated_list(f, unmatch_clause.insert_operation.values.clone())?;
-                    write!(f, ")")?;
+
+                    if unmatch_clause.insert_operation.is_star {
+                        write!(f, " *")?;
+                    } else {
+                        write!(f, " VALUES(")?;
+                        write_comma_separated_list(
+                            f,
+                            unmatch_clause.insert_operation.values.clone(),
+                        )?;
+                        write!(f, ")")?;
+                    }
                 }
             }
         }

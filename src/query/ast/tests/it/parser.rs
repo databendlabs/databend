@@ -554,6 +554,15 @@ fn test_statement() {
             INSERT
                 *;
         END"#,
+        r#"CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND
+        AS BEGIN
+          MERGE INTO t USING s ON t.c = s.c
+            WHEN MATCHED THEN
+            UPDATE
+                *
+                WHEN NOT MATCHED THEN
+            INSERT values('a;', 1, "str");
+        END"#,
         r#"ALTER TASK MyTask1 RESUME"#,
         r#"ALTER TASK MyTask1 SUSPEND"#,
         r#"ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'"#,
