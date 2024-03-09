@@ -371,9 +371,22 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
+    async fn mget_table_names_by_ids(
+        &self,
+        table_ids: &[MetaId],
+    ) -> databend_common_exception::Result<Vec<String>> {
+        let res = self.ctx.meta.mget_table_names_by_ids(table_ids).await?;
+        Ok(res)
+    }
+
     #[async_backtrace::framed]
     async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
         let res = self.ctx.meta.get_db_name_by_id(db_id).await?;
+        Ok(res)
+    }
+
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
+        let res = self.ctx.meta.mget_database_names_by_ids(db_ids).await?;
         Ok(res)
     }
 

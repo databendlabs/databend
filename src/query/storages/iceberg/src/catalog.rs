@@ -266,10 +266,22 @@ impl Catalog for IcebergCatalog {
         ))
     }
 
+    async fn mget_table_names_by_ids(&self, _table_ids: &[MetaId]) -> Result<Vec<String>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get tables name by ids in HIVE catalog",
+        ))
+    }
+
     #[async_backtrace::framed]
     async fn get_db_name_by_id(&self, _table_id: MetaId) -> Result<String> {
         Err(ErrorCode::Unimplemented(
             "Cannot get db name by id in ICEBERG catalog",
+        ))
+    }
+
+    async fn mget_database_names_by_ids(&self, _db_ids: &[MetaId]) -> Result<Vec<String>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get dbs name by ids in ICEBERG catalog",
         ))
     }
 

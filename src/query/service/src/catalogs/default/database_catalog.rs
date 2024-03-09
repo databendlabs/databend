@@ -301,6 +301,20 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn mget_table_names_by_ids(&self, table_ids: &[MetaId]) -> Result<Vec<String>> {
+        let mut tables = self
+            .immutable_catalog
+            .mget_table_names_by_ids(table_ids)
+            .await?;
+        let mut other = self
+            .mutable_catalog
+            .mget_table_names_by_ids(table_ids)
+            .await?;
+        tables.append(&mut other);
+        Ok(tables)
+    }
+
+    #[async_backtrace::framed]
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         let res = self.immutable_catalog.get_db_name_by_id(db_id).await;
 
@@ -309,6 +323,20 @@ impl Catalog for DatabaseCatalog {
         } else {
             self.mutable_catalog.get_db_name_by_id(db_id).await
         }
+    }
+
+    #[async_backtrace::framed]
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
+        let mut dbs = self
+            .immutable_catalog
+            .mget_database_names_by_ids(db_ids)
+            .await?;
+        let mut other = self
+            .mutable_catalog
+            .mget_database_names_by_ids(db_ids)
+            .await?;
+        dbs.append(&mut other);
+        Ok(dbs)
     }
 
     #[async_backtrace::framed]
