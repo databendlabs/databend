@@ -10,7 +10,7 @@ DROP TABLE IF EXISTS empsalary
 statement ok
 CREATE TABLE empsalary (depname string, empno bigint, salary int, enroll_date date)
 
-query 
+query T
 explain SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno
 ----
 Sort
@@ -36,7 +36,7 @@ Sort
 statement ok
 set max_threads=4;
 
-query 
+query T
 explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno;
 ----
 CompoundBlockOperator(Project) × 1 processor
@@ -390,7 +390,7 @@ CompoundBlockOperator(Project) × 1 processor
                               SyncReadParquetDataSource × 1 processor
 
 # row fetch with window function(plan explain)
-query 
+query T
 explain select *, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row) from t where a > 1 order by b limit 3
 ----
 RowFetch
@@ -425,6 +425,27 @@ RowFetch
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]
                     └── estimated rows: 0.00
+
+statement ok
+drop table if exists table43764_orc
+
+statement ok
+CREATE TABLE table43764_orc (rowkey VARCHAR NOT NULL, time TIMESTAMP NULL, sirc_action VARCHAR NULL, sirc_operation_count DECIMAL(36, 16) NULL, akc087 VARCHAR NULL, aae035 VARCHAR)
+
+# window in subquery
+query T
+explain pipeline select time, rowkey from (select *, row_number() over(partition by rowkey order by time desc) as rn from table43764_orc) a where rn = 1 limit 4
+----
+CompoundBlockOperator(Project) × 1 processor
+  LimitTransform × 1 processor
+    TransformFilter × 1 processor
+      Transform Window × 1 processor
+        Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
+          TransformSortMerge × 4 processors
+            SortPartialTransform × 4 processors
+              Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
+                DeserializeDataTransform × 1 processor
+                  SyncReadParquetDataSource × 1 processor
 
 statement ok
 DROP DATABASE test_explain_window;
