@@ -16,15 +16,11 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::plan::InternalColumnMeta;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoPtr;
-use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::Pipeline;
@@ -296,26 +292,4 @@ pub fn adjust_threads_and_request(
         max_io_requests = std::cmp::min(max_io_requests, block_nums);
     }
     (max_threads, max_io_requests)
-}
-
-pub(crate) fn fill_internal_column_meta(
-    data_block: DataBlock,
-    fuse_part: &FusePartInfo,
-    offsets: Option<Vec<usize>>,
-    base_block_ids: Option<Scalar>,
-) -> Result<DataBlock> {
-    // Fill `BlockMetaInfoPtr` if query internal columns
-    let block_meta = fuse_part.block_meta_index().unwrap();
-    let internal_column_meta = InternalColumnMeta {
-        segment_idx: block_meta.segment_idx,
-        block_id: block_meta.block_id,
-        block_location: block_meta.block_location.clone(),
-        segment_location: block_meta.segment_location.clone(),
-        snapshot_location: block_meta.snapshot_location.clone(),
-        offsets,
-        base_block_ids,
-    };
-
-    let meta: Option<BlockMetaInfoPtr> = Some(Box::new(internal_column_meta));
-    data_block.add_meta(meta)
 }

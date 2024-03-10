@@ -97,6 +97,8 @@ pub struct Scan {
     pub prewhere: Option<Prewhere>,
     pub agg_index: Option<AggIndexInfo>,
     pub change_type: Option<ChangeType>,
+    // Whether to update stream columns.
+    pub update_stream_columns: bool,
 
     pub statistics: Statistics,
 }
@@ -124,6 +126,14 @@ impl Scan {
             prewhere,
             agg_index: self.agg_index.clone(),
             change_type: self.change_type.clone(),
+            update_stream_columns: self.update_stream_columns,
+        }
+    }
+
+    pub fn update_stream_columns(&self, update_stream_columns: bool) -> Self {
+        Scan {
+            update_stream_columns,
+            ..self.clone()
         }
     }
 

@@ -16,12 +16,10 @@ use std::any::Any;
 use std::path::Path;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::DecimalScalar;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;
@@ -32,7 +30,6 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
@@ -128,16 +125,17 @@ impl StreamColumnMeta {
     }
 }
 
-pub fn build_origin_block_row_num(num_rows: usize) -> Value<AnyType> {
+pub fn build_origin_block_row_num(num_rows: usize) -> BlockEntry {
     let mut row_ids = Vec::with_capacity(num_rows);
     for i in 0..num_rows {
         row_ids.push(i as u64);
     }
-    let column = UInt64Type::from_data(row_ids);
-    Value::Column(Column::Nullable(Box::new(NullableColumn {
-        column,
-        validity: Bitmap::new_constant(true, num_rows),
-    })))
+    let column = Value::Column(UInt64Type::from_data(row_ids));
+
+    BlockEntry::new(
+        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+        column.wrap_nullable(None),
+    )
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -218,10 +216,7 @@ impl StreamColumn {
                 )))),
                 meta.build_origin_block_id(),
             ),
-            StreamColumnType::OriginRowNum => BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                build_origin_block_row_num(num_rows),
-            ),
+            StreamColumnType::OriginRowNum => build_origin_block_row_num(num_rows),
         }
     }
 }

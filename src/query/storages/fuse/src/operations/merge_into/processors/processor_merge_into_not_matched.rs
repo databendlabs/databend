@@ -188,9 +188,8 @@ impl Processor for MergeIntoNotMatchedProcessor {
 
                 if unsatisfied_block.is_empty() {
                     break;
-                } else {
-                    current_block = unsatisfied_block
                 }
+                current_block = unsatisfied_block;
             }
             let elapsed_time = start.elapsed().as_millis() as u64;
             merge_into_not_matched_operation_milliseconds(elapsed_time);
