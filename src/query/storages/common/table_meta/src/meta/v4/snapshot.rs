@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::io::Cursor;
 
 use chrono::DateTime;
@@ -39,7 +40,7 @@ use crate::meta::SnapshotId;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
 
-/// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
+/// The structure of the TableSnapshot is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot meta data
@@ -80,9 +81,12 @@ pub struct TableSnapshot {
     /// this the size of this vector could be kept reasonable
     pub segments: Vec<Location>,
 
-    // The metadata of the cluster keys.
+    /// The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
+    /// The index info locations.
+    /// One table may have multiple indexes, the key is the index name.
+    pub index_info_locations: Option<BTreeMap<String, Location>>,
 }
 
 impl TableSnapshot {
@@ -95,6 +99,7 @@ impl TableSnapshot {
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
+        index_info_locations: Option<BTreeMap<String, Location>>,
     ) -> Self {
         let now = Utc::now();
         // make snapshot timestamp monotonically increased
@@ -114,6 +119,7 @@ impl TableSnapshot {
             segments,
             cluster_key_meta,
             table_statistics_location,
+            index_info_locations,
         }
     }
 
@@ -125,6 +131,7 @@ impl TableSnapshot {
             schema,
             Statistics::default(),
             vec![],
+            None,
             None,
             None,
         )
@@ -143,6 +150,7 @@ impl TableSnapshot {
             clone.segments,
             clone.cluster_key_meta,
             clone.table_statistics_location,
+            clone.index_info_locations,
         )
     }
 
@@ -221,6 +229,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
+            index_info_locations: None,
         }
     }
 }
@@ -242,6 +251,7 @@ where T: Into<v3::TableSnapshot>
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
+            index_info_locations: None,
         }
     }
 }

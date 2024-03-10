@@ -911,7 +911,8 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::RevertTable(_)
             | Plan::AlterUDF(_)
             | Plan::AlterShareTenants(_)
-            | Plan::RefreshIndex(_) => {
+            | Plan::RefreshIndex(_)
+            | Plan::RefreshTableIndex(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Alter])
                     .await?;
             }

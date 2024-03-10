@@ -317,6 +317,7 @@ impl<'a> Binder {
             Statement::RefreshIndex(stmt) => self.bind_refresh_index(bind_context, stmt).await?,
             Statement::CreateInvertedIndex(stmt) => self.bind_create_inverted_index(bind_context, stmt).await?,
             Statement::DropInvertedIndex(stmt) => self.bind_drop_inverted_index(bind_context, stmt).await?,
+            Statement::RefreshInvertedIndex(stmt) => self.bind_refresh_inverted_index(bind_context, stmt).await?,
 
             // Virtual Columns
             Statement::CreateVirtualColumn(stmt) => self.bind_create_virtual_column(stmt).await?,
