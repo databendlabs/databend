@@ -47,7 +47,6 @@ use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans;
 use databend_common_sql::plans::MergeInto as MergePlan;
 use databend_common_sql::plans::RelOperator;
-use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
@@ -207,13 +206,6 @@ impl MergeIntoInterpreter {
         // check mutability
         let check_table = self.ctx.get_table(catalog, database, table_name).await?;
         check_table.check_mutable()?;
-        // check change tracking
-        if check_table.change_tracking_enabled() {
-            return Err(ErrorCode::Unimplemented(format!(
-                "change tracking is enabled for table '{}', does not support MERGE INTO",
-                check_table.name(),
-            )));
-        }
 
         let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), meta_data).await?;
 
@@ -376,31 +368,23 @@ impl MergeIntoInterpreter {
 
             // update
             let update_list = if let Some(update_list) = &item.update {
-                // use update_plan to get exprs
-                let update_plan = UpdatePlan {
-                    selection: None,
-                    subquery_desc: vec![],
-                    database: database.clone(),
-                    table: match target_alias {
-                        None => table_name.clone(),
-                        Some(alias) => alias.name.to_string().to_lowercase(),
-                    },
-                    update_list: update_list.clone(),
-                    bind_context: bind_context.clone(),
-                    metadata: self.plan.meta_data.clone(),
-                    catalog: catalog.clone(),
-                };
                 // we don't need real col_indices here, just give a
                 // dummy index, that's ok.
                 let col_indices = vec![DUMMY_COL_INDEX];
-                let update_list: Vec<(FieldIndex, RemoteExpr<String>)> = update_plan
-                    .generate_update_list(
-                        self.ctx.clone(),
-                        fuse_table.schema().into(),
-                        col_indices,
-                        Some(PREDICATE_COLUMN_INDEX),
-                        target_alias.is_some(),
-                    )?;
+                let (database, table) = match target_alias {
+                    None => (Some(database.as_str()), table_name.clone()),
+                    Some(alias) => (None, alias.name.to_string().to_lowercase()),
+                };
+                let update_list = plans::generate_update_list(
+                    self.ctx.clone(),
+                    bind_context,
+                    update_list,
+                    fuse_table.schema_with_stream().into(),
+                    col_indices,
+                    Some(PREDICATE_COLUMN_INDEX),
+                    database,
+                    &table,
+                )?;
                 let update_list = update_list
                     .iter()
                     .map(|(idx, remote_expr)| {
@@ -422,7 +406,7 @@ impl MergeIntoInterpreter {
                         )
                     })
                     .collect_vec();
-                //
+                // update
                 Some(update_list)
             } else {
                 // delete
@@ -452,7 +436,7 @@ impl MergeIntoInterpreter {
 
         let commit_input = if !distributed {
             // recv datablocks from matched upstream and unmatched upstream
-            // transform and append dat
+            // transform and append data
             PhysicalPlan::MergeInto(Box::new(MergeInto {
                 input: Box::new(merge_into_source),
                 table_info: table_info.clone(),

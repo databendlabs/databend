@@ -325,7 +325,6 @@ impl TransformHashJoinProbe {
             let data_block = DataBlock::empty_with_meta(Box::new(BlockMetaIndex {
                 segment_idx: segment_idx as usize,
                 block_idx: block_idx as usize,
-                inner: None,
             }));
             self.output_data_blocks.push_back(data_block);
             return Ok(());
@@ -366,7 +365,6 @@ impl TransformHashJoinProbe {
                 let data_block = data_block.add_meta(Some(Box::new(BlockMetaIndex {
                     segment_idx: segment_idx as usize,
                     block_idx: block_idx as usize,
-                    inner: None,
                 })))?;
                 self.output_data_blocks.push_back(data_block);
             }

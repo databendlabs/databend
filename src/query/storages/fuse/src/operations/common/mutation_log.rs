@@ -18,7 +18,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -67,7 +66,6 @@ pub enum MutationLogEntry {
 pub struct BlockMetaIndex {
     pub segment_idx: SegmentIndex,
     pub block_idx: BlockIndex,
-    pub inner: Option<BlockMetaInfoPtr>,
     // range is unused for now.
     // pub range: Option<Range<usize>>,
 }

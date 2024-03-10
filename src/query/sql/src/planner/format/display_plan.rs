@@ -258,6 +258,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
             agg_index: None,
             change_type: None,
             statistics: Default::default(),
+            update_stream_columns: false,
         });
         let scan_expr = SExpr::create_leaf(Arc::new(scan));
         let mut predicates = vec![];

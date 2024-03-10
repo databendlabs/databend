@@ -22,9 +22,11 @@ use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CteScan;
 use databend_common_sql::executor::physical_plans::TableScan;
+use databend_common_sql::StreamContext;
 
 use crate::pipelines::processors::transforms::MaterializedCteSource;
 use crate::pipelines::processors::transforms::TransformAddInternalColumns;
+use crate::pipelines::processors::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -42,6 +44,19 @@ impl PipelineBuilder {
         if let Some(internal_columns) = &scan.internal_column {
             self.main_pipeline.add_transform(|input, output| {
                 TransformAddInternalColumns::try_create(input, output, internal_columns.clone())
+            })?;
+        }
+
+        // Update stream columns if needed.
+        if table.change_tracking_enabled() && scan.source.update_stream_columns {
+            let stream_ctx = StreamContext::try_create(
+                self.ctx.get_function_context()?,
+                scan.source.schema(),
+                table.get_table_info().ident.seq,
+                false,
+            )?;
+            self.main_pipeline.add_transform(|input, output| {
+                TransformAddStreamColumns::try_create(input, output, stream_ctx.clone())
             })?;
         }
 
