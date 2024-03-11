@@ -317,7 +317,7 @@ impl Binder {
             .bind_single_table(&mut source_context, &target_table)
             .await?;
 
-        if table.change_tracking_enabled() {
+        if table.change_tracking_enabled() && merge_type != MergeIntoType::InsertOnly {
             if let RelOperator::Scan(scan) = target_expr.plan() {
                 let new_scan = scan.update_stream_columns(true);
                 target_expr = SExpr::create_leaf(Arc::new(new_scan.into()))
