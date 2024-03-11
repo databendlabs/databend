@@ -58,7 +58,7 @@ impl ProbeSpillHandler {
     // The method only used for cross join
     pub fn next_restore_file(&mut self) -> usize {
         self.next_restore_file += 1;
-        return self.next_restore_file - 1;
+        self.next_restore_file - 1
     }
 
     // The method only need for cross join, will be called after finishing each round
@@ -231,9 +231,8 @@ impl TransformHashJoinProbe {
         for data in self.input_data.drain(..) {
             let spill_state = self.spill_handler.spill_state_mut();
             if self.join_probe_state.join_type() == JoinType::Cross {
+                dbg!("spill probe");
                 spill_state.spiller.spill_block(data).await?;
-                // Add a dummy partition id to indicate spilling has happened.
-                spill_state.spiller.partition_location.insert(0, vec![]);
                 continue;
             }
             let mut hashes = Vec::with_capacity(data.num_rows());
@@ -284,6 +283,7 @@ impl TransformHashJoinProbe {
 
         // Restore each spilled file and probe hash table.
         let next_restore_file = self.spill_handler.next_restore_file();
+        info!("{:?}, {:?}", next_restore_file, self.processor_id);
         let spill_state = self.spill_handler.spill_state_mut();
         let spilled_files = spill_state.spiller.spilled_files();
         let (spilled_data, _) = spill_state

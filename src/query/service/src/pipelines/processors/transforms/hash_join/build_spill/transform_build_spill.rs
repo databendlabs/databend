@@ -113,10 +113,14 @@ impl BuildSpillHandler {
 
     // The method is dedicated to spill for cross join which doesn't need to consider partition
     async fn spill_cross_join(&mut self) -> Result<()> {
-        let pending_spill_data = self.pending_spill_data.clone();
-        let data = DataBlock::concat(&pending_spill_data)?;
+        let data = DataBlock::concat(&self.pending_spill_data)?;
+        let spill_state = self.spill_state_mut();
         // Directly spill the data, don't need to calculate hashes.
-        self.spill_state_mut().spiller.spill_block(data).await?;
+        spill_state.spiller.spill_block(data).await?;
+        // Add a dummy partition id to indicate spilling has happened.
+        spill_state.spiller.partition_location.insert(0, vec![]);
+        self.pending_spill_data.clear();
+        dbg!("spill");
         Ok(())
     }
 
@@ -128,10 +132,12 @@ impl BuildSpillHandler {
     ) -> Result<HashJoinBuildStep> {
         // Add spilled partition ids to `spill_partitions` of `HashJoinBuildState`
         let spilled_partition_set = self.spill_state().spiller.spilled_partitions();
-        info!(
-            "build processor-{:?}: spill finished with spilled partitions {:?}",
-            processor_id, spilled_partition_set
-        );
+        if build_state.join_type() != JoinType::Cross {
+            info!(
+                "build processor-{:?}: spill finished with spilled partitions {:?}",
+                processor_id, spilled_partition_set
+            );
+        }
 
         // For left-related join, will spill all build input blocks which means there isn't first-round hash table.
         // Because first-round hash table will make left join generate wrong results.
