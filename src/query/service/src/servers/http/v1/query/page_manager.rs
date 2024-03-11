@@ -13,16 +13,17 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
 use databend_common_io::prelude::FormatSettings;
 use log::debug;
 use log::info;
+use parking_lot::RwLock;
 use serde_json::Value as JsonValue;
 
 use crate::servers::http::v1::json_block::block_to_json_value;
@@ -53,11 +54,10 @@ pub struct PageManager {
     total_pages: usize,
     end: bool,
     block_end: bool,
-    schema: DataSchemaRef,
     last_page: Option<Page>,
     row_buffer: VecDeque<Vec<JsonValue>>,
     block_receiver: SizedChannelReceiver<DataBlock>,
-    format_settings: FormatSettings,
+    format_settings: Arc<RwLock<Option<FormatSettings>>>,
 }
 
 impl PageManager {
@@ -65,8 +65,7 @@ impl PageManager {
         query_id: String,
         max_rows_per_page: usize,
         block_receiver: SizedChannelReceiver<DataBlock>,
-        schema: DataSchemaRef,
-        format_settings: FormatSettings,
+        format_settings: Arc<RwLock<Option<FormatSettings>>>,
     ) -> PageManager {
         PageManager {
             query_id,
@@ -76,7 +75,6 @@ impl PageManager {
             end: false,
             block_end: false,
             row_buffer: Default::default(),
-            schema,
             block_receiver,
             max_rows_per_page,
             format_settings,
@@ -136,8 +134,11 @@ impl PageManager {
         block: DataBlock,
         remain: usize,
     ) -> Result<()> {
-        let format_settings = &self.format_settings;
-        let mut iter = block_to_json_value(&block, format_settings)?
+        let format_settings = {
+            let guard = self.format_settings.read();
+            guard.as_ref().unwrap().clone()
+        };
+        let mut iter = block_to_json_value(&block, &format_settings)?
             .into_iter()
             .peekable();
         let chunk: Vec<_> = iter.by_ref().take(remain).collect();
@@ -192,10 +193,7 @@ impl PageManager {
             }
         }
 
-        let block = JsonBlock {
-            schema: self.schema.clone(),
-            data: res,
-        };
+        let block = JsonBlock { data: res };
 
         // try to report 'no more data' earlier to client to avoid unnecessary http call
         if !self.block_end {
