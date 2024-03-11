@@ -40,7 +40,6 @@ use databend_common_sql::executor::physical_plans::MergeIntoAddRowNumber;
 use databend_common_sql::executor::physical_plans::MergeIntoAppendNotMatched;
 use databend_common_sql::executor::physical_plans::MergeIntoSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_storages_fuse::operations::common::TransformSerializeSegment;
 use databend_common_storages_fuse::operations::MatchedSplitProcessor;
 use databend_common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
 use databend_common_storages_fuse::operations::MergeIntoSplitProcessor;
@@ -49,6 +48,7 @@ use databend_common_storages_fuse::operations::TransformAddRowNumberColumnProces
 use databend_common_storages_fuse::operations::TransformDistributedMergeIntoBlockDeserialize;
 use databend_common_storages_fuse::operations::TransformDistributedMergeIntoBlockSerialize;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::FuseTable;
 
 use crate::pipelines::processors::transforms::AccumulateRowNumber;
