@@ -40,6 +40,7 @@ opendal = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+simd-json = "0.13.8"
 
 typetag = { workspace = true }
 xml-rs = "0.8.14"

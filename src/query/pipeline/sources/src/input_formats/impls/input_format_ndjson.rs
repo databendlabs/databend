@@ -51,7 +51,7 @@ impl InputFormatNDJson {
         missing_field_as: &NullAs,
     ) -> std::result::Result<(), FileParseError> {
         let mut json: serde_json::Value =
-            serde_json::from_reader(buf).map_err(|e| FileParseError::InvalidNDJsonRow {
+            simd_json::from_reader(buf).map_err(|e| FileParseError::InvalidNDJsonRow {
                 message: e.to_string(),
             })?;
         // todo: this is temporary
