@@ -16,6 +16,7 @@
 
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+
 use bumpalo::Bump;
 use databend_common_exception::Result;
 
@@ -45,7 +46,7 @@ pub struct AggregateHashTable {
     pub payload: PartitionedPayload,
     // use for append rows directly during deserialize
     pub direct_append: bool,
-    config: HashTableConfig,
+    pub config: HashTableConfig,
     current_radix_bits: u64,
     entries: Vec<Entry>,
     count: usize,
@@ -78,7 +79,12 @@ impl AggregateHashTable {
             count: 0,
             direct_append: false,
             current_radix_bits: config.initial_radix_bits,
-            payload: PartitionedPayload::new(group_types, aggrs, 1 << config.initial_radix_bits, vec![arena]),
+            payload: PartitionedPayload::new(
+                group_types,
+                aggrs,
+                1 << config.initial_radix_bits,
+                vec![arena],
+            ),
             capacity,
             config,
         }
@@ -533,6 +539,16 @@ impl AggregateHashTable {
 
     pub fn reset_count(&mut self) {
         self.count = 0;
+    }
+
+    pub fn allocated_bytes(&self) -> usize {
+        self.payload.memory_size()
+            + self
+                .payload
+                .arenas
+                .iter()
+                .map(|arena| arena.allocated_bytes())
+                .sum::<usize>()
     }
 }
 

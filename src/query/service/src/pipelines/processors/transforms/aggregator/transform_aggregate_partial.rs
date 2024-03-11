@@ -92,15 +92,21 @@ impl TryFrom<Arc<QueryContext>> for AggregateSettings {
             },
         };
 
+        // Ok(AggregateSettings {
+        //     convert_threshold,
+        //     max_memory_usage,
+        //     spilling_bytes_threshold_per_proc: match settings
+        //         .get_aggregate_spilling_bytes_threshold_per_proc()?
+        //     {
+        //         0 => max_memory_usage / max_threads,
+        //         spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,
+        //     },
+        // })
+
         Ok(AggregateSettings {
-            convert_threshold,
-            max_memory_usage,
-            spilling_bytes_threshold_per_proc: match settings
-                .get_aggregate_spilling_bytes_threshold_per_proc()?
-            {
-                0 => max_memory_usage / max_threads,
-                spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,
-            },
+            max_memory_usage: 8 * 1024 * 1024 * 1024,
+            convert_threshold: 1000,
+            spilling_bytes_threshold_per_proc: 8 * 1024,
         })
     }
 }
@@ -379,6 +385,39 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                     self.hash_table = HashTable::PartitionedHashTable(HashTableCell::create(
                         new_hashtable,
                         _dropper.unwrap(),
+                    ));
+                    return Ok(blocks);
+                }
+
+                unreachable!()
+            }
+
+            if matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
+            || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage)
+            {
+                if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
+                    // perf
+                    {
+                        metrics_inc_aggregate_partial_spill_count();
+                        metrics_inc_aggregate_partial_spill_cell_count(1);
+                        metrics_inc_aggregate_partial_hashtable_allocated_bytes(
+                            v.allocated_bytes() as u64,
+                        );
+                    }
+
+                    let group_types = v.payload.group_types.clone();
+                    let aggrs = v.payload.aggrs.clone();
+                    let config = v.config.clone();
+                    let blocks = vec![DataBlock::empty_with_meta(
+                        AggregateMeta::<Method, usize>::create_agg_spilling(v.payload),
+                    )];
+
+                    let arena = Arc::new(Bump::new());
+                    self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
+                        group_types,
+                        aggrs,
+                        config,
+                        arena,
                     ));
                     return Ok(blocks);
                 }

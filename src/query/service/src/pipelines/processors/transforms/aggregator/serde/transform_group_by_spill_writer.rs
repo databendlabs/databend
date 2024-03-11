@@ -26,6 +26,7 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::PartitionedPayload;
 use databend_common_hashtable::HashtableLike;
 use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::Event;
@@ -131,6 +132,13 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
                     self.spilling_meta = AggregateMeta::<Method, ()>::downcast_from(block_meta);
                     return Ok(Event::Sync);
                 }
+
+                if matches!(block_meta, AggregateMeta::AggregateSpilling(_)) {
+                    self.input.set_not_need_data();
+                    let block_meta = data_block.take_meta().unwrap();
+                    self.spilling_meta = AggregateMeta::<Method, ()>::downcast_from(block_meta);
+                    return Ok(Event::Sync);
+                }
             }
 
             self.output.push_data(Ok(data_block));
@@ -148,21 +156,35 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
 
     fn process(&mut self) -> Result<()> {
         if let Some(spilling_meta) = self.spilling_meta.take() {
-            if let AggregateMeta::Spilling(payload) = spilling_meta {
-                self.spilling_future = Some(spilling_group_by_payload(
-                    self.ctx.clone(),
-                    self.operator.clone(),
-                    &self.method,
-                    &self.location_prefix,
-                    payload,
-                )?);
+            match spilling_meta {
+                AggregateMeta::Spilling(payload) => {
+                    self.spilling_future = Some(spilling_group_by_payload(
+                        self.ctx.clone(),
+                        self.operator.clone(),
+                        &self.method,
+                        &self.location_prefix,
+                        payload,
+                    )?);
 
-                return Ok(());
+                    return Ok(());
+                }
+                AggregateMeta::AggregateSpilling(payload) => {
+                    self.spilling_future = Some(agg_spilling_group_by_payload::<Method>(
+                        self.ctx.clone(),
+                        self.operator.clone(),
+                        &self.location_prefix,
+                        payload,
+                    )?);
+
+                    return Ok(());
+                }
+
+                _ => {
+                    return Err(ErrorCode::Internal(
+                        "TransformGroupBySpillWriter only recv AggregateMeta",
+                    ));
+                }
             }
-
-            return Err(ErrorCode::Internal(
-                "TransformGroupBySpillWriter only recv AggregateMeta",
-            ));
         }
 
         Ok(())
@@ -176,6 +198,112 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
 
         Ok(())
     }
+}
+
+pub fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
+    ctx: Arc<QueryContext>,
+    operator: Operator,
+    location_prefix: &str,
+    partitioned_payload: PartitionedPayload,
+) -> Result<BoxFuture<'static, Result<DataBlock>>> {
+    let unique_name = GlobalUniqName::unique();
+    let location = format!("{}/{}", location_prefix, unique_name);
+
+    let mut write_size = 0;
+    let partition_count = partitioned_payload.partition_count();
+    let mut write_data = Vec::with_capacity(partition_count);
+    let mut spilled_buckets_payloads = Vec::with_capacity(partition_count);
+    let mut rows = 0;
+
+    for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
+        if payload.len() == 0 {
+            continue;
+        }
+
+        let now = Instant::now();
+        let data_block = payload.group_by_flush_all();
+        rows += data_block.num_rows();
+
+        let begin = write_size;
+        let columns = data_block.columns().to_vec();
+        let mut columns_data = Vec::with_capacity(columns.len());
+        let mut columns_layout = Vec::with_capacity(columns.len());
+        for column in columns.into_iter() {
+            let column = column.value.as_column().unwrap();
+            let column_data = serialize_column(column);
+            write_size += column_data.len() as u64;
+            columns_layout.push(column_data.len() as u64);
+            columns_data.push(column_data);
+        }
+
+        // perf
+        {
+            metrics_inc_aggregate_spill_data_serialize_milliseconds(
+                now.elapsed().as_millis() as u64
+            );
+        }
+
+        write_data.push(columns_data);
+        spilled_buckets_payloads.push(BucketSpilledPayload {
+            bucket: bucket as isize,
+            location: location.clone(),
+            data_range: begin..write_size,
+            columns_layout,
+            max_partition_count: partition_count,
+        });
+    }
+
+    Ok(Box::pin(async move {
+        let instant = Instant::now();
+
+        let mut write_bytes = 0;
+        if !write_data.is_empty() {
+            let mut writer = operator
+                .writer_with(&location)
+                .buffer(8 * 1024 * 1024)
+                .await?;
+            for write_bucket_data in write_data.into_iter() {
+                for data in write_bucket_data.into_iter() {
+                    write_bytes += data.len();
+                    writer.write(data).await?;
+                }
+            }
+
+            writer.close().await?;
+        }
+
+        // perf
+        {
+            metrics_inc_group_by_spill_write_count();
+            metrics_inc_group_by_spill_write_bytes(write_bytes as u64);
+            metrics_inc_group_by_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+
+            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
+            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+            Profile::record_usize_profile(
+                ProfileStatisticsName::SpillWriteTime,
+                instant.elapsed().as_millis() as usize,
+            );
+        }
+
+        {
+            let progress_val = ProgressValues {
+                rows,
+                bytes: write_bytes,
+            };
+            ctx.get_group_by_spill_progress().incr(&progress_val);
+        }
+
+        info!(
+            "Write aggregate spill {} successfully, elapsed: {:?}",
+            location,
+            instant.elapsed()
+        );
+
+        Ok(DataBlock::empty_with_meta(
+            AggregateMeta::<Method, ()>::create_spilled(spilled_buckets_payloads),
+        ))
+    }))
 }
 
 pub fn spilling_group_by_payload<Method: HashMethodBounds>(
@@ -226,6 +354,7 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
             location: location.clone(),
             data_range: begin..write_size,
             columns_layout,
+            max_partition_count: 0,
         });
     }
 

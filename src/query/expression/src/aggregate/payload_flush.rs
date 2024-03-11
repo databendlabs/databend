@@ -34,8 +34,10 @@ use crate::types::NumberType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::with_number_mapped_type;
+use crate::AggregateFunctionRef;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::DataBlock;
 use crate::Scalar;
 use crate::StateAddr;
 use crate::BATCH_SIZE;
@@ -108,6 +110,67 @@ impl PartitionedPayload {
 }
 
 impl Payload {
+    pub fn aggregate_flush_all(&self) -> DataBlock {
+        let mut state = PayloadFlushState::default();
+        let mut blocks = vec![];
+
+        while self.flush(&mut state) {
+            let row_count = state.row_count;
+
+            let mut state_builders: Vec<BinaryColumnBuilder> = self
+                .aggrs
+                .iter()
+                .map(|agg| state_serializer(agg, row_count))
+                .collect();
+
+            for place in state.state_places.as_slice()[0..row_count].iter() {
+                for (idx, (addr_offset, aggr)) in self
+                    .state_addr_offsets
+                    .iter()
+                    .zip(self.aggrs.iter())
+                    .enumerate()
+                {
+                    let arg_place = place.next(*addr_offset);
+                    aggr.serialize(arg_place, &mut state_builders[idx].data)
+                        .unwrap();
+                    state_builders[idx].commit_row();
+                }
+            }
+
+            let mut cols = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
+            for builder in state_builders.into_iter() {
+                let col = Column::Binary(builder.build());
+                cols.push(col);
+            }
+
+            cols.extend_from_slice(&state.take_group_columns());
+
+            blocks.push(DataBlock::new_from_columns(cols));
+        }
+
+        if blocks.is_empty() {
+            return self.empty_block();
+        }
+
+        DataBlock::concat(&blocks).unwrap()
+    }
+
+    pub fn group_by_flush_all(&self) -> DataBlock {
+        let mut state = PayloadFlushState::default();
+        let mut blocks = vec![];
+
+        while self.flush(&mut state) {
+            let cols = state.take_group_columns();
+            blocks.push(DataBlock::new_from_columns(cols));
+        }
+
+        if blocks.is_empty() {
+            return self.empty_block();
+        }
+
+        DataBlock::concat(&blocks).unwrap()
+    }
+
     pub fn flush(&self, state: &mut PayloadFlushState) -> bool {
         if state.flush_page >= self.pages.len() {
             return false;
@@ -285,4 +348,9 @@ impl Payload {
         }
         builder.build()
     }
+}
+
+fn state_serializer(func: &AggregateFunctionRef, row: usize) -> BinaryColumnBuilder {
+    let size = func.serialize_size_per_row().unwrap_or(4);
+    BinaryColumnBuilder::with_capacity(row, row * size)
 }

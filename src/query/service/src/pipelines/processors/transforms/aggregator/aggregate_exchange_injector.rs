@@ -81,6 +81,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                         AggregateMeta::HashTable(v) => Ok(v.bucket),
                         AggregateMeta::AggregateHashTable(_) => unreachable!(),
                         AggregateMeta::AggregatePayload(v) => Ok(v.bucket),
+                        AggregateMeta::AggregateSpilling(_) => unreachable!(),
                         AggregateMeta::Spilled(_)
                         | AggregateMeta::Spilling(_)
                         | AggregateMeta::BucketSpilled(_) => Ok(-1),
@@ -212,6 +213,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                         }
                     }
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
+                    AggregateMeta::AggregateSpilling(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(p) => {
                         for payload in scatter_paylaod(p.payload, self.buckets)? {
                             blocks.push(DataBlock::empty_with_meta(

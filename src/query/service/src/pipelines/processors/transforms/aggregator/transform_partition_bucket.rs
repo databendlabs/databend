@@ -22,13 +22,10 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::HashTableConfig;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::PayloadFlushState;
-use databend_common_expression::ProbeState;
 use databend_common_hashtable::hash2bucket;
 use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::Event;
@@ -166,7 +163,9 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
+                    AggregateMeta::AggregateSpilling(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(payload) => {
+                        println!("enter bucketspilled");
                         (payload.bucket, SINGLE_LEVEL_BUCKET_NUM)
                     }
                     AggregateMeta::Serialized(payload) => {
@@ -239,53 +238,14 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         res
                     }
                     AggregateMeta::Serialized(p) => {
-                        let rows_num = p.data_block.num_rows();
-                        let radix_bits = p.max_partition_count.trailing_zeros() as u64;
-                        let config = HashTableConfig::default().with_initial_radix_bits(radix_bits);
-                        let mut state = ProbeState::default();
-                        let mut hashtable = AggregateHashTable::new_with_capacity(
-                            self.params.group_data_types.clone(),
-                            self.params.aggregate_functions.clone(),
-                            config,
-                            rows_num,
-                            Arc::new(Bump::new()),
-                        );
-                        hashtable.direct_append = true;
-
-                        let agg_len = self.params.aggregate_functions.len();
-                        let group_len = self.params.group_columns.len();
-                        let agg_states = (0..agg_len)
-                            .map(|i| {
-                                p.data_block
-                                    .get_by_offset(i)
-                                    .value
-                                    .as_column()
-                                    .unwrap()
-                                    .clone()
-                            })
-                            .collect::<Vec<_>>();
-                        let group_columns = (agg_len..(agg_len + group_len))
-                            .map(|i| {
-                                p.data_block
-                                    .get_by_offset(i)
-                                    .value
-                                    .as_column()
-                                    .unwrap()
-                                    .clone()
-                            })
-                            .collect::<Vec<_>>();
-
-                        let _ = hashtable
-                            .add_groups(
-                                &mut state,
-                                &group_columns,
-                                &[vec![]],
-                                &agg_states,
-                                rows_num,
+                        for (bucket, payload) in p
+                            .convert_to_partitioned_payload(
+                                self.params.group_data_types.clone(),
+                                self.params.aggregate_functions.clone(),
                             )
-                            .unwrap();
-
-                        for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate()
+                            .payloads
+                            .into_iter()
+                            .enumerate()
                         {
                             self.agg_payloads.push(AggregatePayload {
                                 bucket: bucket as isize,
@@ -532,7 +492,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             }
 
             for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
-                let mut part = PartitionedPayload::new(group_types.clone(), aggrs.clone(), 1, partitioned_payload.arenas.clone());
+                let mut part = PartitionedPayload::new(
+                    group_types.clone(),
+                    aggrs.clone(),
+                    1,
+                    partitioned_payload.arenas.clone(),
+                );
                 part.combine_single(payload, &mut self.flush_state);
 
                 if part.len() != 0 {
@@ -566,6 +531,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                     AggregateMeta::HashTable(payload) => self.partition_hashtable(payload)?,
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(_) => unreachable!(),
+                    AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 };
 
                 for (bucket, block) in data_blocks.into_iter().enumerate() {

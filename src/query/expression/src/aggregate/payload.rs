@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
+use itertools::Itertools;
 use strength_reduce::StrengthReducedU64;
 
 use super::payload_row::rowformat_size;
@@ -27,6 +28,8 @@ use crate::store;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
+use crate::ColumnBuilder;
+use crate::DataBlock;
 use crate::PayloadFlushState;
 use crate::SelectVector;
 use crate::StateAddr;
@@ -373,6 +376,20 @@ impl Payload {
         }
         state.flush_page_row = end;
         true
+    }
+
+    pub fn empty_block(&self) -> DataBlock {
+        let columns = self
+            .aggrs
+            .iter()
+            .map(|f| ColumnBuilder::with_capacity(&f.return_type().unwrap(), 0).build())
+            .chain(
+                self.group_types
+                    .iter()
+                    .map(|t| ColumnBuilder::with_capacity(t, 0).build()),
+            )
+            .collect_vec();
+        DataBlock::new_from_columns(columns)
     }
 }
 
