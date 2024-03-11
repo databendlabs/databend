@@ -33,6 +33,7 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::VisitorMut;
+use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 
@@ -53,13 +54,31 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, after_join_reorder: bool) -> Res
     for predicate in &filter.predicates {
         let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
         match pred {
-            JoinPredicate::Left(_) if can_filter_null(predicate)? => {
+            JoinPredicate::Left(_)
+                if can_filter_null(
+                    predicate,
+                    &left_prop.output_columns,
+                    &right_prop.output_columns,
+                )? =>
+            {
                 can_filter_left_null = true;
             }
-            JoinPredicate::Right(_) if can_filter_null(predicate)? => {
+            JoinPredicate::Right(_)
+                if can_filter_null(
+                    predicate,
+                    &left_prop.output_columns,
+                    &right_prop.output_columns,
+                )? =>
+            {
                 can_filter_right_null = true;
             }
-            JoinPredicate::Both { .. } if can_filter_null(predicate)? => {
+            JoinPredicate::Both { .. }
+                if can_filter_null(
+                    predicate,
+                    &left_prop.output_columns,
+                    &right_prop.output_columns,
+                )? =>
+            {
                 can_filter_left_null = true;
                 can_filter_right_null = true;
             }
@@ -123,30 +142,74 @@ pub fn eliminate_outer_join_type(
     }
 }
 
-pub fn can_filter_null(predicate: &ScalarExpr) -> Result<bool> {
-    struct ReplaceColumnBindingsNull {
+pub fn can_filter_null(
+    predicate: &ScalarExpr,
+    left_output_columns: &ColumnSet,
+    right_output_columns: &ColumnSet,
+) -> Result<bool> {
+    struct ReplaceColumnBindingsNull<'a> {
         can_replace: bool,
+        left_output_columns: &'a ColumnSet,
+        right_output_columns: &'a ColumnSet,
     }
 
-    impl VisitorMut<'_> for ReplaceColumnBindingsNull {
-        fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+    impl<'a> ReplaceColumnBindingsNull<'a> {
+        fn replace(
+            &mut self,
+            expr: &mut ScalarExpr,
+            column_set: &mut Option<ColumnSet>,
+        ) -> Result<()> {
+            if !self.can_replace {
+                return Ok(());
+            }
             match expr {
-                ScalarExpr::BoundColumnRef(_) => {
+                ScalarExpr::BoundColumnRef(column_ref) => {
+                    if let Some(column_set) = column_set {
+                        column_set.insert(column_ref.column.index);
+                    }
                     *expr = ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
                         value: Scalar::Null,
                     });
                     Ok(())
                 }
-                ScalarExpr::FunctionCall(expr) => self.visit_function_call(expr),
-                ScalarExpr::CastExpr(expr) => self.visit_cast_expr(expr),
+                ScalarExpr::FunctionCall(func) => {
+                    if func.func_name != "or" {
+                        for expr in &mut func.arguments {
+                            self.replace(expr, column_set)?;
+                        }
+                        return Ok(());
+                    }
+
+                    let mut children_columns_set = Some(ColumnSet::new());
+                    for expr in &mut func.arguments {
+                        self.replace(expr, &mut children_columns_set)?;
+                    }
+
+                    let mut has_left = false;
+                    let mut has_right = false;
+                    let children_columns_set = children_columns_set.unwrap();
+                    for column in children_columns_set.iter() {
+                        if self.left_output_columns.contains(column) {
+                            has_left = true;
+                        } else if self.right_output_columns.contains(column) {
+                            has_right = true;
+                        }
+                    }
+                    if has_left && has_right {
+                        self.can_replace = false;
+                        return Ok(());
+                    }
+
+                    if let Some(column_set) = column_set {
+                        *column_set = column_set.union(&children_columns_set).cloned().collect();
+                    }
+
+                    Ok(())
+                }
+                ScalarExpr::CastExpr(cast) => self.replace(&mut cast.argument, column_set),
                 ScalarExpr::ConstantExpr(_) => Ok(()),
-                ScalarExpr::WindowFunction(_)
-                | ScalarExpr::AggregateFunction(_)
-                | ScalarExpr::LambdaFunction(_)
-                | ScalarExpr::SubqueryExpr(_)
-                | ScalarExpr::UDFCall(_)
-                | ScalarExpr::UDFLambdaCall(_) => {
+                _ => {
                     self.can_replace = false;
                     Ok(())
                 }
@@ -154,9 +217,13 @@ pub fn can_filter_null(predicate: &ScalarExpr) -> Result<bool> {
         }
     }
 
-    let mut replace = ReplaceColumnBindingsNull { can_replace: true };
+    let mut replace = ReplaceColumnBindingsNull {
+        can_replace: true,
+        left_output_columns,
+        right_output_columns,
+    };
     let mut null_scalar_expr = predicate.clone();
-    replace.visit(&mut null_scalar_expr).unwrap();
+    replace.replace(&mut null_scalar_expr, &mut None).unwrap();
     if replace.can_replace {
         let expr = convert_scalar_expr_to_expr(null_scalar_expr)?;
         let func_ctx = &FunctionContext::default();

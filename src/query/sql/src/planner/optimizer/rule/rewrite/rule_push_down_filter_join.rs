@@ -101,8 +101,7 @@ impl Rule for RulePushDownFilterJoin {
         // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=2) and (t2.b=2 or t2.b=1)`
         // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
         let predicates = rewrite_predicates(&s_expr)?;
-        let (need_push, mut result) =
-            try_push_down_filter_join(&s_expr, predicates)?;
+        let (need_push, mut result) = try_push_down_filter_join(&s_expr, predicates)?;
         if !need_push && !outer_to_inner && !mark_to_semi {
             return Ok(());
         }
@@ -206,13 +205,25 @@ pub fn try_push_down_filter_join(
                 all_push_down.push(predicate);
             }
             JoinPredicate::Left(_) => {
-                if !can_filter_left_null && can_filter_null(&predicate)? {
+                if !can_filter_left_null
+                    && can_filter_null(
+                        &predicate,
+                        &left_prop.output_columns,
+                        &right_prop.output_columns,
+                    )?
+                {
                     can_filter_left_null = true;
                 }
                 left_push_down.push(predicate);
             }
             JoinPredicate::Right(_) => {
-                if !can_filter_right_null && can_filter_null(&predicate)? {
+                if !can_filter_right_null
+                    && can_filter_null(
+                        &predicate,
+                        &left_prop.output_columns,
+                        &right_prop.output_columns,
+                    )?
+                {
                     can_filter_right_null = true;
                 }
                 right_push_down.push(predicate);
