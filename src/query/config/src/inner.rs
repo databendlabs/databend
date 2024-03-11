@@ -566,6 +566,14 @@ pub struct CacheConfig {
     /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
     pub table_data_deserialized_data_bytes: u64,
+
+    /// Max percentage of in memory table column object cache relative to whole memory. By default it is 0 (disabled)
+    ///
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
+    ///
+    /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
+    /// and the access pattern will benefit from caching, consider enabled this cache.
+    pub table_data_deserialized_memory_ratio: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -624,6 +632,7 @@ impl Default for CacheConfig {
             table_data_cache_population_queue_size: 0,
             disk_cache_config: Default::default(),
             table_data_deserialized_data_bytes: 0,
+            table_data_deserialized_memory_ratio: 0,
         }
     }
 }
