@@ -19,9 +19,9 @@ use crate::ast::*;
 use crate::parser::common::*;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
-use crate::parser::token::*;
 use crate::parser::query::*;
 use crate::parser::statement::*;
+use crate::parser::token::*;
 use crate::rule;
 
 pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
@@ -31,10 +31,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
         }),
         |(span, (_, name, _, _, query))| ScriptStatement::LetQuery {
             span: transform_span(span.0),
-            declare: QueryDeclare {
-                name,
-                query,
-            },
+            declare: QueryDeclare { name, query },
         },
     );
     let let_var_stmt = map(
