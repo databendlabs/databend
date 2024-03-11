@@ -15,8 +15,8 @@
 use databend_common_ast::ast::AlterViewStmt;
 use databend_common_ast::ast::CreateViewStmt;
 use databend_common_ast::ast::DropViewStmt;
-use databend_common_ast::VisitorMut;
 use databend_common_exception::Result;
+use derive_visitor::DriveMut;
 
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
@@ -51,12 +51,12 @@ impl Binder {
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
-        visitor.visit_query(&mut query);
+        query.drive_mut(&mut visitor);
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
             create_option: *create_option,
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
             view_name,
@@ -90,11 +90,11 @@ impl Binder {
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
-        visitor.visit_query(&mut query);
+        query.drive_mut(&mut visitor);
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
             view_name,
@@ -121,7 +121,7 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, view);
         let plan = DropViewPlan {
             if_exists: *if_exists,
-            tenant,
+            tenant: tenant.to_string(),
             catalog,
             database,
             view_name,

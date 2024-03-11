@@ -30,3 +30,6 @@ pub mod schema;
 pub mod share;
 pub mod storage;
 pub mod tenant;
+
+mod key_with_tenant;
+pub use key_with_tenant::KeyWithTenant;

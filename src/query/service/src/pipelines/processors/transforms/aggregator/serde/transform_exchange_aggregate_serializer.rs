@@ -22,6 +22,8 @@ use databend_common_arrow::arrow::io::ipc::write::Compression;
 use databend_common_arrow::arrow::io::ipc::IpcField;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::serialize_column;
@@ -39,8 +41,6 @@ use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::Profile;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_settings::FlightCompression;
@@ -48,6 +48,7 @@ use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
 
+use super::SerializePayload;
 use crate::api::serialize_block;
 use crate::api::ExchangeShuffleMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
@@ -134,6 +135,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                 Some(AggregateMeta::Serialized(_)) => unreachable!(),
                 Some(AggregateMeta::BucketSpilled(_)) => unreachable!(),
                 Some(AggregateMeta::Partitioned { .. }) => unreachable!(),
+                Some(AggregateMeta::AggregateHashTable(_)) => unreachable!(),
                 Some(AggregateMeta::Spilling(payload)) => {
                     serialized_blocks.push(FlightSerialized::Future(
                         match index == self.local_pos {
@@ -156,7 +158,6 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         },
                     ));
                 }
-
                 Some(AggregateMeta::HashTable(payload)) => {
                     if index == self.local_pos {
                         serialized_blocks.push(FlightSerialized::DataBlock(block.add_meta(
@@ -165,9 +166,12 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         continue;
                     }
 
-                    let mut stream =
-                        SerializeAggregateStream::create(&self.method, &self.params, payload);
-                    let bucket = stream.payload.bucket;
+                    let bucket = payload.bucket;
+                    let mut stream = SerializeAggregateStream::create(
+                        &self.method,
+                        &self.params,
+                        SerializePayload::<Method, usize>::HashTablePayload(payload),
+                    );
                     serialized_blocks.push(FlightSerialized::DataBlock(match stream.next() {
                         None => DataBlock::empty(),
                         Some(data_block) => {
@@ -175,8 +179,29 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         }
                     }));
                 }
+                Some(AggregateMeta::AggregatePayload(p)) => {
+                    if index == self.local_pos {
+                        serialized_blocks.push(FlightSerialized::DataBlock(block.add_meta(
+                            Some(Box::new(AggregateMeta::<Method, usize>::AggregatePayload(
+                                p,
+                            ))),
+                        )?));
+                        continue;
+                    }
 
-                Some(AggregateMeta::AggregateHashTable(_)) => todo!("AGG_HASHTABLE"),
+                    let bucket = p.bucket;
+                    let mut stream = SerializeAggregateStream::create(
+                        &self.method,
+                        &self.params,
+                        SerializePayload::<Method, usize>::AggregatePayload(p),
+                    );
+                    serialized_blocks.push(FlightSerialized::DataBlock(match stream.next() {
+                        None => DataBlock::empty(),
+                        Some(data_block) => {
+                            serialize_block(bucket, data_block?, &self.ipc_fields, &self.options)?
+                        }
+                    }));
+                }
             };
         }
 

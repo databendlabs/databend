@@ -48,6 +48,10 @@ impl Interpreter for DescDataMaskInterpreter {
         "DescDataMaskInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
@@ -57,7 +61,11 @@ impl Interpreter for DescDataMaskInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
         let policy = handler
-            .get_data_mask(meta_api, self.ctx.get_tenant(), self.plan.name.clone())
+            .get_data_mask(
+                meta_api,
+                self.ctx.get_tenant().to_string(),
+                self.plan.name.clone(),
+            )
             .await;
 
         let policy = match policy {

@@ -105,7 +105,9 @@ where TablesTable<T>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let catalogs = catalog_mgr.list_catalogs(&tenant).await?;
+        let catalogs = catalog_mgr
+            .list_catalogs(tenant.as_str(), ctx.txn_mgr())
+            .await?;
         let visibility_checker = ctx.get_visibility_checker().await?;
 
         Ok(self
@@ -306,7 +308,7 @@ where TablesTable<T>: HistoryAware
         let mut index_size: Vec<Option<u64>> = Vec::new();
 
         for tbl in &database_tables {
-            let stats = match tbl.table_statistics(ctx.clone()).await {
+            let stats = match tbl.table_statistics(ctx.clone(), None).await {
                 Ok(stats) => stats,
                 Err(err) => {
                     let msg = format!(

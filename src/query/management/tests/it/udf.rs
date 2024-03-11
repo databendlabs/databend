@@ -35,9 +35,7 @@ async fn test_add_udf() -> Result<()> {
 
     // lambda udf
     let udf = create_test_lambda_udf();
-    udf_api
-        .add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false))
-        .await??;
+    udf_api.add_udf(udf.clone(), &CreateOption::None).await??;
 
     let value = kv_api
         .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
@@ -59,9 +57,7 @@ async fn test_add_udf() -> Result<()> {
     // udf server
     let udf = create_test_udf_server();
 
-    udf_api
-        .add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false))
-        .await??;
+    udf_api.add_udf(udf.clone(), &CreateOption::None).await??;
 
     let value = kv_api
         .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
@@ -70,6 +66,29 @@ async fn test_add_udf() -> Result<()> {
     match value {
         Some(SeqV {
             seq: 2,
+            meta: _,
+            data: value,
+        }) => {
+            assert_eq!(
+                value,
+                serialize_struct(&udf, ErrorCode::IllegalUDFFormat, || "")?
+            );
+        }
+        catch => panic!("GetKVActionReply{:?}", catch),
+    }
+
+    // udf script
+    let udf = create_test_udf_script();
+
+    udf_api.add_udf(udf.clone(), &CreateOption::None).await??;
+
+    let value = kv_api
+        .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
+        .await?;
+
+    match value {
+        Some(SeqV {
+            seq: 3,
             meta: _,
             data: value,
         }) => {
@@ -90,13 +109,9 @@ async fn test_already_exists_add_udf() -> Result<()> {
 
     // lambda udf
     let udf = create_test_lambda_udf();
-    udf_api
-        .add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false))
-        .await??;
+    udf_api.add_udf(udf.clone(), &CreateOption::None).await??;
 
-    let got = udf_api
-        .add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false))
-        .await?;
+    let got = udf_api.add_udf(udf.clone(), &CreateOption::None).await?;
 
     let err = got.unwrap_err();
 
@@ -104,13 +119,9 @@ async fn test_already_exists_add_udf() -> Result<()> {
 
     // udf server
     let udf = create_test_udf_server();
-    udf_api
-        .add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false))
-        .await??;
+    udf_api.add_udf(udf.clone(), &CreateOption::None).await??;
 
-    let got = udf_api
-        .add_udf(udf.clone(), &CreateOption::CreateIfNotExists(false))
-        .await?;
+    let got = udf_api.add_udf(udf.clone(), &CreateOption::None).await?;
 
     let err = got.unwrap_err();
     assert_eq!(err.to_string(), r#"UDF already exists: 'strlen'; "#);
@@ -129,11 +140,11 @@ async fn test_successfully_get_udfs() -> Result<()> {
     let udf_server = create_test_udf_server();
 
     udf_api
-        .add_udf(lambda_udf.clone(), &CreateOption::CreateIfNotExists(false))
+        .add_udf(lambda_udf.clone(), &CreateOption::None)
         .await??;
 
     udf_api
-        .add_udf(udf_server.clone(), &CreateOption::CreateIfNotExists(false))
+        .add_udf(udf_server.clone(), &CreateOption::None)
         .await??;
 
     let udfs = udf_api.list_udf().await?;
@@ -149,11 +160,11 @@ async fn test_successfully_drop_udf() -> Result<()> {
     let udf_server = create_test_udf_server();
 
     udf_api
-        .add_udf(lambda_udf.clone(), &CreateOption::CreateIfNotExists(false))
+        .add_udf(lambda_udf.clone(), &CreateOption::None)
         .await??;
 
     udf_api
-        .add_udf(udf_server.clone(), &CreateOption::CreateIfNotExists(false))
+        .add_udf(udf_server.clone(), &CreateOption::None)
         .await??;
 
     let udfs = udf_api.list_udf().await?;
@@ -194,6 +205,19 @@ fn create_test_udf_server() -> UserDefinedFunction {
         "python",
         vec![DataType::String],
         DataType::Number(NumberDataType::Int64),
+        "This is a description",
+    )
+}
+
+fn create_test_udf_script() -> UserDefinedFunction {
+    UserDefinedFunction::create_udf_script(
+        "strlen2",
+        "testcode",
+        "strlen_py",
+        "javascript",
+        vec![DataType::String],
+        DataType::Number(NumberDataType::Int64),
+        "3.12.0",
         "This is a description",
     )
 }

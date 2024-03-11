@@ -22,7 +22,6 @@ use arrow_array::RecordBatch;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_enterprise_background_service::Suggestion;
-use log::as_debug;
 use log::info;
 
 use super::suggested_background_tasks::SuggestedBackgroundTasksSource;
@@ -80,7 +79,7 @@ impl SuggestedBackgroundTasksSource {
         let resps = Self::do_get_all_suggested_compaction_tables(ctx).await?;
         let mut suggestions = vec![];
         for records in resps {
-            info!(records = as_debug!(&records); "target_tables");
+            info!(records :? =(&records); "target_tables");
             let db_names = records
                 .column(0)
                 .as_any()

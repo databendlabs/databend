@@ -32,7 +32,7 @@ use crate::sql_gen::SqlGenerator;
 
 const BASE_TABLE_NAMES: [&str; 4] = ["t1", "t2", "t3", "t4"];
 
-const SIMPLE_COLUMN_TYPES: [TypeName; 18] = [
+const SIMPLE_COLUMN_TYPES: [TypeName; 20] = [
     TypeName::Boolean,
     TypeName::UInt8,
     TypeName::UInt16,
@@ -57,6 +57,8 @@ const SIMPLE_COLUMN_TYPES: [TypeName; 18] = [
     TypeName::String,
     TypeName::Bitmap,
     TypeName::Variant,
+    TypeName::Binary,
+    TypeName::Geometry,
 ];
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
@@ -73,7 +75,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 all: false,
             };
             let create_table = CreateTableStmt {
-                create_option: CreateOption::CreateIfNotExists(true),
+                create_option: CreateOption::CreateIfNotExists,
                 catalog: None,
                 database: None,
                 table: Identifier::from_name(table_name),
@@ -92,7 +94,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
     fn gen_nested_type(&mut self, depth: u8) -> TypeName {
         if depth == 0 {
-            let i = self.rng.gen_range(0..=17);
+            let i = self.rng.gen_range(0..=19);
             // replace bitmap with string, as generated bitmap value can't display
             if i == 16 {
                 TypeName::Nullable(Box::new(TypeName::String))
@@ -145,12 +147,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn gen_data_type_name(&mut self, idx: Option<usize>) -> TypeName {
         let i = match idx {
             Some(i) => i,
-            None => self.rng.gen_range(0..38),
+            None => self.rng.gen_range(0..42),
         };
-        if i <= 17 {
+        if i < 20 {
             TypeName::NotNull(Box::new(SIMPLE_COLUMN_TYPES[i].clone()))
-        } else if i <= 35 {
-            TypeName::Nullable(Box::new(SIMPLE_COLUMN_TYPES[i - 18].clone()))
+        } else if i < 40 {
+            TypeName::Nullable(Box::new(SIMPLE_COLUMN_TYPES[i - 20].clone()))
         } else {
             let depth = self.rng.gen_range(1..=3);
             self.gen_nested_type(depth)
@@ -179,12 +181,17 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     fn gen_table_source(&mut self) -> CreateTableSource {
         let mut column_defs = Vec::with_capacity(38);
 
-        for i in 0..38 {
+        for i in 0..42 {
             let name = format!("c{}", i);
             let data_type = self.gen_data_type_name(Some(i));
 
             // TODO: computed expr
-            let default_expr = Some(ColumnExpr::Default(Box::new(gen_default_expr(&data_type))));
+            // TODO: fix binary default value
+            let default_expr = if data_type != TypeName::NotNull(Box::new(TypeName::Binary)) {
+                Some(ColumnExpr::Default(Box::new(gen_default_expr(&data_type))))
+            } else {
+                None
+            };
             let column_def = ColumnDefinition {
                 name: Identifier::from_name(name),
                 data_type,
@@ -264,7 +271,7 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
         },
         TypeName::Geometry => Expr::Literal {
             span: None,
-            lit: Literal::String("POINT(0, 0)".to_string()),
+            lit: Literal::String("POINT(0 0)".to_string()),
         },
         TypeName::Nullable(_) => Expr::Literal {
             span: None,

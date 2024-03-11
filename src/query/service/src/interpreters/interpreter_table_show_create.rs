@@ -56,6 +56,10 @@ impl Interpreter for ShowCreateTableInterpreter {
         "ShowCreateTableInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
@@ -170,6 +174,12 @@ impl ShowCreateTableInterpreter {
                     .join("")
                     .as_str()
             });
+        }
+
+        if engine != "ICEBERG" && engine != "DELTA" {
+            if let Some(sp) = &table_info.meta.storage_params {
+                table_create_sql.push_str(format!(" LOCATION = '{}'", sp).as_str());
+            }
         }
 
         if !table_info.meta.comment.is_empty() {

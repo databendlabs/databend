@@ -21,6 +21,7 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -56,6 +57,8 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateTableIndexReply;
+use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
@@ -66,6 +69,8 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableIndexReply;
+use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
@@ -107,9 +112,9 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::MetaId;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
-use databend_common_pipeline_core::processors::profile::Profile;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_pipeline_core::InputError;
+use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
 use databend_common_sql::Planner;
@@ -122,6 +127,7 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -180,8 +186,16 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_name_by_id(table_id).await
     }
 
+    async fn mget_table_names_by_ids(&self, table_ids: &[MetaId]) -> Result<Vec<String>> {
+        self.cat.mget_table_names_by_ids(table_ids).await
+    }
+
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         self.cat.get_db_name_by_id(db_id).await
+    }
+
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
+        self.cat.mget_database_names_by_ids(db_ids).await
     }
 
     async fn get_table(
@@ -247,6 +261,16 @@ impl Catalog for FakedCatalog {
         _req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply> {
         todo!()
+    }
+
+    #[async_backtrace::framed]
+    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+        unimplemented!()
     }
 
     async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
@@ -392,6 +416,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    fn txn_mgr(&self) -> TxnManagerRef {
         todo!()
     }
 
@@ -562,7 +590,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_tenant(&self) -> String {
+    fn get_tenant(&self) -> NonEmptyString {
         self.ctx.get_tenant()
     }
 
@@ -579,7 +607,7 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
-        Settings::create("fake_settings".to_string())
+        Settings::create(NonEmptyString::new("fake_settings").unwrap())
     }
 
     fn get_shared_settings(&self) -> Arc<Settings> {
@@ -648,7 +676,7 @@ impl TableContext for CtxDelegation {
         let tenant = self.ctx.get_tenant();
         let db = database.to_string();
         let tbl = table.to_string();
-        let table_meta_key = (tenant, db, tbl);
+        let table_meta_key = (tenant.to_string(), db, tbl);
         let already_in_cache = { self.cache.lock().contains_key(&table_meta_key) };
         if already_in_cache {
             self.table_from_cache
@@ -782,6 +810,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
+        todo!()
+    }
+
+    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         todo!()
     }
 }

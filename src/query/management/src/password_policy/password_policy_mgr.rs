@@ -86,7 +86,7 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
             .upsert_kv(UpsertKVReq::new(&key, seq, value, None))
             .await?;
 
-        if let CreateOption::CreateIfNotExists(false) = create_option {
+        if let CreateOption::None = create_option {
             if res.prev.is_some() {
                 return Err(ErrorCode::PasswordPolicyAlreadyExists(format!(
                     "Password policy '{}' already exists.",

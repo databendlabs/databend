@@ -1,0 +1,27 @@
+[package]
+name = "databend-enterprise-inverted-index"
+description = "inverted index handler"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+# Workspace dependencies
+databend-common-base = { path = "../../../common/base" }
+databend-common-catalog = { path = "../../catalog" }
+databend-common-exception = { path = "../../../common/exception" }
+databend-common-expression = { path = "../../expression" }
+databend-common-meta-app = { path = "../../../meta/app" }
+databend-common-storages-fuse = { path = "../../storages/fuse" }
+databend-storages-common-table-meta = { path = "../../storages/common/table_meta" }
+
+async-backtrace = { workspace = true }
+async-trait = { workspace = true }
+
+[build-dependencies]

@@ -43,6 +43,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
@@ -1398,6 +1399,9 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "256")]
     pub max_active_sessions: u64,
 
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub max_running_queries: u64,
+
     /// The max total memory in bytes that can be used by this process.
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub max_server_memory_usage: u64,
@@ -1667,7 +1671,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
 
     fn try_into(self) -> Result<InnerQueryConfig> {
         Ok(InnerQueryConfig {
-            tenant_id: self.tenant_id,
+            tenant_id: NonEmptyString::new(self.tenant_id)
+                .map_err(|_e| ErrorCode::InvalidConfig("tenant-id can not be empty"))?,
             cluster_id: self.cluster_id,
             node_id: "".to_string(),
             num_cpus: self.num_cpus,
@@ -1677,6 +1682,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             mysql_tls_server_cert: self.mysql_tls_server_cert,
             mysql_tls_server_key: self.mysql_tls_server_key,
             max_active_sessions: self.max_active_sessions,
+            max_running_queries: self.max_running_queries,
             max_server_memory_usage: self.max_server_memory_usage,
             max_memory_limit_enabled: self.max_memory_limit_enabled,
             clickhouse_http_handler_host: self.clickhouse_http_handler_host,
@@ -1746,7 +1752,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
 impl From<InnerQueryConfig> for QueryConfig {
     fn from(inner: InnerQueryConfig) -> Self {
         Self {
-            tenant_id: inner.tenant_id,
+            tenant_id: inner.tenant_id.to_string(),
             cluster_id: inner.cluster_id,
             num_cpus: inner.num_cpus,
             mysql_handler_host: inner.mysql_handler_host,
@@ -1756,6 +1762,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             mysql_tls_server_cert: inner.mysql_tls_server_cert,
             mysql_tls_server_key: inner.mysql_tls_server_key,
             max_active_sessions: inner.max_active_sessions,
+            max_running_queries: inner.max_running_queries,
             max_server_memory_usage: inner.max_server_memory_usage,
             max_memory_limit_enabled: inner.max_memory_limit_enabled,
 
@@ -2803,7 +2810,7 @@ pub struct CacheConfig {
 
     /// Max size of in memory table column object cache. By default it is 0 (disabled)
     ///
-    /// CAUTION: The cached items are deserialized table column objects, may take a lot of memory.
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
     ///
     /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
@@ -2813,6 +2820,19 @@ pub struct CacheConfig {
         default_value = "0"
     )]
     pub table_data_deserialized_data_bytes: u64,
+
+    /// Max percentage of in memory table column object cache relative to whole memory. By default it is 0 (disabled)
+    ///
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
+    ///
+    /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
+    /// and the access pattern will benefit from caching, consider enabled this cache.
+    #[clap(
+        long = "cache-table-data-deserialized-memory-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub table_data_deserialized_memory_ratio: u64,
 
     // ----- the following options/args are all deprecated               ----
     /// Max number of cached table segment
@@ -2945,6 +2965,7 @@ mod cache_config_converters {
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.try_into()?,
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+                table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
             })
         }
     }
@@ -2966,6 +2987,7 @@ mod cache_config_converters {
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.into(),
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+                table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
                 table_meta_segment_count: None,
             }
         }

@@ -31,9 +31,11 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 use crate::runtime::catch_unwind::CatchUnwindFuture;
-use crate::runtime::MemStat;
+use crate::runtime::drop_guard;
+use crate::runtime::memory::MemStat;
 use crate::runtime::Thread;
 use crate::runtime::ThreadJoinHandle;
+use crate::runtime::ThreadTracker;
 
 /// Methods to spawn tasks.
 pub trait TrySpawn {
@@ -130,15 +132,6 @@ impl Runtime {
         })
     }
 
-    fn tracker_builder(mem_stat: Arc<MemStat>) -> tokio::runtime::Builder {
-        let mut builder = tokio::runtime::Builder::new_multi_thread();
-        builder
-            .enable_all()
-            .on_thread_start(mem_stat.on_start_thread());
-
-        builder
-    }
-
     pub fn get_tracker(&self) -> Arc<MemStat> {
         self.tracker.clone()
     }
@@ -148,7 +141,7 @@ impl Runtime {
     /// its executor.
     pub fn with_default_worker_threads() -> Result<Self> {
         let mem_stat = MemStat::create(String::from("UnnamedRuntime"));
-        let mut runtime_builder = Self::tracker_builder(mem_stat.clone());
+        let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
 
         #[cfg(debug_assertions)]
         {
@@ -162,7 +155,13 @@ impl Runtime {
             runtime_builder.thread_stack_size(20 * 1024 * 1024);
         }
 
-        Self::create(None, mem_stat, &mut runtime_builder)
+        Self::create(
+            None,
+            mem_stat,
+            runtime_builder
+                .enable_all()
+                .on_thread_start(ThreadTracker::init),
+        )
     }
 
     #[allow(unused_mut)]
@@ -174,7 +173,7 @@ impl Runtime {
         }
 
         let mem_stat = MemStat::create(mem_stat_name);
-        let mut runtime_builder = Self::tracker_builder(mem_stat.clone());
+        let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
 
         #[cfg(debug_assertions)]
         {
@@ -195,7 +194,10 @@ impl Runtime {
         Self::create(
             thread_name,
             mem_stat,
-            runtime_builder.worker_threads(workers),
+            runtime_builder
+                .enable_all()
+                .on_thread_start(ThreadTracker::init)
+                .worker_threads(workers),
         )
     }
 
@@ -269,12 +271,12 @@ impl Runtime {
                 ErrorCode::Internal(format!("semaphore closed, acquire permit failure. {}", e))
             })?;
             #[expect(clippy::disallowed_methods)]
-            let handler = self
-                .handle
-                .spawn(async_backtrace::location!().frame(async move {
+            let handler = self.handle.spawn(ThreadTracker::tracking_future(
+                async_backtrace::location!().frame(async move {
                     // take the ownership of the permit, (implicitly) drop it when task is done
                     fut(permit).await
-                }));
+                }),
+            ));
             handlers.push(handler)
         }
 
@@ -290,7 +292,11 @@ impl Runtime {
         R: Send + 'static,
     {
         #[allow(clippy::disallowed_methods)]
-        match_join_handle(self.handle.spawn_blocking(f)).await
+        match_join_handle(
+            self.handle
+                .spawn_blocking(ThreadTracker::tracking_function(f)),
+        )
+        .await
     }
 }
 
@@ -301,6 +307,7 @@ impl TrySpawn for Runtime {
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
+        let task = ThreadTracker::tracking_future(task);
         let id = id.into();
         let task = match id == GLOBAL_TASK {
             true => async_backtrace::location!(String::from(GLOBAL_TASK_DESC)).frame(task),
@@ -322,24 +329,26 @@ pub struct Dropper {
 
 impl Drop for Dropper {
     fn drop(&mut self) {
-        // Send a signal to say i am dropping.
-        if let Some(close_sender) = self.close.take() {
-            if close_sender.send(()).is_ok() {
-                match self.join_handler.take().unwrap().join() {
-                    Err(e) => warn!("Runtime dropper panic, {:?}", e),
-                    Ok(true) => {
-                        // When the runtime shutdown is blocked for more than 3 seconds,
-                        // we will print the backtrace in the warn log, which will help us debug.
-                        warn!(
-                            "Runtime dropper is blocked 3 seconds, runtime name: {:?}, drop backtrace: {:?}",
-                            self.name,
-                            Backtrace::capture()
-                        );
-                    }
-                    _ => {}
-                };
+        drop_guard(move || {
+            // Send a signal to say i am dropping.
+            if let Some(close_sender) = self.close.take() {
+                if close_sender.send(()).is_ok() {
+                    match self.join_handler.take().unwrap().join() {
+                        Err(e) => warn!("Runtime dropper panic, {:?}", e),
+                        Ok(true) => {
+                            // When the runtime shutdown is blocked for more than 3 seconds,
+                            // we will print the backtrace in the warn log, which will help us debug.
+                            warn!(
+                                "Runtime dropper is blocked 3 seconds, runtime name: {:?}, drop backtrace: {:?}",
+                                self.name,
+                                Backtrace::capture()
+                            );
+                        }
+                        _ => {}
+                    };
+                }
             }
-        }
+        })
     }
 }
 
@@ -422,7 +431,7 @@ where
     R: Send + 'static,
 {
     #[expect(clippy::disallowed_methods)]
-    tokio::runtime::Handle::current().spawn_blocking(f)
+    tokio::runtime::Handle::current().spawn_blocking(ThreadTracker::tracking_function(f))
 }
 
 #[track_caller]
@@ -434,7 +443,7 @@ where
     match tokio::runtime::Handle::try_current() {
         Err(_) => Err(f),
         #[expect(clippy::disallowed_methods)]
-        Ok(handler) => Ok(handler.spawn_blocking(f)),
+        Ok(handler) => Ok(handler.spawn_blocking(ThreadTracker::tracking_function(f))),
     }
 }
 
@@ -468,6 +477,9 @@ where
     // NOTE:
     // Frame name: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=689fbc84ab4be894c0cdd285bea24845
     // Frame location: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=3ae3a2295607628ce95f0a34a566847b
+
+    // TODO: tracking payload
+    let future = ThreadTracker::tracking_future(future);
 
     let frame_name = std::any::type_name::<F>()
         .trim_end_matches("::{{closure}}")

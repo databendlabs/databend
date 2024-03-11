@@ -26,6 +26,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_meta_app::principal::CopyOptions;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 use itertools::Itertools;
 use url::Url;
 
@@ -34,42 +36,7 @@ use crate::ast::write_comma_separated_quoted_list;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TableIdentifier {
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
-}
-
-impl TableIdentifier {
-    pub fn from_tuple(t: (Option<Identifier>, Option<Identifier>, Identifier)) -> Self {
-        let (catalog, database, table) = t;
-        Self {
-            catalog,
-            database,
-            table,
-        }
-    }
-}
-
-impl Display for TableIdentifier {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(catalog) = &self.catalog {
-            write!(
-                f,
-                "{catalog}.{}.{}",
-                self.database.as_ref().expect("database must be valid"),
-                self.table
-            )?;
-        } else if let Some(database) = &self.database {
-            write!(f, "{database}.{}", self.table)?;
-        } else {
-            write!(f, "{}", self.table)?;
-        };
-        Ok(())
-    }
-}
+use crate::ast::TableRef;
 
 /// CopyIntoTableStmt is the parsed statement of `COPY into <table> from <location>`.
 ///
@@ -78,30 +45,42 @@ impl Display for TableIdentifier {
 /// ```sql
 /// COPY INTO table from s3://bucket/path/to/x.csv
 /// ```
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CopyIntoTableStmt {
     pub src: CopyIntoTableSource,
-    pub dst: TableIdentifier,
+    pub dst: TableRef,
     pub dst_columns: Option<Vec<Identifier>>,
 
     pub hints: Option<Hint>,
 
+    #[drive(skip)]
     pub file_format: BTreeMap<String, String>,
 
     // files to load
+    #[drive(skip)]
     pub files: Option<Vec<String>>,
+    #[drive(skip)]
     pub pattern: Option<String>,
+    #[drive(skip)]
     pub force: bool,
 
     // copy options
     /// TODO(xuanwo): parse into validation_mode directly.
+    #[drive(skip)]
     pub validation_mode: String,
+    #[drive(skip)]
     pub size_limit: usize,
+    #[drive(skip)]
     pub max_files: usize,
+    #[drive(skip)]
     pub split_size: usize,
+    #[drive(skip)]
     pub purge: bool,
+    #[drive(skip)]
     pub disable_variant_check: bool,
+    #[drive(skip)]
     pub return_failed_only: bool,
+    #[drive(skip)]
     pub on_error: String,
 }
 
@@ -208,14 +187,18 @@ impl Display for CopyIntoTableStmt {
 }
 
 /// CopyIntoLocationStmt is the parsed statement of `COPY into <location>  from <table> ...`
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CopyIntoLocationStmt {
     pub hints: Option<Hint>,
     pub src: CopyIntoLocationSource,
     pub dst: FileLocation,
+    #[drive(skip)]
     pub file_format: BTreeMap<String, String>,
+    #[drive(skip)]
     pub single: bool,
+    #[drive(skip)]
     pub max_file_size: usize,
+    #[drive(skip)]
     pub detailed_output: bool,
 }
 
@@ -252,7 +235,7 @@ impl CopyIntoLocationStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CopyIntoTableSource {
     Location(FileLocation),
     /// Load with Transform
@@ -271,11 +254,11 @@ impl Display for CopyIntoTableSource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CopyIntoLocationSource {
     Query(Box<Query>),
     /// it will be rewrite as `(SELECT * FROM table)`
-    Table(TableIdentifier),
+    Table(TableRef),
 }
 
 impl Display for CopyIntoLocationSource {
@@ -291,9 +274,11 @@ impl Display for CopyIntoLocationSource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct Connection {
+    #[drive(skip)]
     visited_keys: HashSet<String>,
+    #[drive(skip)]
     pub conns: BTreeMap<String, String>,
 }
 
@@ -360,11 +345,15 @@ impl Display for Connection {
 /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
 ///
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct UriLocation {
+    #[drive(skip)]
     pub protocol: String,
+    #[drive(skip)]
     pub name: String,
+    #[drive(skip)]
     pub path: String,
+    #[drive(skip)]
     pub part_prefix: String,
     pub connection: Connection,
 }
@@ -462,9 +451,9 @@ impl Display for UriLocation {
 /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
 ///
 /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum FileLocation {
-    Stage(String),
+    Stage(#[drive(skip)] String),
     Uri(UriLocation),
 }
 

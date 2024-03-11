@@ -35,6 +35,9 @@ pub enum KeyError {
         got: String,
     },
 
+    #[error("Expect {i}-th segment to be non-empty")]
+    EmptySegment { i: usize },
+
     #[error("Expect {expect} segments, but: '{got}'")]
     WrongNumberOfSegments { expect: usize, got: String },
 
@@ -67,10 +70,34 @@ where Self: Sized
     fn parent(&self) -> Option<String>;
 
     /// Encode structured key into a string.
-    fn to_string_key(&self) -> String;
+    fn to_string_key(&self) -> String {
+        let b = kvapi::KeyBuilder::new_prefixed(Self::PREFIX);
+        self.encode_key(b).done()
+    }
+
+    /// Encode structured key into a key builder.
+    ///
+    /// Implement either this method or `to_string_key()`.
+    /// `to_string_key()` provides a default implementation that create a default builder and relies on this method.
+    fn encode_key(&self, mut _b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+        unimplemented!()
+    }
 
     /// Decode str into a structured key.
-    fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError>;
+    fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+        let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+        let k = Self::decode_key(&mut p)?;
+        p.done()?;
+        Ok(k)
+    }
+
+    /// Parse a structured key from a key parser.
+    ///
+    /// Implement either this method or `from_str_key()`.
+    /// `from_str_key()` provides a default implementation that create a default parser and relies on this method.
+    fn decode_key(_parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+        unimplemented!()
+    }
 }
 
 impl kvapi::Key for String {

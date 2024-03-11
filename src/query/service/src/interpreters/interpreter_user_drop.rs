@@ -42,6 +42,10 @@ impl Interpreter for DropUserInterpreter {
         "DropUserInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -50,7 +54,7 @@ impl Interpreter for DropUserInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         UserApiProvider::instance()
-            .drop_user(&tenant, plan.user, plan.if_exists)
+            .drop_user(tenant, plan.user, plan.if_exists)
             .await?;
 
         Ok(PipelineBuildResult::create())

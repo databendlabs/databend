@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use std::cmp::min;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Duration;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
@@ -78,7 +80,7 @@ impl VacuumDropTablesInterpreter {
         for c in drop_db_table_ids.chunks(chunk_size) {
             info!("vacuum drop {} table ids: {:?}", c.len(), c);
             let req = GcDroppedTableReq {
-                tenant: self.ctx.get_tenant(),
+                tenant: self.ctx.get_tenant().to_string(),
                 drop_ids: c.to_vec(),
             };
             let _ = catalog.gc_drop_tables(req).await?;
@@ -88,7 +90,7 @@ impl VacuumDropTablesInterpreter {
         for c in drop_db_ids.chunks(chunk_size) {
             info!("vacuum drop {} db ids: {:?}", c.len(), c);
             let req = GcDroppedTableReq {
-                tenant: self.ctx.get_tenant(),
+                tenant: self.ctx.get_tenant().to_string(),
                 drop_ids: c.to_vec(),
             };
             let _ = catalog.gc_drop_tables(req).await?;
@@ -102,6 +104,10 @@ impl VacuumDropTablesInterpreter {
 impl Interpreter for VacuumDropTablesInterpreter {
     fn name(&self) -> &str {
         "VacuumDropTablesInterpreter"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
     }
 
     #[async_backtrace::framed]
@@ -131,7 +137,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
         let (tables, drop_ids) = catalog
             .get_drop_table_infos(ListDroppedTableReq {
                 inner: DatabaseNameIdent {
-                    tenant,
+                    tenant: tenant.to_string(),
                     db_name: self.plan.database.clone(),
                 },
                 filter,
@@ -177,18 +183,54 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 if let Some(limit) = self.plan.option.limit {
                     len = min(len, limit);
                 }
-                let mut tables: Vec<String> = Vec::with_capacity(len);
-                let mut files: Vec<String> = Vec::with_capacity(len);
                 let purge_files = &purge_files[0..len];
-                for file in purge_files.iter() {
-                    tables.push(file.0.to_string());
-                    files.push(file.1.to_string());
+                let mut table_file_sizes = HashMap::new();
+                for (table_name, file, file_size) in purge_files {
+                    table_file_sizes
+                        .entry(table_name)
+                        .and_modify(|file_sizes: &mut Vec<(String, u64)>| {
+                            file_sizes.push((file.to_string(), *file_size))
+                        })
+                        .or_insert(vec![(file.to_string(), *file_size)]);
                 }
 
-                PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                    StringType::from_data(tables),
-                    StringType::from_data(files),
-                ])])
+                if let Some(summary) = self.plan.option.dry_run {
+                    if summary {
+                        let mut tables = vec![];
+                        let mut total_files = vec![];
+                        let mut total_size = vec![];
+                        for (table, file_sizes) in table_file_sizes {
+                            tables.push(table.to_string());
+                            total_files.push(file_sizes.len() as u64);
+                            total_size.push(file_sizes.into_iter().map(|(_, num)| num).sum());
+                        }
+
+                        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                            StringType::from_data(tables),
+                            UInt64Type::from_data(total_files),
+                            UInt64Type::from_data(total_size),
+                        ])])
+                    } else {
+                        let mut tables = Vec::with_capacity(len);
+                        let mut files = Vec::with_capacity(len);
+                        let mut file_size = Vec::with_capacity(len);
+                        for (table, file_sizes) in table_file_sizes {
+                            for (file, size) in file_sizes {
+                                tables.push(table.to_string());
+                                files.push(file);
+                                file_size.push(size);
+                            }
+                        }
+
+                        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                            StringType::from_data(tables),
+                            StringType::from_data(files),
+                            UInt64Type::from_data(file_size),
+                        ])])
+                    }
+                } else {
+                    unreachable!();
+                }
             }
         }
     }

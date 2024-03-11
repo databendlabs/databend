@@ -96,7 +96,6 @@ impl IcebergTable {
     pub async fn load_iceberg_table(dop: DataOperator) -> Result<icelake::Table> {
         // FIXME: we should implement catalog for icelake.
         let icelake_catalog = Arc::new(icelake::catalog::StorageCatalog::new(
-            "databend",
             OperatorCreatorWrapper(dop.clone()),
         ));
 
@@ -173,7 +172,6 @@ impl IcebergTable {
                 let op = DataOperator::try_new(sp)?;
                 // FIXME: we should implement catalog for icelake.
                 let icelake_catalog = Arc::new(icelake::catalog::StorageCatalog::new(
-                    "databend",
                     OperatorCreatorWrapper(op),
                 ));
 

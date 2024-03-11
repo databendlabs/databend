@@ -17,6 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnID as AstColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::CopyIntoTableSource;
 use databend_common_ast::ast::CopyIntoTableStmt;
 use databend_common_ast::ast::Expr;
@@ -31,9 +32,8 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
-use databend_common_ast::parser::parser_values_with_placeholder;
+use databend_common_ast::parser::parse_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Visitor;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
@@ -48,12 +48,14 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
+use derive_visitor::Drive;
 use indexmap::IndexMap;
 use log::debug;
 use log::warn;
@@ -88,7 +90,7 @@ impl<'a> Binder {
             }
             CopyIntoTableSource::Query(query) => {
                 let mut max_column_position = MaxColumnPosition::new();
-                max_column_position.visit_query(query.as_ref());
+                query.drive(&mut max_column_position);
                 self.metadata
                     .write()
                     .set_max_column_position(max_column_position.max_pos);
@@ -185,9 +187,13 @@ impl<'a> Binder {
             for dest_field in plan.required_source_schema.fields().iter() {
                 let column = Expr::ColumnRef {
                     span: None,
-                    database: None,
-                    table: None,
-                    column: AstColumnID::Name(Identifier::from_name(dest_field.name().to_string())),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: AstColumnID::Name(Identifier::from_name(
+                            dest_field.name().to_string(),
+                        )),
+                    },
                 };
                 // cast types to variant, tuple will be rewrite as `json_object_keep_null`
                 let expr = if dest_field.data_type().remove_nullable() == DataType::Variant {
@@ -222,10 +228,21 @@ impl<'a> Binder {
             resolve_stage_location(self.ctx.as_ref(), &attachment.location[1..]).await?;
 
         if let Some(ref options) = attachment.file_format_options {
-            stage_info.file_format_params = FileFormatOptionsAst {
+            let mut params = FileFormatOptionsAst {
                 options: options.clone(),
             }
             .try_into()?;
+            if let FileFormatParams::Csv(ref mut fmt) = &mut params {
+                // TODO: remove this after 1. the old server is no longer supported 2. Driver add the option "EmptyFieldAs=FieldDefault"
+                // CSV attachment is mainly used in Drivers for insert.
+                // In the future, client should use EmptyFieldAs=STRING or FieldDefault to distinguish NULL and empty string.
+                // However, old server does not support `empty_field_as`, so client can not add the option directly at now.
+                // So we will get empty_field_as = NULL, which will raise error if there is empty string for non-nullable string field.
+                if fmt.empty_field_as == EmptyFieldAs::Null {
+                    fmt.empty_field_as = EmptyFieldAs::FieldDefault;
+                }
+            }
+            stage_info.file_format_params = params;
         }
         if let Some(ref options) = attachment.copy_options {
             stage_info.copy_options.apply(options, true)?;
@@ -425,7 +442,7 @@ impl<'a> Binder {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
-        let expr_or_placeholders = parser_values_with_placeholder(&tokens, sql_dialect)?;
+        let expr_or_placeholders = parse_values_with_placeholder(&tokens, sql_dialect)?;
 
         if source_schema.num_fields() != expr_or_placeholders.len() {
             return Err(ErrorCode::SemanticError(format!(
@@ -453,7 +470,7 @@ impl<'a> Binder {
         let const_schema = Arc::new(DataSchema::new(const_fields));
         let const_values = bind_context
             .exprs_to_scalar(
-                exprs,
+                &exprs,
                 &const_schema,
                 self.ctx.clone(),
                 &name_resolution_ctx,

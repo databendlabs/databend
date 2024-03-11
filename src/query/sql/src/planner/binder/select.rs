@@ -20,8 +20,10 @@ use async_recursion::async_recursion;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnPosition;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Expr::Array;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Join;
@@ -35,7 +37,6 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SetOperator;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::Visitor;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
@@ -44,6 +45,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use derive_visitor::Drive;
+use derive_visitor::Visitor;
 use log::warn;
 
 use super::sort::OrderItem;
@@ -111,7 +114,7 @@ impl Binder {
             self.bind_one_table(bind_context, select_list).await?
         } else {
             let mut max_column_position = MaxColumnPosition::new();
-            max_column_position.visit_select_stmt(stmt);
+            stmt.drive(&mut max_column_position);
             self.metadata
                 .write()
                 .set_max_column_position(max_column_position.max_pos);
@@ -292,8 +295,12 @@ impl Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
-        // rewrite udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone());
+        // rewrite udf for interpreter udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
+
+        // rewrite udf for server udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
         s_expr = udf_rewriter.rewrite(&s_expr)?;
 
         // rewrite variant inner fields as virtual columns
@@ -819,6 +826,30 @@ impl Binder {
             return Ok(());
         }
 
+        let mut metadata = self.metadata.write();
+        if metadata.tables().len() != 1 {
+            // Only support single table query.
+            return Ok(());
+        }
+
+        // As we don't if this is subquery, we need add required cols to metadata's non_lazy_columns,
+        // so if the inner query not match the lazy materialized but outer query matched, we can prevent
+        // the cols that inner query required not be pruned when analyze outer query.
+        {
+            let mut non_lazy_cols = HashSet::new();
+            for s in select_list.items.iter() {
+                // The TableScan's schema uses name_mapping to prune columns,
+                // all lazy columns will be skipped to add to name_mapping in TableScan.
+                // When build physical window plan, if window's order by or partition by provided,
+                // we need create a `EvalScalar` for physical window inputs, so we should keep the window
+                // used cols not be pruned.
+                if let ScalarExpr::WindowFunction(_) = &s.scalar {
+                    non_lazy_cols.extend(s.scalar.used_columns())
+                }
+            }
+            metadata.add_non_lazy_columns(non_lazy_cols);
+        }
+
         let limit_threadhold = self.ctx.get_settings().get_lazy_read_threshold()? as usize;
 
         let where_cols = where_scalar
@@ -828,12 +859,6 @@ impl Binder {
 
         if limit == 0 || limit > limit_threadhold || (order_by.is_empty() && where_cols.is_empty())
         {
-            return Ok(());
-        }
-
-        let mut metadata = self.metadata.write();
-        if metadata.tables().len() != 1 {
-            // Only support single table query.
             return Ok(());
         }
 
@@ -874,13 +899,8 @@ impl Binder {
 
         let mut select_cols = HashSet::with_capacity(select_list.items.len());
         for s in select_list.items.iter() {
-            // The TableScan's schema uses name_mapping to prune columns,
-            // all lazy columns will be skipped to add to name_mapping in TableScan.
-            // When build physical window plan, if window's order by or partition by proviede,
-            // we need create a `EvalScalar` for physical window inputs, so we should keep the window
-            // used cols not be pruned.
             if let ScalarExpr::WindowFunction(_) = &s.scalar {
-                non_lazy_cols.extend(s.scalar.used_columns())
+                continue;
             } else {
                 select_cols.extend(s.scalar.used_columns())
             }
@@ -903,6 +923,9 @@ impl Binder {
 
         // add internal_cols to non_lazy_cols
         non_lazy_cols.extend(internal_cols);
+
+        // add previous(subquery) stored non_lazy_columns to non_lazy_cols
+        non_lazy_cols.extend(metadata.non_lazy_columns());
 
         let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
         metadata.add_lazy_columns(lazy_cols);
@@ -943,7 +966,10 @@ impl<'a> SelectRewriter<'a> {
     }
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
-            Expr::FunctionCall { name, args, .. } => Ok((name, args)),
+            Expr::FunctionCall {
+                func: FunctionCall { name, args, .. },
+                ..
+            } => Ok((name, args)),
             _ => Err(ErrorCode::SyntaxException("Aggregate function is required")),
         }
     }
@@ -960,10 +986,12 @@ impl<'a> SelectRewriter<'a> {
         Expr::BinaryOp {
             span: None,
             left: Box::new(Expr::ColumnRef {
-                column: ColumnID::Name(col),
                 span: None,
-                database: None,
-                table: None,
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: ColumnID::Name(col),
+                },
             }),
             op: BinaryOperator::Eq,
             right: Box::new(value),
@@ -978,12 +1006,14 @@ impl<'a> SelectRewriter<'a> {
         SelectTarget::AliasedExpr {
             expr: Box::new(Expr::FunctionCall {
                 span: Span::default(),
-                distinct: false,
-                name,
-                args,
-                params: vec![],
-                window: None,
-                lambda: None,
+                func: FunctionCall {
+                    distinct: false,
+                    name,
+                    args,
+                    params: vec![],
+                    window: None,
+                    lambda: None,
+                },
             }),
             alias,
         }
@@ -1009,9 +1039,11 @@ impl<'a> SelectRewriter<'a> {
                 .into_iter()
                 .map(|expr| Expr::ColumnRef {
                     span: None,
-                    column: ColumnID::Name(expr),
-                    database: None,
-                    table: None,
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(expr),
+                    },
                 })
                 .collect(),
         }
@@ -1060,7 +1092,7 @@ impl<'a> SelectRewriter<'a> {
             .ok_or_else(|| ErrorCode::SyntaxException("Aggregate column not found"))?;
         let aggregate_column_names = aggregate_columns
             .iter()
-            .map(|col| col.name())
+            .map(|col| col.column.name())
             .collect::<Vec<_>>();
         let new_group_by = stmt.group_by.clone().unwrap_or_else(|| {
             GroupBy::Normal(
@@ -1085,7 +1117,7 @@ impl<'a> SelectRewriter<'a> {
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
             let mut exclude_columns: Vec<_> = aggregate_columns
                 .iter()
-                .map(|c| Identifier::from_name(c.name()))
+                .map(|c| Identifier::from_name(c.column.name()))
                 .collect();
             exclude_columns.push(pivot.value_column.clone());
             star.exclude(exclude_columns);
@@ -1158,6 +1190,8 @@ impl<'a> SelectRewriter<'a> {
     }
 }
 
+#[derive(Visitor)]
+#[visitor(ColumnPosition(enter))]
 pub struct MaxColumnPosition {
     pub max_pos: usize,
 }
@@ -1168,8 +1202,8 @@ impl MaxColumnPosition {
     }
 }
 
-impl<'a> Visitor<'a> for MaxColumnPosition {
-    fn visit_column_position(&mut self, pos: &ColumnPosition) {
+impl MaxColumnPosition {
+    fn enter_column_position(&mut self, pos: &ColumnPosition) {
         if pos.pos > self.max_pos {
             self.max_pos = pos.pos;
         }

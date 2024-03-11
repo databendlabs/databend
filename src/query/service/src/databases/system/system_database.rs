@@ -40,10 +40,13 @@ use databend_common_storages_system::LocksTable;
 use databend_common_storages_system::MallocStatsTable;
 use databend_common_storages_system::MallocStatsTotalsTable;
 use databend_common_storages_system::MetricsTable;
+use databend_common_storages_system::NotificationHistoryTable;
+use databend_common_storages_system::NotificationsTable;
 use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
 use databend_common_storages_system::ProcessesTable;
 use databend_common_storages_system::ProcessorProfileTable;
+use databend_common_storages_system::QueriesQueueTable;
 use databend_common_storages_system::QueryCacheTable;
 use databend_common_storages_system::QueryLogTable;
 use databend_common_storages_system::RolesTable;
@@ -93,6 +96,7 @@ impl SystemDatabase {
             StreamsTable::create(sys_db_meta.next_table_id()),
             Arc::new(TracingTable::create(sys_db_meta.next_table_id())),
             ProcessesTable::create(sys_db_meta.next_table_id()),
+            QueriesQueueTable::create(sys_db_meta.next_table_id()),
             ConfigsTable::create(sys_db_meta.next_table_id()),
             MetricsTable::create(sys_db_meta.next_table_id()),
             MallocStatsTable::create(sys_db_meta.next_table_id()),
@@ -127,6 +131,8 @@ impl SystemDatabase {
             VirtualColumnsTable::create(sys_db_meta.next_table_id()),
             PasswordPoliciesTable::create(sys_db_meta.next_table_id()),
             UserFunctionsTable::create(sys_db_meta.next_table_id()),
+            NotificationsTable::create(sys_db_meta.next_table_id()),
+            NotificationHistoryTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

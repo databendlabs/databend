@@ -16,14 +16,18 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_dot_separated_list;
+use crate::ast::Expr;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct InsertStmt {
     pub hints: Option<Hint>,
     pub catalog: Option<Identifier>,
@@ -31,6 +35,7 @@ pub struct InsertStmt {
     pub table: Identifier,
     pub columns: Vec<Identifier>,
     pub source: InsertSource,
+    #[drive(skip)]
     pub overwrite: bool,
 }
 
@@ -61,20 +66,31 @@ impl Display for InsertStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum InsertSource {
     Streaming {
+        #[drive(skip)]
         format: String,
+        #[drive(skip)]
         rest_str: String,
+        #[drive(skip)]
         start: usize,
     },
     StreamingV2 {
+        #[drive(skip)]
         settings: BTreeMap<String, String>,
+        #[drive(skip)]
         on_error_mode: Option<String>,
+        #[drive(skip)]
         start: usize,
     },
     Values {
+        rows: Vec<Vec<Expr>>,
+    },
+    RawValues {
+        #[drive(skip)]
         rest_str: String,
+        #[drive(skip)]
         start: usize,
     },
     Select {
@@ -104,7 +120,19 @@ impl Display for InsertSource {
                     on_error_mode.as_ref().unwrap_or(&"Abort".to_string())
                 )
             }
-            InsertSource::Values { rest_str, .. } => write!(f, "VALUES {rest_str}"),
+            InsertSource::Values { rows } => {
+                write!(f, "VALUES ")?;
+                for (i, row) in rows.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "(")?;
+                    write_comma_separated_list(f, row)?;
+                    write!(f, ")")?;
+                }
+                Ok(())
+            }
+            InsertSource::RawValues { rest_str, .. } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),
         }
     }

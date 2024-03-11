@@ -213,5 +213,9 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for LockMeta {}
+    impl kvapi::Value for LockMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 }

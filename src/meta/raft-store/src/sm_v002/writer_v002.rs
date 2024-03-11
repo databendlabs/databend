@@ -21,7 +21,6 @@ use std::io::Write;
 use databend_common_meta_types::LogId;
 use futures::Stream;
 use futures_util::StreamExt;
-use log::as_debug;
 use log::debug;
 use log::info;
 
@@ -98,7 +97,7 @@ impl<'a> WriterV002<'a> {
         while let Some(ent) = entry_results.next().await {
             let ent = ent?;
 
-            debug!(entry = as_debug!(&ent); "write {} entry", data_version);
+            debug!(entry :? =(&ent); "write {} entry", data_version);
 
             if let RaftStoreEntry::StateMachineMeta {
                 key: StateMachineMetaKey::LastApplied,
@@ -106,7 +105,7 @@ impl<'a> WriterV002<'a> {
             } = ent
             {
                 let last: LogId = value.clone().try_into().unwrap();
-                info!(last_applied = as_debug!(last); "write last applied to snapshot");
+                info!(last_applied :? =(last); "write last applied to snapshot");
 
                 assert!(
                     self.last_applied.is_none(),
@@ -157,7 +156,7 @@ impl<'a> WriterV002<'a> {
 
         fs::rename(&self.temp_path, path)?;
 
-        info!(snapshot_id = as_debug!(snapshot_id); "snapshot committed: file_size: {}; {}", file_size, snapshot_id.to_string());
+        info!(snapshot_id :? =(snapshot_id); "snapshot committed: file_size: {}; {}", file_size, snapshot_id.to_string());
 
         Ok((snapshot_id, file_size))
     }

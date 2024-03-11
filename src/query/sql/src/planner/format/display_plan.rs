@@ -40,16 +40,16 @@ use crate::ScalarExpr;
 use crate::Visibility;
 
 impl Plan {
-    pub fn format_indent(&self) -> Result<String> {
+    pub fn format_indent(&self, verbose: bool) -> Result<String> {
         match self {
             Plan::Query {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                s_expr.to_format_tree(metadata).format_pretty()
+                s_expr.to_format_tree(metadata, verbose)?.format_pretty()
             }
-            Plan::Explain { kind, plan } => {
-                let result = plan.format_indent()?;
+            Plan::Explain { kind, plan, .. } => {
+                let result = plan.format_indent(false)?;
                 Ok(format!("{:?}:\n{}", kind, result))
             }
             Plan::ExplainAst { .. } => Ok("ExplainAst".to_string()),
@@ -107,6 +107,8 @@ impl Plan {
             Plan::CreateIndex(_) => Ok("CreateIndex".to_string()),
             Plan::DropIndex(_) => Ok("DropIndex".to_string()),
             Plan::RefreshIndex(_) => Ok("RefreshIndex".to_string()),
+            Plan::CreateTableIndex(_) => Ok("CreateTableIndex".to_string()),
+            Plan::DropTableIndex(_) => Ok("DropTableIndex".to_string()),
 
             // Virtual Columns
             Plan::CreateVirtualColumn(_) => Ok("CreateVirtualColumn".to_string()),
@@ -200,6 +202,15 @@ impl Plan {
             Plan::DescConnection(_) => Ok("DescConnection".to_string()),
             Plan::DropConnection(_) => Ok("DropConnection".to_string()),
             Plan::ShowConnections(_) => Ok("ShowConnections".to_string()),
+            Plan::Begin => Ok("Begin".to_string()),
+            Plan::Commit => Ok("commit".to_string()),
+            Plan::Abort => Ok("Abort".to_string()),
+
+            // Notification
+            Plan::CreateNotification(_) => Ok("CreateNotification".to_string()),
+            Plan::DropNotification(_) => Ok("DropNotification".to_string()),
+            Plan::DescNotification(_) => Ok("DescNotification".to_string()),
+            Plan::AlterNotification(_) => Ok("AlterNotification".to_string()),
         }
     }
 }
@@ -257,7 +268,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
         SExpr::create_unary(Arc::new(filter), Arc::new(scan_expr))
     };
     let metadata = &*delete.metadata.read();
-    let res = s_expr.to_format_tree(metadata).format_pretty()?;
+    let res = s_expr.to_format_tree(metadata, false)?.format_pretty()?;
     Ok(format!("DeletePlan:\n{res}"))
 }
 
@@ -268,7 +279,7 @@ fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                let res = s_expr.to_format_tree(metadata);
+                let res = s_expr.to_format_tree(metadata, false)?;
                 FormatTreeNode::with_children("CreateTableAsSelect".to_string(), vec![res])
                     .format_pretty()
             }
@@ -369,7 +380,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
     }
     let s_expr = merge_into.input.as_ref();
     let metadata = &*merge_into.meta_data.read();
-    let input_format_child = s_expr.to_format_tree(metadata);
+    let input_format_child = s_expr.to_format_tree(metadata, false)?;
     let all_children = [
         vec![distributed_format],
         vec![target_build_optimization_format],

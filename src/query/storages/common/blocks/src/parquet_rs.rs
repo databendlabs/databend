@@ -27,7 +27,7 @@ use parquet_rs::format::FileMetaData;
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(
-    schema: &TableSchema,
+    table_schema: &TableSchema,
     blocks: Vec<DataBlock>,
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,
@@ -44,9 +44,11 @@ pub fn blocks_to_parquet(
         .build();
     let batches = blocks
         .into_iter()
-        .map(|block| block.to_record_batch(&schema.into()))
+        .map(|block| block.to_record_batch(table_schema))
         .collect::<Result<Vec<_>>>()?;
-    let arrow_schema = Arc::new(table_schema_to_arrow_schema_ignore_inside_nullable(schema));
+    let arrow_schema = Arc::new(table_schema_to_arrow_schema_ignore_inside_nullable(
+        table_schema,
+    ));
     let mut writer = ArrowWriter::try_new(write_buffer, arrow_schema, Some(props))?;
     for batch in batches {
         writer.write(&batch)?;

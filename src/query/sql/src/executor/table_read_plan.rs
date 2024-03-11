@@ -35,6 +35,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::get_license_manager;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_settings::Settings;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
@@ -209,7 +210,7 @@ impl ToReadDataSourcePlan for dyn Table {
                             if let Ok(policy) = handler
                                 .get_data_mask(
                                     meta_api.clone(),
-                                    tenant.clone(),
+                                    tenant.to_string(),
                                     mask_policy.clone(),
                                 )
                                 .await
@@ -241,7 +242,8 @@ impl ToReadDataSourcePlan for dyn Table {
                                 let ast_expr =
                                     parse_expr(&tokens, ctx.get_settings().get_sql_dialect()?)?;
                                 let mut bind_context = BindContext::new();
-                                let settings = Settings::create("".to_string());
+                                let settings =
+                                    Settings::create(NonEmptyString::new("dummy").unwrap());
                                 let name_resolution_ctx =
                                     NameResolutionContext::try_from(settings.as_ref())?;
                                 let metadata = Arc::new(RwLock::new(Metadata::default()));

@@ -255,5 +255,9 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for BackgroundTaskInfo {}
+    impl kvapi::Value for BackgroundTaskInfo {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 }

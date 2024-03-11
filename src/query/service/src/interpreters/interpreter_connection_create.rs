@@ -43,6 +43,10 @@ impl Interpreter for CreateConnectionInterpreter {
         "CreateConnectionInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -58,7 +62,7 @@ impl Interpreter for CreateConnectionInterpreter {
 
         let tenant = self.ctx.get_tenant();
         let _create_file_format = user_mgr
-            .add_connection(&tenant, conn, &plan.create_option)
+            .add_connection(tenant.as_str(), conn, &plan.create_option)
             .await?;
 
         Ok(PipelineBuildResult::create())

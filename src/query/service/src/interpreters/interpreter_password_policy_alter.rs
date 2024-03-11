@@ -52,6 +52,10 @@ impl Interpreter for AlterPasswordPolicyInterpreter {
         "AlterPasswordPolicyInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -65,7 +69,7 @@ impl Interpreter for AlterPasswordPolicyInterpreter {
             AlterPasswordAction::SetOptions(set_options) => {
                 user_mgr
                     .update_password_policy(
-                        &tenant,
+                        tenant.as_str(),
                         &plan.name,
                         set_options.min_length,
                         set_options.max_length,
@@ -147,7 +151,7 @@ impl Interpreter for AlterPasswordPolicyInterpreter {
                 };
                 user_mgr
                     .update_password_policy(
-                        &tenant,
+                        tenant.as_str(),
                         &plan.name,
                         min_length,
                         max_length,

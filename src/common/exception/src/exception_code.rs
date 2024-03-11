@@ -199,7 +199,12 @@ build_exceptions! {
     IllegalCloudControlMessageFormat(1703),
 
     // Geometry errors.
-    GeometryError(1801)
+    GeometryError(1801),
+
+    // Tantivy errors.
+    TantivyError(1901),
+    TantivyOpenReadError(1902),
+    TantivyQueryParserError(1903)
 }
 
 // Meta service errors [2001, 3000].
@@ -358,6 +363,11 @@ build_exceptions! {
     InvalidOperation(3905),
     StorageOther(4000),
     UnresolvableConflict(4001),
+
+    // transaction error codes
+    CurrentTransactionIsAborted(4002),
+    TransactionTimeout(4003),
+    InvalidSessionState(4004),
 }
 
 // Service errors [5001,6000].

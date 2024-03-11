@@ -32,21 +32,21 @@ use nom::combinator::value;
 use nom::Slice;
 
 use crate::ast::*;
-use crate::input::Input;
+use crate::parser::common::*;
 use crate::parser::copy::copy_into;
 use crate::parser::copy::copy_into_table;
 use crate::parser::data_mask::data_mask_policy;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
+use crate::parser::input::Input;
 use crate::parser::query::*;
 use crate::parser::share::share_endpoint_uri_location;
 use crate::parser::stage::*;
 use crate::parser::stream::stream_table;
 use crate::parser::token::*;
+use crate::parser::Error;
+use crate::parser::ErrorKind;
 use crate::rule;
-use crate::util::*;
-use crate::Error;
-use crate::ErrorKind;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
@@ -60,12 +60,12 @@ pub enum CreateDatabaseOption {
     FromShare(ShareNameIdent),
 }
 
-pub fn statement(i: Input) -> IResult<StatementWithFormat> {
+pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
+            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO )? ~ #statement
         },
-        |(_, opt_kind, statement)| {
+        |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
                     Some(TokenKind::AST) => {
@@ -83,7 +83,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                         ExplainKind::Syntax(pretty_stmt)
                     }
                     Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
-                    Some(TokenKind::JOIN) => ExplainKind::JOIN,
+                    Some(TokenKind::JOIN) => ExplainKind::Join,
                     Some(TokenKind::GRAPH) => ExplainKind::Graph,
                     Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
                     Some(TokenKind::RAW) => ExplainKind::Raw,
@@ -92,6 +92,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
+                options: options.as_ref().map_or(vec![], |(_, opts, _)| opts.clone()),
                 query: Box::new(statement.stmt),
             })
         },
@@ -114,9 +115,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             ~ (AFTER ~ #comma_separated_list0(literal_string))?
             ~ (WHEN ~ #expr )?
             ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
+            ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
             ~ (#set_table_option)?
-            ~ AS ~ #statement
+            ~ AS ~ #task_sql_block
         },
         |(
             _,
@@ -128,12 +130,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             after_tasks,
             when_conditions,
             suspend_opt,
+            error_integration,
             comment_opt,
             session_opts,
             _,
             sql,
         )| {
-            let sql = format!("{}", sql.stmt);
             let session_opts = session_opts.unwrap_or_default();
             Statement::CreateTask(CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
@@ -146,6 +148,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                     Some((_, tasks)) => tasks,
                     None => Vec::new(),
                 },
+                error_integration: error_integration.map(|(_, _, name)| name.to_string()),
                 when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
                 sql,
                 session_parameters: session_opts,
@@ -208,66 +211,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
-    let insert = map(
-        rule! {
-            INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
-            ~ #dot_separated_idents_1_to_3
-            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ #insert_source
-        },
-        |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
-            Statement::Insert(InsertStmt {
-                hints: opt_hints,
-                catalog,
-                database,
-                table,
-                columns: opt_columns
-                    .map(|(_, columns, _)| columns)
-                    .unwrap_or_default(),
-                source,
-                overwrite: overwrite.kind == OVERWRITE,
-            })
-        },
-    );
-
-    let replace = map(
-        rule! {
-            REPLACE ~ #hint? ~ INTO?
-            ~ #dot_separated_idents_1_to_3
-            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ (ON ~ CONFLICT? ~ "(" ~ #comma_separated_list1(ident) ~ ")")
-            ~ (DELETE ~ WHEN ~ ^#expr)?
-            ~ #insert_source
-        },
-        |(
-            _,
-            opt_hints,
-            _,
-            (catalog, database, table),
-            opt_columns,
-            (_, _, _, on_conflict_columns, _),
-            opt_delete_when,
-            source,
-        )| {
-            Statement::Replace(ReplaceStmt {
-                hints: opt_hints,
-                catalog,
-                database,
-                table,
-                on_conflict_columns,
-                columns: opt_columns
-                    .map(|(_, columns, _)| columns)
-                    .unwrap_or_default(),
-                source,
-                delete_when: opt_delete_when.map(|(_, _, expr)| expr),
-            })
-        },
-    );
-
     let merge = map(
         rule! {
-            MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias? ~ USING
-            ~ #merge_source ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
+            MERGE ~ #hint?
+            ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias?
+            ~ USING ~ #merge_source
+            ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
             _,
@@ -508,9 +457,14 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_database = map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ ( DATABASE | SCHEMA ) ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #create_database_option?
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ ( DATABASE | SCHEMA )
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #database_ref
+            ~ #create_database_option?
         },
-        |(_, opt_or_replace, _, opt_if_not_exists, (catalog, database), create_database_option)| {
+        |(_, opt_or_replace, _, opt_if_not_exists, database, create_database_option)| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
@@ -518,7 +472,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 Some(CreateDatabaseOption::DatabaseEngine(engine)) => {
                     Statement::CreateDatabase(CreateDatabaseStmt {
                         create_option,
-                        catalog,
                         database,
                         engine: Some(engine),
                         options: vec![],
@@ -528,7 +481,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 Some(CreateDatabaseOption::FromShare(share_name)) => {
                     Statement::CreateDatabase(CreateDatabaseStmt {
                         create_option,
-                        catalog,
                         database,
                         engine: None,
                         options: vec![],
@@ -537,7 +489,6 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
                 }
                 None => Statement::CreateDatabase(CreateDatabaseStmt {
                     create_option,
-                    catalog,
                     database,
                     engine: None,
                     options: vec![],
@@ -611,7 +562,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let show_columns = map(
         rule! {
-            SHOW ~ FULL? ~ COLUMNS ~ ( FROM | IN ) ~ #ident ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)? ~ #show_limit?
+            SHOW
+            ~ FULL? ~ COLUMNS
+            ~ ( FROM | IN ) ~ #ident
+            ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)?
+            ~ #show_limit?
         },
         |(_, opt_full, _, _, table, ctl_db, limit)| {
             let (catalog, database) = match ctl_db {
@@ -642,9 +597,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let describe_table = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ #dot_separated_idents_1_to_3
+            ( DESC | DESCRIBE ) ~ TABLE? ~ #dot_separated_idents_1_to_3
         },
-        |(_, (catalog, database, table))| {
+        |(_, _, (catalog, database, table))| {
             Statement::DescribeTable(DescribeTableStmt {
                 catalog,
                 database,
@@ -706,7 +661,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let create_table = map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
@@ -902,7 +857,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_view = map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
@@ -966,7 +921,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_index = map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ ASYNC? ~ AGGREGATING ~ INDEX ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ ASYNC?
+            ~ AGGREGATING ~ INDEX
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ AS ~ #query
         },
@@ -1007,9 +966,69 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         },
     );
 
+    let create_inverted_index = map_res(
+        rule! {
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ ASYNC?
+            ~ INVERTED ~ INDEX
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ ON ~ #dot_separated_idents_1_to_3
+            ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
+        },
+        |(
+            _,
+            opt_or_replace,
+            opt_async,
+            _,
+            _,
+            opt_if_not_exists,
+            index_name,
+            _,
+            (catalog, database, table),
+            _,
+            columns,
+            _,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateInvertedIndex(CreateInvertedIndexStmt {
+                create_option,
+                index_name,
+                catalog,
+                database,
+                table,
+                columns,
+                sync_creation: opt_async.is_none(),
+            }))
+        },
+    );
+
+    let drop_inverted_index = map(
+        rule! {
+            DROP ~ INVERTED ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
+            ~ ON ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, opt_if_exists, index_name, _, (catalog, database, table))| {
+            Statement::DropInvertedIndex(DropInvertedIndexStmt {
+                if_exists: opt_if_exists.is_some(),
+                index_name,
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+
     let create_virtual_column = map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ VIRTUAL ~ COLUMN
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+            ~ FOR ~ #dot_separated_idents_1_to_3
         },
         |(
             _,
@@ -1100,7 +1119,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
     let create_user = map_res(
         rule! {
-            CREATE ~  (OR ~ REPLACE)? ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~  ( OR ~ ^REPLACE )? ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #user_identity
             ~ IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )?
             ~ ( WITH ~ ^#comma_separated_list1(user_option))?
@@ -1233,7 +1252,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let create_udf = map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ FUNCTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ FUNCTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #udf_definition
             ~ ( DESC ~ ^"=" ~ ^#literal_string )?
         },
@@ -1275,7 +1294,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     // stages
     let create_stage = map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ STAGE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ STAGE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ ( #stage_name )
             ~ ( (URL ~ ^"=")? ~ #uri_location )?
             ~ ( #file_format_clause )?
@@ -1357,7 +1376,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     let connection_opt = connection_opt("=");
     let create_connection = map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ CONNECTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ CONNECTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ STORAGE_TYPE ~ "=" ~  #literal_string ~ #connection_opt*
         },
         |(
@@ -1445,7 +1464,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     // share statements
     let create_share_endpoint = map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
              ~ #ident
              ~ URL ~ "=" ~ #share_endpoint_uri_location
              ~ TENANT ~ "=" ~ #ident
@@ -1556,7 +1575,12 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     );
     let alter_share_tenants = map(
         rule! {
-            ALTER ~ SHARE ~ ( IF ~ ^EXISTS )? ~ #ident ~ #alter_add_share_accounts ~ TENANTS ~ Eq ~ #comma_separated_list1(ident)
+            ALTER
+            ~ SHARE
+            ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+            ~ #alter_add_share_accounts
+            ~ TENANTS ~ Eq ~ #comma_separated_list1(ident)
         },
         |(_, _, opt_if_exists, share, is_add, _, _, tenants)| {
             Statement::AlterShareTenants(AlterShareTenantsStmt {
@@ -1582,7 +1606,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_file_format = map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ( OR ~ ^REPLACE )? ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #format_options
         },
         |(_, opt_or_replace, _, _, opt_if_not_exists, name, options)| {
@@ -1612,7 +1636,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     // data mark policy
     let create_data_mask_policy = map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
+            CREATE ~ ( OR ~ ^REPLACE )? ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
         },
         |(_, opt_or_replace, _, _, opt_if_not_exists, name, policy)| {
             let create_option =
@@ -1650,7 +1674,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_network_policy = map_res(
         rule! {
-            CREATE ~  (OR ~ REPLACE)? ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+            CREATE ~  ( OR ~ ^REPLACE )? ~ NETWORK ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
              ~ ALLOWED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")"
              ~ ( BLOCKED_IP_LIST ~ ^Eq ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" ) ?
              ~ ( COMMENT ~ ^Eq ~ ^#literal_string)?
@@ -1754,7 +1778,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 
     let create_password_policy = map_res(
         rule! {
-            CREATE ~ (OR ~ REPLACE)? ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
+            CREATE ~ ( OR ~ ^REPLACE )? ~ PASSWORD ~ ^POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ ^#ident
              ~ #password_set_options
         },
         |(_, opt_or_replace, _, _, opt_if_not_exists, name, set_options)| {
@@ -1873,11 +1897,88 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             })
         },
     );
+    let create_notification = map(
+        rule! {
+            CREATE ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ TYPE ~ "=" ~ #ident
+            ~ ENABLED ~ "=" ~ #literal_bool
+            ~ (#notification_webhook_clause)?
+            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+        },
+        |(
+            _,
+            _,
+            _,
+            if_not_exists,
+            name,
+            _,
+            _,
+            notification_type,
+            _,
+            _,
+            enabled,
+            webhook,
+            comment,
+        )| {
+            Statement::CreateNotification(CreateNotificationStmt {
+                if_not_exists: if_not_exists.is_some(),
+                name: name.to_string(),
+                notification_type: notification_type.to_string(),
+                enabled,
+                webhook_opts: webhook,
+                comments: comment.map(|v| v.2).unwrap_or_default(),
+            })
+        },
+    );
 
-    let statement_body = alt((
+    let drop_notification = map(
+        rule! {
+            DROP ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+        },
+        |(_, _, _, if_exists, name)| {
+            Statement::DropNotification(DropNotificationStmt {
+                if_exists: if_exists.is_some(),
+                name: name.to_string(),
+            })
+        },
+    );
+
+    let alter_notification = map(
+        rule! {
+            ALTER ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+            ~ #alter_notification_options
+        },
+        |(_, _, _, if_exists, name, options)| {
+            Statement::AlterNotification(AlterNotificationStmt {
+                if_exists: if_exists.is_some(),
+                name: name.to_string(),
+                options,
+            })
+        },
+    );
+
+    let desc_notification = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ NOTIFICATION ~ INTEGRATION ~ #ident
+        },
+        |(_, _, _, name)| {
+            Statement::DescribeNotification(DescribeNotificationStmt {
+                name: name.to_string(),
+            })
+        },
+    );
+
+    let begin = value(Statement::Begin, rule! { BEGIN });
+    let commit = value(Statement::Commit, rule! { COMMIT });
+    let abort = value(Statement::Abort, rule! { ABORT | ROLLBACK });
+
+    alt((
         // query, explain,show
         rule!(
-        #map(query, |query| Statement::Query(Box::new(query)))
+            #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
@@ -1915,8 +2016,8 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"
         ),
         rule!(
-            #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
-            | #replace : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
@@ -1924,6 +2025,9 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
         rule!(
             #set_variable : "`SET <variable> = <value>`"
             | #unset_variable : "`UNSET <variable>`"
+            | #begin
+            | #commit
+            | #abort
         ),
         rule!(
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
@@ -1941,8 +2045,8 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
-            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN]`"
-            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN]`"
+            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
+            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
@@ -1954,8 +2058,10 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #stream_table
             | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
-            | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
-            | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
+            | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
+            | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
+            | #create_inverted_index: "`CREATE [OR REPLACE] INVERTED INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
+            | #drop_inverted_index: "`DROP INVERTED INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
         ),
         rule!(
             #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
@@ -2040,6 +2146,7 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
   [ AFTER <string>, <string>...]
   [ WHEN boolean_expr ]
   [ SUSPEND_TASK_AFTER_NUM_FAILURES = <num> ]
+  [ ERROR_INTEGRATION = <string_literal> ]
   [ COMMENT = '<string_literal>' ]
 AS
   <sql>`"
@@ -2058,7 +2165,14 @@ AS
             | #drop_pipe : "`DROP PIPE [ IF EXISTS ] <name>`"
             | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
             | #desc_pipe : "`DESC | DESCRIBE PIPE <name>`"
-
+            | #create_notification : "`CREATE NOTIFICATION INTEGRATION [ IF NOT EXISTS ] <name>
+    TYPE = <type>
+    ENABLED = <bool>
+    [ WEBHOOK = ( url = <string_literal>, method = <string_literal>, authorization_header = <string_literal> ) ]
+    [ COMMENT = '<string_literal>' ]`"
+            | #alter_notification : "`ALTER NOTIFICATION INTEGRATION [ IF EXISTS ] <name> SET <option> = <value>`"
+            | #desc_notification : "`DESC | DESCRIBE NOTIFICATION INTEGRATION <name>`"
+            | #drop_notification : "`DROP NOTIFICATION INTEGRATION [ IF EXISTS ] <name>`"
         ),
         rule!(
             #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
@@ -2066,8 +2180,10 @@ AS
         | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
         | #show_connections: "`SHOW CONNECTIONS`"
         ),
-    ));
+    ))(i)
+}
 
+pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     map(
         rule! {
             #statement_body ~ ( FORMAT ~ ^#ident )? ~ ";"? ~ &EOI
@@ -2083,24 +2199,124 @@ pub fn parse_create_option(
     opt_or_replace: bool,
     opt_if_not_exists: bool,
 ) -> Result<CreateOption, nom::Err<ErrorKind>> {
-    if opt_or_replace && opt_if_not_exists {
-        return Err(nom::Err::Failure(ErrorKind::Other(
+    match (opt_or_replace, opt_if_not_exists) {
+        (false, false) => Ok(CreateOption::None),
+        (true, false) => Ok(CreateOption::CreateOrReplace),
+        (false, true) => Ok(CreateOption::CreateIfNotExists),
+        (true, true) => Err(nom::Err::Failure(ErrorKind::Other(
             "option IF NOT EXISTS and OR REPLACE are incompatible.",
-        )));
-    }
-
-    if opt_or_replace {
-        Ok(CreateOption::CreateOrReplace)
-    } else {
-        Ok(CreateOption::CreateIfNotExists(opt_if_not_exists))
+        ))),
     }
 }
 
-// `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
-// stop the parser immediately and return the rest tokens by `InsertSource`.
-//
-// This is a hack to make it able to parse a large streaming insert statement.
+pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        let insert_source_parser = if allow_raw {
+            raw_insert_source
+        } else {
+            insert_source
+        };
+        map(
+            rule! {
+                INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
+                ~ #dot_separated_idents_1_to_3
+                ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+                ~ #insert_source_parser
+            },
+            |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
+                Statement::Insert(InsertStmt {
+                    hints: opt_hints,
+                    catalog,
+                    database,
+                    table,
+                    columns: opt_columns
+                        .map(|(_, columns, _)| columns)
+                        .unwrap_or_default(),
+                    source,
+                    overwrite: overwrite.kind == OVERWRITE,
+                })
+            },
+        )(i)
+    }
+}
+
+pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        let insert_source_parser = if allow_raw {
+            raw_insert_source
+        } else {
+            insert_source
+        };
+        map(
+            rule! {
+                REPLACE ~ #hint? ~ INTO?
+                ~ #dot_separated_idents_1_to_3
+                ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+                ~ ON ~ CONFLICT? ~ "(" ~ #comma_separated_list1(ident) ~ ")"
+                ~ ( DELETE ~ WHEN ~ ^#expr )?
+                ~ #insert_source_parser
+            },
+            |(
+                _,
+                opt_hints,
+                _,
+                (catalog, database, table),
+                opt_columns,
+                _,
+                _,
+                _,
+                on_conflict_columns,
+                _,
+                opt_delete_when,
+                source,
+            )| {
+                Statement::Replace(ReplaceStmt {
+                    hints: opt_hints,
+                    catalog,
+                    database,
+                    table,
+                    on_conflict_columns,
+                    columns: opt_columns
+                        .map(|(_, columns, _)| columns)
+                        .unwrap_or_default(),
+                    source,
+                    delete_when: opt_delete_when.map(|(_, _, expr)| expr),
+                })
+            },
+        )(i)
+    }
+}
+
+// `VALUES (expr, expr), (expr, expr)`
 pub fn insert_source(i: Input) -> IResult<InsertSource> {
+    let row = map(
+        rule! {
+            "(" ~ #comma_separated_list1(expr) ~ ")"
+        },
+        |(_, values, _)| values,
+    );
+    let values = map(
+        rule! {
+            VALUES ~ #comma_separated_list0(row)
+        },
+        |(_, rows)| InsertSource::Values { rows },
+    );
+
+    let query = map(query, |query| InsertSource::Select {
+        query: Box::new(query),
+    });
+
+    rule!(
+        #values
+        | #query
+    )(i)
+}
+
+// `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
+// stop the parser immediately and return the rest tokens in `InsertSource`.
+//
+// This is a hack to parse large insert statements.
+pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     let streaming = map(
         rule! {
             FORMAT ~ #ident ~ #rest_str
@@ -2125,11 +2341,16 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         rule! {
             VALUES ~ #rest_str
         },
-        |(_, (rest_str, start))| InsertSource::Values { rest_str, start },
+        |(_, (rest_str, start))| InsertSource::RawValues { rest_str, start },
     );
-    let query = map(query, |query| InsertSource::Select {
-        query: Box::new(query),
-    });
+    let query = map(
+        rule! {
+            #query ~ ";"? ~ &EOI
+        },
+        |(query, _, _)| InsertSource::Select {
+            query: Box::new(query),
+        },
+    );
 
     rule!(
         #streaming
@@ -3022,17 +3243,11 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN)? ~ (LIMIT ~ #literal_u64)?
+            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(dry_run_opt, opt_limit)| {
-            let dry_run = match dry_run_opt {
-                Some(_) => Some(()),
-                None => None,
-            };
-            VacuumDropTableOption {
-                dry_run,
-                limit: opt_limit.map(|(_, limit)| limit as usize),
-            }
+        |(opt_dry_run, opt_limit)| VacuumDropTableOption {
+            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
+            limit: opt_limit.map(|(_, limit)| limit as usize),
         },
     ),))(i)
 }
@@ -3040,16 +3255,39 @@ pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN)?
+            (DRY ~ ^RUN ~ SUMMARY?)?
         },
-        |dry_run_opt| {
-            let dry_run = match dry_run_opt {
-                Some(_) => Some(()),
-                None => None,
-            };
-            VacuumTableOption { dry_run }
+        |opt_dry_run| VacuumTableOption {
+            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
         },
     ),))(i)
+}
+
+pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
+    let single_statement = map(
+        rule! {
+            #statement
+        },
+        |stmt| {
+            let sql = format!("{}", stmt.stmt);
+            TaskSql::SingleStatement(sql)
+        },
+    );
+    let task_block = map(
+        rule! {
+            BEGIN
+            ~ #semicolon_terminated_list1(statement_body)
+            ~ END
+        },
+        |(_, stmts, _)| {
+            let sql = stmts
+                .iter()
+                .map(|stmt| format!("{}", stmt))
+                .collect::<Vec<String>>();
+            TaskSql::ScriptBlock(sql)
+        },
+    );
+    alt((single_statement, task_block))(i)
 }
 
 pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
@@ -3067,14 +3305,9 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
     );
     let modify_as = map(
         rule! {
-             MODIFY ~ AS ~ #statement
+             MODIFY ~ AS ~ #task_sql_block
         },
-        |(_, _, sql)| {
-            let sql = pretty_statement(sql.stmt, 10)
-                .map_err(|_| ErrorKind::Other("invalid statement"))
-                .expect("failed to alter task");
-            AlterTaskOptions::ModifyAs(sql)
-        },
+        |(_, _, sql)| AlterTaskOptions::ModifyAs(sql),
     );
     let modify_when = map(
         rule! {
@@ -3105,14 +3338,24 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
              ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
              ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
              ~ ( COMMENT ~ "=" ~ #literal_string )?
-             ~ (#set_table_option)?
+             ~ ( ERROR_INTEGRATION  ~ "=" ~ #literal_string )?
+             ~ #set_table_option?
         },
-        |(_, warehouse_opts, schedule_opts, suspend_opts, comment, session_opts)| {
+        |(
+            _,
+            warehouse_opts,
+            schedule_opts,
+            suspend_opts,
+            comment,
+            err_integration,
+            session_opts,
+        )| {
             AlterTaskOptions::Set {
                 warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
                 schedule: schedule_opts.map(|(_, _, schedule)| schedule),
                 suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
                 comments: comment.map(|(_, _, comment)| comment),
+                error_integration: err_integration.map(|(_, _, integration)| integration),
                 session_parameters: session_opts,
             }
         },
@@ -3459,6 +3702,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
                 columns: vec![],
             }),
             travel_point: None,
+            since_point: None,
             pivot: None,
             unpivot: None,
         },
@@ -3477,6 +3721,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             table,
             alias: None,
             travel_point: None,
+            since_point: None,
             pivot: None,
             unpivot: None,
         },
@@ -3532,9 +3777,32 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         },
     );
 
+    let udf_script = map(
+        rule! {
+            "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
+            ~ RETURNS ~ #udf_arg_type
+            ~ LANGUAGE ~ #ident
+            ~ HANDLER ~ ^"=" ~ ^#literal_string
+            ~ AS ~ ^#code_string
+        },
+        |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, code)| {
+            UDFDefinition::UDFScript {
+                arg_types,
+                return_type,
+                code,
+                handler,
+                language: language.to_string(),
+                // TODO inject runtime_version by user
+                // Now we use fixed runtime version
+                runtime_version: "".to_string(),
+            }
+        },
+    );
+
     rule!(
         #udf_server: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>"
         | #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
+        | #udf_script: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> AS <language_codes>"
     )(i)
 }
 
@@ -3658,5 +3926,94 @@ pub fn alter_password_action(i: Input) -> IResult<AlterPasswordAction> {
     rule!(
         #set_options
         | #unset_options
+    )(i)
+}
+
+pub fn explain_option(i: Input) -> IResult<ExplainOption> {
+    map(
+        rule! {
+            VERBOSE | LOGICAL | OPTIMIZED
+        },
+        |opt| match &opt.kind {
+            VERBOSE => ExplainOption::Verbose(true),
+            LOGICAL => ExplainOption::Logical(true),
+            OPTIMIZED => ExplainOption::Optimized(true),
+            _ => unreachable!(),
+        },
+    )(i)
+}
+
+pub fn notification_webhook_options(i: Input) -> IResult<NotificationWebhookOptions> {
+    let url_option = map(
+        rule! {
+            URL ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("url".to_string(), v.to_string()),
+    );
+    let method_option = map(
+        rule! {
+            METHOD ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("method".to_string(), v.to_string()),
+    );
+    let auth_option = map(
+        rule! {
+            AUTHORIZATION_HEADER ~ "=" ~ #literal_string
+        },
+        |(_, _, v)| ("authorization_header".to_string(), v.to_string()),
+    );
+
+    map(
+        rule! { ((
+        #url_option
+        | #method_option
+        | #auth_option) ~ ","?)* },
+        |opts| {
+            NotificationWebhookOptions::from_iter(
+                opts.iter().map(|((k, v), _)| (k.to_uppercase(), v.clone())),
+            )
+        },
+    )(i)
+}
+
+pub fn notification_webhook_clause(i: Input) -> IResult<NotificationWebhookOptions> {
+    map(
+        rule! { WEBHOOK ~ ^"=" ~ ^"(" ~ ^#notification_webhook_options ~ ^")" },
+        |(_, _, _, opts, _)| opts,
+    )(i)
+}
+
+pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions> {
+    let enabled = map(
+        rule! {
+            SET ~ ENABLED ~ ^"=" ~ #literal_bool
+        },
+        |(_, _, _, enabled)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::enabled(enabled))
+        },
+    );
+    let webhook = map(
+        rule! {
+            SET ~ #notification_webhook_clause
+        },
+        |(_, webhook)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::webhook_opts(webhook))
+        },
+    );
+    let comment = map(
+        rule! {
+            SET ~ (COMMENT | COMMENTS) ~ ^"=" ~ #literal_string
+        },
+        |(_, _, _, comment)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::comments(comment))
+        },
+    );
+    map(
+        rule! {
+            #enabled
+            | #webhook
+            | #comment
+        },
+        |opts| opts,
     )(i)
 }

@@ -829,4 +829,8 @@ impl HashJoinProbeState {
         }
         Ok(result_blocks)
     }
+
+    pub(crate) fn join_type(&self) -> JoinType {
+        self.hash_join_state.hash_join_desc.join_type.clone()
+    }
 }

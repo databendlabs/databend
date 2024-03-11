@@ -20,11 +20,15 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::CreateStagePlan;
+use databend_common_storages_stage::StageTable;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -49,6 +53,10 @@ impl Interpreter for CreateUserStageInterpreter {
         "CreateUserStageInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -65,9 +73,13 @@ impl Interpreter for CreateUserStageInterpreter {
             ));
         }
 
-        let quota_api = user_mgr.get_tenant_quota_api_client(&plan.tenant)?;
+        let tenant = NonEmptyString::new(plan.tenant.clone()).map_err(|_e| {
+            ErrorCode::TenantIsEmpty("tenant is empty when CreateUserStateInterpreter")
+        })?;
+
+        let quota_api = user_mgr.get_tenant_quota_api_client(&tenant)?;
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
-        let stages = user_mgr.get_stages(&plan.tenant).await?;
+        let stages = user_mgr.get_stages(&tenant).await?;
         if quota.max_stages != 0 && stages.len() >= quota.max_stages as usize {
             return Err(ErrorCode::TenantQuotaExceeded(format!(
                 "Max stages quota exceeded {}",
@@ -75,21 +87,50 @@ impl Interpreter for CreateUserStageInterpreter {
             )));
         };
 
-        if user_stage.stage_type != StageType::External {
-            let op = self.ctx.get_data_operator()?.operator();
-            op.create_dir(&user_stage.stage_prefix()).await?
-        }
+        let tenant = NonEmptyString::new(plan.tenant.clone()).map_err(|_e| {
+            ErrorCode::TenantIsEmpty("tenant is empty when CreateUserStateInterpreter")
+        })?;
+
+        let old_stage = match plan.create_option {
+            CreateOption::CreateOrReplace => user_mgr
+                .get_stage(&tenant, &user_stage.stage_name)
+                .await
+                .ok(),
+            _ => None,
+        };
+
+        let tenant = NonEmptyString::new(plan.tenant.clone()).map_err(|_e| {
+            ErrorCode::TenantIsEmpty("tenant is empty when CreateUserStateInterpreter")
+        })?;
 
         let mut user_stage = user_stage;
         user_stage.creator = Some(self.ctx.get_current_user()?.identity());
         user_stage.created_on = Utc::now();
         let _ = user_mgr
-            .add_stage(&plan.tenant, user_stage, &plan.create_option)
+            .add_stage(&tenant, user_stage.clone(), &plan.create_option)
             .await?;
+
+        // when create or replace stage success, if old stage is not External stage, remove stage files
+        if let Some(stage) = old_stage {
+            if stage.stage_type != StageType::External {
+                let op = StageTable::get_op(&stage)?;
+                op.remove_all("/").await?;
+                info!(
+                    "create or replace stage {:?} with all objects removed in stage",
+                    user_stage.stage_name
+                );
+            }
+        }
+
+        // create dir if new stage if not external stage
+        if user_stage.stage_type != StageType::External {
+            let op = self.ctx.get_data_operator()?.operator();
+            op.create_dir(&user_stage.stage_prefix()).await?
+        }
 
         // Grant ownership as the current role
         let tenant = self.ctx.get_tenant();
-        let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+        let role_api = UserApiProvider::instance().role_api(&tenant);
         if let Some(current_role) = self.ctx.get_current_role() {
             role_api
                 .grant_ownership(

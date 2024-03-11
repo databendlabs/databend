@@ -31,6 +31,8 @@ use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableIndexReply;
+use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
@@ -46,6 +48,8 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableIndexReply;
+use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
@@ -85,6 +89,7 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -143,11 +148,11 @@ impl MutableCatalog {
             provider.create_meta_store().await?
         };
 
-        let tenant = conf.query.tenant_id.clone();
+        let tenant = conf.query.tenant_id.to_string();
 
         // Create default database.
         let req = CreateDatabaseReq {
-            create_option: CreateOption::CreateIfNotExists(true),
+            create_option: CreateOption::CreateIfNotExists,
             name_ident: DatabaseNameIdent {
                 tenant,
                 db_name: "default".to_string(),
@@ -172,7 +177,7 @@ impl MutableCatalog {
         };
         Ok(MutableCatalog {
             ctx,
-            tenant: conf.query.tenant_id.clone(),
+            tenant: conf.query.tenant_id.to_string(),
         })
     }
 
@@ -205,7 +210,7 @@ impl Catalog for MutableCatalog {
         let db_info = self
             .ctx
             .meta
-            .get_database(GetDatabaseReq::new(tenant, db_name))
+            .get_database(GetDatabaseReq::new(tenant.to_string(), db_name))
             .await?;
         self.build_db_instance(&db_info)
     }
@@ -366,9 +371,22 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
+    async fn mget_table_names_by_ids(
+        &self,
+        table_ids: &[MetaId],
+    ) -> databend_common_exception::Result<Vec<String>> {
+        let res = self.ctx.meta.mget_table_names_by_ids(table_ids).await?;
+        Ok(res)
+    }
+
     #[async_backtrace::framed]
     async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
         let res = self.ctx.meta.get_db_name_by_id(db_id).await?;
+        Ok(res)
+    }
+
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
+        let res = self.ctx.meta.mget_database_names_by_ids(db_ids).await?;
         Ok(res)
     }
 
@@ -494,6 +512,11 @@ impl Catalog for MutableCatalog {
         }
     }
 
+    #[async_backtrace::framed]
+    async fn update_multi_table_meta(&self, reqs: UpdateMultiTableMetaReq) -> Result<()> {
+        Ok(self.ctx.meta.update_multi_table_meta(reqs).await?)
+    }
+
     async fn set_table_column_mask_policy(
         &self,
         req: SetTableColumnMaskPolicyReq,
@@ -527,6 +550,16 @@ impl Catalog for MutableCatalog {
                 db.truncate_table(req).await
             }
         }
+    }
+
+    #[async_backtrace::framed]
+    async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+        Ok(self.ctx.meta.create_table_index(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+        Ok(self.ctx.meta.drop_table_index(req).await?)
     }
 
     #[async_backtrace::framed]

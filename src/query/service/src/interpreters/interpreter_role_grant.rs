@@ -44,6 +44,10 @@ impl Interpreter for GrantRoleInterpreter {
         "GrantRoleInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -60,7 +64,7 @@ impl Interpreter for GrantRoleInterpreter {
         match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr
-                    .grant_role_to_user(&tenant, user, plan.role)
+                    .grant_role_to_user(tenant.clone(), user, plan.role)
                     .await?;
             }
             PrincipalIdentity::Role(role) => {

@@ -61,7 +61,7 @@ impl StreamHandler for RealStreamHandler {
         let catalog = ctx.get_catalog(&plan.catalog).await?;
 
         let table = catalog
-            .get_table(&tenant, &plan.table_database, &plan.table_name)
+            .get_table(tenant.as_str(), &plan.table_database, &plan.table_name)
             .await?;
         let table_info = table.get_table_info();
         if table_info.options().contains_key("TRANSIENT") {
@@ -86,14 +86,14 @@ impl StreamHandler for RealStreamHandler {
             };
 
             catalog
-                .upsert_table_option(&tenant, &plan.table_database, req)
+                .upsert_table_option(tenant.as_str(), &plan.table_database, req)
                 .await?;
         }
 
         let mut options = BTreeMap::new();
         match &plan.navigation {
             Some(StreamNavigation::AtStream { database, name }) => {
-                let stream = catalog.get_table(&tenant, database, name).await?;
+                let stream = catalog.get_table(tenant.as_str(), database, name).await?;
                 let stream = StreamTable::try_from_table(stream.as_ref())?;
                 let stream_opts = stream.get_table_info().options();
                 let stream_table_name = stream_opts
@@ -192,12 +192,12 @@ impl StreamHandler for RealStreamHandler {
                 )));
             }
 
-            let db = catalog.get_database(&tenant, &db_name).await?;
+            let db = catalog.get_database(tenant.as_str(), &db_name).await?;
 
             catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: plan.if_exists,
-                    tenant: tenant.clone(),
+                    tenant: tenant.to_string(),
                     table_name: stream_name.clone(),
                     tb_id: table.get_id(),
                     db_id: db.get_db_info().ident.db_id,

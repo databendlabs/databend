@@ -17,10 +17,11 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
-use databend_common_ast::ast::contain_agg_func;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
 use databend_common_ast::ast::Lambda;
@@ -39,7 +40,7 @@ use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -75,8 +76,11 @@ use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_users::UserApiProvider;
+use derive_visitor::Drive;
+use derive_visitor::Visitor;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use jsonb::keypath::KeyPath;
@@ -112,8 +116,9 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
-use crate::plans::UDFServerCall;
+use crate::plans::UDFType;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -220,9 +225,12 @@ impl<'a> TypeChecker<'a> {
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
             Expr::ColumnRef {
                 span,
-                database,
-                table,
-                column: ident,
+                column:
+                    ColumnRef {
+                        database,
+                        table,
+                        column: ident,
+                    },
             } => {
                 let database = database
                     .as_ref()
@@ -372,7 +380,7 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                if list.len() >= 1024 {
+                if self.ctx.get_cluster().is_empty() && list.len() >= 1024 {
                     if *not {
                         return self
                             .resolve_unary_op(*span, &UnaryOperator::Not, &Expr::InList {
@@ -395,27 +403,31 @@ impl<'a> TypeChecker<'a> {
                     // Deduplicate the array.
                     let array_expr = Expr::FunctionCall {
                         span: *span,
-                        name: Identifier::from_name("array_distinct"),
-                        args: vec![array_expr],
-                        params: vec![],
-                        window: None,
-                        lambda: None,
-                        distinct: false,
+                        func: ASTFunctionCall {
+                            name: Identifier::from_name("array_distinct"),
+                            args: vec![array_expr],
+                            params: vec![],
+                            window: None,
+                            lambda: None,
+                            distinct: false,
+                        },
                     };
                     let args = vec![&array_expr, expr.as_ref()];
                     if *not {
                         self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::FunctionCall {
                             span: *span,
-                            distinct: false,
-                            name: Identifier {
-                                name: "contains".to_string(),
-                                quote: None,
-                                span: *span,
+                            func: ASTFunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    name: "contains".to_string(),
+                                    quote: None,
+                                    span: *span,
+                                },
+                                args: args.iter().copied().cloned().collect(),
+                                params: vec![],
+                                window: None,
+                                lambda: None,
                             },
-                            args: args.iter().copied().cloned().collect(),
-                            params: vec![],
-                            window: None,
-                            lambda: None,
                         })
                         .await?
                     } else {
@@ -656,16 +668,18 @@ impl<'a> TypeChecker<'a> {
                             // compare case operand with each conditions until one of them is equal
                             let equal_expr = Expr::FunctionCall {
                                 span: *span,
-                                distinct: false,
-                                name: Identifier {
-                                    name: "eq".to_string(),
-                                    quote: None,
-                                    span: *span,
+                                func: ASTFunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        name: "eq".to_string(),
+                                        quote: None,
+                                        span: *span,
+                                    },
+                                    args: vec![*operand.clone(), c.clone()],
+                                    params: vec![],
+                                    window: None,
+                                    lambda: None,
                                 },
-                                args: vec![*operand.clone(), c.clone()],
-                                params: vec![],
-                                window: None,
-                                lambda: None,
                             };
                             arguments.push(equal_expr)
                         }
@@ -708,12 +722,15 @@ impl<'a> TypeChecker<'a> {
 
             Expr::FunctionCall {
                 span,
-                distinct,
-                name,
-                args,
-                params,
-                window,
-                lambda,
+                func:
+                    ASTFunctionCall {
+                        distinct,
+                        name,
+                        args,
+                        params,
+                        window,
+                        lambda,
+                    },
             } => {
                 let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
                 let func_name = func_name.as_str();
@@ -2346,7 +2363,21 @@ impl<'a> TypeChecker<'a> {
                 let select = &select_stmt.select_list[0];
                 if let SelectTarget::AliasedExpr { expr, .. } = select {
                     // Check if contain aggregation function
-                    contain_agg = Some(contain_agg_func(expr));
+                    #[derive(Visitor)]
+                    #[visitor(ASTFunctionCall(enter))]
+                    struct AggFuncVisitor {
+                        contain_agg: bool,
+                    }
+                    impl AggFuncVisitor {
+                        fn enter_ast_function_call(&mut self, func: &ASTFunctionCall) {
+                            self.contain_agg = self.contain_agg
+                                || AggregateFunctionFactory::instance()
+                                    .contains(func.name.to_string());
+                        }
+                    }
+                    let mut visitor = AggFuncVisitor { contain_agg: false };
+                    expr.drive(&mut visitor);
+                    contain_agg = Some(visitor.contain_agg);
                 }
             }
         }
@@ -2494,34 +2525,18 @@ impl<'a> TypeChecker<'a> {
                 )
             }
             ("ifnull", &[arg_x, arg_y]) => {
-                // Rewrite ifnull(x, y) to if(is_null(x), y, x)
+                // Rewrite ifnull(x, y) to coalesce(x, y)
                 Some(
-                    self.resolve_function(span, "if", vec![], &[
-                        &Expr::IsNull {
-                            span,
-                            expr: Box::new(arg_x.clone()),
-                            not: false,
-                        },
-                        arg_y,
-                        arg_x,
-                    ])
-                    .await,
+                    self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y])
+                        .await,
                 )
             }
             ("nvl", &[arg_x, arg_y]) => {
-                // Rewrite nvl(x, y) to if(is_not_null(x), x, y)
+                // Rewrite nvl(x, y) to coalesce(x, y)
                 // nvl is essentially an alias for ifnull.
                 Some(
-                    self.resolve_function(span, "if", vec![], &[
-                        &Expr::IsNull {
-                            span,
-                            expr: Box::new(arg_x.clone()),
-                            not: true,
-                        },
-                        arg_x,
-                        arg_y,
-                    ])
-                    .await,
+                    self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y])
+                        .await,
                 )
             }
             ("nvl2", &[arg_x, arg_y, arg_z]) => {
@@ -2544,16 +2559,18 @@ impl<'a> TypeChecker<'a> {
                 Some(
                     self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::FunctionCall {
                         span,
-                        distinct: false,
-                        name: Identifier {
-                            name: "is_not_null".to_string(),
-                            quote: None,
-                            span,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: Identifier {
+                                name: "is_not_null".to_string(),
+                                quote: None,
+                                span,
+                            },
+                            args: vec![arg_x.clone()],
+                            params: vec![],
+                            window: None,
+                            lambda: None,
                         },
-                        args: vec![arg_x.clone()],
-                        params: vec![],
-                        window: None,
-                        lambda: None,
                     })
                     .await,
                 )
@@ -2581,21 +2598,31 @@ impl<'a> TypeChecker<'a> {
 
                     let assume_not_null_expr = Expr::FunctionCall {
                         span,
-                        distinct: false,
-                        name: Identifier {
-                            name: "assume_not_null".to_string(),
-                            quote: None,
-                            span,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: Identifier {
+                                name: "assume_not_null".to_string(),
+                                quote: None,
+                                span,
+                            },
+                            args: vec![(*arg).clone()],
+                            params: vec![],
+                            window: None,
+                            lambda: None,
                         },
-                        args: vec![(*arg).clone()],
-                        params: vec![],
-                        window: None,
-                        lambda: None,
                     };
 
                     new_args.push(is_not_null_expr);
                     new_args.push(assume_not_null_expr);
                 }
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
                 new_args.push(Expr::Literal {
                     span,
                     lit: Literal::Null,
@@ -2936,7 +2963,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let udf = UserApiProvider::instance()
-            .get_udf(self.ctx.get_tenant().as_str(), udf_name)
+            .get_udf(&self.ctx.get_tenant(), udf_name)
             .await?;
 
         let Some(udf) = udf else {
@@ -2952,6 +2979,10 @@ impl<'a> TypeChecker<'a> {
             )),
             UDFDefinition::UDFServer(udf_def) => Ok(Some(
                 self.resolve_udf_server(span, name, arguments, udf_def)
+                    .await?,
+            )),
+            UDFDefinition::UDFScript(udf_def) => Ok(Some(
+                self.resolve_udf_script(span, name, arguments, udf_def)
                     .await?,
             )),
         }
@@ -3007,14 +3038,57 @@ impl<'a> TypeChecker<'a> {
 
         self.ctx.set_cacheable(false);
         Ok(Box::new((
-            UDFServerCall {
+            UDFCall {
                 span,
                 name,
                 func_name: udf_definition.handler,
                 display_name,
-                server_addr: udf_definition.address,
+                udf_type: UDFType::Server(address.clone()),
                 arg_types: udf_definition.arg_types,
                 return_type: Box::new(udf_definition.return_type.clone()),
+                arguments: args,
+            }
+            .into(),
+            udf_definition.return_type.clone(),
+        )))
+    }
+
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
+    async fn resolve_udf_script(
+        &mut self,
+        span: Span,
+        name: String,
+        arguments: &[Expr],
+        udf_definition: UDFScript,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let mut args = Vec::with_capacity(arguments.len());
+        for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
+            let box (arg, ty) = self.resolve(argument).await?;
+            if ty != *dest_type {
+                args.push(wrap_cast(&arg, dest_type));
+            } else {
+                args.push(arg);
+            }
+        }
+
+        let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
+        let display_name = format!("{}({})", udf_definition.handler, arg_names);
+
+        self.ctx.set_cacheable(false);
+        Ok(Box::new((
+            UDFCall {
+                span,
+                name,
+                func_name: udf_definition.handler,
+                display_name,
+                arg_types: udf_definition.arg_types,
+                return_type: Box::new(udf_definition.return_type.clone()),
+                udf_type: UDFType::Script((
+                    udf_definition.language,
+                    udf_definition.runtime_version,
+                    udf_definition.code,
+                )),
                 arguments: args,
             }
             .into(),
@@ -3053,7 +3127,7 @@ impl<'a> TypeChecker<'a> {
         let udf_expr = self
             .clone_expr_with_replacement(&expr, &|nest_expr| {
                 if let Expr::ColumnRef { column, .. } = nest_expr {
-                    if let Some(arg) = args_map.get(&column.name().to_string()) {
+                    if let Some(arg) = args_map.get(&column.column.name().to_string()) {
                         return Ok(Some(arg.clone()));
                     }
                 }
@@ -3675,23 +3749,28 @@ impl<'a> TypeChecker<'a> {
                 }),
                 Expr::FunctionCall {
                     span,
-                    distinct,
-                    name,
-                    args,
-                    params,
-                    window,
-                    lambda,
+                    func:
+                        ASTFunctionCall {
+                            distinct,
+                            name,
+                            args,
+                            params,
+                            window,
+                            lambda,
+                        },
                 } => Ok(Expr::FunctionCall {
                     span: *span,
-                    distinct: *distinct,
-                    name: name.clone(),
-                    args: args
-                        .iter()
-                        .map(|arg| self.clone_expr_with_replacement(arg, replacement_fn))
-                        .collect::<Result<Vec<Expr>>>()?,
-                    params: params.clone(),
-                    window: window.clone(),
-                    lambda: lambda.clone(),
+                    func: ASTFunctionCall {
+                        distinct: *distinct,
+                        name: name.clone(),
+                        args: args
+                            .iter()
+                            .map(|arg| self.clone_expr_with_replacement(arg, replacement_fn))
+                            .collect::<Result<Vec<Expr>>>()?,
+                        params: params.clone(),
+                        window: window.clone(),
+                        lambda: lambda.clone(),
+                    },
                 }),
                 Expr::Case {
                     span,
@@ -3800,7 +3879,7 @@ pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataT
     let sql_tokens = databend_common_ast::parser::tokenize_sql(name)?;
     let ast = databend_common_ast::parser::run_parser(
         &sql_tokens,
-        databend_common_ast::Dialect::default(),
+        databend_common_ast::parser::Dialect::default(),
         false,
         databend_common_ast::parser::expr::type_name,
     )?;

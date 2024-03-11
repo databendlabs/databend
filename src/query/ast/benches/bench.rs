@@ -20,7 +20,7 @@ use criterion::Criterion;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Dialect;
+use databend_common_ast::parser::Dialect;
 
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("bench_parser");

@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::Profile;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 
 use crate::read::load_context::LoadContext;

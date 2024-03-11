@@ -22,6 +22,7 @@ use databend_common_arrow::parquet::page::CompressedPage;
 use databend_common_arrow::parquet::page::Page;
 use databend_common_arrow::parquet::read::decompress;
 use databend_common_arrow::parquet::FallibleStreamingIterator;
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use streaming_decompression::Compressed;
 use streaming_decompression::Decompressed;
@@ -150,23 +151,25 @@ where I: Iterator<Item = Result<CompressedPage, Error>>
 
 impl<I: Iterator<Item = Result<CompressedPage, Error>>> Drop for BuffedBasicDecompressor<I> {
     fn drop(&mut self) {
-        if let Some(page) = self.current.as_mut() {
-            let guard = self.uncompressed_buffer.borrow_mut();
+        drop_guard(move || {
+            if let Some(page) = self.current.as_mut() {
+                let guard = self.uncompressed_buffer.borrow_mut();
 
-            if !std::thread::panicking() && !guard.is_unique_borrow_mut() {
-                panic!(
-                    "UncompressedBuffer cannot be accessed between multiple threads at the same time."
-                );
-            }
+                if !std::thread::panicking() && !guard.is_unique_borrow_mut() {
+                    panic!(
+                        "UncompressedBuffer cannot be accessed between multiple threads at the same time."
+                    );
+                }
 
-            {
-                let borrow_buffer = self.uncompressed_buffer.buffer_mut();
+                {
+                    let borrow_buffer = self.uncompressed_buffer.buffer_mut();
 
-                if borrow_buffer.capacity() < page.buffer_mut().capacity() {
-                    *borrow_buffer = std::mem::take(page.buffer_mut());
+                    if borrow_buffer.capacity() < page.buffer_mut().capacity() {
+                        *borrow_buffer = std::mem::take(page.buffer_mut());
+                    }
                 }
             }
-        }
+        })
     }
 }
 

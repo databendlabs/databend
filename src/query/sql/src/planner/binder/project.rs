@@ -17,15 +17,16 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnFilter;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::walk_expr_mut;
-use databend_common_ast::VisitorMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
@@ -33,6 +34,8 @@ use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use derive_visitor::DriveMut;
+use derive_visitor::VisitorMut;
 use itertools::Itertools;
 
 use super::AggregateInfo;
@@ -62,10 +65,12 @@ use crate::IndexType;
 use crate::TypeChecker;
 use crate::WindowChecker;
 
+#[derive(VisitorMut)]
+#[visitor(Identifier(enter))]
 struct RemoveIdentifierQuote;
 
-impl VisitorMut for RemoveIdentifierQuote {
-    fn visit_identifier(&mut self, ident: &mut Identifier) {
+impl RemoveIdentifierQuote {
+    fn enter_identifier(&mut self, ident: &mut Identifier) {
         ident.quote = None
     }
 }
@@ -256,12 +261,25 @@ impl Binder {
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
-                    let expr_name = match alias {
-                        Some(alias) => normalize_identifier(alias, &self.name_resolution_ctx).name,
-                        None => {
+                    let expr_name = match (expr.as_ref(), alias) {
+                        (
+                            Expr::ColumnRef {
+                                column:
+                                    ColumnRef {
+                                        column: ColumnID::Name(column),
+                                        ..
+                                    },
+                                ..
+                            },
+                            None,
+                        ) => normalize_identifier(column, &self.name_resolution_ctx).name,
+                        (_, Some(alias)) => {
+                            normalize_identifier(alias, &self.name_resolution_ctx).name
+                        }
+                        _ => {
                             let mut expr = expr.clone();
                             let mut remove_quote_visitor = RemoveIdentifierQuote;
-                            walk_expr_mut(&mut remove_quote_visitor, &mut expr);
+                            expr.drive_mut(&mut remove_quote_visitor);
                             format!("{:#}", expr).to_lowercase()
                         }
                     };
@@ -464,13 +482,15 @@ impl Binder {
             };
 
             let expr = Expr::FunctionCall {
-                name: Identifier::from_name("array_apply"),
-                args: vec![input_array],
-                lambda: lambda.cloned(),
                 span,
-                distinct: false,
-                params: vec![],
-                window: None,
+                func: FunctionCall {
+                    name: Identifier::from_name("array_apply"),
+                    args: vec![input_array],
+                    lambda: lambda.cloned(),
+                    distinct: false,
+                    params: vec![],
+                    window: None,
+                },
             };
 
             let mut temp_ctx = BindContext::new();

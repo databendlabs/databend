@@ -37,7 +37,6 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
-use log::as_debug;
 use log::debug;
 use minitrace::func_name;
 
@@ -63,7 +62,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
         &self,
         req: CreateDatamaskReq,
     ) -> Result<CreateDatamaskReply, KVAppError> {
-        debug!(req = as_debug!(&req); "DatamaskApi: {}", func_name!());
+        debug!(req :? =(&req); "DatamaskApi: {}", func_name!());
 
         let name_key = &req.name;
 
@@ -73,35 +72,35 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
             // Get db mask by name to ensure absence
             let (seq, id) = get_u64_value(self, name_key).await?;
-            debug!(seq = seq, id = id, name_key = as_debug!(name_key); "create_data_mask");
+            debug!(seq = seq, id = id, name_key :? =(name_key); "create_data_mask");
 
             let mut condition = vec![];
             let mut if_then = vec![];
 
             if seq > 0 {
-                if let CreateOption::CreateIfNotExists(if_not_exists) = req.create_option {
-                    return if if_not_exists {
-                        Ok(CreateDatamaskReply { id })
-                    } else {
-                        Err(KVAppError::AppError(AppError::DatamaskAlreadyExists(
+                match req.create_option {
+                    CreateOption::None => {
+                        return Err(KVAppError::AppError(AppError::DatamaskAlreadyExists(
                             DatamaskAlreadyExists::new(
                                 &name_key.name,
                                 format!("create data mask: {}", req.name),
                             ),
-                        )))
-                    };
-                } else {
-                    construct_drop_mask_policy_operations(
-                        self,
-                        name_key,
-                        false,
-                        false,
-                        func_name!(),
-                        &mut condition,
-                        &mut if_then,
-                    )
-                    .await?;
-                }
+                        )));
+                    }
+                    CreateOption::CreateIfNotExists => return Ok(CreateDatamaskReply { id }),
+                    CreateOption::CreateOrReplace => {
+                        construct_drop_mask_policy_operations(
+                            self,
+                            name_key,
+                            false,
+                            false,
+                            func_name!(),
+                            &mut condition,
+                            &mut if_then,
+                        )
+                        .await?;
+                    }
+                };
             };
 
             // Create data mask by inserting these record:
@@ -117,8 +116,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             };
 
             debug!(
-                id = as_debug!(&id_key),
-                name_key = as_debug!(name_key);
+                id :? =(&id_key),
+                name_key :? =(name_key);
                 "new datamask id"
             );
 
@@ -141,8 +140,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    name = as_debug!(name_key),
-                    id = as_debug!(&id_key),
+                    name :? =(name_key),
+                    id :? =(&id_key),
                     succ = succ;
                     "create_data_mask"
                 );
@@ -157,7 +156,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
     }
 
     async fn drop_data_mask(&self, req: DropDatamaskReq) -> Result<DropDatamaskReply, KVAppError> {
-        debug!(req = as_debug!(&req); "DatamaskApi: {}", func_name!());
+        debug!(req :? =(&req); "DatamaskApi: {}", func_name!());
 
         let name_key = &req.name;
 
@@ -199,7 +198,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
     }
 
     async fn get_data_mask(&self, req: GetDatamaskReq) -> Result<GetDatamaskReply, KVAppError> {
-        debug!(req = as_debug!(&req); "DatamaskApi: {}", func_name!());
+        debug!(req :? =(&req); "DatamaskApi: {}", func_name!());
 
         let name_key = &req.name;
 
@@ -242,7 +241,7 @@ pub fn data_mask_has_to_exist(
     msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
-        debug!(seq = seq, name_ident = as_debug!(name_ident); "data mask does not exist");
+        debug!(seq = seq, name_ident :? =(name_ident); "data mask does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownDatamask(
             UnknownDatamask::new(&name_ident.name, format!("{}: {}", msg, name_ident)),
@@ -329,8 +328,8 @@ async fn construct_drop_mask_policy_operations(
     }
 
     debug!(
-        name = as_debug!(name_key),
-        id = as_debug!(&DatamaskId { id }),
+        name :? =(name_key),
+        id :? =(&DatamaskId { id }),
         ctx = ctx;
         "construct_drop_mask_policy_operations"
     );

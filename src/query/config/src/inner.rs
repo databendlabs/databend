@@ -28,6 +28,7 @@ use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_users::idm_config::IDMConfig;
@@ -147,7 +148,7 @@ impl Debug for InnerConfig {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
-    pub tenant_id: String,
+    pub tenant_id: NonEmptyString,
     /// ID for construct the cluster.
     pub cluster_id: String,
     // ID for the query node.
@@ -160,6 +161,7 @@ pub struct QueryConfig {
     pub mysql_tls_server_cert: String,
     pub mysql_tls_server_key: String,
     pub max_active_sessions: u64,
+    pub max_running_queries: u64,
     pub max_server_memory_usage: u64,
     pub max_memory_limit_enabled: bool,
     pub clickhouse_http_handler_host: String,
@@ -235,7 +237,7 @@ pub struct QueryConfig {
 impl Default for QueryConfig {
     fn default() -> Self {
         Self {
-            tenant_id: "admin".to_string(),
+            tenant_id: NonEmptyString::new("admin").unwrap(),
             cluster_id: "".to_string(),
             node_id: "".to_string(),
             num_cpus: 0,
@@ -245,6 +247,7 @@ impl Default for QueryConfig {
             mysql_tls_server_cert: "".to_string(),
             mysql_tls_server_key: "".to_string(),
             max_active_sessions: 256,
+            max_running_queries: 0,
             max_server_memory_usage: 0,
             max_memory_limit_enabled: false,
             clickhouse_http_handler_host: "127.0.0.1".to_string(),
@@ -563,6 +566,14 @@ pub struct CacheConfig {
     /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
     pub table_data_deserialized_data_bytes: u64,
+
+    /// Max percentage of in memory table column object cache relative to whole memory. By default it is 0 (disabled)
+    ///
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
+    ///
+    /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
+    /// and the access pattern will benefit from caching, consider enabled this cache.
+    pub table_data_deserialized_memory_ratio: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -621,6 +632,7 @@ impl Default for CacheConfig {
             table_data_cache_population_queue_size: 0,
             disk_cache_config: Default::default(),
             table_data_deserialized_data_bytes: 0,
+            table_data_deserialized_memory_ratio: 0,
         }
     }
 }

@@ -143,13 +143,13 @@ impl Binder {
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
                 let db_id = catalog
-                    .get_database(&tenant, &database_name)
+                    .get_database(tenant.as_str(), &database_name)
                     .await?
                     .get_db_info()
                     .ident
                     .db_id;
                 let table_id = catalog
-                    .get_table(&tenant, &database_name, table_name)
+                    .get_table(tenant.as_str(), &database_name, table_name)
                     .await?
                     .get_id();
                 Ok(GrantObject::TableById(catalog_name, db_id, table_id))
@@ -159,7 +159,7 @@ impl Binder {
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
                 let db_id = catalog
-                    .get_database(&tenant, &database_name)
+                    .get_database(tenant.as_str(), &database_name)
                     .await?
                     .get_db_info()
                     .ident
@@ -188,13 +188,13 @@ impl Binder {
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
                 let db_id = catalog
-                    .get_database(&tenant, &database_name)
+                    .get_database(tenant.as_str(), &database_name)
                     .await?
                     .get_db_info()
                     .ident
                     .db_id;
                 let table_id = catalog
-                    .get_table(&tenant, &database_name, table_name)
+                    .get_table(tenant.as_str(), &database_name, table_name)
                     .await?
                     .get_id();
                 Ok(vec![
@@ -207,7 +207,7 @@ impl Binder {
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
                 let db_id = catalog
-                    .get_database(&tenant, &database_name)
+                    .get_database(tenant.as_str(), &database_name)
                     .await?
                     .get_db_info()
                     .ident
@@ -239,7 +239,7 @@ impl Binder {
         }
         UserApiProvider::instance()
             .verify_password(
-                &self.ctx.get_tenant(),
+                self.ctx.get_tenant().as_str(),
                 &user_option,
                 auth_option,
                 None,
@@ -289,7 +289,7 @@ impl Binder {
             // verify the password if changed
             UserApiProvider::instance()
                 .verify_password(
-                    &self.ctx.get_tenant(),
+                    self.ctx.get_tenant().as_str(),
                     &user_option,
                     auth_option,
                     Some(&user_info),

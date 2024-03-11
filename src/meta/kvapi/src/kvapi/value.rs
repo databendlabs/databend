@@ -16,6 +16,17 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 
 /// A value that can be stored in kvapi::KVApi.
-pub trait Value: Debug {}
+pub trait Value: Debug {
+    /// Return keys this value depends on.
+    ///
+    /// For example, the name-to-id record `database-name -> a database-id`
+    /// depends on the `database-id -> database-meta` record.
+    /// Thus `DatabaseId::dependency_keys()` returns itself for further traversing.
+    fn dependency_keys(&self) -> impl IntoIterator<Item = String>;
+}
 
-impl Value for Infallible {}
+impl Value for Infallible {
+    fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        []
+    }
+}

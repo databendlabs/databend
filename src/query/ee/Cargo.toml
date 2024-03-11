@@ -36,6 +36,7 @@ databend-common-users = { path = "../users" }
 databend-enterprise-aggregating-index = { path = "../ee_features/aggregating_index" }
 databend-enterprise-background-service = { path = "../ee_features/background_service" }
 databend-enterprise-data-mask-feature = { path = "../ee_features/data_mask" }
+databend-enterprise-inverted-index = { path = "../ee_features/inverted_index" }
 databend-enterprise-storage-encryption = { path = "../ee_features/storage_encryption" }
 databend-enterprise-stream-handler = { path = "../ee_features/stream_handler" }
 databend-enterprise-vacuum-handler = { path = "../ee_features/vacuum_handler" }
@@ -50,9 +51,9 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 dashmap = { workspace = true }
+derive-visitor = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
-
 jwt-simple = "0.11.0"
 log = { workspace = true }
 tempfile = "3.4.0"

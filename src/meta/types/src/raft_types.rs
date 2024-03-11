@@ -67,30 +67,17 @@ pub type Fatal = openraft::error::Fatal<NodeId>;
 pub type ChangeMembershipError = openraft::error::ChangeMembershipError<NodeId>;
 pub type ClientWriteError = openraft::error::ClientWriteError<NodeId, MembershipNode>;
 pub type InitializeError = openraft::error::InitializeError<NodeId, MembershipNode>;
+pub type StreamingError<E> = openraft::error::StreamingError<TypeConfig, E>;
 
 pub type AppendEntriesRequest = openraft::raft::AppendEntriesRequest<TypeConfig>;
 pub type AppendEntriesResponse = openraft::raft::AppendEntriesResponse<NodeId>;
 pub type InstallSnapshotRequest = openraft::raft::InstallSnapshotRequest<TypeConfig>;
 pub type InstallSnapshotResponse = openraft::raft::InstallSnapshotResponse<NodeId>;
+pub type SnapshotResponse = openraft::raft::SnapshotResponse<NodeId>;
 pub type InstallSnapshotError = openraft::error::InstallSnapshotError;
 pub type VoteRequest = openraft::raft::VoteRequest<NodeId>;
 pub type VoteResponse = openraft::raft::VoteResponse<NodeId>;
 
 pub fn new_log_id(term: u64, node_id: NodeId, index: u64) -> LogId {
     LogId::new(CommittedLeaderId::new(term, node_id), index)
-}
-
-/// This mod defines data types that are compatible with openraft v0.7
-pub mod compat07 {
-    use crate::raft_types::TypeConfig;
-
-    pub type LogId = openraft::compat::compat07::LogId;
-    pub type Vote = openraft::compat::compat07::Vote;
-    pub type Membership = openraft::compat::compat07::Membership;
-    pub type StoredMembership = openraft::compat::compat07::StoredMembership;
-
-    pub type EntryPayload = openraft::compat::compat07::EntryPayload<TypeConfig>;
-    pub type Entry = openraft::compat::compat07::Entry<TypeConfig>;
-
-    pub type SnapshotMeta = openraft::compat::compat07::SnapshotMeta;
 }

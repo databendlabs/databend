@@ -41,6 +41,10 @@ impl Interpreter for RenameTableInterpreter {
         "RenameTableInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // TODO check privileges

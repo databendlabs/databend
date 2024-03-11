@@ -45,6 +45,10 @@ impl Interpreter for DropVirtualColumnInterpreter {
         "DropVirtualColumnInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
@@ -69,7 +73,10 @@ impl Interpreter for DropVirtualColumnInterpreter {
 
         let drop_virtual_column_req = DropVirtualColumnReq {
             if_exists: self.plan.if_exists,
-            name_ident: VirtualColumnNameIdent { tenant, table_id },
+            name_ident: VirtualColumnNameIdent {
+                tenant: tenant.to_string(),
+                table_id,
+            },
         };
 
         let handler = get_virtual_column_handler();

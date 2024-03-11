@@ -20,17 +20,18 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::time::Duration;
+use std::time::SystemTime;
 
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_catalog::table_context::ProcessInfoState;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::session::*;
-use databend_common_pipeline_core::processors::profile::Profile;
 use databend_common_settings::Settings;
 use futures::future::Either;
 use futures::StreamExt;
@@ -89,8 +90,7 @@ impl SessionManager {
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let settings = Settings::create(tenant);
-        self.load_config_changes(&settings)?;
-        settings.load_global_changes().await?;
+        settings.load_changes().await?;
 
         self.create_with_settings(typ, settings)
     }
@@ -308,7 +308,9 @@ impl SessionManager {
 
         let mut running_queries_count = 0;
         let mut active_sessions_count = 0;
+        let mut max_running_query_execute_time = 0;
 
+        let now = SystemTime::now();
         let active_sessions = self.active_sessions.read();
         for session in active_sessions.values() {
             if let Some(session_ref) = session.upgrade() {
@@ -316,14 +318,22 @@ impl SessionManager {
                     continue;
                 }
                 active_sessions_count += 1;
-                if session_ref.process_info().state == ProcessInfoState::Query {
+                let process_info = session_ref.process_info();
+                if process_info.state == ProcessInfoState::Query {
                     running_queries_count += 1;
+
+                    let executed_time = process_info.created_time.duration_since(now);
+                    let execute_time_seconds = executed_time.map(|x| x.as_secs()).unwrap_or(0);
+
+                    max_running_query_execute_time =
+                        std::cmp::max(max_running_query_execute_time, execute_time_seconds);
                 }
             }
         }
 
         status_t.running_queries_count = running_queries_count;
         status_t.active_sessions_count = active_sessions_count;
+        status_t.max_running_query_execute_time = max_running_query_execute_time;
         status_t
     }
 

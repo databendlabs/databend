@@ -17,14 +17,13 @@ use std::fmt::Display;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use bumpalo::Bump;
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::borsh_deserialize_from_stream;
-use databend_common_io::prelude::borsh_serialize_into_buf;
 
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
@@ -127,11 +126,13 @@ impl EvalAggr {
 
 impl Drop for EvalAggr {
     fn drop(&mut self) {
-        if self.func.need_manual_drop_state() {
-            unsafe {
-                self.func.drop_state(self.addr);
+        drop_guard(move || {
+            if self.func.need_manual_drop_state() {
+                unsafe {
+                    self.func.drop_state(self.addr);
+                }
             }
-        }
+        })
     }
 }
 
@@ -160,10 +161,11 @@ pub fn borsh_serialize_state<W: std::io::Write, T: BorshSerialize>(
     writer: &mut W,
     value: &T,
 ) -> Result<()> {
-    borsh_serialize_into_buf(writer, value)
+    borsh::to_writer(writer, value)?;
+    Ok(())
 }
 
 #[inline]
 pub fn borsh_deserialize_state<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
-    borsh_deserialize_from_stream(slice)
+    Ok(T::deserialize(slice)?)
 }

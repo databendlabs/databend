@@ -30,6 +30,7 @@ use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::index::filters::BlockFilter;
 use crate::FUSE_TBL_AGG_INDEX_PREFIX;
+use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 
@@ -41,6 +42,8 @@ static SNAPSHOT_V4: SnapshotVersion = SnapshotVersion::V4(PhantomData);
 
 static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V0(PhantomData);
+static SNAPSHOT_STATISTICS_V2: TableSnapshotStatisticsVersion =
+    TableSnapshotStatisticsVersion::V2(PhantomData);
 
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
@@ -135,10 +138,6 @@ impl TableMetaLocationGenerator {
         Ok(statistics_version.create(id, &self.prefix))
     }
 
-    pub fn snapshot_statistics_version(_location: impl AsRef<str>) -> u64 {
-        SNAPSHOT_STATISTICS_V0.version()
-    }
-
     pub fn gen_last_snapshot_hint_location(&self) -> String {
         format!("{}/{}", &self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT)
     }
@@ -147,12 +146,30 @@ impl TableMetaLocationGenerator {
         location.replace(FUSE_TBL_BLOCK_PREFIX, FUSE_TBL_VIRTUAL_BLOCK_PREFIX)
     }
 
+    pub fn table_statistics_version(table_statistics_location: impl AsRef<str>) -> u64 {
+        if table_statistics_location
+            .as_ref()
+            .ends_with(SNAPSHOT_STATISTICS_V0.suffix().as_str())
+        {
+            SNAPSHOT_STATISTICS_V0.version()
+        } else {
+            SNAPSHOT_STATISTICS_V2.version()
+        }
+    }
+
     pub fn gen_agg_index_location_from_block_location(loc: &str, index_id: u64) -> String {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
         let block_name = splits[len - 1];
         format!("{prefix}/{FUSE_TBL_AGG_INDEX_PREFIX}/{index_id}/{block_name}")
+    }
+
+    pub fn gen_inverted_index_location(&self, id: String) -> String {
+        format!(
+            "{}/{}/{}.index",
+            &self.prefix, FUSE_TBL_INVERTED_INDEX_PREFIX, id
+        )
     }
 }
 
@@ -197,6 +214,7 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
     fn suffix(&self) -> String {
         match self {
             TableSnapshotStatisticsVersion::V0(_) => "_ts_v0.json".to_string(),
+            TableSnapshotStatisticsVersion::V2(_) => "_ts_v2.json".to_string(),
         }
     }
 }

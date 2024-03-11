@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_exception::Result;
+use databend_common_sql::binder::ExplainConfig;
 use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
@@ -24,6 +25,8 @@ use super::interpreter_index_create::CreateIndexInterpreter;
 use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_merge_into::MergeIntoInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
+use super::interpreter_table_index_create::CreateTableIndexInterpreter;
+use super::interpreter_table_index_drop::DropTableIndexInterpreter;
 use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
@@ -38,6 +41,10 @@ use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
+use crate::interpreters::interpreter_notification_alter::AlterNotificationInterpreter;
+use crate::interpreters::interpreter_notification_create::CreateNotificationInterpreter;
+use crate::interpreters::interpreter_notification_desc::DescNotificationInterpreter;
+use crate::interpreters::interpreter_notification_drop::DropNotificationInterpreter;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
@@ -48,6 +55,9 @@ use crate::interpreters::interpreter_task_describe::DescribeTaskInterpreter;
 use crate::interpreters::interpreter_task_drop::DropTaskInterpreter;
 use crate::interpreters::interpreter_task_execute::ExecuteTaskInterpreter;
 use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
+use crate::interpreters::interpreter_txn_abort::AbortInterpreter;
+use crate::interpreters::interpreter_txn_begin::BeginInterpreter;
+use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareEndpointInterpreter;
 use crate::interpreters::CreateShareInterpreter;
@@ -94,25 +104,29 @@ impl InterpreterFactory {
                 formatted_ast.clone(),
                 *ignore_result,
             )?)),
-            Plan::Explain { kind, plan } => Ok(Arc::new(ExplainInterpreter::try_create(
+            Plan::Explain { kind, config, plan } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
                 kind.clone(),
+                config.clone(),
             )?)),
             Plan::ExplainAst { formatted_string } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 plan.clone(),
                 ExplainKind::Ast(formatted_string.clone()),
+                ExplainConfig::default(),
             )?)),
             Plan::ExplainSyntax { formatted_sql } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 plan.clone(),
                 ExplainKind::Syntax(formatted_sql.clone()),
+                ExplainConfig::default(),
             )?)),
             Plan::ExplainAnalyze { plan } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
                 ExplainKind::AnalyzePlan,
+                ExplainConfig::default(),
             )?)),
 
             Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
@@ -256,12 +270,19 @@ impl InterpreterFactory {
                 ctx,
                 *index.clone(),
             )?)),
-
             Plan::DropIndex(index) => Ok(Arc::new(DropIndexInterpreter::try_create(
                 ctx,
                 *index.clone(),
             )?)),
             Plan::RefreshIndex(index) => Ok(Arc::new(RefreshIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
+            Plan::CreateTableIndex(index) => Ok(Arc::new(CreateTableIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
+            Plan::DropTableIndex(index) => Ok(Arc::new(DropTableIndexInterpreter::try_create(
                 ctx,
                 *index.clone(),
             )?)),
@@ -370,15 +391,15 @@ impl InterpreterFactory {
                 ctx,
                 *revoke_role.clone(),
             )?)),
-            Plan::CreateUDF(create_user_udf) => Ok(Arc::new(CreateUserUDFInterpreter::try_create(
+            Plan::CreateUDF(create_user_udf) => Ok(Arc::new(CreateUserUDFScript::try_create(
                 ctx,
                 *create_user_udf.clone(),
             )?)),
-            Plan::AlterUDF(alter_udf) => Ok(Arc::new(AlterUserUDFInterpreter::try_create(
+            Plan::AlterUDF(alter_udf) => Ok(Arc::new(AlterUserUDFScript::try_create(
                 ctx,
                 *alter_udf.clone(),
             )?)),
-            Plan::DropUDF(drop_udf) => Ok(Arc::new(DropUserUDFInterpreter::try_create(
+            Plan::DropUDF(drop_udf) => Ok(Arc::new(DropUserUDFScript::try_create(
                 ctx,
                 *drop_udf.clone(),
             )?)),
@@ -518,6 +539,25 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::ShowConnections(_) => Ok(Arc::new(ShowConnectionsInterpreter::try_create(ctx)?)),
+            Plan::Begin => Ok(Arc::new(BeginInterpreter::try_create(ctx)?)),
+            Plan::Commit => Ok(Arc::new(CommitInterpreter::try_create(ctx)?)),
+            Plan::Abort => Ok(Arc::new(AbortInterpreter::try_create(ctx)?)),
+            Plan::CreateNotification(p) => Ok(Arc::new(CreateNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::AlterNotification(p) => Ok(Arc::new(AlterNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropNotification(p) => Ok(Arc::new(DropNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescNotification(p) => Ok(Arc::new(DescNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }

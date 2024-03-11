@@ -17,6 +17,8 @@ use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 use bumpalo::Bump;
+use databend_common_base::runtime::drop_guard;
+use strength_reduce::StrengthReducedU64;
 
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
@@ -25,8 +27,10 @@ use crate::store;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
+use crate::PayloadFlushState;
 use crate::SelectVector;
 use crate::StateAddr;
+use crate::BATCH_SIZE;
 use crate::MAX_PAGE_SIZE;
 
 // payload layout
@@ -37,6 +41,7 @@ use crate::MAX_PAGE_SIZE;
 // [STATE_ADDRS] is the state_addrs of the aggregate functions, 8 bytes each
 pub struct Payload {
     pub arena: Arc<Bump>,
+    pub arenas: Vec<Arc<Bump>>,
     // if true, the states are moved out of the payload into other payload, and will not be dropped
     pub state_move_out: bool,
     pub group_types: Vec<DataType>,
@@ -119,7 +124,8 @@ impl Payload {
         let row_per_page = (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size).max(1);
 
         Self {
-            arena,
+            arena: arena.clone(),
+            arenas: vec![arena],
             state_move_out: false,
             pages: vec![],
             current_write_page: 0,
@@ -332,28 +338,68 @@ impl Payload {
             self.pages.iter().map(|x| x.rows).sum::<usize>()
         );
     }
+
+    pub fn scatter(&self, state: &mut PayloadFlushState, partition_count: usize) -> bool {
+        if state.flush_page >= self.pages.len() {
+            return false;
+        }
+
+        let page = &self.pages[state.flush_page];
+
+        // ToNext
+        if state.flush_page_row >= page.rows {
+            state.flush_page += 1;
+            state.flush_page_row = 0;
+            state.row_count = 0;
+            return self.scatter(state, partition_count);
+        }
+
+        let end = (state.flush_page_row + BATCH_SIZE).min(page.rows);
+        let rows = end - state.flush_page_row;
+        state.row_count = rows;
+
+        state.probe_state.reset_partitions(partition_count);
+
+        let mods: StrengthReducedU64 = StrengthReducedU64::new(partition_count as u64);
+        for idx in 0..rows {
+            state.addresses[idx] = self.data_ptr(page, idx + state.flush_page_row);
+
+            let hash =
+                unsafe { core::ptr::read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
+
+            let partition_idx = (hash % mods) as usize;
+
+            let sel = &mut state.probe_state.partition_entries[partition_idx];
+            sel[state.probe_state.partition_count[partition_idx]] = idx;
+            state.probe_state.partition_count[partition_idx] += 1;
+        }
+        state.flush_page_row = end;
+        true
+    }
 }
 
 impl Drop for Payload {
     fn drop(&mut self) {
-        // drop states
-        if !self.state_move_out {
-            for (aggr, addr_offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
-                if aggr.need_manual_drop_state() {
-                    for page in self.pages.iter() {
-                        for row in 0..page.rows {
-                            unsafe {
-                                let state_place = StateAddr::new(core::ptr::read::<u64>(
-                                    self.data_ptr(page, row).add(self.state_offset) as _,
-                                )
-                                    as usize);
+        drop_guard(move || {
+            // drop states
+            if !self.state_move_out {
+                for (aggr, addr_offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
+                    if aggr.need_manual_drop_state() {
+                        for page in self.pages.iter() {
+                            for row in 0..page.rows {
+                                unsafe {
+                                    let state_place = StateAddr::new(core::ptr::read::<u64>(
+                                        self.data_ptr(page, row).add(self.state_offset) as _,
+                                    )
+                                        as usize);
 
-                                aggr.drop_state(state_place.next(*addr_offset));
+                                    aggr.drop_state(state_place.next(*addr_offset));
+                                }
                             }
                         }
                     }
                 }
             }
-        }
+        })
     }
 }

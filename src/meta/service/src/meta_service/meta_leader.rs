@@ -36,7 +36,6 @@ use databend_common_meta_types::RaftError;
 use databend_common_meta_types::SeqV;
 use databend_common_metrics::count::Count;
 use futures::StreamExt;
-use log::as_debug;
 use log::debug;
 use log::info;
 use maplit::btreemap;
@@ -71,7 +70,7 @@ impl<'a> Handler<ForwardRequestBody> for MetaLeader<'a> {
         &self,
         req: ForwardRequest<ForwardRequestBody>,
     ) -> Result<ForwardResponse, MetaOperationError> {
-        debug!(req = as_debug!(&req), target = req.forward_to_leader; "handle_forwardable_req");
+        debug!(req :? =(&req), target = req.forward_to_leader; "handle_forwardable_req");
 
         match req.body {
             ForwardRequestBody::Ping => Ok(ForwardResponse::Pong),
@@ -115,7 +114,7 @@ impl<'a> Handler<MetaGrpcReadReq> for MetaLeader<'a> {
         &self,
         req: ForwardRequest<MetaGrpcReadReq>,
     ) -> Result<BoxStream<StreamItem>, MetaOperationError> {
-        debug!(req = as_debug!(&req); "handle(MetaGrpcReadReq)");
+        debug!(req :? =(&req); "handle(MetaGrpcReadReq)");
 
         let sm = self.get_state_machine().await;
         let kv_api = sm.kv_api();

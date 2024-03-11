@@ -15,6 +15,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use databend_common_base::runtime::drop_guard;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -24,8 +25,10 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use parking_lot::RwLock;
 
@@ -74,7 +77,7 @@ impl Session {
         let mut properties = vec![
             ("session_id", self.id.clone()),
             ("session_database", self.get_current_database()),
-            ("session_tenant", self.get_current_tenant()),
+            ("session_tenant", self.get_current_tenant().to_string()),
         ];
         if let Some(query_id) = self.get_current_query_id() {
             properties.push(("query_id", query_id));
@@ -185,7 +188,7 @@ impl Session {
         self.session_ctx.get_current_catalog()
     }
 
-    pub fn get_current_tenant(self: &Arc<Self>) -> String {
+    pub fn get_current_tenant(self: &Arc<Self>) -> NonEmptyString {
         self.session_ctx.get_current_tenant()
     }
 
@@ -308,11 +311,20 @@ impl Session {
         self.session_ctx
             .update_query_ids_results(query_id, Some(result_cache_key))
     }
+
+    pub fn txn_mgr(&self) -> TxnManagerRef {
+        self.session_ctx.txn_mgr()
+    }
+    pub fn set_txn_mgr(&self, txn_mgr: TxnManagerRef) {
+        self.session_ctx.set_txn_mgr(txn_mgr)
+    }
 }
 
 impl Drop for Session {
     fn drop(&mut self) {
-        debug!("Drop session {}", self.id.clone());
-        SessionManager::instance().destroy_session(&self.id.clone());
+        drop_guard(move || {
+            debug!("Drop session {}", self.id.clone());
+            SessionManager::instance().destroy_session(&self.id.clone());
+        })
     }
 }

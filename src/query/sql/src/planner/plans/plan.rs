@@ -25,10 +25,12 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use super::SetSecondaryRolesPlan;
+use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterNetworkPolicyPlan;
+use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
 use crate::plans::AlterShareTenantsPlan;
 use crate::plans::AlterTableClusterKeyPlan;
@@ -47,12 +49,14 @@ use crate::plans::CreateDatamaskPolicyPlan;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateIndexPlan;
 use crate::plans::CreateNetworkPolicyPlan;
+use crate::plans::CreateNotificationPlan;
 use crate::plans::CreatePasswordPolicyPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
+use crate::plans::CreateTableIndexPlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
@@ -63,6 +67,7 @@ use crate::plans::DeletePlan;
 use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
+use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
 use crate::plans::DescSharePlan;
 use crate::plans::DescribeTablePlan;
@@ -74,6 +79,7 @@ use crate::plans::DropDatamaskPolicyPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropIndexPlan;
 use crate::plans::DropNetworkPolicyPlan;
+use crate::plans::DropNotificationPlan;
 use crate::plans::DropPasswordPolicyPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropShareEndpointPlan;
@@ -82,6 +88,7 @@ use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
+use crate::plans::DropTableIndexPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
@@ -154,6 +161,7 @@ pub enum Plan {
 
     Explain {
         kind: ExplainKind,
+        config: ExplainConfig,
         plan: Box<Plan>,
     },
     ExplainAst {
@@ -228,6 +236,8 @@ pub enum Plan {
     CreateIndex(Box<CreateIndexPlan>),
     DropIndex(Box<DropIndexPlan>),
     RefreshIndex(Box<RefreshIndexPlan>),
+    CreateTableIndex(Box<CreateTableIndexPlan>),
+    DropTableIndex(Box<DropTableIndexPlan>),
 
     // Virtual Columns
     CreateVirtualColumn(Box<CreateVirtualColumnPlan>),
@@ -320,6 +330,17 @@ pub enum Plan {
     DescribeTask(Box<DescribeTaskPlan>),
     ShowTasks(Box<ShowTasksPlan>),
     ExecuteTask(Box<ExecuteTaskPlan>),
+
+    // Txn
+    Begin,
+    Commit,
+    Abort,
+
+    // Notifications
+    CreateNotification(Box<CreateNotificationPlan>),
+    AlterNotification(Box<AlterNotificationPlan>),
+    DropNotification(Box<DropNotificationPlan>),
+    DescNotification(Box<DescNotificationPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -432,7 +453,7 @@ impl Plan {
             Plan::DescribeTask(plan) => plan.schema(),
             Plan::ShowTasks(plan) => plan.schema(),
             Plan::ExecuteTask(plan) => plan.schema(),
-
+            Plan::DescNotification(plan) => plan.schema(),
             Plan::DescConnection(plan) => plan.schema(),
             Plan::ShowConnections(plan) => plan.schema(),
 

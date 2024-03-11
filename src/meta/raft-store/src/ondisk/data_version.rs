@@ -82,7 +82,7 @@ impl DataVersion {
         match self {
             Self::V0 => Self::V0,
             Self::V001 => Self::V0,
-            Self::V002 => Self::V0,
+            Self::V002 => Self::V001,
         }
     }
 

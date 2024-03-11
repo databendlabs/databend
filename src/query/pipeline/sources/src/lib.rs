@@ -16,6 +16,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(cursor_remaining)]
+#![feature(box_patterns)]
 #![allow(clippy::diverging_sub_expression)]
 
 mod async_source;

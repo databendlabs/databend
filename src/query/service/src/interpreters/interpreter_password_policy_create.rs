@@ -53,6 +53,10 @@ impl Interpreter for CreatePasswordPolicyInterpreter {
         "CreatePasswordPolicyInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -124,7 +128,7 @@ impl Interpreter for CreatePasswordPolicyInterpreter {
             update_on: None,
         };
         user_mgr
-            .add_password_policy(&tenant, password_policy, &plan.create_option)
+            .add_password_policy(tenant.as_str(), password_policy, &plan.create_option)
             .await?;
 
         Ok(PipelineBuildResult::create())

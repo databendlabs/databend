@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::VisitorMut;
 use databend_common_settings::Settings;
+use derive_visitor::VisitorMut;
 
 #[derive(Debug, Clone)]
 pub struct NameResolutionContext {
@@ -75,12 +75,14 @@ pub fn compare_table_name(
     }
 }
 
+#[derive(VisitorMut)]
+#[visitor(Identifier(enter))]
 pub struct IdentifierNormalizer<'a> {
     pub ctx: &'a NameResolutionContext,
 }
 
-impl<'a> VisitorMut for IdentifierNormalizer<'a> {
-    fn visit_identifier(&mut self, ident: &mut Identifier) {
+impl<'a> IdentifierNormalizer<'a> {
+    fn enter_identifier(&mut self, ident: &mut Identifier) {
         let normalized_ident = normalize_identifier(ident, self.ctx);
         *ident = normalized_ident;
     }

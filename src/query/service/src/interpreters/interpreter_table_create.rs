@@ -34,6 +34,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::BloomIndexColumns;
@@ -93,9 +94,16 @@ impl Interpreter for CreateTableInterpreter {
         "CreateTableInterpreterV2"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.plan.tenant.clone();
+        let tenant = NonEmptyString::new(tenant).map_err(|_e| {
+            ErrorCode::TenantIsEmpty("tenant is empty when CreateTableInterpreter")
+        })?;
         let has_computed_column = self
             .plan
             .schema
@@ -182,7 +190,7 @@ impl CreateTableInterpreter {
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
 
-            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            let role_api = UserApiProvider::instance().role_api(&tenant);
             role_api
                 .grant_ownership(
                     &OwnershipObject::Table {
@@ -218,7 +226,7 @@ impl CreateTableInterpreter {
         // update share spec if needed
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
-                &tenant,
+                &tenant.to_string(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),
@@ -274,7 +282,7 @@ impl CreateTableInterpreter {
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
 
-            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            let role_api = UserApiProvider::instance().role_api(&tenant);
             role_api
                 .grant_ownership(
                     &OwnershipObject::Table {
@@ -291,7 +299,7 @@ impl CreateTableInterpreter {
         // update share spec if needed
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
-                &self.ctx.get_tenant(),
+                &self.ctx.get_tenant().to_string(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),

@@ -45,13 +45,17 @@ impl Interpreter for RevokeShareObjectInterpreter {
         "RevokeShareObjectInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let req = RevokeShareObjectReq {
             share_name: ShareNameIdent {
-                tenant,
+                tenant: tenant.to_string(),
                 share_name: self.plan.share.clone(),
             },
             object: self.plan.object.clone(),
@@ -61,7 +65,7 @@ impl Interpreter for RevokeShareObjectInterpreter {
         let resp = meta_api.revoke_share_object(req).await?;
 
         save_share_spec(
-            &self.ctx.get_tenant(),
+            &self.ctx.get_tenant().to_string(),
             self.ctx.get_data_operator()?.operator(),
             resp.spec_vec,
             Some(vec![resp.share_table_info]),

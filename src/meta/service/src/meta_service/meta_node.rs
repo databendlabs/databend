@@ -36,7 +36,6 @@ use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_sled_store::openraft;
-use databend_common_meta_sled_store::openraft::storage::Adaptor;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
@@ -64,8 +63,6 @@ use databend_common_meta_types::RaftMetrics;
 use databend_common_meta_types::TypeConfig;
 use futures::channel::oneshot;
 use itertools::Itertools;
-use log::as_debug;
-use log::as_display;
 use log::debug;
 use log::error;
 use log::info;
@@ -158,8 +155,8 @@ pub struct MetaNodeStatus {
     pub last_seq: u64,
 }
 
-pub type LogStore = Adaptor<TypeConfig, RaftStore>;
-pub type SMStore = Adaptor<TypeConfig, RaftStore>;
+pub type LogStore = RaftStore;
+pub type SMStore = RaftStore;
 
 /// MetaRaft is a implementation of the generic Raft handling meta data R/W.
 pub type MetaRaft = Raft<TypeConfig>;
@@ -207,7 +204,8 @@ impl MetaNodeBuilder {
 
         let net = Network::new(sto.clone());
 
-        let (log_store, sm_store) = Adaptor::new(sto.clone());
+        let log_store = sto.clone();
+        let sm_store = sto.clone();
 
         let raft = MetaRaft::new(node_id, Arc::new(config), net, log_store, sm_store)
             .await
@@ -543,7 +541,7 @@ impl MetaNode {
     /// according to config.
     #[minitrace::trace]
     pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
-        info!(config = as_debug!(config); "start()");
+        info!(config :? =(config); "start()");
         let mn = Self::do_start(config).await?;
         info!("Done starting MetaNode: {:?}", config);
         Ok(mn)
@@ -987,8 +985,8 @@ impl MetaNode {
         for<'a> MetaLeader<'a>: Handler<Req>,
         for<'a> MetaForwarder<'a>: Forwarder<Req>,
     {
-        debug!(target = as_display!(&req.forward_to_leader),
-               req = as_debug!(&req);
+        debug!(target :% =(&req.forward_to_leader),
+               req :? =(&req);
                "handle_forwardable_request");
 
         let mut n_retry = 20;

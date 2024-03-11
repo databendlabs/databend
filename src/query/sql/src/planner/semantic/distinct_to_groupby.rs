@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
@@ -22,13 +24,14 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::VisitorMut;
+use derive_visitor::VisitorMut;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, VisitorMut)]
+#[visitor(SelectStmt(enter))]
 pub struct DistinctToGroupBy {}
 
-impl VisitorMut for DistinctToGroupBy {
-    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
+impl DistinctToGroupBy {
+    fn enter_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             from,
@@ -45,10 +48,13 @@ impl VisitorMut for DistinctToGroupBy {
                 expr:
                     box Expr::FunctionCall {
                         span,
-                        distinct,
-                        name,
-                        args,
-                        ..
+                        func:
+                            FunctionCall {
+                                distinct,
+                                name,
+                                args,
+                                ..
+                            },
                     },
                 alias,
             } = &select_list[0]
@@ -92,21 +98,25 @@ impl VisitorMut for DistinctToGroupBy {
                         select_list: vec![databend_common_ast::ast::SelectTarget::AliasedExpr {
                             expr: Box::new(Expr::FunctionCall {
                                 span: None,
-                                distinct: false,
-                                name: Identifier {
-                                    name: "count".to_string(),
-                                    quote: None,
-                                    span: *span,
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        name: "count".to_string(),
+                                        quote: None,
+                                        span: *span,
+                                    },
+                                    args: vec![Expr::ColumnRef {
+                                        span: None,
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: ColumnID::Name(Identifier::from_name("_1")),
+                                        },
+                                    }],
+                                    params: vec![],
+                                    window: None,
+                                    lambda: None,
                                 },
-                                args: vec![Expr::ColumnRef {
-                                    span: None,
-                                    database: None,
-                                    table: None,
-                                    column: ColumnID::Name(Identifier::from_name("_1")),
-                                }],
-                                params: vec![],
-                                window: None,
-                                lambda: None,
                             }),
                             alias: alias.clone(),
                         }],

@@ -16,13 +16,20 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_meta_app::schema::CreateOption;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateNetworkPolicyStmt {
+    #[drive(skip)]
     pub create_option: CreateOption,
+    #[drive(skip)]
     pub name: String,
+    #[drive(skip)]
     pub allowed_ip_list: Vec<String>,
+    #[drive(skip)]
     pub blocked_ip_list: Option<Vec<String>>,
+    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -33,10 +40,8 @@ impl Display for CreateNetworkPolicyStmt {
             write!(f, "OR REPLACE ")?;
         }
         write!(f, "NETWORK POLICY ")?;
-        if let CreateOption::CreateIfNotExists(if_not_exists) = self.create_option {
-            if if_not_exists {
-                write!(f, "IF NOT EXISTS ")?;
-            }
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, "IF NOT EXISTS ")?;
         }
         write!(f, "{}", self.name)?;
         write!(f, " ALLOWED_IP_LIST = (")?;
@@ -65,12 +70,17 @@ impl Display for CreateNetworkPolicyStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct AlterNetworkPolicyStmt {
+    #[drive(skip)]
     pub if_exists: bool,
+    #[drive(skip)]
     pub name: String,
+    #[drive(skip)]
     pub allowed_ip_list: Option<Vec<String>>,
+    #[drive(skip)]
     pub blocked_ip_list: Option<Vec<String>>,
+    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -110,9 +120,11 @@ impl Display for AlterNetworkPolicyStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropNetworkPolicyStmt {
+    #[drive(skip)]
     pub if_exists: bool,
+    #[drive(skip)]
     pub name: String,
 }
 
@@ -128,8 +140,9 @@ impl Display for DropNetworkPolicyStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DescNetworkPolicyStmt {
+    #[drive(skip)]
     pub name: String,
 }
 

@@ -19,6 +19,15 @@ message WarehouseOptions {
   optional string using_warehouse_size = 2;  //TODO using warehouse or just use serverless warehouse by size
 }
 
+enum TaskSQLType {
+  SQL = 0;
+  SCRIPT = 1;
+}
+
+message ScriptSQL {
+  repeated string sqls = 1;
+}
+
 message CreateTaskRequest {
   string task_name = 1;
   string tenant_id = 2;
@@ -34,6 +43,9 @@ message CreateTaskRequest {
   repeated string after = 11; //
   optional string when_condition = 12;
   map<string, string> session_parameters = 13;
+  optional string error_integration = 14;
+  TaskSQLType task_sql_type = 15;
+  ScriptSQL script_sql = 16;
 }
 
 message TaskError {
@@ -92,6 +104,7 @@ message Task {
   repeated string after = 17;
   optional string when_condition = 18;
   map<string, string> session_parameters = 19;
+  optional string error_integration = 20;
 }
 
 
@@ -138,6 +151,9 @@ message AlterTaskRequest {
   repeated string remove_after = 13;
   bool set_session_parameters = 14;
   map<string, string> session_parameters = 15;
+  optional string error_integration = 16;
+  TaskSQLType task_sql_type = 17;
+  ScriptSQL script_sql = 18;
 }
 
 message AlterTaskResponse {

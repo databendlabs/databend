@@ -46,13 +46,17 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
         "ShowGrantTenantsOfShareInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let tenant = self.ctx.get_tenant();
         let req = GetShareGrantTenantsReq {
             share_name: ShareNameIdent {
-                tenant,
+                tenant: tenant.to_string(),
                 share_name: self.plan.share_name.clone(),
             },
         };

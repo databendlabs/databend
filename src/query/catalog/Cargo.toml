@@ -24,6 +24,7 @@ databend-common-settings = { path = "../settings" }
 databend-common-storage = { path = "../../common/storage" }
 databend-common-users = { path = "../users" }
 databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
+databend-storages-common-txn = { path = "../storages/common/txn" }
 
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
@@ -31,7 +32,7 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
 dyn-clone = "1.0.9"
-log = "0.4.19"
+log = { workspace = true }
 parking_lot = { workspace = true }
 parquet_rs = { workspace = true }
 rand = { workspace = true }

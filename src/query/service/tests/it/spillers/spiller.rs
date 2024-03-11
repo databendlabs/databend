@@ -35,12 +35,10 @@ async fn test_spill_with_partition() -> Result<()> {
 
     let ctx = fixture.new_query_ctx().await?;
     let tenant = ctx.get_tenant();
-    let spiller_config = SpillerConfig::create(query_spill_prefix(&tenant));
+    let spiller_config = SpillerConfig::create(query_spill_prefix(tenant.as_str()));
     let operator = DataOperator::instance().operator();
 
-    let mut spiller = Spiller::create(ctx, operator, spiller_config, SpillerType::HashJoinBuild);
-
-    spiller.partition_set = vec![0, 1, 2];
+    let mut spiller = Spiller::create(ctx, operator, spiller_config, SpillerType::HashJoinBuild)?;
 
     // Generate data block: two columns, type is i32, 100 rows
     let data = DataBlock::new_from_columns(vec![
@@ -48,28 +46,26 @@ async fn test_spill_with_partition() -> Result<()> {
         Int32Type::from_data((1..101).collect::<Vec<_>>()),
     ]);
 
-    let res = spiller.spill_with_partition(0_u8, data, 0).await;
+    let res = spiller.spill_with_partition(0_u8, data).await;
 
     assert!(res.is_ok());
     assert!(spiller.partition_location.get(&0).unwrap()[0].starts_with("_query_spill"));
 
     // Test read spilled data
-    let data_blocks = spiller.read_spilled_data(&(0_u8), 0).await?;
-    for block in data_blocks {
-        assert_eq!(block.num_rows(), 100);
-        assert_eq!(block.num_columns(), 2);
-        for (col_idx, col) in block.columns().iter().enumerate() {
-            for (idx, cell) in col
-                .value
-                .convert_to_full_column(&DataType::Number(NumberDataType::Int32), 100)
-                .iter()
-                .enumerate()
-            {
-                assert_eq!(
-                    cell,
-                    ScalarRef::Number(NumberScalar::Int32((col_idx + idx) as i32))
-                );
-            }
+    let block = DataBlock::concat(&spiller.read_spilled_data(&(0_u8)).await?)?;
+    assert_eq!(block.num_rows(), 100);
+    assert_eq!(block.num_columns(), 2);
+    for (col_idx, col) in block.columns().iter().enumerate() {
+        for (idx, cell) in col
+            .value
+            .convert_to_full_column(&DataType::Number(NumberDataType::Int32), 100)
+            .iter()
+            .enumerate()
+        {
+            assert_eq!(
+                cell,
+                ScalarRef::Number(NumberScalar::Int32((col_idx + idx) as i32))
+            );
         }
     }
 

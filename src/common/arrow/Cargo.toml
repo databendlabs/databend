@@ -90,6 +90,7 @@ arrow-format = { workspace = true }
 bitpacking = "0.8.0"
 byteorder = { workspace = true }
 bytes = "^1"
+indexmap = "2.2.3"
 log = { workspace = true }
 num = { version = "0.4", default-features = false, features = ["std"] }
 ordered-float = "3.7.0"
@@ -112,7 +113,7 @@ ethnum = { workspace = true }
 simdutf8 = "0.1.4"
 
 # A Rust port of SwissTable
-hashbrown = { version = "0.14", default-features = false, features = ["ahash"] }
+hashbrown = { version = "0.14.3", default-features = false, features = ["ahash"] }
 
 # for timezone support
 chrono-tz = { workspace = true, optional = true }
@@ -157,6 +158,6 @@ tokio-util = { version = "0.7", features = ["compat"] }
 # used to run formal property testing
 async-std = "1.12"
 env_logger = "0.10"
-flate2 = "1"
+flate2 = "1.0.28"
 proptest = { version = "1", default_features = false, features = ["std"] }
 quanta = "0.11.1"

@@ -54,12 +54,12 @@ jobs:
           cat license.json
 
   build:
-    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, "${{ inputs.runner_provider }}"]
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { arch: x86_64, libc: gnu }
+          - { arch: x86_64, runner: X64 }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,17 +69,16 @@ jobs:
         timeout-minutes: 60
         with:
           sha: ${{ github.sha }}
-          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+          target: ${{ matrix.arch }}-unknown-linux-gnu
           artifacts: all
 
   build_address_sanitizer:
-    runs-on: [ self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}" ]
+    runs-on: [ self-hosted, "${{ matrix.runner }}", Linux, 16c32g, "${{ inputs.runner_provider }}" ]
     strategy:
       fail-fast: false
       matrix:
         include:
-          # - { arch: x86_64, libc: gnu }
-          - { arch: aarch64, libc: gnu }
+          - { arch: aarch64, runner: ARM64 }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,18 +87,17 @@ jobs:
       - uses: ./.github/actions/build_linux_sanitizer
         timeout-minutes: 60
         with:
-          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+          target: ${{ matrix.arch }}-unknown-linux-gnu
           artifacts: query
 
-  build_other:
-    runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
+  build_musl:
+    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # - { arch: x86_64, libc: musl }
-          - { arch: aarch64, libc: musl }
-          # - { arch: aarch64, libc: gnu }
+        arch:
+          - x86_64
+          - aarch64
     steps:
       - uses: actions/checkout@v4
         with:
@@ -109,7 +107,7 @@ jobs:
         timeout-minutes: 60
         with:
           sha: ${{ github.sha }}
-          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+          target: ${{ matrix.arch }}-unknown-linux-musl
           artifacts: query
 
   test_unit:
@@ -128,14 +126,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_metactl
-        timeout-minutes: 10
-
-  test_meta-data-compat-openraft-07:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_meta_data_compat_openraft_07
         timeout-minutes: 10
 
   test_compat:

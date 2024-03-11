@@ -18,6 +18,7 @@ use chrono_tz::Tz;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::SettingPlan;
 use databend_common_sql::plans::VarValue;
 use databend_common_users::UserApiProvider;
@@ -58,6 +59,10 @@ impl Interpreter for SettingInterpreter {
         "SettingInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.set.clone();
@@ -87,7 +92,9 @@ impl Interpreter for SettingInterpreter {
                     if config.query.internal_enable_sandbox_tenant && !tenant.is_empty() {
                         UserApiProvider::try_create_simple(
                             config.meta.to_meta_grpc_client_conf(),
-                            &tenant,
+                            &NonEmptyString::new(tenant).map_err(|_e| {
+                                ErrorCode::TenantIsEmpty("when SettingInterpreter")
+                            })?,
                         )
                         .await?;
                     }

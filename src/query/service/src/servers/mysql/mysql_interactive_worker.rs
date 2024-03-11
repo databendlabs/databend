@@ -54,7 +54,9 @@ use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
+use crate::sessions::QueryEntry;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::stream::DataBlockStream;
@@ -204,7 +206,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
                 ));
             }
 
-            let mut writer = DFQueryResultWriter::create(writer);
+            let mut writer = DFQueryResultWriter::create(writer, self.base.session.clone());
 
             let instant = Instant::now();
             let query_result = self
@@ -271,7 +273,7 @@ impl InteractiveWorkerBase {
 
         let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
         UserApiProvider::instance()
-            .update_user_login_result(&ctx.get_tenant(), identity, authed)
+            .update_user_login_result(ctx.get_tenant(), identity, authed)
             .await?;
         if authed {
             self.session.set_authed_user(user_info, None).await?;
@@ -354,6 +356,8 @@ impl InteractiveWorkerBase {
                 info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
 
+                let entry = QueryEntry::create(&context)?;
+                let _guard = QueriesQueueManager::instance().acquire(entry).await?;
                 let mut planner = Planner::new(context.clone());
                 let (plan, extras) = planner.plan_sql(query).await?;
 

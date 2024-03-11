@@ -25,15 +25,17 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager() -> Result<()> {
     let conf = RpcClientConf::default();
-    let tenant = "test";
+    let tenant_name = "test";
+    let tenant = NonEmptyString::new(tenant_name.to_string()).unwrap();
 
-    let user_mgr = UserApiProvider::try_create_simple(conf, tenant).await?;
+    let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let username = "test-user1";
     let hostname = "%";
     let pwd = "test-pwd";
@@ -47,7 +49,7 @@ async fn test_user_manager() -> Result<()> {
     {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr
-            .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(false))
+            .add_user(&tenant, user_info, &CreateOption::None)
             .await?;
     }
 
@@ -55,7 +57,7 @@ async fn test_user_manager() -> Result<()> {
     {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
         let res = user_mgr
-            .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(false))
+            .add_user(&tenant, user_info, &CreateOption::None)
             .await;
         assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::USER_ALREADY_EXISTS);
@@ -65,13 +67,13 @@ async fn test_user_manager() -> Result<()> {
     {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr
-            .add_user(tenant, user_info, &CreateOption::CreateIfNotExists(true))
+            .add_user(&tenant, user_info, &CreateOption::CreateIfNotExists)
             .await?;
     }
 
     // get all users.
     {
-        let users = user_mgr.get_users(tenant).await?;
+        let users = user_mgr.get_users(&tenant).await?;
         assert_eq!(1, users.len());
         assert_eq!(pwd.as_bytes(), users[0].auth_info.get_password().unwrap());
     }
@@ -79,7 +81,7 @@ async fn test_user_manager() -> Result<()> {
     // get user hostname.
     {
         let user_info = user_mgr
-            .get_user(tenant, UserIdentity::new(username, hostname))
+            .get_user(&tenant, UserIdentity::new(username, hostname))
             .await?;
         assert_eq!(hostname, user_info.hostname);
         assert_eq!(pwd.as_bytes(), user_info.auth_info.get_password().unwrap());
@@ -88,16 +90,16 @@ async fn test_user_manager() -> Result<()> {
     // drop.
     {
         user_mgr
-            .drop_user(tenant, UserIdentity::new(username, hostname), false)
+            .drop_user(tenant.clone(), UserIdentity::new(username, hostname), false)
             .await?;
-        let users = user_mgr.get_users(tenant).await?;
+        let users = user_mgr.get_users(&tenant).await?;
         assert_eq!(0, users.len());
     }
 
     // repeat drop same user not with if exist.
     {
         let res = user_mgr
-            .drop_user(tenant, UserIdentity::new(username, hostname), false)
+            .drop_user(tenant.clone(), UserIdentity::new(username, hostname), false)
             .await;
         assert!(res.is_err());
     }
@@ -105,7 +107,7 @@ async fn test_user_manager() -> Result<()> {
     // repeat drop same user with if exist.
     {
         let res = user_mgr
-            .drop_user(tenant, UserIdentity::new(username, hostname), true)
+            .drop_user(tenant.clone(), UserIdentity::new(username, hostname), true)
             .await;
         assert!(res.is_ok());
     }
@@ -114,21 +116,22 @@ async fn test_user_manager() -> Result<()> {
     {
         let user_info: UserInfo = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr
-            .add_user(
-                tenant,
-                user_info.clone(),
-                &CreateOption::CreateIfNotExists(false),
-            )
+            .add_user(&tenant, user_info.clone(), &CreateOption::None)
             .await?;
-        let old_user = user_mgr.get_user(tenant, user_info.identity()).await?;
+        let old_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(old_user.grants, UserGrantSet::empty());
 
         let mut add_priv = UserPrivilegeSet::empty();
         add_priv.set_privilege(UserPrivilegeType::Set);
         user_mgr
-            .grant_privileges_to_user(tenant, user_info.identity(), GrantObject::Global, add_priv)
+            .grant_privileges_to_user(
+                tenant.clone(),
+                user_info.identity(),
+                GrantObject::Global,
+                add_priv,
+            )
             .await?;
-        let new_user = user_mgr.get_user(tenant, user_info.identity()).await?;
+        let new_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert!(
             new_user
                 .grants
@@ -140,7 +143,7 @@ async fn test_user_manager() -> Result<()> {
                 .verify_privilege(&GrantObject::Global, vec![UserPrivilegeType::Create])
         );
         user_mgr
-            .drop_user(tenant, new_user.identity(), true)
+            .drop_user(tenant.clone(), new_user.identity(), true)
             .await?;
     }
 
@@ -148,35 +151,31 @@ async fn test_user_manager() -> Result<()> {
     {
         let user_info: UserInfo = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr
-            .add_user(
-                tenant,
-                user_info.clone(),
-                &CreateOption::CreateIfNotExists(false),
-            )
+            .add_user(&tenant, user_info.clone(), &CreateOption::None)
             .await?;
         user_mgr
             .grant_privileges_to_user(
-                tenant,
+                tenant.clone(),
                 user_info.identity(),
                 GrantObject::Global,
                 UserPrivilegeSet::all_privileges(),
             )
             .await?;
-        let user_info = user_mgr.get_user(tenant, user_info.identity()).await?;
+        let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(user_info.grants.entries().len(), 1);
 
         user_mgr
             .revoke_privileges_from_user(
-                tenant,
+                &tenant,
                 user_info.identity(),
                 GrantObject::Global,
                 UserPrivilegeSet::all_privileges(),
             )
             .await?;
-        let user_info = user_mgr.get_user(tenant, user_info.identity()).await?;
+        let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(user_info.grants.entries().len(), 0);
         user_mgr
-            .drop_user(tenant, user_info.identity(), true)
+            .drop_user(tenant.clone(), user_info.identity(), true)
             .await?;
     }
 
@@ -191,14 +190,10 @@ async fn test_user_manager() -> Result<()> {
         };
         let user_info: UserInfo = UserInfo::new(user, hostname, auth_info.clone());
         user_mgr
-            .add_user(
-                tenant,
-                user_info.clone(),
-                &CreateOption::CreateIfNotExists(false),
-            )
+            .add_user(&tenant, user_info.clone(), &CreateOption::None)
             .await?;
 
-        let old_user = user_mgr.get_user(tenant, user_info.identity()).await?;
+        let old_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(old_user.auth_info.get_password().unwrap(), Vec::from(pwd));
 
         // alter both password & password_type
@@ -208,9 +203,9 @@ async fn test_user_manager() -> Result<()> {
             hash_method: PasswordHashMethod::Sha256,
         };
         user_mgr
-            .update_user(tenant, user_info.identity(), Some(auth_info), None)
+            .update_user(&tenant, user_info.identity(), Some(auth_info), None)
             .await?;
-        let new_user = user_mgr.get_user(tenant, user_info.identity()).await?;
+        let new_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(
             new_user.auth_info.get_password().unwrap(),
             Vec::from(new_pwd)
@@ -227,9 +222,9 @@ async fn test_user_manager() -> Result<()> {
             hash_method: PasswordHashMethod::Sha256,
         };
         user_mgr
-            .update_user(tenant, user_info.identity(), Some(auth_info.clone()), None)
+            .update_user(&tenant, user_info.identity(), Some(auth_info.clone()), None)
             .await?;
-        let new_new_user = user_mgr.get_user(tenant, user_info.identity()).await?;
+        let new_new_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(
             new_new_user.auth_info.get_password().unwrap(),
             Vec::from(new_new_pwd)
@@ -237,7 +232,7 @@ async fn test_user_manager() -> Result<()> {
 
         let not_exist = user_mgr
             .update_user(
-                tenant,
+                &tenant,
                 UserIdentity::new("user", hostname),
                 Some(auth_info.clone()),
                 None,

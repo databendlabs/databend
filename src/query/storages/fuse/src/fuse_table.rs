@@ -63,6 +63,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::table_storage_prefix;
+use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
@@ -112,6 +113,9 @@ pub struct FuseTable {
     pub(crate) data_metrics: Arc<StorageMetrics>,
 
     table_type: FuseTableType,
+
+    // If this is set, reading from fuse_table should only returns the increment blocks
+    pub(crate) since_table: Option<Arc<FuseTable>>,
 }
 
 impl FuseTable {
@@ -226,6 +230,7 @@ impl FuseTable {
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
+            since_table: None,
         }))
     }
 
@@ -293,22 +298,18 @@ impl FuseTable {
         Ok(table_storage_prefix(db_id, table_id))
     }
 
-    pub fn table_snapshot_statistics_format_version(&self, location: &String) -> u64 {
-        TableMetaLocationGenerator::snapshot_version(location)
-    }
-
     #[minitrace::trace]
     #[async_backtrace::framed]
-    pub(crate) async fn read_table_snapshot_statistics(
+    pub async fn read_table_snapshot_statistics(
         &self,
         snapshot: Option<&Arc<TableSnapshot>>,
     ) -> Result<Option<Arc<TableSnapshotStatistics>>> {
         match snapshot {
             Some(snapshot) => {
                 if let Some(loc) = &snapshot.table_statistics_location {
-                    let ver = self.table_snapshot_statistics_format_version(loc);
                     let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
 
+                    let ver = TableMetaLocationGenerator::table_statistics_version(loc);
                     let load_params = LoadParams {
                         location: loc.clone(),
                         len_hint: None,
@@ -719,15 +720,10 @@ impl Table for FuseTable {
         }
     }
 
-    #[minitrace::trace]
-    #[async_backtrace::framed]
-    async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        self.do_analyze(&ctx).await
-    }
-
     async fn table_statistics(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
+        _change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         let stats = match self.table_type {
             FuseTableType::AttachedReadOnly => {
@@ -749,14 +745,22 @@ impl Table for FuseTable {
             }
             _ => {
                 let s = &self.table_info.meta.statistics;
-                TableStatistics {
+                let mut res = TableStatistics {
                     num_rows: Some(s.number_of_rows),
                     data_size: Some(s.data_bytes),
                     data_size_compressed: Some(s.compressed_data_bytes),
                     index_size: Some(s.index_data_bytes),
                     number_of_blocks: s.number_of_blocks,
                     number_of_segments: s.number_of_segments,
+                };
+
+                if let Some(since) = &self.since_table {
+                    if let Some(since_stats) = since.table_statistics(ctx, None).await? {
+                        res = res.increment_since_from(&since_stats);
+                    }
                 }
+
+                res
             }
         };
         Ok(Some(stats))
@@ -773,7 +777,7 @@ impl Table for FuseTable {
             if let Some(table_statistics) = table_statistics {
                 FuseTableColumnStatisticsProvider::new(
                     stats.clone(),
-                    Some(table_statistics.column_distinct_values.clone()),
+                    Some(table_statistics.column_distinct_values()),
                     snapshot.summary.row_count,
                 )
             } else {
@@ -791,24 +795,21 @@ impl Table for FuseTable {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<dyn Table>> {
-        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
-            loc
+    async fn navigate_since_to(
+        &self,
+        since_point: &Option<NavigationPoint>,
+        to_point: &Option<NavigationPoint>,
+    ) -> Result<Arc<dyn Table>> {
+        let mut to_point = if let Some(to_point) = to_point {
+            self.navigate_to(to_point).await?.as_ref().clone()
         } else {
-            // not an error?
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "Empty Table has no historical data",
-            ));
+            self.clone()
         };
 
-        match point {
-            NavigationPoint::SnapshotID(snapshot_id) => Ok(self
-                .navigate_to_snapshot(snapshot_location, snapshot_id.as_str())
-                .await?),
-            NavigationPoint::TimePoint(time_point) => Ok(self
-                .navigate_to_time_point(snapshot_location, *time_point)
-                .await?),
+        if let Some(since_point) = since_point {
+            to_point.since_table = Some(self.navigate_to(since_point).await?);
         }
+        Ok(Arc::new(to_point))
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {

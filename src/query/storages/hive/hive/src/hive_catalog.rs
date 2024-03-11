@@ -37,6 +37,8 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateTableIndexReply;
+use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
@@ -47,6 +49,8 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableIndexReply;
+use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
@@ -217,10 +221,7 @@ impl HiveCatalog {
             .await
             .map_err(from_thrift_error)?;
 
-        Ok(partition_names
-            .into_iter()
-            .map(|v| v.into_string())
-            .collect())
+        Ok(partition_names.into_iter().map(|v| v.to_string()).collect())
     }
 
     fn handle_table_meta(table_meta: &hive_metastore::Table) -> Result<()> {
@@ -359,9 +360,21 @@ impl Catalog for HiveCatalog {
         ))
     }
 
+    async fn mget_table_names_by_ids(&self, _table_ids: &[MetaId]) -> Result<Vec<String>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get tables name by ids in HIVE catalog",
+        ))
+    }
+
     async fn get_db_name_by_id(&self, _db_id: MetaId) -> Result<String> {
         Err(ErrorCode::Unimplemented(
             "Cannot get db name by id in HIVE catalog",
+        ))
+    }
+
+    async fn mget_database_names_by_ids(&self, _db_ids: &[MetaId]) -> Result<Vec<String>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get dbs name by ids in HIVE catalog",
         ))
     }
 
@@ -554,6 +567,16 @@ impl Catalog for HiveCatalog {
 
     #[async_backtrace::framed]
     async fn list_locks(&self, _req: ListLocksReq) -> Result<Vec<LockInfo>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
         unimplemented!()
     }
 

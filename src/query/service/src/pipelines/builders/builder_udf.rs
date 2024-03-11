@@ -16,20 +16,32 @@ use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::executor::physical_plans::Udf;
 
-use crate::pipelines::processors::transforms::TransformUdf;
+use crate::pipelines::processors::transforms::TransformUdfScript;
+use crate::pipelines::processors::transforms::TransformUdfServer;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     pub(crate) fn build_udf(&mut self, udf: &Udf) -> Result<()> {
         self.build_pipeline(&udf.input)?;
 
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformUdf::try_create(
-                self.func_ctx.clone(),
-                udf.udf_funcs.clone(),
-                input,
-                output,
-            )?))
-        })
+        if udf.script_udf {
+            self.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(TransformUdfScript::try_create(
+                    self.func_ctx.clone(),
+                    udf.udf_funcs.clone(),
+                    input,
+                    output,
+                )?))
+            })
+        } else {
+            self.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(TransformUdfServer::try_create(
+                    self.func_ctx.clone(),
+                    udf.udf_funcs.clone(),
+                    input,
+                    output,
+                )?))
+            })
+        }
     }
 }

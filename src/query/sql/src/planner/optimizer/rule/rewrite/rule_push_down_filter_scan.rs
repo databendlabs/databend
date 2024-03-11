@@ -32,7 +32,7 @@ use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::RelOp;
 use crate::plans::Scan;
-use crate::plans::UDFServerCall;
+use crate::plans::UDFCall;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
@@ -305,7 +305,7 @@ impl RulePushDownFilterScan {
                     target_type: cast.target_type.clone(),
                 }))
             }
-            ScalarExpr::UDFServerCall(udf) => {
+            ScalarExpr::UDFCall(udf) => {
                 let arguments = udf
                     .arguments
                     .iter()
@@ -319,17 +319,18 @@ impl RulePushDownFilterScan {
                     })
                     .collect::<Result<Vec<ScalarExpr>>>()?;
 
-                Ok(ScalarExpr::UDFServerCall(UDFServerCall {
+                Ok(ScalarExpr::UDFCall(UDFCall {
                     span: udf.span,
                     name: udf.name.clone(),
                     func_name: udf.func_name.clone(),
                     display_name: udf.display_name.clone(),
-                    server_addr: udf.server_addr.clone(),
+                    udf_type: udf.udf_type.clone(),
                     arg_types: udf.arg_types.clone(),
                     return_type: udf.return_type.clone(),
                     arguments,
                 }))
             }
+
             _ => Ok(predicate.clone()),
         }
     }

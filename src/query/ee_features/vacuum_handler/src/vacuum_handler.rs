@@ -23,6 +23,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;
 
+// (TableName, file, file size)
+pub type VacuumDropFileInfo = (String, String, u64);
+
 #[async_trait::async_trait]
 pub trait VacuumHandler: Sync + Send {
     async fn do_vacuum(
@@ -37,7 +40,7 @@ pub trait VacuumHandler: Sync + Send {
         &self,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
-    ) -> Result<Option<Vec<(String, String)>>>;
+    ) -> Result<Option<Vec<VacuumDropFileInfo>>>;
 
     async fn do_vacuum_temporary_files(
         &self,
@@ -74,7 +77,7 @@ impl VacuumHandlerWrapper {
         &self,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
-    ) -> Result<Option<Vec<(String, String)>>> {
+    ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
         self.handler
             .do_vacuum_drop_tables(tables, dry_run_limit)
             .await

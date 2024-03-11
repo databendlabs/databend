@@ -20,6 +20,5 @@ pub mod table_id_ranges;
 pub mod table_memory_meta;
 
 pub use database_catalog::DatabaseCatalog;
-// for "unit" test
 pub use immutable_catalog::ImmutableCatalog;
 pub use mutable_catalog::MutableCatalog;

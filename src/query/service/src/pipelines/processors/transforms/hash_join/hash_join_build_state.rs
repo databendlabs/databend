@@ -109,10 +109,18 @@ pub struct HashJoinBuildState {
     pub(crate) mutex: Mutex<()>,
 
     /// Spill related states
-    /// `send_val` is the message which will be send into `build_done_watcher` channel.
+    /// `send_val` is the message which will be sent into `build_done_watcher` channel.
     pub(crate) send_val: AtomicU8,
     /// Wait all processors finish read spilled data, then go to new round build
     pub(crate) restore_barrier: Barrier,
+    // Max memory usage for join
+    pub(crate) max_memory_usage: usize,
+    // Spilling threshold for each processor
+    pub(crate) spilling_threshold_per_proc: usize,
+    /// Spilled partition set, it contains all spilled_partition_sets from all processors
+    pub(crate) spilled_partition_set: RwLock<HashSet<u8>>,
+
+    /// Runtime filter related states
     pub(crate) enable_inlist_runtime_filter: bool,
     pub(crate) enable_min_max_runtime_filter: bool,
     /// Need to open runtime filter setting.
@@ -127,8 +135,7 @@ impl HashJoinBuildState {
         build_keys: &[RemoteExpr],
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
-        barrier: Barrier,
-        restore_barrier: Barrier,
+        num_threads: usize,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -144,7 +151,7 @@ impl HashJoinBuildState {
         let mut enable_inlist_runtime_filter = false;
         let mut enable_min_max_runtime_filter = false;
         if supported_join_type_for_runtime_filter(&hash_join_state.hash_join_desc.join_type)
-            && ctx.get_settings().get_join_spilling_threshold()? == 0
+            && ctx.get_settings().get_join_spilling_memory_ratio()? == 0
         {
             let is_cluster = !ctx.get_cluster().is_empty();
             // For cluster, only support runtime filter for broadcast join.
@@ -157,14 +164,16 @@ impl HashJoinBuildState {
             }
         }
         let chunk_size_limit = ctx.get_settings().get_max_block_size()? as usize * 16;
-
+        let (max_memory_usage, spilling_threshold_per_proc) =
+            Self::max_memory_usage(ctx.clone(), num_threads)?;
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             func_ctx,
             hash_join_state,
             chunk_size_limit,
-            barrier,
-            restore_barrier,
+            barrier: Barrier::new(num_threads),
+            restore_barrier: Barrier::new(num_threads),
+            max_memory_usage,
             row_space_builders: Default::default(),
             method,
             entry_size: Default::default(),
@@ -177,7 +186,34 @@ impl HashJoinBuildState {
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter,
             enable_min_max_runtime_filter,
+            spilling_threshold_per_proc,
+            spilled_partition_set: Default::default(),
         }))
+    }
+
+    // Get max memory usage for settings
+    fn max_memory_usage(ctx: Arc<QueryContext>, num_threads: usize) -> Result<(usize, usize)> {
+        debug_assert!(num_threads != 0);
+        let settings = ctx.get_settings();
+        let spilling_threshold_per_proc = settings.get_join_spilling_bytes_threshold_per_proc()?;
+        let mut memory_ratio = settings.get_join_spilling_memory_ratio()? as f64 / 100_f64;
+        if memory_ratio > 1_f64 {
+            memory_ratio = 1_f64;
+        }
+        let max_memory_usage = match settings.get_max_memory_usage()? {
+            0 => usize::MAX,
+            max_memory_usage => match memory_ratio {
+                mr if mr == 0_f64 => usize::MAX,
+                mr => (max_memory_usage as f64 * mr) as usize,
+            },
+        };
+
+        let spilling_threshold_per_proc = match spilling_threshold_per_proc {
+            0 => max_memory_usage / num_threads,
+            bytes => bytes,
+        };
+
+        Ok((max_memory_usage, spilling_threshold_per_proc))
     }
 
     /// Add input `DataBlock` to `hash_join_state.row_space`.
@@ -303,8 +339,7 @@ impl HashJoinBuildState {
                     self.hash_join_state.hash_join_desc.join_type,
                     JoinType::LeftMark | JoinType::RightMark
                 )
-                && self.ctx.get_cluster().is_empty()
-                && self.ctx.get_settings().get_join_spilling_threshold()? == 0
+                && self.ctx.get_settings().get_join_spilling_memory_ratio()? == 0
             {
                 self.hash_join_state
                     .fast_return
@@ -741,6 +776,9 @@ impl HashJoinBuildState {
             .hash_table_builders
             .fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {
+            self.hash_join_state
+                .set_spilled_partition(&self.spilled_partition_set.read());
+
             let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
             let build_num_rows = build_state.generation_state.build_num_rows;
             info!("finish build hash table with {} rows", build_num_rows);
@@ -898,9 +936,7 @@ impl HashJoinBuildState {
         build_key: &Expr,
         probe_key: &Expr<String>,
     ) -> Result<()> {
-        if !build_key.data_type().remove_nullable().is_numeric()
-            && !build_key.data_type().remove_nullable().is_string()
-        {
+        if !build_key.runtime_filter_supported_types() {
             return Ok(());
         }
         if let Expr::ColumnRef { .. } = probe_key {
@@ -982,6 +1018,11 @@ impl HashJoinBuildState {
                     let max = Scalar::String(domain.max.unwrap());
                     min_max_filter(min, max, probe_key)?
                 }
+                Domain::Date(date_domain) => {
+                    let min = Scalar::Date(date_domain.min);
+                    let max = Scalar::Date(date_domain.max);
+                    min_max_filter(min, max, probe_key)?
+                }
                 _ => unreachable!(),
             };
             if let Some(min_max_filter) = min_max_filter {
@@ -989,6 +1030,10 @@ impl HashJoinBuildState {
             }
         }
         Ok(())
+    }
+
+    pub(crate) fn join_type(&self) -> JoinType {
+        self.hash_join_state.hash_join_desc.join_type.clone()
     }
 }
 

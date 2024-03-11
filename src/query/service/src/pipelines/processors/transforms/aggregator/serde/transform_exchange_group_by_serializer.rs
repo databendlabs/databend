@@ -24,6 +24,8 @@ use databend_common_arrow::arrow::io::ipc::write::Compression;
 use databend_common_arrow::arrow::io::ipc::IpcField;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::serialize_column;
@@ -44,8 +46,6 @@ use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::Profile;
-use databend_common_pipeline_core::processors::ProfileStatisticsName;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_pipeline_transforms::processors::UnknownMode;
@@ -54,6 +54,7 @@ use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
 
+use super::SerializePayload;
 use crate::api::serialize_block;
 use crate::api::ExchangeShuffleMeta;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
@@ -187,6 +188,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                 Some(AggregateMeta::BucketSpilled(_)) => unreachable!(),
                 Some(AggregateMeta::Serialized(_)) => unreachable!(),
                 Some(AggregateMeta::Partitioned { .. }) => unreachable!(),
+                Some(AggregateMeta::AggregateHashTable(_)) => unreachable!(),
                 Some(AggregateMeta::Spilling(payload)) => {
                     serialized_blocks.push(FlightSerialized::Future(
                         match index == self.local_pos {
@@ -207,7 +209,6 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         },
                     ));
                 }
-                Some(AggregateMeta::AggregateHashTable(_)) => todo!("AGG_HASHTABLE"),
                 Some(AggregateMeta::HashTable(payload)) => {
                     if index == self.local_pos {
                         serialized_blocks.push(FlightSerialized::DataBlock(block.add_meta(
@@ -216,8 +217,31 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         continue;
                     }
 
-                    let mut stream = SerializeGroupByStream::create(&self.method, payload);
-                    let bucket = stream.payload.bucket;
+                    let bucket = payload.bucket;
+                    let mut stream = SerializeGroupByStream::create(
+                        &self.method,
+                        SerializePayload::<Method, ()>::HashTablePayload(payload),
+                    );
+                    serialized_blocks.push(FlightSerialized::DataBlock(match stream.next() {
+                        None => DataBlock::empty(),
+                        Some(data_block) => {
+                            serialize_block(bucket, data_block?, &self.ipc_fields, &self.options)?
+                        }
+                    }));
+                }
+                Some(AggregateMeta::AggregatePayload(p)) => {
+                    if index == self.local_pos {
+                        serialized_blocks.push(FlightSerialized::DataBlock(block.add_meta(
+                            Some(Box::new(AggregateMeta::<Method, ()>::AggregatePayload(p))),
+                        )?));
+                        continue;
+                    }
+
+                    let bucket = p.bucket;
+                    let mut stream = SerializeGroupByStream::create(
+                        &self.method,
+                        SerializePayload::<Method, ()>::AggregatePayload(p),
+                    );
                     serialized_blocks.push(FlightSerialized::DataBlock(match stream.next() {
                         None => DataBlock::empty(),
                         Some(data_block) => {

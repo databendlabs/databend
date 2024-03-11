@@ -118,11 +118,7 @@ impl AuthMgr {
                             }
                         }
                         user_api
-                            .add_user(
-                                &tenant,
-                                user_info.clone(),
-                                &CreateOption::CreateIfNotExists(true),
-                            )
+                            .add_user(&tenant, user_info.clone(), &CreateOption::CreateIfNotExists)
                             .await?;
                         user_info
                     }
@@ -163,7 +159,7 @@ impl AuthMgr {
                     _ => Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                 };
                 UserApiProvider::instance()
-                    .update_user_login_result(&tenant, identity, authed.is_ok())
+                    .update_user_login_result(tenant, identity, authed.is_ok())
                     .await?;
 
                 authed?;

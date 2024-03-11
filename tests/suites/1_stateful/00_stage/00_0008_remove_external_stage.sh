@@ -38,3 +38,11 @@ echo "remove @named_external_stage PATTERN = '.*zst'" | $BENDSQL_CLIENT_CONNECT
 echo "list @named_external_stage" | $BENDSQL_CLIENT_CONNECT | awk '{print $1}' | sort
 
 echo "drop stage named_external_stage" | $BENDSQL_CLIENT_CONNECT
+
+echo "=== Test create or replace external stage ==="
+echo "CREATE STAGE replace_stage url = 's3://testbucket/admin/tempdata/' credentials=(access_key_id ='minioadmin' secret_access_key ='minioadmin'  endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $BENDSQL_CLIENT_CONNECT
+echo "=== List files in external stage ==="
+echo "list @replace_stage" | $BENDSQL_CLIENT_CONNECT | awk '{print $1}' | sort
+echo "CREATE OR REPLACE STAGE replace_stage url = 's3://testbucket/admin/tempdata/' credentials=(access_key_id ='minioadmin' secret_access_key ='minioadmin'  endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $BENDSQL_CLIENT_CONNECT
+echo "=== After create or replace List files in external stage again ==="
+echo "list @replace_stage" | $BENDSQL_CLIENT_CONNECT | awk '{print $1}' | sort

@@ -35,7 +35,7 @@ use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::mutation::SegmentIndex;
-use crate::operations::replace_into::mutator::MergeIntoOperationAggregator;
+use crate::operations::replace_into::MergeIntoOperationAggregator;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -114,9 +114,7 @@ impl FuseTable {
                 bloom_filter_column_indexes.clone(),
                 chunk_of_segment_locations,
                 block_slots.clone(),
-                self.operator.clone(),
-                self.table_info.schema(),
-                self.get_write_settings(),
+                self,
                 read_settings,
                 block_builder.clone(),
                 io_request_semaphore.clone(),

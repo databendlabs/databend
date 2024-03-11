@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
-use databend_common_management::errors::TenantError;
 use databend_common_management::udf::UdfMgr;
 use databend_common_management::ConnectionApi;
 use databend_common_management::ConnectionMgr;
@@ -46,7 +45,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::NonEmptyStr;
+use databend_common_meta_types::NonEmptyString;
 
 use crate::idm_config::IDMConfig;
 use crate::BUILTIN_ROLE_PUBLIC;
@@ -62,7 +61,7 @@ impl UserApiProvider {
     pub async fn init(
         conf: RpcClientConf,
         idm_config: IDMConfig,
-        tenant: &str,
+        tenant: &NonEmptyString,
         quota: Option<TenantQuota>,
     ) -> Result<()> {
         GlobalInstance::set(Self::try_create(conf, idm_config, tenant).await?);
@@ -79,7 +78,7 @@ impl UserApiProvider {
     pub async fn try_create(
         conf: RpcClientConf,
         idm_config: IDMConfig,
-        tenant: &str,
+        tenant: &NonEmptyString,
     ) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).create_meta_store().await?;
         let user_mgr = UserApiProvider {
@@ -109,7 +108,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn try_create_simple(
         conf: RpcClientConf,
-        tenant: &str,
+        tenant: &NonEmptyString,
     ) -> Result<Arc<UserApiProvider>> {
         Self::try_create(conf, IDMConfig::default(), tenant).await
     }
@@ -118,16 +117,22 @@ impl UserApiProvider {
         GlobalInstance::get()
     }
 
-    pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<impl UserApi>> {
-        Ok(Arc::new(UserMgr::create(self.client.clone(), tenant)?))
+    pub fn udf_api(&self, tenant: &NonEmptyString) -> UdfMgr {
+        UdfMgr::create(self.client.clone(), tenant.as_non_empty_str())
     }
 
-    pub fn get_role_api_client(&self, tenant: &str) -> Result<Arc<impl RoleApi>> {
-        Ok(Arc::new(RoleMgr::create(self.client.clone(), tenant)?))
+    pub fn user_api(&self, tenant: &NonEmptyString) -> Arc<impl UserApi> {
+        let user_mgr = UserMgr::create(self.client.clone(), tenant.as_non_empty_str());
+        Arc::new(user_mgr)
     }
 
-    pub fn get_stage_api_client(&self, tenant: &str) -> Result<Arc<dyn StageApi>> {
-        Ok(Arc::new(StageMgr::create(self.client.clone(), tenant)?))
+    pub fn role_api(&self, tenant: &NonEmptyString) -> Arc<impl RoleApi> {
+        let role_mgr = RoleMgr::create(self.client.clone(), tenant.as_non_empty_str());
+        Arc::new(role_mgr)
+    }
+
+    pub fn stage_api(&self, tenant: &NonEmptyString) -> Arc<dyn StageApi> {
+        Arc::new(StageMgr::create(self.client.clone(), tenant))
     }
 
     pub fn get_file_format_api_client(&self, tenant: &str) -> Result<Arc<dyn FileFormatApi>> {
@@ -144,12 +149,18 @@ impl UserApiProvider {
         )?))
     }
 
-    pub fn get_tenant_quota_api_client(&self, tenant: &str) -> Result<Arc<dyn QuotaApi>> {
-        Ok(Arc::new(QuotaMgr::create(self.client.clone(), tenant)?))
+    pub fn get_tenant_quota_api_client(
+        &self,
+        tenant: &NonEmptyString,
+    ) -> Result<Arc<dyn QuotaApi>> {
+        Ok(Arc::new(QuotaMgr::create(
+            self.client.clone(),
+            tenant.as_str(),
+        )?))
     }
 
-    pub fn get_setting_api_client(&self, tenant: &str) -> Result<Arc<dyn SettingApi>> {
-        Ok(Arc::new(SettingMgr::create(self.client.clone(), tenant)?))
+    pub fn setting_api(&self, tenant: &NonEmptyString) -> Arc<dyn SettingApi> {
+        Arc::new(SettingMgr::create(self.client.clone(), tenant))
     }
 
     pub fn get_network_policy_api_client(
@@ -182,31 +193,5 @@ impl UserApiProvider {
 
     pub fn get_configured_users(&self) -> HashMap<String, AuthInfo> {
         self.idm_config.users.clone()
-    }
-
-    /// Create an API container for a specific tenant that is guaranteed to have a non-empty tenant
-    pub fn for_tenant<'a>(
-        &'a self,
-        tenant: &'a str,
-    ) -> std::result::Result<ForTenant<'a>, TenantError> {
-        let tenant = NonEmptyStr::new(tenant).map_err(|_e| TenantError::CanNotBeEmpty {
-            context: "".to_string(),
-        })?;
-        Ok(ForTenant {
-            tenant,
-            user_api: self,
-        })
-    }
-}
-
-/// A wrapped UserApiProvider that guarantees the tenant is not empty
-pub struct ForTenant<'a> {
-    tenant: NonEmptyStr<'a>,
-    user_api: &'a UserApiProvider,
-}
-
-impl<'a> ForTenant<'a> {
-    pub fn udf_api(&self) -> UdfMgr {
-        UdfMgr::create(self.user_api.client.clone(), self.tenant)
     }
 }

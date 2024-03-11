@@ -70,7 +70,7 @@ impl Display for BackgroundJobType {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct ManualTriggerParams {
     pub id: String,
     pub trigger: UserIdentity,
@@ -379,6 +379,7 @@ impl Display for ListBackgroundJobsReq {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::background::background_job::BackgroundJobId;
     use crate::background::background_job::BackgroundJobIdent;
@@ -439,7 +440,15 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for BackgroundJobId {}
+    impl kvapi::Value for BackgroundJobId {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
 
-    impl kvapi::Value for BackgroundJobInfo {}
+    impl kvapi::Value for BackgroundJobInfo {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
 }

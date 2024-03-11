@@ -25,6 +25,7 @@ databend-common-expression = { path = "../query/expression" }
 databend-common-license = { path = "../common/license" }
 databend-common-meta-app = { path = "../meta/app" }
 databend-common-meta-embedded = { path = "../meta/embedded" }
+databend-common-meta-types = { path = "../meta/types" }
 databend-common-users = { path = "../query/users" }
 databend-query = { path = "../query/service", features = [
     "simd",
@@ -33,7 +34,7 @@ databend-query = { path = "../query/service", features = [
 
 # # Crates.io dependencies
 ctor = "0.2.5"
-pyo3 = { version = "0.19.1", features = ["extension-module", "abi3", "abi3-py37"] }
+pyo3 = { version = "0.20", features = ["extension-module", "abi3", "abi3-py37"] }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { workspace = true }
 uuid = { workspace = true }

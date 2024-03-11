@@ -25,6 +25,7 @@ use dashmap::DashMap;
 use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::Join;
@@ -72,7 +73,6 @@ use databend_common_meta_types::MetaId;
 use databend_common_storage::DataOperator;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_parquet::Parquet2Table;
 use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_storages_result_cache::ResultCacheMetaManager;
 use databend_common_storages_result_cache::ResultCacheReader;
@@ -80,9 +80,9 @@ use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::get_change_type;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
-use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use log::info;
 use parking_lot::RwLock;
@@ -175,6 +175,7 @@ impl Binder {
         table: &Identifier,
         alias: &Option<TableAlias>,
         travel_point: &Option<TimeTravelPoint>,
+        since_point: &Option<TimeTravelPoint>,
     ) -> Result<(SExpr, BindContext)> {
         let (catalog, database, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);
@@ -212,6 +213,11 @@ impl Binder {
             None => None,
         };
 
+        let since_point = match since_point {
+            Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp).await?),
+            None => None,
+        };
+
         // Resolve table with catalog
         let table_meta = match self
             .resolve_data_source(
@@ -220,6 +226,7 @@ impl Binder {
                 database.as_str(),
                 table_name.as_str(),
                 &navigation_point,
+                &since_point,
             )
             .await
         {
@@ -300,24 +307,7 @@ impl Binder {
                 }
             }
             "STREAM" => {
-                let mut change_type = None;
-                if let Some(table_alias) = table_alias_name.as_deref() {
-                    let alias_param = table_alias.split('$').collect::<Vec<_>>();
-                    if alias_param.len() == 2 && alias_param[1].len() == 8 {
-                        if let Ok(suffix) = i64::from_str_radix(alias_param[1], 16) {
-                            // 2023-01-01 00:00:00.
-                            let base_timestamp = 1672502400;
-                            if suffix > base_timestamp {
-                                change_type = match alias_param[0] {
-                                    "_change_append" => Some(ChangeType::Append),
-                                    "_change_insert" => Some(ChangeType::Insert),
-                                    "_change_delete" => Some(ChangeType::Delete),
-                                    _ => None,
-                                };
-                            }
-                        }
-                    }
-                }
+                let change_type = get_change_type(&table_alias_name);
                 if change_type.is_some() {
                     let table_index = self.metadata.write().add_table(
                         catalog,
@@ -338,11 +328,7 @@ impl Binder {
                     return Ok((s_expr, bind_context));
                 }
 
-                let mode = table_meta
-                    .options()
-                    .get(OPT_KEY_MODE)
-                    .and_then(|s| s.parse::<StreamMode>().ok())
-                    .unwrap_or(StreamMode::AppendOnly);
+                let mode = table_meta.get_stream_mode(self.ctx.clone()).await?;
                 let table_version = table_meta
                     .options()
                     .get(OPT_KEY_TABLE_VER)
@@ -593,12 +579,14 @@ impl Binder {
                     // convert lateral join table function to srf function
                     let srf = Expr::FunctionCall {
                         span: *span,
-                        distinct: false,
-                        name: func_name.clone(),
-                        args,
-                        params: vec![],
-                        window: None,
-                        lambda: None,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: func_name.clone(),
+                            args,
+                            params: vec![],
+                            window: None,
+                            lambda: None,
+                        },
                     };
                     let srfs = vec![srf.clone()];
                     let srf_expr = self
@@ -677,7 +665,7 @@ impl Binder {
         span: &Span,
         name: &Identifier,
         params: &[Expr],
-        named_params: &[(String, Expr)],
+        named_params: &[(Identifier, Expr)],
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
         let func_name = normalize_identifier(name, &self.name_resolution_ctx);
@@ -697,16 +685,18 @@ impl Binder {
                 select_list: vec![SelectTarget::AliasedExpr {
                     expr: Box::new(databend_common_ast::ast::Expr::FunctionCall {
                         span: *span,
-                        distinct: false,
-                        name: databend_common_ast::ast::Identifier {
-                            span: *span,
-                            name: func_name.name.clone(),
-                            quote: None,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: databend_common_ast::ast::Identifier {
+                                span: *span,
+                                name: func_name.name.clone(),
+                                quote: None,
+                            },
+                            params: vec![],
+                            args,
+                            window: None,
+                            lambda: None,
                         },
-                        params: vec![],
-                        args,
-                        window: None,
-                        lambda: None,
                     }),
                     alias: None,
                 }],
@@ -803,7 +793,7 @@ impl Binder {
             // Other table functions always reside is default catalog
             let table_meta: Arc<dyn TableFunction> = self
                 .catalogs
-                .get_default_catalog()?
+                .get_default_catalog(self.ctx.txn_mgr())?
                 .get_table_function(&func_name.name, table_args)?;
             let table = table_meta.as_table();
             let table_alias_name = if let Some(table_alias) = alias {
@@ -916,6 +906,7 @@ impl Binder {
                 table,
                 alias,
                 travel_point,
+                since_point,
                 pivot: _,
                 unpivot: _,
             } => {
@@ -927,6 +918,7 @@ impl Binder {
                     table,
                     alias,
                     travel_point,
+                    since_point,
                 )
                 .await
             }
@@ -991,7 +983,6 @@ impl Binder {
 
         let table = match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
-                let use_parquet2 = table_ctx.get_settings().get_use_parquet2()?;
                 let mut read_options = ParquetReadOptions::default();
 
                 if !table_ctx.get_settings().get_enable_parquet_page_index()? {
@@ -1009,25 +1000,14 @@ impl Binder {
                     read_options = read_options.with_do_prewhere(false);
                 }
 
-                if use_parquet2 {
-                    Parquet2Table::create(
-                        table_ctx.clone(),
-                        stage_info.clone(),
-                        files_info,
-                        read_options,
-                        files_to_copy,
-                    )
-                    .await?
-                } else {
-                    ParquetRSTable::create(
-                        table_ctx.clone(),
-                        stage_info.clone(),
-                        files_info,
-                        read_options,
-                        files_to_copy,
-                    )
-                    .await?
-                }
+                ParquetRSTable::create(
+                    table_ctx.clone(),
+                    stage_info.clone(),
+                    files_info,
+                    read_options,
+                    files_to_copy,
+                )
+                .await?
             }
             FileFormatParams::NdJson(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(
@@ -1407,7 +1387,9 @@ impl Binder {
             }
         }
 
-        let stat = table.table_statistics(self.ctx.clone()).await?;
+        let stat = table
+            .table_statistics(self.ctx.clone(), change_type.clone())
+            .await?;
 
         Ok((
             SExpr::create_leaf(Arc::new(
@@ -1435,6 +1417,7 @@ impl Binder {
         database_name: &str,
         table_name: &str,
         travel_point: &Option<NavigationPoint>,
+        since_point: &Option<NavigationPoint>,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with ctx
         // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
@@ -1445,8 +1428,10 @@ impl Binder {
             .get_table(catalog_name, database_name, table_name)
             .await?;
 
-        if let Some(tp) = travel_point {
-            table_meta = table_meta.navigate_to(tp).await?;
+        if travel_point.is_some() || since_point.is_some() {
+            table_meta = table_meta
+                .navigate_since_to(since_point, travel_point)
+                .await?;
         }
         Ok(table_meta)
     }
@@ -1505,7 +1490,10 @@ impl Binder {
         catalog_name: &str,
         table_id: MetaId,
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        let catalog = self.catalogs.get_catalog(tenant, catalog_name).await?;
+        let catalog = self
+            .catalogs
+            .get_catalog(tenant, catalog_name, self.ctx.txn_mgr())
+            .await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
             .await?;
@@ -1536,13 +1524,13 @@ fn parse_table_function_args(
     span: &Span,
     func_name: &Identifier,
     params: &[Expr],
-    named_params: &[(String, Expr)],
+    named_params: &[(Identifier, Expr)],
 ) -> Result<Vec<Expr>> {
     if func_name.name.eq_ignore_ascii_case("flatten") {
         // build flatten function arguments.
         let mut named_args: HashMap<String, Expr> = named_params
             .iter()
-            .map(|(name, value)| (name.to_lowercase(), value.clone()))
+            .map(|(name, value)| (name.name.to_lowercase(), value.clone()))
             .collect::<HashMap<_, _>>();
 
         let mut args = Vec::with_capacity(named_args.len() + params.len());
@@ -1576,7 +1564,7 @@ fn parse_table_function_args(
         if !named_params.is_empty() {
             let invalid_names = named_params
                 .iter()
-                .map(|(name, _)| name.clone())
+                .map(|(name, _)| name.name.clone())
                 .collect::<Vec<String>>()
                 .join(", ");
             return Err(ErrorCode::InvalidArgument(format!(

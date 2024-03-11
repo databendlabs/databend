@@ -67,7 +67,7 @@ impl AsyncSystemTable for StreamsTable {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
         let ctls: Vec<(String, Arc<dyn Catalog>)> = catalog_mgr
-            .list_catalogs(&tenant)
+            .list_catalogs(tenant.as_str(), ctx.txn_mgr())
             .await?
             .iter()
             .map(|e| (e.name(), e.clone()))
@@ -194,7 +194,7 @@ impl AsyncSystemTable for StreamsTable {
                         snapshot_location.push(stream_table.snapshot_loc());
 
                         let mut reason = "".to_string();
-                        match stream_table.source_table(ctx.clone()).await {
+                        match stream_table.source_table(ctx.get_default_catalog()?).await {
                             Ok(source) => {
                                 let fuse_table = FuseTable::try_from_table(source.as_ref())?;
                                 if let Some(location) = stream_table.snapshot_loc() {

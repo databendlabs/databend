@@ -13,9 +13,13 @@
 // limitations under the License.
 
 use std::str::Split;
+use std::string::FromUtf8Error;
+
+use databend_common_meta_types::NonEmptyString;
 
 use crate::kvapi::helper::decode_id;
 use crate::kvapi::helper::unescape;
+use crate::kvapi::helper::unescape_specified;
 use crate::kvapi::KeyError;
 
 /// A helper for parsing a string key into structured key.
@@ -51,6 +55,13 @@ impl<'s> KeyParser<'s> {
         Ok(s)
     }
 
+    /// Get the index of the last returned element.
+    ///
+    /// If no element is returned, it will panic.
+    pub fn index(&self) -> usize {
+        self.i - 1
+    }
+
     /// Pop the next element in raw `&str`, without unescaping or decoding.
     ///
     /// If there is no more element, it returns KeyError::WrongNumberOfSegments.
@@ -68,6 +79,14 @@ impl<'s> KeyParser<'s> {
                 got: self.str_key.to_string(),
             })
         }
+    }
+
+    /// Pop the next non-empty element and unescape it.
+    pub fn next_nonempty(&mut self) -> Result<NonEmptyString, KeyError> {
+        let elt = self.next_raw()?;
+        let s = unescape(elt)?;
+        let x = NonEmptyString::new(s).map_err(|_| KeyError::EmptySegment { i: self.i - 1 })?;
+        Ok(x)
     }
 
     /// Pop the next element and unescape it.
@@ -122,11 +141,22 @@ impl<'s> KeyParser<'s> {
         }
         Ok(())
     }
+
+    /// Re-export unescape()
+    pub fn unescape(s: &str) -> Result<String, FromUtf8Error> {
+        unescape(s)
+    }
+
+    /// Re-export unescape()
+    pub fn unescape_specified(s: &str, chars: &[u8]) -> Result<String, FromUtf8Error> {
+        unescape_specified(s, chars)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::kvapi::key_parser::KeyParser;
+    use crate::kvapi::KeyError;
 
     #[test]
     fn test_key_parser_new_prefixed() -> anyhow::Result<()> {
@@ -154,6 +184,24 @@ mod tests {
         assert_eq!(Ok("bar%20-"), kp.next_raw());
         assert_eq!(Ok("123"), kp.next_raw());
         assert!(kp.next_raw().is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_key_parser_next_nonempty() -> anyhow::Result<()> {
+        let s = "_foo/bar%21-//123";
+
+        let mut kp = KeyParser::new(s);
+        assert_eq!(
+            Ok("_foo".to_string()),
+            kp.next_nonempty().map(|x| x.to_string())
+        );
+        assert_eq!(
+            Ok("bar!-".to_string()),
+            kp.next_nonempty().map(|x| x.to_string())
+        );
+        assert_eq!(Err(KeyError::EmptySegment { i: 2 }), kp.next_nonempty());
 
         Ok(())
     }

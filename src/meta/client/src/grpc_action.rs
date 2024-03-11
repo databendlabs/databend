@@ -33,7 +33,6 @@ use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
-use log::as_debug;
 use log::debug;
 use tonic::codegen::BoxStream;
 use tonic::Request;
@@ -81,7 +80,7 @@ impl From<MetaGrpcReq> for RaftRequest {
         };
 
         debug!(
-            req = as_debug!(&raft_request);
+            req :? =(&raft_request);
             "build raft_request"
         );
 
@@ -97,7 +96,7 @@ impl MetaGrpcReq {
         };
 
         debug!(
-            req = as_debug!(&raft_request);
+            req :? =(&raft_request);
             "build raft_request"
         );
 
@@ -144,7 +143,7 @@ impl From<MetaGrpcReadReq> for RaftRequest {
         };
 
         debug!(
-            req = as_debug!(&raft_request);
+            req :? =(&raft_request);
             "build raft_request"
         );
 
@@ -160,7 +159,7 @@ impl MetaGrpcReadReq {
         };
 
         debug!(
-            req = as_debug!(&raft_request);
+            req :? =(&raft_request);
             "build raft_request"
         );
 

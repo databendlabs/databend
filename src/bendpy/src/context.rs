@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
@@ -55,12 +56,14 @@ impl PySessionContext {
                 uuid::Uuid::new_v4().to_string()
             };
 
+            let tenant = NonEmptyString::new(tenant).unwrap();
+
             let config = GlobalConfig::instance();
             UserApiProvider::try_create_simple(config.meta.to_meta_grpc_client_conf(), &tenant)
                 .await
                 .unwrap();
 
-            session.set_current_tenant(tenant.to_owned());
+            session.set_current_tenant(tenant.to_string());
 
             let mut user = UserInfo::new_no_auth("root", "%");
             user.grants.grant_privileges(

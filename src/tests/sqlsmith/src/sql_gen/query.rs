@@ -15,6 +15,7 @@
 use std::mem;
 
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Join;
@@ -475,6 +476,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             alias: None,
             // TODO
             travel_point: None,
+            since_point: None,
             // TODO
             pivot: None,
             // TODO
@@ -532,12 +534,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             };
                             (TableDataType::Timestamp, Expr::FunctionCall {
                                 span: None,
-                                distinct: false,
-                                name: Identifier::from_name("to_timestamp".to_string()),
-                                args: vec![arg],
-                                params: vec![],
-                                window: None,
-                                lambda: None,
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier::from_name("to_timestamp".to_string()),
+                                    args: vec![arg],
+                                    params: vec![],
+                                    window: None,
+                                    lambda: None,
+                                },
                             })
                         }
                         1 => {
@@ -547,12 +551,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             };
                             (TableDataType::Date, Expr::FunctionCall {
                                 span: None,
-                                distinct: false,
-                                name: Identifier::from_name("to_date".to_string()),
-                                args: vec![arg],
-                                params: vec![],
-                                window: None,
-                                lambda: None,
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier::from_name("to_date".to_string()),
+                                    args: vec![arg],
+                                    params: vec![],
+                                    window: None,
+                                    lambda: None,
+                                },
                             })
                         }
                         2 => (

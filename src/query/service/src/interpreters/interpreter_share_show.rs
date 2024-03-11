@@ -44,6 +44,10 @@ impl Interpreter for ShowSharesInterpreter {
         "ShowSharesInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
@@ -58,7 +62,7 @@ impl Interpreter for ShowSharesInterpreter {
 
         // query all share endpoint for other tenant inbound shares
         let share_specs = ShareEndpointManager::instance()
-            .get_inbound_shares(&tenant, None, None)
+            .get_inbound_shares(tenant.as_str(), None, None)
             .await?;
         for (from_tenant, share_spec) in share_specs {
             names.push(share_spec.name.clone());
@@ -66,12 +70,12 @@ impl Interpreter for ShowSharesInterpreter {
             created_owns.push(share_spec.share_on.unwrap_or_default().to_string());
             database_names.push(share_spec.database.unwrap_or_default().name);
             from.push(from_tenant);
-            to.push(tenant.clone());
+            to.push(tenant.to_string());
             comments.push(share_spec.comment.unwrap_or_default());
         }
 
         let req = ShowSharesReq {
-            tenant: tenant.clone(),
+            tenant: tenant.to_string(),
         };
         let resp = meta_api.show_shares(req).await?;
 

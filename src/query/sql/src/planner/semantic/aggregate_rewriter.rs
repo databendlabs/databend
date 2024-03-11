@@ -14,28 +14,30 @@
 
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::walk_expr_mut;
-use databend_common_ast::Dialect;
-use databend_common_ast::VisitorMut;
+use databend_common_ast::parser::Dialect;
+use derive_visitor::VisitorMut;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, VisitorMut)]
+#[visitor(Expr(exit))]
 pub struct AggregateRewriter {
     pub sql_dialect: Dialect,
 }
 
-impl VisitorMut for AggregateRewriter {
-    fn visit_expr(&mut self, expr: &mut Expr) {
-        // rewrite children
-        walk_expr_mut(self, expr);
-
+impl AggregateRewriter {
+    fn exit_expr(&mut self, expr: &mut Expr) {
         let new_expr = match expr {
             Expr::FunctionCall {
-                distinct,
-                name,
-                args,
-                window,
+                func:
+                    FunctionCall {
+                        distinct,
+                        name,
+                        args,
+                        window,
+                        ..
+                    },
                 ..
             } if !*distinct && args.len() == 1 && window.is_none() => {
                 match name.name.to_ascii_lowercase().to_lowercase().as_str() {

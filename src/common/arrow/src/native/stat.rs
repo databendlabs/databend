@@ -164,6 +164,7 @@ fn size_of_primitive(p: PrimitiveType) -> usize {
         PrimitiveType::Float64 => 8,
         PrimitiveType::DaysMs => unimplemented!(),
         PrimitiveType::MonthDayNano => unimplemented!(),
+        PrimitiveType::UInt128 => unimplemented!(),
     }
 }
 

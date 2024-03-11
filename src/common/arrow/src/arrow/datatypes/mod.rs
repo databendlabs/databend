@@ -174,6 +174,10 @@ pub enum DataType {
     Decimal256(usize, usize),
     /// Extension type.
     Extension(String, Box<DataType>, Option<String>),
+    /// A binary type that inlines small values and can intern bytes.
+    BinaryView,
+    /// A string type that inlines small values and can intern strings.
+    Utf8View,
 }
 
 #[cfg(feature = "arrow")]
@@ -232,6 +236,9 @@ impl From<DataType> for arrow_schema::DataType {
             DataType::Decimal(precision, scale) => Self::Decimal128(precision as _, scale as _),
             DataType::Decimal256(precision, scale) => Self::Decimal256(precision as _, scale as _),
             DataType::Extension(_, d, _) => (*d).into(),
+            DataType::BinaryView | DataType::Utf8View => {
+                panic!("view datatypes are not supported by arrow-rs")
+            }
         }
     }
 }
@@ -453,6 +460,8 @@ impl DataType {
             LargeBinary => PhysicalType::LargeBinary,
             Utf8 => PhysicalType::Utf8,
             LargeUtf8 => PhysicalType::LargeUtf8,
+            BinaryView => PhysicalType::BinaryView,
+            Utf8View => PhysicalType::Utf8View,
             List(_) => PhysicalType::List,
             FixedSizeList(_, _) => PhysicalType::FixedSizeList,
             LargeList(_) => PhysicalType::LargeList,
@@ -509,6 +518,7 @@ impl From<PrimitiveType> for DataType {
             PrimitiveType::Float64 => DataType::Float64,
             PrimitiveType::DaysMs => DataType::Interval(IntervalUnit::DayTime),
             PrimitiveType::MonthDayNano => DataType::Interval(IntervalUnit::MonthDayNano),
+            PrimitiveType::UInt128 => unimplemented!(),
         }
     }
 }

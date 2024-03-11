@@ -52,6 +52,10 @@ impl Interpreter for SetOptionsInterpreter {
         "SetOptionsInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // valid_options_check and do request to meta_srv

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use csv_core::ReadRecordResult;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -81,23 +82,39 @@ impl InputFormatCSV {
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
                                     empty_field_as: empty_filed_as.to_string(),
+                                    remedy: format!(
+                                        "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set `EMPTY_FIELD_AS = FIELD_DEFAULT`.",
+                                        field.name()
+                                    ),
                                 });
                             }
                             builder.push_default();
                         }
-                        EmptyFieldAs::String => {
-                            if !matches!(field.data_type.remove_nullable(), TableDataType::String) {
+                        EmptyFieldAs::String => match builder {
+                            ColumnBuilder::String(b) => {
+                                b.put_str("");
+                                b.commit_row();
+                            }
+                            ColumnBuilder::Nullable(box NullableColumnBuilder {
+                                builder: ColumnBuilder::String(b),
+                                validity,
+                            }) => {
+                                b.put_str("");
+                                b.commit_row();
+                                validity.push(true);
+                            }
+                            _ => {
                                 let field = &schema.fields()[column_index];
                                 return Err(FileParseError::ColumnEmptyError {
                                     column_index,
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
                                     empty_field_as: empty_filed_as.to_string(),
+                                    remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL."
+                                        .to_string(),
                                 });
                             }
-
-                            builder.push_default();
-                        }
+                        },
                     }
                 }
             }

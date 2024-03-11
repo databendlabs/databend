@@ -26,12 +26,22 @@ use walkdir::WalkDir;
 use crate::arg::SqlLogicTestArgs;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct ServerInfo {
+    pub id: String,
+    pub start_time: String,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct HttpSessionConf {
     pub database: Option<String>,
-    pub keep_server_session_secs: Option<u64>,
+    pub role: Option<String>,
+    pub secondary_roles: Option<Vec<String>>,
     pub settings: Option<BTreeMap<String, String>>,
+    pub txn_state: Option<String>,
+    pub last_server_info: Option<ServerInfo>,
+    #[serde(default)]
+    pub last_query_ids: Vec<String>,
 }
 
 pub fn parser_rows(rows: &Value) -> Result<Vec<Vec<String>>> {
@@ -119,6 +129,7 @@ pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
 static PREPARE_TPCH: std::sync::Once = std::sync::Once::new();
 static PREPARE_TPCDS: std::sync::Once = std::sync::Once::new();
 static PREPARE_STAGE: std::sync::Once = std::sync::Once::new();
+static PREPARE_SPILL: std::sync::Once = std::sync::Once::new();
 
 pub fn lazy_prepare_data(file_path: &Path) -> Result<()> {
     let file_path = file_path.to_str().unwrap_or_default();
@@ -134,6 +145,8 @@ pub fn lazy_prepare_data(file_path: &Path) -> Result<()> {
         PREPARE_STAGE.call_once(|| {
             run_script("prepare_stage.sh").unwrap();
         });
+    } else if file_path.contains("spill/") {
+        PREPARE_SPILL.call_once(|| run_script("prepare_spill_data.sh").unwrap())
     }
     Ok(())
 }

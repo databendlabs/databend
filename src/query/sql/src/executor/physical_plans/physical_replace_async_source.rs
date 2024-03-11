@@ -14,10 +14,11 @@
 
 use databend_common_expression::DataSchemaRef;
 
+use crate::plans::insert::InsertValue;
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceAsyncSourcer {
     pub plan_id: u32,
-    pub value_data: String,
-    pub start: usize,
     pub schema: DataSchemaRef,
+    pub source: InsertValue,
 }

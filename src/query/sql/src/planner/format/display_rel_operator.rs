@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_exception::Result;
 use itertools::Itertools;
 
 use crate::optimizer::SExpr;
@@ -38,8 +39,11 @@ impl SExpr {
     pub fn to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(
         &self,
         id_humanizer: &I,
-    ) -> FormatTreeNode {
-        TreeHumanizer::humanize_s_expr(id_humanizer, &DefaultOperatorHumanizer, self)
+        verbose: bool,
+    ) -> Result<FormatTreeNode> {
+        let operator_humanizer = DefaultOperatorHumanizer;
+        let tree_humanizer = TreeHumanizer::new(id_humanizer, &operator_humanizer, verbose);
+        tree_humanizer.humanize_s_expr(self)
     }
 }
 
@@ -92,7 +96,7 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
             )
         }
         ScalarExpr::SubqueryExpr(_) => "SUBQUERY".to_string(),
-        ScalarExpr::UDFServerCall(udf) => {
+        ScalarExpr::UDFCall(udf) => {
             format!(
                 "{}({})",
                 &udf.func_name,

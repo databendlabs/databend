@@ -45,6 +45,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
@@ -149,8 +150,17 @@ impl Table for TenantQuotaTable {
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
+        let tenants = self
+            .args
+            .iter()
+            .map(|s| NonEmptyString::new(s.clone()))
+            .collect::<std::result::Result<Vec<_>, &'static str>>()
+            .map_err(|_e| {
+                ErrorCode::TenantIsEmpty("tenant is empty when impl Table for TenantQutaTable")
+            })?;
+
         pipeline.add_source(
-            |output| TenantQuotaSource::create(ctx.clone(), output, self.args.clone()),
+            move |output| TenantQuotaSource::create(ctx.clone(), output, tenants.clone()),
             1,
         )?;
 
@@ -160,7 +170,7 @@ impl Table for TenantQuotaTable {
 
 struct TenantQuotaSource {
     ctx: Arc<dyn TableContext>,
-    args: Vec<String>,
+    args: Vec<NonEmptyString>,
     done: bool,
 }
 
@@ -168,7 +178,7 @@ impl TenantQuotaSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        args: Vec<String>,
+        args: Vec<NonEmptyString>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, TenantQuotaSource {
             ctx,
@@ -243,15 +253,15 @@ impl AsyncSource for TenantQuotaSource {
             return Ok(Some(self.to_block(&quota)?));
         };
 
-        quota.max_databases = args[1].parse::<u32>()?;
+        quota.max_databases = args[1].as_str().parse::<u32>()?;
         if let Some(max_tables) = args.get(2) {
-            quota.max_tables_per_database = max_tables.parse::<u32>()?;
+            quota.max_tables_per_database = max_tables.as_str().parse::<u32>()?;
         };
         if let Some(max_stages) = args.get(3) {
-            quota.max_stages = max_stages.parse::<u32>()?;
+            quota.max_stages = max_stages.as_str().parse::<u32>()?;
         };
         if let Some(max_files_per_stage) = args.get(4) {
-            quota.max_files_per_stage = max_files_per_stage.parse::<u32>()?
+            quota.max_files_per_stage = max_files_per_stage.as_str().parse::<u32>()?
         };
 
         quota_api

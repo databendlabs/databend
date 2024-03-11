@@ -14,6 +14,8 @@
 
 pub mod client_config;
 pub mod cloud_api;
+pub mod notification_client;
+pub mod notification_utils;
 pub mod task_client;
 pub mod task_utils;
 
@@ -24,6 +26,11 @@ pub mod task_utils;
 pub mod pb {
     // taskproto is proto package name.
     tonic::include_proto!("taskproto");
+    tonic::include_proto!("notificationproto");
+}
+
+pub mod utils {
+    tonic::include_proto!("utils");
 }
 
 pub use prost;

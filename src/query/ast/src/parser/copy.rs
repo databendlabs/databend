@@ -23,7 +23,11 @@ use crate::ast::CopyIntoTableSource;
 use crate::ast::CopyIntoTableStmt;
 use crate::ast::Statement;
 use crate::ast::Statement::CopyIntoLocation;
-use crate::ast::TableIdentifier;
+use crate::parser::common::comma_separated_list0;
+use crate::parser::common::comma_separated_list1;
+use crate::parser::common::ident;
+use crate::parser::common::table_ref;
+use crate::parser::common::IResult;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
 use crate::parser::expr::literal_u64;
@@ -33,17 +37,8 @@ use crate::parser::stage::file_location;
 use crate::parser::statement::hint;
 use crate::parser::token::TokenKind::COPY;
 use crate::parser::token::TokenKind::*;
+use crate::parser::Input;
 use crate::rule;
-use crate::util::comma_separated_list0;
-use crate::util::comma_separated_list1;
-use crate::util::dot_separated_idents_1_to_3;
-use crate::util::ident;
-use crate::util::IResult;
-use crate::Input;
-
-fn table_triple(i: Input) -> IResult<TableIdentifier> {
-    map(dot_separated_idents_1_to_3, TableIdentifier::from_tuple)(i)
-}
 
 pub fn copy_into_table(i: Input) -> IResult<Statement> {
     let copy_into_table_source = alt((
@@ -57,7 +52,7 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
         rule! {
             COPY
             ~ #hint?
-            ~ INTO ~ #table_triple ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ INTO ~ #table_ref ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ ^FROM ~ ^#copy_into_table_source
             ~ #copy_into_table_option*
         },
@@ -90,7 +85,7 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
 
 fn copy_into_location(i: Input) -> IResult<Statement> {
     let copy_into_location_source = alt((
-        map(table_triple, CopyIntoLocationSource::Table),
+        map(table_ref, CopyIntoLocationSource::Table),
         map(rule! { "(" ~ #query ~ ")" }, |(_, query, _)| {
             CopyIntoLocationSource::Query(Box::new(query))
         }),

@@ -26,6 +26,7 @@ use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::PresignAction;
@@ -90,7 +91,7 @@ impl PrivilegeAccess {
                     .ctx
                     .get_catalog(catalog_name)
                     .await?
-                    .get_database(&tenant, db_name)
+                    .get_database(tenant.as_str(), db_name)
                     .await?
                     .get_db_info()
                     .ident
@@ -106,12 +107,14 @@ impl PrivilegeAccess {
                 }
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
                 let db_id = catalog
-                    .get_database(&tenant, db_name)
+                    .get_database(tenant.as_str(), db_name)
                     .await?
                     .get_db_info()
                     .ident
                     .db_id;
-                let table = catalog.get_table(&tenant, db_name, table_name).await?;
+                let table = catalog
+                    .get_table(tenant.as_str(), db_name, table_name)
+                    .await?;
                 let table_id = table.get_id();
                 OwnershipObject::Table {
                     catalog_name: catalog_name.clone(),
@@ -161,7 +164,7 @@ impl PrivilegeAccess {
             }
             Err(_err) => {
                 match self
-                    .convert_to_id(&tenant, catalog_name, db_name, None)
+                    .convert_to_id(tenant.as_str(), catalog_name, db_name, None)
                     .await
                 {
                     Ok(obj) => {
@@ -233,7 +236,7 @@ impl PrivilegeAccess {
             Ok(_) => return Ok(()),
             Err(_err) => {
                 match self
-                    .convert_to_id(&tenant, catalog_name, db_name, Some(table_name))
+                    .convert_to_id(tenant.as_str(), catalog_name, db_name, Some(table_name))
                     .await
                 {
                     Ok(obj) => {
@@ -501,7 +504,7 @@ impl AccessChecker for PrivilegeAccess {
                         if self.has_ownership(&session, &GrantObject::Database(catalog.clone(), database.clone())).await? {
                             return Ok(());
                         }
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, catalog, database, None).await? {
+                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), catalog, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -520,7 +523,7 @@ impl AccessChecker for PrivilegeAccess {
                         if self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone())).await? {
                             return Ok(());
                         }
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog_name, database, None).await? {
+                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), &catalog_name, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -539,7 +542,7 @@ impl AccessChecker for PrivilegeAccess {
                         if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone())).await? {
                             return Ok(());
                         }
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, catalog_name, database, Some(table)).await? {
+                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), catalog_name, database, Some(table)).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -576,9 +579,6 @@ impl AccessChecker for PrivilegeAccess {
                             DataSourceInfo::StageSource(stage_info) => {
                                 self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
                             }
-                            DataSourceInfo::Parquet2Source(stage_info) => {
-                                self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
-                            }
                             DataSourceInfo::ParquetSource(stage_info) => {
                                 self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
                             }
@@ -613,7 +613,8 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::UndropDatabase(_)
             | Plan::DropUDF(_)
-            | Plan::DropIndex(_) => {
+            | Plan::DropIndex(_)
+            | Plan::DropTableIndex(_) => {
                 // undroptable/db need convert name to id. But because of drop, can not find the id. Upgrade Object to Database.
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Drop])
                     .await?;
@@ -625,7 +626,7 @@ impl AccessChecker for PrivilegeAccess {
                 }
                 // Use db is special. Should not check the privilege.
                 // Just need to check user grant objects contain the db that be used.
-                let (db_id, _) = match self.convert_to_id(&tenant, &catalog_name, &plan.database, None).await? {
+                let (db_id, _) = match self.convert_to_id(tenant.as_str(), &catalog_name, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
@@ -742,7 +743,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     InsertInputSource::StreamingWithFormat(..)
                     | InsertInputSource::StreamingWithFileFormat {..}
-                    | InsertInputSource::Values {..} => {}
+                    | InsertInputSource::Values(_) => {}
                 }
             }
             Plan::Replace(plan) => {
@@ -757,7 +758,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     InsertInputSource::StreamingWithFormat(..)
                     | InsertInputSource::StreamingWithFileFormat {..}
-                    | InsertInputSource::Values {..} => {}
+                    | InsertInputSource::Values(_) => {}
                 }
             }
             Plan::MergeInto(plan) => {
@@ -959,6 +960,11 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropConnection(_)
             | Plan::CreateUDF(_)
             | Plan::CreateIndex(_)
+            | Plan::CreateTableIndex(_)
+            | Plan::CreateNotification(_)
+            | Plan::DropNotification(_)
+            | Plan::DescNotification(_)
+            | Plan::AlterNotification(_)
             | Plan::CreateTask(_)   // TODO: need to build ownership info for task
             | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task
@@ -992,6 +998,9 @@ impl AccessChecker for PrivilegeAccess {
             // just used in clickhouse-sqlalchemy, no need to check
             Plan::ExistsTable(_) => {}
             Plan::DescDatamaskPolicy(_) => {}
+            Plan::Begin => {}
+            Plan::Commit => {}
+            Plan::Abort => {}
         }
 
         Ok(())
@@ -1000,7 +1009,7 @@ impl AccessChecker for PrivilegeAccess {
 
 // TODO(liyz): replace it with verify_access
 async fn has_priv(
-    tenant: &str,
+    tenant: &NonEmptyString,
     db_name: &str,
     table_name: Option<&str>,
     db_id: u64,

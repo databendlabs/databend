@@ -45,11 +45,15 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
         "ShowObjectGrantPrivilegesInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let req = GetObjectGrantPrivilegesReq {
-            tenant: self.ctx.get_tenant(),
+            tenant: self.ctx.get_tenant().to_string(),
             object: self.plan.object.clone(),
         };
         let resp = meta_api.get_grant_privileges_of_object(req).await?;

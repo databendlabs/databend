@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::arrow::bitmap::Bitmap;
+use crate::arrow::bitmap::TrueIdxIter;
 use crate::arrow::trusted_len::TrustedLen;
 
 mod private {
@@ -96,3 +98,35 @@ impl<'a, A: ArrayAccessor<'a>> DoubleEndedIterator for ArrayValuesIter<'a, A> {
 
 unsafe impl<'a, A: ArrayAccessor<'a>> TrustedLen for ArrayValuesIter<'a, A> {}
 impl<'a, A: ArrayAccessor<'a>> ExactSizeIterator for ArrayValuesIter<'a, A> {}
+
+pub struct NonNullValuesIter<'a, A: ?Sized> {
+    accessor: &'a A,
+    idxs: TrueIdxIter<'a>,
+}
+
+impl<'a, A: ArrayAccessor<'a> + ?Sized> NonNullValuesIter<'a, A> {
+    pub fn new(accessor: &'a A, validity: Option<&'a Bitmap>) -> Self {
+        Self {
+            idxs: TrueIdxIter::new(accessor.len(), validity),
+            accessor,
+        }
+    }
+}
+
+impl<'a, A: ArrayAccessor<'a> + ?Sized> Iterator for NonNullValuesIter<'a, A> {
+    type Item = A::Item;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(i) = self.idxs.next() {
+            return Some(unsafe { self.accessor.value_unchecked(i) });
+        }
+        None
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.idxs.size_hint()
+    }
+}
+
+unsafe impl<'a, A: ArrayAccessor<'a> + ?Sized> TrustedLen for NonNullValuesIter<'a, A> {}

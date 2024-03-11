@@ -17,6 +17,8 @@ use std::fmt::Formatter;
 use std::fmt::Result;
 use std::mem::MaybeUninit;
 
+use crate::runtime::drop_guard;
+
 /// A fixed-size heap structure inspired by https://github.com/rodolphito/fixed_heap
 pub struct FixedHeap<T> {
     high: usize,
@@ -401,9 +403,11 @@ unsafe impl<T: Send> Send for FixedHeap<T> {}
 impl<T> Drop for FixedHeap<T> {
     #[inline(always)]
     fn drop(&mut self) {
-        for i in 0..self.high {
-            unsafe { self.data.get_unchecked_mut(i).assume_init_drop() };
-        }
+        drop_guard(move || {
+            for i in 0..self.high {
+                unsafe { self.data.get_unchecked_mut(i).assume_init_drop() };
+            }
+        })
     }
 }
 

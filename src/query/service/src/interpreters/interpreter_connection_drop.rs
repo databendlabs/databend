@@ -42,6 +42,10 @@ impl Interpreter for DropConnectionInterpreter {
         "DropConnectionInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -52,7 +56,7 @@ impl Interpreter for DropConnectionInterpreter {
         let user_mgr = UserApiProvider::instance();
 
         user_mgr
-            .drop_connection(&tenant, &plan.name, plan.if_exists)
+            .drop_connection(tenant.as_str(), &plan.name, plan.if_exists)
             .await?;
 
         Ok(PipelineBuildResult::create())

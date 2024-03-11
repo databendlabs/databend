@@ -44,6 +44,10 @@ impl Interpreter for ShowConnectionsInterpreter {
         "ShowConnectionsInterpreter"
     }
 
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -51,7 +55,7 @@ impl Interpreter for ShowConnectionsInterpreter {
 
         let user_mgr = UserApiProvider::instance();
         let tenant = self.ctx.get_tenant();
-        let mut formats = user_mgr.get_connections(&tenant).await?;
+        let mut formats = user_mgr.get_connections(tenant.as_str()).await?;
 
         formats.sort_by(|a, b| a.name.cmp(&b.name));
 

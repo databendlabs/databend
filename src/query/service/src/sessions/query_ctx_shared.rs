@@ -22,6 +22,7 @@ use std::time::SystemTime;
 
 use dashmap::DashMap;
 use databend_common_base::base::Progress;
+use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
@@ -36,7 +37,8 @@ use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_pipeline_core::processors::profile::PlanProfile;
+use databend_common_meta_types::NonEmptyString;
+use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
@@ -128,9 +130,9 @@ impl QueryContextShared {
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
+            catalog_manager: CatalogManager::instance(),
             session,
             cluster_cache,
-            catalog_manager: CatalogManager::instance(),
             data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             total_scan_values: Arc::new(Progress::create()),
@@ -278,7 +280,7 @@ impl QueryContextShared {
         StorageMetrics::merge(&metrics)
     }
 
-    pub fn get_tenant(&self) -> String {
+    pub fn get_tenant(&self) -> NonEmptyString {
         self.session.get_current_tenant()
     }
 
@@ -327,7 +329,10 @@ impl QueryContextShared {
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
-        let catalog = self.catalog_manager.get_catalog(&tenant, catalog).await?;
+        let catalog = self
+            .catalog_manager
+            .get_catalog(tenant.as_str(), catalog, self.session.session_ctx.txn_mgr())
+            .await?;
         let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();
@@ -343,6 +348,11 @@ impl QueryContextShared {
         let mut tables_refs = self.tables_refs.lock();
         tables_refs.remove(&table_meta_key);
         Ok(())
+    }
+
+    pub fn clear_tables_cache(&self) {
+        let mut tables_refs = self.tables_refs.lock();
+        tables_refs.clear();
     }
 
     /// Init runtime when first get
@@ -442,7 +452,7 @@ impl QueryContextShared {
     pub async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
         let user_mgr = UserApiProvider::instance();
         let tenant = self.get_tenant();
-        user_mgr.get_connection(&tenant, name).await
+        user_mgr.get_connection(tenant.as_str(), name).await
     }
 
     pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {
@@ -452,12 +462,14 @@ impl QueryContextShared {
 
 impl Drop for QueryContextShared {
     fn drop(&mut self) {
-        // last_query_id() should return the query_id of the last executed statement,
-        // so we set it when the current context drops
-        // to avoid returning the query_id of the current statement.
-        self.session
-            .session_ctx
-            .update_query_ids_results(self.init_query_id.read().clone(), None)
+        drop_guard(move || {
+            // last_query_id() should return the query_id of the last executed statement,
+            // so we set it when the current context drops
+            // to avoid returning the query_id of the current statement.
+            self.session
+                .session_ctx
+                .update_query_ids_results(self.init_query_id.read().clone(), None)
+        })
     }
 }
 

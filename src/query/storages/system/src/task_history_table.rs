@@ -18,10 +18,10 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::client_config::build_client_config;
+use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::ShowTaskRunsRequest;
 use databend_common_cloud_control::pb::TaskRun;
-use databend_common_cloud_control::task_client::make_request;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -136,7 +136,7 @@ impl AsyncSystemTable for TaskHistoryTable {
         let user = ctx.get_current_user()?.identity().to_string();
         let available_roles = ctx.get_available_roles().await?;
         let req = ShowTaskRunsRequest {
-            tenant_id: tenant.clone(),
+            tenant_id: tenant.to_string(),
             scheduled_time_start: "".to_string(),
             scheduled_time_end: "".to_string(),
             task_name: "".to_string(),
@@ -151,7 +151,8 @@ impl AsyncSystemTable for TaskHistoryTable {
 
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
-        let config = build_client_config(tenant, user, query_id, cloud_api.get_timeout());
+        let config =
+            build_client_config(tenant.to_string(), user, query_id, cloud_api.get_timeout());
         let req = make_request(req, config);
 
         let resp = task_client.show_task_runs(req).await?;
