@@ -98,8 +98,11 @@ impl CacheManager {
         };
 
         // setup in-memory table column cache
-        let memory_cache_capacity =
-            max_server_memory_usage * config.table_data_deserialized_memory_ratio / 100;
+        let memory_cache_capacity = if config.table_data_deserialized_data_bytes != 0 {
+            config.table_data_deserialized_data_bytes
+        } else {
+            max_server_memory_usage * config.table_data_deserialized_memory_ratio / 100
+        };
         let table_column_array_cache = Self::new_in_memory_cache(
             memory_cache_capacity,
             ColumnArrayMeter,
