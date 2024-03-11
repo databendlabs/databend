@@ -147,6 +147,7 @@ fn test_decode_v23_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: BTreeSet::new(),
         column_mask_policy: None,
+        indexes: btreemap! {},
     };
 
     common::test_pb_from_to(func_name!(), want())?;

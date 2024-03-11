@@ -15,28 +15,29 @@
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyString;
 
 use crate::UserApiProvider;
 
 impl UserApiProvider {
     // Set a setting.
     #[async_backtrace::framed]
-    pub async fn set_setting(&self, tenant: &str, setting: UserSetting) -> Result<u64> {
-        let setting_api_provider = self.get_setting_api_client(tenant)?;
+    pub async fn set_setting(&self, tenant: &NonEmptyString, setting: UserSetting) -> Result<u64> {
+        let setting_api_provider = self.setting_api(tenant);
         setting_api_provider.set_setting(setting).await
     }
 
     // Get all settings list.
     #[async_backtrace::framed]
-    pub async fn get_settings(&self, tenant: &str) -> Result<Vec<UserSetting>> {
-        let setting_api_provider = self.get_setting_api_client(tenant)?;
+    pub async fn get_settings(&self, tenant: &NonEmptyString) -> Result<Vec<UserSetting>> {
+        let setting_api_provider = self.setting_api(tenant);
         setting_api_provider.get_settings().await
     }
 
     // Drop a setting by name.
     #[async_backtrace::framed]
-    pub async fn drop_setting(&self, tenant: &str, name: &str) -> Result<()> {
-        let setting_api_provider = self.get_setting_api_client(tenant)?;
+    pub async fn drop_setting(&self, tenant: &NonEmptyString, name: &str) -> Result<()> {
+        let setting_api_provider = self.setting_api(tenant);
         setting_api_provider
             .try_drop_setting(name, MatchSeq::GE(1))
             .await

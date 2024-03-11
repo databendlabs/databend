@@ -165,6 +165,8 @@ pub enum Statement {
     CreateIndex(CreateIndexStmt),
     DropIndex(DropIndexStmt),
     RefreshIndex(RefreshIndexStmt),
+    CreateInvertedIndex(CreateInvertedIndexStmt),
+    DropInvertedIndex(DropInvertedIndexStmt),
 
     // VirtualColumns
     CreateVirtualColumn(CreateVirtualColumnStmt),
@@ -553,6 +555,8 @@ impl Display for Statement {
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateInvertedIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::DropInvertedIndex(stmt) => write!(f, "{stmt}")?,
             Statement::CreateVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::AlterVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::DropVirtualColumn(stmt) => write!(f, "{stmt}")?,

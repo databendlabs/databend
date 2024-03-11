@@ -17,7 +17,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
-use databend_common_ast::ast::contain_agg_func;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -80,6 +79,8 @@ use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_users::UserApiProvider;
+use derive_visitor::Drive;
+use derive_visitor::Visitor;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use jsonb::keypath::KeyPath;
@@ -2362,7 +2363,21 @@ impl<'a> TypeChecker<'a> {
                 let select = &select_stmt.select_list[0];
                 if let SelectTarget::AliasedExpr { expr, .. } = select {
                     // Check if contain aggregation function
-                    contain_agg = Some(contain_agg_func(expr));
+                    #[derive(Visitor)]
+                    #[visitor(ASTFunctionCall(enter))]
+                    struct AggFuncVisitor {
+                        contain_agg: bool,
+                    }
+                    impl AggFuncVisitor {
+                        fn enter_ast_function_call(&mut self, func: &ASTFunctionCall) {
+                            self.contain_agg = self.contain_agg
+                                || AggregateFunctionFactory::instance()
+                                    .contains(func.name.to_string());
+                        }
+                    }
+                    let mut visitor = AggFuncVisitor { contain_agg: false };
+                    expr.drive(&mut visitor);
+                    contain_agg = Some(visitor.contain_agg);
                 }
             }
         }
@@ -2510,34 +2525,18 @@ impl<'a> TypeChecker<'a> {
                 )
             }
             ("ifnull", &[arg_x, arg_y]) => {
-                // Rewrite ifnull(x, y) to if(is_null(x), y, x)
+                // Rewrite ifnull(x, y) to coalesce(x, y)
                 Some(
-                    self.resolve_function(span, "if", vec![], &[
-                        &Expr::IsNull {
-                            span,
-                            expr: Box::new(arg_x.clone()),
-                            not: false,
-                        },
-                        arg_y,
-                        arg_x,
-                    ])
-                    .await,
+                    self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y])
+                        .await,
                 )
             }
             ("nvl", &[arg_x, arg_y]) => {
-                // Rewrite nvl(x, y) to if(is_not_null(x), x, y)
+                // Rewrite nvl(x, y) to coalesce(x, y)
                 // nvl is essentially an alias for ifnull.
                 Some(
-                    self.resolve_function(span, "if", vec![], &[
-                        &Expr::IsNull {
-                            span,
-                            expr: Box::new(arg_x.clone()),
-                            not: true,
-                        },
-                        arg_x,
-                        arg_y,
-                    ])
-                    .await,
+                    self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y])
+                        .await,
                 )
             }
             ("nvl2", &[arg_x, arg_y, arg_z]) => {
@@ -2616,6 +2615,14 @@ impl<'a> TypeChecker<'a> {
                     new_args.push(is_not_null_expr);
                     new_args.push(assume_not_null_expr);
                 }
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
                 new_args.push(Expr::Literal {
                     span,
                     lit: Literal::Null,

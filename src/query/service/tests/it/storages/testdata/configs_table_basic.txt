@@ -14,6 +14,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'cache'   | 'table_bloom_index_meta_count'             | '3000'                                                         | ''       |
 | 'cache'   | 'table_data_cache_population_queue_size'   | '0'                                                            | ''       |
 | 'cache'   | 'table_data_deserialized_data_bytes'       | '0'                                                            | ''       |
+| 'cache'   | 'table_data_deserialized_memory_ratio'     | '0'                                                            | ''       |
 | 'cache'   | 'table_meta_segment_bytes'                 | '1073741824'                                                   | ''       |
 | 'cache'   | 'table_meta_segment_count'                 | 'null'                                                         | ''       |
 | 'cache'   | 'table_meta_snapshot_count'                | '256'                                                          | ''       |
@@ -97,6 +98,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'max_active_sessions'                      | '256'                                                          | ''       |
 | 'query'   | 'max_memory_limit_enabled'                 | 'false'                                                        | ''       |
 | 'query'   | 'max_query_log_size'                       | '10000'                                                        | ''       |
+| 'query'   | 'max_running_queries'                      | '0'                                                            | ''       |
 | 'query'   | 'max_server_memory_usage'                  | '0'                                                            | ''       |
 | 'query'   | 'max_storage_io_requests'                  | 'null'                                                         | ''       |
 | 'query'   | 'metric_api_address'                       | '127.0.0.1:7070'                                               | ''       |

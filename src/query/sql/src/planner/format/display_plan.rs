@@ -107,6 +107,8 @@ impl Plan {
             Plan::CreateIndex(_) => Ok("CreateIndex".to_string()),
             Plan::DropIndex(_) => Ok("DropIndex".to_string()),
             Plan::RefreshIndex(_) => Ok("RefreshIndex".to_string()),
+            Plan::CreateTableIndex(_) => Ok("CreateTableIndex".to_string()),
+            Plan::DropTableIndex(_) => Ok("DropTableIndex".to_string()),
 
             // Virtual Columns
             Plan::CreateVirtualColumn(_) => Ok("CreateVirtualColumn".to_string()),

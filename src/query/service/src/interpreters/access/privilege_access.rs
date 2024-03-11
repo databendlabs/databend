@@ -613,7 +613,8 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::UndropDatabase(_)
             | Plan::DropUDF(_)
-            | Plan::DropIndex(_) => {
+            | Plan::DropIndex(_)
+            | Plan::DropTableIndex(_) => {
                 // undroptable/db need convert name to id. But because of drop, can not find the id. Upgrade Object to Database.
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Drop])
                     .await?;
@@ -742,7 +743,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     InsertInputSource::StreamingWithFormat(..)
                     | InsertInputSource::StreamingWithFileFormat {..}
-                    | InsertInputSource::Values {..} => {}
+                    | InsertInputSource::Values(_) => {}
                 }
             }
             Plan::Replace(plan) => {
@@ -757,7 +758,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     InsertInputSource::StreamingWithFormat(..)
                     | InsertInputSource::StreamingWithFileFormat {..}
-                    | InsertInputSource::Values {..} => {}
+                    | InsertInputSource::Values(_) => {}
                 }
             }
             Plan::MergeInto(plan) => {
@@ -959,6 +960,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropConnection(_)
             | Plan::CreateUDF(_)
             | Plan::CreateIndex(_)
+            | Plan::CreateTableIndex(_)
             | Plan::CreateNotification(_)
             | Plan::DropNotification(_)
             | Plan::DescNotification(_)

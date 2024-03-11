@@ -54,28 +54,28 @@ Error: APIError: ResponseError with 1063: Permission denied, privilege [Read] is
 Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
 a b/data_UUID_0000_00000000.parquet	1	0	NULL	NULL
 === check db/table_id ===
-GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
-GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
-GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
-GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 GRANT Read ON STAGE s3 TO 'b'@'%'
+GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
+GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
+GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
+GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 GRANT SELECT,INSERT ON 'default'.'c'.'t' TO 'b'@'%'
 GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
-GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
-GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
-GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
-GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 GRANT Read ON STAGE s3 TO 'b'@'%'
+GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
+GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
+GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
+GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 GRANT SELECT,INSERT ON 'default'.'c'.'t1' TO 'b'@'%'
 GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
 2
-GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
-GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
-GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
-GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 GRANT Read ON STAGE s3 TO 'b'@'%'
+GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
+GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
+GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
+GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 GRANT SELECT,INSERT ON 'default'.'d'.'t1' TO 'b'@'%'
 GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1

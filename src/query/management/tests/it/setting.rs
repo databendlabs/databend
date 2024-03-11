@@ -22,6 +22,7 @@ use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::SeqV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -114,6 +115,9 @@ async fn test_set_setting() -> Result<()> {
 
 async fn new_setting_api() -> Result<(Arc<MetaEmbedded>, SettingMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
-    let mgr = SettingMgr::create(test_api.clone(), "databend_query")?;
+    let mgr = SettingMgr::create(
+        test_api.clone(),
+        &NonEmptyString::new("databend_query").unwrap(),
+    );
     Ok((test_api, mgr))
 }

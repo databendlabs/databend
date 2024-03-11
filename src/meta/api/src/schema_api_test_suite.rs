@@ -44,6 +44,7 @@ use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdTableName;
@@ -60,6 +61,7 @@ use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
@@ -330,6 +332,7 @@ impl SchemaApiTestSuite {
         suite
             .update_table_with_copied_files(&b.build().await)
             .await?;
+        suite.table_index_create_drop(&b.build().await).await?;
         suite.index_create_list_drop(&b.build().await).await?;
         suite.table_lock_revision(&b.build().await).await?;
         suite
@@ -5721,6 +5724,187 @@ impl SchemaApiTestSuite {
                 assert_eq!(Some(&"t1".to_string()), res[0].2.options.get("name"));
                 assert_eq!(Some(&"t2".to_string()), res[1].2.options.get("name"));
             }
+        }
+
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn table_index_create_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+        let table_id;
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![
+                TableField::new("title", TableDataType::String),
+                TableField::new("content", TableDataType::String),
+            ]))
+        };
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        let created_on = Utc::now();
+
+        info!("--- prepare db and table");
+        {
+            let plan = CreateDatabaseReq {
+                create_option: CreateOption::None,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let _ = mt.create_database(plan).await?;
+
+            let req = CreateTableReq {
+                create_option: CreateOption::None,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+            let resp = mt.create_table(req.clone()).await?;
+            table_id = resp.table_id;
+        }
+
+        let index_name_1 = "idx1".to_string();
+        let index_column_ids_1 = vec![0, 1];
+        let index_name_2 = "idx2".to_string();
+        let index_column_ids_2 = vec![0];
+        let index_name_3 = "idx2".to_string();
+        let index_column_ids_3 = vec![2];
+
+        {
+            info!("--- create table index");
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::None,
+                table_id,
+                name: index_name_1.clone(),
+                column_ids: index_column_ids_1.clone(),
+            };
+            let res = mt.create_table_index(req).await;
+            assert!(res.is_ok());
+
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::None,
+                table_id,
+                name: index_name_2.clone(),
+                column_ids: index_column_ids_2.clone(),
+            };
+            let res = mt.create_table_index(req).await;
+            assert!(res.is_ok());
+        }
+
+        {
+            info!("--- create table index again with if_not_exists = false");
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::None,
+                table_id,
+                name: index_name_1.clone(),
+                column_ids: index_column_ids_1.clone(),
+            };
+
+            let res = mt.create_table_index(req).await;
+            assert!(res.is_err());
+            let status = res.err().unwrap();
+            let err_code = ErrorCode::from(status);
+
+            assert_eq!(ErrorCode::IndexAlreadyExists("").code(), err_code.code());
+        }
+
+        {
+            info!("--- create table index again with if_not_exists = true");
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::CreateIfNotExists,
+                table_id,
+                name: index_name_1.clone(),
+                column_ids: index_column_ids_1.clone(),
+            };
+
+            let res = mt.create_table_index(req).await;
+            assert!(res.is_ok());
+        }
+
+        {
+            info!("--- create table index with invalid column id");
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::None,
+                table_id,
+                name: index_name_3.clone(),
+                column_ids: index_column_ids_3.clone(),
+            };
+            let res = mt.create_table_index(req).await;
+            assert!(res.is_err());
+        }
+
+        {
+            info!("--- check table index");
+            let (_, table_meta) = mt.get_table_by_id(table_id).await?;
+            assert_eq!(table_meta.indexes.len(), 2);
+
+            let index1 = table_meta.indexes.get(&index_name_1);
+            assert!(index1.is_some());
+            let index1 = index1.unwrap();
+            assert_eq!(index1.column_ids, index_column_ids_1);
+
+            let index2 = table_meta.indexes.get(&index_name_2);
+            assert!(index2.is_some());
+            let index2 = index2.unwrap();
+            assert_eq!(index2.column_ids, index_column_ids_2);
+        }
+
+        {
+            info!("--- drop table index");
+            let req = DropTableIndexReq {
+                if_exists: false,
+                table_id,
+                name: index_name_1.clone(),
+            };
+            let res = mt.drop_table_index(req).await;
+            assert!(res.is_ok());
+
+            let req = DropTableIndexReq {
+                if_exists: false,
+                table_id,
+                name: index_name_1.clone(),
+            };
+            let res = mt.drop_table_index(req).await;
+            assert!(res.is_err());
+
+            let req = DropTableIndexReq {
+                if_exists: true,
+                table_id,
+                name: index_name_1.clone(),
+            };
+            let res = mt.drop_table_index(req).await;
+            assert!(res.is_ok());
+        }
+
+        {
+            info!("--- check table index after drop");
+            let (_, table_meta) = mt.get_table_by_id(table_id).await?;
+            assert_eq!(table_meta.indexes.len(), 1);
+
+            let index1 = table_meta.indexes.get(&index_name_1);
+            assert!(index1.is_none());
+
+            let index2 = table_meta.indexes.get(&index_name_2);
+            assert!(index2.is_some());
+            let index2 = index2.unwrap();
+            assert_eq!(index2.column_ids, index_column_ids_2);
         }
 
         Ok(())
