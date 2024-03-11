@@ -79,6 +79,12 @@ impl Rule for RulePushDownFilterJoin {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
         let (s_expr, outer_to_inner) = outer_join_to_inner_join(s_expr, self.after_join_reorder())?;
+        if self.after_join_reorder {
+            if outer_to_inner {
+                state.add_result(s_expr);
+            }
+            return Ok(());
+        }
         // Second, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr)?;
         if s_expr.plan().rel_op() != RelOp::Filter {
@@ -96,7 +102,7 @@ impl Rule for RulePushDownFilterJoin {
         // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
         let predicates = rewrite_predicates(&s_expr)?;
         let (need_push, mut result) =
-            try_push_down_filter_join(&s_expr, predicates, self.after_join_reorder())?;
+            try_push_down_filter_join(&s_expr, predicates)?;
         if !need_push && !outer_to_inner && !mark_to_semi {
             return Ok(());
         }
@@ -114,7 +120,6 @@ impl Rule for RulePushDownFilterJoin {
 pub fn try_push_down_filter_join(
     s_expr: &SExpr,
     predicates: Vec<ScalarExpr>,
-    after_join_reorder: bool,
 ) -> Result<(bool, SExpr)> {
     let join_expr = s_expr.child(0)?;
     let mut join: Join = join_expr.plan().clone().try_into()?;
@@ -234,7 +239,7 @@ pub fn try_push_down_filter_join(
     }
     join.join_type = eliminate_outer_join_type(
         join.join_type,
-        after_join_reorder,
+        false,
         can_filter_left_null,
         can_filter_right_null,
     );
