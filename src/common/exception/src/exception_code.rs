@@ -242,6 +242,7 @@ build_exceptions! {
     InvalidPassword(2215),
     RoleAlreadyExists(2216),
     IllegalRole(2217),
+    IllegalUser(2218),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
