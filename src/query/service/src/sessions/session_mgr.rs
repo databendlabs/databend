@@ -90,8 +90,7 @@ impl SessionManager {
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let settings = Settings::create(tenant);
-        self.load_config_changes(&settings)?;
-        settings.load_global_changes().await?;
+        settings.load_changes().await?;
 
         self.create_with_settings(typ, settings)
     }

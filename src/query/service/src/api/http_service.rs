@@ -32,6 +32,7 @@ use log::warn;
 use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
+use poem::post;
 use poem::Endpoint;
 use poem::Route;
 
@@ -77,11 +78,9 @@ impl HttpService {
             )
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler))
-            .at("/debug/async_tasks/dump", get(debug_dump_stack))
-            .at(
-                "/v1/background/:tenant/background_tasks",
-                get(super::http::v1::background_tasks::list_background_tasks),
-            );
+            .at("/debug/async_tasks/dump", get(debug_dump_stack));
+
+        // Multiple tenants admin api
         if self.config.query.management_mode {
             route = route
                 .at(
@@ -91,6 +90,19 @@ impl HttpService {
                 .at(
                     "v1/tenants/:tenant/stream_status",
                     get(super::http::v1::stream_status::stream_status_handler),
+                )
+                .at(
+                    "/v1/background/:tenant/background_tasks",
+                    get(super::http::v1::background_tasks::list_background_tasks),
+                )
+                .at(
+                    "/v1/tenants/:tenant/settings",
+                    get(super::http::v1::settings::list_settings),
+                )
+                .at(
+                    "/v1/tenants/:tenant/settings/:key",
+                    post(super::http::v1::settings::set_settings)
+                        .delete(super::http::v1::settings::unset_settings),
                 );
         }
 
