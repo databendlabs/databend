@@ -35,27 +35,30 @@ use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 use crate::plans::VisitorMut;
 use crate::ColumnBinding;
+use crate::ColumnSet;
 
 // The InferFilterOptimizer tries to infer new predicates from existing predicates, for example:
 // 1. [A > 1 and A > 5] => [A > 5], [A > 1 and A <= 1 => false], [A = 1 and A < 10] => [A = 1]
 // 2. [A = 10 and A = B] => [B = 10]
 // 3. [A = B and A = C] => [B = C]
-pub struct InferFilterOptimizer {
+pub struct InferFilterOptimizer<'a> {
     columns: Vec<ColumnBinding>,
     column_index: HashMap<ColumnBinding, usize>,
     column_equal_to: Vec<Vec<ColumnBinding>>,
     predicates: Vec<Vec<Predicate>>,
     is_falsy: bool,
+    join_prop: Option<JoinProperty<'a>>,
 }
 
-impl InferFilterOptimizer {
-    pub fn new() -> Self {
+impl<'a> InferFilterOptimizer<'a> {
+    pub fn new(join_prop: Option<JoinProperty<'a>>) -> Self {
         Self {
             columns: vec![],
             column_index: HashMap::new(),
             column_equal_to: vec![],
             predicates: vec![],
             is_falsy: false,
+            join_prop,
         }
     }
 
@@ -473,13 +476,16 @@ impl InferFilterOptimizer {
         }
 
         struct ReplaceColumnBindings<'a> {
+            column_index: usize,
             equal_to: &'a ColumnBinding,
         }
 
         impl<'a> VisitorMut<'_> for ReplaceColumnBindings<'a> {
             fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
                 if let ScalarExpr::BoundColumnRef(column_ref) = expr {
-                    column_ref.column = self.equal_to.clone()
+                    if column_ref.column.index == self.column_index {
+                        column_ref.column = self.equal_to.clone()
+                    }
                 }
                 walk_expr_mut(self, expr)
             }
@@ -492,12 +498,48 @@ impl InferFilterOptimizer {
                 can_derive: true,
             };
             collector.visit(&predicate).unwrap();
-            if collector.can_derive && collector.columns.len() == 1 {
+            if !collector.can_derive {
+                result_predicates.push(predicate);
+                continue;
+            }
+
+            if let Some(join_prop) = &self.join_prop {
+                let mut can_replace = true;
+                let mut new_predicate = predicate.clone();
+                let mut has_left = false;
+                let mut has_right = false;
+                for original_column in collector.columns.iter() {
+                    if join_prop.left_columns.contains(&original_column.index) {
+                        has_left = true;
+                    } else if join_prop.right_columns.contains(&original_column.index) {
+                        has_right = true;
+                    }
+                    if let Some(index) = self.column_index.get(original_column) {
+                        let equal_to = &self.column_equal_to[*index];
+                        for column in equal_to.iter() {
+                            let mut replace = ReplaceColumnBindings {
+                                column_index: original_column.index,
+                                equal_to: column,
+                            };
+                            replace.visit(&mut new_predicate).unwrap();
+                        }
+                    } else {
+                        can_replace = false;
+                        break;
+                    }
+                }
+                if can_replace && (has_left && !has_right || !has_left && has_right) {
+                    result_predicates.push(new_predicate);
+                }
+            } else if collector.columns.len() == 1 {
                 let original_column = collector.columns.iter().next().unwrap();
                 if let Some(index) = self.column_index.get(original_column) {
                     let equal_to = &self.column_equal_to[*index];
                     for column in equal_to.iter() {
-                        let mut replace = ReplaceColumnBindings { equal_to: column };
+                        let mut replace = ReplaceColumnBindings {
+                            column_index: original_column.index,
+                            equal_to: column,
+                        };
                         let mut new_predicate = predicate.clone();
                         replace.visit(&mut new_predicate).unwrap();
                         result_predicates.push(new_predicate);
@@ -522,6 +564,20 @@ enum MergeResult {
     Left,
     Right,
     None,
+}
+
+pub struct JoinProperty<'a> {
+    left_columns: &'a ColumnSet,
+    right_columns: &'a ColumnSet,
+}
+
+impl<'a> JoinProperty<'a> {
+    pub fn new(left_columns: &'a ColumnSet, right_columns: &'a ColumnSet) -> Self {
+        Self {
+            left_columns,
+            right_columns,
+        }
+    }
 }
 
 pub fn adjust_scalar(scalar: Scalar, data_type: DataType) -> (bool, ConstantExpr) {

@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use crate::binder::JoinPredicate;
 use crate::optimizer::extract::Matcher;
 use crate::optimizer::filter::InferFilterOptimizer;
+use crate::optimizer::filter::JoinProperty;
 use crate::optimizer::rule::constant::false_constant;
 use crate::optimizer::rule::constant::is_falsy;
 use crate::optimizer::rule::rewrite::push_down_filter_join::can_filter_null;
@@ -177,7 +178,8 @@ pub fn try_push_down_filter_join(
     join.left_conditions.clear();
     join.right_conditions.clear();
 
-    let infer_filter = InferFilterOptimizer::new();
+    let join_prop = JoinProperty::new(&left_prop.output_columns, &right_prop.output_columns);
+    let infer_filter = InferFilterOptimizer::new(Some(join_prop));
     let predicates = infer_filter.run(push_down_predicates)?;
 
     let mut can_filter_left_null = !matches!(

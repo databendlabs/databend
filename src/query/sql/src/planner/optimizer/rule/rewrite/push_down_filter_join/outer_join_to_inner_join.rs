@@ -32,7 +32,6 @@ use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::VisitorMut;
 use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::TypeCheck;
