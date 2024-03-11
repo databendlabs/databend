@@ -487,6 +487,74 @@ statement ok
 drop stream s7_1
 
 statement ok
+create stream s8 on table t7 append_only = false
+
+statement ok
+create stream s8_1 on table t7
+
+# test merge into insert only
+query T
+merge into t7 using (select a, b from t8) as s on t7.a=s.a when not matched then insert *
+----
+1
+
+query IITB
+select a, b, change$action, change$is_update from s8_1 order by a, b
+----
+3 3 INSERT 0
+
+# test merge into matched only
+query TT
+merge into t7 using (select a, b+1 as b from t8) as s on t7.a=s.a when matched and s.a=2 then update * when matched and s.a=4 then delete
+----
+1 1
+
+query IITB
+select a, b, change$action, change$is_update from s8 order by a, b
+----
+2 2 DELETE 1
+2 3 INSERT 1
+3 3 INSERT 0
+4 4 DELETE 0
+
+statement ok
+drop stream s8
+
+statement ok
+drop stream s8_1
+
+statement ok
+create stream s9 on table t7 append_only = false
+
+statement ok
+create stream s9_1 on table t7
+
+# test merge into full operation
+query TTT
+merge into t7 using t8 on t7.a=t8.a when matched and t8.a=2 then update set t7.b=t8.b when matched and t8.a=3 then delete when not matched then insert (a,b) values(t8.a,t8.b)
+----
+1 1 1
+
+query IITB
+select a, b, change$action, change$is_update from s9 order by a, b
+----
+2 2 INSERT 1
+2 3 DELETE 1
+3 3 DELETE 0
+4 4 INSERT 0
+
+query IITB
+select a, b, change$action, change$is_update from s9_1 order by a, b
+----
+4 4 INSERT 0
+
+statement ok
+drop stream s9
+
+statement ok
+drop stream s9_1
+
+statement ok
 drop table t7 all
 
 statement ok
