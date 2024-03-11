@@ -39,7 +39,7 @@ use opendal::Operator;
 
 use crate::io::write::WriteSettings;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::util::column_parquet_metas;
+use crate::operations::column_parquet_metas;
 use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseStorageFormat;
