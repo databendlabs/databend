@@ -347,33 +347,37 @@ HashJoin
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or a.x < 43
 ----
-HashJoin
-├── output columns: [a.x (#0), b.y (#2), b.x (#1)]
-├── join type: INNER
-├── build keys: [b.x (#1)]
-├── probe keys: [a.x (#0)]
-├── filters: [b.x (#1) > 44 OR a.x (#0) < 43]
-├── estimated rows: 3.00
-├── TableScan(Build)
-│   ├── table: default.default.twocolumn
-│   ├── output columns: [x (#1), y (#2)]
-│   ├── read rows: 4
-│   ├── read bytes: 92
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 4.00
-└── TableScan(Probe)
-    ├── table: default.default.onecolumn
-    ├── output columns: [x (#0)]
-    ├── read rows: 4
-    ├── read bytes: 44
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 4.00
+Filter
+├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
+├── filters: [is_true(b.x (#1) > 44 OR a.x (#0) < 43)]
+├── estimated rows: 2.00
+└── HashJoin
+    ├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
+    ├── join type: LEFT OUTER
+    ├── build keys: [b.x (#1)]
+    ├── probe keys: [a.x (#0)]
+    ├── filters: []
+    ├── estimated rows: 4.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.twocolumn
+    │   ├── output columns: [x (#1), y (#2)]
+    │   ├── read rows: 4
+    │   ├── read bytes: 92
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 4.00
+    └── TableScan(Probe)
+        ├── table: default.default.onecolumn
+        ├── output columns: [x (#0)]
+        ├── read rows: 4
+        ├── read bytes: 44
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 4.00
 
 query T
 explain select * from onecolumn as a right join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
