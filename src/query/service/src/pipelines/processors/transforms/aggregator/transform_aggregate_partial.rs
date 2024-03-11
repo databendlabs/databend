@@ -92,21 +92,15 @@ impl TryFrom<Arc<QueryContext>> for AggregateSettings {
             },
         };
 
-        // Ok(AggregateSettings {
-        //     convert_threshold,
-        //     max_memory_usage,
-        //     spilling_bytes_threshold_per_proc: match settings
-        //         .get_aggregate_spilling_bytes_threshold_per_proc()?
-        //     {
-        //         0 => max_memory_usage / max_threads,
-        //         spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,
-        //     },
-        // })
-
         Ok(AggregateSettings {
-            max_memory_usage: 8 * 1024 * 1024 * 1024,
-            convert_threshold: 1000,
-            spilling_bytes_threshold_per_proc: 8 * 1024,
+            convert_threshold,
+            max_memory_usage,
+            spilling_bytes_threshold_per_proc: match settings
+                .get_aggregate_spilling_bytes_threshold_per_proc()?
+            {
+                0 => max_memory_usage / max_threads,
+                spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,
+            },
         })
     }
 }

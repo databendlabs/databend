@@ -164,7 +164,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
                                             as usize
                                             ..columns_layout.offsets[index + 1] as usize]
                                             .to_vec(),
-                                        max_partition_count: 0,
+                                        max_partition_count: meta.max_partition_count,
                                     });
                                 }
                             }

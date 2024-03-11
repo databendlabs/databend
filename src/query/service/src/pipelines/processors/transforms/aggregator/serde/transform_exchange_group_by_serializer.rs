@@ -42,7 +42,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::PartitionedPayload;
-use databend_common_expression::PayloadFlushState;
 use databend_common_hashtable::HashtableLike;
 use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::InputPort;
@@ -308,14 +307,7 @@ fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
         }
 
         let now = Instant::now();
-        let mut state = PayloadFlushState::default();
-        let mut blocks = vec![];
-        while payload.flush(&mut state) {
-            let cols = state.take_group_columns();
-            blocks.push(DataBlock::new_from_columns(cols));
-        }
-
-        let data_block = DataBlock::concat(&blocks)?;
+        let data_block = payload.group_by_flush_all();
         rows += data_block.num_rows();
 
         let old_write_size = write_size;
@@ -403,11 +395,12 @@ fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
                 )),
             ]);
 
-            let data_block = data_block.add_meta(Some(AggregateSerdeMeta::create_spilled(
+            let data_block = data_block.add_meta(Some(AggregateSerdeMeta::create_agg_spilled(
                 -1,
                 location.clone(),
                 0..0,
                 vec![],
+                partition_count,
             )))?;
 
             let ipc_fields = exchange_defines::spilled_ipc_fields();

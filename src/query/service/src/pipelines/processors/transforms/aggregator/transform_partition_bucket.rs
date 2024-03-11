@@ -165,7 +165,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregateSpilling(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(payload) => {
-                        println!("enter bucketspilled");
                         (payload.bucket, SINGLE_LEVEL_BUCKET_NUM)
                     }
                     AggregateMeta::Serialized(payload) => {
@@ -479,7 +478,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                 if !partitioned_payload.include_arena(&agg_payload.payload.arena) {
                     partitioned_payload
                         .arenas
-                        .extend_from_slice(&vec![agg_payload.payload.arena.clone()]);
+                        .extend_from_slice(&[agg_payload.payload.arena.clone()]);
                 }
 
                 if agg_payload.max_partition_count != self.max_partition_count {

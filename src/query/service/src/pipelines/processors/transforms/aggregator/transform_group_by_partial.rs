@@ -87,20 +87,15 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
             },
         };
 
-        // Ok(GroupBySettings {
-        //     max_memory_usage,
-        //     convert_threshold,
-        //     spilling_bytes_threshold_per_proc: match settings
-        //         .get_aggregate_spilling_bytes_threshold_per_proc()?
-        //     {
-        //         0 => max_memory_usage / max_threads,
-        //         spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,
-        //     },
-        // })
         Ok(GroupBySettings {
-            max_memory_usage: 8 * 1024 * 1024 * 1024,
-            convert_threshold: 1000,
-            spilling_bytes_threshold_per_proc: 8 * 1024,
+            max_memory_usage,
+            convert_threshold,
+            spilling_bytes_threshold_per_proc: match settings
+                .get_aggregate_spilling_bytes_threshold_per_proc()?
+            {
+                0 => max_memory_usage / max_threads,
+                spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,
+            },
         })
     }
 }
