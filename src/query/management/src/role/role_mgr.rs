@@ -43,9 +43,11 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
+use minitrace::func_name;
 
 use crate::role::role_api::RoleApi;
 use crate::serde::check_and_upgrade_to_pb;
+use crate::serde::Quota;
 use crate::serialize_struct;
 
 static TXN_MAX_RETRY_TIMES: u32 = 5;
@@ -163,17 +165,13 @@ impl RoleApi for RoleMgr {
 
         match seq.match_seq(&seq_value) {
             Ok(_) => {
-                let data = check_and_upgrade_to_pb(
-                    key,
-                    &seq_value,
-                    self.kv_api.clone(),
-                    ErrorCode::UnknownRole,
-                    || format!("Role '{}' does not exist.", role),
-                )
-                .await?
-                .data;
+                let mut quota = Quota::new(func_name!());
 
-                Ok(SeqV::new(seq_value.seq, data))
+                let u = check_and_upgrade_to_pb(&mut quota, key, &seq_value, self.kv_api.as_ref())
+                    .await?;
+
+                // Keep the original seq.
+                Ok(SeqV::new(seq_value.seq, u.data))
             }
             Err(_) => Err(ErrorCode::UnknownRole(format!(
                 "Role '{}' does not exist.",
@@ -189,17 +187,12 @@ impl RoleApi for RoleMgr {
         let values = self.kv_api.prefix_list_kv(role_prefix.as_str()).await?;
 
         let mut r = vec![];
+
+        let mut quota = Quota::new(func_name!());
+
         for (key, val) in values {
-            let u = check_and_upgrade_to_pb(
-                key,
-                &val,
-                self.kv_api.clone(),
-                ErrorCode::UnknownRole,
-                || "",
-            )
-            .await?
-            .data;
-            r.push(SeqV::new(val.seq, u));
+            let u = check_and_upgrade_to_pb(&mut quota, key, &val, self.kv_api.as_ref()).await?;
+            r.push(u);
         }
 
         Ok(r)
@@ -215,17 +208,12 @@ impl RoleApi for RoleMgr {
             .await?;
 
         let mut r = vec![];
+
+        let mut quota = Quota::new(func_name!());
+
         for (key, val) in values {
-            let u = check_and_upgrade_to_pb(
-                key,
-                &val,
-                self.kv_api.clone(),
-                ErrorCode::UnknownRole,
-                || "",
-            )
-            .await?
-            .data;
-            r.push(SeqV::new(val.seq, u));
+            let u = check_and_upgrade_to_pb(&mut quota, key, &val, self.kv_api.as_ref()).await?;
+            r.push(u);
         }
 
         Ok(r)
@@ -359,15 +347,11 @@ impl RoleApi for RoleMgr {
             None => return Ok(None),
         };
 
+        let mut quota = Quota::new(func_name!());
+
         // if can not get ownership, will directly return None.
-        let seq_val = check_and_upgrade_to_pb(
-            key,
-            &seq_value,
-            self.kv_api.clone(),
-            ErrorCode::UnknownRole,
-            || "",
-        )
-        .await?;
+        let seq_val =
+            check_and_upgrade_to_pb(&mut quota, key, &seq_value, self.kv_api.as_ref()).await?;
 
         Ok(Some(seq_val.data))
     }
