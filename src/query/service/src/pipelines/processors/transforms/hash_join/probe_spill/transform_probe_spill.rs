@@ -35,6 +35,8 @@ pub struct ProbeSpillHandler {
     probe_first_round_hashtable: bool,
     // Next restore file index, only used for cross join
     next_restore_file: usize,
+    // Save input block from the processor if the input block has zero columns.
+    input_blocks: Vec<DataBlock>,
 }
 
 impl ProbeSpillHandler {
@@ -44,6 +46,7 @@ impl ProbeSpillHandler {
             spill_done: false,
             probe_first_round_hashtable: true,
             next_restore_file: 0,
+            input_blocks: vec![],
         }
     }
 
@@ -53,6 +56,14 @@ impl ProbeSpillHandler {
 
     pub fn probe_first_round_hashtable(&self) -> bool {
         self.probe_first_round_hashtable
+    }
+
+    pub fn input_blocks(&self) -> Vec<DataBlock> {
+        self.input_blocks.clone()
+    }
+
+    pub fn add_input_block(&mut self, data: DataBlock) {
+        self.input_blocks.push(data)
     }
 
     // The method only used for cross join
@@ -92,6 +103,19 @@ impl ProbeSpillHandler {
     pub fn spill_state_mut(&mut self) -> &mut ProbeSpillState {
         debug_assert!(self.spill_state.is_some());
         self.spill_state.as_mut().unwrap()
+    }
+
+    pub async fn spill_block(&mut self, data: DataBlock) -> Result<()> {
+        let spill_state = self.spill_state_mut();
+        spill_state.spiller.spill_block(data).await?;
+        Ok(())
+    }
+
+    pub fn add_partition_loc(&mut self, id: u8, loc: Vec<String>) {
+        self.spill_state_mut()
+            .spiller
+            .partition_location
+            .insert(id, loc);
     }
 }
 
@@ -149,30 +173,28 @@ impl TransformHashJoinProbe {
     //    change current step to `WaitBuild`
     pub(crate) fn spill_finished(&mut self, processor_id: usize) -> Result<Event> {
         self.spill_handler.set_spill_done();
-        if self.join_probe_state.join_type() != JoinType::Cross {
-            // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
-            let spilled_partition_set = &self
-                .spill_handler
-                .spill_state()
-                .spiller
-                .spilled_partitions();
-            info!(
-                "probe processor-{:?}: spill finished with spilled partitions {:?}",
-                processor_id, spilled_partition_set
-            );
-            if self.join_probe_state.hash_join_state.need_final_scan() {
-                // Assign build spilled partitions to `self.join_probe_state.spill_partitions`
-                let mut spill_partitions = self.join_probe_state.spill_partitions.write();
-                *spill_partitions = self
-                    .join_probe_state
-                    .hash_join_state
-                    .build_spilled_partitions
-                    .read()
-                    .clone();
-            } else if !spilled_partition_set.is_empty() {
-                let mut spill_partitions = self.join_probe_state.spill_partitions.write();
-                spill_partitions.extend(spilled_partition_set);
-            }
+        // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
+        let spilled_partition_set = &self
+            .spill_handler
+            .spill_state()
+            .spiller
+            .spilled_partitions();
+        info!(
+            "probe processor-{:?}: spill finished with spilled partitions {:?}",
+            processor_id, spilled_partition_set
+        );
+        if self.join_probe_state.hash_join_state.need_final_scan() {
+            // Assign build spilled partitions to `self.join_probe_state.spill_partitions`
+            let mut spill_partitions = self.join_probe_state.spill_partitions.write();
+            *spill_partitions = self
+                .join_probe_state
+                .hash_join_state
+                .build_spilled_partitions
+                .read()
+                .clone();
+        } else if !spilled_partition_set.is_empty() {
+            let mut spill_partitions = self.join_probe_state.spill_partitions.write();
+            spill_partitions.extend(spilled_partition_set);
         }
         self.join_probe_state.finish_spill()?;
         // Wait build side to build hash table
@@ -229,13 +251,18 @@ impl TransformHashJoinProbe {
         );
         let mut unmatched_data_blocks = vec![];
         for data in self.input_data.drain(..) {
-            let spill_state = self.spill_handler.spill_state_mut();
             if self.join_probe_state.join_type() == JoinType::Cross {
-                dbg!("spill probe");
-                spill_state.spiller.spill_block(data).await?;
+                if data.columns().is_empty() {
+                    self.spill_handler.add_input_block(data);
+                } else {
+                    self.spill_handler.spill_block(data).await?;
+                }
+                // Add a dummy partition id to indicate spilling has happened.
+                self.spill_handler.add_partition_loc(0, vec![]);
                 continue;
             }
             let mut hashes = Vec::with_capacity(data.num_rows());
+            let spill_state = self.spill_handler.spill_state_mut();
             spill_state.get_hashes(&data, &self.join_probe_state.join_type(), &mut hashes)?;
             // Pass build spilled partition set, we only need to spill data in build spilled partition set
             let build_spilled_partitions = self
@@ -281,23 +308,29 @@ impl TransformHashJoinProbe {
             return self.finish_cross_join_spill();
         }
 
-        // Restore each spilled file and probe hash table.
-        let next_restore_file = self.spill_handler.next_restore_file();
-        info!("{:?}, {:?}", next_restore_file, self.processor_id);
-        let spill_state = self.spill_handler.spill_state_mut();
-        let spilled_files = spill_state.spiller.spilled_files();
-        let (spilled_data, _) = spill_state
-            .spiller
-            .read_spilled(&spilled_files[next_restore_file])
-            .await?;
-        debug_assert!(spilled_data.num_rows() <= self.max_block_size);
-        self.input_data.push_back(spilled_data);
+        if !self.spill_handler.input_blocks.is_empty() {
+            self.input_data.extend(self.spill_handler.input_blocks());
+        } else {
+            // Restore each spilled file and probe hash table.
+            let next_restore_file = self.spill_handler.next_restore_file();
+            let spill_state = self.spill_handler.spill_state_mut();
+            let spilled_files = spill_state.spiller.spilled_files();
+            if !spilled_files.is_empty() {
+                let (spilled_data, _) = spill_state
+                    .spiller
+                    .read_spilled(&spilled_files[next_restore_file])
+                    .await?;
+                debug_assert!(spilled_data.num_rows() <= self.max_block_size);
+                self.input_data.push_back(spilled_data);
+            }
 
-        if self.spill_handler.has_next_restore_file() {
-            self.step = HashJoinProbeStep::Running;
-            self.step_logs.push(HashJoinProbeStep::Running);
-            return Ok(());
+            if self.spill_handler.has_next_restore_file() {
+                self.step = HashJoinProbeStep::Running;
+                self.step_logs.push(HashJoinProbeStep::Running);
+                return Ok(());
+            }
         }
+
         self.join_probe_state.restore_barrier.wait().await;
         self.reset().await?;
         Ok(())

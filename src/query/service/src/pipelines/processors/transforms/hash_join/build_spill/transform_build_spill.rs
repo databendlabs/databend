@@ -120,7 +120,6 @@ impl BuildSpillHandler {
         // Add a dummy partition id to indicate spilling has happened.
         spill_state.spiller.partition_location.insert(0, vec![]);
         self.pending_spill_data.clear();
-        dbg!("spill");
         Ok(())
     }
 
