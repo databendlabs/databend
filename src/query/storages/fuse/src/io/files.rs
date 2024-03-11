@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table_context::TableContext;
@@ -76,7 +77,10 @@ impl Files {
             .filter(|loc| !loc.is_empty())
             .collect::<Vec<_>>();
         info!("deleting files: {:?}", &locations);
+        let begin = Instant::now();
         op.remove(locations).await?;
+        info!("deleting files, tim used {:?}", begin.elapsed());
+
         Ok(())
     }
 }

@@ -108,8 +108,8 @@ impl<'a> Binder {
             }
         };
 
-        let elapsed = begin.elapsed().as_millis() as u64;
-        metrics_inc_copy_into_timings_ms_bind(elapsed);
+        let elapsed = begin.elapsed();
+        metrics_inc_copy_into_timings_ms_bind(elapsed.as_millis() as u64);
         info!("bind_copy_into_table done, time used: {:?}", elapsed);
 
         plan
