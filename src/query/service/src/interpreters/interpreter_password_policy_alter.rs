@@ -69,7 +69,7 @@ impl Interpreter for AlterPasswordPolicyInterpreter {
             AlterPasswordAction::SetOptions(set_options) => {
                 user_mgr
                     .update_password_policy(
-                        tenant.as_str(),
+                        &tenant,
                         &plan.name,
                         set_options.min_length,
                         set_options.max_length,
@@ -151,7 +151,7 @@ impl Interpreter for AlterPasswordPolicyInterpreter {
                 };
                 user_mgr
                     .update_password_policy(
-                        tenant.as_str(),
+                        &tenant,
                         &plan.name,
                         min_length,
                         max_length,
