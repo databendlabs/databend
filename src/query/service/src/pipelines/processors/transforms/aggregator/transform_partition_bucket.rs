@@ -258,9 +258,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     _ => unreachable!(),
                 };
             }
-            return Err(ErrorCode::Internal(
-                "TransformPartitionBucket only recv AggregateMeta.",
-            ));
+            return Ok(0);
         }
 
         self.unsplitted_blocks.push(data_block);
