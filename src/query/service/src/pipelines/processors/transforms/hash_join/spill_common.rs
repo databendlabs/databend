@@ -84,7 +84,3 @@ fn wrap_nullable_block(block: &mut DataBlock) {
         block.num_rows(),
     )
 }
-
-pub fn spilling_supported_join_type(join_type: &JoinType) -> bool {
-    !matches!(*join_type, JoinType::Cross)
-}

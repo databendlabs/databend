@@ -179,7 +179,7 @@ impl Spiller {
     /// Read spilled data with partition id
     pub async fn read_spilled_data(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
         debug_assert!(self.partition_location.contains_key(p_id));
-        let files = self.partition_location.get(p_id).unwrap();
+        let files = self.partition_location.get(p_id).unwrap().to_vec();
         let mut spilled_data = Vec::with_capacity(files.len());
         for file in files.iter() {
             let (block, _) = self.read_spilled(file).await?;
@@ -249,6 +249,10 @@ impl Spiller {
             &unspilled_block_row_indexes,
             unspilled_row_index.len(),
         )))
+    }
+
+    pub(crate) fn spilled_files(&self) -> Vec<String> {
+        self.columns_layout.keys().cloned().collect()
     }
 }
 

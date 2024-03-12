@@ -94,6 +94,9 @@ impl BuildSpillHandler {
 
     // Spill pending data block
     pub(crate) async fn spill(&mut self, join_type: &JoinType) -> Result<()> {
+        if join_type == &JoinType::Cross {
+            return self.spill_cross_join().await;
+        }
         let pending_spill_data = self.pending_spill_data.clone();
         for block in pending_spill_data.iter() {
             let mut hashes = Vec::with_capacity(block.num_rows());
@@ -108,6 +111,18 @@ impl BuildSpillHandler {
         Ok(())
     }
 
+    // The method is dedicated to spill for cross join which doesn't need to consider partition
+    async fn spill_cross_join(&mut self) -> Result<()> {
+        let data = DataBlock::concat(&self.pending_spill_data)?;
+        let spill_state = self.spill_state_mut();
+        // Directly spill the data, don't need to calculate hashes.
+        spill_state.spiller.spill_block(data).await?;
+        // Add a dummy partition id to indicate spilling has happened.
+        spill_state.spiller.partition_location.insert(0, vec![]);
+        self.pending_spill_data.clear();
+        Ok(())
+    }
+
     // Finishing up after spilling
     pub(crate) fn finalize_spill(
         &mut self,
@@ -116,10 +131,12 @@ impl BuildSpillHandler {
     ) -> Result<HashJoinBuildStep> {
         // Add spilled partition ids to `spill_partitions` of `HashJoinBuildState`
         let spilled_partition_set = self.spill_state().spiller.spilled_partitions();
-        info!(
-            "build processor-{:?}: spill finished with spilled partitions {:?}",
-            processor_id, spilled_partition_set
-        );
+        if build_state.join_type() != JoinType::Cross {
+            info!(
+                "build processor-{:?}: spill finished with spilled partitions {:?}",
+                processor_id, spilled_partition_set
+            );
+        }
 
         // For left-related join, will spill all build input blocks which means there isn't first-round hash table.
         // Because first-round hash table will make left join generate wrong results.
@@ -164,6 +181,21 @@ impl BuildSpillHandler {
             )?;
             if !spilled_data.is_empty() {
                 return Ok(Some(spilled_data));
+            }
+        }
+        Ok(None)
+    }
+
+    // Restore data for cross join
+    pub(crate) async fn restore_cross_join(&mut self) -> Result<Option<DataBlock>> {
+        // Each round will read one spill file for current processor.
+        let spill_state = self.spill_state_mut();
+        let spilled_files = spill_state.spiller.spilled_files();
+        if !spilled_files.is_empty() {
+            let (block, _) = spill_state.spiller.read_spilled(&spilled_files[0]).await?;
+            spill_state.spiller.columns_layout.remove(&spilled_files[0]);
+            if block.num_rows() != 0 {
+                return Ok(Some(block));
             }
         }
         Ok(None)
