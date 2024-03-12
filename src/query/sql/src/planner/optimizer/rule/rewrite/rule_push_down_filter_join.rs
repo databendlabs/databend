@@ -22,9 +22,7 @@ use crate::optimizer::filter::InferFilterOptimizer;
 use crate::optimizer::filter::JoinProperty;
 use crate::optimizer::rule::constant::false_constant;
 use crate::optimizer::rule::constant::is_falsy;
-use crate::optimizer::rule::rewrite::push_down_filter_join::can_filter_null;
 use crate::optimizer::rule::rewrite::push_down_filter_join::convert_mark_to_semi_join;
-use crate::optimizer::rule::rewrite::push_down_filter_join::eliminate_outer_join_type;
 use crate::optimizer::rule::rewrite::push_down_filter_join::outer_join_to_inner_join;
 use crate::optimizer::rule::rewrite::push_down_filter_join::rewrite_predicates;
 use crate::optimizer::rule::Rule;
@@ -171,21 +169,11 @@ pub fn try_push_down_filter_join(
     let infer_filter = InferFilterOptimizer::new(Some(join_prop));
     let predicates = infer_filter.run(push_down_predicates)?;
 
-    let mut can_filter_left_null = !matches!(
-        join.join_type,
-        JoinType::Right | JoinType::RightSingle | JoinType::Full
-    );
-    let mut can_filter_right_null = !matches!(
-        join.join_type,
-        JoinType::Left | JoinType::LeftSingle | JoinType::Full
-    );
     let mut all_push_down = vec![];
     let mut left_push_down = vec![];
     let mut right_push_down = vec![];
     for predicate in predicates.into_iter() {
         if is_falsy(&predicate) {
-            can_filter_left_null = true;
-            can_filter_right_null = true;
             left_push_down = vec![false_constant()];
             right_push_down = vec![false_constant()];
             break;
@@ -196,27 +184,9 @@ pub fn try_push_down_filter_join(
                 all_push_down.push(predicate);
             }
             JoinPredicate::Left(_) => {
-                if !can_filter_left_null
-                    && can_filter_null(
-                        &predicate,
-                        &left_prop.output_columns,
-                        &right_prop.output_columns,
-                    )?
-                {
-                    can_filter_left_null = true;
-                }
                 left_push_down.push(predicate);
             }
             JoinPredicate::Right(_) => {
-                if !can_filter_right_null
-                    && can_filter_null(
-                        &predicate,
-                        &left_prop.output_columns,
-                        &right_prop.output_columns,
-                    )?
-                {
-                    can_filter_right_null = true;
-                }
                 right_push_down.push(predicate);
             }
             JoinPredicate::Both { left, right, .. } => {
@@ -227,28 +197,9 @@ pub fn try_push_down_filter_join(
         }
     }
     join.non_equi_conditions.extend(non_equi_predicates);
-    if !can_filter_left_null {
-        original_predicates.extend(left_push_down);
-        left_push_down = vec![];
-    }
-    if !can_filter_right_null {
-        original_predicates.extend(right_push_down);
-        right_push_down = vec![];
-    }
     if !all_push_down.is_empty() {
         left_push_down.extend(all_push_down.to_vec());
         right_push_down.extend(all_push_down);
-    }
-
-    let original_join_type = join.join_type.clone();
-    join.join_type =
-        eliminate_outer_join_type(join.join_type, can_filter_left_null, can_filter_right_null);
-    if matches!(
-        original_join_type,
-        JoinType::LeftSingle | JoinType::RightSingle
-    ) {
-        join.join_type = original_join_type.clone();
-        join.single_to_inner = Some(original_join_type);
     }
 
     let mut left_child = join_expr.child(0)?.clone();
