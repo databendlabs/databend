@@ -66,7 +66,7 @@ AggregateFinal
         ├── estimated rows: 0.00
         ├── EvalScalar
         │   ├── output columns: [t.id (#0), de (#8)]
-        │   ├── expressions: [if(CAST(is_not_null(sum(tb.de) (#7)) AS Boolean NULL), CAST(assume_not_null(sum(tb.de) (#7)) AS Int64 NULL), true, 0, NULL)]
+        │   ├── expressions: [if(CAST(is_not_null(sum(tb.de) (#7)) AS Boolean NULL), CAST(assume_not_null(sum(tb.de) (#7)) AS Int64 NULL), true, 0, NULL, NULL, NULL)]
         │   ├── estimated rows: 0.00
         │   └── AggregateFinal
         │       ├── output columns: [sum(tb.de) (#7), t.id (#0)]
@@ -80,7 +80,7 @@ AggregateFinal
         │           ├── estimated rows: 0.00
         │           └── HashJoin
         │               ├── output columns: [t.id (#0), sum(coalesce(t3.val, 0)) (#5)]
-        │               ├── join type: INNER
+        │               ├── join type: LEFT OUTER
         │               ├── build keys: [tb.sid (#1)]
         │               ├── probe keys: [t.id (#0)]
         │               ├── filters: []
@@ -97,7 +97,7 @@ AggregateFinal
         │               │       ├── estimated rows: 0.00
         │               │       └── EvalScalar
         │               │           ├── output columns: [t2.sid (#1), sum_arg_0 (#4)]
-        │               │           ├── expressions: [if(CAST(is_not_null(t3.val (#2)) AS Boolean NULL), CAST(assume_not_null(t3.val (#2)) AS Int32 NULL), true, 0, NULL)]
+        │               │           ├── expressions: [if(CAST(is_not_null(t3.val (#2)) AS Boolean NULL), CAST(assume_not_null(t3.val (#2)) AS Int32 NULL), true, 0, NULL, NULL, NULL)]
         │               │           ├── estimated rows: 0.00
         │               │           └── Filter
         │               │               ├── output columns: [t2.sid (#1), t2.val (#2)]
