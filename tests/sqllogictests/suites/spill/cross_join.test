@@ -1,0 +1,90 @@
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use spill_test;
+
+statement ok
+set join_spilling_memory_ratio = 10;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 4657589;
+
+statement ok
+set disable_join_reorder = 1;
+
+query I
+select
+    o_comment, c_custkey
+from
+    customer
+    cross join
+    orders
+where o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by o_comment
+    limit 20;
+----
+ Tiresias about the blithely ironic a 101
+ Tiresias about the blithely ironic a 101
+ Tiresias about the blithely ironic a 102
+ Tiresias about the blithely ironic a 102
+ Tiresias about the blithely ironic a 103
+ Tiresias about the blithely ironic a 103
+ Tiresias about the blithely ironic a 104
+ Tiresias about the blithely ironic a 104
+ Tiresias about the blithely ironic a 105
+ Tiresias about the blithely ironic a 105
+ Tiresias about the blithely ironic a 106
+ Tiresias about the blithely ironic a 106
+ Tiresias about the blithely ironic a 107
+ Tiresias about the blithely ironic a 107
+ Tiresias about the blithely ironic a 108
+ Tiresias about the blithely ironic a 108
+ Tiresias about the blithely ironic a 109
+ Tiresias about the blithely ironic a 109
+ Tiresias about the blithely ironic a 110
+ Tiresias about the blithely ironic a 110
+
+
+query I
+select
+    o_comment
+from
+    customer
+    cross join
+    orders
+where o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by o_comment
+    limit 20;
+----
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+
+
+statement ok
+set join_spilling_memory_ratio = 0;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 0;
+
+
+statement ok
+set disable_join_reorder = 0;

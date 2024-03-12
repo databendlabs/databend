@@ -39,7 +39,7 @@ use opendal::Operator;
 
 use crate::io::write::WriteSettings;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::util;
+use crate::operations::column_parquet_metas;
 use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseStorageFormat;
@@ -62,7 +62,7 @@ pub fn serialize_block(
                 write_settings.table_compression,
                 use_parquet2,
             )?;
-            let meta = util::column_parquet_metas(&result, &schema)?;
+            let meta = column_parquet_metas(&result, &schema)?;
             Ok(meta)
         }
         FuseStorageFormat::Native => {

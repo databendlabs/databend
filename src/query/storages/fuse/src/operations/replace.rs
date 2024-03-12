@@ -35,7 +35,7 @@ use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::mutation::SegmentIndex;
-use crate::operations::replace_into::mutator::MergeIntoOperationAggregator;
+use crate::operations::replace_into::MergeIntoOperationAggregator;
 use crate::FuseTable;
 
 impl FuseTable {
