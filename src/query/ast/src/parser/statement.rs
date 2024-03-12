@@ -3276,7 +3276,7 @@ pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
     let task_block = map(
         rule! {
             BEGIN
-            ~ #task_statements(statement_body)
+            ~ #semicolon_terminated_list1(statement_body)
             ~ END
         },
         |(_, stmts, _)| {

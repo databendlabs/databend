@@ -2867,33 +2867,33 @@ Query {
 
 ---------- Input ----------
 select c_count cc, count(*) as custdist, sum(c_acctbal) as totacctbal
-            from customer, orders ODS,
-                (
-                    select
-                        c_custkey,
-                        count(o_orderkey)
-                    from
-                        customer left outer join orders on
-                            c_custkey = o_custkey
-                            and o_comment not like '%:1%:2%'
-                    group by
-                        c_custkey
-                ) as c_orders
-            group by c_count
-            order by custdist desc nulls first, c_count asc, totacctbal nulls last
-            limit 10, totacctbal
+from customer, orders ODS,
+    (
+        select
+            c_custkey,
+            count(o_orderkey)
+        from
+            customer left outer join orders on
+                c_custkey = o_custkey
+                and o_comment not like '%:1%:2%'
+        group by
+            c_custkey
+    ) as c_orders
+group by c_count
+order by custdist desc nulls first, c_count asc, totacctbal nulls last
+limit 10, totacctbal
 ---------- Output ---------
 SELECT c_count AS cc, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer, orders AS ODS, (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON ((c_custkey = o_custkey) AND (o_comment NOT LIKE '%:1%:2%')) GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY custdist DESC NULLS FIRST, c_count ASC, totacctbal NULLS LAST LIMIT 10, totacctbal
 ---------- AST ------------
 Query {
     span: Some(
-        0..547,
+        0..391,
     ),
     with: None,
     body: Select(
         SelectStmt {
             span: Some(
-                0..547,
+                0..391,
             ),
             hints: None,
             distinct: false,
@@ -2997,13 +2997,13 @@ Query {
             from: [
                 Table {
                     span: Some(
-                        87..95,
+                        75..83,
                     ),
                     catalog: None,
                     database: None,
                     table: Identifier {
                         span: Some(
-                            87..95,
+                            75..83,
                         ),
                         name: "customer",
                         quote: None,
@@ -3016,13 +3016,13 @@ Query {
                 },
                 Table {
                     span: Some(
-                        97..107,
+                        85..95,
                     ),
                     catalog: None,
                     database: None,
                     table: Identifier {
                         span: Some(
-                            97..103,
+                            85..91,
                         ),
                         name: "orders",
                         quote: None,
@@ -3031,7 +3031,7 @@ Query {
                         TableAlias {
                             name: Identifier {
                                 span: Some(
-                                    104..107,
+                                    92..95,
                                 ),
                                 name: "ODS",
                                 quote: None,
@@ -3046,18 +3046,18 @@ Query {
                 },
                 Subquery {
                     span: Some(
-                        125..518,
+                        101..374,
                     ),
                     lateral: false,
                     subquery: Query {
                         span: Some(
-                            147..488,
+                            111..356,
                         ),
                         with: None,
                         body: Select(
                             SelectStmt {
                                 span: Some(
-                                    147..488,
+                                    111..356,
                                 ),
                                 hints: None,
                                 distinct: false,
@@ -3065,7 +3065,7 @@ Query {
                                     AliasedExpr {
                                         expr: ColumnRef {
                                             span: Some(
-                                                178..187,
+                                                130..139,
                                             ),
                                             column: ColumnRef {
                                                 database: None,
@@ -3073,7 +3073,7 @@ Query {
                                                 column: Name(
                                                     Identifier {
                                                         span: Some(
-                                                            178..187,
+                                                            130..139,
                                                         ),
                                                         name: "c_custkey",
                                                         quote: None,
@@ -3086,13 +3086,13 @@ Query {
                                     AliasedExpr {
                                         expr: FunctionCall {
                                             span: Some(
-                                                213..230,
+                                                153..170,
                                             ),
                                             func: FunctionCall {
                                                 distinct: false,
                                                 name: Identifier {
                                                     span: Some(
-                                                        213..218,
+                                                        153..158,
                                                     ),
                                                     name: "count",
                                                     quote: None,
@@ -3100,7 +3100,7 @@ Query {
                                                 args: [
                                                     ColumnRef {
                                                         span: Some(
-                                                            219..229,
+                                                            159..169,
                                                         ),
                                                         column: ColumnRef {
                                                             database: None,
@@ -3108,7 +3108,7 @@ Query {
                                                             column: Name(
                                                                 Identifier {
                                                                     span: Some(
-                                                                        219..229,
+                                                                        159..169,
                                                                     ),
                                                                     name: "o_orderkey",
                                                                     quote: None,
@@ -3128,24 +3128,24 @@ Query {
                                 from: [
                                     Join {
                                         span: Some(
-                                            289..304,
+                                            205..220,
                                         ),
                                         join: Join {
                                             op: LeftOuter,
                                             condition: On(
                                                 BinaryOp {
                                                     span: Some(
-                                                        393..396,
+                                                        285..288,
                                                     ),
                                                     op: And,
                                                     left: BinaryOp {
                                                         span: Some(
-                                                            353..354,
+                                                            257..258,
                                                         ),
                                                         op: Eq,
                                                         left: ColumnRef {
                                                             span: Some(
-                                                                343..352,
+                                                                247..256,
                                                             ),
                                                             column: ColumnRef {
                                                                 database: None,
@@ -3153,7 +3153,7 @@ Query {
                                                                 column: Name(
                                                                     Identifier {
                                                                         span: Some(
-                                                                            343..352,
+                                                                            247..256,
                                                                         ),
                                                                         name: "c_custkey",
                                                                         quote: None,
@@ -3163,7 +3163,7 @@ Query {
                                                         },
                                                         right: ColumnRef {
                                                             span: Some(
-                                                                355..364,
+                                                                259..268,
                                                             ),
                                                             column: ColumnRef {
                                                                 database: None,
@@ -3171,7 +3171,7 @@ Query {
                                                                 column: Name(
                                                                     Identifier {
                                                                         span: Some(
-                                                                            355..364,
+                                                                            259..268,
                                                                         ),
                                                                         name: "o_custkey",
                                                                         quote: None,
@@ -3182,12 +3182,12 @@ Query {
                                                     },
                                                     right: BinaryOp {
                                                         span: Some(
-                                                            407..415,
+                                                            299..307,
                                                         ),
                                                         op: NotLike,
                                                         left: ColumnRef {
                                                             span: Some(
-                                                                397..406,
+                                                                289..298,
                                                             ),
                                                             column: ColumnRef {
                                                                 database: None,
@@ -3195,7 +3195,7 @@ Query {
                                                                 column: Name(
                                                                     Identifier {
                                                                         span: Some(
-                                                                            397..406,
+                                                                            289..298,
                                                                         ),
                                                                         name: "o_comment",
                                                                         quote: None,
@@ -3205,7 +3205,7 @@ Query {
                                                         },
                                                         right: Literal {
                                                             span: Some(
-                                                                416..425,
+                                                                308..317,
                                                             ),
                                                             lit: String(
                                                                 "%:1%:2%",
@@ -3216,13 +3216,13 @@ Query {
                                             ),
                                             left: Table {
                                                 span: Some(
-                                                    280..288,
+                                                    196..204,
                                                 ),
                                                 catalog: None,
                                                 database: None,
                                                 table: Identifier {
                                                     span: Some(
-                                                        280..288,
+                                                        196..204,
                                                     ),
                                                     name: "customer",
                                                     quote: None,
@@ -3235,13 +3235,13 @@ Query {
                                             },
                                             right: Table {
                                                 span: Some(
-                                                    305..311,
+                                                    221..227,
                                                 ),
                                                 catalog: None,
                                                 database: None,
                                                 table: Identifier {
                                                     span: Some(
-                                                        305..311,
+                                                        221..227,
                                                     ),
                                                     name: "orders",
                                                     quote: None,
@@ -3261,7 +3261,7 @@ Query {
                                         [
                                             ColumnRef {
                                                 span: Some(
-                                                    479..488,
+                                                    347..356,
                                                 ),
                                                 column: ColumnRef {
                                                     database: None,
@@ -3269,7 +3269,7 @@ Query {
                                                     column: Name(
                                                         Identifier {
                                                             span: Some(
-                                                                479..488,
+                                                                347..356,
                                                             ),
                                                             name: "c_custkey",
                                                             quote: None,
@@ -3294,7 +3294,7 @@ Query {
                         TableAlias {
                             name: Identifier {
                                 span: Some(
-                                    510..518,
+                                    366..374,
                                 ),
                                 name: "c_orders",
                                 quote: None,
@@ -3310,7 +3310,7 @@ Query {
                     [
                         ColumnRef {
                             span: Some(
-                                540..547,
+                                384..391,
                             ),
                             column: ColumnRef {
                                 database: None,
@@ -3318,7 +3318,7 @@ Query {
                                 column: Name(
                                     Identifier {
                                         span: Some(
-                                            540..547,
+                                            384..391,
                                         ),
                                         name: "c_count",
                                         quote: None,
@@ -3338,7 +3338,7 @@ Query {
         OrderByExpr {
             expr: ColumnRef {
                 span: Some(
-                    569..577,
+                    401..409,
                 ),
                 column: ColumnRef {
                     database: None,
@@ -3346,7 +3346,7 @@ Query {
                     column: Name(
                         Identifier {
                             span: Some(
-                                569..577,
+                                401..409,
                             ),
                             name: "custdist",
                             quote: None,
@@ -3364,7 +3364,7 @@ Query {
         OrderByExpr {
             expr: ColumnRef {
                 span: Some(
-                    596..603,
+                    428..435,
                 ),
                 column: ColumnRef {
                     database: None,
@@ -3372,7 +3372,7 @@ Query {
                     column: Name(
                         Identifier {
                             span: Some(
-                                596..603,
+                                428..435,
                             ),
                             name: "c_count",
                             quote: None,
@@ -3388,7 +3388,7 @@ Query {
         OrderByExpr {
             expr: ColumnRef {
                 span: Some(
-                    609..619,
+                    441..451,
                 ),
                 column: ColumnRef {
                     database: None,
@@ -3396,7 +3396,7 @@ Query {
                     column: Name(
                         Identifier {
                             span: Some(
-                                609..619,
+                                441..451,
                             ),
                             name: "totacctbal",
                             quote: None,
@@ -3413,7 +3413,7 @@ Query {
     limit: [
         Literal {
             span: Some(
-                649..651,
+                469..471,
             ),
             lit: UInt64(
                 10,
@@ -3421,7 +3421,7 @@ Query {
         },
         ColumnRef {
             span: Some(
-                653..663,
+                473..483,
             ),
             column: ColumnRef {
                 database: None,
@@ -3429,7 +3429,7 @@ Query {
                 column: Name(
                     Identifier {
                         span: Some(
-                            653..663,
+                            473..483,
                         ),
                         name: "totacctbal",
                         quote: None,
