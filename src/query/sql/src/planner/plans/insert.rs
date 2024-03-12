@@ -26,7 +26,7 @@ use serde::Serialize;
 
 use super::Plan;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum InsertInputSource {
     SelectPlan(Box<Plan>),
     // From outside streaming source with 'FORMAT <format_name>;

@@ -745,6 +745,7 @@ impl AccessChecker for PrivilegeAccess {
                     | InsertInputSource::Values(_) => {}
                 }
             }
+            Plan::InsertMultiTable(_) => todo!(),
             Plan::Replace(plan) => {
                 //plan.delete_when is Expr no need to check privileges.
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete], false).await?;

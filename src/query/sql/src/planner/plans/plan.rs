@@ -99,6 +99,7 @@ use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
 use crate::plans::GrantShareObjectPlan;
 use crate::plans::Insert;
+use crate::plans::InsertMultiTable;
 use crate::plans::KillPlan;
 use crate::plans::MergeInto;
 use crate::plans::ModifyTableColumnPlan;
@@ -217,6 +218,7 @@ pub enum Plan {
 
     // Insert
     Insert(Box<Insert>),
+    InsertMultiTable(Box<InsertMultiTable>),
     Replace(Box<Replace>),
     Delete(Box<DeletePlan>),
     Update(Box<UpdatePlan>),
