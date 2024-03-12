@@ -41,6 +41,7 @@ name = "root"
 auth_type = "no_password"
 [meta]
 endpoints = ["127.0.0.1:9191"]
+client_timeout_in_second = 90
 [storage]
 type = "fs"
 [storage.fs]
