@@ -38,7 +38,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::ROW_VERSION_COL_NAME;
-use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
+use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_meta_app::schema::DatabaseType;
@@ -57,8 +57,6 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::ClusterKey;
-use databend_storages_common_table_meta::meta::IndexInfo;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -346,27 +344,6 @@ impl FuseTable {
         }
     }
 
-    #[minitrace::trace]
-    #[async_backtrace::framed]
-    pub async fn read_index_info(
-        &self,
-        index_info_loc: Option<&Location>,
-    ) -> Result<Option<Arc<IndexInfo>>> {
-        match index_info_loc {
-            Some((index_info_loc, ver)) => {
-                let reader = MetaReaders::inverted_index_info_reader(self.get_operator());
-                let params = LoadParams {
-                    location: index_info_loc.clone(),
-                    len_hint: None,
-                    ver: *ver,
-                    put_cache: true,
-                };
-                Ok(Some(reader.read(&params).await?))
-            }
-            None => Ok(None),
-        }
-    }
-
     #[async_backtrace::framed]
     pub async fn snapshot_format_version(&self, location_opt: Option<String>) -> Result<u64> {
         let location_opt = if location_opt.is_some() {
@@ -493,7 +470,8 @@ impl Table for FuseTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        column_id >= SNAPSHOT_NAME_COLUMN_ID
+        // column_id >= SNAPSHOT_NAME_COLUMN_ID
+        column_id >= SEARCH_SCORE_COLUMN_ID
     }
 
     fn support_column_projection(&self) -> bool {

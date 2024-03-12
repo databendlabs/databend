@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -68,6 +69,10 @@ impl FuseTable {
             .as_ref()
             .map(|p| p.lazy_materialization)
             .unwrap_or_default();
+        let is_inverted = push_downs
+            .as_ref()
+            .map(|p| p.inverted_index.is_some())
+            .unwrap_or_default();
         match snapshot {
             Some(snapshot) => {
                 let snapshot_loc = self
@@ -90,8 +95,7 @@ impl FuseTable {
                         )
                         .await;
                 }
-
-                if (!dry_run && snapshot.segments.len() > nodes_num) || is_lazy {
+                if !is_inverted && ((!dry_run && snapshot.segments.len() > nodes_num) || is_lazy) {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
@@ -122,6 +126,7 @@ impl FuseTable {
                     table_schema,
                     segments_location,
                     summary,
+                    &snapshot.index_info_locations,
                 )
                 .await
             }
@@ -157,7 +162,9 @@ impl FuseTable {
                 table_schema.clone(),
                 &push_downs,
                 self.bloom_index_cols(),
-            )?
+                &None,
+            )
+            .await?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
             FusePruner::create_with_pages(
@@ -168,7 +175,9 @@ impl FuseTable {
                 self.cluster_key_meta.clone(),
                 cluster_keys,
                 self.bloom_index_cols(),
-            )?
+                &None,
+            )
+            .await?
         };
 
         let block_metas = pruner.read_pruning(segments_location).await?;
@@ -202,6 +211,7 @@ impl FuseTable {
         table_schema: TableSchemaRef,
         segments_location: Vec<SegmentLocation>,
         summary: usize,
+        index_info_locations: &Option<BTreeMap<String, Location>>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         info!(
@@ -234,7 +244,6 @@ impl FuseTable {
                 }
             }
         }
-
         let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
             FusePruner::create(
                 &ctx,
@@ -242,7 +251,9 @@ impl FuseTable {
                 table_schema.clone(),
                 &push_downs,
                 self.bloom_index_cols(),
-            )?
+                index_info_locations,
+            )
+            .await?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
 
@@ -254,9 +265,10 @@ impl FuseTable {
                 self.cluster_key_meta.clone(),
                 cluster_keys,
                 self.bloom_index_cols(),
-            )?
+                index_info_locations,
+            )
+            .await?
         };
-
         let block_metas = pruner.read_pruning(segments_location).await?;
         let pruning_stats = pruner.pruning_stats();
 

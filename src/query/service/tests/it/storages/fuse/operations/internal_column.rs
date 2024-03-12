@@ -53,6 +53,7 @@ fn expected_data_block(
             offsets: None,
             base_block_ids: None,
             inner: None,
+            matched_rows: None,
         };
         for internal_column in internal_columns {
             let column = internal_column.generate_column_values(&internal_column_meta, num_rows);

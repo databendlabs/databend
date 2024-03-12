@@ -822,6 +822,7 @@ impl Binder {
             || stmt.distinct
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
+            || !bind_context.inverted_index_map.is_empty()
         {
             return Ok(());
         }

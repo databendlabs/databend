@@ -347,7 +347,7 @@ impl Binder {
         )?;
 
         target_expr =
-            SExpr::add_internal_column_index(&target_expr, table_index, column_binding.index);
+            SExpr::add_internal_column_index(&target_expr, table_index, column_binding.index, None);
 
         self.metadata
             .write()

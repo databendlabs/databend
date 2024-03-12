@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Semaphore;
@@ -40,6 +41,7 @@ use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::warn;
 use opendal::Operator;
@@ -50,6 +52,7 @@ use crate::pruning::BlockPruner;
 use crate::pruning::BloomPruner;
 use crate::pruning::BloomPrunerCreator;
 use crate::pruning::FusePruningStatistics;
+use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
 
 pub struct PruningContext {
@@ -63,13 +66,14 @@ pub struct PruningContext {
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
     pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
+    pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
 
     pub pruning_stats: Arc<FusePruningStatistics>,
 }
 
 impl PruningContext {
     #[allow(clippy::too_many_arguments)]
-    pub fn try_create(
+    pub async fn try_create(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         table_schema: TableSchemaRef,
@@ -78,6 +82,7 @@ impl PruningContext {
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         max_concurrency: usize,
+        index_info_locations: &Option<BTreeMap<String, Location>>,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
 
@@ -145,6 +150,22 @@ impl PruningContext {
         let internal_column_pruner =
             InternalColumnPruner::try_create(func_ctx, filter_expr.as_ref());
 
+        let inverted_index_pruner = if let Some(push_down) = push_down {
+            if let Some(inverted_index) = &push_down.inverted_index {
+                let inverted_index_pruner = InvertedIndexPruner::try_create(
+                    dal.clone(),
+                    inverted_index,
+                    index_info_locations,
+                )
+                .await?;
+                Some(inverted_index_pruner)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         // Constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
@@ -166,6 +187,7 @@ impl PruningContext {
             bloom_pruner,
             page_pruner,
             internal_column_pruner,
+            inverted_index_pruner,
             pruning_stats,
         });
         Ok(pruning_ctx)
@@ -183,12 +205,13 @@ pub struct FusePruner {
 
 impl FusePruner {
     // Create normal fuse pruner.
-    pub fn create(
+    pub async fn create(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         bloom_index_cols: BloomIndexColumns,
+        index_info_locations: &Option<BTreeMap<String, Location>>,
     ) -> Result<Self> {
         Self::create_with_pages(
             ctx,
@@ -198,11 +221,13 @@ impl FusePruner {
             None,
             vec![],
             bloom_index_cols,
+            index_info_locations,
         )
+        .await
     }
 
     // Create fuse pruner with pages.
-    pub fn create_with_pages(
+    pub async fn create_with_pages(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         table_schema: TableSchemaRef,
@@ -210,6 +235,7 @@ impl FusePruner {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
+        index_info_locations: &Option<BTreeMap<String, Location>>,
     ) -> Result<Self> {
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -233,7 +259,9 @@ impl FusePruner {
             cluster_keys,
             bloom_index_cols,
             max_concurrency,
-        )?;
+            index_info_locations,
+        )
+        .await?;
 
         Ok(FusePruner {
             max_concurrency,
@@ -260,6 +288,7 @@ impl FusePruner {
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         self.pruning(segment_locs, true).await
     }
+
     // Pruning chain:
     // segment pruner -> block pruner -> topn pruner
     #[async_backtrace::framed]
@@ -294,6 +323,15 @@ impl FusePruner {
 
                         async move {
                             // Build pruning tasks.
+                            if let Some(inverted_index_pruner) = &pruning_ctx.inverted_index_pruner
+                            {
+                                batch = batch
+                                    .into_iter()
+                                    .filter(|segment| {
+                                        inverted_index_pruner.should_keep(&segment.location.0)
+                                    })
+                                    .collect::<Vec<_>>();
+                            }
                             if let Some(internal_column_pruner) =
                                 &pruning_ctx.internal_column_pruner
                             {

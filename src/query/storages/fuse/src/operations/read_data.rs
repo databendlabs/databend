@@ -185,6 +185,7 @@ impl FuseTable {
                             table_schema,
                             lazy_init_segments,
                             0,
+                            &None,
                         )
                         .await?;
 

@@ -249,7 +249,9 @@ impl FuseTable {
             vec![],
             BloomIndexColumns::None,
             max_concurrency,
-        )?;
+            &None,
+        )
+        .await?;
 
         let segment_pruner = SegmentPruner::create(pruning_ctx.clone(), schema)?;
         let mut remain = segment_locs.len() % max_concurrency;
