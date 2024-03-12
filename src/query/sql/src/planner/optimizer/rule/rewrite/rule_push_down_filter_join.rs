@@ -44,11 +44,10 @@ use crate::plans::ScalarExpr;
 pub struct RulePushDownFilterJoin {
     id: RuleID,
     matchers: Vec<Matcher>,
-    after_join_reorder: bool,
 }
 
 impl RulePushDownFilterJoin {
-    pub fn new(after_join_reorder: bool) -> Self {
+    pub fn new() -> Self {
         Self {
             id: RuleID::PushDownFilterJoin,
             // Filter
@@ -64,11 +63,7 @@ impl RulePushDownFilterJoin {
                     children: vec![Matcher::Leaf, Matcher::Leaf],
                 }],
             }],
-            after_join_reorder,
         }
-    }
-    fn after_join_reorder(&self) -> bool {
-        self.after_join_reorder
     }
 }
 
@@ -80,12 +75,6 @@ impl Rule for RulePushDownFilterJoin {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
         let (s_expr, outer_to_inner) = outer_join_to_inner_join(s_expr)?;
-        if self.after_join_reorder {
-            if outer_to_inner {
-                state.add_result(s_expr);
-            }
-            return Ok(());
-        }
         // Second, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr)?;
         if s_expr.plan().rel_op() != RelOp::Filter {
