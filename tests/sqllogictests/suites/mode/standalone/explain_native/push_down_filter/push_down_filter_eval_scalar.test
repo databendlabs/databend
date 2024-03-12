@@ -80,7 +80,7 @@ AggregateFinal
         │           ├── estimated rows: 0.00
         │           └── HashJoin
         │               ├── output columns: [t.id (#0), sum(coalesce(t3.val, 0)) (#5)]
-        │               ├── join type: INNER
+        │               ├── join type: LEFT OUTER
         │               ├── build keys: [tb.sid (#1)]
         │               ├── probe keys: [t.id (#0)]
         │               ├── filters: []

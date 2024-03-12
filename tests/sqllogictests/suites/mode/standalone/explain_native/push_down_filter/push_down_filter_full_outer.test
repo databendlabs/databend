@@ -22,12 +22,12 @@ query T
 explain select * from t1 full outer join t2 on t1.a = t2.a where t1.a > 0;
 ----
 HashJoin
-├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
-├── join type: INNER
+├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── join type: LEFT OUTER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 0.80
+├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
@@ -54,8 +54,8 @@ query T
 explain select * from t1 full outer join t2 on t1.a = t2.a where t2.a > 0;
 ----
 HashJoin
-├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
-├── join type: INNER
+├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── join type: RIGHT OUTER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []

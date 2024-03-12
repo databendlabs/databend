@@ -348,11 +348,11 @@ explain select * from onecolumn as a right join twocolumn as b on a.x = b.x wher
 ----
 HashJoin
 ├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
-├── join type: INNER
+├── join type: LEFT OUTER
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
 ├── filters: []
-├── estimated rows: 3.00
+├── estimated rows: 3.20
 ├── TableScan(Build)
 │   ├── table: default.default.onecolumn
 │   ├── output columns: [x (#0)]

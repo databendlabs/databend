@@ -398,11 +398,11 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where (select cou
 ----
 HashJoin
 ├── output columns: [t.number (#0)]
-├── join type: LEFT SINGLE
+├── join type: INNER
 ├── build keys: [number (#2)]
-├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
+├── probe keys: [number (#0)]
 ├── filters: []
-├── estimated rows: 1.00
+├── estimated rows: 0.20
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#2)]
 │   ├── filters: [is_true(try_to_boolean(if(true, TRY_CAST(COUNT(*) (#3) = 1 AS UInt64 NULL), 0)))]
