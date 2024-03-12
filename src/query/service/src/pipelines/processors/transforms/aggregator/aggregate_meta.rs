@@ -94,7 +94,7 @@ impl SerializedPayload {
             .collect::<Vec<_>>();
 
         let _ = hashtable
-            .add_groups(&mut state, &group_columns, &[vec![]], &agg_states, rows_num)
+            .add_groups(&mut state, &group_columns, &[vec![]], &agg_states, rows_num)?
             .unwrap();
 
         hashtable.payload
