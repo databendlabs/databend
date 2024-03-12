@@ -2810,7 +2810,7 @@ pub struct CacheConfig {
 
     /// Max size of in memory table column object cache. By default it is 0 (disabled)
     ///
-    /// CAUTION: The cached items are deserialized table column objects, may take a lot of memory.
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
     ///
     /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
@@ -2820,6 +2820,19 @@ pub struct CacheConfig {
         default_value = "0"
     )]
     pub table_data_deserialized_data_bytes: u64,
+
+    /// Max percentage of in memory table column object cache relative to whole memory. By default it is 0 (disabled)
+    ///
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
+    ///
+    /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
+    /// and the access pattern will benefit from caching, consider enabled this cache.
+    #[clap(
+        long = "cache-table-data-deserialized-memory-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub table_data_deserialized_memory_ratio: u64,
 
     // ----- the following options/args are all deprecated               ----
     /// Max number of cached table segment
@@ -2952,6 +2965,7 @@ mod cache_config_converters {
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.try_into()?,
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+                table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
             })
         }
     }
@@ -2973,6 +2987,7 @@ mod cache_config_converters {
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.into(),
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+                table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
                 table_meta_segment_count: None,
             }
         }

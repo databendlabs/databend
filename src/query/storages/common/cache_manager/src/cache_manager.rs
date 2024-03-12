@@ -58,7 +58,11 @@ pub struct CacheManager {
 
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
-    pub fn init(config: &CacheConfig, tenant_id: impl Into<String>) -> Result<()> {
+    pub fn init(
+        config: &CacheConfig,
+        max_server_memory_usage: &u64,
+        tenant_id: impl Into<String>,
+    ) -> Result<()> {
         // setup table data cache
         let table_data_cache = {
             match config.data_cache_storage {
@@ -94,8 +98,13 @@ impl CacheManager {
         };
 
         // setup in-memory table column cache
+        let memory_cache_capacity = if config.table_data_deserialized_data_bytes != 0 {
+            config.table_data_deserialized_data_bytes
+        } else {
+            max_server_memory_usage * config.table_data_deserialized_memory_ratio / 100
+        };
         let table_column_array_cache = Self::new_in_memory_cache(
-            config.table_data_deserialized_data_bytes,
+            memory_cache_capacity,
             ColumnArrayMeter,
             "table_data_column_array",
         );

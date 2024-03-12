@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::UserSettingValue;
@@ -61,7 +63,30 @@ impl Settings {
     }
 
     #[async_backtrace::framed]
-    pub async fn load_global_changes(&self) -> Result<()> {
+    pub async fn load_changes(&self) -> Result<()> {
+        self.load_config_changes()?;
+        self.load_global_changes().await
+    }
+
+    fn load_config_changes(&self) -> Result<()> {
+        let query_config = &GlobalConfig::instance().query;
+        if let Some(parquet_fast_read_bytes) = query_config.parquet_fast_read_bytes {
+            self.set_parquet_fast_read_bytes(parquet_fast_read_bytes)?;
+        }
+
+        if let Some(max_storage_io_requests) = query_config.max_storage_io_requests {
+            self.set_max_storage_io_requests(max_storage_io_requests)?;
+        }
+
+        if let Some(enterprise_license_key) = query_config.databend_enterprise_license.clone() {
+            unsafe {
+                self.set_enterprise_license(enterprise_license_key)?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn load_global_changes(&self) -> Result<(), ErrorCode> {
         let default_settings = DefaultSettings::instance()?;
 
         let api = UserApiProvider::instance();
