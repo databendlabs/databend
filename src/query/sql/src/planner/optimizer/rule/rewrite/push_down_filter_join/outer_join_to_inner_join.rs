@@ -112,7 +112,7 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
     Ok((result, true))
 }
 
-pub fn eliminate_outer_join_type(
+fn eliminate_outer_join_type(
     join_type: JoinType,
     can_filter_left_null: bool,
     can_filter_right_null: bool,
@@ -135,7 +135,7 @@ pub fn eliminate_outer_join_type(
     }
 }
 
-pub fn can_filter_null(
+fn can_filter_null(
     predicate: &ScalarExpr,
     left_output_columns: &ColumnSet,
     right_output_columns: &ColumnSet,

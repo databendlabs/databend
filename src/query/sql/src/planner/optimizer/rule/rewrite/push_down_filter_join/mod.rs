@@ -18,6 +18,4 @@ mod outer_join_to_inner_join;
 
 pub use extract_or_predicates::rewrite_predicates;
 pub use mark_join_to_semi_join::convert_mark_to_semi_join;
-pub use outer_join_to_inner_join::can_filter_null;
-pub use outer_join_to_inner_join::eliminate_outer_join_type;
 pub use outer_join_to_inner_join::outer_join_to_inner_join;
