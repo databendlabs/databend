@@ -15,6 +15,8 @@
 mod quota;
 #[allow(clippy::module_inception)]
 mod tenant;
+mod tenant_quota_ident;
 
 pub use quota::TenantQuota;
 pub use tenant::Tenant;
+pub use tenant_quota_ident::TenantQuotaIdent;
