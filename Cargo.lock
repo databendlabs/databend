@@ -8575,16 +8575,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "macros"
-version = "0.9.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.11#c9a463f5ce73d1e7dd66eabfe909fe8d5a087f0e"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.52",
-]
-
-[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9453,15 +9443,15 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.9.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.11#c9a463f5ce73d1e7dd66eabfe909fe8d5a087f0e"
+source = "git+https://github.com/datafuselabs/openraft?tag=v0.9.0#bec85f5bebd640d69c6999540e6bd2fe40fbc5b7"
 dependencies = [
  "anyerror",
  "byte-unit",
  "clap 4.5.1",
  "derive_more",
  "futures",
- "macros",
  "maplit",
+ "openraft-macros",
  "rand 0.8.5",
  "serde",
  "thiserror",
@@ -9469,6 +9459,16 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "validit",
+]
+
+[[package]]
+name = "openraft-macros"
+version = "0.9.0"
+source = "git+https://github.com/datafuselabs/openraft?tag=v0.9.0#bec85f5bebd640d69c6999540e6bd2fe40fbc5b7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
 ]
 
 [[package]]
