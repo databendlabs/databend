@@ -19,6 +19,7 @@ mod duplicate_processor;
 mod port_trigger;
 mod profile;
 mod resize_processor;
+mod router_processor;
 mod shuffle_processor;
 
 pub use duplicate_processor::DuplicateProcessor;
