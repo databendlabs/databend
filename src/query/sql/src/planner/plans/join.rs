@@ -161,7 +161,7 @@ pub struct Join {
     pub is_lateral: bool,
     // Original join type. Left/Right single join may be convert to inner join
     // Record the original join type and do some special processing during runtime.
-    pub original_join_type: Option<JoinType>,
+    pub single_to_inner: Option<JoinType>,
 }
 
 impl Default for Join {
@@ -175,7 +175,7 @@ impl Default for Join {
             from_correlated_subquery: Default::default(),
             need_hold_hash_table: false,
             is_lateral: false,
-            original_join_type: None,
+            single_to_inner: None,
         }
     }
 }

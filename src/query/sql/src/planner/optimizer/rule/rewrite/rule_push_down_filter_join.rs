@@ -79,7 +79,7 @@ impl Rule for RulePushDownFilterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
-        let (s_expr, outer_to_inner) = outer_join_to_inner_join(s_expr, self.after_join_reorder())?;
+        let (s_expr, outer_to_inner) = outer_join_to_inner_join(s_expr)?;
         if self.after_join_reorder {
             if outer_to_inner {
                 state.add_result(s_expr);
@@ -250,12 +250,17 @@ pub fn try_push_down_filter_join(
         left_push_down.extend(all_push_down.to_vec());
         right_push_down.extend(all_push_down);
     }
-    join.join_type = eliminate_outer_join_type(
-        join.join_type,
-        false,
-        can_filter_left_null,
-        can_filter_right_null,
-    );
+
+    let original_join_type = join.join_type.clone();
+    join.join_type =
+        eliminate_outer_join_type(join.join_type, can_filter_left_null, can_filter_right_null);
+    if matches!(
+        original_join_type,
+        JoinType::LeftSingle | JoinType::RightSingle
+    ) {
+        join.join_type = original_join_type.clone();
+        join.single_to_inner = Some(original_join_type);
+    }
 
     let mut left_child = join_expr.child(0)?.clone();
     let mut right_child = join_expr.child(1)?.clone();

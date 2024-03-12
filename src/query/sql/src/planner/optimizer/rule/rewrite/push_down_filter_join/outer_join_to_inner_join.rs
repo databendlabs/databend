@@ -36,7 +36,7 @@ use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 
-pub fn outer_join_to_inner_join(s_expr: &SExpr, after_join_reorder: bool) -> Result<(SExpr, bool)> {
+pub fn outer_join_to_inner_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
     if !join.join_type.is_outer_join() {
         return Ok((s_expr.clone(), false));
@@ -86,12 +86,8 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, after_join_reorder: bool) -> Res
     }
 
     let original_join_type = join.join_type.clone();
-    join.join_type = eliminate_outer_join_type(
-        join.join_type,
-        after_join_reorder,
-        can_filter_left_null,
-        can_filter_right_null,
-    );
+    join.join_type =
+        eliminate_outer_join_type(join.join_type, can_filter_left_null, can_filter_right_null);
     if join.join_type == original_join_type {
         return Ok((s_expr.clone(), false));
     }
@@ -100,7 +96,8 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, after_join_reorder: bool) -> Res
         original_join_type,
         JoinType::LeftSingle | JoinType::RightSingle
     ) {
-        join.original_join_type = Some(original_join_type);
+        join.join_type = original_join_type.clone();
+        join.single_to_inner = Some(original_join_type);
     }
 
     let result = SExpr::create_unary(
@@ -117,15 +114,12 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, after_join_reorder: bool) -> Res
 
 pub fn eliminate_outer_join_type(
     join_type: JoinType,
-    after_join_reorder: bool,
     can_filter_left_null: bool,
     can_filter_right_null: bool,
 ) -> JoinType {
     match join_type {
-        JoinType::Left if can_filter_right_null => JoinType::Inner,
-        JoinType::LeftSingle if can_filter_right_null && after_join_reorder => JoinType::Inner,
-        JoinType::Right if can_filter_left_null => JoinType::Inner,
-        JoinType::RightSingle if can_filter_left_null && after_join_reorder => JoinType::Inner,
+        JoinType::Left | JoinType::LeftSingle if can_filter_right_null => JoinType::Inner,
+        JoinType::Right | JoinType::RightSingle if can_filter_left_null => JoinType::Inner,
         JoinType::Full => {
             if can_filter_left_null && can_filter_right_null {
                 JoinType::Inner

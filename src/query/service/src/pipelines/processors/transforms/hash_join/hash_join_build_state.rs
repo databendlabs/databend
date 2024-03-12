@@ -248,7 +248,7 @@ impl HashJoinBuildState {
     pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
         let block_outer_scan_map = if self.hash_join_state.need_outer_scan()
             || matches!(
-                self.hash_join_state.hash_join_desc.original_join_type,
+                self.hash_join_state.hash_join_desc.single_to_inner,
                 Some(JoinType::RightSingle)
             ) {
             vec![false; data_block.num_rows()]
@@ -268,7 +268,7 @@ impl HashJoinBuildState {
             let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
             if self.hash_join_state.need_outer_scan()
                 || matches!(
-                    self.hash_join_state.hash_join_desc.original_join_type,
+                    self.hash_join_state.hash_join_desc.single_to_inner,
                     Some(JoinType::RightSingle)
                 )
             {

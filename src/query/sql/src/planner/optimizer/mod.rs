@@ -21,6 +21,7 @@ mod filter;
 mod format;
 mod group;
 mod hyper_dp;
+mod join;
 mod m_expr;
 mod memo;
 #[allow(clippy::module_inception)]

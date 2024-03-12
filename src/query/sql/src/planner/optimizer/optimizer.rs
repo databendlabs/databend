@@ -35,6 +35,7 @@ use crate::optimizer::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::filter::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
+use crate::optimizer::join::SingleToInnerOptimizer;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::RuleFactory;
@@ -152,10 +153,6 @@ impl<'a> RecursiveOptimizer<'a> {
 
         Ok(s_expr.clone())
     }
-
-    fn set_after_join_reorder(&mut self, after_join_reorder: bool) {
-        self.after_join_reorder = after_join_reorder;
-    }
 }
 
 #[minitrace::trace]
@@ -262,23 +259,12 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone()).optimize(&s_expr)?;
         if optimized {
             s_expr = (*dp_res).clone();
-            s_expr = RecursiveOptimizer::new(&[RuleID::CommuteJoin], &opt_ctx).run(&s_expr)?;
-            // After join reorder, we need to run push down filter join again.
-            // There may be some changes to change join type, such as single join to inner join.
-            s_expr.clear_applied_rules();
-            let mut optimizer = RecursiveOptimizer::new(
-                &[
-                    RuleID::PushDownFilterJoin,
-                    RuleID::MergeFilter,
-                    RuleID::EliminateFilter,
-                ],
-                &opt_ctx,
-            );
-            optimizer.set_after_join_reorder(true);
-            s_expr = optimizer.run(&s_expr)?;
             dphyp_optimized = true;
         }
     }
+
+    // After join reorder, Convert some single join to inner join.
+    s_expr = SingleToInnerOptimizer::new().run(&s_expr)?;
 
     // Deduplicate join conditions.
     s_expr = DeduplicateJoinConditionOptimizer::new().run(&s_expr)?;
