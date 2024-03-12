@@ -224,7 +224,7 @@ pub fn agg_spilling_aggregate_payload<Method: HashMethodBounds>(
         }
 
         let now = Instant::now();
-        let data_block = payload.aggregate_flush_all();
+        let data_block = payload.aggregate_flush_all()?;
         rows += data_block.num_rows();
 
         let begin = write_size;

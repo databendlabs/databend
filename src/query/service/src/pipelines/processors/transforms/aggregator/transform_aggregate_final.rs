@@ -95,14 +95,14 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                             let payload = payload.convert_to_partitioned_payload(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
-                            );
+                            )?;
                             ht.combine_payloads(&payload, &mut self.flush_state)?;
                         }
                         None => {
                             let payload = payload.convert_to_partitioned_payload(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
-                            );
+                            )?;
                             let capacity =
                                 AggregateHashTable::get_capacity_for_count(payload.len());
                             let mut hashtable = AggregateHashTable::new_with_capacity(

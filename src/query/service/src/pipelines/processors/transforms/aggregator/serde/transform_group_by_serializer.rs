@@ -244,7 +244,7 @@ impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
                 Some(data_block.add_meta(Some(AggregateSerdeMeta::create(bucket))))
             }
             SerializePayload::AggregatePayload(p) => {
-                let data_block = p.payload.group_by_flush_all();
+                let data_block = p.payload.group_by_flush_all().ok()?;
 
                 self.end_iter = true;
 

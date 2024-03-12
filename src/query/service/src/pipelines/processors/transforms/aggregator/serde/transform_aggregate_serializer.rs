@@ -299,7 +299,7 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
                 self.finish(state_builders, group_key_builder)
             }
             SerializePayload::AggregatePayload(p) => {
-                let data_block = p.payload.aggregate_flush_all();
+                let data_block = p.payload.aggregate_flush_all()?;
 
                 self.end_iter = true;
 

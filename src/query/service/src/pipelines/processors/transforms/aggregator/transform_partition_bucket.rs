@@ -144,7 +144,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             }
 
             let data_block = self.inputs[index].port.pull_data().unwrap()?;
-            self.inputs[index].bucket = self.add_bucket(data_block);
+            self.inputs[index].bucket = self.add_bucket(data_block)?;
 
             if self.inputs[index].bucket <= SINGLE_LEVEL_BUCKET_NUM || self.max_partition_count > 0
             {
@@ -156,7 +156,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         Ok(self.initialized_all_inputs)
     }
 
-    fn add_bucket(&mut self, mut data_block: DataBlock) -> isize {
+    fn add_bucket(&mut self, mut data_block: DataBlock) -> Result<isize> {
         if let Some(block_meta) = data_block.get_meta() {
             if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_ref_from(block_meta) {
                 let (bucket, res) = match block_meta {
@@ -200,7 +200,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                                 };
                             }
 
-                            return SINGLE_LEVEL_BUCKET_NUM;
+                            return Ok(SINGLE_LEVEL_BUCKET_NUM);
                         }
 
                         unreachable!()
@@ -222,7 +222,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         }
                     };
 
-                    return res;
+                    return Ok(res);
                 }
             }
         }
@@ -234,14 +234,14 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     AggregateMeta::AggregatePayload(p) => {
                         let res = p.bucket;
                         self.agg_payloads.push(p);
-                        res
+                        Ok(res)
                     }
                     AggregateMeta::Serialized(p) => {
                         for (bucket, payload) in p
                             .convert_to_partitioned_payload(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
-                            )
+                            )?
                             .payloads
                             .into_iter()
                             .enumerate()
@@ -253,16 +253,18 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                             });
                         }
 
-                        p.bucket
+                        Ok(p.bucket)
                     }
                     _ => unreachable!(),
                 };
             }
-            return 0;
+            return Err(ErrorCode::Internal(
+                "TransformPartitionBucket only recv AggregateMeta.",
+            ));
         }
 
         self.unsplitted_blocks.push(data_block);
-        SINGLE_LEVEL_BUCKET_NUM
+        Ok(SINGLE_LEVEL_BUCKET_NUM)
     }
 
     fn try_push_data_block(&mut self) -> bool {
@@ -428,7 +430,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                 }
 
                 let data_block = self.inputs[index].port.pull_data().unwrap()?;
-                self.inputs[index].bucket = self.add_bucket(data_block);
+                self.inputs[index].bucket = self.add_bucket(data_block)?;
                 debug_assert!(self.unsplitted_blocks.is_empty());
 
                 if self.inputs[index].bucket <= self.working_bucket {

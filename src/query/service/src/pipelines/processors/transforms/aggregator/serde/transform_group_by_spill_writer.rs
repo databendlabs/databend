@@ -221,7 +221,7 @@ pub fn agg_spilling_group_by_payload<Method: HashMethodBounds>(
         }
 
         let now = Instant::now();
-        let data_block = payload.group_by_flush_all();
+        let data_block = payload.group_by_flush_all()?;
         rows += data_block.num_rows();
 
         let begin = write_size;

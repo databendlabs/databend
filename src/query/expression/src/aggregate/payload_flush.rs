@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::Result;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use ethnum::i256;
 
@@ -110,7 +111,7 @@ impl PartitionedPayload {
 }
 
 impl Payload {
-    pub fn aggregate_flush_all(&self) -> DataBlock {
+    pub fn aggregate_flush_all(&self) -> Result<DataBlock> {
         let mut state = PayloadFlushState::default();
         let mut blocks = vec![];
 
@@ -149,13 +150,13 @@ impl Payload {
         }
 
         if blocks.is_empty() {
-            return self.empty_block();
+            return Ok(self.empty_block());
         }
 
-        DataBlock::concat(&blocks).unwrap()
+        DataBlock::concat(&blocks)
     }
 
-    pub fn group_by_flush_all(&self) -> DataBlock {
+    pub fn group_by_flush_all(&self) -> Result<DataBlock> {
         let mut state = PayloadFlushState::default();
         let mut blocks = vec![];
 
@@ -165,10 +166,10 @@ impl Payload {
         }
 
         if blocks.is_empty() {
-            return self.empty_block();
+            return Ok(self.empty_block());
         }
 
-        DataBlock::concat(&blocks).unwrap()
+        DataBlock::concat(&blocks)
     }
 
     pub fn flush(&self, state: &mut PayloadFlushState) -> bool {

@@ -18,6 +18,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use bumpalo::Bump;
+use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateHashTable;
@@ -56,7 +57,7 @@ impl SerializedPayload {
         &self,
         group_types: Vec<DataType>,
         aggrs: Vec<Arc<dyn AggregateFunction>>,
-    ) -> PartitionedPayload {
+    ) -> Result<PartitionedPayload> {
         let rows_num = self.data_block.num_rows();
         let radix_bits = self.max_partition_count.trailing_zeros() as u64;
         let config = HashTableConfig::default().with_initial_radix_bits(radix_bits);
@@ -93,11 +94,10 @@ impl SerializedPayload {
             })
             .collect::<Vec<_>>();
 
-        let _ = hashtable
-            .add_groups(&mut state, &group_columns, &[vec![]], &agg_states, rows_num)
-            .unwrap();
+        let _ =
+            hashtable.add_groups(&mut state, &group_columns, &[vec![]], &agg_states, rows_num)?;
 
-        hashtable.payload
+        Ok(hashtable.payload)
     }
 }
 
