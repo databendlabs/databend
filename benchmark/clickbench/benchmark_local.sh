@@ -41,6 +41,7 @@ name = "root"
 auth_type = "no_password"
 [meta]
 endpoints = ["127.0.0.1:9191"]
+client_timeout_in_second = 60
 [storage]
 type = "fs"
 [storage.fs]
@@ -70,19 +71,10 @@ echo "Instance type: ${instance_type}"
 
 # Load data
 if [ "${BENCHMARK_DATASET}" == "internal" ]; then
-    echo "drop user if exists a" | bendsql
-    echo "drop role if exists role1" | bendsql
-    echo "create role role1" | bendsql
-    echo "grant create database on *.* to role role1" | bendsql
-    echo "create user a identified by '123' with DEFAULT_ROLE='role1'" | bendsql
-    echo "grant role role1 to a" | bendsql
-    export BENDSQL_DSN="databend://a:123@localhost:8000/${BENCHMARK_DATASET}?sslmode=disable"
-    # use created user a test rbac
     bash "${BENCHMARK_DATASET}"/load.sh
     load_time=0
 else
     echo "Loading data..."
-    export BENDSQL_DSN="databend://root:@localhost:8000/${BENCHMARK_DATASET}?sslmode=disable"
     load_start=$(date +%s)
     bendsql <"${BENCHMARK_DATASET}/load.sql"
     load_end=$(date +%s)
@@ -90,7 +82,6 @@ else
     echo "Data loaded in ${load_time}s."
 fi
 
-export BENDSQL_DSN="databend://root:@localhost:8000/${BENCHMARK_DATASET}?sslmode=disable"
 data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql -o tsv)
 
 echo '{}' >result.json

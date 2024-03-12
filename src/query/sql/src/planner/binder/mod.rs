@@ -51,6 +51,7 @@ mod table;
 mod table_args;
 mod udf;
 mod update;
+mod util;
 mod values;
 mod window;
 
