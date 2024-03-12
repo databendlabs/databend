@@ -759,7 +759,7 @@ impl Display for OptimizeTableAction {
             OptimizeTableAction::Compact { target } => {
                 match target {
                     CompactTarget::Block => {
-                        write!(f, "COMPACT BLOCK")?;
+                        write!(f, "COMPACT")?;
                     }
                     CompactTarget::Segment => {
                         write!(f, "COMPACT SEGMENT")?;
