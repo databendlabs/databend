@@ -117,6 +117,8 @@ pub fn try_push_down_filter_join(
 
     let original_predicates_count = predicates.len();
     let mut original_predicates = vec![];
+    let mut left_push_down = vec![];
+    let mut right_push_down = vec![];
     let mut push_down_predicates = vec![];
     let mut non_equi_predicates = vec![];
     for predicate in predicates.into_iter() {
@@ -126,8 +128,14 @@ pub fn try_push_down_filter_join(
         }
         let pred = JoinPredicate::new(&predicate, &left_prop, &right_prop);
         match pred {
-            JoinPredicate::ALL(_) | JoinPredicate::Left(_) | JoinPredicate::Right(_) => {
+            JoinPredicate::ALL(_) => {
                 push_down_predicates.push(predicate);
+            }
+            JoinPredicate::Left(_) => {
+                left_push_down.push(predicate);
+            }
+            JoinPredicate::Right(_) => {
+                right_push_down.push(predicate);
             }
             JoinPredicate::Other(_) => original_predicates.push(predicate),
             JoinPredicate::Both { is_equal_op, .. } => {
@@ -149,30 +157,54 @@ pub fn try_push_down_filter_join(
         return Ok((false, s_expr.clone()));
     }
 
-    // Infer new predicate and push down filter.
-    for (left_condition, right_condition) in join
-        .left_conditions
-        .iter()
-        .zip(join.right_conditions.iter())
-    {
-        push_down_predicates.push(ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: String::from(ComparisonOp::Equal.to_func_name()),
-            params: vec![],
-            arguments: vec![left_condition.clone(), right_condition.clone()],
-        }));
+    if matches!(
+        join.join_type,
+        JoinType::Inner
+            | JoinType::LeftSemi
+            | JoinType::RightSemi
+            | JoinType::Left
+            | JoinType::Right
+            | JoinType::LeftSingle
+            | JoinType::RightSingle
+    ) {
+        // Infer new predicate and push down filter.
+        for (left_condition, right_condition) in join
+            .left_conditions
+            .iter()
+            .zip(join.right_conditions.iter())
+        {
+            push_down_predicates.push(ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: String::from(ComparisonOp::Equal.to_func_name()),
+                params: vec![],
+                arguments: vec![left_condition.clone(), right_condition.clone()],
+            }));
+        }
+        join.left_conditions.clear();
+        join.right_conditions.clear();
+        match join.join_type {
+            JoinType::Left | JoinType::LeftSingle => {
+                push_down_predicates.extend(left_push_down);
+                left_push_down = vec![];
+            }
+            JoinType::Right | JoinType::RightSingle => {
+                push_down_predicates.extend(right_push_down);
+                right_push_down = vec![];
+            }
+            _ => {
+                push_down_predicates.extend(left_push_down);
+                left_push_down = vec![];
+                push_down_predicates.extend(right_push_down);
+                right_push_down = vec![];
+            }
+        }
+        let join_prop = JoinProperty::new(&left_prop.output_columns, &right_prop.output_columns);
+        let infer_filter = InferFilterOptimizer::new(Some(join_prop));
+        push_down_predicates = infer_filter.run(push_down_predicates)?;
     }
-    join.left_conditions.clear();
-    join.right_conditions.clear();
-
-    let join_prop = JoinProperty::new(&left_prop.output_columns, &right_prop.output_columns);
-    let infer_filter = InferFilterOptimizer::new(Some(join_prop));
-    let predicates = infer_filter.run(push_down_predicates)?;
 
     let mut all_push_down = vec![];
-    let mut left_push_down = vec![];
-    let mut right_push_down = vec![];
-    for predicate in predicates.into_iter() {
+    for predicate in push_down_predicates.into_iter() {
         if is_falsy(&predicate) {
             left_push_down = vec![false_constant()];
             right_push_down = vec![false_constant()];
