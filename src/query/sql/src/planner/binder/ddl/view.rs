@@ -194,7 +194,7 @@ impl Binder {
             .with_order_by("name");
 
         select_builder.with_filter(format!("database = '{database}'"));
-        select_builder.with_filter(format!(" engine = 'VIEW'"));
+        select_builder.with_filter(" engine = 'VIEW'".to_string());
 
         let catalog_name = match catalog {
             None => self.ctx.get_current_catalog(),
