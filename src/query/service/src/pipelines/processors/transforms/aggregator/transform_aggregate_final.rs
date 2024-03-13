@@ -84,6 +84,33 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                                 self.params.aggregate_functions.clone(),
                                 HashTableConfig::default().with_initial_radix_bits(0),
                                 capacity,
+                                Arc::new(Bump::new()),
+                            );
+                            hashtable.combine_payloads(&payload, &mut self.flush_state)?;
+                            agg_hashtable = Some(hashtable);
+                        }
+                    },
+                    AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
+                        Some(ht) => {
+                            let payload = payload.convert_to_partitioned_payload(
+                                self.params.group_data_types.clone(),
+                                self.params.aggregate_functions.clone(),
+                            )?;
+                            ht.combine_payloads(&payload, &mut self.flush_state)?;
+                        }
+                        None => {
+                            let payload = payload.convert_to_partitioned_payload(
+                                self.params.group_data_types.clone(),
+                                self.params.aggregate_functions.clone(),
+                            )?;
+                            let capacity =
+                                AggregateHashTable::get_capacity_for_count(payload.len());
+                            let mut hashtable = AggregateHashTable::new_with_capacity(
+                                self.params.group_data_types.clone(),
+                                self.params.aggregate_functions.clone(),
+                                HashTableConfig::default().with_initial_radix_bits(0),
+                                capacity,
+                                Arc::new(Bump::new()),
                             );
                             hashtable.combine_payloads(&payload, &mut self.flush_state)?;
                             agg_hashtable = Some(hashtable);
@@ -241,6 +268,7 @@ where Method: HashMethodBounds
                     },
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(_) => unreachable!(),
+                    AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 }
             }
 

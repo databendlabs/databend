@@ -136,10 +136,12 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 )?),
             }
         } else {
+            let arena = Arc::new(Bump::new());
             HashTable::AggregateHashTable(AggregateHashTable::new(
                 params.group_data_types.clone(),
                 params.aggregate_functions.clone(),
                 config,
+                arena,
             ))
         };
 
@@ -383,6 +385,39 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
 
                 unreachable!()
             }
+
+            if matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
+            || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage)
+            {
+                if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
+                    // perf
+                    {
+                        metrics_inc_aggregate_partial_spill_count();
+                        metrics_inc_aggregate_partial_spill_cell_count(1);
+                        metrics_inc_aggregate_partial_hashtable_allocated_bytes(
+                            v.allocated_bytes() as u64,
+                        );
+                    }
+
+                    let group_types = v.payload.group_types.clone();
+                    let aggrs = v.payload.aggrs.clone();
+                    let config = v.config.clone();
+                    let blocks = vec![DataBlock::empty_with_meta(
+                        AggregateMeta::<Method, usize>::create_agg_spilling(v.payload),
+                    )];
+
+                    let arena = Arc::new(Bump::new());
+                    self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
+                        group_types,
+                        aggrs,
+                        config,
+                        arena,
+                    ));
+                    return Ok(blocks);
+                }
+
+                unreachable!()
+            }
         }
 
         Ok(vec![])
@@ -422,8 +457,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             HashTable::AggregateHashTable(hashtable) => {
                 let partition_count = hashtable.payload.partition_count();
                 let mut blocks = Vec::with_capacity(partition_count);
-                for (bucket, mut payload) in hashtable.payload.payloads.into_iter().enumerate() {
-                    payload.arenas.extend_from_slice(&hashtable.payload.arenas);
+                for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
                     blocks.push(DataBlock::empty_with_meta(
                         AggregateMeta::<Method, usize>::create_agg_payload(
                             bucket as isize,

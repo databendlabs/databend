@@ -34,7 +34,6 @@ AggregateFinal
 ├── aggregate functions: [count()]
 ├── estimated rows: 1.00
 └── AggregatePartial
-    ├── output columns: [COUNT(*) (#1)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00

@@ -18,15 +18,19 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
+use itertools::Itertools;
 use strength_reduce::StrengthReducedU64;
 
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use crate::get_layout_offsets;
+use crate::read;
 use crate::store;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
+use crate::ColumnBuilder;
+use crate::DataBlock;
 use crate::PayloadFlushState;
 use crate::SelectVector;
 use crate::StateAddr;
@@ -41,7 +45,6 @@ use crate::MAX_PAGE_SIZE;
 // [STATE_ADDRS] is the state_addrs of the aggregate functions, 8 bytes each
 pub struct Payload {
     pub arena: Arc<Bump>,
-    pub arenas: Vec<Arc<Bump>>,
     // if true, the states are moved out of the payload into other payload, and will not be dropped
     pub state_move_out: bool,
     pub group_types: Vec<DataType>,
@@ -124,8 +127,7 @@ impl Payload {
         let row_per_page = (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size).max(1);
 
         Self {
-            arena: arena.clone(),
-            arenas: vec![arena],
+            arena,
             state_move_out: false,
             pages: vec![],
             current_write_page: 0,
@@ -236,14 +238,14 @@ impl Payload {
                     for idx in select_vector.iter().take(new_group_rows).copied() {
                         unsafe {
                             let dst = address[idx].add(write_offset);
-                            store(val, dst as *mut u8);
+                            store::<u8>(&val, dst as *mut u8);
                         }
                     }
                 } else {
                     for idx in select_vector.iter().take(new_group_rows).copied() {
                         unsafe {
                             let dst = address[idx].add(write_offset);
-                            store(bitmap.get_bit(idx) as u8, dst as *mut u8);
+                            store::<u8>(&(bitmap.get_bit(idx) as u8), dst as *mut u8);
                         }
                     }
                 }
@@ -274,7 +276,7 @@ impl Payload {
         for idx in select_vector.iter().take(new_group_rows).copied() {
             unsafe {
                 let dst = address[idx].add(write_offset);
-                store(group_hashes[idx], dst as *mut u8);
+                store::<u64>(&group_hashes[idx], dst as *mut u8);
             }
         }
 
@@ -286,7 +288,7 @@ impl Payload {
                 let place = self.arena.alloc_layout(layout);
                 unsafe {
                     let dst = address[idx].add(write_offset);
-                    store(place.as_ptr() as u64, dst as *mut u8);
+                    store::<u64>(&(place.as_ptr() as u64), dst as *mut u8);
                 }
 
                 let place = StateAddr::from(place);
@@ -364,8 +366,7 @@ impl Payload {
         for idx in 0..rows {
             state.addresses[idx] = self.data_ptr(page, idx + state.flush_page_row);
 
-            let hash =
-                unsafe { core::ptr::read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
+            let hash = unsafe { read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
 
             let partition_idx = (hash % mods) as usize;
 
@@ -375,6 +376,20 @@ impl Payload {
         }
         state.flush_page_row = end;
         true
+    }
+
+    pub fn empty_block(&self) -> DataBlock {
+        let columns = self
+            .aggrs
+            .iter()
+            .map(|f| ColumnBuilder::with_capacity(&f.return_type().unwrap(), 0).build())
+            .chain(
+                self.group_types
+                    .iter()
+                    .map(|t| ColumnBuilder::with_capacity(t, 0).build()),
+            )
+            .collect_vec();
+        DataBlock::new_from_columns(columns)
     }
 }
 
@@ -388,7 +403,7 @@ impl Drop for Payload {
                         for page in self.pages.iter() {
                             for row in 0..page.rows {
                                 unsafe {
-                                    let state_place = StateAddr::new(core::ptr::read::<u64>(
+                                    let state_place = StateAddr::new(read::<u64>(
                                         self.data_ptr(page, row).add(self.state_offset) as _,
                                     )
                                         as usize);

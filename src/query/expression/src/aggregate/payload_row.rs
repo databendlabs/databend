@@ -18,6 +18,7 @@ use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 use ethnum::i256;
 
+use crate::read;
 use crate::store;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
@@ -76,7 +77,7 @@ pub unsafe fn serialize_column_to_rowformat(
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(buffer) => {
                 for index in select_vector.iter().take(rows).copied() {
-                    store(buffer[index], address[index].add(offset) as *mut u8);
+                    store(&buffer[index], address[index].add(offset) as *mut u8);
                 }
             }
         }),
@@ -84,7 +85,7 @@ pub unsafe fn serialize_column_to_rowformat(
             with_decimal_mapped_type!(|DECIMAL_TYPE| match v {
                 DecimalColumn::DECIMAL_TYPE(buffer, _) => {
                     for index in select_vector.iter().take(rows).copied() {
-                        store(buffer[index], address[index].add(offset) as *mut u8);
+                        store(&buffer[index], address[index].add(offset) as *mut u8);
                     }
                 }
             })
@@ -94,12 +95,12 @@ pub unsafe fn serialize_column_to_rowformat(
                 let val: u8 = if v.unset_bits() == 0 { 1 } else { 0 };
                 // faster path
                 for index in select_vector.iter().take(rows).copied() {
-                    store(val, address[index].add(offset) as *mut u8);
+                    store(&val, address[index].add(offset) as *mut u8);
                 }
             } else {
                 for index in select_vector.iter().take(rows).copied() {
                     store(
-                        v.get_bit(index) as u8,
+                        &(v.get_bit(index) as u8),
                         address[index].add(offset) as *mut u8,
                     );
                 }
@@ -108,9 +109,9 @@ pub unsafe fn serialize_column_to_rowformat(
         Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
             for index in select_vector.iter().take(rows).copied() {
                 let data = arena.alloc_slice_copy(v.index_unchecked(index));
-                store(data.len() as u32, address[index].add(offset) as *mut u8);
+                store(&(data.len() as u32), address[index].add(offset) as *mut u8);
                 store(
-                    data.as_ptr() as u64,
+                    &(data.as_ptr() as u64),
                     address[index].add(offset + 4) as *mut u8,
                 );
             }
@@ -118,21 +119,21 @@ pub unsafe fn serialize_column_to_rowformat(
         Column::String(v) => {
             for index in select_vector.iter().take(rows).copied() {
                 let data = arena.alloc_str(v.index_unchecked(index));
-                store(data.len() as u32, address[index].add(offset) as *mut u8);
+                store(&(data.len() as u32), address[index].add(offset) as *mut u8);
                 store(
-                    data.as_ptr() as u64,
+                    &(data.as_ptr() as u64),
                     address[index].add(offset + 4) as *mut u8,
                 );
             }
         }
         Column::Timestamp(buffer) => {
             for index in select_vector.iter().take(rows).copied() {
-                store(buffer[index], address[index].add(offset) as *mut u8);
+                store(&buffer[index], address[index].add(offset) as *mut u8);
             }
         }
         Column::Date(buffer) => {
             for index in select_vector.iter().take(rows).copied() {
-                store(buffer[index], address[index].add(offset) as *mut u8);
+                store(&buffer[index], address[index].add(offset) as *mut u8);
             }
         }
         Column::Nullable(c) => serialize_column_to_rowformat(
@@ -153,9 +154,9 @@ pub unsafe fn serialize_column_to_rowformat(
                 bincode_serialize_into_buf(scratch, &s).unwrap();
 
                 let data = arena.alloc_slice_copy(scratch);
-                store(data.len() as u32, address[index].add(offset) as *mut u8);
+                store(&(data.len() as u32), address[index].add(offset) as *mut u8);
                 store(
-                    data.as_ptr() as u64,
+                    &(data.as_ptr() as u64),
                     address[index].add(offset + 4) as *mut u8,
                 );
             }
@@ -362,19 +363,19 @@ unsafe fn row_match_binary_column(
         for idx in select_vector[..*count].iter() {
             let idx = *idx;
             let validity_address = address[idx].add(validity_offset);
-            let is_set2 = core::ptr::read::<u8>(validity_address as _) != 0;
+            let is_set2 = read::<u8>(validity_address as _) != 0;
             let is_set = is_all_set || validity.get_bit_unchecked(idx);
 
             if is_set && is_set2 {
                 let len_address = address[idx].add(col_offset);
                 let address = address[idx].add(col_offset + 4);
-                let len = core::ptr::read::<u32>(len_address as _) as usize;
+                let len = read::<u32>(len_address as _) as usize;
 
                 let value = BinaryType::index_column_unchecked(col, idx);
                 if len != value.len() {
                     equal = false;
                 } else {
-                    let data_address = core::ptr::read::<u64>(address as _) as usize as *const u8;
+                    let data_address = read::<u64>(address as _) as usize as *const u8;
                     let scalar = std::slice::from_raw_parts(data_address, len);
                     equal = databend_common_hashtable::fast_memcmp(scalar, value);
                 }
@@ -396,13 +397,13 @@ unsafe fn row_match_binary_column(
             let len_address = address[idx].add(col_offset);
             let address = address[idx].add(col_offset + 4);
 
-            let len = core::ptr::read::<u32>(len_address as _) as usize;
+            let len = read::<u32>(len_address as _) as usize;
 
             let value = BinaryType::index_column_unchecked(col, idx);
             if len != value.len() {
                 equal = false;
             } else {
-                let data_address = core::ptr::read::<u64>(address as _) as usize as *const u8;
+                let data_address = read::<u64>(address as _) as usize as *const u8;
                 let scalar = std::slice::from_raw_parts(data_address, len);
 
                 equal = databend_common_hashtable::fast_memcmp(scalar, value);
@@ -444,11 +445,11 @@ unsafe fn row_match_column_type<T: ArgType>(
         for idx in select_vector[..*count].iter() {
             let idx = *idx;
             let validity_address = address[idx].add(validity_offset);
-            let is_set2 = core::ptr::read::<u8>(validity_address as _) != 0;
+            let is_set2 = read::<u8>(validity_address as _) != 0;
             let is_set = is_all_set || validity.get_bit_unchecked(idx);
             if is_set && is_set2 {
                 let address = address[idx].add(col_offset);
-                let scalar = core::ptr::read::<<T as ValueType>::Scalar>(address as _);
+                let scalar = read::<<T as ValueType>::Scalar>(address as _);
                 let value = T::index_column_unchecked(&col, idx);
                 let value = T::to_owned_scalar(value);
 
@@ -470,7 +471,7 @@ unsafe fn row_match_column_type<T: ArgType>(
             let idx = *idx;
             let value = T::index_column_unchecked(&col, idx);
             let address = address[idx].add(col_offset);
-            let scalar = core::ptr::read::<<T as ValueType>::Scalar>(address as _);
+            let scalar = read::<<T as ValueType>::Scalar>(address as _);
             let value = T::to_owned_scalar(value);
 
             if scalar.eq(&value) {
@@ -502,12 +503,12 @@ unsafe fn row_match_generic_column(
     for idx in select_vector[..*count].iter() {
         let idx = *idx;
         let len_address = address[idx].add(col_offset);
-        let len = core::ptr::read::<u32>(len_address as _) as usize;
+        let len = read::<u32>(len_address as _) as usize;
 
         let address = address[idx].add(col_offset + 4);
 
         let value = AnyType::index_column_unchecked(col, idx);
-        let data_address = core::ptr::read::<u64>(address as _) as usize as *const u8;
+        let data_address = read::<u64>(address as _) as usize as *const u8;
 
         let scalar = std::slice::from_raw_parts(data_address, len);
         let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
