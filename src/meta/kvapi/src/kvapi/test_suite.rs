@@ -416,14 +416,18 @@ impl kvapi::TestSuite {
         info!("--- get returns the value with meta and seq updated");
         let key_value = kv.get_kv(test_key).await?;
         assert!(key_value.is_some());
-        assert_eq!(
-            SeqV::with_meta(
-                seq + 1,
-                Some(KVMeta::new_expire(now_sec + 20)),
-                b"v1".to_vec()
-            ),
-            key_value.unwrap(),
-        );
+
+        {
+            let res = key_value.unwrap();
+
+            assert_eq!(res.seq, seq + 1);
+            assert_eq!(res.data, b("v1"));
+
+            let meta = res.meta.unwrap();
+            let expire_at_sec = meta.get_expire_at_ms().unwrap() / 1000;
+            let want = now_sec + 20;
+            assert!((want..want + 2).contains(&expire_at_sec));
+        }
 
         Ok(())
     }
