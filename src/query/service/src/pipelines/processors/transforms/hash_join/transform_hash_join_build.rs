@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::hash_join::build_spill::BuildSpillHandler;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
@@ -230,14 +231,21 @@ impl Processor for TransformHashJoinBuild {
             }
             HashJoinBuildStep::WaitProbe => {
                 self.build_state.hash_join_state.wait_probe_notify().await?;
-                // Currently, each processor will read its own partition
-                // Note: we assume that the partition files will fit into memory
-                // later, will introduce multiple level spill or other way to handle this.
                 let partition_id = self
                     .build_state
                     .hash_join_state
                     .partition_id
                     .load(Ordering::Relaxed);
+                if self.build_state.join_type() == JoinType::Cross {
+                    if partition_id == -1 {
+                        self.step = HashJoinBuildStep::Finished;
+                        return Ok(());
+                    }
+                    self.input_data = self.spill_handler.restore_cross_join().await?;
+                    self.build_state.restore_barrier.wait().await;
+                    self.reset().await?;
+                    return Ok(());
+                }
                 // If there is no partition to restore, probe will send `-1` to build
                 // Which means it's time to finish.
                 if partition_id == -1 {

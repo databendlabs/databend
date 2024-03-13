@@ -124,10 +124,12 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
             let _dropper = GroupByHashTableDropper::<Method>::create();
             HashTable::HashTable(HashTableCell::create(hashtable, _dropper))
         } else {
+            let arena = Arc::new(Bump::new());
             HashTable::AggregateHashTable(AggregateHashTable::new(
                 params.group_data_types.clone(),
                 params.aggregate_functions.clone(),
                 config,
+                arena,
             ))
         };
 
@@ -227,6 +229,30 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
 
                     unreachable!()
                 }
+
+                if matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
+                    || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage)
+                {
+                    if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
+                        let group_types = v.payload.group_types.clone();
+                        let aggrs = v.payload.aggrs.clone();
+                        let config = v.config.clone();
+                        let blocks = vec![DataBlock::empty_with_meta(
+                            AggregateMeta::<Method, ()>::create_agg_spilling(v.payload),
+                        )];
+
+                        let arena = Arc::new(Bump::new());
+                        self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
+                            group_types,
+                            aggrs,
+                            config,
+                            arena,
+                        ));
+                        return Ok(blocks);
+                    }
+
+                    unreachable!()
+                }
             }
         }
 
@@ -267,8 +293,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             HashTable::AggregateHashTable(hashtable) => {
                 let partition_count = hashtable.payload.partition_count();
                 let mut blocks = Vec::with_capacity(partition_count);
-                for (bucket, mut payload) in hashtable.payload.payloads.into_iter().enumerate() {
-                    payload.arenas.extend_from_slice(&hashtable.payload.arenas);
+                for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
                     blocks.push(DataBlock::empty_with_meta(
                         AggregateMeta::<Method, ()>::create_agg_payload(
                             bucket as isize,

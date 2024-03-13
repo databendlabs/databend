@@ -14,53 +14,44 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::escape_for_key;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::principal::PasswordPolicy;
+use databend_common_meta_app::principal::PasswordPolicyIdent;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::Operation;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::With;
+use futures::TryStreamExt;
 
 use crate::password_policy::password_policy_api::PasswordPolicyApi;
-use crate::serde::deserialize_struct;
-use crate::serde::serialize_struct;
-
-static PASSWORD_POLICY_API_KEY_PREFIX: &str = "__fd_password_policies";
 
 pub struct PasswordPolicyMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-    password_policy_prefix: String,
+    tenant: Tenant,
 }
 
 impl PasswordPolicyMgr {
     pub fn create(
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-        tenant: &str,
-    ) -> Result<Self, ErrorCode> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty (while create password policy)",
-            ));
-        }
-
-        Ok(PasswordPolicyMgr {
+        tenant: &NonEmptyString,
+    ) -> Self {
+        PasswordPolicyMgr {
             kv_api,
-            password_policy_prefix: format!("{}/{}", PASSWORD_POLICY_API_KEY_PREFIX, tenant),
-        })
+            tenant: Tenant::new_nonempty(tenant.clone()),
+        }
     }
 
-    fn make_password_policy_key(&self, name: &str) -> Result<String> {
-        Ok(format!(
-            "{}/{}",
-            self.password_policy_prefix,
-            escape_for_key(name)?
-        ))
+    fn ident(&self, name: &str) -> PasswordPolicyIdent {
+        PasswordPolicyIdent::new(self.tenant.clone(), name)
     }
 }
 
@@ -73,18 +64,12 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
         password_policy: PasswordPolicy,
         create_option: &CreateOption,
     ) -> Result<()> {
-        let seq = MatchSeq::from(*create_option);
-        let key = self.make_password_policy_key(password_policy.name.as_str())?;
-        let value = Operation::Update(serialize_struct(
-            &password_policy,
-            ErrorCode::IllegalPasswordPolicy,
-            || "",
-        )?);
+        let ident = self.ident(&password_policy.name);
 
-        let kv_api = self.kv_api.clone();
-        let res = kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, value, None))
-            .await?;
+        let seq = MatchSeq::from(*create_option);
+        let upsert = UpsertPB::insert(ident, password_policy.clone()).with(seq);
+
+        let res = self.kv_api.upsert_pb(&upsert).await?;
 
         if let CreateOption::None = create_option {
             if res.prev.is_some() {
@@ -105,59 +90,53 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
         password_policy: PasswordPolicy,
         match_seq: MatchSeq,
     ) -> Result<u64> {
-        let key = self.make_password_policy_key(password_policy.name.as_str())?;
-        let value = Operation::Update(serialize_struct(
-            &password_policy,
-            ErrorCode::IllegalPasswordPolicy,
-            || "",
-        )?);
+        let ident = self.ident(&password_policy.name);
 
-        let kv_api = self.kv_api.clone();
-        let upsert_kv = kv_api
-            .upsert_kv(UpsertKVReq::new(&key, match_seq, value, None))
-            .await?;
+        let upsert = UpsertPB::update(ident, password_policy.clone()).with(match_seq);
+        let res = self.kv_api.upsert_pb(&upsert).await?;
 
-        match upsert_kv.result {
-            Some(SeqV { seq: s, .. }) => Ok(s),
-            None => Err(ErrorCode::UnknownPasswordPolicy(format!(
+        let Some(SeqV { seq, .. }) = res.result else {
+            return Err(ErrorCode::UnknownPasswordPolicy(format!(
                 "Password policy '{}' does not exist.",
                 password_policy.name
-            ))),
-        }
+            )));
+        };
+
+        Ok(seq)
     }
 
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn drop_password_policy(&self, name: &str, seq: MatchSeq) -> Result<()> {
-        let key = self.make_password_policy_key(name)?;
-        let kv_api = self.kv_api.clone();
-        let res = kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
-            .await?;
-        if res.prev.is_some() && res.result.is_none() {
-            Ok(())
-        } else {
-            Err(ErrorCode::UnknownPasswordPolicy(format!(
+        let ident = self.ident(name);
+
+        let upsert = UpsertPB::delete(ident).with(seq);
+        let res = self.kv_api.upsert_pb(&upsert).await?;
+
+        res.removed_or_else(|_| {
+            ErrorCode::UnknownPasswordPolicy(format!(
                 "Cannot delete password policy '{}'. It may not exist.",
                 name
-            )))
-        }
+            ))
+        })?;
+
+        Ok(())
     }
 
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_password_policy(&self, name: &str, seq: MatchSeq) -> Result<SeqV<PasswordPolicy>> {
-        let key = self.make_password_policy_key(name)?;
-        let res = self.kv_api.get_kv(&key).await?;
-        let seq_value = res.ok_or_else(|| {
-            ErrorCode::UnknownPasswordPolicy(format!("Password policy '{}' does not exist.", name))
-        })?;
+        let ident = self.ident(name);
 
-        match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(SeqV::new(
-                seq_value.seq,
-                deserialize_struct(&seq_value.data, ErrorCode::IllegalPasswordPolicy, || "")?,
-            )),
+        let seqv = self.kv_api.get_pb(&ident).await?;
+
+        match seq.match_seq(&seqv) {
+            Ok(_) => seqv.ok_or_else(|| {
+                ErrorCode::UnknownPasswordPolicy(format!(
+                    "Password policy '{}' does not exist.",
+                    name
+                ))
+            }),
             Err(_) => Err(ErrorCode::UnknownPasswordPolicy(format!(
                 "Password policy '{}' does not exist.",
                 name
@@ -168,17 +147,11 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn get_password_policies(&self) -> Result<Vec<PasswordPolicy>> {
-        let values = self
-            .kv_api
-            .prefix_list_kv(&self.password_policy_prefix)
-            .await?;
+        let dir_name = DirName::new(self.ident("dummy"));
 
-        let mut password_policies = Vec::with_capacity(values.len());
-        for (_, value) in values {
-            let password_policy =
-                deserialize_struct(&value.data, ErrorCode::IllegalPasswordPolicy, || "")?;
-            password_policies.push(password_policy);
-        }
-        Ok(password_policies)
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = values.try_collect().await?;
+
+        Ok(values)
     }
 }

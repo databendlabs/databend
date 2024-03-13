@@ -186,7 +186,6 @@ Limit
                 ├── output columns: [count(1) (#2), max(a) (#4)]
                 ├── exchange type: Merge
                 └── AggregatePartial
-                    ├── output columns: [count(1) (#2), max(a) (#4)]
                     ├── group by: []
                     ├── aggregate functions: [count(), max(a)]
                     ├── estimated rows: 1.00
@@ -339,7 +338,6 @@ AggregateFinal
     ├── output columns: [sum(a) (#2)]
     ├── exchange type: Merge
     └── AggregatePartial
-        ├── output columns: [sum(a) (#2)]
         ├── group by: []
         ├── aggregate functions: [sum(number)]
         ├── estimated rows: 1.00

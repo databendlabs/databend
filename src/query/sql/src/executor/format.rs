@@ -575,10 +575,6 @@ fn aggregate_partial_to_format_tree(
         .join(", ");
 
     let mut children = vec![
-        FormatTreeNode::new(format!(
-            "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata, true)
-        )),
         FormatTreeNode::new(format!("group by: [{group_by}]")),
         FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
     ];

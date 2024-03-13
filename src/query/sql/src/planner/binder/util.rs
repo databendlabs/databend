@@ -12,15 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data_source_info;
-mod parquet;
-mod parquet_read_options;
-mod result_scan;
-mod stage;
-
-pub use data_source_info::DataSourceInfo;
-pub use parquet::FullParquetMeta;
-pub use parquet::ParquetTableInfo;
-pub use parquet_read_options::ParquetReadOptions;
-pub use result_scan::ResultScanTableInfo;
-pub use stage::StageTableInfo;
+/// Ident name can not contain ' or "
+/// Forbidden ' or " in UserName and RoleName, to prevent Meta injection problem
+pub fn illegal_ident_name(ident_name: &str) -> bool {
+    ident_name.chars().any(|c| c == '\'' || c == '\"')
+}

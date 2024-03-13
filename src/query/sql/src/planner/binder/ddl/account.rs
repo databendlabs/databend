@@ -19,6 +19,7 @@ use databend_common_ast::ast::AlterUserStmt;
 use databend_common_ast::ast::CreateUserStmt;
 use databend_common_ast::ast::GrantStmt;
 use databend_common_ast::ast::RevokeStmt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
@@ -27,6 +28,7 @@ use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_users::UserApiProvider;
 
+use crate::binder::util::illegal_ident_name;
 use crate::plans::AlterUserPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::GrantPrivilegePlan;
@@ -233,13 +235,19 @@ impl Binder {
             auth_option,
             user_options,
         } = stmt;
+        if illegal_ident_name(&user.username) {
+            return Err(ErrorCode::IllegalUser(format!(
+                "Illegal Username: Illegal user name [{}], not support username contain ' or \"",
+                user.username
+            )));
+        }
         let mut user_option = UserOption::default();
         for option in user_options {
             option.apply(&mut user_option);
         }
         UserApiProvider::instance()
             .verify_password(
-                self.ctx.get_tenant().as_str(),
+                &self.ctx.get_tenant(),
                 &user_option,
                 auth_option,
                 None,
@@ -289,7 +297,7 @@ impl Binder {
             // verify the password if changed
             UserApiProvider::instance()
                 .verify_password(
-                    self.ctx.get_tenant().as_str(),
+                    &self.ctx.get_tenant(),
                     &user_option,
                     auth_option,
                     Some(&user_info),

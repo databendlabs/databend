@@ -211,8 +211,10 @@ impl Interpreter for GrantPrivilegeInterpreter {
                     user_mgr
                         .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)
                         .await?;
-                    RoleCacheManager::instance().invalidate_cache(&tenant);
                 }
+                // grant_ownership and grant_privileges_to_role will modify the kv in meta.
+                // So we need invalidate the role cache.
+                RoleCacheManager::instance().invalidate_cache(&tenant);
             }
         }
 

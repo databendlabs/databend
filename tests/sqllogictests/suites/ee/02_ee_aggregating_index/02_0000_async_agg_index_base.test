@@ -386,7 +386,6 @@ EvalScalar
     ├── aggregate functions: [max(user_id), sum(id), count(id)]
     ├── estimated rows: 8.00
     └── AggregatePartial
-        ├── output columns: [max(user_id) (#3), sum(id) (#4), count(id) (#5), #_group_by_key]
         ├── group by: [event_name, user_id]
         ├── aggregate functions: [max(user_id), sum(id), count(id)]
         ├── estimated rows: 8.00
@@ -427,7 +426,6 @@ EvalScalar
     ├── aggregate functions: [max(user_id), sum(id), count(id)]
     ├── estimated rows: 7.11
     └── AggregatePartial
-        ├── output columns: [max(user_id) (#3), sum(id) (#4), count(id) (#5), #_group_by_key]
         ├── group by: [event_name, user_id]
         ├── aggregate functions: [max(user_id), sum(id), count(id)]
         ├── estimated rows: 7.11
@@ -474,7 +472,6 @@ EvalScalar
         ├── aggregate functions: [max(user_id), sum(id), count(id)]
         ├── estimated rows: 7.11
         └── AggregatePartial
-            ├── output columns: [max(user_id) (#3), sum(id) (#4), count(id) (#5), #_group_by_key]
             ├── group by: [event_name, user_id]
             ├── aggregate functions: [max(user_id), sum(id), count(id)]
             ├── estimated rows: 7.11
