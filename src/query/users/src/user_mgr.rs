@@ -147,11 +147,7 @@ impl UserApiProvider {
             }
         }
         if let Some(name) = user_info.option.password_policy() {
-            if self
-                .get_password_policy(tenant.as_str(), name)
-                .await
-                .is_err()
-            {
+            if self.get_password_policy(tenant, name).await.is_err() {
                 return Err(ErrorCode::UnknownPasswordPolicy(format!(
                     "password policy `{}` is not exist",
                     name
@@ -309,11 +305,7 @@ impl UserApiProvider {
                 }
             }
             if let Some(name) = user_option.password_policy() {
-                if self
-                    .get_password_policy(tenant.as_str(), name)
-                    .await
-                    .is_err()
-                {
+                if self.get_password_policy(tenant, name).await.is_err() {
                     return Err(ErrorCode::UnknownPasswordPolicy(format!(
                         "password policy `{}` is not exist",
                         name

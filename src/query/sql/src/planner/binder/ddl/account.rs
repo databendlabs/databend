@@ -247,7 +247,7 @@ impl Binder {
         }
         UserApiProvider::instance()
             .verify_password(
-                self.ctx.get_tenant().as_str(),
+                &self.ctx.get_tenant(),
                 &user_option,
                 auth_option,
                 None,
@@ -297,7 +297,7 @@ impl Binder {
             // verify the password if changed
             UserApiProvider::instance()
                 .verify_password(
-                    self.ctx.get_tenant().as_str(),
+                    &self.ctx.get_tenant(),
                     &user_option,
                     auth_option,
                     Some(&user_info),

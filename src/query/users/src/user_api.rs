@@ -167,14 +167,8 @@ impl UserApiProvider {
         )?))
     }
 
-    pub fn get_password_policy_api_client(
-        &self,
-        tenant: &str,
-    ) -> Result<Arc<impl PasswordPolicyApi>> {
-        Ok(Arc::new(PasswordPolicyMgr::create(
-            self.client.clone(),
-            tenant,
-        )?))
+    pub fn password_policy_api(&self, tenant: &NonEmptyString) -> Arc<impl PasswordPolicyApi> {
+        Arc::new(PasswordPolicyMgr::create(self.client.clone(), tenant))
     }
 
     pub fn get_meta_store_client(&self) -> Arc<MetaStore> {
