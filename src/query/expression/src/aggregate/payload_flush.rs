@@ -19,6 +19,7 @@ use ethnum::i256;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
+use crate::read;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::Decimal;
@@ -196,13 +197,13 @@ impl Payload {
         for idx in 0..rows {
             state.addresses[idx] = self.data_ptr(page, idx + state.flush_page_row);
             state.probe_state.group_hashes[idx] =
-                unsafe { core::ptr::read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
+                unsafe { read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
 
             if !self.aggrs.is_empty() {
                 state.state_places[idx] = unsafe {
-                    StateAddr::new(core::ptr::read::<u64>(
-                        state.addresses[idx].add(self.state_offset) as _,
-                    ) as usize)
+                    StateAddr::new(
+                        read::<u64>(state.addresses[idx].add(self.state_offset) as _) as usize,
+                    )
                 };
             }
         }
@@ -268,9 +269,8 @@ impl Payload {
         state: &mut PayloadFlushState,
     ) -> Column {
         let len = state.probe_state.row_count;
-        let iter = (0..len).map(|idx| unsafe {
-            core::ptr::read::<T::Scalar>(state.addresses[idx].add(col_offset) as _)
-        });
+        let iter = (0..len)
+            .map(|idx| unsafe { read::<T::Scalar>(state.addresses[idx].add(col_offset) as _) });
         let col = T::column_from_iter(iter, &[]);
         T::upcast_column(col)
     }
@@ -283,8 +283,8 @@ impl Payload {
     ) -> Column {
         let len = state.probe_state.row_count;
         let iter = (0..len).map(|idx| unsafe {
-            core::ptr::read::<<DecimalType<Num> as ValueType>::Scalar>(
-                state.addresses[idx].add(col_offset) as _,
+            read::<<DecimalType<Num> as ValueType>::Scalar>(
+                state.addresses[idx].add(col_offset) as _
             )
         });
         let col = DecimalType::<Num>::column_from_iter(iter, &[]);
@@ -301,11 +301,9 @@ impl Payload {
 
         unsafe {
             for idx in 0..len {
-                let str_len =
-                    core::ptr::read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
-                let data_address =
-                    core::ptr::read::<u64>(state.addresses[idx].add(col_offset + 4) as _) as usize
-                        as *const u8;
+                let str_len = read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
+                let data_address = read::<u64>(state.addresses[idx].add(col_offset + 4) as _)
+                    as usize as *const u8;
 
                 let scalar = std::slice::from_raw_parts(data_address, str_len);
 
@@ -335,11 +333,9 @@ impl Payload {
 
         unsafe {
             for idx in 0..len {
-                let str_len =
-                    core::ptr::read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
-                let data_address =
-                    core::ptr::read::<u64>(state.addresses[idx].add(col_offset + 4) as _) as usize
-                        as *const u8;
+                let str_len = read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
+                let data_address = read::<u64>(state.addresses[idx].add(col_offset + 4) as _)
+                    as usize as *const u8;
 
                 let scalar = std::slice::from_raw_parts(data_address, str_len);
                 let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();

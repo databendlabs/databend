@@ -20,6 +20,7 @@ use itertools::Itertools;
 
 use super::payload::Payload;
 use super::probe_state::ProbeState;
+use crate::read;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
@@ -217,8 +218,7 @@ impl PartitionedPayload {
         for idx in 0..rows {
             state.addresses[idx] = other.data_ptr(page, idx + state.flush_page_row);
 
-            let hash =
-                unsafe { core::ptr::read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
+            let hash = unsafe { read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
 
             let partition_idx = ((hash & self.mask_v) >> self.shift_v) as usize;
 

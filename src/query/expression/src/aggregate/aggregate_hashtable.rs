@@ -26,6 +26,7 @@ use super::probe_state::ProbeState;
 use crate::aggregate::payload_row::row_match_columns;
 use crate::group_hash_columns;
 use crate::new_sel;
+use crate::read;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
@@ -159,8 +160,8 @@ impl AggregateHashTable {
         if !self.payload.aggrs.is_empty() {
             for i in 0..row_count {
                 state.state_places[i] = unsafe {
-                    StateAddr::new(core::ptr::read::<u64>(
-                        state.addresses[i].add(self.payload.state_offset) as _,
+                    StateAddr::new(read::<u64>(
+                        state.addresses[i].add(self.payload.state_offset) as _
                     ) as usize)
                 };
             }
@@ -365,7 +366,7 @@ impl AggregateHashTable {
             if !self.payload.aggrs.is_empty() {
                 for i in 0..row_count {
                     flush_state.probe_state.state_places[i] = unsafe {
-                        StateAddr::new(core::ptr::read::<u64>(
+                        StateAddr::new(read::<u64>(
                             flush_state.probe_state.addresses[i].add(self.payload.state_offset)
                                 as _,
                         ) as usize)
