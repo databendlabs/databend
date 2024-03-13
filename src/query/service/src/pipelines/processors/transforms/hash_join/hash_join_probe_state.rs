@@ -406,23 +406,25 @@ impl HashJoinProbeState {
     pub fn finish_final_probe(&self) -> Result<()> {
         let old_count = self.final_probe_workers.fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {
-            // If build side has spilled data, we need to wait build side to next round.
-            // Set partition id to `HashJoinState`
-            let mut spill_partitions = self.spill_partitions.write();
-            if let Some(id) = spill_partitions.iter().next().cloned() {
-                spill_partitions.remove(&id);
-                self.hash_join_state
-                    .partition_id
-                    .store(id as i8, Ordering::Relaxed);
-            } else {
-                self.hash_join_state
-                    .partition_id
-                    .store(-1, Ordering::Relaxed);
+            if self.join_type() != JoinType::Cross {
+                // If build side has spilled data, we need to wait build side to next round.
+                // Set partition id to `HashJoinState`
+                let mut spill_partitions = self.spill_partitions.write();
+                if let Some(id) = spill_partitions.iter().next().cloned() {
+                    spill_partitions.remove(&id);
+                    self.hash_join_state
+                        .partition_id
+                        .store(id as i8, Ordering::Relaxed);
+                } else {
+                    self.hash_join_state
+                        .partition_id
+                        .store(-1, Ordering::Relaxed);
+                }
+                info!(
+                    "next partition to read: {:?}, final probe done",
+                    self.hash_join_state.partition_id.load(Ordering::Relaxed)
+                );
             }
-            info!(
-                "next partition to read: {:?}, final probe done",
-                self.hash_join_state.partition_id.load(Ordering::Relaxed)
-            );
             self.hash_join_state
                 .continue_build_watcher
                 .send(true)
@@ -444,22 +446,24 @@ impl HashJoinProbeState {
         self.final_probe_workers.fetch_sub(1, Ordering::Relaxed);
         let old_count = self.spill_workers.fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {
-            // Set partition id to `HashJoinState`
-            let mut spill_partitions = self.spill_partitions.write();
-            if let Some(id) = spill_partitions.iter().next().cloned() {
-                spill_partitions.remove(&id);
-                self.hash_join_state
-                    .partition_id
-                    .store(id as i8, Ordering::Relaxed);
-            } else {
-                self.hash_join_state
-                    .partition_id
-                    .store(-1, Ordering::Relaxed);
-            };
-            info!(
-                "next partition to read: {:?}, probe spill done",
-                self.hash_join_state.partition_id.load(Ordering::Relaxed)
-            );
+            if self.join_type() != JoinType::Cross {
+                // Set partition id to `HashJoinState`
+                let mut spill_partitions = self.spill_partitions.write();
+                if let Some(id) = spill_partitions.iter().next().cloned() {
+                    spill_partitions.remove(&id);
+                    self.hash_join_state
+                        .partition_id
+                        .store(id as i8, Ordering::Relaxed);
+                } else {
+                    self.hash_join_state
+                        .partition_id
+                        .store(-1, Ordering::Relaxed);
+                };
+                info!(
+                    "next partition to read: {:?}, probe spill done",
+                    self.hash_join_state.partition_id.load(Ordering::Relaxed)
+                );
+            }
             self.hash_join_state
                 .continue_build_watcher
                 .send(true)

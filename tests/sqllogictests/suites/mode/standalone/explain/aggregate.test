@@ -7,7 +7,6 @@ AggregateFinal
 ├── aggregate functions: []
 ├── estimated rows: 10.00
 └── AggregatePartial
-    ├── output columns: [#_group_by_key]
     ├── group by: [number]
     ├── aggregate functions: []
     ├── estimated rows: 10.00
@@ -31,7 +30,6 @@ AggregateFinal
 ├── aggregate functions: []
 ├── estimated rows: 10.00
 └── AggregatePartial
-    ├── output columns: [#_group_by_key]
     ├── group by: [number]
     ├── aggregate functions: []
     ├── estimated rows: 10.00
@@ -78,7 +76,6 @@ EvalScalar
     ├── aggregate functions: []
     ├── estimated rows: 10.00
     └── AggregatePartial
-        ├── output columns: [#_group_by_key]
         ├── group by: [number]
         ├── aggregate functions: []
         ├── estimated rows: 10.00
@@ -106,7 +103,6 @@ EvalScalar
     ├── aggregate functions: [count()]
     ├── estimated rows: 0.00
     └── AggregatePartial
-        ├── output columns: [count(3) (#13), #_group_by_key]
         ├── group by: [name, type]
         ├── aggregate functions: [count()]
         ├── estimated rows: 0.00
@@ -133,7 +129,6 @@ AggregateFinal
 ├── aggregate functions: []
 ├── estimated rows: 0.00
 └── AggregatePartial
-    ├── output columns: [#_group_by_key]
     ├── group by: [a]
     ├── aggregate functions: []
     ├── estimated rows: 0.00
@@ -160,7 +155,6 @@ AggregateFinal
 ├── aggregate functions: []
 ├── estimated rows: 0.00
 └── AggregatePartial
-    ├── output columns: [#_group_by_key]
     ├── group by: [a]
     ├── aggregate functions: []
     ├── estimated rows: 0.00
@@ -187,7 +181,6 @@ AggregateFinal
 ├── aggregate functions: [max(b)]
 ├── estimated rows: 0.00
 └── AggregatePartial
-    ├── output columns: [max(b) (#2), #_group_by_key]
     ├── group by: [a]
     ├── aggregate functions: [max(b)]
     ├── estimated rows: 0.00
@@ -222,7 +215,6 @@ EvalScalar
         ├── aggregate functions: [sum(b), count(), max(b)]
         ├── estimated rows: 0.00
         └── AggregatePartial
-            ├── output columns: [sum(b) (#2), count(b) (#3), max(b) (#5), #_group_by_key]
             ├── group by: [a]
             ├── aggregate functions: [sum(b), count(), max(b)]
             ├── estimated rows: 0.00
@@ -261,7 +253,6 @@ EvalScalar
             ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
             └── AggregatePartial
-                ├── output columns: [sum(b) (#2), count(b) (#3), #_group_by_key]
                 ├── group by: [a]
                 ├── aggregate functions: [sum(b), count()]
                 ├── estimated rows: 0.00
@@ -297,7 +288,6 @@ EvalScalar
             ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
             └── AggregatePartial
-                ├── output columns: [sum(b) (#2), count(b) (#3), #_group_by_key]
                 ├── group by: [a]
                 ├── aggregate functions: [sum(b), count()]
                 ├── estimated rows: 0.00
@@ -332,7 +322,6 @@ EvalScalar
             ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
             └── AggregatePartial
-                ├── output columns: [sum(b) (#2), count(b) (#3), #_group_by_key]
                 ├── group by: [a]
                 ├── aggregate functions: [sum(b), count()]
                 ├── estimated rows: 0.00
@@ -367,7 +356,6 @@ EvalScalar
             ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
             └── AggregatePartial
-                ├── output columns: [sum(b) (#2), count(b) (#3), #_group_by_key]
                 ├── group by: [a]
                 ├── aggregate functions: [sum(b), count()]
                 ├── estimated rows: 0.00
@@ -402,7 +390,6 @@ EvalScalar
             ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
             └── AggregatePartial
-                ├── output columns: [sum(b) (#2), count(b) (#3), #_group_by_key]
                 ├── group by: [a]
                 ├── aggregate functions: [sum(b), count()]
                 ├── estimated rows: 0.00
@@ -440,7 +427,6 @@ AggregateFinal
 ├── aggregate functions: [count()]
 ├── estimated rows: 1.00
 └── AggregatePartial
-    ├── output columns: [count() (#2)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00

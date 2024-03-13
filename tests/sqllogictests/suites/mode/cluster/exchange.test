@@ -170,7 +170,6 @@ Exchange
     │           ├── output columns: [sum(number) (#2), #_group_by_key]
     │           ├── exchange type: Hash(_group_by_key)
     │           └── AggregatePartial
-    │               ├── output columns: [sum(number) (#2), #_group_by_key]
     │               ├── group by: [number]
     │               ├── aggregate functions: [sum(number)]
     │               ├── estimated rows: 1.00
@@ -202,7 +201,6 @@ Fragment 0:
     ├── output columns: [sum(number) (#2), #_group_by_key]
     ├── destination fragment: [1]
     └── AggregatePartial
-        ├── output columns: [sum(number) (#2), #_group_by_key]
         ├── group by: [number]
         ├── aggregate functions: [sum(number)]
         ├── estimated rows: 1.00
@@ -285,7 +283,6 @@ AggregateFinal
     ├── output columns: [sum(a) (#4)]
     ├── exchange type: Merge
     └── AggregatePartial
-        ├── output columns: [sum(a) (#4)]
         ├── group by: []
         ├── aggregate functions: [sum(number)]
         ├── estimated rows: 1.00
@@ -368,7 +365,6 @@ AggregateFinal
 ├── aggregate functions: [sum(a)]
 ├── estimated rows: 1.00
 └── AggregatePartial
-    ├── output columns: [sum(a) (#6)]
     ├── group by: []
     ├── aggregate functions: [sum(a)]
     ├── estimated rows: 1.00
@@ -419,7 +415,6 @@ AggregateFinal
                 ├── output columns: [sum(t1.a) (#4)]
                 ├── exchange type: Merge
                 └── AggregatePartial
-                    ├── output columns: [sum(t1.a) (#4)]
                     ├── group by: []
                     ├── aggregate functions: [sum(number)]
                     ├── estimated rows: 1.00
@@ -473,7 +468,6 @@ AggregateFinal
     ├── output columns: [sum(a) (#3)]
     ├── exchange type: Merge
     └── AggregatePartial
-        ├── output columns: [sum(a) (#3)]
         ├── group by: []
         ├── aggregate functions: [sum(number)]
         ├── estimated rows: 1.00

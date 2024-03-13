@@ -65,13 +65,13 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_password_policy(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         password_policy: PasswordPolicy,
         create_option: &CreateOption,
     ) -> Result<()> {
         check_password_policy(&password_policy)?;
 
-        let client = self.get_password_policy_api_client(tenant)?;
+        let client = self.password_policy_api(tenant);
         client
             .add_password_policy(password_policy, create_option)
             .await
@@ -82,7 +82,7 @@ impl UserApiProvider {
     #[allow(clippy::too_many_arguments)]
     pub async fn update_password_policy(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         name: &str,
         min_length: Option<u64>,
         max_length: Option<u64>,
@@ -98,7 +98,7 @@ impl UserApiProvider {
         comment: Option<String>,
         if_exists: bool,
     ) -> Result<Option<u64>> {
-        let client = self.get_password_policy_api_client(tenant)?;
+        let client = self.password_policy_api(tenant);
         let seq_password_policy = match client.get_password_policy(name, MatchSeq::GE(0)).await {
             Ok(seq_password_policy) => seq_password_policy,
             Err(e) => {
@@ -181,7 +181,7 @@ impl UserApiProvider {
             }
         }
 
-        let client = self.get_password_policy_api_client(tenant.as_str())?;
+        let client = self.password_policy_api(tenant);
         match client.drop_password_policy(name, MatchSeq::GE(1)).await {
             Ok(res) => Ok(res),
             Err(e) => {
@@ -196,7 +196,11 @@ impl UserApiProvider {
 
     // Check whether a password policy is exist.
     #[async_backtrace::framed]
-    pub async fn exists_password_policy(&self, tenant: &str, name: &str) -> Result<bool> {
+    pub async fn exists_password_policy(
+        &self,
+        tenant: &NonEmptyString,
+        name: &str,
+    ) -> Result<bool> {
         match self.get_password_policy(tenant, name).await {
             Ok(_) => Ok(true),
             Err(e) => {
@@ -211,8 +215,12 @@ impl UserApiProvider {
 
     // Get a password_policy by tenant.
     #[async_backtrace::framed]
-    pub async fn get_password_policy(&self, tenant: &str, name: &str) -> Result<PasswordPolicy> {
-        let client = self.get_password_policy_api_client(tenant)?;
+    pub async fn get_password_policy(
+        &self,
+        tenant: &NonEmptyString,
+        name: &str,
+    ) -> Result<PasswordPolicy> {
+        let client = self.password_policy_api(tenant);
         let password_policy = client
             .get_password_policy(name, MatchSeq::GE(0))
             .await?
@@ -222,8 +230,11 @@ impl UserApiProvider {
 
     // Get all password policies by tenant.
     #[async_backtrace::framed]
-    pub async fn get_password_policies(&self, tenant: &str) -> Result<Vec<PasswordPolicy>> {
-        let client = self.get_password_policy_api_client(tenant)?;
+    pub async fn get_password_policies(
+        &self,
+        tenant: &NonEmptyString,
+    ) -> Result<Vec<PasswordPolicy>> {
+        let client = self.password_policy_api(tenant);
         let password_policies = client
             .get_password_policies()
             .await
@@ -239,7 +250,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn verify_password(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         user_option: &UserOption,
         auth_option: &AuthOption,
         user_info: Option<&UserInfo>,
@@ -379,7 +390,7 @@ impl UserApiProvider {
         }
 
         if let Some(name) = user_info.option.password_policy() {
-            if let Ok(password_policy) = self.get_password_policy(tenant.as_str(), name).await {
+            if let Ok(password_policy) = self.get_password_policy(tenant, name).await {
                 // Check the number of login password fails
                 if !user_info.password_fails.is_empty() && password_policy.max_retries > 0 {
                     let check_time = now

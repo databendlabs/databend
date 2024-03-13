@@ -13,7 +13,6 @@ Exchange
     ├── aggregate functions: []
     ├── estimated rows: 100000.00
     └── AggregatePartial
-        ├── output columns: [#_group_by_key]
         ├── group by: [number]
         ├── aggregate functions: []
         ├── estimated rows: 100000.00
@@ -49,7 +48,6 @@ Exchange
         ├── output columns: [#_group_by_key]
         ├── exchange type: Hash(_group_by_key)
         └── AggregatePartial
-            ├── output columns: [#_group_by_key]
             ├── group by: [number]
             ├── aggregate functions: []
             ├── estimated rows: 100000.00

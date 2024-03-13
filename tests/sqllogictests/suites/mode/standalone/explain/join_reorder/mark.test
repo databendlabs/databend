@@ -115,7 +115,6 @@ EvalScalar
     │       │   │   ├── aggregate functions: []
     │       │   │   ├── estimated rows: 0.00
     │       │   │   └── AggregatePartial
-    │       │   │       ├── output columns: [#_group_by_key]
     │       │   │       ├── group by: [c]
     │       │   │       ├── aggregate functions: []
     │       │   │       ├── estimated rows: 0.00

@@ -8751,7 +8751,7 @@ OptimizeTable(
 ---------- Input ----------
 OPTIMIZE TABLE t COMPACT LIMIT 10;
 ---------- Output ---------
-OPTIMIZE TABLE t COMPACT BLOCK LIMIT 10
+OPTIMIZE TABLE t COMPACT LIMIT 10
 ---------- AST ------------
 OptimizeTable(
     OptimizeTableStmt {

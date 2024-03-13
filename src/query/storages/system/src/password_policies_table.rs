@@ -53,7 +53,7 @@ impl AsyncSystemTable for PasswordPoliciesTable {
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let password_policies = UserApiProvider::instance()
-            .get_password_policies(tenant.as_str())
+            .get_password_policies(&tenant)
             .await?;
 
         let mut names = Vec::with_capacity(password_policies.len());
