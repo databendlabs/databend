@@ -95,7 +95,7 @@ impl Indexer {
             snapshot.segments.clone()
         };
 
-        let data_schema = DataSchema::from(schema.clone());
+        let data_schema = DataSchema::from(schema.as_ref());
 
         // Grouping of segments, each group includes a number of segments to generate an index file.
         // Limit the index file size by check the sum row count to avoid too large index file.
