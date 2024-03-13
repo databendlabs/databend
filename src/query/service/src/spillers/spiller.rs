@@ -105,7 +105,7 @@ impl Spiller {
 
     /// Read a certain file to a [`DataBlock`].
     /// We should guarantee that the file is managed by this spiller.
-    pub async fn read_spilled(&self, file: &str) -> Result<(DataBlock, u64)> {
+    pub async fn read_spilled_file(&self, file: &str) -> Result<(DataBlock, u64)> {
         debug_assert!(self.columns_layout.contains_key(file));
         let data = self.operator.read(file).await?;
         let bytes = data.len() as u64;
@@ -177,12 +177,12 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_data(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
+    pub async fn read_spilled_partition(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
         debug_assert!(self.partition_location.contains_key(p_id));
         let files = self.partition_location.get(p_id).unwrap().to_vec();
         let mut spilled_data = Vec::with_capacity(files.len());
         for file in files.iter() {
-            let (block, _) = self.read_spilled(file).await?;
+            let (block, _) = self.read_spilled_file(file).await?;
             if block.num_rows() != 0 {
                 spilled_data.push(block);
             }

@@ -78,6 +78,7 @@ order by c_custkey
 19 0
 20 0
 
+#left semi
 query II
 select
     c_custkey
@@ -111,6 +112,7 @@ order by c_custkey
 115
 115
 
+#left anti
 query I
 select
     c_custkey

@@ -344,7 +344,7 @@ where R: Rows + Sync + Send + 'static
             debug_assert!(files.len() == 1);
 
             let ins = Instant::now();
-            let (block, bytes) = self.spiller.read_spilled(&files[0]).await?;
+            let (block, bytes) = self.spiller.read_spilled_file(&files[0]).await?;
 
             // perf
             {
@@ -430,7 +430,7 @@ impl SortedStream for BlockStream {
             BlockStream::Spilled((files, spiller)) => {
                 if let Some(file) = files.pop_front() {
                     let ins = Instant::now();
-                    let (block, bytes) = spiller.read_spilled(&file).await?;
+                    let (block, bytes) = spiller.read_spilled_file(&file).await?;
 
                     // perf
                     {
