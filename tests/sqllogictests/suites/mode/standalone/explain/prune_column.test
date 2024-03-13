@@ -20,7 +20,6 @@ AggregateFinal
 ├── aggregate functions: []
 ├── estimated rows: 1.00
 └── AggregatePartial
-    ├── output columns: [#_group_by_key]
     ├── group by: [number]
     ├── aggregate functions: []
     ├── estimated rows: 1.00
@@ -52,7 +51,6 @@ Limit
         ├── aggregate functions: []
         ├── estimated rows: 0.00
         └── AggregatePartial
-            ├── output columns: [#_group_by_key]
             ├── group by: [number, number, number, number]
             ├── aggregate functions: []
             ├── estimated rows: 0.00
@@ -137,7 +135,6 @@ HashJoin
 │           ├── limit: 1
 │           ├── estimated rows: 1.00
 │           └── AggregatePartial
-│               ├── output columns: [_count_scalar_subquery (#13), _any_scalar_subquery (#14)]
 │               ├── group by: []
 │               ├── aggregate functions: [count(), any(COUNT(*))]
 │               ├── estimated rows: 1.00
@@ -147,7 +144,6 @@ HashJoin
 │                   ├── aggregate functions: [count()]
 │                   ├── estimated rows: 1.00
 │                   └── AggregatePartial
-│                       ├── output columns: [COUNT(*) (#12)]
 │                       ├── group by: []
 │                       ├── aggregate functions: [count()]
 │                       ├── estimated rows: 1.00
@@ -239,7 +235,6 @@ HashJoin
 │       ├── aggregate functions: [count()]
 │       ├── estimated rows: 1.00
 │       └── AggregatePartial
-│           ├── output columns: [count(*) (#2)]
 │           ├── group by: []
 │           ├── aggregate functions: [count()]
 │           ├── estimated rows: 1.00
@@ -286,7 +281,6 @@ AggregateFinal
 ├── aggregate functions: [count()]
 ├── estimated rows: 1.00
 └── AggregatePartial
-    ├── output columns: [COUNT(*) (#2)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00

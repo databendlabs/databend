@@ -91,7 +91,6 @@ Limit
         ├── aggregate functions: []
         ├── estimated rows: 0.20
         └── AggregatePartial
-            ├── output columns: [#_group_by_key]
             ├── group by: [number]
             ├── aggregate functions: []
             ├── estimated rows: 0.20
@@ -112,7 +111,6 @@ Limit
                     │   ├── aggregate functions: [count()]
                     │   ├── estimated rows: 1.00
                     │   └── AggregatePartial
-                    │       ├── output columns: [COUNT(*) (#4), #_group_by_key]
                     │       ├── group by: [number]
                     │       ├── aggregate functions: [count()]
                     │       ├── estimated rows: 1.00
@@ -192,7 +190,6 @@ Limit
         │   ├── aggregate functions: [count()]
         │   ├── estimated rows: 1.00
         │   └── AggregatePartial
-        │       ├── output columns: [count(t1.number) (#2), #_group_by_key]
         │       ├── group by: [number]
         │       ├── aggregate functions: [count()]
         │       ├── estimated rows: 1.00
@@ -211,7 +208,6 @@ Limit
             ├── aggregate functions: [count()]
             ├── estimated rows: 2.00
             └── AggregatePartial
-                ├── output columns: [count(t.number) (#5), #_group_by_key]
                 ├── group by: [number]
                 ├── aggregate functions: [count()]
                 ├── estimated rows: 2.00

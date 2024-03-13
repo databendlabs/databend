@@ -77,7 +77,7 @@ pub unsafe fn serialize_column_to_rowformat(
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(buffer) => {
                 for index in select_vector.iter().take(rows).copied() {
-                    store::<NUM_TYPE>(&buffer[index], address[index].add(offset) as *mut u8);
+                    store(&buffer[index], address[index].add(offset) as *mut u8);
                 }
             }
         }),
@@ -85,10 +85,7 @@ pub unsafe fn serialize_column_to_rowformat(
             with_decimal_mapped_type!(|DECIMAL_TYPE| match v {
                 DecimalColumn::DECIMAL_TYPE(buffer, _) => {
                     for index in select_vector.iter().take(rows).copied() {
-                        store::<DECIMAL_TYPE>(
-                            &buffer[index],
-                            address[index].add(offset) as *mut u8,
-                        );
+                        store(&buffer[index], address[index].add(offset) as *mut u8);
                     }
                 }
             })
@@ -98,11 +95,11 @@ pub unsafe fn serialize_column_to_rowformat(
                 let val: u8 = if v.unset_bits() == 0 { 1 } else { 0 };
                 // faster path
                 for index in select_vector.iter().take(rows).copied() {
-                    store::<u8>(&val, address[index].add(offset) as *mut u8);
+                    store(&val, address[index].add(offset) as *mut u8);
                 }
             } else {
                 for index in select_vector.iter().take(rows).copied() {
-                    store::<u8>(
+                    store(
                         &(v.get_bit(index) as u8),
                         address[index].add(offset) as *mut u8,
                     );
@@ -112,8 +109,8 @@ pub unsafe fn serialize_column_to_rowformat(
         Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
             for index in select_vector.iter().take(rows).copied() {
                 let data = arena.alloc_slice_copy(v.index_unchecked(index));
-                store::<u32>(&(data.len() as u32), address[index].add(offset) as *mut u8);
-                store::<u64>(
+                store(&(data.len() as u32), address[index].add(offset) as *mut u8);
+                store(
                     &(data.as_ptr() as u64),
                     address[index].add(offset + 4) as *mut u8,
                 );
@@ -122,8 +119,8 @@ pub unsafe fn serialize_column_to_rowformat(
         Column::String(v) => {
             for index in select_vector.iter().take(rows).copied() {
                 let data = arena.alloc_str(v.index_unchecked(index));
-                store::<u32>(&(data.len() as u32), address[index].add(offset) as *mut u8);
-                store::<u64>(
+                store(&(data.len() as u32), address[index].add(offset) as *mut u8);
+                store(
                     &(data.as_ptr() as u64),
                     address[index].add(offset + 4) as *mut u8,
                 );
@@ -131,12 +128,12 @@ pub unsafe fn serialize_column_to_rowformat(
         }
         Column::Timestamp(buffer) => {
             for index in select_vector.iter().take(rows).copied() {
-                store::<i64>(&buffer[index], address[index].add(offset) as *mut u8);
+                store(&buffer[index], address[index].add(offset) as *mut u8);
             }
         }
         Column::Date(buffer) => {
             for index in select_vector.iter().take(rows).copied() {
-                store::<i32>(&buffer[index], address[index].add(offset) as *mut u8);
+                store(&buffer[index], address[index].add(offset) as *mut u8);
             }
         }
         Column::Nullable(c) => serialize_column_to_rowformat(
@@ -157,8 +154,8 @@ pub unsafe fn serialize_column_to_rowformat(
                 bincode_serialize_into_buf(scratch, &s).unwrap();
 
                 let data = arena.alloc_slice_copy(scratch);
-                store::<u32>(&(data.len() as u32), address[index].add(offset) as *mut u8);
-                store::<u64>(
+                store(&(data.len() as u32), address[index].add(offset) as *mut u8);
+                store(
                     &(data.as_ptr() as u64),
                     address[index].add(offset + 4) as *mut u8,
                 );
