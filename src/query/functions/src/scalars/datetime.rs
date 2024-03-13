@@ -124,7 +124,14 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
 }
 
 fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
-    registry.register_aliases("to_date", &["str_to_date"]);
+    registry.register_aliases("to_date", &["str_to_date", "date"]);
+    registry.register_aliases("to_year", &["str_to_year", "year"]);
+    registry.register_aliases("to_day_of_month", &["day", "dayofmonth"]);
+    registry.register_aliases("to_day_of_year", &["dayofyear"]);
+    registry.register_aliases("to_month", &["month"]);
+    registry.register_aliases("to_quarter", &["quarter"]);
+    registry.register_aliases("to_week_of_year", &["week", "weekofyear"]);
+
     registry.register_aliases("to_timestamp", &["to_datetime", "str_to_timestamp"]);
     registry.register_aliases("try_to_timestamp", &["try_to_datetime"]);
 
