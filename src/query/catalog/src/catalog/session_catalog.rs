@@ -289,14 +289,9 @@ impl Catalog for SessionCatalog {
                 } else {
                     let table = self.inner.get_table(tenant, db_name, table_name).await?;
                     if table.engine() == "STREAM" {
-                        let source_table = table
-                            .stream_source_table(Arc::new(self.clone()))
-                            .await?
-                            .get_table_info()
-                            .clone();
                         self.txn_mgr
                             .lock()
-                            .add_stream_table(table.get_table_info().clone(), source_table);
+                            .upsert_table_desc_to_id(table.get_table_info().clone());
                     }
                     Ok(table)
                 }
@@ -467,26 +462,23 @@ impl Catalog for SessionCatalog {
         self.inner.get_table_engines()
     }
 
-    async fn stream_source_table(
-        &self,
-        stream_desc: &str,
-        tenant: &str,
-        db_name: &str,
-        source_table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
+    fn stream_source_table(&self, stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
         let is_active = self.txn_mgr.lock().is_active();
         if is_active {
-            let maybe_table = self
-                .txn_mgr
+            self.txn_mgr
                 .lock()
                 .get_stream_table_source(stream_desc)
-                .map(|table_info| self.get_table_by_info(&table_info));
-            if let Some(t) = maybe_table {
-                return t;
-            }
-            self.get_table(tenant, db_name, source_table_name).await
+                .map(|table_info| self.get_table_by_info(&table_info))
+                .transpose()
         } else {
-            self.get_table(tenant, db_name, source_table_name).await
+            Ok(None)
+        }
+    }
+
+    fn cache_stream_table(&self, stream: TableInfo, source: TableInfo) {
+        let is_active = self.txn_mgr.lock().is_active();
+        if is_active {
+            self.txn_mgr.lock().upsert_stream_table(stream, source);
         }
     }
 }

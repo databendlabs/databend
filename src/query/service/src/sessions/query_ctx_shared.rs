@@ -46,6 +46,7 @@ use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::MergeStatus;
 use databend_common_storage::StorageMetrics;
+use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::UserApiProvider;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -309,15 +310,55 @@ impl QueryContextShared {
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
 
         let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };
-        match already_in_cache {
-            false => self.get_table_to_cache(catalog, database, table).await,
-            true => Ok(self
+        let res = match already_in_cache {
+            false => self.get_table_to_cache(catalog, database, table).await?,
+            true => self
                 .tables_refs
                 .lock()
                 .get(&table_meta_key)
                 .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
-                .clone()),
+                .clone(),
+        };
+
+        if res.engine() == "STREAM" {
+            let stream = StreamTable::try_from_table(res.as_ref())?;
+            let source_table_name = stream.source_table_name();
+            let source_database = stream.source_table_database();
+            let source_meta_key = (
+                catalog.to_string(),
+                source_database.to_string(),
+                source_table_name.to_string(),
+            );
+            let source_already_in_cache =
+                { self.tables_refs.lock().contains_key(&source_meta_key) };
+            if !source_already_in_cache {
+                let stream_desc = &stream.get_table_info().desc;
+                let tenant = self.get_tenant();
+                let catalog = self
+                    .catalog_manager
+                    .get_catalog(tenant.as_str(), catalog, self.session.session_ctx.txn_mgr())
+                    .await?;
+                let source_table = match catalog.stream_source_table(stream_desc)? {
+                    Some(source_table) => source_table,
+                    None => {
+                        let source_table = catalog
+                            .get_table(tenant.as_str(), source_database, source_table_name)
+                            .await?;
+                        catalog.cache_stream_table(
+                            stream.get_table_info().clone(),
+                            source_table.get_table_info().clone(),
+                        );
+                        source_table
+                    }
+                };
+
+                let mut tables_refs = self.tables_refs.lock();
+                tables_refs
+                    .entry(source_meta_key)
+                    .or_insert(source_table.clone());
+            }
         }
+        Ok(res)
     }
 
     #[async_backtrace::framed]
