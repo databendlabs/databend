@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
 use log::error;
@@ -81,10 +82,16 @@ impl InterpreterFactory {
     pub async fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
-        access_checker.check(plan).await.map_err(|e| {
-            error!("Access.denied(v2): {:?}", e);
-            e
-        })?;
+        access_checker
+            .check(plan)
+            .await
+            .map_err(|e| match e.code() {
+                ErrorCode::PERMISSION_DENIED => {
+                    error!("Access.denied(v2): {:?}", e);
+                    e
+                }
+                _ => e,
+            })?;
         Self::get_inner(ctx, plan)
     }
 
