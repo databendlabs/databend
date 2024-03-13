@@ -8167,7 +8167,7 @@ Insert(
 
 
 ---------- Input ----------
-insert into t (c1, c2) values (1, 2);   
+insert into t (c1, c2) values (1, 2);
 ---------- Output ---------
 INSERT INTO t (c1, c2) VALUES (1, 2)
 ---------- AST ------------
@@ -8751,7 +8751,7 @@ OptimizeTable(
 ---------- Input ----------
 OPTIMIZE TABLE t COMPACT LIMIT 10;
 ---------- Output ---------
-OPTIMIZE TABLE t COMPACT BLOCK LIMIT 10
+OPTIMIZE TABLE t COMPACT LIMIT 10
 ---------- AST ------------
 OptimizeTable(
     OptimizeTableStmt {
@@ -15735,6 +15735,95 @@ CreateTask(
                 "VACUUM TABLE t ",
                 "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *",
                 "COMMIT",
+            ],
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND
+        AS BEGIN
+          MERGE INTO t USING s ON t.c = s.c
+            WHEN MATCHED THEN
+            UPDATE
+                *
+                WHEN NOT MATCHED THEN
+            INSERT
+                *;
+        END
+---------- Output ---------
+CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = test-parser SCHEDULE 1 SECOND AS BEGIN
+MERGE INTO t USING s ON (t.c = s.c) WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *;
+END;
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "merge_task",
+        warehouse_opts: WarehouseOptions {
+            warehouse: Some(
+                "test-parser",
+            ),
+        },
+        schedule_opts: Some(
+            IntervalSecs(
+                1,
+            ),
+        ),
+        session_parameters: {},
+        suspend_task_after_num_failures: None,
+        error_integration: None,
+        comments: "",
+        after: [],
+        when_condition: None,
+        sql: ScriptBlock(
+            [
+                "MERGE INTO t USING s ON (t.c = s.c) WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *",
+            ],
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND
+        AS BEGIN
+          MERGE INTO t USING s ON t.c = s.c
+            WHEN MATCHED THEN
+            UPDATE
+                *
+                WHEN NOT MATCHED THEN
+            INSERT values('a;', 1, "str");
+        END
+---------- Output ---------
+CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = test-parser SCHEDULE 1 SECOND AS BEGIN
+MERGE INTO t USING s ON (t.c = s.c) WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, "str");
+END;
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "merge_task",
+        warehouse_opts: WarehouseOptions {
+            warehouse: Some(
+                "test-parser",
+            ),
+        },
+        schedule_opts: Some(
+            IntervalSecs(
+                1,
+            ),
+        ),
+        session_parameters: {},
+        suspend_task_after_num_failures: None,
+        error_integration: None,
+        comments: "",
+        after: [],
+        when_condition: None,
+        sql: ScriptBlock(
+            [
+                "MERGE INTO t USING s ON (t.c = s.c) WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, \"str\")",
             ],
         ),
     },

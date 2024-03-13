@@ -258,7 +258,7 @@ pub fn comma_separated_list0_ignore_trailing<'a, T>(
     nom::multi::separated_list0(match_text(","), item)
 }
 
-pub fn task_statements<'a, T>(
+pub fn semicolon_terminated_list1<'a, T>(
     item: impl FnMut(Input<'a>) -> IResult<'a, T>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
     many1(terminated(item, match_text(";")))

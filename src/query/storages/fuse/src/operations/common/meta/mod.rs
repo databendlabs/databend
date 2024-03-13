@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod pb_serde;
-mod quota;
+mod commit_meta;
+mod mutation_log;
 
-pub use pb_serde::check_and_upgrade_to_pb;
-pub use pb_serde::deserialize_struct;
-pub use pb_serde::serialize_struct;
-pub use quota::Quota;
+pub use commit_meta::*;
+pub use mutation_log::*;

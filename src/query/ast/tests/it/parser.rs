@@ -22,6 +22,7 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::query::*;
 use databend_common_ast::parser::quote::quote_ident;
 use databend_common_ast::parser::quote::unquote_ident;
+use databend_common_ast::parser::script::script_stmt;
 use databend_common_ast::parser::statement::insert_stmt;
 use databend_common_ast::parser::token::*;
 use databend_common_ast::parser::tokenize_sql;
@@ -45,6 +46,8 @@ where
     P: FnMut(Input) -> IResult<O>,
     O: Debug + Display,
 {
+    let src = unindent::unindent(src);
+    let src = src.trim();
     let tokens = tokenize_sql(src).unwrap();
     let backtrace = Backtrace::new();
     let parser = parser;
@@ -194,7 +197,7 @@ fn test_statement() {
         r#"select 'stringwith"doublequote'"#,
         r#"select '🦈'"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
-        r#"insert into t (c1, c2) values (1, 2);   "#,
+        r#"insert into t (c1, c2) values (1, 2);"#,
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"CREATE STAGE ~"#,
@@ -544,6 +547,25 @@ fn test_statement() {
               merge into t using s on t.id = s.id when matched then update *;
               commit;
             END"#,
+        r#"CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND
+        AS BEGIN
+          MERGE INTO t USING s ON t.c = s.c
+            WHEN MATCHED THEN
+            UPDATE
+                *
+                WHEN NOT MATCHED THEN
+            INSERT
+                *;
+        END"#,
+        r#"CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND
+        AS BEGIN
+          MERGE INTO t USING s ON t.c = s.c
+            WHEN MATCHED THEN
+            UPDATE
+                *
+                WHEN NOT MATCHED THEN
+            INSERT values('a;', 1, "str");
+        END"#,
         r#"ALTER TASK MyTask1 RESUME"#,
         r#"ALTER TASK MyTask1 SUSPEND"#,
         r#"ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'"#,
@@ -728,7 +750,7 @@ fn test_raw_insert_stmt() {
     let file = &mut mint.new_goldenfile("raw_insert.txt").unwrap();
     let cases = &[
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
-        r#"insert into t (c1, c2) values (1, 2);   "#,
+        r#"insert into t (c1, c2) values (1, 2);"#,
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
     ];
@@ -904,7 +926,7 @@ fn test_expr() {
         r#"SUM(salary) OVER ()"#,
         r#"AVG(salary) OVER (PARTITION BY department)"#,
         r#"SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"#,
-        r#"AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) "#,
+        r#"AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)"#,
@@ -954,13 +976,93 @@ fn test_expr_error() {
         r#"CAST(col1)"#,
         r#"a.add(b)"#,
         r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,
-        r#"G.E.B IS NOT NULL AND
-            col1 NOT BETWEEN col2 AND
-                AND 1 + col3 DIV sum(col4)"#,
+        r#"
+            G.E.B IS NOT NULL AND
+                col1 NOT BETWEEN col2 AND
+                    AND 1 + col3 DIV sum(col4)
+        "#,
     ];
 
     for case in cases {
         run_parser(file, expr, case);
+    }
+}
+
+#[test]
+fn test_script() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("script.txt").unwrap();
+
+    let cases = &[
+        r#"LET cost DECIMAL(38, 2) := 100.0"#,
+        r#"LET t1 RESULTSET := SELECT * FROM numbers(100)"#,
+        r#"profit := revenue - cost"#,
+        r#"RETURN profit"#,
+        r#"RETURN"#,
+        r#"
+            FOR i IN REVERSE 1 TO maximum_count DO
+                counter := counter + 1;
+            END FOR label1
+        "#,
+        r#"
+            FOR rec IN resultset DO
+                CONTINUE;
+            END FOR label1
+        "#,
+        r#"
+            WHILE counter < maximum_count DO
+                CONTINUE label1;
+            END WHILE label1
+        "#,
+        r#"
+            REPEAT
+                BREAK;
+            UNTIL counter = maximum_count
+            END REPEAT label1
+        "#,
+        r#"
+            LOOP
+                BREAK label1;
+            END LOOP label1
+        "#,
+        r#"
+            CASE
+                WHEN counter = 1 THEN
+                    counter := counter + 1;
+                WHEN counter = 2 THEN
+                    counter := counter + 2;
+                ELSE
+                    counter := counter + 3;
+            END
+        "#,
+        r#"
+            CASE counter
+                WHEN 1 THEN
+                    counter := counter + 1;
+                WHEN 2 THEN
+                    counter := counter + 2;
+                ELSE
+                    counter := counter + 3;
+            END CASE
+        "#,
+        r#"
+            IF counter = 1 THEN
+                counter := counter + 1;
+            ELSEIF counter = 2 THEN
+                counter := counter + 2;
+            ELSE
+                counter := counter + 3;
+            END IF
+        "#,
+        r#"
+            LOOP
+                SELECT c1, c2 FROM t WHERE c1 = 1;
+            END LOOP
+        "#,
+    ];
+
+    for case in cases {
+        run_parser(file, script_stmt, case);
     }
 }
 

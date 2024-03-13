@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod pb_serde;
-mod quota;
-
-pub use pb_serde::check_and_upgrade_to_pb;
-pub use pb_serde::deserialize_struct;
-pub use pb_serde::serialize_struct;
-pub use quota::Quota;
+/// Ident name can not contain ' or "
+/// Forbidden ' or " in UserName and RoleName, to prevent Meta injection problem
+pub fn illegal_ident_name(ident_name: &str) -> bool {
+    ident_name.chars().any(|c| c == '\'' || c == '\"')
+}

@@ -17,6 +17,7 @@ mod data_mask;
 pub mod expr;
 pub mod query;
 pub mod quote;
+pub mod script;
 mod share;
 mod stage;
 pub mod statement;

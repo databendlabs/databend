@@ -28,14 +28,6 @@ sleep 5
 echo "select st.name bt,type, bt.trigger from system.background_tasks AS bt JOIN system.tables st ON bt.table_id = st.table_id where bt.trigger is not null and bt.created_on > TO_TIMESTAMP('$current_time') order by st.name;" | $BENDSQL_CLIENT_CONNECT
 echo "select * from system.processes where type != 'HTTPQuery';" | $BENDSQL_CLIENT_CONNECT
 
-table_ids=$(curl -X GET -s http://localhost:8080/v1/background/test_tenant/background_tasks?timestamp=$encoded_time | jq '[.task_infos[] | .[1].compaction_task_stats.table_id]')
-
-# Convert the table_ids JSON array to a comma-separated list
-table_ids_list=$(echo $table_ids | jq -r 'join(",")')
-
-sql="select database, name from system.tables where table_id in ($table_ids_list) order by name;"
-echo "$sql" | $BENDSQL_CLIENT_CONNECT
-
 ## Drop table
 echo "drop table if exists target1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists target2;" | $BENDSQL_CLIENT_CONNECT

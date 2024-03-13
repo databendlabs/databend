@@ -2512,48 +2512,48 @@ BinaryOp {
 
 ---------- Input ----------
 p_partkey = l_partkey
-            AND p_brand = 'Brand#12'
-            AND p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')
-            AND l_quantity >= CAST (1 AS smallint) AND l_quantity <= CAST (1 + 10 AS smallint)
-            AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
-            AND l_shipmode IN ('AIR', 'AIR REG')
-            AND l_shipinstruct = 'DELIVER IN PERSON'
+AND p_brand = 'Brand#12'
+AND p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')
+AND l_quantity >= CAST (1 AS smallint) AND l_quantity <= CAST (1 + 10 AS smallint)
+AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
+AND l_shipmode IN ('AIR', 'AIR REG')
+AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- Output ---------
 ((((((((p_partkey = l_partkey) AND (p_brand = 'Brand#12')) AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')) AND (l_quantity >= CAST(1 AS Int16))) AND (l_quantity <= CAST((1 + 10) AS Int16))) AND p_size BETWEEN CAST(1 AS Int16) AND CAST(5 AS Int16)) AND l_shipmode IN('AIR', 'AIR REG')) AND (l_shipinstruct = 'DELIVER IN PERSON'))
 ---------- AST ------------
 BinaryOp {
     span: Some(
-        366..369,
+        294..297,
     ),
     op: And,
     left: BinaryOp {
         span: Some(
-            317..320,
+            257..260,
         ),
         op: And,
         left: BinaryOp {
             span: Some(
-                240..243,
+                192..195,
             ),
             op: And,
             left: BinaryOp {
                 span: Some(
-                    184..187,
+                    148..151,
                 ),
                 op: And,
                 left: BinaryOp {
                     span: Some(
-                        145..148,
+                        109..112,
                     ),
                     op: And,
                     left: BinaryOp {
                         span: Some(
-                            71..74,
+                            47..50,
                         ),
                         op: And,
                         left: BinaryOp {
                             span: Some(
-                                34..37,
+                                22..25,
                             ),
                             op: And,
                             left: BinaryOp {
@@ -2600,12 +2600,12 @@ BinaryOp {
                             },
                             right: BinaryOp {
                                 span: Some(
-                                    46..47,
+                                    34..35,
                                 ),
                                 op: Eq,
                                 left: ColumnRef {
                                     span: Some(
-                                        38..45,
+                                        26..33,
                                     ),
                                     column: ColumnRef {
                                         database: None,
@@ -2613,7 +2613,7 @@ BinaryOp {
                                         column: Name(
                                             Identifier {
                                                 span: Some(
-                                                    38..45,
+                                                    26..33,
                                                 ),
                                                 name: "p_brand",
                                                 quote: None,
@@ -2623,7 +2623,7 @@ BinaryOp {
                                 },
                                 right: Literal {
                                     span: Some(
-                                        48..58,
+                                        36..46,
                                     ),
                                     lit: String(
                                         "Brand#12",
@@ -2633,11 +2633,11 @@ BinaryOp {
                         },
                         right: InList {
                             span: Some(
-                                87..132,
+                                63..108,
                             ),
                             expr: ColumnRef {
                                 span: Some(
-                                    75..86,
+                                    51..62,
                                 ),
                                 column: ColumnRef {
                                     database: None,
@@ -2645,7 +2645,7 @@ BinaryOp {
                                     column: Name(
                                         Identifier {
                                             span: Some(
-                                                75..86,
+                                                51..62,
                                             ),
                                             name: "p_container",
                                             quote: None,
@@ -2656,7 +2656,7 @@ BinaryOp {
                             list: [
                                 Literal {
                                     span: Some(
-                                        91..100,
+                                        67..76,
                                     ),
                                     lit: String(
                                         "SM CASE",
@@ -2664,7 +2664,7 @@ BinaryOp {
                                 },
                                 Literal {
                                     span: Some(
-                                        102..110,
+                                        78..86,
                                     ),
                                     lit: String(
                                         "SM BOX",
@@ -2672,7 +2672,7 @@ BinaryOp {
                                 },
                                 Literal {
                                     span: Some(
-                                        112..121,
+                                        88..97,
                                     ),
                                     lit: String(
                                         "SM PACK",
@@ -2680,7 +2680,7 @@ BinaryOp {
                                 },
                                 Literal {
                                     span: Some(
-                                        123..131,
+                                        99..107,
                                     ),
                                     lit: String(
                                         "SM PKG",
@@ -2692,12 +2692,12 @@ BinaryOp {
                     },
                     right: BinaryOp {
                         span: Some(
-                            160..162,
+                            124..126,
                         ),
                         op: Gte,
                         left: ColumnRef {
                             span: Some(
-                                149..159,
+                                113..123,
                             ),
                             column: ColumnRef {
                                 database: None,
@@ -2705,7 +2705,7 @@ BinaryOp {
                                 column: Name(
                                     Identifier {
                                         span: Some(
-                                            149..159,
+                                            113..123,
                                         ),
                                         name: "l_quantity",
                                         quote: None,
@@ -2715,11 +2715,11 @@ BinaryOp {
                         },
                         right: Cast {
                             span: Some(
-                                163..183,
+                                127..147,
                             ),
                             expr: Literal {
                                 span: Some(
-                                    169..170,
+                                    133..134,
                                 ),
                                 lit: UInt64(
                                     1,
@@ -2732,12 +2732,12 @@ BinaryOp {
                 },
                 right: BinaryOp {
                     span: Some(
-                        199..201,
+                        163..165,
                     ),
                     op: Lte,
                     left: ColumnRef {
                         span: Some(
-                            188..198,
+                            152..162,
                         ),
                         column: ColumnRef {
                             database: None,
@@ -2745,7 +2745,7 @@ BinaryOp {
                             column: Name(
                                 Identifier {
                                     span: Some(
-                                        188..198,
+                                        152..162,
                                     ),
                                     name: "l_quantity",
                                     quote: None,
@@ -2755,16 +2755,16 @@ BinaryOp {
                     },
                     right: Cast {
                         span: Some(
-                            202..227,
+                            166..191,
                         ),
                         expr: BinaryOp {
                             span: Some(
-                                210..211,
+                                174..175,
                             ),
                             op: Plus,
                             left: Literal {
                                 span: Some(
-                                    208..209,
+                                    172..173,
                                 ),
                                 lit: UInt64(
                                     1,
@@ -2772,7 +2772,7 @@ BinaryOp {
                             },
                             right: Literal {
                                 span: Some(
-                                    212..214,
+                                    176..178,
                                 ),
                                 lit: UInt64(
                                     10,
@@ -2786,11 +2786,11 @@ BinaryOp {
             },
             right: Between {
                 span: Some(
-                    251..304,
+                    203..256,
                 ),
                 expr: ColumnRef {
                     span: Some(
-                        244..250,
+                        196..202,
                     ),
                     column: ColumnRef {
                         database: None,
@@ -2798,7 +2798,7 @@ BinaryOp {
                         column: Name(
                             Identifier {
                                 span: Some(
-                                    244..250,
+                                    196..202,
                                 ),
                                 name: "p_size",
                                 quote: None,
@@ -2808,11 +2808,11 @@ BinaryOp {
                 },
                 low: Cast {
                     span: Some(
-                        259..279,
+                        211..231,
                     ),
                     expr: Literal {
                         span: Some(
-                            265..266,
+                            217..218,
                         ),
                         lit: UInt64(
                             1,
@@ -2823,11 +2823,11 @@ BinaryOp {
                 },
                 high: Cast {
                     span: Some(
-                        284..304,
+                        236..256,
                     ),
                     expr: Literal {
                         span: Some(
-                            290..291,
+                            242..243,
                         ),
                         lit: UInt64(
                             5,
@@ -2841,11 +2841,11 @@ BinaryOp {
         },
         right: InList {
             span: Some(
-                332..353,
+                272..293,
             ),
             expr: ColumnRef {
                 span: Some(
-                    321..331,
+                    261..271,
                 ),
                 column: ColumnRef {
                     database: None,
@@ -2853,7 +2853,7 @@ BinaryOp {
                     column: Name(
                         Identifier {
                             span: Some(
-                                321..331,
+                                261..271,
                             ),
                             name: "l_shipmode",
                             quote: None,
@@ -2864,7 +2864,7 @@ BinaryOp {
             list: [
                 Literal {
                     span: Some(
-                        336..341,
+                        276..281,
                     ),
                     lit: String(
                         "AIR",
@@ -2872,7 +2872,7 @@ BinaryOp {
                 },
                 Literal {
                     span: Some(
-                        343..352,
+                        283..292,
                     ),
                     lit: String(
                         "AIR REG",
@@ -2884,12 +2884,12 @@ BinaryOp {
     },
     right: BinaryOp {
         span: Some(
-            385..386,
+            313..314,
         ),
         op: Eq,
         left: ColumnRef {
             span: Some(
-                370..384,
+                298..312,
             ),
             column: ColumnRef {
                 database: None,
@@ -2897,7 +2897,7 @@ BinaryOp {
                 column: Name(
                     Identifier {
                         span: Some(
-                            370..384,
+                            298..312,
                         ),
                         name: "l_shipinstruct",
                         quote: None,
@@ -2907,7 +2907,7 @@ BinaryOp {
         },
         right: Literal {
             span: Some(
-                387..406,
+                315..334,
             ),
             lit: String(
                 "DELIVER IN PERSON",
@@ -3700,7 +3700,7 @@ FunctionCall {
 
 
 ---------- Input ----------
-AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) 
+AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
 ---------- Output ---------
 AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
 ---------- AST ------------

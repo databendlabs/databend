@@ -826,6 +826,30 @@ impl Binder {
             return Ok(());
         }
 
+        let mut metadata = self.metadata.write();
+        if metadata.tables().len() != 1 {
+            // Only support single table query.
+            return Ok(());
+        }
+
+        // As we don't if this is subquery, we need add required cols to metadata's non_lazy_columns,
+        // so if the inner query not match the lazy materialized but outer query matched, we can prevent
+        // the cols that inner query required not be pruned when analyze outer query.
+        {
+            let mut non_lazy_cols = HashSet::new();
+            for s in select_list.items.iter() {
+                // The TableScan's schema uses name_mapping to prune columns,
+                // all lazy columns will be skipped to add to name_mapping in TableScan.
+                // When build physical window plan, if window's order by or partition by provided,
+                // we need create a `EvalScalar` for physical window inputs, so we should keep the window
+                // used cols not be pruned.
+                if let ScalarExpr::WindowFunction(_) = &s.scalar {
+                    non_lazy_cols.extend(s.scalar.used_columns())
+                }
+            }
+            metadata.add_non_lazy_columns(non_lazy_cols);
+        }
+
         let limit_threadhold = self.ctx.get_settings().get_lazy_read_threshold()? as usize;
 
         let where_cols = where_scalar
@@ -835,12 +859,6 @@ impl Binder {
 
         if limit == 0 || limit > limit_threadhold || (order_by.is_empty() && where_cols.is_empty())
         {
-            return Ok(());
-        }
-
-        let mut metadata = self.metadata.write();
-        if metadata.tables().len() != 1 {
-            // Only support single table query.
             return Ok(());
         }
 
@@ -881,13 +899,8 @@ impl Binder {
 
         let mut select_cols = HashSet::with_capacity(select_list.items.len());
         for s in select_list.items.iter() {
-            // The TableScan's schema uses name_mapping to prune columns,
-            // all lazy columns will be skipped to add to name_mapping in TableScan.
-            // When build physical window plan, if window's order by or partition by proviede,
-            // we need create a `EvalScalar` for physical window inputs, so we should keep the window
-            // used cols not be pruned.
             if let ScalarExpr::WindowFunction(_) = &s.scalar {
-                non_lazy_cols.extend(s.scalar.used_columns())
+                continue;
             } else {
                 select_cols.extend(s.scalar.used_columns())
             }
@@ -910,6 +923,9 @@ impl Binder {
 
         // add internal_cols to non_lazy_cols
         non_lazy_cols.extend(internal_cols);
+
+        // add previous(subquery) stored non_lazy_columns to non_lazy_cols
+        non_lazy_cols.extend(metadata.non_lazy_columns());
 
         let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
         metadata.add_lazy_columns(lazy_cols);

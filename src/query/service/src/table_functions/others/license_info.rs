@@ -216,7 +216,7 @@ impl AsyncSource for LicenseInfoSource {
 
         let settings = self.ctx.get_settings();
         // sync global changes on distributed node cluster.
-        settings.load_global_changes().await?;
+        settings.load_changes().await?;
         let license = unsafe {
             settings
                 .get_enterprise_license()

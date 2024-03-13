@@ -37,6 +37,7 @@ use indexmap::IndexMap;
 use log::warn;
 
 use super::Finder;
+use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
@@ -339,10 +340,16 @@ impl<'a> Binder {
             Statement::CreateRole {
                 if_not_exists,
                 role_name,
-            } => Plan::CreateRole(Box::new(CreateRolePlan {
+            } => {
+                if illegal_ident_name(role_name) {
+                    return Err(ErrorCode::IllegalRole(
+                        format!("Illegal Role Name: Illegal role name [{}], not support username contain ' or \"", role_name),
+                    ));
+                }
+                Plan::CreateRole(Box::new(CreateRolePlan {
                 if_not_exists: *if_not_exists,
                 role_name: role_name.to_string(),
-            })),
+            }))},
             Statement::DropRole {
                 if_exists,
                 role_name,
