@@ -164,7 +164,7 @@ HashJoin
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│   ├── push downs: [filters: [and_filters(t2.b (#3) > 0, t2.a (#2) > 0)], limit: NONE]
+│   ├── push downs: [filters: [and_filters(t2.a (#2) > 0, t2.b (#3) > 0)], limit: NONE]
 │   └── estimated rows: 0.60
 └── TableScan(Probe)
     ├── table: default.default.t1
@@ -206,7 +206,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [and_filters(t1.b (#1) > 0, t1.a (#0) > 0)], limit: NONE]
+    ├── push downs: [filters: [and_filters(t1.a (#0) > 0, t1.b (#1) > 0)], limit: NONE]
     └── estimated rows: 4.00
 
 # full outer join, can not push down

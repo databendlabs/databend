@@ -410,7 +410,6 @@ HashJoin
 │       ├── aggregate functions: [count()]
 │       ├── estimated rows: 1.00
 │       └── AggregatePartial
-│           ├── output columns: [COUNT(*) (#3), #_group_by_key]
 │           ├── group by: [number]
 │           ├── aggregate functions: [count()]
 │           ├── estimated rows: 1.00
