@@ -34,4 +34,4 @@ url = { version = "2.5", default-features = false }
 uuid = { version = "1.6", features = ["v4"] }
 
 [dev-dependencies]
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
+chrono = { version = "0.4.35", default-features = false, features = ["clock"] }

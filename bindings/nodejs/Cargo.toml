@@ -15,7 +15,7 @@ doc = false
 [dependencies]
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 
-chrono = { version = "0.4", default-features = false }
+chrono = { version = "0.4.35", default-features = false }
 napi = { version = "2.14", default-features = false, features = [
     "napi6",
     "async",

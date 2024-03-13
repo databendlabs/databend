@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use arrow::datatypes::{i256, ArrowNativeTypeOp};
-use chrono::{Datelike, NaiveDate, NaiveDateTime};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime};
 
 use crate::{
     error::{ConvertError, Error, Result},
@@ -189,6 +189,7 @@ impl TryFrom<(&DataType, &str)> for Value {
 
             DataType::Timestamp => Ok(Self::Timestamp(
                 chrono::NaiveDateTime::parse_from_str(v, "%Y-%m-%d %H:%M:%S%.6f")?
+                    .and_utc()
                     .timestamp_micros(),
             )),
             DataType::Date => Ok(Self::Date(
@@ -525,9 +526,9 @@ impl TryFrom<Value> for NaiveDateTime {
             Value::Timestamp(i) => {
                 let secs = i / 1_000_000;
                 let nanos = ((i % 1_000_000) * 1000) as u32;
-                let t = NaiveDateTime::from_timestamp_opt(secs, nanos);
+                let t = DateTime::from_timestamp(secs, nanos);
                 match t {
-                    Some(t) => Ok(t),
+                    Some(t) => Ok(t.naive_utc()),
                     None => Err(ConvertError::new("NaiveDateTime", "".to_string()).into()),
                 }
             }
@@ -633,7 +634,8 @@ fn encode_value(f: &mut std::fmt::Formatter<'_>, val: &Value, raw: bool) -> std:
         Value::Timestamp(i) => {
             let secs = i / 1_000_000;
             let nanos = ((i % 1_000_000) * 1000) as u32;
-            let t = NaiveDateTime::from_timestamp_opt(secs, nanos).unwrap_or_default();
+            let t = DateTime::from_timestamp(secs, nanos).unwrap_or_default();
+            let t = t.naive_utc();
             if raw {
                 write!(f, "{}", t)
             } else {
