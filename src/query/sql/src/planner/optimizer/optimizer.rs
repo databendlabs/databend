@@ -26,7 +26,6 @@ use log::info;
 
 use super::distributed::MergeSourceOptimizer;
 use super::format::display_memo;
-use super::s_expr;
 use super::Memo;
 use crate::binder::MergeIntoType;
 use crate::optimizer::cascades::CascadesOptimizer;
