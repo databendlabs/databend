@@ -26,6 +26,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use bumpalo::Bump;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
@@ -87,16 +90,24 @@ fn test_agg_hashtable() {
         let params: Vec<Vec<Column>> = aggrs.iter().map(|_| vec![columns[1].clone()]).collect();
 
         let config = HashTableConfig::default();
-        let mut hashtable =
-            AggregateHashTable::new(group_types.clone(), aggrs.clone(), config.clone());
+        let mut hashtable = AggregateHashTable::new(
+            group_types.clone(),
+            aggrs.clone(),
+            config.clone(),
+            Arc::new(Bump::new()),
+        );
 
         let mut state = ProbeState::default();
         let _ = hashtable
             .add_groups(&mut state, &group_columns, &params, &[], n)
             .unwrap();
 
-        let mut hashtable2 =
-            AggregateHashTable::new(group_types.clone(), aggrs.clone(), config.clone());
+        let mut hashtable2 = AggregateHashTable::new(
+            group_types.clone(),
+            aggrs.clone(),
+            config.clone(),
+            Arc::new(Bump::new()),
+        );
 
         let mut state2 = ProbeState::default();
         let _ = hashtable2

@@ -97,16 +97,15 @@ impl BuildSpillHandler {
         if join_type == &JoinType::Cross {
             return self.spill_cross_join().await;
         }
-        let pending_spill_data = self.pending_spill_data.clone();
-        for block in pending_spill_data.iter() {
-            let mut hashes = Vec::with_capacity(block.num_rows());
-            let spill_state = self.spill_state_mut();
-            spill_state.get_hashes(block, join_type, &mut hashes)?;
-            spill_state
-                .spiller
-                .spill_input(block.clone(), &hashes, false, None)
-                .await?;
-        }
+        // Concat the data blocks that pending to spill to reduce the spill file number.
+        let pending_spill_data = DataBlock::concat(&self.pending_spill_data)?;
+        let mut hashes = Vec::with_capacity(pending_spill_data.num_rows());
+        let spill_state = self.spill_state_mut();
+        spill_state.get_hashes(&pending_spill_data, join_type, &mut hashes)?;
+        spill_state
+            .spiller
+            .spill_input(pending_spill_data.clone(), &hashes, false, None)
+            .await?;
         self.pending_spill_data.clear();
         Ok(())
     }

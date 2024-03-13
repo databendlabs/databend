@@ -14,47 +14,51 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::escape_for_key;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_app::tenant::TenantQuotaIdent;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::IntoSeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::Operation;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::With;
 
 use super::quota_api::QuotaApi;
 
-static QUOTA_API_KEY_PREFIX: &str = "__fd_quotas";
-
 pub struct QuotaMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-    key: String,
+    ident: TenantQuotaIdent,
 }
 
 impl QuotaMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &str) -> Result<Self> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while quota mgr create)",
-            ));
-        }
-        Ok(QuotaMgr {
+    pub fn create(
+        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
+        tenant: &NonEmptyString,
+    ) -> Self {
+        QuotaMgr {
             kv_api,
-            key: format!("{}/{}", QUOTA_API_KEY_PREFIX, escape_for_key(tenant)?),
-        })
+            ident: TenantQuotaIdent::new(Tenant::new_nonempty(tenant.clone())),
+        }
+    }
+
+    fn key(&self) -> String {
+        self.ident.to_string_key()
     }
 }
 
+// TODO: use pb to replace json
 #[async_trait::async_trait]
 impl QuotaApi for QuotaMgr {
     #[async_backtrace::framed]
     async fn get_quota(&self, seq: MatchSeq) -> Result<SeqV<TenantQuota>> {
-        let res = self.kv_api.get_kv(&self.key).await?;
+        let res = self.kv_api.get_kv(&self.key()).await?;
         match res {
             Some(seq_value) => match seq.match_seq(&seq_value) {
                 Ok(_) => Ok(seq_value.into_seqv()?),
@@ -69,12 +73,7 @@ impl QuotaApi for QuotaMgr {
         let value = serde_json::to_vec(quota)?;
         let res = self
             .kv_api
-            .upsert_kv(UpsertKVReq::new(
-                &self.key,
-                seq,
-                Operation::Update(value),
-                None,
-            ))
+            .upsert_kv(UpsertKV::update(&self.key(), &value).with(seq))
             .await?;
 
         match res.result {
