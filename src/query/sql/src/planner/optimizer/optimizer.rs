@@ -26,6 +26,7 @@ use log::info;
 
 use super::distributed::MergeSourceOptimizer;
 use super::format::display_memo;
+use super::s_expr;
 use super::Memo;
 use crate::binder::MergeIntoType;
 use crate::optimizer::cascades::CascadesOptimizer;
@@ -264,45 +265,30 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         opt_ctx.table_ctx.clone(),
         opt_ctx.metadata.clone(),
         dphyp_optimized,
-        enable_distributed_query,
+        false,
     )?;
 
-    // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
+    // Cascades optimizer may fail due to timeout.
     s_expr = match cascades.optimize(s_expr.clone()) {
-        Ok(mut s_expr) => {
-            let rules = if opt_ctx.enable_join_reorder {
-                [RuleID::EliminateEvalScalar, RuleID::CommuteJoin].as_slice()
-            } else {
-                [RuleID::EliminateEvalScalar].as_slice()
-            };
-
-            s_expr = RecursiveOptimizer::new(rules, &opt_ctx).run(&s_expr)?;
-
-            // Push down sort and limit
-            // TODO(leiysky): do this optimization in cascades optimizer
-            if enable_distributed_query {
-                let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create();
-                s_expr = sort_and_limit_optimizer.optimize(&s_expr)?;
-            }
-            s_expr
-        }
-
+        Ok(s_expr) => s_expr,
         Err(e) => {
-            info!(
-                "CascadesOptimizer failed, fallback to heuristic optimizer: {}",
-                e
-            );
-
-            s_expr =
-                RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?;
-
-            if enable_distributed_query {
-                s_expr = optimize_distributed_query(opt_ctx.table_ctx.clone(), &s_expr)?;
-            }
-
+            info!("CascadesOptimizer failed: {}", e);
             s_expr
         }
     };
+
+    let rules = if opt_ctx.enable_join_reorder {
+        [RuleID::EliminateEvalScalar, RuleID::CommuteJoin].as_slice()
+    } else {
+        [RuleID::EliminateEvalScalar].as_slice()
+    };
+    s_expr = RecursiveOptimizer::new(rules, &opt_ctx).run(&s_expr)?;
+
+    if enable_distributed_query {
+        let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create();
+        s_expr = sort_and_limit_optimizer.optimize(&s_expr)?;
+        s_expr = optimize_distributed_query(opt_ctx.table_ctx.clone(), &s_expr)?;
+    }
 
     Ok(s_expr)
 }
