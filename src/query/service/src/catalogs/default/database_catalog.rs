@@ -301,7 +301,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_table_names_by_ids(&self, table_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_table_names_by_ids(&self, table_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         let mut tables = self
             .immutable_catalog
             .mget_table_names_by_ids(table_ids)
@@ -326,7 +326,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         let mut dbs = self
             .immutable_catalog
             .mget_database_names_by_ids(db_ids)

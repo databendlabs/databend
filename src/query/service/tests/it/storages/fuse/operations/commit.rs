@@ -803,7 +803,7 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_table_names_by_ids(&self, table_id: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_table_names_by_ids(&self, table_id: &[MetaId]) -> Result<Vec<Option<String>>> {
         self.cat.mget_table_names_by_ids(table_id).await
     }
 
@@ -812,7 +812,7 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         self.cat.mget_database_names_by_ids(db_ids).await
     }
 

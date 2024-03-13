@@ -147,10 +147,12 @@ impl Interpreter for ShowGrantsInterpreter {
             let dbs_name = catalog.mget_database_names_by_ids(&db_ids).await?;
 
             for (i, db_name) in dbs_name.iter().enumerate() {
-                grant_list.push(format!(
-                    "GRANT {} ON '{}'.'{}'.* TO {}",
-                    &privileges_strs[i], catalog_name, db_name, identity
-                ));
+                if let Some(db_name) = db_name {
+                    grant_list.push(format!(
+                        "GRANT {} ON '{}'.'{}'.* TO {}",
+                        &privileges_strs[i], catalog_name, db_name, identity
+                    ));
+                }
             }
         }
 
@@ -166,10 +168,14 @@ impl Interpreter for ShowGrantsInterpreter {
             let tables_name = catalog.mget_table_names_by_ids(&table_ids).await?;
 
             for (i, table_name) in tables_name.iter().enumerate() {
-                grant_list.push(format!(
-                    "GRANT {} ON '{}'.'{}'.'{}' TO {}",
-                    &privileges_strs[i], catalog_name, dbs_name[i], table_name, identity
-                ));
+                if let Some(table_name) = table_name {
+                    if let Some(db_name) = &dbs_name[i] {
+                        grant_list.push(format!(
+                            "GRANT {} ON '{}'.'{}'.'{}' TO {}",
+                            &privileges_strs[i], catalog_name, db_name, table_name, identity
+                        ));
+                    }
+                }
             }
         }
 
