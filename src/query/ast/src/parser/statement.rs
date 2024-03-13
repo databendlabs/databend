@@ -1021,6 +1021,21 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let refresh_inverted_index = map(
+        rule! {
+            REFRESH ~ INVERTED ~ INDEX ~ #ident ~ ON ~ #dot_separated_idents_1_to_3 ~ ( LIMIT ~ #literal_u64 )?
+        },
+        |(_, _, _, index_name, _, (catalog, database, table), opt_limit)| {
+            Statement::RefreshInvertedIndex(RefreshInvertedIndexStmt {
+                index_name,
+                catalog,
+                database,
+                table,
+                limit: opt_limit.map(|(_, limit)| limit),
+            })
+        },
+    );
+
     let create_virtual_column = map_res(
         rule! {
             CREATE
@@ -2062,6 +2077,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
             | #create_inverted_index: "`CREATE [OR REPLACE] INVERTED INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             | #drop_inverted_index: "`DROP INVERTED INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
+            | #refresh_inverted_index: "`REFRESH INVERTED INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
         ),
         rule!(
             #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"

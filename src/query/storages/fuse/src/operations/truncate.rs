@@ -45,6 +45,7 @@ impl FuseTable {
                 self.cluster_key_meta.clone(),
                 // truncate MUST reset ts location
                 None,
+                None,
             );
 
             // 2. write down new snapshot

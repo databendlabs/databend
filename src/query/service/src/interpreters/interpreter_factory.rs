@@ -28,6 +28,7 @@ use super::interpreter_merge_into::MergeIntoInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
 use super::interpreter_table_index_create::CreateTableIndexInterpreter;
 use super::interpreter_table_index_drop::DropTableIndexInterpreter;
+use super::interpreter_table_index_refresh::RefreshTableIndexInterpreter;
 use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
@@ -293,6 +294,9 @@ impl InterpreterFactory {
                 ctx,
                 *index.clone(),
             )?)),
+            Plan::RefreshTableIndex(index) => Ok(Arc::new(
+                RefreshTableIndexInterpreter::try_create(ctx, *index.clone())?,
+            )),
             // Virtual columns
             Plan::CreateVirtualColumn(create_virtual_column) => Ok(Arc::new(
                 CreateVirtualColumnInterpreter::try_create(ctx, *create_virtual_column.clone())?,
