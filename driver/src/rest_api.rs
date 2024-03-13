@@ -266,6 +266,9 @@ impl Stream for RestAPIRows {
             Some(ref mut next_page) => match Pin::new(next_page).poll(cx) {
                 Poll::Ready(Ok(resp)) => {
                     self.data = resp.data.into();
+                    if self.schema.fields().is_empty() {
+                        self.schema = Arc::new(resp.schema.try_into()?);
+                    }
                     self.query_id = resp.id;
                     self.next_uri = resp.next_uri;
                     self.next_page = None;
