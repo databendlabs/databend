@@ -85,21 +85,6 @@ impl Interpreter for ExplainInterpreter {
                 }
                 Plan::Insert(insert_plan) => {
                     let mut res = self.explain_plan(&self.plan)?;
-                    if let InsertInputSource::SelectPlan(plan) = &insert_plan.source {
-                        if let Plan::Query {
-                            s_expr,
-                            metadata,
-                            bind_context,
-                            formatted_ast,
-                            ..
-                        } = &**plan
-                        {
-                            let query = self
-                                .explain_query(s_expr, metadata, bind_context, formatted_ast)
-                                .await?;
-                            res.extend(query);
-                        }
-                    }
                     vec![DataBlock::concat(&res)?]
                 }
                 Plan::CreateTable(plan) => match &plan.as_select {
