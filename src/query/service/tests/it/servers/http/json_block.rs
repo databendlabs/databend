@@ -18,14 +18,10 @@ use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int32Type;
 use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_io::prelude::FormatSettings;
 use databend_query::servers::http::v1::json_block::JsonBlock;
@@ -40,23 +36,6 @@ where T: Serialize {
 }
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
-    let schema = match is_nullable {
-        false => DataSchemaRefExt::create(vec![
-            DataField::new("c1", DataType::Number(NumberDataType::Int32)),
-            DataField::new("c2", DataType::String),
-            DataField::new("c3", DataType::Boolean),
-            DataField::new("c4", DataType::Number(NumberDataType::Float64)),
-            DataField::new("c5", DataType::Date),
-        ]),
-        true => DataSchemaRefExt::create(vec![
-            DataField::new_nullable("c1", DataType::Number(NumberDataType::Int32)),
-            DataField::new_nullable("c2", DataType::String),
-            DataField::new_nullable("c3", DataType::Boolean),
-            DataField::new_nullable("c4", DataType::Number(NumberDataType::Float64)),
-            DataField::new_nullable("c5", DataType::Date),
-        ]),
-    };
-
     let mut columns = vec![
         Int32Type::from_data(vec![1, 2, 3]),
         StringType::from_data(vec!["a", "b", "c"]),
@@ -80,7 +59,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     let block = DataBlock::new_from_columns(columns);
 
     let format = FormatSettings::default();
-    let json_block = JsonBlock::new(schema, &block, &format)?;
+    let json_block = JsonBlock::new(&block, &format)?;
     let expect = vec![
         vec![val("1"), val("a"), val("1"), val("1.1"), val("1970-01-02")],
         vec![val("2"), val("b"), val("1"), val("2.2"), val("1970-01-03")],
@@ -105,7 +84,7 @@ fn test_data_block_not_nullable() -> Result<()> {
 fn test_empty_block() -> Result<()> {
     let block = DataBlock::empty();
     let format = FormatSettings::default();
-    let json_block = JsonBlock::new(DataSchemaRefExt::create(vec![]), &block, &format)?;
+    let json_block = JsonBlock::new(&block, &format)?;
     assert!(json_block.is_empty());
     Ok(())
 }
