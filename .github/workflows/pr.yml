@@ -158,9 +158,7 @@ jobs:
             let testsChecked = false;
             let changesChecked = false;
             for (const line of body.split('\n')) {
-              console.log("=====================================");
-              console.log(line);
-              console.log("=====================================");
+              console.log(`==> ${line} <==`);
               if (line.startsWith("## Tests")) {
                 section = "tests";
                 core.info('checking section: tests');
