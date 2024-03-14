@@ -154,7 +154,7 @@ fn eliminate_outer_join_type(
     }
 }
 
-fn can_filter_null(
+pub fn can_filter_null(
     predicate: &ScalarExpr,
     left_output_columns: &ColumnSet,
     right_output_columns: &ColumnSet,

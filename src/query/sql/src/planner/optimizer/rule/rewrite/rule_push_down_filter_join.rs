@@ -22,6 +22,7 @@ use crate::optimizer::filter::InferFilterOptimizer;
 use crate::optimizer::filter::JoinProperty;
 use crate::optimizer::rule::constant::false_constant;
 use crate::optimizer::rule::constant::is_falsy;
+use crate::optimizer::rule::rewrite::push_down_filter_join::can_filter_null;
 use crate::optimizer::rule::rewrite::push_down_filter_join::convert_mark_to_semi_join;
 use crate::optimizer::rule::rewrite::push_down_filter_join::outer_join_to_inner_join;
 use crate::optimizer::rule::rewrite::push_down_filter_join::rewrite_predicates;
@@ -132,10 +133,40 @@ pub fn try_push_down_filter_join(
                 push_down_predicates.push(predicate);
             }
             JoinPredicate::Left(_) => {
-                left_push_down.push(predicate);
+                if matches!(
+                    join.join_type,
+                    JoinType::Right | JoinType::RightSingle | JoinType::Full
+                ) {
+                    if can_filter_null(
+                        &predicate,
+                        &left_prop.output_columns,
+                        &right_prop.output_columns,
+                    )? {
+                        left_push_down.push(predicate);
+                    } else {
+                        original_predicates.push(predicate);
+                    }
+                } else {
+                    left_push_down.push(predicate);
+                }
             }
             JoinPredicate::Right(_) => {
-                right_push_down.push(predicate);
+                if matches!(
+                    join.join_type,
+                    JoinType::Left | JoinType::LeftSingle | JoinType::Full
+                ) {
+                    if can_filter_null(
+                        &predicate,
+                        &left_prop.output_columns,
+                        &right_prop.output_columns,
+                    )? {
+                        right_push_down.push(predicate);
+                    } else {
+                        original_predicates.push(predicate);
+                    }
+                } else {
+                    right_push_down.push(predicate);
+                }
             }
             JoinPredicate::Other(_) => original_predicates.push(predicate),
             JoinPredicate::Both { is_equal_op, .. } => {
