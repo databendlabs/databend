@@ -881,23 +881,25 @@ impl NativeDeserializeDataTransform {
             let col = Column::from_arrow(array.as_ref(), &data_type)?;
 
             let filter_executor = self.filter_executor.as_mut().unwrap();
-
-            if let Some(count) = self.read_state.filtered_count {
-                let cnt = sorter.push_column_with_selection(
+            let count = if let Some(count) = self.read_state.filtered_count {
+                sorter.push_column_with_selection::<false>(
                     &col,
                     filter_executor.mutable_true_selection(),
                     count,
-                );
-
-                if cnt == 0 {
-                    return Ok(false);
-                }
-                self.read_state.filtered_count = Some(cnt);
+                )
             } else {
-                let mut bitmap = MutableBitmap::from_len_set(col.len());
-                sorter.push_column(&col, &mut bitmap);
-                self.read_state.filtered_count = Some(filter_executor.from_bitmap(bitmap));
+                // If there is no prewhere filter, initialize the true selection.
+                sorter.push_column_with_selection::<true>(
+                    &col,
+                    filter_executor.mutable_true_selection(),
+                    col.len(),
+                )
+            };
+
+            if count == 0 {
+                return Ok(false);
             }
+            self.read_state.filtered_count = Some(count);
         };
 
         Ok(true)
