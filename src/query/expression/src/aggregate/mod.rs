@@ -104,7 +104,7 @@ impl HashTableConfig {
 
     pub fn cluster_with_partial(mut self, partial_agg: bool) -> Self {
         self.partial_agg = partial_agg;
-        self.max_partial_capacity = 131072 * 10;
+        self.max_partial_capacity = 131072 * 16;
 
         self
     }
