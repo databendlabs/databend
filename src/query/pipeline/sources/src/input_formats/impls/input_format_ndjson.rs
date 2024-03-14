@@ -49,6 +49,7 @@ impl InputFormatNDJson {
         default_values: &Option<Vec<Scalar>>,
         null_field_as: &NullAs,
         missing_field_as: &NullAs,
+        null_if: &[&str],
     ) -> std::result::Result<(), FileParseError> {
         let mut json: serde_json::Value =
             serde_json::from_reader(buf).map_err(|e| FileParseError::InvalidNDJsonRow {
@@ -131,15 +132,23 @@ impl InputFormatNDJson {
                         }
                     },
                     Some(value) => {
-                        field_decoder.read_field(column, value).map_err(|e| {
-                            FileParseError::ColumnDecodeError {
-                                column_index,
-                                column_name: field.name().to_owned(),
-                                column_type: field.data_type.to_string(),
-                                decode_error: e.to_string(),
-                                column_data: truncate_column_data(value.to_string()),
-                            }
-                        })?;
+                        if !null_if.is_empty()
+                            && matches!(column, ColumnBuilder::Nullable(_))
+                            && value.is_string()
+                            && null_if.contains(&value.as_str().unwrap())
+                        {
+                            column.push_default();
+                        } else {
+                            field_decoder.read_field(column, value).map_err(|e| {
+                                FileParseError::ColumnDecodeError {
+                                    column_index,
+                                    column_name: field.name().to_owned(),
+                                    column_type: field.data_type.to_string(),
+                                    decode_error: e.to_string(),
+                                    column_data: truncate_column_data(value.to_string()),
+                                }
+                            })?;
+                        }
                     }
                 }
             }
@@ -190,6 +199,11 @@ impl InputFormatTextBase for InputFormatNDJson {
             _ => unreachable!(),
         };
 
+        let null_if = format_params
+            .null_if
+            .iter()
+            .map(|x| x.as_str())
+            .collect::<Vec<_>>();
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
             let buf = buf.trim();
@@ -202,6 +216,7 @@ impl InputFormatTextBase for InputFormatNDJson {
                     &builder.ctx.default_values,
                     &format_params.null_field_as,
                     &format_params.missing_field_as,
+                    &null_if,
                 ) {
                     builder.ctx.on_error(
                         e,
