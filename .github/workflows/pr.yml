@@ -161,11 +161,11 @@ jobs:
               console.log("=====================================");
               console.log(line);
               console.log("=====================================");
-              if (line ==="## Tests") {
+              if (line.startsWith("## Tests")) {
                 section = "tests";
                 core.info('checking section: tests');
                 continue;
-              } else if (line === "## Type of change") {
+              } else if (line.startsWith("## Type of change")) {
                 section = "changes";
                 core.info('checking section: changes');
                 continue;
