@@ -15,7 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::NonEmptyString;
 
 use crate::UserApiProvider;
@@ -28,7 +28,7 @@ impl UserApiProvider {
         &self,
         tenant: &NonEmptyString,
         info: StageInfo,
-        create_option: &CreateOption,
+        create_option: &OnExist,
     ) -> Result<()> {
         let stage_api_provider = self.stage_api(tenant);
         stage_api_provider.add_stage(info, create_option).await

@@ -20,7 +20,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_types::MetaId;
 
-use super::CreateOption;
+use super::OnExist;
 use crate::tenant::Tenant;
 use crate::KeyWithTenant;
 
@@ -135,7 +135,7 @@ impl Default for IndexMeta {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateIndexReq {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub name_ident: IndexNameIdent,
     pub meta: IndexMeta,
 }
@@ -143,16 +143,16 @@ pub struct CreateIndexReq {
 impl Display for CreateIndexReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
-            CreateOption::None => {
+            OnExist::Error => {
                 write!(f, "create_index:{}={:?}", self.name_ident.tenant, self.meta)
             }
-            CreateOption::CreateIfNotExists => write!(
+            OnExist::Keep => write!(
                 f,
                 "create_index_if_not_exists:{}={:?}",
                 self.name_ident.tenant_name(),
                 self.meta
             ),
-            CreateOption::CreateOrReplace => write!(
+            OnExist::Replace => write!(
                 f,
                 "create_or_replace_index:{}={:?}",
                 self.name_ident.tenant_name(),

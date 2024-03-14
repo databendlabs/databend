@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use pretty::RcDoc;
 
 use super::expr::pretty_expr;
@@ -34,7 +34,7 @@ use crate::ast::TimeTravelPoint;
 
 pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
     RcDoc::text("CREATE")
-        .append(if let CreateOption::CreateOrReplace = stmt.create_option {
+        .append(if let OnExist::Replace = stmt.create_option {
             RcDoc::space().append(RcDoc::text("OR REPLACE"))
         } else {
             RcDoc::nil()
@@ -46,9 +46,9 @@ pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
         })
         .append(RcDoc::space().append(RcDoc::text("TABLE")))
         .append(match stmt.create_option {
-            CreateOption::None => RcDoc::nil(),
-            CreateOption::CreateIfNotExists => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
-            CreateOption::CreateOrReplace => RcDoc::nil(),
+            OnExist::Error => RcDoc::nil(),
+            OnExist::Keep => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
+            OnExist::Replace => RcDoc::nil(),
         })
         .append(
             RcDoc::space()
@@ -238,16 +238,16 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
 
 pub(crate) fn pretty_create_view(stmt: CreateViewStmt) -> RcDoc<'static> {
     RcDoc::text("CREATE")
-        .append(if let CreateOption::CreateOrReplace = stmt.create_option {
+        .append(if let OnExist::Replace = stmt.create_option {
             RcDoc::space().append(RcDoc::text("OR REPLACE"))
         } else {
             RcDoc::nil()
         })
         .append(RcDoc::space().append(RcDoc::text("VIEW")))
         .append(match stmt.create_option {
-            CreateOption::None => RcDoc::nil(),
-            CreateOption::CreateIfNotExists => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
-            CreateOption::CreateOrReplace => RcDoc::nil(),
+            OnExist::Error => RcDoc::nil(),
+            OnExist::Keep => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
+            OnExist::Replace => RcDoc::nil(),
         })
         .append(
             RcDoc::space()
@@ -299,16 +299,16 @@ pub(crate) fn pretty_alter_view(stmt: AlterViewStmt) -> RcDoc<'static> {
 
 pub(crate) fn pretty_create_stream(stmt: CreateStreamStmt) -> RcDoc<'static> {
     RcDoc::text("CREATE")
-        .append(if let CreateOption::CreateOrReplace = stmt.create_option {
+        .append(if let OnExist::Replace = stmt.create_option {
             RcDoc::space().append(RcDoc::text("OR REPLACE"))
         } else {
             RcDoc::nil()
         })
         .append(RcDoc::space().append(RcDoc::text("STREAM")))
         .append(match stmt.create_option {
-            CreateOption::None => RcDoc::nil(),
-            CreateOption::CreateIfNotExists => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
-            CreateOption::CreateOrReplace => RcDoc::nil(),
+            OnExist::Error => RcDoc::nil(),
+            OnExist::Keep => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
+            OnExist::Replace => RcDoc::nil(),
         })
         .append(
             RcDoc::space()

@@ -25,7 +25,7 @@ use databend_common_meta_app::principal::PasswordPolicy;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 
@@ -68,11 +68,7 @@ async fn test_password_policy() -> Result<()> {
     };
 
     let res = user_mgr
-        .add_password_policy(
-            &tenant,
-            password_policy.clone(),
-            &CreateOption::CreateIfNotExists,
-        )
+        .add_password_policy(&tenant, password_policy.clone(), &OnExist::Keep)
         .await;
     assert!(res.is_ok());
 
@@ -80,11 +76,7 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy1 = password_policy.clone();
     invalid_password_policy1.min_length = 0;
     let res = user_mgr
-        .add_password_policy(
-            &tenant,
-            invalid_password_policy1,
-            &CreateOption::CreateIfNotExists,
-        )
+        .add_password_policy(&tenant, invalid_password_policy1, &OnExist::Keep)
         .await;
     assert!(res.is_err());
 
@@ -92,11 +84,7 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy2 = password_policy.clone();
     invalid_password_policy2.max_length = 260;
     let res = user_mgr
-        .add_password_policy(
-            &tenant,
-            invalid_password_policy2,
-            &CreateOption::CreateIfNotExists,
-        )
+        .add_password_policy(&tenant, invalid_password_policy2, &OnExist::Keep)
         .await;
     assert!(res.is_err());
 
@@ -105,11 +93,7 @@ async fn test_password_policy() -> Result<()> {
     invalid_password_policy3.min_length = 30;
     invalid_password_policy3.max_length = 20;
     let res = user_mgr
-        .add_password_policy(
-            &tenant,
-            invalid_password_policy3,
-            &CreateOption::CreateIfNotExists,
-        )
+        .add_password_policy(&tenant, invalid_password_policy3, &OnExist::Keep)
         .await;
     assert!(res.is_err());
 
@@ -120,11 +104,7 @@ async fn test_password_policy() -> Result<()> {
     invalid_password_policy4.min_numeric_chars = 272;
     invalid_password_policy4.min_special_chars = 273;
     let res = user_mgr
-        .add_password_policy(
-            &tenant,
-            invalid_password_policy4,
-            &CreateOption::CreateIfNotExists,
-        )
+        .add_password_policy(&tenant, invalid_password_policy4, &OnExist::Keep)
         .await;
     assert!(res.is_err());
 
@@ -136,11 +116,7 @@ async fn test_password_policy() -> Result<()> {
     invalid_password_policy5.min_numeric_chars = 12;
     invalid_password_policy5.min_special_chars = 13;
     let res = user_mgr
-        .add_password_policy(
-            &tenant,
-            invalid_password_policy5,
-            &CreateOption::CreateIfNotExists,
-        )
+        .add_password_policy(&tenant, invalid_password_policy5, &OnExist::Keep)
         .await;
     assert!(res.is_err());
 
@@ -149,11 +125,7 @@ async fn test_password_policy() -> Result<()> {
     invalid_password_policy6.min_age_days = 20;
     invalid_password_policy6.max_age_days = 10;
     let res = user_mgr
-        .add_password_policy(
-            &tenant,
-            invalid_password_policy6,
-            &CreateOption::CreateIfNotExists,
-        )
+        .add_password_policy(&tenant, invalid_password_policy6, &OnExist::Keep)
         .await;
     assert!(res.is_err());
 
@@ -161,11 +133,7 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy7 = password_policy.clone();
     invalid_password_policy7.max_retries = 20;
     let res = user_mgr
-        .add_password_policy(
-            &tenant,
-            invalid_password_policy7,
-            &CreateOption::CreateIfNotExists,
-        )
+        .add_password_policy(&tenant, invalid_password_policy7, &OnExist::Keep)
         .await;
     assert!(res.is_err());
 
@@ -173,11 +141,7 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy8 = password_policy.clone();
     invalid_password_policy8.lockout_time_mins = 2000;
     let res = user_mgr
-        .add_password_policy(
-            &tenant,
-            invalid_password_policy8,
-            &CreateOption::CreateIfNotExists,
-        )
+        .add_password_policy(&tenant, invalid_password_policy8, &OnExist::Keep)
         .await;
     assert!(res.is_err());
 
@@ -185,11 +149,7 @@ async fn test_password_policy() -> Result<()> {
     let mut invalid_password_policy9 = password_policy.clone();
     invalid_password_policy9.history = 50;
     let res = user_mgr
-        .add_password_policy(
-            &tenant,
-            invalid_password_policy9,
-            &CreateOption::CreateIfNotExists,
-        )
+        .add_password_policy(&tenant, invalid_password_policy9, &OnExist::Keep)
         .await;
     assert!(res.is_err());
 
@@ -361,7 +321,7 @@ async fn test_password_policy() -> Result<()> {
 
     // add user
     user_mgr
-        .add_user(&tenant, user_info, &CreateOption::CreateIfNotExists)
+        .add_user(&tenant, user_info, &OnExist::Keep)
         .await?;
 
     // drop password policy

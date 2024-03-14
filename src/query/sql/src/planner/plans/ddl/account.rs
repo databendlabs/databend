@@ -27,11 +27,11 @@ use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateUserPlan {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub user: UserIdentity,
     pub auth_info: AuthInfo,
     pub user_option: UserOption,
@@ -129,7 +129,7 @@ pub struct RevokePrivilegePlan {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateNetworkPolicyPlan {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub tenant: String,
     pub name: String,
     pub allowed_ip_list: Vec<String>,
@@ -204,7 +204,7 @@ impl ShowNetworkPoliciesPlan {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreatePasswordPolicyPlan {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub tenant: String,
     pub name: String,
     pub set_options: PasswordSetOptions,

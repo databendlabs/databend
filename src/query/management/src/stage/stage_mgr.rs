@@ -27,7 +27,7 @@ use databend_common_meta_app::principal::StageFile;
 use databend_common_meta_app::principal::StageFileIdent;
 use databend_common_meta_app::principal::StageIdent;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -93,14 +93,14 @@ impl StageMgr {
 impl StageApi for StageMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_stage(&self, info: StageInfo, create_option: &CreateOption) -> Result<()> {
+    async fn add_stage(&self, info: StageInfo, create_option: &OnExist) -> Result<()> {
         let ident = self.stage_ident(&info.stage_name);
         let seq = MatchSeq::from(*create_option);
         let upsert = UpsertPB::update(ident, info.clone()).with(seq);
 
         let res = self.kv_api.upsert_pb(&upsert).await?;
 
-        if let CreateOption::None = create_option {
+        if let OnExist::Error = create_option {
             if res.prev.is_some() {
                 return Err(ErrorCode::StageAlreadyExists(format!(
                     "Stage '{}' already exists.",

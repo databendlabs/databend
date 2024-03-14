@@ -27,7 +27,7 @@ use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserQuota;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
@@ -399,7 +399,7 @@ async fn test_users_table() -> Result<()> {
                 password_update_on: None,
                 lockout_time: None,
             },
-            &CreateOption::None,
+            &OnExist::Error,
         )
         .await?;
     let auth_data = AuthInfo::new(AuthType::Sha256Password, &Some("123456789".to_string()));
@@ -419,7 +419,7 @@ async fn test_users_table() -> Result<()> {
                 password_update_on: None,
                 lockout_time: None,
             },
-            &CreateOption::None,
+            &OnExist::Error,
         )
         .await?;
 

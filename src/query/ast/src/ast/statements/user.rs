@@ -21,7 +21,7 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserOptionFlag;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -30,7 +30,7 @@ use crate::ast::write_comma_separated_list;
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateUserStmt {
     #[drive(skip)]
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     #[drive(skip)]
     pub user: UserIdentity,
     pub auth_option: AuthOption,
@@ -40,11 +40,11 @@ pub struct CreateUserStmt {
 impl Display for CreateUserStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "CREATE")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
+        if let OnExist::Replace = self.create_option {
             write!(f, " OR REPLACE")?;
         }
         write!(f, " USER")?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
+        if let OnExist::Keep = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
         write!(f, " {} IDENTIFIED", self.user)?;

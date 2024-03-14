@@ -20,7 +20,7 @@ use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::principal::PasswordPolicy;
 use databend_common_meta_app::principal::PasswordPolicyIdent;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -59,11 +59,7 @@ impl PasswordPolicyMgr {
 impl PasswordPolicyApi for PasswordPolicyMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add(
-        &self,
-        password_policy: PasswordPolicy,
-        create_option: &CreateOption,
-    ) -> Result<()> {
+    async fn add(&self, password_policy: PasswordPolicy, create_option: &OnExist) -> Result<()> {
         let ident = self.ident(&password_policy.name);
 
         let seq = MatchSeq::from(*create_option);
@@ -71,7 +67,7 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
 
         let res = self.kv_api.upsert_pb(&upsert).await?;
 
-        if let CreateOption::None = create_option {
+        if let OnExist::Error = create_option {
             if res.prev.is_some() {
                 return Err(ErrorCode::PasswordPolicyAlreadyExists(format!(
                     "Password policy '{}' already exists.",

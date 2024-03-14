@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use derive_visitor::Drive;
@@ -29,7 +29,7 @@ use crate::ast::Identifier;
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateShareEndpointStmt {
     #[drive(skip)]
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub endpoint: Identifier,
     pub url: UriLocation,
     pub tenant: Identifier,
@@ -42,11 +42,11 @@ pub struct CreateShareEndpointStmt {
 impl Display for CreateShareEndpointStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
+        if let OnExist::Replace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
         write!(f, "SHARE ENDPOINT ")?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
+        if let OnExist::Keep = self.create_option {
             write!(f, "IF NOT EXISTS ")?;
         }
         write!(f, "{}", self.endpoint)?;

@@ -81,7 +81,7 @@ fn default_test_auth_info() -> AuthInfo {
 
 mod add {
     use databend_common_meta_app::principal::UserInfo;
-    use databend_common_meta_app::schema::CreateOption;
+    use databend_common_meta_app::schema::OnExist;
     use databend_common_meta_types::NonEmptyStr;
     use databend_common_meta_types::Operation;
 
@@ -121,7 +121,7 @@ mod add {
                 .return_once(|_u| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, v)))));
             let api = Arc::new(api);
             let user_mgr = UserMgr::create(api, NonEmptyStr::new("tenant1").unwrap());
-            let res = user_mgr.add_user(user_info, &CreateOption::None);
+            let res = user_mgr.add_user(user_info, &OnExist::Error);
 
             assert!(res.await.is_ok());
         }
@@ -150,7 +150,7 @@ mod add {
 
             let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-            let res = user_mgr.add_user(user_info, &CreateOption::None).await;
+            let res = user_mgr.add_user(user_info, &OnExist::Error).await;
 
             assert_eq!(
                 res.unwrap_err().code(),

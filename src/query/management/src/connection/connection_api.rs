@@ -14,7 +14,7 @@
 
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedConnection;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
@@ -24,7 +24,7 @@ pub trait ConnectionApi: Sync + Send {
     async fn add_connection(
         &self,
         connection: UserDefinedConnection,
-        create_option: &CreateOption,
+        create_option: &OnExist,
     ) -> Result<()>;
 
     async fn get_connection(

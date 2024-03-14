@@ -14,17 +14,17 @@
 
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropDatabaseReq;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_types::NonEmptyString;
 
 /// Create.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabasePlan {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub tenant: NonEmptyString,
     pub catalog: String,
     pub database: String,

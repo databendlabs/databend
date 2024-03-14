@@ -74,7 +74,6 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -136,6 +135,7 @@ use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
@@ -282,7 +282,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let spec_vec = if db_id_seq > 0 {
                 match req.create_option {
-                    CreateOption::None => {
+                    OnExist::Error => {
                         return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
                             DatabaseAlreadyExists::new(
                                 &name_key.db_name,
@@ -290,13 +290,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             ),
                         )));
                     }
-                    CreateOption::CreateIfNotExists => {
+                    OnExist::Keep => {
                         return Ok(CreateDatabaseReply {
                             db_id,
                             spec_vec: None,
                         });
                     }
-                    CreateOption::CreateOrReplace => {
+                    OnExist::Replace => {
                         drop_database_meta(
                             self,
                             name_key,
@@ -929,7 +929,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let (_, index_id_seq) = if index_id_seq > 0 {
                 match req.create_option {
-                    CreateOption::None => {
+                    OnExist::Error => {
                         return Err(KVAppError::AppError(AppError::IndexAlreadyExists(
                             IndexAlreadyExists::new(
                                 &tenant_index.index_name,
@@ -937,10 +937,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             ),
                         )));
                     }
-                    CreateOption::CreateIfNotExists => {
+                    OnExist::Keep => {
                         return Ok(CreateIndexReply { index_id });
                     }
-                    CreateOption::CreateOrReplace => {
+                    OnExist::Replace => {
                         construct_drop_index_txn_operations(
                             self,
                             tenant_index,
@@ -1267,7 +1267,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut if_then = vec![];
             let seq = if old_virtual_column_opt.is_some() {
                 match req.create_option {
-                    CreateOption::None => {
+                    OnExist::Error => {
                         return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
                             VirtualColumnAlreadyExists::new(
                                 req.name_ident.table_id,
@@ -1278,10 +1278,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             ),
                         )));
                     }
-                    CreateOption::CreateIfNotExists => {
+                    OnExist::Keep => {
                         return Ok(CreateVirtualColumnReply {});
                     }
-                    CreateOption::CreateOrReplace => {
+                    OnExist::Replace => {
                         construct_drop_virtual_column_txn_operations(
                             self,
                             &req.name_ident,
@@ -1630,18 +1630,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 if let Some(id) = v {
                     // TODO: move if_not_exists to upper caller. It is not duty of SchemaApi.
                     match req.create_option {
-                        CreateOption::None => {
+                        OnExist::Error => {
                             let app_err = make_exists_err(&req);
                             return Err(KVAppError::AppError(app_err));
                         }
-                        CreateOption::CreateIfNotExists => {
+                        OnExist::Keep => {
                             return Ok(CreateTableReply {
                                 table_id: *id.data,
                                 new_table: false,
                                 spec_vec: None,
                             });
                         }
-                        CreateOption::CreateOrReplace => {
+                        OnExist::Replace => {
                             construct_drop_table_txn_operations(
                                 self,
                                 req.name_ident.table_name.clone(),
@@ -3220,15 +3220,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let indexes = &mut table_meta.indexes;
             if indexes.contains_key(&req.name) {
                 match req.create_option {
-                    CreateOption::None => {
+                    OnExist::Error => {
                         return Err(KVAppError::AppError(AppError::IndexAlreadyExists(
                             IndexAlreadyExists::new(&req.name, "create table index".to_string()),
                         )));
                     }
-                    CreateOption::CreateIfNotExists => {
+                    OnExist::Keep => {
                         return Ok(CreateTableIndexReply {});
                     }
-                    CreateOption::CreateOrReplace => {}
+                    OnExist::Replace => {}
                 }
             }
             // check the index column id exists

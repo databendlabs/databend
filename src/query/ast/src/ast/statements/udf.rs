@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -58,7 +58,7 @@ pub enum UDFDefinition {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateUDFStmt {
     #[drive(skip)]
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub udf_name: Identifier,
     #[drive(skip)]
     pub description: Option<String>,
@@ -121,11 +121,11 @@ impl Display for UDFDefinition {
 impl Display for CreateUDFStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
+        if let OnExist::Replace = self.create_option {
             write!(f, " OR REPLACE")?;
         }
         write!(f, " FUNCTION")?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
+        if let OnExist::Keep = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
         write!(f, " {} {}", self.udf_name, self.definition)?;

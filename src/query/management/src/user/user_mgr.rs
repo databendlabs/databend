@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::TenantUserIdent;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
@@ -93,7 +93,7 @@ impl UserApi for UserMgr {
     async fn add_user(
         &self,
         user_info: UserInfo,
-        create_option: &CreateOption,
+        create_option: &OnExist,
     ) -> databend_common_exception::Result<()> {
         let key = self.user_key(&user_info.name, &user_info.hostname);
         let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
@@ -104,7 +104,7 @@ impl UserApi for UserMgr {
             .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Update(value), None))
             .await?;
 
-        if let CreateOption::None = create_option {
+        if let OnExist::Error = create_option {
             if res.prev.is_some() {
                 return Err(ErrorCode::UserAlreadyExists(format!(
                     "User {} already exists.",

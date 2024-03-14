@@ -18,7 +18,7 @@ use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
 use databend_common_users::UserApiProvider;
@@ -153,11 +153,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let tenant = ctx.get_current_session().get_current_tenant();
         let user2_info = UserInfo::new(user2, "%", AuthInfo::JWT);
         UserApiProvider::instance()
-            .add_user(
-                &tenant,
-                user2_info.clone(),
-                &CreateOption::CreateIfNotExists,
-            )
+            .add_user(&tenant, user2_info.clone(), &OnExist::Keep)
             .await?;
         let res2 = auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt {

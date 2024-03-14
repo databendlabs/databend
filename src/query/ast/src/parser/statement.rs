@@ -21,7 +21,7 @@ use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogType;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
@@ -2214,11 +2214,11 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
 pub fn parse_create_option(
     opt_or_replace: bool,
     opt_if_not_exists: bool,
-) -> Result<CreateOption, nom::Err<ErrorKind>> {
+) -> Result<OnExist, nom::Err<ErrorKind>> {
     match (opt_or_replace, opt_if_not_exists) {
-        (false, false) => Ok(CreateOption::None),
-        (true, false) => Ok(CreateOption::CreateOrReplace),
-        (false, true) => Ok(CreateOption::CreateIfNotExists),
+        (false, false) => Ok(OnExist::Error),
+        (true, false) => Ok(OnExist::Replace),
+        (false, true) => Ok(OnExist::Keep),
         (true, true) => Err(nom::Err::Failure(ErrorKind::Other(
             "option IF NOT EXISTS and OR REPLACE are incompatible.",
         ))),

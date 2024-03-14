@@ -19,7 +19,7 @@ use std::fmt::Formatter;
 use chrono::DateTime;
 use chrono::Utc;
 
-use crate::schema::CreateOption;
+use crate::schema::OnExist;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatamaskNameIdent {
@@ -70,7 +70,7 @@ impl From<CreateDatamaskReq> for DatamaskMeta {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatamaskReq {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub name: DatamaskNameIdent,
     pub args: Vec<(String, String)>,
     pub return_type: String,

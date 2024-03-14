@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_sql::plans::AlterViewPlan;
@@ -97,7 +97,7 @@ impl Interpreter for AlterViewInterpreter {
             options.insert("query".to_string(), subquery);
 
             let plan = CreateTableReq {
-                create_option: CreateOption::CreateIfNotExists,
+                create_option: OnExist::Keep,
                 name_ident: TableNameIdent {
                     tenant: self.plan.tenant.clone(),
                     db_name: self.plan.database.clone(),

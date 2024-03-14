@@ -23,11 +23,11 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DatamaskNameIdent;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateDatamaskPolicyPlan {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub tenant: String,
     pub name: String,
     pub policy: DataMaskPolicy,

@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -41,7 +41,7 @@ pub struct DataMaskPolicy {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateDatamaskPolicyStmt {
     #[drive(skip)]
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     #[drive(skip)]
     pub name: String,
     pub policy: DataMaskPolicy,
@@ -50,11 +50,11 @@ pub struct CreateDatamaskPolicyStmt {
 impl Display for CreateDatamaskPolicyStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
+        if let OnExist::Replace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
         write!(f, "MASKING POLICY ")?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
+        if let OnExist::Keep = self.create_option {
             write!(f, "IF NOT EXISTS ")?;
         }
         write!(f, "{} AS (", self.name)?;

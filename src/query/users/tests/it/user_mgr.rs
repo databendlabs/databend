@@ -24,7 +24,7 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
@@ -49,16 +49,14 @@ async fn test_user_manager() -> Result<()> {
     {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr
-            .add_user(&tenant, user_info, &CreateOption::None)
+            .add_user(&tenant, user_info, &OnExist::Error)
             .await?;
     }
 
     // add user hostname again, error.
     {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
-        let res = user_mgr
-            .add_user(&tenant, user_info, &CreateOption::None)
-            .await;
+        let res = user_mgr.add_user(&tenant, user_info, &OnExist::Error).await;
         assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::USER_ALREADY_EXISTS);
     }
@@ -67,7 +65,7 @@ async fn test_user_manager() -> Result<()> {
     {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr
-            .add_user(&tenant, user_info, &CreateOption::CreateIfNotExists)
+            .add_user(&tenant, user_info, &OnExist::Keep)
             .await?;
     }
 
@@ -116,7 +114,7 @@ async fn test_user_manager() -> Result<()> {
     {
         let user_info: UserInfo = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr
-            .add_user(&tenant, user_info.clone(), &CreateOption::None)
+            .add_user(&tenant, user_info.clone(), &OnExist::Error)
             .await?;
         let old_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(old_user.grants, UserGrantSet::empty());
@@ -151,7 +149,7 @@ async fn test_user_manager() -> Result<()> {
     {
         let user_info: UserInfo = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr
-            .add_user(&tenant, user_info.clone(), &CreateOption::None)
+            .add_user(&tenant, user_info.clone(), &OnExist::Error)
             .await?;
         user_mgr
             .grant_privileges_to_user(
@@ -190,7 +188,7 @@ async fn test_user_manager() -> Result<()> {
         };
         let user_info: UserInfo = UserInfo::new(user, hostname, auth_info.clone());
         user_mgr
-            .add_user(&tenant, user_info.clone(), &CreateOption::None)
+            .add_user(&tenant, user_info.clone(), &OnExist::Error)
             .await?;
 
         let old_user = user_mgr.get_user(&tenant, user_info.identity()).await?;

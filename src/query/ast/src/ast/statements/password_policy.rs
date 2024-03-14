@@ -15,14 +15,14 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreatePasswordPolicyStmt {
     #[drive(skip)]
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     #[drive(skip)]
     pub name: String,
     pub set_options: PasswordSetOptions,
@@ -31,11 +31,11 @@ pub struct CreatePasswordPolicyStmt {
 impl Display for CreatePasswordPolicyStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
+        if let OnExist::Replace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
         write!(f, "PASSWORD POLICY ")?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
+        if let OnExist::Keep = self.create_option {
             write!(f, "IF NOT EXISTS ")?;
         }
         write!(f, "{}", self.name)?;

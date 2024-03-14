@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -28,7 +28,7 @@ use crate::ast::Query;
 pub struct CreateIndexStmt {
     pub index_type: TableIndexType,
     #[drive(skip)]
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
 
     pub index_name: Identifier,
 
@@ -60,12 +60,12 @@ impl Display for TableIndexType {
 impl Display for CreateIndexStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "CREATE ")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
+        if let OnExist::Replace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
         let sync = if self.sync_creation { "SYNC" } else { "ASYNC" };
         write!(f, "{} {} INDEX", sync, self.index_type)?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
+        if let OnExist::Keep = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
 
@@ -113,7 +113,7 @@ impl Display for RefreshIndexStmt {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateInvertedIndexStmt {
     #[drive(skip)]
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
 
     pub index_name: Identifier,
 
@@ -129,12 +129,12 @@ pub struct CreateInvertedIndexStmt {
 impl Display for CreateInvertedIndexStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "CREATE ")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
+        if let OnExist::Replace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
         let sync = if self.sync_creation { "SYNC" } else { "ASYNC" };
         write!(f, "{} INVERTED INDEX", sync)?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
+        if let OnExist::Keep = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
 

@@ -24,12 +24,12 @@ use databend_common_meta_app::app_error::UnknownShareAccounts;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::WrongShare;
 use databend_common_meta_app::app_error::WrongShareObject;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableMeta;
@@ -993,7 +993,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
             if share_endpoint_id_seq > 0 {
                 match req.create_option {
-                    CreateOption::None => {
+                    OnExist::Error => {
                         return Err(KVAppError::AppError(AppError::ShareEndpointAlreadyExists(
                             ShareEndpointAlreadyExists::new(
                                 &name_key.endpoint,
@@ -1001,10 +1001,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                             ),
                         )));
                     }
-                    CreateOption::CreateIfNotExists => {
+                    OnExist::Keep => {
                         return Ok(CreateShareEndpointReply { share_endpoint_id });
                     }
-                    CreateOption::CreateOrReplace => {
+                    OnExist::Replace => {
                         construct_drop_share_endpoint_txn_operations(
                             self,
                             name_key,

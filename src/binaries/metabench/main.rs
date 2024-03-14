@@ -28,11 +28,11 @@ use databend_common_meta_api::serialize_struct;
 use databend_common_meta_api::txn_op_put;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableReq;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -189,7 +189,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 
     let res = client
         .create_database(CreateDatabaseReq {
-            create_option: CreateOption::None,
+            create_option: OnExist::Error,
             name_ident: DatabaseNameIdent {
                 tenant: tenant(),
                 db_name: db_name(),
@@ -206,7 +206,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 
     let res = client
         .create_table(CreateTableReq {
-            create_option: CreateOption::CreateIfNotExists,
+            create_option: OnExist::Keep,
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
         })
@@ -246,7 +246,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 
     let res = client
         .create_table(CreateTableReq {
-            create_option: CreateOption::CreateIfNotExists,
+            create_option: OnExist::Keep,
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
         })

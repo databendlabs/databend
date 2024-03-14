@@ -14,7 +14,7 @@
 
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedFileFormat;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
@@ -24,7 +24,7 @@ pub trait FileFormatApi: Sync + Send {
     async fn add_file_format(
         &self,
         file_format: UserDefinedFileFormat,
-        create_option: &CreateOption,
+        create_option: &OnExist,
     ) -> Result<()>;
 
     async fn get_file_format(

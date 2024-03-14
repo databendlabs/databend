@@ -19,7 +19,7 @@ use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::principal::UdfName;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::MatchSeq;
@@ -52,7 +52,7 @@ impl UdfMgr {
     pub async fn add_udf(
         &self,
         info: UserDefinedFunction,
-        create_option: &CreateOption,
+        create_option: &OnExist,
     ) -> Result<Result<(), UdfError>, UdfApiError> {
         if let Err(e) = self.ensure_non_builtin(info.name.as_str()) {
             return Ok(Err(e));
@@ -64,7 +64,7 @@ impl UdfMgr {
         let req = UpsertPB::insert(key, info.clone()).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
-        if let CreateOption::None = create_option {
+        if let OnExist::Error = create_option {
             if res.prev.is_some() {
                 let err = UdfError::Exists {
                     tenant: self.tenant.to_string(),

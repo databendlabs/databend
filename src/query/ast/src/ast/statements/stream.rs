@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -46,7 +46,7 @@ impl Display for StreamPoint {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateStreamStmt {
     #[drive(skip)]
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub stream: Identifier,
@@ -62,11 +62,11 @@ pub struct CreateStreamStmt {
 impl Display for CreateStreamStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "CREATE ")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
+        if let OnExist::Replace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
         write!(f, "STREAM ")?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
+        if let OnExist::Keep = self.create_option {
             write!(f, "IF NOT EXISTS ")?;
         }
         write_dot_separated_list(

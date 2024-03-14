@@ -15,16 +15,15 @@
 //! Schema types
 
 mod catalog;
-mod create_option;
 mod database;
 mod index;
 mod least_visible_time;
 mod lock;
+mod on_exist;
 mod ownership;
 mod table;
 mod virtual_column;
 pub use catalog::*;
-pub use create_option::CreateOption;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseId;
@@ -62,6 +61,7 @@ pub use lock::LockKey;
 pub use lock::LockMeta;
 pub use lock::LockType;
 pub use lock::TableLockKey;
+pub use on_exist::OnExist;
 pub use ownership::Ownership;
 pub use table::CountTablesKey;
 pub use table::CountTablesReply;

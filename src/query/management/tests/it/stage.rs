@@ -21,7 +21,7 @@ use databend_common_management::*;
 use databend_common_meta_app::principal::StageFile;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageParams;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_embedded::MetaEmbedded;
@@ -35,7 +35,7 @@ async fn test_add_stage() -> Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::None)
+        .add_stage(stage_info.clone(), &OnExist::Error)
         .await?;
     let value = kv_api.get_kv("__fd_stages/admin/mystage").await?;
 
@@ -62,11 +62,11 @@ async fn test_already_exists_add_stage() -> Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::None)
+        .add_stage(stage_info.clone(), &OnExist::Error)
         .await?;
 
     match stage_api
-        .add_stage(stage_info.clone(), &CreateOption::None)
+        .add_stage(stage_info.clone(), &OnExist::Error)
         .await
     {
         Ok(_) => panic!("Already exists add stage must be return Err."),
@@ -85,7 +85,7 @@ async fn test_successfully_get_stages() -> Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::None)
+        .add_stage(stage_info.clone(), &OnExist::Error)
         .await?;
 
     let stages = stage_api.get_stages().await?;
@@ -99,7 +99,7 @@ async fn test_successfully_drop_stage() -> Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::None)
+        .add_stage(stage_info.clone(), &OnExist::Error)
         .await?;
 
     let stages = stage_api.get_stages().await?;
@@ -149,7 +149,7 @@ async fn test_add_stage_file() -> Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::None)
+        .add_stage(stage_info.clone(), &OnExist::Error)
         .await?;
     let mystage = stage_api.get_stage("mystage").await?;
     assert_eq!(mystage.number_of_files, 0);
@@ -188,7 +188,7 @@ async fn test_remove_files() -> Result<()> {
     let (_kv_api, stage_api) = new_stage_api().await?;
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::None)
+        .add_stage(stage_info.clone(), &OnExist::Error)
         .await?;
     let mystage = stage_api.get_stage("mystage").await?;
     assert_eq!(mystage.number_of_files, 0);

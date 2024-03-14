@@ -14,8 +14,8 @@
 
 use databend_common_ast::ast::TableIndexType;
 use databend_common_expression::ColumnId;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_types::MetaId;
 use databend_storages_common_table_meta::meta::Location;
@@ -24,7 +24,7 @@ use crate::plans::Plan;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateIndexPlan {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub index_type: TableIndexType,
     pub index_name: String,
     pub original_query: String,
@@ -54,7 +54,7 @@ pub struct RefreshIndexPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexPlan {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub catalog: String,
     pub index_name: String,
     pub column_ids: Vec<ColumnId>,

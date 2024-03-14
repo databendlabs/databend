@@ -25,7 +25,7 @@ use databend_common_meta_app::principal::PasswordPolicy;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NonEmptyString;
 use log::info;
@@ -67,7 +67,7 @@ impl UserApiProvider {
         &self,
         tenant: &NonEmptyString,
         password_policy: PasswordPolicy,
-        create_option: &CreateOption,
+        create_option: &OnExist,
     ) -> Result<()> {
         check_password_policy(&password_policy)?;
 

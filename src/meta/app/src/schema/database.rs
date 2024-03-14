@@ -22,7 +22,7 @@ use std::ops::Deref;
 use chrono::DateTime;
 use chrono::Utc;
 
-use super::CreateOption;
+use super::OnExist;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
 
@@ -206,7 +206,7 @@ impl Display for DbIdList {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabaseReq {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub name_ident: DatabaseNameIdent,
     pub meta: DatabaseMeta,
 }
@@ -214,18 +214,18 @@ pub struct CreateDatabaseReq {
 impl Display for CreateDatabaseReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
-            CreateOption::None => write!(
+            OnExist::Error => write!(
                 f,
                 "create_db:{}/{}={:?}",
                 self.name_ident.tenant, self.name_ident.db_name, self.meta
             ),
-            CreateOption::CreateIfNotExists => write!(
+            OnExist::Keep => write!(
                 f,
                 "create_db_if_not_exists:{}/{}={:?}",
                 self.name_ident.tenant, self.name_ident.db_name, self.meta
             ),
 
-            CreateOption::CreateOrReplace => write!(
+            OnExist::Replace => write!(
                 f,
                 "create_or_replace_db:{}/{}={:?}",
                 self.name_ident.tenant, self.name_ident.db_name, self.meta

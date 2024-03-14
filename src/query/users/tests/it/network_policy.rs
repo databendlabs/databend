@@ -23,7 +23,7 @@ use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 
@@ -52,7 +52,7 @@ async fn test_network_policy() -> Result<()> {
         update_on: None,
     };
     user_mgr
-        .add_network_policy(&tenant, network_policy, &CreateOption::None)
+        .add_network_policy(&tenant, network_policy, &OnExist::Error)
         .await?;
 
     // add user
@@ -66,7 +66,7 @@ async fn test_network_policy() -> Result<()> {
     option = option.with_network_policy(Some(policy_name.clone()));
     user_info.update_auth_option(None, Some(option));
     user_mgr
-        .add_user(&tenant, user_info, &CreateOption::None)
+        .add_user(&tenant, user_info, &OnExist::Error)
         .await?;
 
     let user = UserIdentity::new(username, hostname);

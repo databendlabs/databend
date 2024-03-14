@@ -21,7 +21,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
 
@@ -118,7 +118,7 @@ impl AuthMgr {
                             }
                         }
                         user_api
-                            .add_user(&tenant, user_info.clone(), &CreateOption::CreateIfNotExists)
+                            .add_user(&tenant, user_info.clone(), &OnExist::Keep)
                             .await?;
                         user_info
                     }

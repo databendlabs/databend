@@ -822,7 +822,7 @@ CREATE SYNC AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GRO
 CreateIndex(
     CreateIndexStmt {
         index_type: Aggregating,
-        create_option: None,
+        create_option: Error,
         index_name: Identifier {
             span: Some(
                 25..29,
@@ -1008,7 +1008,7 @@ CREATE OR REPLACE SYNC AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE 
 CreateIndex(
     CreateIndexStmt {
         index_type: Aggregating,
-        create_option: CreateOrReplace,
+        create_option: Replace,
         index_name: Identifier {
             span: Some(
                 36..40,
@@ -1193,7 +1193,7 @@ CREATE OR REPLACE SYNC INVERTED INDEX idx2 ON t1 (a, b)
 ---------- AST ------------
 CreateInvertedIndex(
     CreateInvertedIndexStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         index_name: Identifier {
             span: Some(
                 33..37,
@@ -1238,7 +1238,7 @@ CREATE TABLE a (c Decimal(38, 0))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         table: Identifier {
@@ -1286,7 +1286,7 @@ CREATE TABLE a (c Decimal(38, 0))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         table: Identifier {
@@ -1334,7 +1334,7 @@ CREATE OR REPLACE TABLE a (c Decimal(38, 0))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         catalog: None,
         database: None,
         table: Identifier {
@@ -1382,7 +1382,7 @@ CREATE OR REPLACE TABLE a (c UInt32)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         catalog: None,
         database: None,
         table: Identifier {
@@ -1427,7 +1427,7 @@ CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         catalog: None,
         database: Some(
             Identifier {
@@ -1505,7 +1505,7 @@ CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING) AS SELECT 
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         catalog: None,
         database: Some(
             Identifier {
@@ -1641,7 +1641,7 @@ CREATE TABLE IF NOT EXISTS a.b (c TUPLE(m Int32, n STRING), d TUPLE(Int32, STRIN
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         catalog: None,
         database: Some(
             Identifier {
@@ -1723,7 +1723,7 @@ CREATE TABLE IF NOT EXISTS a.b (a STRING, b STRING, c STRING AS (concat(a, ' ', 
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         catalog: None,
         database: Some(
             Identifier {
@@ -1867,7 +1867,7 @@ CREATE TABLE IF NOT EXISTS a.b (a Int32, b Int32, c Int32 AS ((a + b)) VIRTUAL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         catalog: None,
         database: Some(
             Identifier {
@@ -1989,7 +1989,7 @@ CREATE TABLE a.b LIKE c.d
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: Some(
             Identifier {
@@ -2045,7 +2045,7 @@ CREATE TABLE t LIKE t2 ENGINE = MEMORY
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         table: Identifier {
@@ -2087,7 +2087,7 @@ CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTIO
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         catalog: None,
         database: Some(
             Identifier {
@@ -2157,7 +2157,7 @@ CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' LOCATION_
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         catalog: None,
         database: Some(
             Identifier {
@@ -2365,7 +2365,7 @@ CREATE DATABASE IF NOT EXISTS a
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         database: DatabaseRef {
             catalog: None,
             database: Identifier {
@@ -2390,7 +2390,7 @@ CREATE DATABASEctl.t ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        create_option: None,
+        create_option: Error,
         database: DatabaseRef {
             catalog: Some(
                 Identifier {
@@ -2425,7 +2425,7 @@ CREATE DATABASEt ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        create_option: None,
+        create_option: Error,
         database: DatabaseRef {
             catalog: None,
             database: Identifier {
@@ -2452,7 +2452,7 @@ CREATE DATABASEt FROM SHARE a.s
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        create_option: None,
+        create_option: Error,
         database: DatabaseRef {
             catalog: None,
             database: Identifier {
@@ -2482,7 +2482,7 @@ CREATE OR REPLACE DATABASEa
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         database: DatabaseRef {
             catalog: None,
             database: Identifier {
@@ -2555,7 +2555,7 @@ CREATE TABLE c (a TIMESTAMP NULL, b TIMESTAMP)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         table: Identifier {
@@ -2614,7 +2614,7 @@ CREATE VIEW v AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         view: Identifier {
@@ -2870,7 +2870,7 @@ CREATE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         view: Identifier {
@@ -2996,7 +2996,7 @@ CREATE OR REPLACE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         catalog: None,
         database: None,
         view: Identifier {
@@ -3247,7 +3247,7 @@ CREATE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
 ---------- AST ------------
 CreateStream(
     CreateStreamStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: Some(
             Identifier {
@@ -3295,7 +3295,7 @@ CREATE STREAM IF NOT EXISTS test2.s2 ON TABLE test.t AT (STREAM => test1.s1) COM
 ---------- AST ------------
 CreateStream(
     CreateStreamStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         catalog: None,
         database: Some(
             Identifier {
@@ -3364,7 +3364,7 @@ CREATE OR REPLACE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
 ---------- AST ------------
 CreateStream(
     CreateStreamStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         catalog: None,
         database: Some(
             Identifier {
@@ -3642,7 +3642,7 @@ CREATE TABLE t (c1 Int32 NULL, c2 Int64 NULL, c3 STRING NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         table: Identifier {
@@ -3717,7 +3717,7 @@ CREATE TABLE t (c1 Int32 NOT NULL, c2 Int64 NOT NULL, c3 STRING NOT NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         table: Identifier {
@@ -3792,7 +3792,7 @@ CREATE TABLE t (c1 BINARY, c2 BINARY)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         table: Identifier {
@@ -3849,7 +3849,7 @@ CREATE TABLE t (c1 Int32 DEFAULT 1)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         table: Identifier {
@@ -3905,7 +3905,7 @@ CREATE TABLE abc AS SELECT * FROM xyz LIMIT 10
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         table: Identifier {
@@ -4119,7 +4119,7 @@ CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANT
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        create_option: None,
+        create_option: Error,
         user: UserIdentity {
             username: "u1",
             hostname: "%",
@@ -4149,7 +4149,7 @@ CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET NETWORK POLICY = 'policy1'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        create_option: None,
+        create_option: Error,
         user: UserIdentity {
             username: "u1",
             hostname: "%",
@@ -8411,7 +8411,7 @@ CREATE STAGE ~
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        create_option: None,
+        create_option: Error,
         stage_name: "~",
         location: None,
         file_format_options: {},
@@ -8430,7 +8430,7 @@ CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         stage_name: "test_stage",
         location: Some(
             UriLocation {
@@ -8467,7 +8467,7 @@ CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         stage_name: "test_stage",
         location: Some(
             UriLocation {
@@ -8504,7 +8504,7 @@ CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( acco
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         stage_name: "test_stage",
         location: Some(
             UriLocation {
@@ -8541,7 +8541,7 @@ CREATE OR REPLACE STAGE test_stage 'azblob://load/files/' CONNECTION = ( account
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         stage_name: "test_stage",
         location: Some(
             UriLocation {
@@ -8622,7 +8622,7 @@ CREATE USER 'test-e'@'%' IDENTIFIED BY 'password'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        create_option: None,
+        create_option: Error,
         user: UserIdentity {
             username: "test-e",
             hostname: "%",
@@ -10055,7 +10055,7 @@ CREATE TABLE t (a Int32 COMMENT 'col comment')comment = 'table comment'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         table: Identifier {
@@ -12495,7 +12495,7 @@ CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' TENANT=x ARGS=(jwk
 ---------- AST ------------
 CreateShareEndpoint(
     CreateShareEndpointStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         endpoint: Identifier {
             span: Some(
                 36..37,
@@ -12538,7 +12538,7 @@ CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_k
 ---------- AST ------------
 CreateShareEndpoint(
     CreateShareEndpointStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         endpoint: Identifier {
             span: Some(
                 33..34,
@@ -13817,7 +13817,7 @@ CREATE FILE FORMAT my_csv
 CREATE FILE_FORMAT my_csv {"field_delimiter": ",", "record_delimiter": "\n", "skip_header": "1", "type": "CSV"}
 ---------- AST ------------
 CreateFileFormat {
-    create_option: None,
+    create_option: Error,
     name: "my_csv",
     file_format_options: FileFormatOptionsAst {
         options: {
@@ -13837,7 +13837,7 @@ CREATE OR REPLACE FILE FORMAT my_csv
 CREATE OR REPLACE FILE_FORMAT my_csv {"field_delimiter": ",", "record_delimiter": "\n", "skip_header": "1", "type": "CSV"}
 ---------- AST ------------
 CreateFileFormat {
-    create_option: CreateOrReplace,
+    create_option: Replace,
     name: "my_csv",
     file_format_options: FileFormatOptionsAst {
         options: {
@@ -14741,7 +14741,7 @@ CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN cur
 ---------- AST ------------
 CreateDatamaskPolicy(
     CreateDatamaskPolicyStmt {
-        create_option: None,
+        create_option: Error,
         name: "email_mask",
         policy: DataMaskPolicy {
             args: [
@@ -14839,7 +14839,7 @@ CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CA
 ---------- AST ------------
 CreateDatamaskPolicy(
     CreateDatamaskPolicyStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         name: "email_mask",
         policy: DataMaskPolicy {
             args: [
@@ -14962,7 +14962,7 @@ CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- AST ------------
 CreateVirtualColumn(
     CreateVirtualColumnStmt {
-        create_option: None,
+        create_option: Error,
         catalog: None,
         database: None,
         table: Identifier {
@@ -15081,7 +15081,7 @@ CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- AST ------------
 CreateVirtualColumn(
     CreateVirtualColumnStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         catalog: None,
         database: None,
         table: Identifier {
@@ -15360,7 +15360,7 @@ CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_
 ---------- AST ------------
 CreateNetworkPolicy(
     CreateNetworkPolicyStmt {
-        create_option: None,
+        create_option: Error,
         name: "mypolicy",
         allowed_ip_list: [
             "192.168.10.0/24",
@@ -15384,7 +15384,7 @@ CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') 
 ---------- AST ------------
 CreateNetworkPolicy(
     CreateNetworkPolicyStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         name: "mypolicy",
         allowed_ip_list: [
             "192.168.10.0/24",
@@ -16177,7 +16177,7 @@ CreateConnection(
         },
         storage_type: "s3",
         storage_params: {},
-        create_option: CreateIfNotExists,
+        create_option: Keep,
     },
 )
 
@@ -16200,7 +16200,7 @@ CreateConnection(
         storage_params: {
             "any_arg": "any_value",
         },
-        create_option: CreateIfNotExists,
+        create_option: Keep,
     },
 )
 
@@ -16223,7 +16223,7 @@ CreateConnection(
         storage_params: {
             "any_arg": "any_value",
         },
-        create_option: CreateOrReplace,
+        create_option: Replace,
     },
 )
 
@@ -16888,7 +16888,7 @@ CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> (NOT is_null(p))
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
-        create_option: CreateIfNotExists,
+        create_option: Keep,
         udf_name: Identifier {
             span: Some(
                 30..40,
@@ -16963,7 +16963,7 @@ CREATE OR REPLACE FUNCTION isnotempty_test_replace AS (p) -> (NOT is_null(p)) DE
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         udf_name: Identifier {
             span: Some(
                 27..50,
@@ -17040,7 +17040,7 @@ CREATE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
-        create_option: None,
+        create_option: Error,
         udf_name: Identifier {
             span: Some(
                 16..30,
@@ -17073,7 +17073,7 @@ CREATE OR REPLACE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANG
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         udf_name: Identifier {
             span: Some(
                 27..41,
@@ -17117,7 +17117,7 @@ $$
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
-        create_option: CreateOrReplace,
+        create_option: Replace,
         udf_name: Identifier {
             span: Some(
                 27..33,

@@ -28,7 +28,7 @@ use databend_common_meta_app::data_mask::GetDatamaskReply;
 use databend_common_meta_app::data_mask::GetDatamaskReq;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdListKey;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_kvapi::kvapi;
@@ -79,7 +79,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
             if seq > 0 {
                 match req.create_option {
-                    CreateOption::None => {
+                    OnExist::Error => {
                         return Err(KVAppError::AppError(AppError::DatamaskAlreadyExists(
                             DatamaskAlreadyExists::new(
                                 &name_key.name,
@@ -87,8 +87,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                             ),
                         )));
                     }
-                    CreateOption::CreateIfNotExists => return Ok(CreateDatamaskReply { id }),
-                    CreateOption::CreateOrReplace => {
+                    OnExist::Keep => return Ok(CreateDatamaskReply { id }),
+                    OnExist::Replace => {
                         construct_drop_mask_policy_operations(
                             self,
                             name_key,

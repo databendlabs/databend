@@ -50,8 +50,8 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::EmptySink;
@@ -302,7 +302,7 @@ impl TestFixture {
 
     pub fn default_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            create_option: CreateOption::None,
+            create_option: OnExist::Error,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -327,7 +327,7 @@ impl TestFixture {
     // create a normal table without cluster key.
     pub fn normal_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            create_option: CreateOption::None,
+            create_option: OnExist::Error,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -363,7 +363,7 @@ impl TestFixture {
     // create a variant table
     pub fn variant_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            create_option: CreateOption::None,
+            create_option: OnExist::Error,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -399,7 +399,7 @@ impl TestFixture {
     // create a string table for inverted index
     pub fn string_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            create_option: CreateOption::None,
+            create_option: OnExist::Error,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -444,7 +444,7 @@ impl TestFixture {
     // create a table with computed column
     pub fn computed_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
-            create_option: CreateOption::None,
+            create_option: OnExist::Error,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
@@ -505,7 +505,7 @@ impl TestFixture {
         let plan = CreateDatabasePlan {
             catalog: "default".to_owned(),
             tenant,
-            create_option: CreateOption::None,
+            create_option: OnExist::Error,
             database: db_name,
             meta: DatabaseMeta {
                 engine: "".to_string(),

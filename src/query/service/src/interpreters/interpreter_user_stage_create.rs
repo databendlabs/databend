@@ -20,7 +20,7 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::CreateStagePlan;
@@ -92,7 +92,7 @@ impl Interpreter for CreateUserStageInterpreter {
         })?;
 
         let old_stage = match plan.create_option {
-            CreateOption::CreateOrReplace => user_mgr
+            OnExist::Replace => user_mgr
                 .get_stage(&tenant, &user_stage.stage_name)
                 .await
                 .ok(),

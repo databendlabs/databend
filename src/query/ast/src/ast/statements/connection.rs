@@ -17,7 +17,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_base::base::mask_string;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -31,7 +31,7 @@ pub struct CreateConnectionStmt {
     #[drive(skip)]
     pub storage_params: BTreeMap<String, String>,
     #[drive(skip)]
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -52,11 +52,11 @@ pub struct ShowConnectionsStmt {}
 impl Display for CreateConnectionStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
+        if let OnExist::Replace = self.create_option {
             write!(f, " OR REPLACE")?;
         }
         write!(f, " CONNECTION ")?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
+        if let OnExist::Keep = self.create_option {
             write!(f, "IF NOT EXISTS ")?;
         }
         write!(f, "{} ", self.name)?;

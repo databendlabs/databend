@@ -19,11 +19,11 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateFileFormatPlan {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub name: String,
     pub file_format_params: FileFormatParams,
 }

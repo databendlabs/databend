@@ -66,7 +66,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::DataOperator;
 use databend_common_storages_delta::DeltaTable;
@@ -727,7 +727,7 @@ impl Binder {
         };
 
         Ok(Plan::CreateTable(Box::new(CreateTablePlan {
-            create_option: CreateOption::None,
+            create_option: OnExist::Error,
             tenant: self.ctx.get_tenant().to_string(),
             catalog,
             database,

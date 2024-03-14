@@ -18,7 +18,7 @@ use databend_common_base::base::escape_for_key;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedConnection;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
@@ -64,7 +64,7 @@ impl ConnectionApi for ConnectionMgr {
     async fn add_connection(
         &self,
         info: UserDefinedConnection,
-        create_option: &CreateOption,
+        create_option: &OnExist,
     ) -> Result<()> {
         let val = Operation::Update(serialize_struct(
             &info,
@@ -79,7 +79,7 @@ impl ConnectionApi for ConnectionMgr {
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None))
             .await?;
 
-        if let CreateOption::None = create_option {
+        if let OnExist::Error = create_option {
             if res.prev.is_some() {
                 return Err(ErrorCode::ConnectionAlreadyExists(format!(
                     "Connection '{}' already exists.",

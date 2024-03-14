@@ -16,7 +16,7 @@ use databend_common_exception::Result;
 use databend_common_management::udf::UdfApiError;
 use databend_common_management::udf::UdfError;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NonEmptyString;
 
@@ -30,7 +30,7 @@ impl UserApiProvider {
         &self,
         tenant: &NonEmptyString,
         info: UserDefinedFunction,
-        create_option: &CreateOption,
+        create_option: &OnExist,
     ) -> Result<()> {
         let udf_api = self.udf_api(tenant);
         udf_api.add_udf(info, create_option).await??;

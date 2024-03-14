@@ -20,7 +20,7 @@ use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::principal::NetworkPolicy;
 use databend_common_meta_app::principal::NetworkPolicyIdent;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -59,7 +59,7 @@ impl NetworkPolicyMgr {
 impl NetworkPolicyApi for NetworkPolicyMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add(&self, network_policy: NetworkPolicy, create_option: &CreateOption) -> Result<()> {
+    async fn add(&self, network_policy: NetworkPolicy, create_option: &OnExist) -> Result<()> {
         let ident = self.ident(network_policy.name.as_str());
 
         let seq = MatchSeq::from(*create_option);
@@ -67,7 +67,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
 
         let res = self.kv_api.upsert_pb(&upsert).await?;
 
-        if let CreateOption::None = create_option {
+        if let OnExist::Error = create_option {
             if res.prev.is_some() {
                 return Err(ErrorCode::NetworkPolicyAlreadyExists(format!(
                     "Network policy '{}' already exists.",

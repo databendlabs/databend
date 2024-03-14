@@ -17,7 +17,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::NetworkPolicyApi;
 use databend_common_meta_app::principal::NetworkPolicy;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NonEmptyString;
 
@@ -30,7 +30,7 @@ impl UserApiProvider {
         &self,
         tenant: &NonEmptyString,
         network_policy: NetworkPolicy,
-        create_option: &CreateOption,
+        create_option: &OnExist,
     ) -> Result<()> {
         let client = self.network_policy_api(tenant);
         client.add(network_policy, create_option).await

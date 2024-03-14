@@ -14,13 +14,13 @@
 
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::NetworkPolicy;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait NetworkPolicyApi: Sync + Send {
-    async fn add(&self, network_policy: NetworkPolicy, create_option: &CreateOption) -> Result<()>;
+    async fn add(&self, network_policy: NetworkPolicy, create_option: &OnExist) -> Result<()>;
 
     async fn update(&self, network_policy: NetworkPolicy, seq: MatchSeq) -> Result<u64>;
 

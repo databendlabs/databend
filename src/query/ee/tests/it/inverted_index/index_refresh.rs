@@ -15,8 +15,8 @@
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_storages_fuse::io::read::InvertedIndexReader;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
@@ -51,7 +51,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let table_id = table.get_id();
     let index_name = "idx1".to_string();
     let req = CreateTableIndexReq {
-        create_option: CreateOption::None,
+        create_option: OnExist::Error,
         table_id,
         name: index_name.clone(),
         column_ids: vec![0, 1],

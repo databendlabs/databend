@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
@@ -249,7 +249,7 @@ pub enum Statement {
     // UserDefinedFileFormat
     CreateFileFormat {
         #[drive(skip)]
-        create_option: CreateOption,
+        create_option: OnExist,
         #[drive(skip)]
         name: String,
         #[drive(skip)]
@@ -647,11 +647,11 @@ impl Display for Statement {
                 file_format_options,
             } => {
                 write!(f, "CREATE")?;
-                if let CreateOption::CreateOrReplace = create_option {
+                if let OnExist::Replace = create_option {
                     write!(f, " OR REPLACE")?;
                 }
                 write!(f, " FILE_FORMAT")?;
-                if let CreateOption::CreateIfNotExists = create_option {
+                if let OnExist::Keep = create_option {
                     write!(f, " IF NOT EXISTS")?;
                 }
                 write!(f, " {name}")?;

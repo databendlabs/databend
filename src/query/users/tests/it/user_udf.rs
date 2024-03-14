@@ -17,7 +17,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
@@ -41,7 +41,7 @@ async fn test_user_lambda_udf() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(&tenant, isempty_udf.clone(), &CreateOption::None)
+        .add_udf(&tenant, isempty_udf.clone(), &OnExist::Error)
         .await?;
 
     // add isnotempty.
@@ -52,7 +52,7 @@ async fn test_user_lambda_udf() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(&tenant, isnotempty_udf.clone(), &CreateOption::None)
+        .add_udf(&tenant, isnotempty_udf.clone(), &OnExist::Error)
         .await?;
 
     // get all.
@@ -114,7 +114,7 @@ async fn test_user_udf_server() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(&tenant, isempty_udf.clone(), &CreateOption::None)
+        .add_udf(&tenant, isempty_udf.clone(), &OnExist::Error)
         .await?;
 
     // add isnotempty.
@@ -128,7 +128,7 @@ async fn test_user_udf_server() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(&tenant, isnotempty_udf.clone(), &CreateOption::None)
+        .add_udf(&tenant, isnotempty_udf.clone(), &OnExist::Error)
         .await?;
 
     // get all.

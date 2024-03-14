@@ -22,12 +22,12 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -73,7 +73,7 @@ async fn test_catalogs_database() -> Result<()> {
     // Create.
     {
         let mut req = CreateDatabaseReq {
-            create_option: CreateOption::None,
+            create_option: OnExist::Error,
             name_ident: DatabaseNameIdent {
                 tenant: tenant.to_string(),
                 db_name: "db1".to_string(),
@@ -180,7 +180,7 @@ async fn test_catalogs_table() -> Result<()> {
         let created_on = Utc::now();
 
         let mut req = CreateTableReq {
-            create_option: CreateOption::None,
+            create_option: OnExist::Error,
             name_ident: TableNameIdent {
                 tenant: tenant.to_string(),
                 db_name: "default".to_string(),

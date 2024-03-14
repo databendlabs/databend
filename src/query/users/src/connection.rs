@@ -15,7 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedConnection;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
@@ -28,7 +28,7 @@ impl UserApiProvider {
         &self,
         tenant: &str,
         connection: UserDefinedConnection,
-        create_option: &CreateOption,
+        create_option: &OnExist,
     ) -> Result<()> {
         let connection_api_provider = self.get_connection_api_client(tenant)?;
         connection_api_provider

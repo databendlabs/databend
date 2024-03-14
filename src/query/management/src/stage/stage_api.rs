@@ -15,12 +15,12 @@
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageFile;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 
 #[async_trait::async_trait]
 pub trait StageApi: Sync + Send {
     // Add a stage info to /tenant/stage-name.
-    async fn add_stage(&self, stage: StageInfo, create_option: &CreateOption) -> Result<()>;
+    async fn add_stage(&self, stage: StageInfo, create_option: &OnExist) -> Result<()>;
 
     async fn get_stage(&self, name: &str) -> Result<StageInfo>;
 

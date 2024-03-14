@@ -22,7 +22,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_management::udf::UdfMgr;
 use databend_common_management::*;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::MatchSeq;
@@ -35,7 +35,7 @@ async fn test_add_udf() -> Result<()> {
 
     // lambda udf
     let udf = create_test_lambda_udf();
-    udf_api.add_udf(udf.clone(), &CreateOption::None).await??;
+    udf_api.add_udf(udf.clone(), &OnExist::Error).await??;
 
     let value = kv_api
         .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
@@ -57,7 +57,7 @@ async fn test_add_udf() -> Result<()> {
     // udf server
     let udf = create_test_udf_server();
 
-    udf_api.add_udf(udf.clone(), &CreateOption::None).await??;
+    udf_api.add_udf(udf.clone(), &OnExist::Error).await??;
 
     let value = kv_api
         .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
@@ -80,7 +80,7 @@ async fn test_add_udf() -> Result<()> {
     // udf script
     let udf = create_test_udf_script();
 
-    udf_api.add_udf(udf.clone(), &CreateOption::None).await??;
+    udf_api.add_udf(udf.clone(), &OnExist::Error).await??;
 
     let value = kv_api
         .get_kv(format!("__fd_udfs/admin/{}", udf.name).as_str())
@@ -109,9 +109,9 @@ async fn test_already_exists_add_udf() -> Result<()> {
 
     // lambda udf
     let udf = create_test_lambda_udf();
-    udf_api.add_udf(udf.clone(), &CreateOption::None).await??;
+    udf_api.add_udf(udf.clone(), &OnExist::Error).await??;
 
-    let got = udf_api.add_udf(udf.clone(), &CreateOption::None).await?;
+    let got = udf_api.add_udf(udf.clone(), &OnExist::Error).await?;
 
     let err = got.unwrap_err();
 
@@ -119,9 +119,9 @@ async fn test_already_exists_add_udf() -> Result<()> {
 
     // udf server
     let udf = create_test_udf_server();
-    udf_api.add_udf(udf.clone(), &CreateOption::None).await??;
+    udf_api.add_udf(udf.clone(), &OnExist::Error).await??;
 
-    let got = udf_api.add_udf(udf.clone(), &CreateOption::None).await?;
+    let got = udf_api.add_udf(udf.clone(), &OnExist::Error).await?;
 
     let err = got.unwrap_err();
     assert_eq!(err.to_string(), r#"UDF already exists: 'strlen'; "#);
@@ -140,11 +140,11 @@ async fn test_successfully_get_udfs() -> Result<()> {
     let udf_server = create_test_udf_server();
 
     udf_api
-        .add_udf(lambda_udf.clone(), &CreateOption::None)
+        .add_udf(lambda_udf.clone(), &OnExist::Error)
         .await??;
 
     udf_api
-        .add_udf(udf_server.clone(), &CreateOption::None)
+        .add_udf(udf_server.clone(), &OnExist::Error)
         .await??;
 
     let udfs = udf_api.list_udf().await?;
@@ -160,11 +160,11 @@ async fn test_successfully_drop_udf() -> Result<()> {
     let udf_server = create_test_udf_server();
 
     udf_api
-        .add_udf(lambda_udf.clone(), &CreateOption::None)
+        .add_udf(lambda_udf.clone(), &OnExist::Error)
         .await??;
 
     udf_api
-        .add_udf(udf_server.clone(), &CreateOption::None)
+        .add_udf(udf_server.clone(), &OnExist::Error)
         .await??;
 
     let udfs = udf_api.list_udf().await?;

@@ -29,7 +29,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_sql::parse_to_filters;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::BloomIndexColumns;
@@ -89,7 +89,7 @@ async fn test_block_pruner() -> Result<()> {
     // create test table
     let create_table_plan = CreateTablePlan {
         catalog: "default".to_owned(),
-        create_option: CreateOption::None,
+        create_option: OnExist::Error,
         tenant: fixture.default_tenant(),
         database: fixture.default_db_name(),
         table: test_tbl_name.to_string(),

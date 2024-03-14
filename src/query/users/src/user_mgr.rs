@@ -26,7 +26,7 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NonEmptyString;
 
@@ -130,7 +130,7 @@ impl UserApiProvider {
         &self,
         tenant: &NonEmptyString,
         user_info: UserInfo,
-        create_option: &CreateOption,
+        create_option: &OnExist,
     ) -> Result<()> {
         if let Some(name) = user_info.option.network_policy() {
             if self.get_network_policy(tenant, name).await.is_err() {

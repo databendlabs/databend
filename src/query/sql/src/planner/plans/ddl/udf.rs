@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateUDFPlan {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub udf: UserDefinedFunction,
 }
 

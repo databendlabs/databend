@@ -18,13 +18,13 @@ use std::collections::BTreeSet;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -211,7 +211,7 @@ impl ShareApiTestSuite {
         let create_on = Utc::now();
         {
             let req = CreateShareEndpointReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 endpoint: ShareEndpointIdent {
                     tenant: tenant.to_string(),
                     endpoint: endpoint1.to_string(),
@@ -228,7 +228,7 @@ impl ShareApiTestSuite {
             assert!(res.is_ok());
 
             let req = CreateShareEndpointReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 endpoint: ShareEndpointIdent {
                     tenant: tenant.to_string(),
                     endpoint: endpoint1.to_string(),
@@ -250,7 +250,7 @@ impl ShareApiTestSuite {
             );
 
             let req = CreateShareEndpointReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 endpoint: ShareEndpointIdent {
                     tenant: tenant.to_string(),
                     endpoint: endpoint2.to_string(),
@@ -393,7 +393,7 @@ impl ShareApiTestSuite {
             };
             let url = "http://127.0.0.1:22222".to_string();
             let req = CreateShareEndpointReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 endpoint: endpoint.clone(),
                 url: url.clone(),
                 tenant: tenant2.to_string(),
@@ -429,7 +429,7 @@ impl ShareApiTestSuite {
 
             let url = "http://192.168.0.1".to_string();
             let req = CreateShareEndpointReq {
-                create_option: CreateOption::CreateOrReplace,
+                create_option: OnExist::Replace,
                 endpoint: endpoint.clone(),
                 url: url.clone(),
                 tenant: tenant2.to_string(),
@@ -803,7 +803,7 @@ impl ShareApiTestSuite {
             assert_eq!(share_name, share_name_ret);
 
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -816,7 +816,7 @@ impl ShareApiTestSuite {
             db_id = res.db_id;
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -830,7 +830,7 @@ impl ShareApiTestSuite {
             table_id = res.table_id;
 
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db2_name.to_string(),
@@ -839,7 +839,7 @@ impl ShareApiTestSuite {
             };
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -855,7 +855,7 @@ impl ShareApiTestSuite {
             info!("create database res: {:?}", res);
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db2_name.to_string(),
@@ -1251,7 +1251,7 @@ impl ShareApiTestSuite {
         info!("--- create db1,table1");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -1263,7 +1263,7 @@ impl ShareApiTestSuite {
             info!("create database res: {:?}", res);
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -1404,7 +1404,7 @@ impl ShareApiTestSuite {
         info!("--- create db1,table1");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant1.to_string(),
                     db_name: db_name.to_string(),
@@ -1416,7 +1416,7 @@ impl ShareApiTestSuite {
             info!("create database res: {:?}", res);
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 name_ident: TableNameIdent {
                     tenant: tenant1.to_string(),
                     db_name: db_name.to_string(),
@@ -1513,7 +1513,7 @@ impl ShareApiTestSuite {
 
             // tenant2 create a database from share1
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 name_ident: db_name2.clone(),
                 meta: DatabaseMeta {
                     from_share: Some(share_name1.clone()),
@@ -1654,7 +1654,7 @@ impl ShareApiTestSuite {
         info!("--- create db1,table1");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -1667,7 +1667,7 @@ impl ShareApiTestSuite {
             db_id = res.db_id;
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: OnExist::Error,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),

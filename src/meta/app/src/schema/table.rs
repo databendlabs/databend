@@ -31,7 +31,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaId;
 use maplit::hashmap;
 
-use super::CreateOption;
+use super::OnExist;
 use crate::schema::database::DatabaseNameIdent;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
@@ -460,7 +460,7 @@ impl Display for TableIdList {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableReq {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub name_ident: TableNameIdent,
     pub table_meta: TableMeta,
 }
@@ -480,7 +480,7 @@ impl CreateTableReq {
 impl Display for CreateTableReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.create_option {
-            CreateOption::None => write!(
+            OnExist::Error => write!(
                 f,
                 "create_table:{}/{}-{}={}",
                 self.tenant(),
@@ -488,7 +488,7 @@ impl Display for CreateTableReq {
                 self.table_name(),
                 self.table_meta
             ),
-            CreateOption::CreateIfNotExists => write!(
+            OnExist::Keep => write!(
                 f,
                 "create_table_if_not_exists:{}/{}-{}={}",
                 self.tenant(),
@@ -496,7 +496,7 @@ impl Display for CreateTableReq {
                 self.table_name(),
                 self.table_meta
             ),
-            CreateOption::CreateOrReplace => write!(
+            OnExist::Replace => write!(
                 f,
                 "create_or_replace_table:{}/{}-{}={}",
                 self.tenant(),
@@ -719,7 +719,7 @@ pub struct UpdateTableMetaReply {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexReq {
-    pub create_option: CreateOption,
+    pub create_option: OnExist,
     pub table_id: u64,
     pub name: String,
     pub column_ids: Vec<u32>,
@@ -728,15 +728,15 @@ pub struct CreateTableIndexReq {
 impl Display for CreateTableIndexReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
-            CreateOption::None => {
+            OnExist::Error => {
                 write!(f, "create_table_index:{}={:?}", self.name, self.column_ids)
             }
-            CreateOption::CreateIfNotExists => write!(
+            OnExist::Keep => write!(
                 f,
                 "create_table_index_if_not_exists:{}={:?}",
                 self.name, self.column_ids
             ),
-            CreateOption::CreateOrReplace => write!(
+            OnExist::Replace => write!(
                 f,
                 "create_or_replace_table_index:{}={:?}",
                 self.name, self.column_ids

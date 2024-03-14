@@ -15,7 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedFileFormat;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::OnExist;
 use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
@@ -28,7 +28,7 @@ impl UserApiProvider {
         &self,
         tenant: &str,
         file_format_options: UserDefinedFileFormat,
-        create_option: &CreateOption,
+        create_option: &OnExist,
     ) -> Result<()> {
         let file_format_api_provider = self.get_file_format_api_client(tenant)?;
         file_format_api_provider
