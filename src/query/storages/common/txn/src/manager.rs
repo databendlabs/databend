@@ -152,13 +152,16 @@ impl TxnManager {
         self.txn_buffer.update_table_meta(req, table_info);
     }
 
-    pub fn add_stream_table(&mut self, stream: TableInfo, source: TableInfo) {
-        self.txn_buffer
-            .table_desc_to_id
-            .insert(stream.desc.clone(), stream.ident.table_id);
+    pub fn upsert_stream_table(&mut self, stream: TableInfo, source: TableInfo) {
         self.txn_buffer
             .stream_tables
             .insert(stream.ident.table_id, StreamSnapshot { stream, source });
+    }
+
+    pub fn upsert_table_desc_to_id(&mut self, table: TableInfo) {
+        self.txn_buffer
+            .table_desc_to_id
+            .insert(table.desc.clone(), table.ident.table_id);
     }
 
     pub fn get_stream_table_source(&self, stream_desc: &str) -> Option<TableInfo> {
