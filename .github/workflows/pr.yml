@@ -180,6 +180,14 @@ jobs:
                 }
               }
             }
+            if (!testsChecked) {
+              core.setOutput('tests', 'not-fulfilled');
+              core.error('Tests are not checked');
+            }
+            if (!changesChecked) {
+              core.setOutput('changes', 'not-fulfilled');
+              core.error('Type of Changes are not checked');
+            }
       - name: Delete Comment for Tests
         if: steps.check.outputs.tests == 'fullfilled'
         uses: everpcpc/comment-on-pr-action@v1
