@@ -52,7 +52,7 @@ async fn test_spill_with_partition() -> Result<()> {
     assert!(spiller.partition_location.get(&0).unwrap()[0].starts_with("_query_spill"));
 
     // Test read spilled data
-    let block = DataBlock::concat(&spiller.read_spilled_data(&(0_u8)).await?)?;
+    let block = DataBlock::concat(&spiller.read_spilled_partition(&(0_u8)).await?)?;
     assert_eq!(block.num_rows(), 100);
     assert_eq!(block.num_columns(), 2);
     for (col_idx, col) in block.columns().iter().enumerate() {

@@ -709,6 +709,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
+                ("statement_queued_timeout_in_seconds", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "The maximum waiting seconds in the queue. The default value is 0(no limit).",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                })
             ]);
 
             Ok(Arc::new(DefaultSettings {

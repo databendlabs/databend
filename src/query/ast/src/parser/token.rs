@@ -566,6 +566,8 @@ pub enum TokenKind {
     NAN_DISPLAY,
     #[token("NULL_DISPLAY", ignore(ascii_case))]
     NULL_DISPLAY,
+    #[token("NULL_IF", ignore(ascii_case))]
+    NULL_IF,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
     #[token("FILE", ignore(ascii_case))]

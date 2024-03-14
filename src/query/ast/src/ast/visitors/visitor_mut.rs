@@ -603,6 +603,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_drop_inverted_index(&mut self, _stmt: &mut DropInvertedIndexStmt) {}
 
+    fn visit_refresh_inverted_index(&mut self, _stmt: &mut RefreshInvertedIndexStmt) {}
+
     fn visit_create_virtual_column(&mut self, _stmt: &mut CreateVirtualColumnStmt) {}
 
     fn visit_alter_virtual_column(&mut self, _stmt: &mut AlterVirtualColumnStmt) {}

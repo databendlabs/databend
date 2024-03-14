@@ -20,21 +20,13 @@ use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait NetworkPolicyApi: Sync + Send {
-    async fn add_network_policy(
-        &self,
-        network_policy: NetworkPolicy,
-        create_option: &CreateOption,
-    ) -> Result<()>;
+    async fn add(&self, network_policy: NetworkPolicy, create_option: &CreateOption) -> Result<()>;
 
-    async fn update_network_policy(
-        &self,
-        network_policy: NetworkPolicy,
-        seq: MatchSeq,
-    ) -> Result<u64>;
+    async fn update(&self, network_policy: NetworkPolicy, seq: MatchSeq) -> Result<u64>;
 
-    async fn drop_network_policy(&self, name: &str, seq: MatchSeq) -> Result<()>;
+    async fn remove(&self, name: &str, seq: MatchSeq) -> Result<()>;
 
-    async fn get_network_policy(&self, name: &str, seq: MatchSeq) -> Result<SeqV<NetworkPolicy>>;
+    async fn get(&self, name: &str, seq: MatchSeq) -> Result<SeqV<NetworkPolicy>>;
 
-    async fn get_network_policies(&self) -> Result<Vec<NetworkPolicy>>;
+    async fn list(&self) -> Result<Vec<NetworkPolicy>>;
 }

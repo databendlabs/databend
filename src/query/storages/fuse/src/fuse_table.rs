@@ -57,6 +57,8 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::IndexInfo;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -344,6 +346,27 @@ impl FuseTable {
         }
     }
 
+    #[minitrace::trace]
+    #[async_backtrace::framed]
+    pub async fn read_index_info(
+        &self,
+        index_info_loc: Option<&Location>,
+    ) -> Result<Option<Arc<IndexInfo>>> {
+        match index_info_loc {
+            Some((index_info_loc, ver)) => {
+                let reader = MetaReaders::inverted_index_info_reader(self.get_operator());
+                let params = LoadParams {
+                    location: index_info_loc.clone(),
+                    len_hint: None,
+                    ver: *ver,
+                    put_cache: true,
+                };
+                Ok(Some(reader.read(&params).await?))
+            }
+            None => Ok(None),
+        }
+    }
+
     #[async_backtrace::framed]
     pub async fn snapshot_format_version(&self, location_opt: Option<String>) -> Result<u64> {
         let location_opt = if location_opt.is_some() {
@@ -554,6 +577,7 @@ impl Table for FuseTable {
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
+        let prev_index_info_locations = prev.as_ref().and_then(|v| v.index_info_locations.clone());
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
         } else {
@@ -569,6 +593,7 @@ impl Table for FuseTable {
             segments,
             cluster_key_meta,
             prev_statistics_location,
+            prev_index_info_locations,
         );
 
         let mut table_info = self.table_info.clone();
@@ -604,6 +629,7 @@ impl Table for FuseTable {
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
+        let prev_index_info_locations = prev.as_ref().and_then(|v| v.index_info_locations.clone());
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
@@ -620,6 +646,7 @@ impl Table for FuseTable {
             segments,
             None,
             prev_statistics_location,
+            prev_index_info_locations,
         );
 
         let mut table_info = self.table_info.clone();

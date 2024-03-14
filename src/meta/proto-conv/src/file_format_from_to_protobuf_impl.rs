@@ -327,6 +327,7 @@ impl FromToProto for mt::principal::NdJsonFileFormatParams {
             compression,
             p.missing_field_as.as_deref(),
             p.null_field_as.as_deref(),
+            p.null_if,
         )
         .map_err(|e| Incompatible {
             reason: format!("{e}"),
@@ -342,6 +343,7 @@ impl FromToProto for mt::principal::NdJsonFileFormatParams {
             compression,
             missing_field_as: Some(self.missing_field_as.to_string()),
             null_field_as: Some(self.null_field_as.to_string()),
+            null_if: self.null_if.clone(),
         })
     }
 }

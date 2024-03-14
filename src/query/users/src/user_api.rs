@@ -157,14 +157,8 @@ impl UserApiProvider {
         Arc::new(SettingMgr::create(self.client.clone(), tenant))
     }
 
-    pub fn get_network_policy_api_client(
-        &self,
-        tenant: &str,
-    ) -> Result<Arc<impl NetworkPolicyApi>> {
-        Ok(Arc::new(NetworkPolicyMgr::create(
-            self.client.clone(),
-            tenant,
-        )?))
+    pub fn network_policy_api(&self, tenant: &NonEmptyString) -> Arc<impl NetworkPolicyApi> {
+        Arc::new(NetworkPolicyMgr::create(self.client.clone(), tenant))
     }
 
     pub fn password_policy_api(&self, tenant: &NonEmptyString) -> Arc<impl PasswordPolicyApi> {

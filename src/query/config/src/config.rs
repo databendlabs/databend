@@ -1399,7 +1399,7 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "256")]
     pub max_active_sessions: u64,
 
-    #[clap(long, value_name = "VALUE", default_value = "0")]
+    #[clap(long, value_name = "VALUE", default_value = "8")]
     pub max_running_queries: u64,
 
     /// The max total memory in bytes that can be used by this process.
@@ -2766,6 +2766,14 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_filter_size: u64,
 
+    /// Max number of cached inverted index info objects. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-inverted-index-info-count",
+        value_name = "VALUE",
+        default_value = "3000"
+    )]
+    pub inverted_index_info_count: u64,
+
     #[clap(
         long = "cache-table-prune-partitions-count",
         value_name = "VALUE",
@@ -2959,6 +2967,7 @@ mod cache_config_converters {
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 table_bloom_index_filter_size: value.table_bloom_index_filter_size,
+                inverted_index_info_count: value.inverted_index_info_count,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
@@ -2981,6 +2990,7 @@ mod cache_config_converters {
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 table_bloom_index_filter_size: value.table_bloom_index_filter_size,
+                inverted_index_info_count: value.inverted_index_info_count,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
                 table_data_cache_population_queue_size: value

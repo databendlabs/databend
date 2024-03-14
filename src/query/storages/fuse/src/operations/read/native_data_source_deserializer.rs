@@ -802,6 +802,7 @@ impl NativeDeserializeDataTransform {
             )?;
 
             let filter_executor = self.filter_executor.as_mut().unwrap();
+
             let count = filter_executor.select(&prewhere_block)?;
 
             // If it's all filtered, we can skip the current pages.
@@ -879,21 +880,24 @@ impl NativeDeserializeDataTransform {
             let data_type = top_k.field.data_type().into();
             let col = Column::from_arrow(array.as_ref(), &data_type)?;
 
-            let mut bitmap = MutableBitmap::from_len_set(col.len());
-            sorter.push_column(&col, &mut bitmap);
-
             let filter_executor = self.filter_executor.as_mut().unwrap();
-            let count = if let Some(count) = self.read_state.filtered_count {
-                filter_executor.select_bitmap(count, bitmap)
+
+            if let Some(count) = self.read_state.filtered_count {
+                let cnt = sorter.push_column_with_selection(
+                    &col,
+                    filter_executor.mutable_true_selection(),
+                    count,
+                );
+
+                if cnt == 0 {
+                    return Ok(false);
+                }
+                self.read_state.filtered_count = Some(cnt);
             } else {
-                filter_executor.from_bitmap(bitmap)
-            };
-
-            if count == 0 {
-                return Ok(false);
+                let mut bitmap = MutableBitmap::from_len_set(col.len());
+                sorter.push_column(&col, &mut bitmap);
+                self.read_state.filtered_count = Some(filter_executor.from_bitmap(bitmap));
             }
-
-            self.read_state.filtered_count = Some(count);
         };
 
         Ok(true)
@@ -959,6 +963,7 @@ impl NativeDeserializeDataTransform {
             // for merge into target build
             block = add_row_prefix_meta(self.need_reserve_block_info, fuse_part, block)?;
             self.add_output_block(block);
+
             self.finish_partition();
             return Ok(());
         }
