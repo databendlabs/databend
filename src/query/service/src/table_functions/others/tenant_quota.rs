@@ -245,7 +245,7 @@ impl AsyncSource for TenantQuotaSource {
             }
             tenant = args[0].clone();
         }
-        let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
+        let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
         let res = quota_api.get_quota(MatchSeq::GE(0)).await?;
         let mut quota = res.data;
 

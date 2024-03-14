@@ -39,7 +39,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
 
-use crate::catalog::Catalog;
 use crate::lock::Lock;
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
@@ -401,14 +400,6 @@ pub trait Table: Sync + Send {
 
     fn is_read_only(&self) -> bool {
         false
-    }
-
-    async fn stream_source_table(&self, _catalog: Arc<dyn Catalog>) -> Result<Arc<dyn Table>> {
-        Err(ErrorCode::Unimplemented(format!(
-            "The 'stream_source_table' operation is not supported for the table '{}'. Table engine: '{}'.",
-            self.name(),
-            self.get_table_info().engine(),
-        )))
     }
 }
 

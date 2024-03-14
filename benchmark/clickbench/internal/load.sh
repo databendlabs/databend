@@ -6,6 +6,9 @@ echo "drop database if exists test2" | bendsql
 echo "create database test" | bendsql
 for((i=1;i<=10000;i++));
 do
+  if ((i%1000==0)); then
+    echo "load $i tables in test"
+  fi
 	echo "create table if not exists test.t_$i(id int comment 'tes\t', c2 string comment 'c2comment')" | bendsql
 done
 

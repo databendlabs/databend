@@ -15,7 +15,9 @@
 // A new AggregateHashtable which inspired by duckdb's https://duckdb.org/2022/03/07/aggregate-hashtable.html
 
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
+use bumpalo::Bump;
 use databend_common_exception::Result;
 
 use super::partitioned_payload::PartitionedPayload;
@@ -24,6 +26,7 @@ use super::probe_state::ProbeState;
 use crate::aggregate::payload_row::row_match_columns;
 use crate::group_hash_columns;
 use crate::new_sel;
+use crate::read;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
@@ -44,7 +47,7 @@ pub struct AggregateHashTable {
     pub payload: PartitionedPayload,
     // use for append rows directly during deserialize
     pub direct_append: bool,
-    config: HashTableConfig,
+    pub config: HashTableConfig,
     current_radix_bits: u64,
     entries: Vec<Entry>,
     count: usize,
@@ -59,9 +62,10 @@ impl AggregateHashTable {
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
         config: HashTableConfig,
+        arena: Arc<Bump>,
     ) -> Self {
         let capacity = Self::initial_capacity();
-        Self::new_with_capacity(group_types, aggrs, config, capacity)
+        Self::new_with_capacity(group_types, aggrs, config, capacity, arena)
     }
 
     pub fn new_with_capacity(
@@ -69,13 +73,19 @@ impl AggregateHashTable {
         aggrs: Vec<AggregateFunctionRef>,
         config: HashTableConfig,
         capacity: usize,
+        arena: Arc<Bump>,
     ) -> Self {
         Self {
             entries: vec![0u64; capacity],
             count: 0,
             direct_append: false,
             current_radix_bits: config.initial_radix_bits,
-            payload: PartitionedPayload::new(group_types, aggrs, 1 << config.initial_radix_bits),
+            payload: PartitionedPayload::new(
+                group_types,
+                aggrs,
+                1 << config.initial_radix_bits,
+                vec![arena],
+            ),
             capacity,
             config,
         }
@@ -150,8 +160,8 @@ impl AggregateHashTable {
         if !self.payload.aggrs.is_empty() {
             for i in 0..row_count {
                 state.state_places[i] = unsafe {
-                    StateAddr::new(core::ptr::read::<u64>(
-                        state.addresses[i].add(self.payload.state_offset) as _,
+                    StateAddr::new(read::<u64>(
+                        state.addresses[i].add(self.payload.state_offset) as _
                     ) as usize)
                 };
             }
@@ -356,7 +366,7 @@ impl AggregateHashTable {
             if !self.payload.aggrs.is_empty() {
                 for i in 0..row_count {
                     flush_state.probe_state.state_places[i] = unsafe {
-                        StateAddr::new(core::ptr::read::<u64>(
+                        StateAddr::new(read::<u64>(
                             flush_state.probe_state.addresses[i].add(self.payload.state_offset)
                                 as _,
                         ) as usize)
@@ -446,6 +456,7 @@ impl AggregateHashTable {
                 self.payload.group_types.clone(),
                 self.payload.aggrs.clone(),
                 1,
+                vec![Arc::new(Bump::new())],
             );
             let payload = std::mem::replace(&mut self.payload, temp_payload);
             let mut state = PayloadFlushState::default();
@@ -529,6 +540,16 @@ impl AggregateHashTable {
 
     pub fn reset_count(&mut self) {
         self.count = 0;
+    }
+
+    pub fn allocated_bytes(&self) -> usize {
+        self.payload.memory_size()
+            + self
+                .payload
+                .arenas
+                .iter()
+                .map(|arena| arena.allocated_bytes())
+                .sum::<usize>()
     }
 }
 

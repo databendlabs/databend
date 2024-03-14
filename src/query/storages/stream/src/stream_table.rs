@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::block_id_from_location;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -133,11 +132,10 @@ impl StreamTable {
         })
     }
 
-    pub async fn source_table(&self, catalog: Arc<dyn Catalog>) -> Result<Arc<dyn Table>> {
-        let table = catalog
-            .stream_source_table(
-                &self.stream_info.desc,
-                &self.stream_info.tenant,
+    pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
+        let table = ctx
+            .get_table(
+                self.stream_info.catalog(),
                 &self.table_database,
                 &self.table_name,
             )
@@ -192,7 +190,7 @@ impl StreamTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
-        let table = self.source_table(ctx.get_default_catalog()?).await?;
+        let table = self.source_table(ctx.clone()).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
         let fuse_segment_io =
@@ -288,7 +286,7 @@ impl StreamTable {
 
     #[minitrace::trace]
     pub async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
-        let base_table = self.source_table(ctx.get_default_catalog()?).await?;
+        let base_table = self.source_table(ctx).await?;
         let status = if base_table.get_table_info().ident.seq == self.table_version {
             StreamStatus::NoData
         } else {
@@ -343,7 +341,7 @@ impl Table for StreamTable {
                     return Ok(StreamMode::AppendOnly);
                 }
 
-                let table = self.source_table(ctx.get_default_catalog()?).await?;
+                let table = self.source_table(ctx).await?;
                 let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
                 let latest_snapshot = fuse_table.read_table_snapshot().await?;
@@ -404,7 +402,7 @@ impl Table for StreamTable {
         ctx: Arc<dyn TableContext>,
         change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
-        let table = self.source_table(ctx.get_default_catalog()?).await?;
+        let table = self.source_table(ctx.clone()).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let change_type = change_type.unwrap_or(ChangeType::Append);
 
@@ -485,12 +483,8 @@ impl Table for StreamTable {
         &self,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Box<dyn ColumnStatisticsProvider>> {
-        let table = self.source_table(ctx.get_default_catalog()?).await?;
+        let table = self.source_table(ctx.clone()).await?;
         table.column_statistics_provider(ctx).await
-    }
-
-    async fn stream_source_table(&self, catalog: Arc<dyn Catalog>) -> Result<Arc<dyn Table>> {
-        self.source_table(catalog).await
     }
 }
 

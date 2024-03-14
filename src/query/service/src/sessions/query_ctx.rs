@@ -584,7 +584,7 @@ impl TableContext for QueryContext {
     }
 
     fn get_format_settings(&self) -> Result<FormatSettings> {
-        let tz = self.query_settings.get_timezone()?;
+        let tz = self.get_settings().get_timezone()?;
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;

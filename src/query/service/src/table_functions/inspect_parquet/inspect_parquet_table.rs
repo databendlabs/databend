@@ -218,7 +218,7 @@ impl AsyncSource for InspectParquetSource {
                 && !visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
             {
                 return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied, privilege READ is required on stage {} for user {}",
+                    "Permission denied: privilege READ is required on stage {} for user {}",
                     stage_info.stage_name.clone(),
                     &self.ctx.get_current_user()?.identity(),
                 )));

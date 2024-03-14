@@ -138,6 +138,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::Spilling(_) => unreachable!(),
                 AggregateMeta::AggregateHashTable(_) => unreachable!(),
                 AggregateMeta::AggregatePayload(_) => unreachable!(),
+                AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::HashTable(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
@@ -181,6 +182,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::HashTable(_) => unreachable!(),
                 AggregateMeta::AggregateHashTable(_) => unreachable!(),
                 AggregateMeta::AggregatePayload(_) => unreachable!(),
+                AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
                     let instant = Instant::now();
@@ -300,7 +302,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
         AggregateMeta::<Method, V>::Serialized(SerializedPayload {
             bucket: payload.bucket,
             data_block: DataBlock::new_from_columns(columns),
-            max_partition_count: 0,
+            max_partition_count: payload.max_partition_count,
         })
     }
 }

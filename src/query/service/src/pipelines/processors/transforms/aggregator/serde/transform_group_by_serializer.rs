@@ -19,9 +19,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
-use databend_common_expression::PayloadFlushState;
 use databend_common_hashtable::HashtableEntryRefLike;
 use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::Event;
@@ -29,7 +27,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use itertools::Itertools;
 
 use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
@@ -131,6 +128,7 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
                     AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
+                    AggregateMeta::AggregateSpilling(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(p) => {
                         self.input_data = Some(SerializeGroupByStream::create(
                             &self.method,
@@ -246,21 +244,10 @@ impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
                 Some(data_block.add_meta(Some(AggregateSerdeMeta::create(bucket))))
             }
             SerializePayload::AggregatePayload(p) => {
-                let mut state = PayloadFlushState::default();
-                let mut blocks = vec![];
-
-                while p.payload.flush(&mut state) {
-                    let col = state.take_group_columns();
-                    blocks.push(DataBlock::new_from_columns(col));
-                }
+                let data_block = p.payload.group_by_flush_all().ok()?;
 
                 self.end_iter = true;
 
-                let data_block = if blocks.is_empty() {
-                    empty_block(p)
-                } else {
-                    DataBlock::concat(&blocks).unwrap()
-                };
                 Some(
                     data_block.add_meta(Some(AggregateSerdeMeta::create_agg_payload(
                         p.bucket,
@@ -270,20 +257,4 @@ impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
             }
         }
     }
-}
-
-pub fn empty_block(p: &AggregatePayload) -> DataBlock {
-    let columns = p
-        .payload
-        .aggrs
-        .iter()
-        .map(|f| ColumnBuilder::with_capacity(&f.return_type().unwrap(), 0).build())
-        .chain(
-            p.payload
-                .group_types
-                .iter()
-                .map(|t| ColumnBuilder::with_capacity(t, 0).build()),
-        )
-        .collect_vec();
-    DataBlock::new_from_columns(columns)
 }

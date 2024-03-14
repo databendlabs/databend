@@ -52,7 +52,7 @@ mod kvapi_key_impl {
 
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
             b.push_str(self.stage.tenant_name())
-                .push_str(&self.stage.name)
+                .push_str(self.stage.name())
                 .push_str(&self.path)
         }
 

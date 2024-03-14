@@ -77,7 +77,7 @@ impl Interpreter for CreateUserStageInterpreter {
             ErrorCode::TenantIsEmpty("tenant is empty when CreateUserStateInterpreter")
         })?;
 
-        let quota_api = user_mgr.get_tenant_quota_api_client(&tenant)?;
+        let quota_api = user_mgr.tenant_quota_api(&tenant);
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let stages = user_mgr.get_stages(&tenant).await?;
         if quota.max_stages != 0 && stages.len() >= quota.max_stages as usize {

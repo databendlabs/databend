@@ -37,6 +37,7 @@ use indexmap::IndexMap;
 use log::warn;
 
 use super::Finder;
+use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
@@ -317,6 +318,7 @@ impl<'a> Binder {
             Statement::RefreshIndex(stmt) => self.bind_refresh_index(bind_context, stmt).await?,
             Statement::CreateInvertedIndex(stmt) => self.bind_create_inverted_index(bind_context, stmt).await?,
             Statement::DropInvertedIndex(stmt) => self.bind_drop_inverted_index(bind_context, stmt).await?,
+            Statement::RefreshInvertedIndex(stmt) => self.bind_refresh_inverted_index(bind_context, stmt).await?,
 
             // Virtual Columns
             Statement::CreateVirtualColumn(stmt) => self.bind_create_virtual_column(stmt).await?,
@@ -339,10 +341,16 @@ impl<'a> Binder {
             Statement::CreateRole {
                 if_not_exists,
                 role_name,
-            } => Plan::CreateRole(Box::new(CreateRolePlan {
+            } => {
+                if illegal_ident_name(role_name) {
+                    return Err(ErrorCode::IllegalRole(
+                        format!("Illegal Role Name: Illegal role name [{}], not support username contain ' or \"", role_name),
+                    ));
+                }
+                Plan::CreateRole(Box::new(CreateRolePlan {
                 if_not_exists: *if_not_exists,
                 role_name: role_name.to_string(),
-            })),
+            }))},
             Statement::DropRole {
                 if_exists,
                 role_name,

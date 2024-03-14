@@ -17,8 +17,6 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
-use databend_common_expression::DataSchemaRef;
 use databend_common_formats::field_encoder::FieldEncoderValues;
 use databend_common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
@@ -26,7 +24,6 @@ use serde_json::Value as JsonValue;
 #[derive(Debug, Clone)]
 pub struct JsonBlock {
     pub(crate) data: Vec<Vec<JsonValue>>,
-    pub(crate) schema: DataSchemaRef,
 }
 
 pub type JsonBlockRef = Arc<JsonBlock>;
@@ -63,16 +60,12 @@ pub fn block_to_json_value(
 
 impl JsonBlock {
     pub fn empty() -> Self {
-        Self {
-            data: vec![],
-            schema: Arc::new(DataSchema::empty()),
-        }
+        Self { data: vec![] }
     }
 
-    pub fn new(schema: DataSchemaRef, block: &DataBlock, format: &FormatSettings) -> Result<Self> {
+    pub fn new(block: &DataBlock, format: &FormatSettings) -> Result<Self> {
         Ok(JsonBlock {
             data: block_to_json_value(block, format)?,
-            schema,
         })
     }
 
@@ -80,10 +73,9 @@ impl JsonBlock {
         if blocks.is_empty() {
             return Self::empty();
         }
-        let schema = blocks[0].schema.clone();
         let results = blocks.into_iter().map(|b| b.data).collect::<Vec<_>>();
         let data = results.concat();
-        Self { data, schema }
+        Self { data }
     }
 
     pub fn num_rows(&self) -> usize {
@@ -96,10 +88,6 @@ impl JsonBlock {
 
     pub fn data(&self) -> &Vec<Vec<JsonValue>> {
         &self.data
-    }
-
-    pub fn schema(&self) -> &DataSchemaRef {
-        &self.schema
     }
 }
 

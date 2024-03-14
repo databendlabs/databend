@@ -19,7 +19,6 @@ AggregateFinal
 ├── aggregate functions: [count()]
 ├── estimated rows: 1.00
 └── AggregatePartial
-    ├── output columns: [count() (#4)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00

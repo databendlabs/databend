@@ -50,7 +50,7 @@ impl Interpreter for ShowNetworkPoliciesInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
-        let network_policies = user_mgr.get_network_policies(tenant.as_str()).await?;
+        let network_policies = user_mgr.get_network_policies(&tenant).await?;
 
         let mut names = Vec::with_capacity(network_policies.len());
         let mut allowed_ip_lists = Vec::with_capacity(network_policies.len());
