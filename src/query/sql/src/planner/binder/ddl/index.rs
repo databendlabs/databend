@@ -22,6 +22,7 @@ use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::RefreshIndexStmt;
+use databend_common_ast::ast::RefreshInvertedIndexStmt;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
@@ -50,6 +51,7 @@ use crate::plans::DropIndexPlan;
 use crate::plans::DropTableIndexPlan;
 use crate::plans::Plan;
 use crate::plans::RefreshIndexPlan;
+use crate::plans::RefreshTableIndexPlan;
 use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
@@ -467,5 +469,32 @@ impl Binder {
             table_id,
         };
         Ok(Plan::DropTableIndex(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_refresh_inverted_index(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &RefreshInvertedIndexStmt,
+    ) -> Result<Plan> {
+        let RefreshInvertedIndexStmt {
+            index_name,
+            catalog,
+            database,
+            table,
+            limit: _,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+        let index_name = self.normalize_object_identifier(index_name);
+
+        let plan = RefreshTableIndexPlan {
+            catalog,
+            database,
+            table,
+            index_name,
+        };
+        Ok(Plan::RefreshTableIndex(Box::new(plan)))
     }
 }

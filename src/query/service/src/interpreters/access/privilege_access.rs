@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -151,7 +152,6 @@ impl PrivilegeAccess {
         if_exists: bool,
     ) -> Result<()> {
         let tenant = self.ctx.get_tenant();
-
         match self
             .validate_access(
                 &GrantObject::Database(catalog_name.to_string(), db_name.to_string()),
@@ -163,8 +163,9 @@ impl PrivilegeAccess {
                 return Ok(());
             }
             Err(_err) => {
+                let catalog = self.ctx.get_catalog(catalog_name).await?;
                 match self
-                    .convert_to_id(tenant.as_str(), catalog_name, db_name, None)
+                    .convert_to_id(tenant.as_str(), &catalog, db_name, None)
                     .await
                 {
                     Ok(obj) => {
@@ -172,11 +173,34 @@ impl PrivilegeAccess {
                             ObjectId::Table(db_id, table_id) => (db_id, Some(table_id)),
                             ObjectId::Database(db_id) => (db_id, None),
                         };
-                        self.validate_access(
-                            &GrantObject::DatabaseById(catalog_name.to_string(), db_id),
-                            privileges,
-                        )
-                        .await?
+                        if let Err(err) = self
+                            .validate_access(
+                                &GrantObject::DatabaseById(catalog_name.to_string(), db_id),
+                                privileges.clone(),
+                            )
+                            .await
+                        {
+                            if err.code() != ErrorCode::PermissionDenied("").code() {
+                                return Err(err);
+                            }
+                            let current_user = self.ctx.get_current_user()?;
+                            let session = self.ctx.get_current_session();
+                            let roles_name = session
+                                .get_all_effective_roles()
+                                .await?
+                                .iter()
+                                .map(|r| r.name.clone())
+                                .collect::<Vec<_>>()
+                                .join(",");
+                            return Err(ErrorCode::PermissionDenied(format!(
+                                "Permission denied: privilege {:?} is required on '{}'.'{}'.* for user {} with roles [{}]",
+                                privileges,
+                                catalog_name,
+                                db_name,
+                                &current_user.identity(),
+                                roles_name,
+                            )));
+                        }
                     }
                     Err(e) => match e.code() {
                         ErrorCode::UNKNOWN_DATABASE
@@ -202,12 +226,93 @@ impl PrivilegeAccess {
         privileges: Vec<UserPrivilegeType>,
         if_exists: bool,
     ) -> Result<()> {
+        // skip checking the privilege on system tables.
+        if ((db_name == "system" && SYSTEM_TABLES_ALLOW_LIST.iter().any(|x| x == &table_name))
+            || db_name == "information_schema")
+            && privileges == [UserPrivilegeType::Select]
+        {
+            return Ok(());
+        }
+
         let tenant = self.ctx.get_tenant();
 
         match self.ctx.get_catalog(catalog_name).await {
             Ok(catalog) => {
                 if catalog.exists_table_function(table_name) {
                     return Ok(());
+                }
+                // to keep compatibility with the legacy privileges which granted by table name,
+                // we'd both check the privileges by name and id.
+                // we'll completely move to the id side in the future.
+                match self
+                    .validate_access(
+                        &GrantObject::Table(
+                            catalog_name.to_string(),
+                            db_name.to_string(),
+                            table_name.to_string(),
+                        ),
+                        privileges.clone(),
+                    )
+                    .await
+                {
+                    Ok(_) => return Ok(()),
+                    Err(_err) => {
+                        match self
+                            .convert_to_id(tenant.as_str(), &catalog, db_name, Some(table_name))
+                            .await
+                        {
+                            Ok(obj) => {
+                                let (db_id, table_id) = match obj {
+                                    ObjectId::Table(db_id, table_id) => (db_id, Some(table_id)),
+                                    ObjectId::Database(db_id) => (db_id, None),
+                                };
+                                if let Err(err) = self
+                                    .validate_access(
+                                        &GrantObject::TableById(
+                                            catalog_name.to_string(),
+                                            db_id,
+                                            table_id.unwrap(),
+                                        ),
+                                        privileges.clone(),
+                                    )
+                                    .await
+                                {
+                                    if err.code() != ErrorCode::PermissionDenied("").code() {
+                                        return Err(err);
+                                    }
+                                    let current_user = self.ctx.get_current_user()?;
+                                    let session = self.ctx.get_current_session();
+                                    let roles_name = session
+                                        .get_all_effective_roles()
+                                        .await?
+                                        .iter()
+                                        .map(|r| r.name.clone())
+                                        .collect::<Vec<_>>()
+                                        .join(",");
+                                    return Err(ErrorCode::PermissionDenied(format!(
+                                        "Permission denied: privilege {:?} is required on '{}'.'{}'.'{}' for user {} with roles [{}]",
+                                        privileges,
+                                        catalog_name,
+                                        db_name,
+                                        table_name,
+                                        &current_user.identity(),
+                                        roles_name,
+                                    )));
+                                }
+                            }
+                            Err(e) => match e.code() {
+                                ErrorCode::UNKNOWN_DATABASE
+                                | ErrorCode::UNKNOWN_TABLE
+                                | ErrorCode::UNKNOWN_CATALOG
+                                    if if_exists =>
+                                {
+                                    return Ok(());
+                                }
+
+                                _ => return Err(e.add_message("error on validating table access")),
+                            },
+                        }
+                    }
                 }
             }
             Err(error) => {
@@ -219,54 +324,6 @@ impl PrivilegeAccess {
             }
         }
 
-        // to keep compatibility with the legacy privileges which granted by table name,
-        // we'd both check the privileges by name and id.
-        // we'll completely move to the id side in the future.
-        match self
-            .validate_access(
-                &GrantObject::Table(
-                    catalog_name.to_string(),
-                    db_name.to_string(),
-                    table_name.to_string(),
-                ),
-                privileges.clone(),
-            )
-            .await
-        {
-            Ok(_) => return Ok(()),
-            Err(_err) => {
-                match self
-                    .convert_to_id(tenant.as_str(), catalog_name, db_name, Some(table_name))
-                    .await
-                {
-                    Ok(obj) => {
-                        let (db_id, table_id) = match obj {
-                            ObjectId::Table(db_id, table_id) => (db_id, Some(table_id)),
-                            ObjectId::Database(db_id) => (db_id, None),
-                        };
-                        self.validate_access(
-                            &GrantObject::TableById(
-                                catalog_name.to_string(),
-                                db_id,
-                                table_id.unwrap(),
-                            ),
-                            privileges,
-                        )
-                        .await?
-                    }
-                    Err(e) => match e.code() {
-                        ErrorCode::UNKNOWN_DATABASE
-                        | ErrorCode::UNKNOWN_TABLE
-                        | ErrorCode::UNKNOWN_CATALOG
-                            if if_exists =>
-                        {
-                            return Ok(());
-                        }
-                        _ => return Err(e.add_message("error on validating table access")),
-                    },
-                }
-            }
-        }
         Ok(())
     }
 
@@ -301,35 +358,6 @@ impl PrivilegeAccess {
     ) -> Result<()> {
         let session = self.ctx.get_current_session();
 
-        // translate the db_id and table_id to db_name and table_name, used on
-        // skipping the privilege check on system tables, and on the error message.
-        let (db_name, table_name) = match grant_object {
-            GrantObject::Database(_, db_name) => (db_name.to_lowercase(), "".to_string()),
-            GrantObject::Table(_, db_name, table_name) => {
-                (db_name.to_lowercase(), table_name.to_lowercase())
-            }
-            GrantObject::DatabaseById(catalog_name, db_id) => {
-                let catalog = self.ctx.get_catalog(catalog_name).await?;
-                let db_name = catalog.get_db_name_by_id(*db_id).await?;
-                (db_name.to_lowercase(), "".to_string())
-            }
-            GrantObject::TableById(catalog_name, db_id, table_id) => {
-                let catalog = self.ctx.get_catalog(catalog_name).await?;
-                let db_name = catalog.get_db_name_by_id(*db_id).await?;
-                let table_name = catalog.get_table_name_by_id(*table_id).await?;
-                (db_name.to_lowercase(), table_name.to_lowercase())
-            }
-            _ => ("".to_string(), "".to_string()),
-        };
-
-        // skip checking the privilege on system tables.
-        if ((db_name == "system" && SYSTEM_TABLES_ALLOW_LIST.iter().any(|x| x == &table_name))
-            || db_name == "information_schema")
-            && privileges == [UserPrivilegeType::Select]
-        {
-            return Ok(());
-        }
-
         let verify_ownership = match grant_object {
             GrantObject::Database(_, _)
             | GrantObject::Table(_, _, _)
@@ -355,41 +383,23 @@ impl PrivilegeAccess {
                     return Err(err);
                 }
                 let current_user = self.ctx.get_current_user()?;
-                let effective_roles = session.get_all_effective_roles().await?;
 
-                let roles_name = effective_roles
+                let roles_name = session
+                    .get_all_effective_roles()
+                    .await?
                     .iter()
                     .map(|r| r.name.clone())
                     .collect::<Vec<_>>()
                     .join(",");
                 match grant_object {
-                    GrantObject::TableById(catalog_name, _, _) => {
-                        Err(ErrorCode::PermissionDenied(format!(
-                            "Permission denied, privilege {:?} is required on '{}'.'{}'.'{}' for user {} with roles [{}]",
-                            privileges.clone(),
-                            catalog_name,
-                            db_name,
-                            table_name,
-                            &current_user.identity(),
-                            roles_name,
-                        )))
-                    }
-                    GrantObject::DatabaseById(catalog_name, _) => {
-                        Err(ErrorCode::PermissionDenied(format!(
-                            "Permission denied, privilege {:?} is required on '{}'.'{}'.* for user {} with roles [{}]",
-                            privileges.clone(),
-                            catalog_name,
-                            db_name,
-                            &current_user.identity(),
-                            roles_name,
-                        )))
-                    }
+                    GrantObject::TableById(_, _, _) => Err(ErrorCode::PermissionDenied("")),
+                    GrantObject::DatabaseById(_, _) => Err(ErrorCode::PermissionDenied("")),
                     GrantObject::Global
                     | GrantObject::UDF(_)
                     | GrantObject::Stage(_)
                     | GrantObject::Database(_, _)
                     | GrantObject::Table(_, _, _) => Err(ErrorCode::PermissionDenied(format!(
-                        "Permission denied, privilege {:?} is required on {} for user {} with roles [{}]",
+                        "Permission denied: privilege {:?} is required on {} for user {} with roles [{}]",
                         privileges.clone(),
                         grant_object,
                         &current_user.identity(),
@@ -446,11 +456,10 @@ impl PrivilegeAccess {
     async fn convert_to_id(
         &self,
         tenant: &str,
-        catalog_name: &str,
+        catalog: &Arc<dyn Catalog>,
         database_name: &str,
         table_name: Option<&str>,
     ) -> Result<ObjectId> {
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
         let db_id = catalog
             .get_database(tenant, database_name)
             .await?
@@ -504,7 +513,8 @@ impl AccessChecker for PrivilegeAccess {
                         if self.has_ownership(&session, &GrantObject::Database(catalog.clone(), database.clone())).await? {
                             return Ok(());
                         }
-                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), catalog, database, None).await? {
+                        let catalog = self.ctx.get_catalog(catalog).await?;
+                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), &catalog, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -523,7 +533,8 @@ impl AccessChecker for PrivilegeAccess {
                         if self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone())).await? {
                             return Ok(());
                         }
-                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), &catalog_name, database, None).await? {
+                        let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), &catalog, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -542,7 +553,8 @@ impl AccessChecker for PrivilegeAccess {
                         if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone())).await? {
                             return Ok(());
                         }
-                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), catalog_name, database, Some(table)).await? {
+                        let catalog = self.ctx.get_catalog(catalog_name).await?;
+                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), &catalog, database, Some(table)).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -624,9 +636,10 @@ impl AccessChecker for PrivilegeAccess {
                 if self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), plan.database.clone())).await? {
                     return Ok(());
                 }
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
                 // Use db is special. Should not check the privilege.
                 // Just need to check user grant objects contain the db that be used.
-                let (db_id, _) = match self.convert_to_id(tenant.as_str(), &catalog_name, &plan.database, None).await? {
+                let (db_id, _) = match self.convert_to_id(tenant.as_str(), &catalog, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
@@ -911,7 +924,8 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::RevertTable(_)
             | Plan::AlterUDF(_)
             | Plan::AlterShareTenants(_)
-            | Plan::RefreshIndex(_) => {
+            | Plan::RefreshIndex(_)
+            | Plan::RefreshTableIndex(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Alter])
                     .await?;
             }

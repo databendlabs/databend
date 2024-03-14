@@ -28,6 +28,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::prelude::FormatSettings;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
 use databend_storages_common_txn::TxnState;
@@ -42,6 +43,7 @@ use serde::Serialize;
 use super::HttpQueryContext;
 use super::RemoveReason;
 use crate::interpreters::InterpreterQueryLog;
+use crate::servers::http::v1::http_query_handlers::QueryResponseField;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
 use crate::servers::http::v1::query::execute_state::ExecutorSessionState;
@@ -60,10 +62,8 @@ use crate::servers::http::v1::QueryError;
 use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
 use crate::sessions::short_sql;
-use crate::sessions::AcquireQueueGuard;
-use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryAffect;
-use crate::sessions::QueryEntry;
+use crate::sessions::Session;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
@@ -218,6 +218,7 @@ pub struct StageAttachmentConf {
 
 #[derive(Debug, Clone)]
 pub struct ResponseState {
+    pub schema: Vec<QueryResponseField>,
     pub running_time_ms: i64,
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
@@ -259,8 +260,58 @@ pub struct HttpQuery {
     /// exceed this result_timeout_secs.
     pub(crate) result_timeout_secs: u64,
     pub(crate) is_txn_mgr_saved: AtomicBool,
-    #[allow(dead_code)]
-    guard: AcquireQueueGuard,
+}
+
+fn try_set_txn(
+    query_id: &str,
+    session: &Arc<Session>,
+    session_conf: &HttpSessionConf,
+    http_query_manager: &Arc<HttpQueryManager>,
+) -> Result<()> {
+    match &session_conf.txn_state {
+        Some(TxnState::Active) => {
+            if let Some(ServerInfo { id, start_time }) = &session_conf.last_server_info {
+                if http_query_manager.server_info.id != *id {
+                    return Err(ErrorCode::InvalidSessionState(format!(
+                        "transaction is active, but the request routed to the wrong server: current server is {}, the last is {}.",
+                        http_query_manager.server_info.id, id
+                    )));
+                }
+                if http_query_manager.server_info.start_time != *start_time {
+                    return Err(ErrorCode::CurrentTransactionIsAborted(format!(
+                        "transaction is aborted because server restarted at {}.",
+                        start_time
+                    )));
+                }
+            } else {
+                return Err(ErrorCode::InvalidSessionState(
+                    "transaction is active but missing server_info".to_string(),
+                ));
+            }
+
+            let last_query_id = session_conf.last_query_ids.first().ok_or_else(|| {
+                ErrorCode::InvalidSessionState(
+                    "transaction is active but last_query_ids is empty".to_string(),
+                )
+            })?;
+            if let Some(txn_mgr) = http_query_manager.get_txn(last_query_id) {
+                session.set_txn_mgr(txn_mgr);
+                info!(
+                    "{}: continue transaction from last query {}",
+                    query_id, last_query_id
+                );
+            } else {
+                // the returned TxnState should be Fail
+                return Err(ErrorCode::TransactionTimeout(format!(
+                    "transaction timeout: last_query_id {} not found",
+                    last_query_id
+                )));
+            }
+        }
+        Some(TxnState::Fail) => session.txn_mgr().lock().force_set_fail(),
+        _ => {}
+    }
+    Ok(())
 }
 
 impl HttpQuery {
@@ -339,49 +390,8 @@ impl HttpQuery {
                         })?;
                 }
             }
-            match &session_conf.txn_state {
-                Some(TxnState::Active) => {
-                    if let Some(ServerInfo { id, start_time }) = &session_conf.last_server_info {
-                        if http_query_manager.server_info.id != *id {
-                            return Err(ErrorCode::InvalidSessionState(format!(
-                                "transaction is active, but the request routed to the wrong server: current server is {}, the last is {}.",
-                                http_query_manager.server_info.id, id
-                            )));
-                        }
-                        if http_query_manager.server_info.start_time != *start_time {
-                            return Err(ErrorCode::CurrentTransactionIsAborted(format!(
-                                "transaction is aborted because server restarted at {}.",
-                                start_time
-                            )));
-                        }
-                    } else {
-                        return Err(ErrorCode::InvalidSessionState(
-                            "transaction is active but missing server_info".to_string(),
-                        ));
-                    }
+            try_set_txn(&ctx.query_id, &session, session_conf, &http_query_manager)?;
 
-                    let last_query_id = session_conf.last_query_ids.first().ok_or_else(|| {
-                        ErrorCode::InvalidSessionState(
-                            "transaction is active but last_query_ids is empty".to_string(),
-                        )
-                    })?;
-                    if let Some(txn_mgr) = http_query_manager.get_txn(last_query_id) {
-                        session.set_txn_mgr(txn_mgr);
-                        info!(
-                            "{}: continue transaction from last query {}",
-                            &ctx.query_id, last_query_id
-                        );
-                    } else {
-                        // the returned TxnState should be Fail
-                        return Err(ErrorCode::TransactionTimeout(format!(
-                            "transaction timeout: last_query_id {} not found",
-                            last_query_id
-                        )));
-                    }
-                }
-                Some(TxnState::Fail) => session.txn_mgr().lock().force_set_fail(),
-                _ => {}
-            }
             if let Some(secs) = session_conf.keep_server_session_secs {
                 if secs > 0 && request.session_id.is_none() {
                     http_query_manager
@@ -436,6 +446,7 @@ impl HttpQuery {
         };
 
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
+
         let state = Arc::new(RwLock::new(Executor {
             query_id: query_id.clone(),
             state: ExecuteState::Starting(ExecuteStarting { ctx: ctx.clone() }),
@@ -446,37 +457,33 @@ impl HttpQuery {
         let sql = request.sql.clone();
         let query_id_clone = query_id.clone();
 
-        let entry = QueryEntry::create(&ctx)?;
-        let guard = QueriesQueueManager::instance().acquire(entry).await?;
-
-        let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone()).await?;
-        let schema = plan.schema();
-
+        let http_query_runtime_instance = GlobalQueryRuntime::instance();
         let span = if let Some(parent) = SpanContext::current_local_parent() {
             Span::root(std::any::type_name::<ExecuteState>(), parent)
                 .with_properties(|| http_ctx.to_minitrace_properties())
         } else {
             Span::noop()
         };
-
-        let http_query_runtime_instance = GlobalQueryRuntime::instance();
+        let format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>> = Default::default();
+        let format_settings_clone = format_settings.clone();
         http_query_runtime_instance.runtime().try_spawn(
             ctx.get_id(),
             async move {
                 let state = state_clone.clone();
                 if let Err(e) = ExecuteState::try_start_query(
                     state,
-                    plan,
-                    plan_extras,
+                    sql,
                     session,
                     ctx_clone.clone(),
                     block_sender,
+                    format_settings_clone,
                 )
                 .await
                 {
                     InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone());
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
+                        schema: vec![],
                         reason: Err(e.clone()),
                         session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
                         query_duration_ms: ctx_clone.get_query_duration_ms(),
@@ -495,12 +502,10 @@ impl HttpQuery {
             .in_span(span),
         )?;
 
-        let format_settings = ctx.get_format_settings()?;
         let data = Arc::new(TokioMutex::new(PageManager::new(
             query_id.clone(),
             request.pagination.max_rows_per_page,
             block_receiver,
-            schema,
             format_settings,
         )));
 
@@ -510,7 +515,6 @@ impl HttpQuery {
             node_id,
             request,
             state,
-            guard,
             page_manager: data,
             result_timeout_secs,
             expire_state: Arc::new(TokioMutex::new(ExpireState::Working)),
@@ -561,6 +565,7 @@ impl HttpQuery {
             error: err,
             warnings: state.get_warnings(),
             affect: state.get_affect(),
+            schema: state.get_schema(),
         }
     }
 

@@ -270,6 +270,7 @@ impl SnapshotGenerator for MutationGenerator {
                         new_segments,
                         cluster_key_meta,
                         previous.table_statistics_location.clone(),
+                        previous.index_info_locations.clone(),
                     );
                     return Ok(new_snapshot);
                 }
@@ -378,6 +379,7 @@ impl SnapshotGenerator for AppendGenerator {
         let mut prev_timestamp = None;
         let mut prev_snapshot_id = None;
         let mut table_statistics_location = None;
+        let mut index_info_locations = None;
         let mut new_segments = snapshot_merged.merged_segments.clone();
         let mut new_summary = snapshot_merged.merged_statistics.clone();
 
@@ -385,6 +387,7 @@ impl SnapshotGenerator for AppendGenerator {
             prev_timestamp = snapshot.timestamp;
             prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version));
             table_statistics_location = snapshot.table_statistics_location.clone();
+            index_info_locations = snapshot.index_info_locations.clone();
 
             if !self.overwrite {
                 let mut summary = snapshot.summary.clone();
@@ -468,6 +471,7 @@ impl SnapshotGenerator for AppendGenerator {
             new_segments,
             cluster_key_meta,
             table_statistics_location,
+            index_info_locations,
         ))
     }
 }

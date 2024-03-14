@@ -42,6 +42,7 @@ limit 20;
 119 40
 NULL 299606
 
+# right semi
 query I
 select
     o_custkey
@@ -75,6 +76,7 @@ order by o_custkey
 101
 101
 
+#right anti
 query I
 select
     o_custkey

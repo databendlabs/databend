@@ -108,6 +108,7 @@ use crate::plans::OptimizeTablePlan;
 use crate::plans::PresignPlan;
 use crate::plans::ReclusterTablePlan;
 use crate::plans::RefreshIndexPlan;
+use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
@@ -238,6 +239,7 @@ pub enum Plan {
     RefreshIndex(Box<RefreshIndexPlan>),
     CreateTableIndex(Box<CreateTableIndexPlan>),
     DropTableIndex(Box<DropTableIndexPlan>),
+    RefreshTableIndex(Box<RefreshTableIndexPlan>),
 
     // Virtual Columns
     CreateVirtualColumn(Box<CreateVirtualColumnPlan>),
