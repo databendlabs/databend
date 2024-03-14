@@ -893,6 +893,10 @@ impl NativeDeserializeDataTransform {
                     return Ok(false);
                 }
                 self.read_state.filtered_count = Some(cnt);
+            } else {
+                let mut bitmap = MutableBitmap::from_len_set(col.len());
+                sorter.push_column(&col, &mut bitmap);
+                self.read_state.filtered_count = Some(filter_executor.from_bitmap(bitmap));
             }
         };
 
