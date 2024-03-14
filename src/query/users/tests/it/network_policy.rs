@@ -52,7 +52,7 @@ async fn test_network_policy() -> Result<()> {
         update_on: None,
     };
     user_mgr
-        .add_network_policy(tenant_name, network_policy, &CreateOption::None)
+        .add_network_policy(&tenant, network_policy, &CreateOption::None)
         .await?;
 
     // add user
@@ -97,7 +97,7 @@ async fn test_network_policy() -> Result<()> {
     let new_blocked_ip_list = vec!["127.0.0.10".to_string()];
     user_mgr
         .update_network_policy(
-            tenant_name,
+            &tenant,
             policy_name.as_ref(),
             Some(new_allowed_ip_list),
             Some(new_blocked_ip_list),
