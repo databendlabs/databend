@@ -480,7 +480,7 @@ impl CreateTableReq {
 impl Display for CreateTableReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.create_option {
-            CreateOption::None => write!(
+            CreateOption::Create => write!(
                 f,
                 "create_table:{}/{}-{}={}",
                 self.tenant(),

@@ -143,7 +143,7 @@ pub struct CreateIndexReq {
 impl Display for CreateIndexReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
-            CreateOption::None => {
+            CreateOption::Create => {
                 write!(f, "create_index:{}={:?}", self.name_ident.tenant, self.meta)
             }
             CreateOption::CreateIfNotExists => write!(

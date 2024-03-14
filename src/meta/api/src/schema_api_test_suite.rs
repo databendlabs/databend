@@ -461,7 +461,7 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
 
         let req = CreateTableReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: db_table_name_ident.clone(),
             table_meta: table_meta(created_on),
         };
@@ -580,7 +580,7 @@ impl SchemaApiTestSuite {
         info!("--- create db1");
         {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: "db1".to_string(),
@@ -600,7 +600,7 @@ impl SchemaApiTestSuite {
         info!("--- create db1 again with if_not_exists=false");
         {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: "db1".to_string(),
@@ -652,7 +652,7 @@ impl SchemaApiTestSuite {
         info!("--- create db2");
         {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: "db2".to_string(),
@@ -796,7 +796,7 @@ impl SchemaApiTestSuite {
         info!("--- create a share and tenant1 create db1 from a share");
         {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: db_name1.clone(),
                 meta: DatabaseMeta {
                     from_share: Some(share_name.clone()),
@@ -850,7 +850,7 @@ impl SchemaApiTestSuite {
         info!("--- tenant1 create db1");
         let db_id_1 = {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant1.to_string(),
                     db_name: "db1".to_string(),
@@ -871,7 +871,7 @@ impl SchemaApiTestSuite {
         info!("--- tenant1 create db2");
         let db_id_2 = {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant1.to_string(),
                     db_name: "db2".to_string(),
@@ -892,7 +892,7 @@ impl SchemaApiTestSuite {
         info!("--- tenant2 create db1");
         let _db_id_3 = {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant2.to_string(),
                     db_name: "db1".to_string(),
@@ -1208,7 +1208,7 @@ impl SchemaApiTestSuite {
         {
             // first create database
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: db_name_ident.clone(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
@@ -1295,7 +1295,7 @@ impl SchemaApiTestSuite {
 
             // then create database
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: db_name_ident.clone(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
@@ -1323,7 +1323,7 @@ impl SchemaApiTestSuite {
         {
             // first create db2
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: new_db_name_ident.clone(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
@@ -1482,7 +1482,7 @@ impl SchemaApiTestSuite {
         let table_name = "tbl";
 
         let create_db_req = CreateDatabaseReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: DatabaseNameIdent {
                 tenant: tenant.to_string(),
                 db_name: db.to_string(),
@@ -1514,7 +1514,7 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
 
         let req = CreateTableReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: TableNameIdent {
                 tenant: tenant.to_string(),
                 db_name: db.to_string(),
@@ -1563,7 +1563,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -1590,7 +1590,7 @@ impl SchemaApiTestSuite {
             };
             let created_on = Utc::now();
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
                 table_meta: table_meta(created_on),
             };
@@ -1677,7 +1677,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -1713,7 +1713,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db");
         let db_id = {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -1740,7 +1740,7 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
 
         let mut req = CreateTableReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: TableNameIdent {
                 tenant: tenant.to_string(),
                 db_name: db_name.to_string(),
@@ -1810,7 +1810,7 @@ impl SchemaApiTestSuite {
 
         info!("--- create table again with if_not_exists = false");
         {
-            req.create_option = CreateOption::None;
+            req.create_option = CreateOption::Create;
 
             let res = mt.create_table(req).await;
             info!("create table res: {:?}", res);
@@ -1850,7 +1850,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -1958,7 +1958,7 @@ impl SchemaApiTestSuite {
             };
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -2207,7 +2207,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db1_name.to_string(),
@@ -2224,7 +2224,7 @@ impl SchemaApiTestSuite {
 
         let created_on = Utc::now();
         let create_tb2_req = CreateTableReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: TableNameIdent {
                 tenant: tenant.to_string(),
                 db_name: db1_name.to_string(),
@@ -2352,7 +2352,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare other db");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db2_name.to_string(),
@@ -2425,7 +2425,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -2447,7 +2447,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -2692,7 +2692,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -2713,7 +2713,7 @@ impl SchemaApiTestSuite {
         info!("--- create table");
         {
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -2724,7 +2724,7 @@ impl SchemaApiTestSuite {
             let _res = mt.create_table(req.clone()).await?;
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -3058,7 +3058,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -3080,7 +3080,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -3201,7 +3201,7 @@ impl SchemaApiTestSuite {
 
             // first create database
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: db_name_ident.clone(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
@@ -3256,7 +3256,7 @@ impl SchemaApiTestSuite {
         delete: bool,
     ) -> anyhow::Result<()> {
         let req = CreateDatabaseReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: db_name.clone(),
             meta: DatabaseMeta {
                 engine: "github".to_string(),
@@ -3412,7 +3412,7 @@ impl SchemaApiTestSuite {
         };
 
         let req = CreateTableReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident,
             table_meta: create_table_meta.clone(),
         };
@@ -3454,7 +3454,7 @@ impl SchemaApiTestSuite {
         };
 
         let plan = CreateDatabaseReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: DatabaseNameIdent {
                 tenant: tenant1.to_string(),
                 db_name: db1_name.to_string(),
@@ -3616,7 +3616,7 @@ impl SchemaApiTestSuite {
         };
 
         let plan = CreateDatabaseReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: DatabaseNameIdent {
                 tenant: tenant_name.to_string(),
                 db_name: db1_name.to_string(),
@@ -3647,7 +3647,7 @@ impl SchemaApiTestSuite {
         };
 
         let req = CreateTableReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: tbl_name_ident,
             table_meta: create_table_meta.clone(),
         };
@@ -3853,7 +3853,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -3881,7 +3881,7 @@ impl SchemaApiTestSuite {
         info!("--- create and get table");
         {
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: tbl_name_ident.clone(),
                 table_meta: create_table_meta.clone(),
             };
@@ -3954,7 +3954,7 @@ impl SchemaApiTestSuite {
                 db_name: "db1".to_string(),
             };
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: db_name.clone(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
@@ -3967,7 +3967,7 @@ impl SchemaApiTestSuite {
             drop_ids_2.push(DroppedId::Db(res.db_id, db_name.db_name.clone()));
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: "db1".to_string(),
@@ -3992,7 +3992,7 @@ impl SchemaApiTestSuite {
         info!("--- create db2");
         {
             let create_db_req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: "db2".to_string(),
@@ -4015,7 +4015,7 @@ impl SchemaApiTestSuite {
                     table_name: "tb1".to_string(),
                 };
                 let req = CreateTableReq {
-                    create_option: CreateOption::None,
+                    create_option: CreateOption::Create,
                     name_ident: table_name.clone(),
                     table_meta: table_meta(created_on),
                 };
@@ -4040,7 +4040,7 @@ impl SchemaApiTestSuite {
             {
                 let mut table_meta = table_meta(created_on);
                 let req = CreateTableReq {
-                    create_option: CreateOption::None,
+                    create_option: CreateOption::Create,
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: "db2".to_string(),
@@ -4068,7 +4068,7 @@ impl SchemaApiTestSuite {
             info!("--- create db2.tb3");
             {
                 let req = CreateTableReq {
-                    create_option: CreateOption::None,
+                    create_option: CreateOption::Create,
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: "db2".to_string(),
@@ -4099,7 +4099,7 @@ impl SchemaApiTestSuite {
         // third create a database not dropped, but has a table drop within filter time
         {
             let create_db_req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: "db3".to_string(),
@@ -4116,7 +4116,7 @@ impl SchemaApiTestSuite {
             info!("--- create and drop db3.tb1");
             {
                 let req = CreateTableReq {
-                    create_option: CreateOption::None,
+                    create_option: CreateOption::Create,
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: "db3".to_string(),
@@ -4142,7 +4142,7 @@ impl SchemaApiTestSuite {
             {
                 let mut table_meta = table_meta(created_on);
                 let req = CreateTableReq {
-                    create_option: CreateOption::None,
+                    create_option: CreateOption::Create,
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: "db3".to_string(),
@@ -4171,7 +4171,7 @@ impl SchemaApiTestSuite {
             info!("--- create db3.tb3");
             {
                 let req = CreateTableReq {
-                    create_option: CreateOption::None,
+                    create_option: CreateOption::Create,
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: "db3".to_string(),
@@ -4317,7 +4317,7 @@ impl SchemaApiTestSuite {
             for i in 0..number {
                 let table_name = format!("tb{:?}", i);
                 let req = CreateTableReq {
-                    create_option: CreateOption::None,
+                    create_option: CreateOption::Create,
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: db.to_string(),
@@ -4356,7 +4356,7 @@ impl SchemaApiTestSuite {
                 db_name: test_db_name.to_string(),
             };
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: db_name.clone(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
@@ -4390,7 +4390,7 @@ impl SchemaApiTestSuite {
                 db_name: test_db_name.to_string(),
             };
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: db_name.clone(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
@@ -4421,7 +4421,7 @@ impl SchemaApiTestSuite {
                 db_name: test_db_name.to_string(),
             };
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: db_name.clone(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
@@ -4526,7 +4526,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -4553,7 +4553,7 @@ impl SchemaApiTestSuite {
         info!("--- create and get table");
         {
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: tbl_name_ident.clone(),
                 table_meta: create_table_meta.clone(),
             };
@@ -4687,7 +4687,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             let res = mt
                 .create_table(CreateTableReq {
-                    create_option: CreateOption::None,
+                    create_option: CreateOption::Create,
                     name_ident: tbl_name_ident.clone(),
                     table_meta: create_table_meta.clone(),
                 })
@@ -4792,7 +4792,7 @@ impl SchemaApiTestSuite {
         {
             // first create drop table2
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: new_tbl_name_ident.clone(),
                 table_meta: create_table_meta.clone(),
             };
@@ -4949,7 +4949,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -4971,7 +4971,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -5057,7 +5057,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -5079,7 +5079,7 @@ impl SchemaApiTestSuite {
             let created_on = Utc::now();
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -5136,7 +5136,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare and get db");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -5215,7 +5215,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db and table");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -5229,7 +5229,7 @@ impl SchemaApiTestSuite {
             let _ = mt.create_database(plan).await?;
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -5418,7 +5418,7 @@ impl SchemaApiTestSuite {
 
             // create share db
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: db_name1.clone(),
                 meta: DatabaseMeta {
                     ..Default::default()
@@ -5443,7 +5443,7 @@ impl SchemaApiTestSuite {
             };
             for tb_name in tb_names {
                 let req = CreateTableReq {
-                    create_option: CreateOption::None,
+                    create_option: CreateOption::Create,
                     name_ident: tb_name.clone(),
                     table_meta: table_meta(create_on),
                 };
@@ -5485,7 +5485,7 @@ impl SchemaApiTestSuite {
         info!("--- create a share db");
         {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: db_name2.clone(),
                 meta: DatabaseMeta {
                     from_share: Some(share_name.clone()),
@@ -5560,7 +5560,7 @@ impl SchemaApiTestSuite {
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
             let mut req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -5627,7 +5627,7 @@ impl SchemaApiTestSuite {
 
                 let table_meta = util.table_meta();
                 let req = CreateTableReq {
-                    create_option: CreateOption::None,
+                    create_option: CreateOption::Create,
                     name_ident: TableNameIdent {
                         tenant: util.tenant(),
                         db_name: util.db_name(),
@@ -5677,7 +5677,7 @@ impl SchemaApiTestSuite {
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
             let mut req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db1_name.to_string(),
@@ -5977,7 +5977,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create index");
             let req = CreateIndexReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -5986,7 +5986,7 @@ impl SchemaApiTestSuite {
             index_id = res.index_id;
 
             let req = CreateIndexReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: name_ident_2.clone(),
                 meta: index_meta_2.clone(),
             };
@@ -5997,7 +5997,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create index again with if_not_exists = false");
             let req = CreateIndexReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -6138,7 +6138,7 @@ impl SchemaApiTestSuite {
                 index_name: replace_index_name.to_string(),
             };
             let req = CreateIndexReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: replace_name_ident.clone(),
                 meta: index_meta_1.clone(),
             };
@@ -6219,7 +6219,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create virtual column");
             let req = CreateVirtualColumnReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
@@ -6228,7 +6228,7 @@ impl SchemaApiTestSuite {
 
             info!("--- create virtual column again");
             let req = CreateVirtualColumnReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
@@ -6322,7 +6322,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create or replace virtual column");
             let req = CreateVirtualColumnReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
@@ -6606,7 +6606,7 @@ impl SchemaApiTestSuite {
         info!("--- create database {}", db_name);
 
         let req = CreateDatabaseReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: DatabaseNameIdent {
                 tenant: tenant.to_string(),
                 db_name: db_name.to_string(),
@@ -6636,7 +6636,7 @@ impl SchemaApiTestSuite {
         let tenant = "tenant1";
         {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: "db1".to_string(),
@@ -6697,7 +6697,7 @@ impl SchemaApiTestSuite {
             let dbs = vec!["db1", "db3"];
             for db_name in dbs {
                 let req = CreateDatabaseReq {
-                    create_option: CreateOption::None,
+                    create_option: CreateOption::Create,
                     name_ident: DatabaseNameIdent {
                         tenant: tenant.to_string(),
                         db_name: db_name.to_string(),
@@ -6746,7 +6746,7 @@ impl SchemaApiTestSuite {
 
         {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -6769,7 +6769,7 @@ impl SchemaApiTestSuite {
             let options = maplit::btreemap! {"opt-1".into() => "val-1".into()};
             for tb in tables {
                 let req = CreateTableReq {
-                    create_option: CreateOption::None,
+                    create_option: CreateOption::Create,
                     name_ident: TableNameIdent {
                         tenant: tenant.to_string(),
                         db_name: db_name.to_string(),
@@ -6820,7 +6820,7 @@ impl SchemaApiTestSuite {
         let db_name = "db1";
         let tb_id = {
             let req = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -6842,7 +6842,7 @@ impl SchemaApiTestSuite {
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -6923,7 +6923,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db and table");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -6937,7 +6937,7 @@ impl SchemaApiTestSuite {
             let _ = mt.create_database(plan).await?;
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -7157,7 +7157,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
 
     async fn create_db(&mut self) -> anyhow::Result<()> {
         let plan = CreateDatabaseReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: DatabaseNameIdent {
                 tenant: self.tenant(),
                 db_name: self.db_name(),
@@ -7191,7 +7191,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
     async fn create_table(&mut self) -> anyhow::Result<(u64, TableMeta)> {
         let table_meta = self.table_meta();
         let req = CreateTableReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: TableNameIdent {
                 tenant: self.tenant(),
                 db_name: self.db_name(),
