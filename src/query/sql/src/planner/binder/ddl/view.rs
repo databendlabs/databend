@@ -29,7 +29,7 @@ use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::AlterViewPlan;
 use crate::plans::CreateViewPlan;
-use crate::plans::DescribeTablePlan;
+use crate::plans::DescribeViewPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
@@ -237,7 +237,7 @@ impl Binder {
             view,
         } = stmt;
 
-        let (catalog, database, table) =
+        let (catalog, database, view) =
             self.normalize_object_identifier_triple(catalog, database, view);
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Field", DataType::String),
@@ -247,10 +247,10 @@ impl Binder {
             DataField::new("Extra", DataType::String),
         ]);
 
-        Ok(Plan::DescribeTable(Box::new(DescribeTablePlan {
+        Ok(Plan::DescribeView(Box::new(DescribeViewPlan {
             catalog,
             database,
-            table,
+            view,
             schema,
         })))
     }

@@ -28,7 +28,7 @@ use super::SetSecondaryRolesPlan;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
-use crate::plans::AddTableColumnPlan;
+use crate::plans::{AddTableColumnPlan, DescribeViewPlan};
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
@@ -228,6 +228,7 @@ pub enum Plan {
     CreateView(Box<CreateViewPlan>),
     AlterView(Box<AlterViewPlan>),
     DropView(Box<DropViewPlan>),
+    DescribeView(Box<DescribeViewPlan>),
 
     // Streams
     CreateStream(Box<CreateStreamPlan>),

@@ -869,6 +869,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DropView(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop], plan.if_exists).await?
             }
+            Plan::DescribeView(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.view, vec![UserPrivilegeType::Select], false).await?
+            }
             Plan::CreateStream(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create], false).await?
             }

@@ -137,6 +137,7 @@ mod interpreter_vacuum_temporary_files;
 mod interpreter_view_alter;
 mod interpreter_view_create;
 mod interpreter_view_drop;
+mod interpreter_view_describe;
 mod interpreter_virtual_column_alter;
 mod interpreter_virtual_column_create;
 mod interpreter_virtual_column_drop;
