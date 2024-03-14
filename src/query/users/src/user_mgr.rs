@@ -77,9 +77,7 @@ impl UserApiProvider {
                 }
             };
 
-            let network_policy = self
-                .get_network_policy(tenant.as_str(), name.as_str())
-                .await?;
+            let network_policy = self.get_network_policy(tenant, name.as_str()).await?;
             for blocked_ip in network_policy.blocked_ip_list {
                 let blocked_cidr: Ipv4Cidr = blocked_ip.parse().unwrap();
                 if blocked_cidr.contains(&ip_addr) {
@@ -135,11 +133,7 @@ impl UserApiProvider {
         create_option: &CreateOption,
     ) -> Result<()> {
         if let Some(name) = user_info.option.network_policy() {
-            if self
-                .get_network_policy(tenant.as_str(), name)
-                .await
-                .is_err()
-            {
+            if self.get_network_policy(tenant, name).await.is_err() {
                 return Err(ErrorCode::UnknownNetworkPolicy(format!(
                     "network policy `{}` is not exist",
                     name
@@ -293,11 +287,7 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         if let Some(ref user_option) = user_option {
             if let Some(name) = user_option.network_policy() {
-                if self
-                    .get_network_policy(tenant.as_str(), name)
-                    .await
-                    .is_err()
-                {
+                if self.get_network_policy(tenant, name).await.is_err() {
                     return Err(ErrorCode::UnknownNetworkPolicy(format!(
                         "network policy `{}` is not exist",
                         name

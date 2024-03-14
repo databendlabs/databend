@@ -70,3 +70,11 @@ pub struct DropTableIndexPlan {
     pub index_name: String,
     pub table_id: MetaId,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RefreshTableIndexPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub index_name: String,
+}

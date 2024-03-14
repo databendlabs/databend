@@ -48,10 +48,12 @@ impl BuildSpillHandler {
 
     // Note: the caller should ensure `spill_state` is Some
     pub(crate) fn spill_state(&self) -> &BuildSpillState {
+        debug_assert!(self.spill_state.is_some());
         self.spill_state.as_ref().unwrap()
     }
 
     pub(crate) fn spill_state_mut(&mut self) -> &mut BuildSpillState {
+        debug_assert!(self.spill_state.is_some());
         self.spill_state.as_mut().unwrap()
     }
 
@@ -175,7 +177,7 @@ impl BuildSpillHandler {
             let spilled_data = DataBlock::concat(
                 &spill_state
                     .spiller
-                    .read_spilled_data(&(partition_id as u8))
+                    .read_spilled_partition(&(partition_id as u8))
                     .await?,
             )?;
             if !spilled_data.is_empty() {
@@ -191,7 +193,10 @@ impl BuildSpillHandler {
         let spill_state = self.spill_state_mut();
         let spilled_files = spill_state.spiller.spilled_files();
         if !spilled_files.is_empty() {
-            let (block, _) = spill_state.spiller.read_spilled(&spilled_files[0]).await?;
+            let (block, _) = spill_state
+                .spiller
+                .read_spilled_file(&spilled_files[0])
+                .await?;
             spill_state.spiller.columns_layout.remove(&spilled_files[0]);
             if block.num_rows() != 0 {
                 return Ok(Some(block));

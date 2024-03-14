@@ -182,3 +182,32 @@ impl Display for DropInvertedIndexStmt {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct RefreshInvertedIndexStmt {
+    pub index_name: Identifier,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    #[drive(skip)]
+    pub limit: Option<u64>,
+}
+
+impl Display for RefreshInvertedIndexStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "REFRESH INVERTED INDEX")?;
+        write!(f, " {}", self.index_name)?;
+        write!(f, " ON ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        if let Some(limit) = self.limit {
+            write!(f, " LIMIT {limit}")?;
+        }
+        Ok(())
+    }
+}

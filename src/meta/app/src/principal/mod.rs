@@ -17,6 +17,7 @@
 mod connection;
 mod file_format;
 mod network_policy;
+mod network_policy_ident;
 mod ownership_info;
 mod password_policy;
 mod password_policy_ident;
@@ -40,6 +41,7 @@ mod user_stage_ident;
 pub use connection::*;
 pub use file_format::*;
 pub use network_policy::NetworkPolicy;
+pub use network_policy_ident::NetworkPolicyIdent;
 pub use ownership_info::OwnershipInfo;
 pub use password_policy::PasswordPolicy;
 pub use password_policy_ident::PasswordPolicyIdent;

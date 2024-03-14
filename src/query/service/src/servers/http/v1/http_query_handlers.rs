@@ -100,7 +100,7 @@ pub struct QueryResponseField {
 }
 
 impl QueryResponseField {
-    fn from_schema(schema: DataSchemaRef) -> Vec<Self> {
+    pub fn from_schema(schema: DataSchemaRef) -> Vec<Self> {
         schema
             .fields()
             .iter()
@@ -172,7 +172,6 @@ impl QueryResponse {
             metrics_incr_http_response_errors_count(err.name(), err.code());
         }
 
-        let schema = data.schema().clone();
         let session_id = r.session_id.clone();
         let stats = QueryStats {
             progresses: state.progresses.clone(),
@@ -183,7 +182,7 @@ impl QueryResponse {
         Json(QueryResponse {
             data: data.into(),
             state: state.state,
-            schema: QueryResponseField::from_schema(schema),
+            schema: state.schema.clone(),
             session_id: Some(session_id),
             node_id: r.node_id,
             session: r.session,
