@@ -12,57 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tenant::Tenant;
+use crate::tenant_key::TIdent;
 
 /// Define the meta-service key for a user setting.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SettingIdent {
-    pub tenant: Tenant,
-    pub name: String,
-}
+pub type SettingIdent = TIdent<kvapi_impl::Resource>;
 
-impl SettingIdent {
-    pub fn new(tenant: Tenant, name: impl ToString) -> Self {
-        Self {
-            tenant,
-            name: name.to_string(),
-        }
-    }
-}
-
-mod kvapi_key_impl {
+mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyError;
 
-    use crate::principal::user_setting_ident::SettingIdent;
     use crate::principal::UserSetting;
-    use crate::tenant::Tenant;
-    use crate::KeyWithTenant;
+    use crate::tenant_key::TenantResource;
 
-    impl kvapi::Key for SettingIdent {
+    pub struct Resource;
+    impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_settings";
         type ValueType = UserSetting;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_str(self.tenant_name()).push_str(&self.name)
-        }
-
-        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
-            let tenant = p.next_nonempty()?;
-            let name = p.next_str()?;
-
-            Ok(SettingIdent::new(Tenant::new_nonempty(tenant), name))
-        }
-    }
-
-    impl KeyWithTenant for SettingIdent {
-        fn tenant(&self) -> &Tenant {
-            &self.tenant
-        }
     }
 
     impl kvapi::Value for UserSetting {
@@ -83,8 +47,6 @@ mod tests {
     fn test_setting_ident() {
         let tenant = Tenant::new("tenant1");
         let ident = SettingIdent::new(tenant.clone(), "test");
-        assert_eq!(tenant, ident.tenant);
-        assert_eq!("test", ident.name);
         assert_eq!("__fd_settings/tenant1/test", ident.to_string_key());
 
         let got = SettingIdent::from_str_key(&ident.to_string_key()).unwrap();
