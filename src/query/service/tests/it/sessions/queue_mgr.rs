@@ -36,6 +36,10 @@ impl QueueData for TestData {
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {
         ErrorCode::Internal(format!("{:?}", key))
     }
+
+    fn timeout(&self) -> Duration {
+        Duration::from_secs(1000)
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
