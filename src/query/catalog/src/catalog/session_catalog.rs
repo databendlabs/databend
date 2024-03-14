@@ -462,7 +462,8 @@ impl Catalog for SessionCatalog {
         self.inner.get_table_engines()
     }
 
-    fn stream_source_table(&self, stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
+    // Get stream source table from buffer by stream desc.
+    fn get_stream_source_table(&self, stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
         let is_active = self.txn_mgr.lock().is_active();
         if is_active {
             self.txn_mgr
@@ -475,7 +476,8 @@ impl Catalog for SessionCatalog {
         }
     }
 
-    fn cache_stream_table(&self, stream: TableInfo, source: TableInfo) {
+    // Cache stream source table to buffer.
+    fn cache_stream_source_table(&self, stream: TableInfo, source: TableInfo) {
         let is_active = self.txn_mgr.lock().is_active();
         if is_active {
             self.txn_mgr.lock().upsert_stream_table(stream, source);

@@ -338,13 +338,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         unimplemented!()
     }
 
-    fn stream_source_table(&self, _stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
+    fn get_stream_source_table(&self, _stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(
-            "'stream_source_table' not implemented",
+            "'get_stream_source_table' not implemented",
         ))
     }
 
-    fn cache_stream_table(&self, _stream: TableInfo, _source: TableInfo) {
+    fn cache_stream_source_table(&self, _stream: TableInfo, _source: TableInfo) {
         unimplemented!()
     }
 }

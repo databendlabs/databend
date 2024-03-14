@@ -320,44 +320,7 @@ impl QueryContextShared {
                 .clone(),
         };
 
-        if res.engine() == "STREAM" {
-            let stream = StreamTable::try_from_table(res.as_ref())?;
-            let source_table_name = stream.source_table_name();
-            let source_database = stream.source_table_database();
-            let source_meta_key = (
-                catalog.to_string(),
-                source_database.to_string(),
-                source_table_name.to_string(),
-            );
-            let source_already_in_cache =
-                { self.tables_refs.lock().contains_key(&source_meta_key) };
-            if !source_already_in_cache {
-                let stream_desc = &stream.get_table_info().desc;
-                let tenant = self.get_tenant();
-                let catalog = self
-                    .catalog_manager
-                    .get_catalog(tenant.as_str(), catalog, self.session.session_ctx.txn_mgr())
-                    .await?;
-                let source_table = match catalog.stream_source_table(stream_desc)? {
-                    Some(source_table) => source_table,
-                    None => {
-                        let source_table = catalog
-                            .get_table(tenant.as_str(), source_database, source_table_name)
-                            .await?;
-                        catalog.cache_stream_table(
-                            stream.get_table_info().clone(),
-                            source_table.get_table_info().clone(),
-                        );
-                        source_table
-                    }
-                };
-
-                let mut tables_refs = self.tables_refs.lock();
-                tables_refs
-                    .entry(source_meta_key)
-                    .or_insert(source_table.clone());
-            }
-        }
+        self.cache_stream_source_table(res.clone(), catalog).await?;
         Ok(res)
     }
 
@@ -382,6 +345,47 @@ impl QueryContextShared {
             Entry::Occupied(v) => Ok(v.get().clone()),
             Entry::Vacant(v) => Ok(v.insert(cache_table).clone()),
         }
+    }
+
+    // Cache the source table of a stream table to ensure can get the same table metadata.
+    #[async_backtrace::framed]
+    async fn cache_stream_source_table(&self, table: Arc<dyn Table>, catalog: &str) -> Result<()> {
+        if table.engine() == "STREAM" {
+            let stream = StreamTable::try_from_table(table.as_ref())?;
+            let table_name = stream.source_table_name();
+            let database = stream.source_table_database();
+            let meta_key = (
+                catalog.to_string(),
+                database.to_string(),
+                table_name.to_string(),
+            );
+            let already_in_cache = { self.tables_refs.lock().contains_key(&meta_key) };
+            if !already_in_cache {
+                let stream_desc = &stream.get_table_info().desc;
+                let tenant = self.get_tenant();
+                let catalog = self
+                    .catalog_manager
+                    .get_catalog(tenant.as_str(), catalog, self.session.session_ctx.txn_mgr())
+                    .await?;
+                let source_table = match catalog.get_stream_source_table(stream_desc)? {
+                    Some(source_table) => source_table,
+                    None => {
+                        let source_table = catalog
+                            .get_table(tenant.as_str(), database, table_name)
+                            .await?;
+                        catalog.cache_stream_source_table(
+                            stream.get_table_info().clone(),
+                            source_table.get_table_info().clone(),
+                        );
+                        source_table
+                    }
+                };
+
+                let mut tables_refs = self.tables_refs.lock();
+                tables_refs.entry(meta_key).or_insert(source_table.clone());
+            }
+        }
+        Ok(())
     }
 
     pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
