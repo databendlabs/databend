@@ -332,6 +332,7 @@ impl TransformHashJoinProbe {
             JoinType::Left | JoinType::LeftSingle | JoinType::Full
         );
         let mut unmatched_data_blocks = vec![];
+        debug_assert!(self.input_data.len() == 1);
         for data in self.input_data.drain(..) {
             if self.join_probe_state.join_type() == JoinType::Cross {
                 if data.columns().is_empty() {
