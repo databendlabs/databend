@@ -9,6 +9,7 @@ on:
       - edited
       - ready_for_review
       - converted_to_draft
+  pull_request:
 
 permissions:
   pull-requests: write
@@ -157,52 +158,55 @@ jobs:
             let testsChecked = false;
             let changesChecked = false;
             for (const line of body.split('\n')) {
-              if (line ==="## Tests") {
+              if (line.includes("## Tests")) {
                 section = "tests";
+                core.info('checking section: tests');
                 continue;
-              } else if (line === "## Type of change") {
+              } else if (line.includes("## Type of change")) {
                 section = "changes";
+                core.info('checking section: changes');
                 continue;
               }
               if (section === "tests") {
                 if (line.startsWith("- [x] ")) {
                   testsChecked = true;
-                  core.setOutput('tests', 'fulfilled');
+                  core.info(`tests checked: ${line}`);
+                  core.setOutput('tests', 'checked');
                   continue;
                 }
-              }
-              if (section === "changes") {
+              } else if (section === "changes") {
                 if (line.startsWith("- [x] ")) {
                   changesChecked = true;
-                  core.setOutput('changes', 'fulfilled');
+                  core.info(`type of change checked: ${line}`);
+                  core.setOutput('changes', 'checked');
                   continue;
                 }
               }
             }
             if (!testsChecked) {
-              core.setOutput('tests', 'not-fulfilled');
+              core.setOutput('tests', 'not-checked');
               core.setFailed('Tests are not checked');
             }
             if (!changesChecked) {
-              core.setOutput('changes', 'not-fulfilled');
+              core.setOutput('changes', 'not-checked');
               core.setFailed('Type of Changes are not checked');
             }
       - name: Delete Comment for Tests
-        if: always() && steps.check.outputs.tests == 'fullfilled'
+        if: always() && steps.check.outputs.tests == 'checked'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
           identifier: 'pr-assistant-description-tests'
           delete: true
       - name: Delete Comment for Changes
-        if: always() && steps.check.outputs.changes == 'fullfilled'
+        if: always() && steps.check.outputs.changes == 'checked'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
           identifier: 'pr-assistant-description-changes'
           delete: true
       - name: Comment on PR for Tests
-        if: always() && steps.check.outputs.tests != 'fullfilled'
+        if: always() && steps.check.outputs.tests != 'checked'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
@@ -211,7 +215,7 @@ jobs:
             At least one test kind must be checked in the PR description.
             @${{ github.event.pull_request.user.login }} please update it 🙏.
       - name: Comment on PR for Changes
-        if: always() && steps.check.outputs.changes != 'fullfilled'
+        if: always() && steps.check.outputs.changes != 'checked'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
