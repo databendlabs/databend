@@ -154,6 +154,6 @@ jobs:
         with:
           script: |
             const body = context.payload.pull_request.body;
-            const regex = /[x]/;
+            const regex = /- [x]/;
             const maches = regex.search(body);
             console.log(maches);
