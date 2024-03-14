@@ -1713,6 +1713,28 @@ impl<'a> TypeChecker<'a> {
             params
         };
 
+        // Convert the num_buckets of histogram to params
+        let params = if func_name.eq_ignore_ascii_case("histogram")
+            && arguments.len() == 2
+            && params.is_empty()
+        {
+            let max_num_buckets = ConstantExpr::try_from(arguments[1].clone());
+
+            let is_positive_integer = match &max_num_buckets {
+                Ok(v) => v.value.is_positive(),
+                Err(_) => false,
+            } && arg_types[1].is_integer();
+            if !is_positive_integer {
+                return Err(ErrorCode::SemanticError(
+                    "The delimiter of `histogram` must be a constant positive int",
+                ));
+            }
+
+            vec![max_num_buckets.unwrap().value]
+        } else {
+            params
+        };
+
         // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
         let (func_name, distinct) = if func_name.eq_ignore_ascii_case("count") && distinct {
             ("count_distinct", false)
