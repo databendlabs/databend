@@ -154,6 +154,60 @@ jobs:
         with:
           script: |
             const body = context.payload.pull_request.body;
-            const regex = /- [x]/;
-            const maches = regex.search(body);
-            console.log(maches);
+            const regex = /- [x] /;
+            let section = "summary";
+            let testsChecked = false;
+            let changesChecked = false;
+            for (const line of body.split('\n')) {
+              if (line ==="## Tests") {
+                section = "tests";
+                continue;
+              } else if (line === "## Type of change") {
+                section = "changes";
+                continue;
+              }
+              if (section === "tests") {
+                if (regex.test(line)) {
+                  testsChecked = true;
+                  core.setOutput('tests', 'fulfilled');
+                  continue;
+                }
+              }
+              if (section === "changes") {
+                if (regex.test(line)) {
+                  changesChecked = true;
+                  core.setOutput('changes', 'fulfilled');
+                  continue;
+                }
+              }
+            }
+      - name: Delete Comment for Tests
+        if: steps.check.outputs.tests == 'fullfilled'
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ github.token }}
+          identifier: 'pr-assistant-summary-tests'
+          delete: true
+      - name: Delete Comment for Changes
+        if: steps.check.outputs.changes == 'fullfilled'
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ github.token }}
+          identifier: 'pr-assistant-summary-changes'
+          delete: true
+      - name: Comment on PR for Tests
+        if: steps.check.outputs.tests != 'fullfilled'
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ github.token }}
+          identifier: 'pr-assistant-summary-tests'
+          body: |
+            At least one test case must be checked in the PR description.
+      - name: Comment on PR for Changes
+        if: steps.check.outputs.changes != 'fullfilled'
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ github.token }}
+          identifier: 'pr-assistant-summary-changes'
+          body: |
+            At least one type of change must be checked in the PR description.
