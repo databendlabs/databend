@@ -133,6 +133,16 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
         |(k, _, v)| (k.text().to_string(), v.text().to_string()),
     );
 
+    let null_if = map(
+        rule! { NULL_IF ~ ^"=" ~ ^"(" ~ ^#comma_separated_list0(literal_string) ~ ^")" },
+        |(_, _, _, values, _)| {
+            (
+                "null_if".to_string(),
+                serde_json::to_string(&values).unwrap(),
+            )
+        },
+    );
+
     map(
         rule! { ((
         #option_type
@@ -141,7 +151,9 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
         | #string_options
         | #int_options
         | #bool_options
-        | #none_options) ~ ","?)* },
+        | #none_options
+        | #null_if
+        ) ~ ","?)* },
         |opts| BTreeMap::from_iter(opts.iter().map(|((k, v), _)| (k.to_lowercase(), v.clone()))),
     )(i)
 }
