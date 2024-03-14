@@ -174,8 +174,7 @@ jobs:
                   core.setOutput('tests', 'fulfilled');
                   continue;
                 }
-              }
-              if (section === "changes") {
+              } else if (section === "changes") {
                 if (line.startsWith("- [x] ")) {
                   changesChecked = true;
                   core.setOutput('changes', 'fulfilled');
