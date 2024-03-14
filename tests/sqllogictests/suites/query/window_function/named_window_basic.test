@@ -206,13 +206,13 @@ query TR
 SELECT depname, STDDEV_POP(salary) OVER w s FROM empsalary WINDOW w AS (PARTITION BY depname ORDER BY salary, empno) ORDER BY depname, empno
 ----
 develop 0.0
-develop 627.3754856543248
+develop 627.375485654325
 develop 150.0
-develop 418.99350299921787
-develop 438.0353866983808
+develop 418.9935029992179
+develop 438.03538669838093
 personnel 200.0
 personnel 0.0
-sales 94.28090415820634
+sales 94.28090415820623
 sales 0.0
 sales 0.0
 

@@ -87,7 +87,11 @@ where
     T::Scalar: Number + AsPrimitive<N::Scalar>,
     N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         let other = T::to_owned_scalar(other).as_();
         self.value += other;
         Ok(())
@@ -134,7 +138,11 @@ where
     T: ValueType,
     T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         self.value += T::to_owned_scalar(other);
         if OVERFLOW && (self.value > T::Scalar::MAX || self.value < T::Scalar::MIN) {
             return Err(ErrorCode::Overflow(format!(
@@ -148,7 +156,7 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.add(T::to_scalar_ref(&rhs.value))
+        self.add(T::to_scalar_ref(&rhs.value), None)
     }
 
     fn merge_result(

@@ -405,7 +405,7 @@ insert into d values(20), (10)
 query F
 select stddev_samp(value) from d;
 ----
-7.0710
+7.0710678118654755
 
 statement ok
 DROP TABLE d

@@ -710,7 +710,7 @@ evaluation (internal):
 | Column | Data                                                                                    |
 +--------+-----------------------------------------------------------------------------------------+
 | dec    | NullableColumn { column: Decimal128([1.10, 2.20, 0.00, 3.30]), validity: [0b____1011] } |
-| Output | NullableColumn { column: Decimal128([1.1000]), validity: [0b_______1] }                 |
+| Output | NullableColumn { column: Float64([1.1]), validity: [0b_______1] }                       |
 +--------+-----------------------------------------------------------------------------------------+
 
 
