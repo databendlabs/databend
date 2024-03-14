@@ -404,6 +404,17 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             return Ok(Event::NeedConsume);
         }
 
+        if self.max_partition_count > 0 {
+            if let Some((bucket, bucket_blocks)) = self.buckets_blocks.pop_first() {
+                let data_block = Self::convert_blocks(bucket, bucket_blocks);
+                self.output.push_data(Ok(data_block));
+                return Ok(Event::NeedConsume);
+            }
+
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
         let pushed_data_block = self.try_push_data_block();
 
         loop {

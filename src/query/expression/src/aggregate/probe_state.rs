@@ -54,6 +54,21 @@ unsafe impl Send for ProbeState {}
 unsafe impl Sync for ProbeState {}
 
 impl ProbeState {
+    pub fn with_partition_count(partition_count: usize) -> Self {
+        Self {
+            group_hashes: [0_u64; BATCH_SIZE],
+            addresses: [std::ptr::null::<u8>(); BATCH_SIZE],
+            state_places: [StateAddr::new(0); BATCH_SIZE],
+            group_compare_vector: new_sel(),
+            no_match_vector: new_sel(),
+            empty_vector: new_sel(),
+            temp_vector: new_sel(),
+            partition_entries: vec![new_sel(); partition_count],
+            partition_count: vec![0; partition_count],
+            row_count: 0,
+        }
+    }
+
     pub fn set_incr_empty_vector(&mut self, row_count: usize) {
         for i in 0..row_count {
             self.empty_vector[i] = i;

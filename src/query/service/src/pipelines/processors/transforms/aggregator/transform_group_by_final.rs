@@ -62,6 +62,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
 
     fn transform_agg_hashtable(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
         let mut agg_hashtable: Option<AggregateHashTable> = None;
+        let mut limit_count = 0;
         if let AggregateMeta::Partitioned { bucket: _, data } = meta {
             for bucket_data in data {
                 match bucket_data {
@@ -122,6 +123,14 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                     blocks.push(DataBlock::new_from_columns(
                         self.flush_state.take_group_columns(),
                     ));
+
+                    limit_count += self.flush_state.row_count;
+
+                    if let Some(limit) = self.params.limit {
+                        if limit_count >= limit {
+                            break;
+                        }
+                    }
                 } else {
                     break;
                 }
@@ -146,7 +155,6 @@ where Method: HashMethodBounds
         if self.params.enable_experimental_aggregate_hashtable {
             return self.transform_agg_hashtable(meta);
         }
-
         if let AggregateMeta::Partitioned { bucket, data } = meta {
             let arena = Arc::new(Bump::new());
             let mut hashtable = self.method.create_hash_table::<()>(arena)?;

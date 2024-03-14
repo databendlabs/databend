@@ -61,7 +61,7 @@ impl SerializedPayload {
         let rows_num = self.data_block.num_rows();
         let radix_bits = self.max_partition_count.trailing_zeros() as u64;
         let config = HashTableConfig::default().with_initial_radix_bits(radix_bits);
-        let mut state = ProbeState::default();
+        let mut state = ProbeState::with_partition_count(self.max_partition_count);
         let agg_len = aggrs.len();
         let group_len = group_types.len();
         let mut hashtable = AggregateHashTable::new_with_capacity(
