@@ -59,7 +59,7 @@ impl PasswordPolicyMgr {
 impl PasswordPolicyApi for PasswordPolicyMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_password_policy(
+    async fn add(
         &self,
         password_policy: PasswordPolicy,
         create_option: &CreateOption,
@@ -85,11 +85,7 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn update_password_policy(
-        &self,
-        password_policy: PasswordPolicy,
-        match_seq: MatchSeq,
-    ) -> Result<u64> {
+    async fn update(&self, password_policy: PasswordPolicy, match_seq: MatchSeq) -> Result<u64> {
         let ident = self.ident(&password_policy.name);
 
         let upsert = UpsertPB::update(ident, password_policy.clone()).with(match_seq);
@@ -107,7 +103,7 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn drop_password_policy(&self, name: &str, seq: MatchSeq) -> Result<()> {
+    async fn remove(&self, name: &str, seq: MatchSeq) -> Result<()> {
         let ident = self.ident(name);
 
         let upsert = UpsertPB::delete(ident).with(seq);
@@ -125,7 +121,7 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_password_policy(&self, name: &str, seq: MatchSeq) -> Result<SeqV<PasswordPolicy>> {
+    async fn get(&self, name: &str, seq: MatchSeq) -> Result<SeqV<PasswordPolicy>> {
         let ident = self.ident(name);
 
         let seqv = self.kv_api.get_pb(&ident).await?;
@@ -146,7 +142,7 @@ impl PasswordPolicyApi for PasswordPolicyMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_password_policies(&self) -> Result<Vec<PasswordPolicy>> {
+    async fn list(&self) -> Result<Vec<PasswordPolicy>> {
         let dir_name = DirName::new(self.ident("dummy"));
 
         let values = self.kv_api.list_pb_values(&dir_name).await?;

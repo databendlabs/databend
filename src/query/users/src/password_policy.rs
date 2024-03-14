@@ -72,9 +72,7 @@ impl UserApiProvider {
         check_password_policy(&password_policy)?;
 
         let client = self.password_policy_api(tenant);
-        client
-            .add_password_policy(password_policy, create_option)
-            .await
+        client.add(password_policy, create_option).await
     }
 
     // Update password policy.
@@ -99,7 +97,7 @@ impl UserApiProvider {
         if_exists: bool,
     ) -> Result<Option<u64>> {
         let client = self.password_policy_api(tenant);
-        let seq_password_policy = match client.get_password_policy(name, MatchSeq::GE(0)).await {
+        let seq_password_policy = match client.get(name, MatchSeq::GE(0)).await {
             Ok(seq_password_policy) => seq_password_policy,
             Err(e) => {
                 if if_exists && e.code() == ErrorCode::UNKNOWN_PASSWORD_POLICY {
@@ -152,10 +150,7 @@ impl UserApiProvider {
 
         password_policy.update_on = Some(Utc::now());
 
-        match client
-            .update_password_policy(password_policy, MatchSeq::Exact(seq))
-            .await
-        {
+        match client.update(password_policy, MatchSeq::Exact(seq)).await {
             Ok(res) => Ok(Some(res)),
             Err(e) => Err(e.add_message_back(" (while alter password policy).")),
         }
@@ -182,7 +177,7 @@ impl UserApiProvider {
         }
 
         let client = self.password_policy_api(tenant);
-        match client.drop_password_policy(name, MatchSeq::GE(1)).await {
+        match client.remove(name, MatchSeq::GE(1)).await {
             Ok(res) => Ok(res),
             Err(e) => {
                 if if_exists && e.code() == ErrorCode::UNKNOWN_PASSWORD_POLICY {
@@ -221,10 +216,7 @@ impl UserApiProvider {
         name: &str,
     ) -> Result<PasswordPolicy> {
         let client = self.password_policy_api(tenant);
-        let password_policy = client
-            .get_password_policy(name, MatchSeq::GE(0))
-            .await?
-            .data;
+        let password_policy = client.get(name, MatchSeq::GE(0)).await?.data;
         Ok(password_policy)
     }
 
@@ -236,7 +228,7 @@ impl UserApiProvider {
     ) -> Result<Vec<PasswordPolicy>> {
         let client = self.password_policy_api(tenant);
         let password_policies = client
-            .get_password_policies()
+            .list()
             .await
             .map_err(|e| e.add_message_back(" (while get password policies)."))?;
         Ok(password_policies)

@@ -59,11 +59,7 @@ impl NetworkPolicyMgr {
 impl NetworkPolicyApi for NetworkPolicyMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_network_policy(
-        &self,
-        network_policy: NetworkPolicy,
-        create_option: &CreateOption,
-    ) -> Result<()> {
+    async fn add(&self, network_policy: NetworkPolicy, create_option: &CreateOption) -> Result<()> {
         let ident = self.ident(network_policy.name.as_str());
 
         let seq = MatchSeq::from(*create_option);
@@ -85,11 +81,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn update_network_policy(
-        &self,
-        network_policy: NetworkPolicy,
-        match_seq: MatchSeq,
-    ) -> Result<u64> {
+    async fn update(&self, network_policy: NetworkPolicy, match_seq: MatchSeq) -> Result<u64> {
         let ident = self.ident(network_policy.name.as_str());
         let upsert = UpsertPB::update(ident, network_policy.clone()).with(match_seq);
 
@@ -106,7 +98,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn drop_network_policy(&self, name: &str, seq: MatchSeq) -> Result<()> {
+    async fn remove(&self, name: &str, seq: MatchSeq) -> Result<()> {
         let ident = self.ident(name);
 
         let upsert = UpsertPB::delete(ident).with(seq);
@@ -124,7 +116,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_network_policy(&self, name: &str, seq: MatchSeq) -> Result<SeqV<NetworkPolicy>> {
+    async fn get(&self, name: &str, seq: MatchSeq) -> Result<SeqV<NetworkPolicy>> {
         let ident = self.ident(name);
 
         let res = self.kv_api.get_pb(&ident).await?;
@@ -144,7 +136,7 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_network_policies(&self) -> Result<Vec<NetworkPolicy>> {
+    async fn list(&self) -> Result<Vec<NetworkPolicy>> {
         let dir_name = DirName::new(self.ident("dummy"));
 
         let values = self.kv_api.list_pb_values(&dir_name).await?;
