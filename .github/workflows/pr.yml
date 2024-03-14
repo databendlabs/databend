@@ -9,7 +9,6 @@ on:
       - edited
       - ready_for_review
       - converted_to_draft
-  pull_request:
 
 permissions:
   pull-requests: write
@@ -145,10 +144,10 @@ jobs:
             - Close #issue
             ```
 
-  summary:
+  description:
     runs-on: ubuntu-latest
     steps:
-      - name: Check PR summary checkbox
+      - name: Check PR description checkbox
         uses: actions/github-script@v7
         id: check
         with:
@@ -186,21 +185,21 @@ jobs:
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
-          identifier: 'pr-assistant-summary-tests'
+          identifier: 'pr-assistant-description-tests'
           delete: true
       - name: Delete Comment for Changes
         if: steps.check.outputs.changes == 'fullfilled'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
-          identifier: 'pr-assistant-summary-changes'
+          identifier: 'pr-assistant-description-changes'
           delete: true
       - name: Comment on PR for Tests
         if: steps.check.outputs.tests != 'fullfilled'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
-          identifier: 'pr-assistant-summary-tests'
+          identifier: 'pr-assistant-description-tests'
           body: |
             At least one test case must be checked in the PR description.
       - name: Comment on PR for Changes
@@ -208,6 +207,6 @@ jobs:
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
-          identifier: 'pr-assistant-summary-changes'
+          identifier: 'pr-assistant-description-changes'
           body: |
             At least one type of change must be checked in the PR description.
