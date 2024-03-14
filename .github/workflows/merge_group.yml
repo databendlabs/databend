@@ -1,0 +1,19 @@
+name: "PR Assistant"
+
+on:
+  merge_group:
+
+jobs:
+  title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip title check
+        shell: bash
+        run: exit 0
+
+  cla:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip CLA check
+        shell: bash
+        run: exit 0
