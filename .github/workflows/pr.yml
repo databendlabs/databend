@@ -9,7 +9,6 @@ on:
       - edited
       - ready_for_review
       - converted_to_draft
-  pull_request:
 
 permissions:
   pull-requests: write
