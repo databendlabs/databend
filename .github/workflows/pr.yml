@@ -9,7 +9,7 @@ on:
       - edited
       - ready_for_review
       - converted_to_draft
-  merge_group:
+  pull_request:
 
 permissions:
   pull-requests: write
@@ -20,15 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check PR title if not sematic
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         id: check
         with:
           script: |
-            if (!context.payload.pull_request) {
-              core.info('PR payload is null');
-              core.setOutput('title', 'ignore');
-              return;
-            }
             const title = context.payload.pull_request.title;
             const regex = /^(rfc|feat|fix|refactor|ci|docs|chore)(\([a-z0-9-]+\))?:/;
             const m = title.match(regex);
@@ -112,15 +107,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check CLA if not signed
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         id: check
         with:
           script: |
-            if (!context.payload.pull_request) {
-              core.info('PR payload is null');
-              core.setOutput('cla', 'ignore');
-              return;
-            }
             const body = context.payload.pull_request.body;
             const regex = /I hereby agree to the terms of the CLA available at: https:\/\/docs.databend.com\/dev\/policies\/cla\//;
             if (!regex.test(body)) {
@@ -154,3 +144,16 @@ jobs:
 
             - Close #issue
             ```
+
+  summary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR summary checkbox
+        uses: actions/github-script@v7
+        id: check
+        with:
+          script: |
+            const body = context.payload.pull_request.body;
+            const regex = /[x]/;
+            const maches = regex.search(body);
+            console.log(maches);
