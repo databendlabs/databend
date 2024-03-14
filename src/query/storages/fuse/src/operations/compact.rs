@@ -27,7 +27,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::gen_mutation_stream_operator;
+use databend_common_sql::StreamContext;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::TableMutationAggregator;
@@ -171,14 +171,15 @@ impl FuseTable {
             self.change_tracking_enabled(),
             false,
         )?;
-        let (stream_columns, stream_operators) = if self.change_tracking_enabled() {
-            gen_mutation_stream_operator(
+        let stream_ctx = if self.change_tracking_enabled() {
+            Some(StreamContext::try_create(
+                ctx.get_function_context()?,
                 self.schema_with_stream(),
                 self.get_table_info().ident.seq,
                 false,
-            )?
+            )?)
         } else {
-            (vec![], vec![])
+            None
         };
         // Add source pipe.
         pipeline.add_source(
@@ -187,8 +188,7 @@ impl FuseTable {
                     ctx.clone(),
                     self.storage_format,
                     block_reader.clone(),
-                    stream_columns.clone(),
-                    stream_operators.clone(),
+                    stream_ctx.clone(),
                     output,
                 )
             },

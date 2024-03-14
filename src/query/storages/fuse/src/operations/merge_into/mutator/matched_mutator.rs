@@ -25,9 +25,12 @@ use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::build_origin_block_row_num;
+use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::split_prefix;
 use databend_common_catalog::plan::split_row_id;
 use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -35,8 +38,8 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
+use databend_common_sql::StreamContext;
 use databend_common_storage::MergeStatus;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -61,6 +64,7 @@ use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::read_block;
 use crate::operations::BlockMetaIndex;
+use crate::FuseTable;
 
 struct AggregationContext {
     ctx: Arc<dyn TableContext>,
@@ -69,6 +73,7 @@ struct AggregationContext {
     read_settings: ReadSettings,
     block_builder: BlockBuilder,
     block_reader: Arc<BlockReader>,
+    stream_ctx: Option<StreamContext>,
 }
 
 type UpdateOffset = HashSet<usize>;
@@ -85,18 +90,20 @@ pub struct MatchedAggregator {
 }
 
 impl MatchedAggregator {
-    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        target_table_schema: TableSchemaRef,
-        data_accessor: Operator,
-        write_settings: WriteSettings,
-        read_settings: ReadSettings,
+        table: &FuseTable,
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         target_build_optimization: bool,
     ) -> Result<Self> {
+        let target_table_schema = table.schema_with_stream();
+        let data_accessor = table.get_operator();
+        let write_settings = table.get_write_settings();
+        let update_stream_columns = table.change_tracking_enabled();
+        let read_settings = ReadSettings::from_ctx(&ctx)?;
+
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
 
@@ -106,13 +113,24 @@ impl MatchedAggregator {
             BlockReader::create(
                 ctx.clone(),
                 data_accessor.clone(),
-                target_table_schema,
+                target_table_schema.clone(),
                 projection,
                 false,
-                false,
+                update_stream_columns,
                 false,
             )
         }?;
+
+        let stream_ctx = if update_stream_columns {
+            Some(StreamContext::try_create(
+                ctx.get_function_context()?,
+                target_table_schema,
+                table.get_table_info().ident.seq,
+                true,
+            )?)
+        } else {
+            None
+        };
 
         Ok(Self {
             aggregation_ctx: Arc::new(AggregationContext {
@@ -122,6 +140,7 @@ impl MatchedAggregator {
                 data_accessor,
                 block_builder,
                 block_reader,
+                stream_ctx,
             }),
             io_request_semaphore,
             segment_reader,
@@ -257,8 +276,6 @@ impl MatchedAggregator {
                 let segment_info: SegmentInfo = compact_segment_info.try_into()?;
 
                 e.insert(segment_info);
-            } else {
-                continue;
             }
         }
 
@@ -277,7 +294,6 @@ impl MatchedAggregator {
                     index: BlockMetaIndex {
                         segment_idx,
                         block_idx,
-                        inner: None,
                     },
                 })
             }
@@ -376,7 +392,7 @@ impl AggregationContext {
             bytes: 0,
         };
         self.ctx.get_write_progress().incr(&progress_values);
-        let origin_data_block = read_block(
+        let mut origin_data_block = read_block(
             self.write_settings.storage_format,
             &self.block_reader,
             block_meta,
@@ -385,6 +401,11 @@ impl AggregationContext {
         )
         .await?;
         let origin_num_rows = origin_data_block.num_rows();
+        if self.stream_ctx.is_some() {
+            let row_num = build_origin_block_row_num(origin_num_rows);
+            origin_data_block.add_column(row_num);
+        }
+
         // apply delete
         let mut bitmap = MutableBitmap::new();
         for row in 0..origin_num_rows {
@@ -394,7 +415,7 @@ impl AggregationContext {
                 bitmap.push(true);
             }
         }
-        let res_block = origin_data_block.filter_with_bitmap(&bitmap.into())?;
+        let mut res_block = origin_data_block.filter_with_bitmap(&bitmap.into())?;
 
         if res_block.is_empty() {
             metrics_inc_merge_into_deleted_blocks_counter(1);
@@ -403,9 +424,13 @@ impl AggregationContext {
                 index: BlockMetaIndex {
                     segment_idx,
                     block_idx,
-                    inner: None,
                 },
             }));
+        }
+
+        if let Some(stream_ctx) = &self.stream_ctx {
+            let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0)?;
+            res_block = stream_ctx.apply(res_block, &stream_meta)?;
         }
 
         // serialization and compression is cpu intensive, send them to dedicated thread pool
@@ -447,7 +472,6 @@ impl AggregationContext {
             index: BlockMetaIndex {
                 segment_idx,
                 block_idx,
-                inner: None,
             },
             block_meta: Arc::new(new_block_meta),
         };

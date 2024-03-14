@@ -222,6 +222,11 @@ impl Binder {
         // bind source data
         let (mut source_expr, mut source_context) =
             self.bind_single_table(bind_context, &source_data).await?;
+        // remove stream column.
+        source_context
+            .columns
+            .retain(|v| v.visibility == Visibility::Visible);
+
         // Wrap `LogicalMaterializedCte` to `source_expr`
         for (_, cte_info) in self.ctes_map.iter().rev() {
             if !cte_info.materialized || cte_info.used_count == 0 {
@@ -284,9 +289,9 @@ impl Binder {
                                 )
                                 .to_string(),
                             ));
-                            } else {
-                                indices[0].clone()
                             }
+
+                            indices[0].clone()
                         }
                     };
                     let column = ColumnBindingBuilder::new(
@@ -311,6 +316,13 @@ impl Binder {
         let (mut target_expr, mut target_context) = self
             .bind_single_table(&mut source_context, &target_table)
             .await?;
+
+        if table.change_tracking_enabled() && merge_type != MergeIntoType::InsertOnly {
+            if let RelOperator::Scan(scan) = target_expr.plan() {
+                let new_scan = scan.update_stream_columns(true);
+                target_expr = SExpr::create_leaf(Arc::new(new_scan.into()))
+            }
+        }
 
         // add internal_column (_row_id)
         let table_index = self
@@ -367,10 +379,21 @@ impl Binder {
             .await?;
         {
             // add join used column idx
-            let join_ctx = bind_ctx.clone();
-            let join_column_set = join_ctx.clone().column_set();
+            let join_column_set = bind_ctx.column_set();
             columns_set = columns_set.union(&join_column_set).cloned().collect();
         }
+
+        let has_update = self.has_update(&matched_clauses);
+        let update_row_version = if table.change_tracking_enabled() && has_update {
+            Some(Self::update_row_version(
+                table.schema_with_stream(),
+                &bind_ctx.columns,
+                Some(&database_name),
+                Some(&table_name),
+            )?)
+        } else {
+            None
+        };
 
         let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut scalar_binder = ScalarBinder::new(
@@ -388,7 +411,7 @@ impl Binder {
         // if true, read all columns of target table
         let has_update = self.has_update(&matched_clauses);
         if has_update {
-            for (idx, field) in table_schema.fields().iter().enumerate() {
+            for (idx, field) in table.schema_with_stream().fields().iter().enumerate() {
                 let used_idx = self.find_column_index(&column_entries, field.name())?;
                 columns_set.insert(used_idx);
                 field_index_map.insert(idx, used_idx.to_string());
@@ -412,6 +435,7 @@ impl Binder {
                     &mut columns_set,
                     table_schema.clone(),
                     update_or_insert_columns_star.clone(),
+                    update_row_version.clone(),
                     target_name.as_ref(),
                 )
                 .await?,
@@ -450,7 +474,7 @@ impl Binder {
             table: table_name,
             target_alias: target_alias.clone(),
             table_id,
-            bind_context: Box::new(bind_ctx.clone()),
+            bind_context: Box::new(bind_ctx),
             meta_data: self.metadata.clone(),
             input: Box::new(join_sexpr.clone()),
             columns_set: Box::new(columns_set),
@@ -474,6 +498,7 @@ impl Binder {
         columns: &mut HashSet<IndexType>,
         schema: TableSchemaRef,
         update_or_insert_columns_star: Option<HashMap<FieldIndex, ScalarExpr>>,
+        update_row_version: Option<(FieldIndex, ScalarExpr)>,
         target_name: &str,
     ) -> Result<MatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
@@ -494,16 +519,13 @@ impl Binder {
             None
         };
 
-        if let MatchOperation::Update {
+        let mut update = if let MatchOperation::Update {
             update_list,
             is_star,
         } = &clause.operation
         {
             if *is_star {
-                Ok(MatchedEvaluator {
-                    condition,
-                    update: update_or_insert_columns_star,
-                })
+                update_or_insert_columns_star
             } else {
                 let mut update_columns = HashMap::with_capacity(update_list.len());
                 for update_expr in update_list {
@@ -548,18 +570,18 @@ impl Binder {
                     update_columns.insert(index, scalar_expr.clone());
                 }
 
-                Ok(MatchedEvaluator {
-                    condition,
-                    update: Some(update_columns),
-                })
+                Some(update_columns)
             }
         } else {
             // delete
-            Ok(MatchedEvaluator {
-                condition,
-                update: None,
-            })
+            None
+        };
+
+        // update row_version
+        if let Some((index, row_version)) = update_row_version {
+            update.as_mut().map(|v| v.insert(index, row_version));
         }
+        Ok(MatchedEvaluator { condition, update })
     }
 
     async fn bind_unmatched_clause<'a>(
