@@ -27,7 +27,7 @@ jobs:
             const regex = /^(rfc|feat|fix|refactor|ci|docs|chore)(\([a-z0-9-]+\))?:/;
             const m = title.match(regex);
             if (!m) {
-              core.error('PR title is not semantic');
+              core.setFailed('PR title is not semantic');
               core.setOutput('title', 'not-semantic');
               return;
             }
@@ -66,14 +66,14 @@ jobs:
             });
             core.setOutput('title', 'semantic');
       - name: Delete Comment
-        if: steps.check.outputs.title == 'semantic'
+        if: always() && steps.check.outputs.title == 'semantic'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
           identifier: 'pr-assistant-title'
           delete: true
       - name: Comment on PR
-        if: steps.check.outputs.title == 'not-semantic'
+        if: always() && steps.check.outputs.title == 'not-semantic'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
@@ -113,20 +113,20 @@ jobs:
             const body = context.payload.pull_request.body;
             const regex = /I hereby agree to the terms of the CLA available at: https:\/\/docs.databend.com\/dev\/policies\/cla\//;
             if (!regex.test(body)) {
-              core.error('CLA is not signed');
+              core.setFailed('CLA is not signed');
               core.setOutput('cla', 'not-signed');
             } else {
               core.setOutput('cla', 'signed');
             }
       - name: Delete Comment
-        if: steps.check.outputs.cla == 'signed'
+        if: always() && steps.check.outputs.cla == 'signed'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
           identifier: 'pr-assistant-cla'
           delete: true
       - name: Comment on PR
-        if: steps.check.outputs.cla == 'not-signed'
+        if: always() && steps.check.outputs.cla == 'not-signed'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
@@ -153,7 +153,6 @@ jobs:
         with:
           script: |
             const body = context.payload.pull_request.body;
-            const regex = /- [x] /;
             let section = "summary";
             let testsChecked = false;
             let changesChecked = false;
@@ -166,14 +165,14 @@ jobs:
                 continue;
               }
               if (section === "tests") {
-                if (regex.test(line)) {
+                if (line.startsWith("- [x] ")) {
                   testsChecked = true;
                   core.setOutput('tests', 'fulfilled');
                   continue;
                 }
               }
               if (section === "changes") {
-                if (regex.test(line)) {
+                if (line.startsWith("- [x] ")) {
                   changesChecked = true;
                   core.setOutput('changes', 'fulfilled');
                   continue;
@@ -182,39 +181,41 @@ jobs:
             }
             if (!testsChecked) {
               core.setOutput('tests', 'not-fulfilled');
-              core.error('Tests are not checked');
+              core.setFailed('Tests are not checked');
             }
             if (!changesChecked) {
               core.setOutput('changes', 'not-fulfilled');
-              core.error('Type of Changes are not checked');
+              core.setFailed('Type of Changes are not checked');
             }
       - name: Delete Comment for Tests
-        if: steps.check.outputs.tests == 'fullfilled'
+        if: always() && steps.check.outputs.tests == 'fullfilled'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
           identifier: 'pr-assistant-description-tests'
           delete: true
       - name: Delete Comment for Changes
-        if: steps.check.outputs.changes == 'fullfilled'
+        if: always() && steps.check.outputs.changes == 'fullfilled'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
           identifier: 'pr-assistant-description-changes'
           delete: true
       - name: Comment on PR for Tests
-        if: steps.check.outputs.tests != 'fullfilled'
+        if: always() && steps.check.outputs.tests != 'fullfilled'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
           identifier: 'pr-assistant-description-tests'
           body: |
-            At least one test case must be checked in the PR description.
+            At least one test kind must be checked in the PR description.
+            @${{ github.event.pull_request.user.login }} please update it 🙏.
       - name: Comment on PR for Changes
-        if: steps.check.outputs.changes != 'fullfilled'
+        if: always() && steps.check.outputs.changes != 'fullfilled'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
           identifier: 'pr-assistant-description-changes'
           body: |
             At least one type of change must be checked in the PR description.
+            @${{ github.event.pull_request.user.login }} please update it 🙏.
