@@ -158,6 +158,9 @@ jobs:
             let testsChecked = false;
             let changesChecked = false;
             for (const line of body.split('\n')) {
+              console.log("=====================================");
+              console.log(line);
+              console.log("=====================================");
               if (line ==="## Tests") {
                 section = "tests";
                 core.info('checking section: tests');
@@ -167,7 +170,6 @@ jobs:
                 core.info('checking section: changes');
                 continue;
               }
-              console.log(line);
               if (section === "tests") {
                 if (line.startsWith("- [x] ")) {
                   testsChecked = true;
