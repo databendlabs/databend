@@ -33,9 +33,7 @@ impl UserApiProvider {
         create_option: &CreateOption,
     ) -> Result<()> {
         let client = self.network_policy_api(tenant);
-        client
-            .add_network_policy(network_policy, create_option)
-            .await
+        client.add(network_policy, create_option).await
     }
 
     // Update network policy.
@@ -50,7 +48,7 @@ impl UserApiProvider {
         if_exists: bool,
     ) -> Result<Option<u64>> {
         let client = self.network_policy_api(tenant);
-        let seq_network_policy = match client.get_network_policy(name, MatchSeq::GE(0)).await {
+        let seq_network_policy = match client.get(name, MatchSeq::GE(0)).await {
             Ok(seq_network_policy) => seq_network_policy,
             Err(e) => {
                 if if_exists && e.code() == ErrorCode::UNKNOWN_NETWORK_POLICY {
@@ -74,10 +72,7 @@ impl UserApiProvider {
         }
         network_policy.update_on = Some(Utc::now());
 
-        match client
-            .update_network_policy(network_policy, MatchSeq::Exact(seq))
-            .await
-        {
+        match client.update(network_policy, MatchSeq::Exact(seq)).await {
             Ok(res) => Ok(Some(res)),
             Err(e) => Err(e.add_message_back(" (while alter network policy).")),
         }
@@ -104,7 +99,7 @@ impl UserApiProvider {
         }
 
         let client = self.network_policy_api(tenant);
-        match client.drop_network_policy(name, MatchSeq::GE(1)).await {
+        match client.remove(name, MatchSeq::GE(1)).await {
             Ok(res) => Ok(res),
             Err(e) => {
                 if if_exists && e.code() == ErrorCode::UNKNOWN_NETWORK_POLICY {
@@ -139,7 +134,7 @@ impl UserApiProvider {
         name: &str,
     ) -> Result<NetworkPolicy> {
         let client = self.network_policy_api(tenant);
-        let network_policy = client.get_network_policy(name, MatchSeq::GE(0)).await?.data;
+        let network_policy = client.get(name, MatchSeq::GE(0)).await?.data;
         Ok(network_policy)
     }
 
@@ -151,7 +146,7 @@ impl UserApiProvider {
     ) -> Result<Vec<NetworkPolicy>> {
         let client = self.network_policy_api(tenant);
         let network_policies = client
-            .get_network_policies()
+            .list()
             .await
             .map_err(|e| e.add_message_back(" (while get network policies)."))?;
         Ok(network_policies)
