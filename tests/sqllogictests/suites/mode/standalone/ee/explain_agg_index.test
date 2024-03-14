@@ -42,7 +42,6 @@ AggregateFinal
 ├── aggregate functions: [sum(a)]
 ├── estimated rows: 0.00
 └── AggregatePartial
-    ├── output columns: [SUM(a) (#2), #_group_by_key]
     ├── group by: [b]
     ├── aggregate functions: [sum(a)]
     ├── estimated rows: 0.00
