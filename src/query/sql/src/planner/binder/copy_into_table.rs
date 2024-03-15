@@ -55,7 +55,6 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_stage::StageTable;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use indexmap::IndexMap;
@@ -321,7 +320,7 @@ impl<'a> Binder {
                 files_info,
                 stage_info,
                 files_to_copy: Some(files_to_copy),
-                duplicated_files_detected: vec![],
+                duplicated_files_detected,
                 is_select: false,
                 default_values: Some(default_values),
             },
