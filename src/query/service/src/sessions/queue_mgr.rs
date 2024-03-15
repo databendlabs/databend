@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::future::Future;
 use std::hash::Hash;
 use std::pin::Pin;
@@ -45,7 +46,7 @@ use tokio::time::error::Elapsed;
 use crate::sessions::QueryContext;
 
 pub trait QueueData: Send + Sync + 'static {
-    type Key: Send + Sync + Eq + Hash + Clone + 'static;
+    type Key: Send + Sync + Eq + Hash + Display + Clone + 'static;
 
     fn get_key(&self) -> Self::Key;
 
@@ -199,7 +200,13 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
                 Poll::Ready(match res {
                     Ok(Ok(v)) => {
                         if let Some(data) = this.data {
-                            record_session_queue_acquire_duration_ms(data.get_elapsed_time());
+                            let queue_time = data.get_elapsed_time();
+                            info!(
+                                "acquire query {} from queue success: {} ms",
+                                data.get_key(),
+                                queue_time.as_millis()
+                            );
+                            record_session_queue_acquire_duration_ms(queue_time);
                         }
                         Ok(AcquireQueueGuard::create(v))
                     }
