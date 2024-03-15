@@ -835,6 +835,8 @@ pub enum TokenKind {
     PROCESSLIST,
     #[token("PURGE", ignore(ascii_case))]
     PURGE,
+    #[token("PURGE_DUPLICATED", ignore(ascii_case))]
+    PURGE_DUPLICATED,
     #[token("QUARTER", ignore(ascii_case))]
     QUARTER,
     #[token("QUERY", ignore(ascii_case))]

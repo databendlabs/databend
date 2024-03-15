@@ -77,6 +77,8 @@ pub struct CopyIntoTableStmt {
     #[drive(skip)]
     pub purge: bool,
     #[drive(skip)]
+    pub purge_duplicated: bool,
+    #[drive(skip)]
     pub disable_variant_check: bool,
     #[drive(skip)]
     pub return_failed_only: bool,
@@ -95,6 +97,7 @@ impl CopyIntoTableStmt {
             CopyIntoTableOption::MaxFiles(v) => self.max_files = v,
             CopyIntoTableOption::SplitSize(v) => self.split_size = v,
             CopyIntoTableOption::Purge(v) => self.purge = v,
+            CopyIntoTableOption::PurgeDuplicated(v) => self.purge_duplicated = v,
             CopyIntoTableOption::Force(v) => self.force = v,
             CopyIntoTableOption::DisableVariantCheck(v) => self.disable_variant_check = v,
             CopyIntoTableOption::ReturnFailedOnly(v) => self.return_failed_only = v,
@@ -178,6 +181,7 @@ impl Display for CopyIntoTableStmt {
         }
 
         write!(f, " PURGE = {}", self.purge)?;
+        write!(f, " PURGE_DUPLICATED = {}", self.purge_duplicated)?;
         write!(f, " FORCE = {}", self.force)?;
         write!(f, " DISABLE_VARIANT_CHECK = {}", self.disable_variant_check)?;
         write!(f, " ON_ERROR = {}", self.on_error)?;
@@ -479,6 +483,7 @@ pub enum CopyIntoTableOption {
     MaxFiles(usize),
     SplitSize(usize),
     Purge(bool),
+    PurgeDuplicated(bool),
     Force(bool),
     DisableVariantCheck(bool),
     ReturnFailedOnly(bool),
