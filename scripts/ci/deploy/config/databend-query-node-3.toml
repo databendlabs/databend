@@ -3,7 +3,6 @@
 
 [query]
 max_active_sessions = 256
-max_running_queries = 2
 shutdown_wait_timeout_ms = 5000
 
 # For flight rpc.
