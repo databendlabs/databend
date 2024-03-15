@@ -30,6 +30,10 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_metrics::session::incr_session_queue_acquire_error_count;
+use databend_common_metrics::session::incr_session_queue_acquire_timeout_count;
+use databend_common_metrics::session::record_session_queue_acquire_duration_ms;
+use databend_common_metrics::session::set_session_queued_queries;
 use log::info;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
@@ -48,6 +52,8 @@ pub trait QueueData: Send + Sync + 'static {
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode;
 
     fn timeout(&self) -> Duration;
+
+    fn get_elapsed_time(&self) -> Duration;
 }
 
 pub(crate) struct Inner<Data: QueueData> {
@@ -91,12 +97,14 @@ impl<Data: QueueData> QueueManager<Data> {
     pub fn remove(&self, key: Data::Key) -> bool {
         let mut queue = self.queue.lock();
         if let Some(inner) = queue.remove(&key) {
+            set_session_queued_queries(queue.len());
             inner.waker.wake();
             inner.is_abort.store(true, Ordering::SeqCst);
-            return true;
+            true
+        } else {
+            set_session_queued_queries(queue.len());
+            false
         }
-
-        false
     }
 
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
@@ -114,12 +122,15 @@ impl<Data: QueueData> QueueManager<Data> {
         let key = inner.data.get_key();
         let mut queue = self.queue.lock();
         queue.insert(key.clone(), inner);
+        set_session_queued_queries(queue.len());
         key
     }
 
     pub(crate) fn remove_entity(&self, key: &Data::Key) -> Option<Arc<Data>> {
         let mut queue = self.queue.lock();
-        queue.remove(key).map(|inner| inner.data.clone())
+        let data = queue.remove(key).map(|inner| inner.data.clone());
+        set_session_queued_queries(queue.len());
+        data
     }
 }
 
@@ -186,9 +197,20 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
                 }
 
                 Poll::Ready(match res {
-                    Ok(Ok(v)) => Ok(AcquireQueueGuard::create(v)),
-                    Ok(Err(_)) => Err(ErrorCode::TokioError("acquire queue failure.")),
-                    Err(_elapsed) => Err(ErrorCode::Timeout("query queuing timeout")),
+                    Ok(Ok(v)) => {
+                        if let Some(data) = this.data {
+                            record_session_queue_acquire_duration_ms(data.get_elapsed_time());
+                        }
+                        Ok(AcquireQueueGuard::create(v))
+                    }
+                    Ok(Err(_)) => {
+                        incr_session_queue_acquire_error_count();
+                        Err(ErrorCode::TokioError("acquire queue failure."))
+                    }
+                    Err(_elapsed) => {
+                        incr_session_queue_acquire_timeout_count();
+                        Err(ErrorCode::Timeout("query queuing timeout"))
+                    }
                 })
             }
             Poll::Pending => {
@@ -252,6 +274,12 @@ impl QueueData for QueryEntry {
 
     fn timeout(&self) -> Duration {
         self.timeout
+    }
+
+    fn get_elapsed_time(&self) -> Duration {
+        self.create_time
+            .elapsed()
+            .unwrap_or_else(|_| Duration::from_secs(0))
     }
 }
 
