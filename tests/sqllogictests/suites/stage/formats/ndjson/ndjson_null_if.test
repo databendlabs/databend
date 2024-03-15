@@ -1,0 +1,42 @@
+statement ok
+drop table if exists v
+
+statement ok
+create table v (a variant, b string, c int)
+
+query 
+copy into v from @data/ndjson/null_if.ndjson file_format = (type = 'ndjson') on_error = continue
+----
+ndjson/null_if.ndjson 1 1 Invalid value '"Null"' for column 2 (c Int32 NULL): BadBytes. Code: 1046, Text = Incorrect json value, must be number. 1
+
+query 
+select * from v order by b
+----
+1 null NULL
+
+statement ok
+truncate table v
+
+query 
+copy into v from @data/ndjson/null_if.ndjson file_format = (type = 'ndjson' null_if = ()) force=true  on_error = continue
+----
+ndjson/null_if.ndjson 1 1 Invalid value '"Null"' for column 2 (c Int32 NULL): BadBytes. Code: 1046, Text = Incorrect json value, must be number. 1
+
+query 
+select * from v order by b
+----
+1 null NULL
+
+statement ok
+truncate table v
+
+query 
+copy into v from @data/ndjson/null_if.ndjson file_format = (type = 'ndjson' null_if = ('', 'Null')) force=true
+----
+ndjson/null_if.ndjson 2 0 NULL NULL
+
+query 
+select * from v order by b
+----
+1 null NULL
+NULL NULL NULL

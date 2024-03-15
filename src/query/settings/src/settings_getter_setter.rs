@@ -626,4 +626,8 @@ impl Settings {
     pub fn get_enable_experimental_queries_executor(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_queries_executor")? == 1)
     }
+
+    pub fn get_statement_queued_timeout(&self) -> Result<u64> {
+        self.try_get_u64("statement_queued_timeout_in_seconds")
+    }
 }

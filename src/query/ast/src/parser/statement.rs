@@ -1986,7 +1986,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let begin = value(Statement::Begin, rule! { BEGIN });
+    let begin = value(Statement::Begin, rule! { BEGIN ~ (TRANSACTION)? });
     let commit = value(Statement::Commit, rule! { COMMIT });
     let abort = value(Statement::Abort, rule! { ABORT | ROLLBACK });
 

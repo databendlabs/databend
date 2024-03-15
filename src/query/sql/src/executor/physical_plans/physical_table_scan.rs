@@ -225,6 +225,7 @@ impl PhysicalPlanBuilder {
                 } else {
                     Some(project_internal_columns.clone())
                 },
+                scan.update_stream_columns,
                 self.dry_run,
             )
             .await?;
@@ -268,6 +269,7 @@ impl PhysicalPlanBuilder {
                 CATALOG_DEFAULT.to_string(),
                 None,
                 None,
+                false,
                 self.dry_run,
             )
             .await?;

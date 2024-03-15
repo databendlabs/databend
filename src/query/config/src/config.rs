@@ -1399,7 +1399,7 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "256")]
     pub max_active_sessions: u64,
 
-    #[clap(long, value_name = "VALUE", default_value = "0")]
+    #[clap(long, value_name = "VALUE", default_value = "8")]
     pub max_running_queries: u64,
 
     /// The max total memory in bytes that can be used by this process.
