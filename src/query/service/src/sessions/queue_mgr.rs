@@ -31,6 +31,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_metrics::session::incr_session_queue_abort_count;
 use databend_common_metrics::session::incr_session_queue_acquire_error_count;
 use databend_common_metrics::session::incr_session_queue_acquire_timeout_count;
 use databend_common_metrics::session::record_session_queue_acquire_duration_ms;
@@ -186,6 +187,7 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
         let this = self.project();
 
         if this.is_abort.load(Ordering::SeqCst) {
+            incr_session_queue_abort_count();
             return Poll::Ready(Err(Data::remove_error_message(this.key.take())));
         }
 
@@ -193,6 +195,7 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
             Poll::Ready(res) => {
                 if let Some(key) = this.key.take() {
                     if this.manager.remove_entity(&key).is_none() {
+                        incr_session_queue_abort_count();
                         return Poll::Ready(Err(Data::remove_error_message(Some(key))));
                     }
                 }

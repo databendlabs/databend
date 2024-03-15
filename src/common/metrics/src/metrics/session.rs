@@ -30,6 +30,8 @@ pub static SESSION_ACTIVE_CONNECTIONS: LazyLock<Gauge> =
     LazyLock::new(|| register_gauge("session_connections"));
 pub static SESSION_QUQUED_QUERIES: LazyLock<Gauge> =
     LazyLock::new(|| register_gauge("session_queued_queries"));
+pub static SESSION_QUEUE_ABORT_COUNT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("session_queue_abort_count"));
 pub static SESSION_QUEUE_ACQUIRE_ERROR_COUNT: LazyLock<Counter> =
     LazyLock::new(|| register_counter("session_queue_acquire_error_count"));
 pub static SESSION_QUEUE_ACQUIRE_TIMEOUT_COUNT: LazyLock<Counter> =
@@ -51,6 +53,10 @@ pub fn set_session_active_connections(num: usize) {
 
 pub fn set_session_queued_queries(num: usize) {
     SESSION_QUQUED_QUERIES.set(num as i64);
+}
+
+pub fn incr_session_queue_abort_count() {
+    SESSION_QUEUE_ABORT_COUNT.inc();
 }
 
 pub fn incr_session_queue_acquire_error_count() {
