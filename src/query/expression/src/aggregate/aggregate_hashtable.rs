@@ -404,7 +404,7 @@ impl AggregateHashTable {
     }
 
     pub fn combine(&mut self, other: Self, flush_state: &mut PayloadFlushState) -> Result<()> {
-        self.combine_payloads(&other.payload, flush_state, None)
+        self.combine_payloads(&other.payload, flush_state, None, false)
     }
 
     pub fn combine_payloads(
@@ -412,9 +412,10 @@ impl AggregateHashTable {
         payloads: &PartitionedPayload,
         flush_state: &mut PayloadFlushState,
         limit: Option<usize>,
+        no_agg: bool,
     ) -> Result<()> {
         for payload in payloads.payloads.iter() {
-            self.combine_payload(payload, flush_state, limit)?;
+            self.combine_payload(payload, flush_state, limit, no_agg)?;
         }
         Ok(())
     }
@@ -424,10 +425,10 @@ impl AggregateHashTable {
         payload: &Payload,
         flush_state: &mut PayloadFlushState,
         limit: Option<usize>,
+        no_agg: bool,
     ) -> Result<()> {
         flush_state.clear();
         let mut reach_limit = false;
-        let mut current_limit = 0;
         while payload.flush(flush_state) {
             let row_count = flush_state.row_count;
 
@@ -438,14 +439,12 @@ impl AggregateHashTable {
                     &flush_state.group_columns,
                     row_count,
                 );
-                println!("current={},match count={}", current_limit, match_count);
 
                 if match_count > 0 {
-                    let mut temp = [StateAddr::new(0); BATCH_SIZE];
                     // set state places
                     if !self.payload.aggrs.is_empty() {
                         for i in 0..match_count {
-                            let idx = flush_state.probe_state.temp_vector[i];
+                            let idx = flush_state.probe_state.group_compare_vector[i];
                             flush_state.probe_state.state_places[i] = unsafe {
                                 StateAddr::new(read::<u64>(
                                     flush_state.probe_state.addresses[idx]
@@ -453,26 +452,21 @@ impl AggregateHashTable {
                                         as _,
                                 ) as usize)
                             };
-                            temp[i] = flush_state.state_places[idx];
+                            for (aggr, addr_offset) in self
+                                .payload
+                                .aggrs
+                                .iter()
+                                .zip(self.payload.state_addr_offsets.iter())
+                            {
+                                aggr.merge_states(flush_state.probe_state.state_places[i].next(*addr_offset), flush_state.state_places[idx].next(*addr_offset))?;
+                            }
                         }
-                    }
-
-                    let state = &mut flush_state.probe_state;
-                    let places = &state.state_places.as_slice()[0..match_count];
-                    let rhses = &temp.as_slice()[0..match_count];
-                    for (aggr, addr_offset) in self
-                        .payload
-                        .aggrs
-                        .iter()
-                        .zip(self.payload.state_addr_offsets.iter())
-                    {
-                        aggr.batch_merge_states(places, rhses, *addr_offset)?;
                     }
                 }
                 continue;
             }
 
-            let new_group_count = self.probe_and_create(
+            let _ = self.probe_and_create(
                 &mut flush_state.probe_state,
                 &flush_state.group_columns,
                 row_count,
@@ -503,12 +497,10 @@ impl AggregateHashTable {
             }
 
             if let Some(limit) = limit {
-                current_limit += new_group_count;
-                if current_limit >= limit {
+                if self.count >= limit {
                     reach_limit = true;
                     self.reset_with_limit(limit);
-                    // no aggrs, return directly
-                    if self.payload.aggrs.is_empty() {
+                    if no_agg {
                         return Ok(());
                     }
                 }

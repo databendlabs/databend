@@ -64,12 +64,15 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
 
     fn transform_agg_hashtable(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
         let mut agg_hashtable: Option<AggregateHashTable> = None;
+        if self.reach_limit {
+            return Ok(self.params.empty_result_block());
+        }
         if let AggregateMeta::Partitioned { bucket: _, data } = meta {
             for bucket_data in data {
                 match bucket_data {
                     AggregateMeta::AggregateHashTable(payload) => match agg_hashtable.as_mut() {
                         Some(ht) => {
-                            ht.combine_payloads(&payload, &mut self.flush_state, self.params.limit)?;
+                            ht.combine_payloads(&payload, &mut self.flush_state, self.params.limit, true)?;
                             if let Some(limit) = self.params.limit {
                                 if ht.len() >= limit {
                                     self.reach_limit = true;
@@ -86,7 +89,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                                 capacity,
                                 Arc::new(Bump::new()),
                             );
-                            hashtable.combine_payloads(&payload, &mut self.flush_state, self.params.limit)?;
+                            hashtable.combine_payloads(&payload, &mut self.flush_state, self.params.limit,true)?;
                             if let Some(limit) = self.params.limit {
                                 if hashtable.len() >= limit {
                                     self.reach_limit = true;
@@ -101,7 +104,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
                             )?;
-                            ht.combine_payloads(&payload, &mut self.flush_state, self.params.limit)?;
+                            ht.combine_payloads(&payload, &mut self.flush_state, self.params.limit, true)?;
                             if let Some(limit) = self.params.limit {
                                 if ht.len() >= limit {
                                     self.reach_limit = true;
@@ -122,7 +125,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                                 capacity,
                                 Arc::new(Bump::new()),
                             );
-                            hashtable.combine_payloads(&payload, &mut self.flush_state, self.params.limit)?;
+                            hashtable.combine_payloads(&payload, &mut self.flush_state, self.params.limit, true)?;
                             if let Some(limit) = self.params.limit {
                                 if hashtable.len() >= limit {
                                     self.reach_limit = true;
@@ -233,12 +236,5 @@ where Method: HashMethodBounds
         Err(ErrorCode::Internal(
             "TransformFinalGroupBy only recv AggregateMeta::Partitioned",
         ))
-    }
-
-    fn is_finish(&mut self) -> bool {
-        if self.reach_limit {
-            return true;
-        }
-        false
     }
 }
