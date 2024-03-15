@@ -174,7 +174,7 @@ impl Plan {
                     InsertInputSource::Values(insert_value) => match insert_value {
                         InsertValue::RawValues { data, start } => {
                             let sub_tree =
-                                FormatTreeNode::with_children(format!("InseredRawValue"), vec![
+                                FormatTreeNode::with_children(format!("InsertedRawValue"), vec![
                                     FormatTreeNode::new(format!("data: {}", data)),
                                     FormatTreeNode::new(format!("start: {}", start)),
                                 ]);
