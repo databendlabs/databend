@@ -138,6 +138,11 @@ impl ProbeSpillHandler {
             .spill_input(data_block, hashes, left_related_join, spilled_partitions)
             .await
     }
+
+    // Print spill info
+    pub fn print_spill_info(&self) -> String {
+        self.spill_state().spiller.print_spill_info()
+    }
 }
 
 /// The following methods only used for cross join
@@ -229,10 +234,9 @@ impl TransformHashJoinProbe {
         self.spill_handler.set_spill_done();
         // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
         let spilled_partition_set = &self.spill_handler.spilled_partitions();
-        info!(
-            "probe processor-{:?}: spill finished with spilled partitions {:?}",
-            processor_id, spilled_partition_set
-        );
+        if self.join_probe_state.join_type() != JoinType::Cross {
+            info!("Processor: {}, spill info: {}", processor_id, self.spill_handler.print_spill_info());
+        }
         if self.join_probe_state.hash_join_state.need_final_scan() {
             // Assign build spilled partitions to `self.join_probe_state.spill_partitions`
             let mut spill_partitions = self.join_probe_state.spill_partitions.write();
