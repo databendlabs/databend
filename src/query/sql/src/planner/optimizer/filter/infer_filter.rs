@@ -42,11 +42,17 @@ use crate::ColumnSet;
 // 2. [A = 10 and A = B] => [B = 10]
 // 3. [A = B and A = C] => [B = C]
 pub struct InferFilterOptimizer<'a> {
+    // All column bindings.
     columns: Vec<ColumnBinding>,
+    // The index of column bindings in `columns`.
     column_index: HashMap<ColumnBinding, usize>,
+    // The equal columns of each column. 
     column_equal_to: Vec<Vec<ColumnBinding>>,
+    // The predicates of each column.
     predicates: Vec<Vec<Predicate>>,
+    // If the whole predicates is false.
     is_falsy: bool,
+    // The `join_prop` is used for filter push down join.
     join_prop: Option<JoinProperty<'a>>,
 }
 
@@ -63,6 +69,7 @@ impl<'a> InferFilterOptimizer<'a> {
     }
 
     pub fn run(mut self, mut predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
+        // Remove trivial type cast.
         for predicate in predicates.iter_mut() {
             if let ScalarExpr::FunctionCall(func) = predicate {
                 if ComparisonOp::try_from_func_name(&func.func_name).is_some() {
@@ -80,6 +87,8 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
+        // Process each predicate, add it to the optimizer if it can be used to infer new predicates, 
+        // otherwise, add it to the remaining predicates.
         let mut remaining_predicates = vec![];
         for predicate in predicates.into_iter() {
             if let ScalarExpr::FunctionCall(func) = &predicate {
@@ -125,7 +134,7 @@ impl<'a> InferFilterOptimizer<'a> {
 
         let mut new_predicates = vec![];
         if !self.is_falsy {
-            // `derive_predicates` may change is_falsy to true.
+            // Derive new predicates from existing predicates, `derive_predicates` may change is_falsy to true.
             new_predicates = self.derive_predicates();
         }
 
@@ -138,6 +147,7 @@ impl<'a> InferFilterOptimizer<'a> {
                 .into(),
             ];
         } else {
+            // Derive new predicates from remaining predicates.
             new_predicates.extend(self.derive_remaining_predicates(remaining_predicates));
         }
 
@@ -360,6 +370,8 @@ impl<'a> InferFilterOptimizer<'a> {
         let mut result = vec![];
         let num_columns = self.columns.len();
 
+        // Using the Union-Find algorithm to construct the equal column binding index sets.
+        let mut equal_index_sets: HashMap<usize, HashSet<usize>> = HashMap::new();
         let mut parents = vec![0; num_columns];
         for (i, parent) in parents.iter_mut().enumerate().take(num_columns) {
             *parent = i;
@@ -370,8 +382,6 @@ impl<'a> InferFilterOptimizer<'a> {
                 Self::union(&mut parents, left_index, *right_index);
             }
         }
-
-        let mut equal_index_sets: HashMap<usize, HashSet<usize>> = HashMap::new();
         for index in 0..num_columns {
             let parent_index = Self::find(&mut parents, index);
             match equal_index_sets.get_mut(&parent_index) {
@@ -383,6 +393,7 @@ impl<'a> InferFilterOptimizer<'a> {
                 }
             }
             if index != parent_index {
+                // Add the predicates to the parent column binding.
                 let expr = self.columns[parent_index].clone();
                 let predicates = self.predicates[index].clone();
                 for predicate in predicates {
@@ -391,6 +402,7 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
+        // Construct predicates for each column binding.
         for column in self.columns.iter() {
             let index = self.column_index.get(column).unwrap();
             let parent_index = Self::find(&mut parents, *index);
@@ -411,6 +423,7 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
+        // Construct equal condition predicates for each equal column binding index set.
         for index in 0..num_columns {
             let parent_index = Self::find(&mut parents, index);
             if index == parent_index {
@@ -445,6 +458,7 @@ impl<'a> InferFilterOptimizer<'a> {
     }
 
     fn derive_remaining_predicates(&self, predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
+        // The ColumnBindingsCollector is used to collect the column bindings of a predicate.
         struct ColumnBindingsCollector {
             columns: HashSet<ColumnBinding>,
             can_derive: bool,
@@ -475,6 +489,7 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
+        // The ReplaceColumnBindings is used to replace the column bindings of a predicate.
         struct ReplaceColumnBindings<'a> {
             column_index: usize,
             equal_to: &'a ColumnBinding,
@@ -505,9 +520,9 @@ impl<'a> InferFilterOptimizer<'a> {
 
             if let Some(join_prop) = &self.join_prop {
                 let mut can_replace = true;
-                let mut new_predicate = predicate.clone();
                 let mut has_left = false;
                 let mut has_right = false;
+                let mut new_predicate = predicate.clone();
                 for original_column in collector.columns.iter() {
                     if join_prop.left_columns.contains(&original_column.index) {
                         has_left = true;
@@ -528,6 +543,7 @@ impl<'a> InferFilterOptimizer<'a> {
                         break;
                     }
                 }
+                // We only derive new predicates when the predicate contains columns only from one side of the join.
                 if can_replace && (has_left && !has_right || !has_left && has_right) {
                     result_predicates.push(new_predicate);
                 }

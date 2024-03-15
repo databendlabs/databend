@@ -229,6 +229,7 @@ pub fn can_filter_null(
         }
     }
 
+    // Replace the column bindings of predicate with `Scalar::Null` and evaluate the result.
     let mut replace = ReplaceColumnBindingsNull {
         can_replace: true,
         left_output_columns,
@@ -242,6 +243,7 @@ pub fn can_filter_null(
         let data_block = DataBlock::empty();
         let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
         if let Value::Scalar(scalar) = evaluator.run(&expr)? {
+            // if null column can be filtered, return true.
             if matches!(scalar, Scalar::Boolean(false) | Scalar::Null) {
                 return Ok(true);
             }
