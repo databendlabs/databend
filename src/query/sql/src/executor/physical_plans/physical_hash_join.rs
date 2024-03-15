@@ -82,7 +82,7 @@ pub struct HashJoin {
     pub enable_bloom_runtime_filter: bool,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
-    // When left/right single join converted to inner join, record the original join type 
+    // When left/right single join converted to inner join, record the original join type
     // and do some special processing during runtime.
     pub single_to_inner: Option<JoinType>,
 }

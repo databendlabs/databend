@@ -46,7 +46,7 @@ pub struct InferFilterOptimizer<'a> {
     columns: Vec<ColumnBinding>,
     // The index of column bindings in `columns`.
     column_index: HashMap<ColumnBinding, usize>,
-    // The equal columns of each column. 
+    // The equal columns of each column.
     column_equal_to: Vec<Vec<ColumnBinding>>,
     // The predicates of each column.
     predicates: Vec<Vec<Predicate>>,
@@ -87,7 +87,7 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
-        // Process each predicate, add it to the optimizer if it can be used to infer new predicates, 
+        // Process each predicate, add it to the optimizer if it can be used to infer new predicates,
         // otherwise, add it to the remaining predicates.
         let mut remaining_predicates = vec![];
         for predicate in predicates.into_iter() {
