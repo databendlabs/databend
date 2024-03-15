@@ -153,15 +153,7 @@ impl PipelinePullingExecutor {
             sender,
             tracking_payload.mem_stat.clone().unwrap(),
         )?;
-        let executor = if settings.enable_new_executor {
-            PipelineExecutor::QueriesPipelineExecutor(QueriesPipelineExecutor::create(
-                pipeline, settings,
-            )?)
-        } else {
-            PipelineExecutor::QueryPipelineExecutor(QueryPipelineExecutor::create(
-                pipeline, settings,
-            )?)
-        };
+        let executor = PipelineExecutor::create(pipeline, settings)?;
 
         Ok(PipelinePullingExecutor {
             receiver,
@@ -189,15 +181,7 @@ impl PipelinePullingExecutor {
 
         let mut pipelines = build_res.sources_pipelines;
         pipelines.push(main_pipeline);
-        let executor = if settings.enable_new_executor {
-            PipelineExecutor::QueriesPipelineExecutor(QueriesPipelineExecutor::from_pipelines(
-                pipelines, settings,
-            )?)
-        } else {
-            PipelineExecutor::QueryPipelineExecutor(QueryPipelineExecutor::from_pipelines(
-                pipelines, settings,
-            )?)
-        };
+        let executor = PipelineExecutor::from_pipelines(pipelines, settings)?;
         Ok(PipelinePullingExecutor {
             receiver,
             state: State::create(),

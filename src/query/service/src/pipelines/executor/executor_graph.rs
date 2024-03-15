@@ -15,10 +15,11 @@
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -31,7 +32,7 @@ use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::Pipeline;
-use log::debug;
+use log::{debug, info};
 use log::trace;
 use minitrace::prelude::*;
 use petgraph::dot::Config;
@@ -148,6 +149,8 @@ const EPOCH_MASK: u64 = 0x00000000FFFFFFFF;
 // TODO: Replace with a variable, not a const value
 const MAX_POINTS: u64 = 3;
 
+type ResSender = Option<Sender<Result<(), ErrorCode>>>;
+
 struct ExecutingGraph {
     finished_nodes: AtomicUsize,
     graph: StableGraph<Arc<Node>, EdgeInfo>,
@@ -156,22 +159,29 @@ struct ExecutingGraph {
     /// - the high 32 bit store the number of points that can be consumed
     /// - the low 32 bit store this points belong to which epoch
     points: AtomicU64,
+    query_id: Arc<String>,
+    should_finish: AtomicBool,
+    sender: ResSender,
 }
 
 type StateLockGuard = ExecutingGraph;
 
 impl ExecutingGraph {
-    pub fn create(mut pipeline: Pipeline, init_epoch: u32) -> Result<ExecutingGraph> {
+    pub fn create(mut pipeline: Pipeline, init_epoch: u32, query_id: Arc<String>, sender: ResSender,) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
         Self::init_graph(&mut pipeline, &mut graph);
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
             points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
+            query_id,
+            should_finish: AtomicBool::new(false),
+            sender
         })
     }
 
-    pub fn from_pipelines(mut pipelines: Vec<Pipeline>, init_epoch: u32) -> Result<ExecutingGraph> {
+    pub fn from_pipelines(mut pipelines: Vec<Pipeline>, init_epoch: u32, query_id: Arc<String>,
+                          sender: ResSender,) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
 
         for pipeline in &mut pipelines {
@@ -182,6 +192,9 @@ impl ExecutingGraph {
             finished_nodes: AtomicUsize::new(0),
             graph,
             points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
+            query_id,
+            should_finish: AtomicBool::new(false),
+            sender
         })
     }
 
@@ -465,9 +478,10 @@ impl ScheduleQueue {
         debug_assert!(!context.has_task());
 
         while let Some(processor) = self.async_queue.pop_front() {
+            let query_id = processor.graph.get_query_id().clone();
             Self::schedule_async_task(
                 processor,
-                context.query_id.clone(),
+                query_id,
                 executor,
                 context.get_worker_id(),
                 context.get_workers_condvar().clone(),
@@ -550,9 +564,10 @@ impl ScheduleQueue {
                 .graph
                 .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
             {
+                let query_id = processor.graph.get_query_id().clone();
                 Self::schedule_async_task_with_condition(
                     processor,
-                    context.query_id.clone(),
+                    query_id,
                     executor,
                     context.get_worker_id(),
                     context.get_workers_condvar().clone(),
@@ -636,14 +651,14 @@ impl ScheduleQueue {
 pub struct RunningGraph(ExecutingGraph);
 
 impl RunningGraph {
-    pub fn create(pipeline: Pipeline, init_epoch: u32) -> Result<Arc<RunningGraph>> {
-        let graph_state = ExecutingGraph::create(pipeline, init_epoch)?;
+    pub fn create(pipeline: Pipeline, init_epoch: u32, query_id: Arc<String>, sender: ResSender,) -> Result<Arc<RunningGraph>> {
+        let graph_state = ExecutingGraph::create(pipeline, init_epoch, query_id, sender)?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
     }
 
-    pub fn from_pipelines(pipelines: Vec<Pipeline>, init_epoch: u32) -> Result<Arc<RunningGraph>> {
-        let graph_state = ExecutingGraph::from_pipelines(pipelines, init_epoch)?;
+    pub fn from_pipelines(pipelines: Vec<Pipeline>, init_epoch: u32, query_id: Arc<String>, sender: ResSender,) -> Result<Arc<RunningGraph>> {
+        let graph_state = ExecutingGraph::from_pipelines(pipelines, init_epoch, query_id, sender)?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
     }
@@ -711,9 +726,32 @@ impl RunningGraph {
         }
     }
 
+    /// Checks if all nodes in the graph are finished.
+    pub fn is_all_nodes_finished(&self) -> bool {
+        info!("Finished: {:?}/{:?}", self.0.finished_nodes.load(Ordering::SeqCst), self.0.graph.node_count());
+        self.0.finished_nodes.load(Ordering::SeqCst) >= self.0.graph.node_count()
+    }
+
+    /// Flag the graph should finish and no more tasks should be scheduled.
+    pub fn should_finish(&self, cause: Result<(), ErrorCode>) {
+        self.0.should_finish.store(true, Ordering::SeqCst);
+        if let Some(sender) = &self.0.sender{
+            sender.send(Ok(())).unwrap()
+        }
+    }
+
+    /// Checks if the graph should finish and no more tasks should be scheduled.
+    pub fn is_should_finish(&self) -> bool {
+        self.0.should_finish.load(Ordering::SeqCst)
+    }
+
     /// Checks if a task can be performed in the current epoch, consuming a point if possible.
     pub fn can_perform_task(&self, global_epoch: u32, max_points: u64) -> bool {
         self.0.can_perform_task(global_epoch, max_points)
+    }
+
+    pub fn get_query_id(&self) -> Arc<String> {
+        self.0.query_id.clone()
     }
 
     pub fn format_graph_nodes(&self) -> String {

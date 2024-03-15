@@ -67,7 +67,6 @@ impl CompletedAsyncTask {
 }
 
 pub struct ExecutorWorkerContext {
-    pub query_id: Arc<String>,
     worker_id: usize,
     task: ExecutorTask,
     workers_condvar: Arc<WorkersCondvar>,
@@ -77,10 +76,8 @@ impl ExecutorWorkerContext {
     pub fn create(
         worker_id: usize,
         workers_condvar: Arc<WorkersCondvar>,
-        query_id: Arc<String>,
     ) -> Self {
         ExecutorWorkerContext {
-            query_id,
             worker_id,
             workers_condvar,
             task: ExecutorTask::None,
@@ -158,7 +155,7 @@ impl ExecutorWorkerContext {
         unsafe {
             let workers_condvar = self.workers_condvar.clone();
             workers_condvar.inc_active_async_worker();
-            let query_id = self.query_id.clone();
+            let query_id = proc.graph.get_query_id().clone();
             let wakeup_worker_id = self.worker_id;
             let process_future = proc.processor.async_process();
             let graph = proc.graph;
