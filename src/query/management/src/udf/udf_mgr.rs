@@ -22,6 +22,7 @@ use databend_common_meta_app::principal::UdfName;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
@@ -29,6 +30,7 @@ use databend_common_meta_types::NonEmptyStr;
 use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
+use futures::TryStreamExt;
 
 use crate::udf::UdfApiError;
 use crate::udf::UdfError;
@@ -122,8 +124,19 @@ impl UdfMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
     pub async fn list_udf(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
+        let key = DirName::new(UdfName::new(self.tenant.as_str(), ""));
+        let strm = self.kv_api.list_pb_values(&key).await?;
+
+        match strm.try_collect().await {
+            Ok(udfs) => Ok(udfs),
+            Err(_) => self.list_udf_fallback().await,
+        }
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    pub async fn list_udf_fallback(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
         let key = UdfName::new(&self.tenant, "");
-        // TODO: use list_kv instead.
         let values = self.kv_api.prefix_list_kv(&key.to_string_key()).await?;
 
         let mut udfs = Vec::with_capacity(values.len());
@@ -133,7 +146,10 @@ impl UdfMgr {
         for (name, value) in values {
             let udf = crate::deserialize_struct(&value.data, ErrorCode::IllegalUDFFormat, || {
                 format!(
-                    "Failed to deserialize UDF '{}': data format is corrupt or invalid.",
+                    "Encountered invalid json data for LambdaUDF '{}', \
+                please drop this invalid udf and re-create it. \n\
+                Example: `DROP FUNCTION <invalid_udf>;` then `CREATE FUNCTION <invalid_udf> AS <udf_definition>;`\n\
+                ",
                     name
                 )
             })?;

@@ -75,10 +75,12 @@ impl UserApiProvider {
     pub async fn list_udf(&self, tenant: &NonEmptyString) -> Result<Vec<UserDefinedFunction>> {
         let udf_api = self.udf_api(tenant);
 
-        match udf_api.list_udf().await {
-            Err(e) => Err(e.add_message_back("(while list UDFs).")),
-            Ok(seq_udfs_info) => Ok(seq_udfs_info),
-        }
+        let udfs = udf_api
+            .list_udf()
+            .await
+            .map_err(|e| e.add_message_back("while list UDFs"))?;
+
+        Ok(udfs)
     }
 
     // Drop a UDF by name.
