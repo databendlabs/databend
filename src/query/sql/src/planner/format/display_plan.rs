@@ -139,11 +139,7 @@ impl Plan {
                 match &insert.source {
                     InsertInputSource::SelectPlan(plan) => {
                         if let Plan::Query {
-                            s_expr,
-                            metadata,
-                            bind_context,
-                            formatted_ast,
-                            ..
+                            s_expr, metadata, ..
                         } = &**plan
                         {
                             let metadata = &*metadata.read();
@@ -151,14 +147,12 @@ impl Plan {
                             children.push(sub_tree);
                         }
                     }
-                    InsertInputSource::StreamingWithFormat(_, _, _) => {
-                        todo!()
-                    }
+                    InsertInputSource::StreamingWithFormat(_, _, _) => {}
                     InsertInputSource::StreamingWithFileFormat {
                         format,
-                        on_error_mode,
                         start,
                         input_context_option,
+                        ..
                     } => {
                         let mut file_format_children = vec![
                             FormatTreeNode::new(format!("file format:  {}", format)),
@@ -193,6 +187,11 @@ impl Plan {
                         }
                     },
                     InsertInputSource::Stage(stage_plan) => {
+                        let mut stage_children =
+                            vec![FormatTreeNode::new(stage_plan.format_indent(verbose)?)];
+                        let sub_tree =
+                            FormatTreeNode::with_children(format!("Stage"), stage_children);
+                        children.push(sub_tree);
                         todo!()
                     }
                 }
