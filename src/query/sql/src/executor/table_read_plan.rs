@@ -62,7 +62,7 @@ pub trait ToReadDataSourcePlan {
         push_downs: Option<PushDownInfo>,
         dry_run: bool,
     ) -> Result<DataSourcePlan> {
-        self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs, None, dry_run)
+        self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs, None, false, dry_run)
             .await
     }
 
@@ -72,6 +72,7 @@ pub trait ToReadDataSourcePlan {
         catalog: String,
         push_downs: Option<PushDownInfo>,
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
+        update_stream_columns: bool,
         dry_run: bool,
     ) -> Result<DataSourcePlan>;
 }
@@ -85,6 +86,7 @@ impl ToReadDataSourcePlan for dyn Table {
         catalog: String,
         push_downs: Option<PushDownInfo>,
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
+        update_stream_columns: bool,
         dry_run: bool,
     ) -> Result<DataSourcePlan> {
         let catalog_info = ctx.get_catalog(&catalog).await?.info();
@@ -294,7 +296,7 @@ impl ToReadDataSourcePlan for dyn Table {
             push_downs,
             query_internal_columns: internal_columns.is_some(),
             base_block_ids,
-            update_stream_columns: false,
+            update_stream_columns,
             data_mask_policy,
             // Set a dummy id, will be set real id later
             table_index: usize::MAX,
