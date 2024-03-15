@@ -318,3 +318,71 @@ select * from target_build_optimization order by a,b,c;
 
 statement ok
 set enable_experimental_merge_into = 0;
+
+
+## test explain and target build optimization
+statement ok
+set enable_experimental_merge_into = 1;
+
+statement ok
+set join_spilling_memory_ratio = 0;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+create table t1(a int, b int);
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t2(a int, b int);
+
+statement ok
+drop stream if exists s1;
+
+statement ok
+create stream s1 on table t1 append_only = false;
+
+statement ok
+drop stream if exists s2;
+
+statement ok
+create stream s2 on table t1 append_only = true;
+
+statement ok
+insert into t2 values(2,2),(3,3),(4,4);
+
+statement ok
+insert into t1 values(1,1),(2,3),(3,3);
+
+query T
+explain merge into t1 using t2 on t1.a=t2.a when matched then update set t1.b=t2.b when not matched then insert *;
+----
+MergeInto:
+target_table: default.default.t1
+├── distributed: false
+├── target_build_optimization: true
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set b = t2.b (#1),_row_version = plus(t1._row_version (#7), 1)]
+├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS Int32 NULL))]
+└── Join(Left)
+    ├── build keys: [t1.a (#2)]
+    ├── probe keys: [t2.a (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.t2
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.t1
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+query TT
+merge into t1 using t2 on t1.a=t2.a when matched then update set t1.b=t2.b when not matched then insert *;
+----
+1 2
