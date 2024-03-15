@@ -70,7 +70,6 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
                 max_files: Default::default(),
                 split_size: Default::default(),
                 purge: Default::default(),
-                purge_duplicated: Default::default(),
                 force: Default::default(),
                 disable_variant_check: Default::default(),
                 on_error: "abort".to_string(),
@@ -167,10 +166,6 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
         map(rule! { PURGE ~ "=" ~ #literal_bool }, |(_, _, purge)| {
             CopyIntoTableOption::Purge(purge)
         }),
-        map(
-            rule! { PURGE_DUPLICATED ~ "=" ~ #literal_bool },
-            |(_, _, purge_duplicated)| CopyIntoTableOption::PurgeDuplicated(purge_duplicated),
-        ),
         map(rule! { FORCE ~ "=" ~ #literal_bool }, |(_, _, force)| {
             CopyIntoTableOption::Force(force)
         }),

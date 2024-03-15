@@ -258,11 +258,6 @@ pub(crate) fn pretty_copy_into_table(copy_stmt: CopyIntoTableStmt) -> RcDoc<'sta
         )
         .append(
             RcDoc::line()
-                .append(RcDoc::text("PURGE_DUPLICATED = "))
-                .append(RcDoc::text(format!("{}", copy_stmt.purge_duplicated))),
-        )
-        .append(
-            RcDoc::line()
                 .append(RcDoc::text("DISABLE_VARIANT_CHECK = "))
                 .append(RcDoc::text(format!("{}", copy_stmt.disable_variant_check))),
         )

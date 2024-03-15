@@ -853,11 +853,6 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let purge_name_node = FormatTreeNode::new(purge_name_ctx);
         children.push(purge_name_node);
 
-        let purge_duplicated_name = format!("PurgeDuplicated {}", copy.purge_duplicated);
-        let purge_duplicated_ctx = AstFormatContext::new(purge_duplicated_name);
-        let purge_duplicated_node = FormatTreeNode::new(purge_duplicated_ctx);
-        children.push(purge_duplicated_node);
-
         let disable_variant_check = format!("DisableVariantCheck {}", copy.disable_variant_check);
         let disable_variant_check_ctx = AstFormatContext::new(disable_variant_check);
         let disable_variant_check_node = FormatTreeNode::new(disable_variant_check_ctx);
