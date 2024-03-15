@@ -24,16 +24,13 @@ use databend_query::sessions::QueueData;
 use databend_query::sessions::QueueManager;
 
 #[derive(Debug)]
-struct TestData {
-    query_id: String,
-    create_time: SystemTime,
-}
+struct TestData(String);
 
 impl QueueData for TestData {
     type Key = String;
 
     fn get_key(&self) -> Self::Key {
-        self.query_id.clone()
+        self.0.clone()
     }
 
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {
@@ -42,19 +39,6 @@ impl QueueData for TestData {
 
     fn timeout(&self) -> Duration {
         Duration::from_secs(1000)
-    }
-
-    fn get_elapsed_time(&self) -> Duration {
-        self.create_time.elapsed().unwrap()
-    }
-}
-
-impl TestData {
-    fn new(query_id: String) -> Self {
-        TestData {
-            query_id,
-            create_time: SystemTime::now(),
-        }
     }
 }
 
@@ -79,7 +63,7 @@ async fn test_serial_acquire() -> Result<()> {
             databend_common_base::runtime::spawn(async move {
                 barrier.wait().await;
                 let _guard = queue
-                    .acquire(TestData::new(format!("TestData{}", index)))
+                    .acquire(TestData(format!("TestData{}", index)))
                     .await?;
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 Result::<(), ErrorCode>::Ok(())
@@ -117,7 +101,7 @@ async fn test_concurrent_acquire() -> Result<()> {
             databend_common_base::runtime::spawn(async move {
                 barrier.wait().await;
                 let _guard = queue
-                    .acquire(TestData::new(format!("TestData{}", index)))
+                    .acquire(TestData(format!("TestData{}", index)))
                     .await?;
 
                 tokio::time::sleep(Duration::from_secs(1)).await;
@@ -156,7 +140,7 @@ async fn test_list_acquire() -> Result<()> {
             databend_common_base::runtime::spawn(async move {
                 barrier.wait().await;
                 let _guard = queue
-                    .acquire(TestData::new(format!("TestData{}", index)))
+                    .acquire(TestData(format!("TestData{}", index)))
                     .await?;
 
                 tokio::time::sleep(Duration::from_secs(10)).await;

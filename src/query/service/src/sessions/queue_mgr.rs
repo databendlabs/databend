@@ -54,8 +54,6 @@ pub trait QueueData: Send + Sync + 'static {
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode;
 
     fn timeout(&self) -> Duration;
-
-    fn get_elapsed_time(&self) -> Duration;
 }
 
 pub(crate) struct Inner<Data: QueueData> {
@@ -116,8 +114,28 @@ impl<Data: QueueData> QueueManager<Data> {
             tokio::time::timeout(timeout, self.semaphore.clone().acquire_owned()),
             self.clone(),
         );
+        let start_time = SystemTime::now();
 
-        future.await
+        match future.await {
+            Ok(v) => {
+                record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
+                Ok(v)
+            }
+            Err(e) => {
+                match e.code() {
+                    ErrorCode::ABORTED_QUERY => {
+                        incr_session_queue_abort_count();
+                    }
+                    ErrorCode::TIMEOUT => {
+                        incr_session_queue_acquire_timeout_count();
+                    }
+                    _ => {
+                        incr_session_queue_acquire_error_count();
+                    }
+                }
+                Err(e)
+            }
+        }
     }
 
     pub(crate) fn add_entity(&self, inner: Inner<Data>) -> Data::Key {
@@ -187,7 +205,6 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
         let this = self.project();
 
         if this.is_abort.load(Ordering::SeqCst) {
-            incr_session_queue_abort_count();
             return Poll::Ready(Err(Data::remove_error_message(this.key.take())));
         }
 
@@ -195,32 +212,14 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
             Poll::Ready(res) => {
                 if let Some(key) = this.key.take() {
                     if this.manager.remove_entity(&key).is_none() {
-                        incr_session_queue_abort_count();
                         return Poll::Ready(Err(Data::remove_error_message(Some(key))));
                     }
                 }
 
                 Poll::Ready(match res {
-                    Ok(Ok(v)) => {
-                        if let Some(data) = this.data {
-                            let queue_time = data.get_elapsed_time();
-                            info!(
-                                "acquire query {} from queue success: {} ms",
-                                data.get_key(),
-                                queue_time.as_millis()
-                            );
-                            record_session_queue_acquire_duration_ms(queue_time);
-                        }
-                        Ok(AcquireQueueGuard::create(v))
-                    }
-                    Ok(Err(_)) => {
-                        incr_session_queue_acquire_error_count();
-                        Err(ErrorCode::TokioError("acquire queue failure."))
-                    }
-                    Err(_elapsed) => {
-                        incr_session_queue_acquire_timeout_count();
-                        Err(ErrorCode::Timeout("query queuing timeout"))
-                    }
+                    Ok(Ok(v)) => Ok(AcquireQueueGuard::create(v)),
+                    Ok(Err(_)) => Err(ErrorCode::TokioError("acquire queue failure.")),
+                    Err(_elapsed) => Err(ErrorCode::Timeout("query queuing timeout")),
                 })
             }
             Poll::Pending => {
@@ -284,12 +283,6 @@ impl QueueData for QueryEntry {
 
     fn timeout(&self) -> Duration {
         self.timeout
-    }
-
-    fn get_elapsed_time(&self) -> Duration {
-        self.create_time
-            .elapsed()
-            .unwrap_or_else(|_| Duration::from_secs(0))
     }
 }
 
