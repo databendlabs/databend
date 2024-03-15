@@ -27,6 +27,8 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateTableIndexReply;
+use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
@@ -37,6 +39,8 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableIndexReply;
+use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
@@ -189,8 +193,20 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Get the table name by meta id.
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String>;
 
-    // Get the db name by meta id.
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String>;
+    // List the tables name by meta ids.
+    async fn mget_table_names_by_ids(
+        &self,
+        table_ids: &[MetaId],
+    ) -> databend_common_exception::Result<Vec<String>>;
+
+    // Mget the db name by meta id.
+    async fn get_db_name_by_id(&self, db_ids: MetaId) -> databend_common_exception::Result<String>;
+
+    // Mget the dbs name by meta ids.
+    async fn mget_database_names_by_ids(
+        &self,
+        db_ids: &[MetaId],
+    ) -> databend_common_exception::Result<Vec<String>>;
 
     // Get one table by db and table name.
     async fn get_table(
@@ -264,6 +280,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply>;
 
+    async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<CreateTableIndexReply>;
+
+    async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply>;
+
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply>;
 
     async fn get_table_copied_file_info(
@@ -318,15 +338,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         unimplemented!()
     }
 
-    async fn stream_source_table(
-        &self,
-        _stream_desc: &str,
-        _tenant: &str,
-        _db_name: &str,
-        _source_table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
+    fn get_stream_source_table(&self, _stream_desc: &str) -> Result<Option<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(
-            "'stream_source_table' not implemented",
+            "'get_stream_source_table' not implemented",
         ))
+    }
+
+    fn cache_stream_source_table(&self, _stream: TableInfo, _source: TableInfo) {
+        unimplemented!()
     }
 }

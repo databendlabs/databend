@@ -6,13 +6,19 @@ from concurrent import futures
 from grpc_reflection.v1alpha import reflection
 from google.protobuf import json_format
 from datetime import datetime, timezone
-
+import calendar
 import task_pb2
 import task_pb2_grpc
+import notification_pb2
+import notification_pb2_grpc
+import timestamp_pb2
 
 # Simple in-memory database
 TASK_DB = {}
 TASK_RUN_DB = {}
+
+NOTIFICATION_DB = {}
+NOTIFICATION_HISTORY_DB = {}
 
 
 def load_data_from_json():
@@ -26,6 +32,20 @@ def load_data_from_json():
                 task = task_pb2.Task()
                 json_format.ParseDict(task_run_data["Task"], task)
                 TASK_DB[task.task_name] = task
+    notification_history_directory_path = os.path.join(
+        script_directory, "testdata", "notification_history"
+    )
+    for file_name in os.listdir(notification_history_directory_path):
+        if file_name.endswith(".json"):
+            with open(
+                os.path.join(notification_history_directory_path, file_name), "r"
+            ) as f:
+                notification_history_data = json.load(f)
+                notification_history = notification_pb2.NotificationHistory()
+                json_format.ParseDict(notification_history_data, notification_history)
+                NOTIFICATION_HISTORY_DB[
+                    notification_history.name
+                ] = notification_history
 
 
 def create_task_request_to_task(id, create_task_request):
@@ -46,6 +66,7 @@ def create_task_request_to_task(id, create_task_request):
     task.suspend_task_after_num_failures = (
         create_task_request.suspend_task_after_num_failures
     )
+    task.error_integration = create_task_request.error_integration
 
     task.when_condition = (
         create_task_request.when_condition
@@ -58,6 +79,31 @@ def create_task_request_to_task(id, create_task_request):
     # add session parameters
     task.session_parameters.update(create_task_request.session_parameters)
     return task
+
+
+def create_notification_request_to_notification(id, create_notification_request):
+    # Convert CreateNotification to dictionary
+    notification = notification_pb2.Notification()
+
+    notification.name = create_notification_request.name
+    notification.notification_id = id
+    notification.notification_type = create_notification_request.notification_type
+    notification.enabled = create_notification_request.enabled
+    notification.webhook_url = create_notification_request.webhook_url
+    notification.webhook_method = create_notification_request.webhook_method
+    notification.webhook_authorization_header = (
+        create_notification_request.webhook_authorization_header
+    )
+    notification.comments = create_notification_request.comments
+    t = timestamp_pb2.Timestamp()
+    dt = datetime.utcnow()
+    seconds = calendar.timegm(dt.utctimetuple())
+    nanos = dt.microsecond * 1000
+    t.seconds = seconds
+    t.nanos = nanos
+    notification.created_time.CopyFrom(t)
+    notification.updated_time.CopyFrom(t)
+    return notification
 
 
 def get_root_task_id(task):
@@ -211,6 +257,9 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
                     request.suspend_task_after_num_failures
                 )
                 has_options = True
+            if request.HasField("error_integration"):
+                task.error_integration = request.error_integration
+                has_options = True
             if request.set_session_parameters:
                 task.session_parameters.update(request.session_parameters)
                 has_options = True
@@ -280,12 +329,106 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
         return task_pb2.EnableTaskDependentsResponse()
 
 
+class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
+    def CreateNotification(self, request, context):
+        print("CreateTask", request)
+        name = request.name
+        if name in NOTIFICATION_DB and request.if_not_exists is False:
+            return notification_pb2.CreateNotificationResponse(
+                error=notification_pb2.NotificationError(
+                    kind="ALREADY_EXISTS", message="Notification already exists", code=6
+                )
+            )
+        notification_id = len(NOTIFICATION_DB) + 1
+        NOTIFICATION_DB[name] = create_notification_request_to_notification(
+            notification_id, request
+        )
+        return notification_pb2.CreateNotificationResponse(
+            notification_id=notification_id
+        )
+
+    def GetNotification(self, request, context):
+        print("GetNotification", request)
+        name = request.name
+        if name not in NOTIFICATION_DB:
+            return notification_pb2.GetNotificationResponse(
+                error=notification_pb2.NotificationError(
+                    kind="NOT_FOUND", message="Notification not found", code=5
+                )
+            )
+        notification = NOTIFICATION_DB[name]
+        return notification_pb2.GetNotificationResponse(notification=notification)
+
+    def ListNotification(self, request, context):
+        print("ListNotification", request)
+        notifications = list(NOTIFICATION_DB.values())
+        return notification_pb2.ListNotificationResponse(notifications=notifications)
+
+    def AlterNotification(self, request, context):
+        print("AlterNotification", request)
+        name = request.name
+        if name not in NOTIFICATION_DB:
+            return notification_pb2.AlterNotificationResponse(
+                error=notification_pb2.NotificationError(
+                    kind="NOT_FOUND", message="Notification not found", code=5
+                )
+            )
+        notification = NOTIFICATION_DB[name]
+        if request.operation_type == "SET":
+            if request.HasField("enabled"):
+                notification.enabled = request.enabled
+            if request.HasField("webhook_url"):
+                notification.webhook_url = request.webhook_url
+            if request.HasField("webhook_method"):
+                notification.webhook_method = request.webhook_method
+            if request.HasField("webhook_authorization_header"):
+                notification.webhook_authorization_header = (
+                    request.webhook_authorization_header
+                )
+            if request.HasField("comments"):
+                notification.comments = request.comments
+        return notification_pb2.AlterNotificationResponse(
+            notification_id=notification.notification_id
+        )
+
+    def DropNotification(self, request, context):
+        print("DropNotification", request)
+        name = request.name
+        if name not in NOTIFICATION_DB:
+            return notification_pb2.DropNotificationResponse()
+        del NOTIFICATION_DB[name]
+        return notification_pb2.DropNotificationResponse()
+
+    def ListNotificationHistory(self, request, context):
+        print("ListNotificationHistory", request)
+        notification_histories = list(NOTIFICATION_HISTORY_DB.values())
+
+        if (
+            request.HasField("result_limit")
+            and len(notification_histories) > request.result_limit
+        ):
+            print("Limiting result to", request.result_limit)
+            notification_histories = notification_histories[: request.result_limit]
+        return notification_pb2.ListNotificationHistoryResponse(
+            notification_histories=notification_histories
+        )
+
+
+def timestamp_to_datetime(timestamp):
+    # Convert google.protobuf.Timestamp to Python datetime
+    return datetime.fromtimestamp(timestamp.seconds + timestamp.nanos / 1e9)
+
+
 def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=20))
     task_pb2_grpc.add_TaskServiceServicer_to_server(TaskService(), server)
+    notification_pb2_grpc.add_NotificationServiceServicer_to_server(
+        NotificationService(), server
+    )
     # Add reflection service
     SERVICE_NAMES = (
         task_pb2.DESCRIPTOR.services_by_name["TaskService"].full_name,
+        notification_pb2.DESCRIPTOR.services_by_name["NotificationService"].full_name,
         reflection.SERVICE_NAME,
     )
     reflection.enable_server_reflection(SERVICE_NAMES, server)

@@ -698,13 +698,17 @@ pub enum CompactTarget {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTableOption {
     #[drive(skip)]
-    pub dry_run: bool,
+    // Some(true) means dry run with summary option
+    pub dry_run: Option<bool>,
 }
 
 impl Display for VacuumTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if self.dry_run {
+        if let Some(summary) = self.dry_run {
             write!(f, "DRY RUN")?;
+            if summary {
+                write!(f, " SUMMARY")?;
+            }
         }
         Ok(())
     }
@@ -713,15 +717,19 @@ impl Display for VacuumTableOption {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumDropTableOption {
     #[drive(skip)]
-    pub dry_run: bool,
+    // Some(true) means dry run with summary option
+    pub dry_run: Option<bool>,
     #[drive(skip)]
     pub limit: Option<usize>,
 }
 
 impl Display for VacuumDropTableOption {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if self.dry_run {
+        if let Some(summary) = self.dry_run {
             write!(f, "DRY RUN")?;
+            if summary {
+                write!(f, " SUMMARY")?;
+            }
         }
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {}", limit)?;
@@ -751,7 +759,7 @@ impl Display for OptimizeTableAction {
             OptimizeTableAction::Compact { target } => {
                 match target {
                     CompactTarget::Block => {
-                        write!(f, "COMPACT BLOCK")?;
+                        write!(f, "COMPACT")?;
                     }
                     CompactTarget::Segment => {
                         write!(f, "COMPACT SEGMENT")?;

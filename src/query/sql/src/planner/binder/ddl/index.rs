@@ -12,22 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::walk_statement_mut;
+use std::collections::HashSet;
+
 use databend_common_ast::ast::CreateIndexStmt;
+use databend_common_ast::ast::CreateInvertedIndexStmt;
 use databend_common_ast::ast::DropIndexStmt;
+use databend_common_ast::ast::DropInvertedIndexStmt;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::RefreshIndexStmt;
+use databend_common_ast::ast::RefreshInvertedIndexStmt;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::ast::Visitor;
-use databend_common_ast::ast::VisitorMut;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::TableDataType;
 use databend_common_license::license::Feature::AggregateIndex;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -36,14 +39,19 @@ use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::NonEmptyString;
 use databend_storages_common_table_meta::meta::Location;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 
 use crate::binder::Binder;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
 use crate::plans::CreateIndexPlan;
+use crate::plans::CreateTableIndexPlan;
 use crate::plans::DropIndexPlan;
+use crate::plans::DropTableIndexPlan;
 use crate::plans::Plan;
 use crate::plans::RefreshIndexPlan;
+use crate::plans::RefreshTableIndexPlan;
 use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
@@ -142,6 +150,7 @@ impl Binder {
 
         Ok(())
     }
+
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_index(
         &mut self,
@@ -159,7 +168,7 @@ impl Binder {
         // check if query support index
         {
             let mut agg_index_checker = AggregatingIndexChecker::default();
-            agg_index_checker.visit_query(query);
+            query.drive(&mut agg_index_checker);
             if !agg_index_checker.is_supported() {
                 return Err(ErrorCode::UnsupportedIndex(format!(
                     "Currently create aggregating index just support simple query, like: {}, \
@@ -177,7 +186,7 @@ impl Binder {
         let mut query = query.clone();
         // TODO(ariesdevil): unify the checker and rewriter.
         let mut agg_index_rewritter = AggregatingIndexRewriter::new(self.dialect);
-        agg_index_rewritter.visit_query(&mut query);
+        query.drive_mut(&mut agg_index_rewritter);
 
         let index_name = self.normalize_object_identifier(index_name);
 
@@ -304,7 +313,7 @@ impl Binder {
 
         // And we will rewrite the agg function to agg state func in this rewriter.
         let mut index_rewriter = RefreshAggregatingIndexRewriter::default();
-        walk_statement_mut(&mut index_rewriter, &mut stmt);
+        stmt.drive_mut(&mut index_rewriter);
 
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
@@ -355,5 +364,137 @@ impl Binder {
                 }
             }
         }
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_create_inverted_index(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &CreateInvertedIndexStmt,
+    ) -> Result<Plan> {
+        let CreateInvertedIndexStmt {
+            create_option,
+            index_name,
+            catalog,
+            database,
+            table,
+            columns,
+            sync_creation,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        let table = self.ctx.get_table(&catalog, &database, &table).await?;
+        if !table.support_index() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table engine {} does not support create inverted index",
+                table.engine()
+            )));
+        }
+        let table_schema = table.schema();
+        let mut column_set = HashSet::with_capacity(columns.len());
+        let mut column_ids = Vec::with_capacity(columns.len());
+        for column in columns {
+            match table_schema.field_with_name(&column.name) {
+                Ok(field) => {
+                    if field.data_type.remove_nullable() != TableDataType::String {
+                        return Err(ErrorCode::UnsupportedIndex(format!(
+                            "Inverted index currently only support String type, but the type of column {} is {}",
+                            column, field.data_type
+                        )));
+                    }
+                    if column_set.contains(&column.name) {
+                        return Err(ErrorCode::UnsupportedIndex(format!(
+                            "Inverted index column must be unique, but column {} is duplicate",
+                            column.name
+                        )));
+                    }
+                    column_set.insert(column.name.clone());
+                    column_ids.push(field.column_id);
+                }
+                Err(_) => {
+                    return Err(ErrorCode::UnsupportedIndex(format!(
+                        "Table does not have column {}",
+                        column
+                    )));
+                }
+            }
+        }
+        let table_id = table.get_id();
+        let index_name = self.normalize_object_identifier(index_name);
+
+        let plan = CreateTableIndexPlan {
+            create_option: *create_option,
+            catalog,
+            index_name,
+            column_ids,
+            table_id,
+            sync_creation: *sync_creation,
+        };
+        Ok(Plan::CreateTableIndex(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_drop_inverted_index(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &DropInvertedIndexStmt,
+    ) -> Result<Plan> {
+        let DropInvertedIndexStmt {
+            if_exists,
+            index_name,
+            catalog,
+            database,
+            table,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        let table = self.ctx.get_table(&catalog, &database, &table).await?;
+        if !table.support_index() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table engine {} does not support create inverted index",
+                table.engine()
+            )));
+        }
+        let table_id = table.get_id();
+        let index_name = self.normalize_object_identifier(index_name);
+
+        let plan = DropTableIndexPlan {
+            if_exists: *if_exists,
+            catalog,
+            index_name,
+            table_id,
+        };
+        Ok(Plan::DropTableIndex(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_refresh_inverted_index(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &RefreshInvertedIndexStmt,
+    ) -> Result<Plan> {
+        let RefreshInvertedIndexStmt {
+            index_name,
+            catalog,
+            database,
+            table,
+            limit: _,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+        let index_name = self.normalize_object_identifier(index_name);
+
+        let plan = RefreshTableIndexPlan {
+            catalog,
+            database,
+            table,
+            index_name,
+        };
+        Ok(Plan::RefreshTableIndex(Box::new(plan)))
     }
 }

@@ -149,6 +149,7 @@ build_exceptions! {
     UnknownCatalog(1119),
     UnknownCatalogType(1120),
     UnmatchMaskPolicyReturnType(1121),
+    Timeout(1122),
 
     // Data Related Errors
 
@@ -242,6 +243,7 @@ build_exceptions! {
     InvalidPassword(2215),
     RoleAlreadyExists(2216),
     IllegalRole(2217),
+    IllegalUser(2218),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),

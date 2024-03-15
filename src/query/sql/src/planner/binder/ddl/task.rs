@@ -24,6 +24,7 @@ use databend_common_ast::ast::DropTaskStmt;
 use databend_common_ast::ast::ExecuteTaskStmt;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowTasksStmt;
+use databend_common_ast::ast::TaskSql;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
@@ -39,7 +40,7 @@ use crate::plans::Plan;
 use crate::plans::ShowTasksPlan;
 use crate::Binder;
 
-fn verify_task_sql(sql: &String) -> Result<()> {
+fn verify_single_statement(sql: &String) -> Result<()> {
     let tokens = tokenize_sql(sql.as_str()).map_err(|e| {
         ErrorCode::SyntaxException(format!(
             "syntax error for task formatted sql: {}, error: {:?}",
@@ -53,6 +54,17 @@ fn verify_task_sql(sql: &String) -> Result<()> {
         ))
     })?;
     Ok(())
+}
+fn verify_task_sql(sql: &TaskSql) -> Result<()> {
+    match sql {
+        TaskSql::SingleStatement(stmt) => verify_single_statement(stmt),
+        TaskSql::ScriptBlock(stmts) => {
+            for stmt in stmts {
+                verify_single_statement(stmt)?;
+            }
+            Ok(())
+        }
+    }
 }
 
 fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()> {
@@ -95,6 +107,7 @@ impl Binder {
             comments,
             after,
             when_condition,
+            error_integration,
             sql,
             session_parameters,
         } = stmt;
@@ -119,6 +132,7 @@ impl Binder {
             when_condition: when_condition.clone(),
             comment: comments.clone(),
             session_parameters: session_parameters.clone(),
+            error_integration: error_integration.clone(),
             sql: sql.clone(),
         };
         Ok(Plan::CreateTask(Box::new(plan)))
@@ -141,6 +155,7 @@ impl Binder {
             suspend_task_after_num_failures,
             comments,
             session_parameters,
+            error_integration,
         } = options
         {
             if warehouse.is_none()
@@ -148,6 +163,7 @@ impl Binder {
                 && suspend_task_after_num_failures.is_none()
                 && comments.is_none()
                 && session_parameters.is_none()
+                && error_integration.is_none()
             {
                 return Err(ErrorCode::SyntaxException(
                     "alter task must set at least one option".to_string(),

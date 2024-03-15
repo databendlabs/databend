@@ -129,7 +129,6 @@ AggregateFinal
 ├── aggregate functions: []
 ├── estimated rows: 0.00
 └── AggregatePartial
-    ├── output columns: [#_group_by_key]
     ├── group by: [id]
     ├── aggregate functions: []
     ├── estimated rows: 0.00
@@ -138,7 +137,7 @@ AggregateFinal
         ├── estimated rows: 0.00
         ├── EvalScalar
         │   ├── output columns: [t.id (#0), de (#8)]
-        │   ├── expressions: [if(CAST(is_not_null(sum(tb.de) (#7)) AS Boolean NULL), CAST(assume_not_null(sum(tb.de) (#7)) AS Int64 NULL), true, 0, NULL)]
+        │   ├── expressions: [if(CAST(is_not_null(sum(tb.de) (#7)) AS Boolean NULL), CAST(assume_not_null(sum(tb.de) (#7)) AS Int64 NULL), true, 0, NULL, NULL, NULL)]
         │   ├── estimated rows: 0.00
         │   └── AggregateFinal
         │       ├── output columns: [sum(tb.de) (#7), t.id (#0)]
@@ -146,7 +145,6 @@ AggregateFinal
         │       ├── aggregate functions: [sum(sum(coalesce(t3.val, 0)))]
         │       ├── estimated rows: 0.00
         │       └── AggregatePartial
-        │           ├── output columns: [sum(tb.de) (#7), #_group_by_key]
         │           ├── group by: [id]
         │           ├── aggregate functions: [sum(sum(coalesce(t3.val, 0)))]
         │           ├── estimated rows: 0.00
@@ -163,13 +161,12 @@ AggregateFinal
         │               │   ├── aggregate functions: [sum(sum_arg_0)]
         │               │   ├── estimated rows: 0.00
         │               │   └── AggregatePartial
-        │               │       ├── output columns: [sum(coalesce(t3.val, 0)) (#5), #_group_by_key]
         │               │       ├── group by: [sid]
         │               │       ├── aggregate functions: [sum(sum_arg_0)]
         │               │       ├── estimated rows: 0.00
         │               │       └── EvalScalar
         │               │           ├── output columns: [t2.sid (#1), sum_arg_0 (#4)]
-        │               │           ├── expressions: [if(CAST(is_not_null(t3.val (#2)) AS Boolean NULL), CAST(assume_not_null(t3.val (#2)) AS Int32 NULL), true, 0, NULL)]
+        │               │           ├── expressions: [if(CAST(is_not_null(t3.val (#2)) AS Boolean NULL), CAST(assume_not_null(t3.val (#2)) AS Int32 NULL), true, 0, NULL, NULL, NULL)]
         │               │           ├── estimated rows: 0.00
         │               │           └── TableScan
         │               │               ├── table: default.default.t2
@@ -203,7 +200,6 @@ AggregateFinal
                     ├── aggregate functions: []
                     ├── estimated rows: 0.00
                     └── AggregatePartial
-                        ├── output columns: [#_group_by_key]
                         ├── group by: [id]
                         ├── aggregate functions: []
                         ├── estimated rows: 0.00

@@ -93,6 +93,7 @@ fn test_decode_v32_ndjson_file_format_params() -> anyhow::Result<()> {
             compression: StageFileCompression::Gzip,
             missing_field_as: NullAs::Error,
             null_field_as: NullAs::Null,
+            null_if: vec![],
         })
     };
     common::test_pb_from_to(func_name!(), want())?;

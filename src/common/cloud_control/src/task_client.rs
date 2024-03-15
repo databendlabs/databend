@@ -16,10 +16,8 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use tonic::transport::Channel;
-use tonic::transport::Endpoint;
 use tonic::Request;
 
-use crate::client_config::ClientConfig;
 use crate::pb::task_service_client::TaskServiceClient;
 use crate::pb::AlterTaskRequest;
 use crate::pb::AlterTaskResponse;
@@ -34,39 +32,16 @@ use crate::pb::ExecuteTaskResponse;
 use crate::pb::ShowTasksRequest;
 use crate::pb::ShowTasksResponse;
 
-const TASK_CLIENT_VERSION: &str = "v1";
-const TASK_CLIENT_VERSION_NAME: &str = "TASK_CLIENT_VERSION";
+pub(crate) const TASK_CLIENT_VERSION: &str = "v1";
+pub(crate) const TASK_CLIENT_VERSION_NAME: &str = "TASK_CLIENT_VERSION";
 
 pub struct TaskClient {
     pub task_client: TaskServiceClient<Channel>,
 }
 
-// add necessary metadata and client request setup for auditing and tracing purpose
-pub fn make_request<T>(t: T, config: ClientConfig) -> Request<T> {
-    let mut request = Request::new(t);
-    request.set_timeout(config.get_timeout());
-    let metadata = request.metadata_mut();
-    let config_meta = config.get_metadata().clone();
-    for (k, v) in config_meta {
-        let key = k
-            .parse::<tonic::metadata::MetadataKey<tonic::metadata::Ascii>>()
-            .unwrap();
-        metadata.insert(key, v.parse().unwrap());
-    }
-    metadata.insert(
-        TASK_CLIENT_VERSION_NAME
-            .to_string()
-            .parse::<tonic::metadata::MetadataKey<tonic::metadata::Ascii>>()
-            .unwrap(),
-        TASK_CLIENT_VERSION.to_string().parse().unwrap(),
-    );
-    request
-}
-
 impl TaskClient {
     // TODO: add auth interceptor
-    pub async fn new(endpoint: Endpoint) -> Result<Arc<TaskClient>> {
-        let channel = endpoint.connect_lazy();
+    pub async fn new(channel: Channel) -> Result<Arc<TaskClient>> {
         let task_client = TaskServiceClient::new(channel);
         Ok(Arc::new(TaskClient { task_client }))
     }

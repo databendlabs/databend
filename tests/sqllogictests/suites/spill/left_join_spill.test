@@ -8,10 +8,40 @@ statement ok
 set join_spilling_memory_ratio = 10;
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 1024;
+set join_spilling_bytes_threshold_per_proc = 100;
 
 statement ok
 set disable_join_reorder = 1;
+
+query I
+select
+    c_custkey, count(o_orderkey) as c_count
+from
+    orders
+        left join
+    customer
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+group by
+    c_custkey
+order by c_custkey
+    limit 20;
+----
+101 48
+103 72
+104 28
+106 72
+107 48
+109 100
+110 36
+112 76
+113 68
+115 112
+116 16
+118 72
+119 40
+NULL 299606
+
 
 query I
 select
@@ -48,6 +78,7 @@ order by c_custkey
 19 0
 20 0
 
+#left semi
 query II
 select
     c_custkey
@@ -81,6 +112,7 @@ order by c_custkey
 115
 115
 
+#left anti
 query I
 select
     c_custkey

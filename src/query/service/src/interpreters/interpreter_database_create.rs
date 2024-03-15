@@ -109,7 +109,7 @@ impl Interpreter for CreateDatabaseInterpreter {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "create_database_execute");
 
         let tenant = self.plan.tenant.clone();
-        let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
+        let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let databases = catalog.list_databases(tenant.as_str()).await?;

@@ -103,6 +103,7 @@ use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
@@ -135,7 +136,7 @@ impl QueryContext {
     pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
         debug!("Create QueryContext");
 
-        let tenant = GlobalConfig::instance().query.tenant_id.to_string();
+        let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let query_settings = Settings::create(tenant);
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
@@ -583,7 +584,7 @@ impl TableContext for QueryContext {
     }
 
     fn get_format_settings(&self) -> Result<FormatSettings> {
-        let tz = self.query_settings.get_timezone()?;
+        let tz = self.get_settings().get_timezone()?;
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
@@ -658,6 +659,23 @@ impl TableContext for QueryContext {
     // Get all the processes list info.
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         SessionManager::instance().processes_info()
+    }
+
+    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
+        let queries = QueriesQueueManager::instance()
+            .list()
+            .iter()
+            .map(|x| x.query_id.clone())
+            .collect::<HashSet<_>>();
+
+        SessionManager::instance()
+            .processes_info()
+            .into_iter()
+            .filter(|x| match &x.current_query_id {
+                None => false,
+                Some(query_id) => queries.contains(query_id),
+            })
+            .collect::<Vec<_>>()
     }
 
     // Get Stage Attachment.

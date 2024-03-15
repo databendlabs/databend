@@ -17,7 +17,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
-use databend_common_ast::ast::contain_agg_func;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -80,6 +79,8 @@ use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_users::UserApiProvider;
+use derive_visitor::Drive;
+use derive_visitor::Visitor;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use jsonb::keypath::KeyPath;
@@ -379,7 +380,7 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                if list.len() >= 1024 {
+                if self.ctx.get_cluster().is_empty() && list.len() >= 1024 {
                     if *not {
                         return self
                             .resolve_unary_op(*span, &UnaryOperator::Not, &Expr::InList {
@@ -1712,6 +1713,28 @@ impl<'a> TypeChecker<'a> {
             params
         };
 
+        // Convert the num_buckets of histogram to params
+        let params = if func_name.eq_ignore_ascii_case("histogram")
+            && arguments.len() == 2
+            && params.is_empty()
+        {
+            let max_num_buckets = ConstantExpr::try_from(arguments[1].clone());
+
+            let is_positive_integer = match &max_num_buckets {
+                Ok(v) => v.value.is_positive(),
+                Err(_) => false,
+            } && arg_types[1].is_integer();
+            if !is_positive_integer {
+                return Err(ErrorCode::SemanticError(
+                    "The delimiter of `histogram` must be a constant positive int",
+                ));
+            }
+
+            vec![max_num_buckets.unwrap().value]
+        } else {
+            params
+        };
+
         // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
         let (func_name, distinct) = if func_name.eq_ignore_ascii_case("count") && distinct {
             ("count_distinct", false)
@@ -2362,7 +2385,21 @@ impl<'a> TypeChecker<'a> {
                 let select = &select_stmt.select_list[0];
                 if let SelectTarget::AliasedExpr { expr, .. } = select {
                     // Check if contain aggregation function
-                    contain_agg = Some(contain_agg_func(expr));
+                    #[derive(Visitor)]
+                    #[visitor(ASTFunctionCall(enter))]
+                    struct AggFuncVisitor {
+                        contain_agg: bool,
+                    }
+                    impl AggFuncVisitor {
+                        fn enter_ast_function_call(&mut self, func: &ASTFunctionCall) {
+                            self.contain_agg = self.contain_agg
+                                || AggregateFunctionFactory::instance()
+                                    .contains(func.name.to_string());
+                        }
+                    }
+                    let mut visitor = AggFuncVisitor { contain_agg: false };
+                    expr.drive(&mut visitor);
+                    contain_agg = Some(visitor.contain_agg);
                 }
             }
         }
@@ -2510,34 +2547,18 @@ impl<'a> TypeChecker<'a> {
                 )
             }
             ("ifnull", &[arg_x, arg_y]) => {
-                // Rewrite ifnull(x, y) to if(is_null(x), y, x)
+                // Rewrite ifnull(x, y) to coalesce(x, y)
                 Some(
-                    self.resolve_function(span, "if", vec![], &[
-                        &Expr::IsNull {
-                            span,
-                            expr: Box::new(arg_x.clone()),
-                            not: false,
-                        },
-                        arg_y,
-                        arg_x,
-                    ])
-                    .await,
+                    self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y])
+                        .await,
                 )
             }
             ("nvl", &[arg_x, arg_y]) => {
-                // Rewrite nvl(x, y) to if(is_not_null(x), x, y)
+                // Rewrite nvl(x, y) to coalesce(x, y)
                 // nvl is essentially an alias for ifnull.
                 Some(
-                    self.resolve_function(span, "if", vec![], &[
-                        &Expr::IsNull {
-                            span,
-                            expr: Box::new(arg_x.clone()),
-                            not: true,
-                        },
-                        arg_x,
-                        arg_y,
-                    ])
-                    .await,
+                    self.resolve_function(span, "coalesce", vec![], &[arg_x, arg_y])
+                        .await,
                 )
             }
             ("nvl2", &[arg_x, arg_y, arg_z]) => {
@@ -2616,6 +2637,14 @@ impl<'a> TypeChecker<'a> {
                     new_args.push(is_not_null_expr);
                     new_args.push(assume_not_null_expr);
                 }
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
                 new_args.push(Expr::Literal {
                     span,
                     lit: Literal::Null,

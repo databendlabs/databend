@@ -22,6 +22,8 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::query::*;
 use databend_common_ast::parser::quote::quote_ident;
 use databend_common_ast::parser::quote::unquote_ident;
+use databend_common_ast::parser::script::script_stmt;
+use databend_common_ast::parser::statement::insert_stmt;
 use databend_common_ast::parser::token::*;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Backtrace;
@@ -44,6 +46,8 @@ where
     P: FnMut(Input) -> IResult<O>,
     O: Debug + Display,
 {
+    let src = unindent::unindent(src);
+    let src = src.trim();
     let tokens = tokenize_sql(src).unwrap();
     let backtrace = Backtrace::new();
     let parser = parser;
@@ -102,6 +106,7 @@ fn test_statement() {
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
         r#"CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
+        r#"CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b);"#,
         r#"create table a (c decimal(38, 0))"#,
         r#"create table a (c decimal(38))"#,
         r#"create or replace table a (c decimal(38))"#,
@@ -192,8 +197,7 @@ fn test_statement() {
         r#"select 'stringwith"doublequote'"#,
         r#"select '🦈'"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
-        r#"insert into t (c1, c2) values (1, 2);   "#,
-        r#"insert into table t format json;"#,
+        r#"insert into t (c1, c2) values (1, 2);"#,
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"CREATE STAGE ~"#,
@@ -239,8 +243,10 @@ fn test_statement() {
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
         r#"VACUUM TABLE t;"#,
         r#"VACUUM TABLE t DRY RUN;"#,
+        r#"VACUUM TABLE t DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE;"#,
         r#"VACUUM DROP TABLE DRY RUN;"#,
+        r#"VACUUM DROP TABLE DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
         r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
@@ -524,7 +530,7 @@ fn test_statement() {
         r#"CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
         r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
         // tasks
-        r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)"#,
@@ -532,6 +538,34 @@ fn test_statement() {
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  as
+            BEGIN
+              begin;
+              insert into t values('a;');
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END"#,
+        r#"CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND
+        AS BEGIN
+          MERGE INTO t USING s ON t.c = s.c
+            WHEN MATCHED THEN
+            UPDATE
+                *
+                WHEN NOT MATCHED THEN
+            INSERT
+                *;
+        END"#,
+        r#"CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND
+        AS BEGIN
+          MERGE INTO t USING s ON t.c = s.c
+            WHEN MATCHED THEN
+            UPDATE
+                *
+                WHEN NOT MATCHED THEN
+            INSERT values('a;', 1, "str");
+        END"#,
         r#"ALTER TASK MyTask1 RESUME"#,
         r#"ALTER TASK MyTask1 SUSPEND"#,
         r#"ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'"#,
@@ -540,7 +574,17 @@ fn test_statement() {
         r#"ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 13 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'"#,
         r#"ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'"#,
         r#"ALTER TASK MyTask1 SET DATABASE='newDB', TIMEZONE='America/Los_Angeles'"#,
+        r#"ALTER TASK MyTask1 SET ERROR_INTEGRATION = 'candidate_notifictaion'"#,
         r#"ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()"#,
+        r#"ALTER TASK MyTask2 MODIFY AS
+            BEGIN
+              begin;
+              insert into t values('a;');
+              delete from t where c = ';';
+              vacuum table t;
+              merge into t using s on t.id = s.id when matched then update *;
+              commit;
+            END"#,
         r#"ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION'"#,
         r#"DROP TASK MyTask1"#,
         r#"SHOW TASKS"#,
@@ -562,6 +606,14 @@ fn test_statement() {
         r#"ALTER PIPE mypipe SET PIPE_EXECUTION_PAUSED = true"#,
         r#"DROP PIPE mypipe"#,
         r#"DESC PIPE mypipe"#,
+        // notification
+        r#"CREATE NOTIFICATION INTEGRATION IF NOT EXISTS SampleNotification type = webhook enabled = true webhook = (url = 'https://example.com', method = 'GET', authorization_header = 'bearer auth')"#,
+        r#"CREATE NOTIFICATION INTEGRATION SampleNotification type = webhook enabled = true webhook = (url = 'https://example.com') COMMENT = 'notify'"#,
+        r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET enabled = true"#,
+        r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET webhook = (url = 'https://example.com')"#,
+        r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET comment = '1'"#,
+        r#"DROP NOTIFICATION INTEGRATION SampleNotification"#,
+        r#"DESC NOTIFICATION INTEGRATION SampleNotification"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
@@ -689,6 +741,22 @@ fn test_statement_error() {
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
         writeln!(file, "{}", err.message()).unwrap();
+    }
+}
+
+#[test]
+fn test_raw_insert_stmt() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("raw_insert.txt").unwrap();
+    let cases = &[
+        r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
+        r#"insert into t (c1, c2) values (1, 2);"#,
+        r#"insert into table t format json;"#,
+        r#"insert into table t select * from t2;"#,
+    ];
+
+    for case in cases {
+        run_parser(file, insert_stmt(true), case);
     }
 }
 
@@ -858,7 +926,7 @@ fn test_expr() {
         r#"SUM(salary) OVER ()"#,
         r#"AVG(salary) OVER (PARTITION BY department)"#,
         r#"SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"#,
-        r#"AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) "#,
+        r#"AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)"#,
@@ -908,13 +976,93 @@ fn test_expr_error() {
         r#"CAST(col1)"#,
         r#"a.add(b)"#,
         r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,
-        r#"G.E.B IS NOT NULL AND
-            col1 NOT BETWEEN col2 AND
-                AND 1 + col3 DIV sum(col4)"#,
+        r#"
+            G.E.B IS NOT NULL AND
+                col1 NOT BETWEEN col2 AND
+                    AND 1 + col3 DIV sum(col4)
+        "#,
     ];
 
     for case in cases {
         run_parser(file, expr, case);
+    }
+}
+
+#[test]
+fn test_script() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("script.txt").unwrap();
+
+    let cases = &[
+        r#"LET cost DECIMAL(38, 2) := 100.0"#,
+        r#"LET t1 RESULTSET := SELECT * FROM numbers(100)"#,
+        r#"profit := revenue - cost"#,
+        r#"RETURN profit"#,
+        r#"RETURN"#,
+        r#"
+            FOR i IN REVERSE 1 TO maximum_count DO
+                counter := counter + 1;
+            END FOR label1
+        "#,
+        r#"
+            FOR rec IN resultset DO
+                CONTINUE;
+            END FOR label1
+        "#,
+        r#"
+            WHILE counter < maximum_count DO
+                CONTINUE label1;
+            END WHILE label1
+        "#,
+        r#"
+            REPEAT
+                BREAK;
+            UNTIL counter = maximum_count
+            END REPEAT label1
+        "#,
+        r#"
+            LOOP
+                BREAK label1;
+            END LOOP label1
+        "#,
+        r#"
+            CASE
+                WHEN counter = 1 THEN
+                    counter := counter + 1;
+                WHEN counter = 2 THEN
+                    counter := counter + 2;
+                ELSE
+                    counter := counter + 3;
+            END
+        "#,
+        r#"
+            CASE counter
+                WHEN 1 THEN
+                    counter := counter + 1;
+                WHEN 2 THEN
+                    counter := counter + 2;
+                ELSE
+                    counter := counter + 3;
+            END CASE
+        "#,
+        r#"
+            IF counter = 1 THEN
+                counter := counter + 1;
+            ELSEIF counter = 2 THEN
+                counter := counter + 2;
+            ELSE
+                counter := counter + 3;
+            END IF
+        "#,
+        r#"
+            LOOP
+                SELECT c1, c2 FROM t WHERE c1 = 1;
+            END LOOP
+        "#,
+    ];
+
+    for case in cases {
+        run_parser(file, script_stmt, case);
     }
 }
 

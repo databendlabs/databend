@@ -105,7 +105,7 @@ impl Spiller {
 
     /// Read a certain file to a [`DataBlock`].
     /// We should guarantee that the file is managed by this spiller.
-    pub async fn read_spilled(&self, file: &str) -> Result<(DataBlock, u64)> {
+    pub async fn read_spilled_file(&self, file: &str) -> Result<(DataBlock, u64)> {
         debug_assert!(self.columns_layout.contains_key(file));
         let data = self.operator.read(file).await?;
         let bytes = data.len() as u64;
@@ -177,12 +177,12 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_data(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
+    pub async fn read_spilled_partition(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
         debug_assert!(self.partition_location.contains_key(p_id));
-        let files = self.partition_location.get(p_id).unwrap();
+        let files = self.partition_location.get(p_id).unwrap().to_vec();
         let mut spilled_data = Vec::with_capacity(files.len());
         for file in files.iter() {
-            let (block, _) = self.read_spilled(file).await?;
+            let (block, _) = self.read_spilled_file(file).await?;
             if block.num_rows() != 0 {
                 spilled_data.push(block);
             }
@@ -194,12 +194,16 @@ impl Spiller {
     // Directly spill input data without buffering.
     // Need to compute hashes for data block advanced.
     // For probe, only need to spill rows in build spilled partitions.
+    // For left-related join, need to record rows not in build spilled partitions.
     pub(crate) async fn spill_input(
         &mut self,
         data_block: DataBlock,
         hashes: &[u64],
+        left_related_join: bool,
         spilled_partitions: Option<&HashSet<u8>>,
-    ) -> Result<()> {
+    ) -> Result<Option<DataBlock>> {
+        // Save the row index which is not spilled.
+        let mut unspilled_row_index = Vec::with_capacity(data_block.num_rows());
         // Key is partition, value is row indexes
         let mut partition_rows = HashMap::new();
         // Classify rows to spill or not spill.
@@ -208,6 +212,9 @@ impl Spiller {
                 get_partition_id(*hash as usize, self.join_spilling_partition_bits) as u8;
             if let Some(spilled_partitions) = spilled_partitions {
                 if !spilled_partitions.contains(&partition_id) {
+                    if left_related_join {
+                        unspilled_row_index.push(row_idx);
+                    }
                     continue;
                 }
             }
@@ -230,7 +237,22 @@ impl Spiller {
             // Spill block with partition id
             self.spill_with_partition(*p_id, block).await?;
         }
-        Ok(())
+        if !left_related_join {
+            return Ok(None);
+        }
+        let unspilled_block_row_indexes = unspilled_row_index
+            .iter()
+            .map(|idx| (0_u32, *idx as u32, 1_usize))
+            .collect::<Vec<_>>();
+        Ok(Some(DataBlock::take_blocks(
+            &[data_block.clone()],
+            &unspilled_block_row_indexes,
+            unspilled_row_index.len(),
+        )))
+    }
+
+    pub(crate) fn spilled_files(&self) -> Vec<String> {
+        self.columns_layout.keys().cloned().collect()
     }
 }
 

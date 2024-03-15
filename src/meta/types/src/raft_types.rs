@@ -67,11 +67,13 @@ pub type Fatal = openraft::error::Fatal<NodeId>;
 pub type ChangeMembershipError = openraft::error::ChangeMembershipError<NodeId>;
 pub type ClientWriteError = openraft::error::ClientWriteError<NodeId, MembershipNode>;
 pub type InitializeError = openraft::error::InitializeError<NodeId, MembershipNode>;
+pub type StreamingError<E> = openraft::error::StreamingError<TypeConfig, E>;
 
 pub type AppendEntriesRequest = openraft::raft::AppendEntriesRequest<TypeConfig>;
 pub type AppendEntriesResponse = openraft::raft::AppendEntriesResponse<NodeId>;
 pub type InstallSnapshotRequest = openraft::raft::InstallSnapshotRequest<TypeConfig>;
 pub type InstallSnapshotResponse = openraft::raft::InstallSnapshotResponse<NodeId>;
+pub type SnapshotResponse = openraft::raft::SnapshotResponse<NodeId>;
 pub type InstallSnapshotError = openraft::error::InstallSnapshotError;
 pub type VoteRequest = openraft::raft::VoteRequest<NodeId>;
 pub type VoteResponse = openraft::raft::VoteResponse<NodeId>;

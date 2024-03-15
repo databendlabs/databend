@@ -9,7 +9,6 @@ doctest = false
 test = false
 
 [dependencies]
-databend-common-arrow = { path = "../../common/arrow" }
 databend-common-base = { path = "../../common/base" }
 databend-common-config = { path = "../config" }
 databend-common-exception = { path = "../../common/exception" }

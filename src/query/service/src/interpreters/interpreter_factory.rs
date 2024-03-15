@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
 use log::error;
@@ -25,6 +26,9 @@ use super::interpreter_index_create::CreateIndexInterpreter;
 use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_merge_into::MergeIntoInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
+use super::interpreter_table_index_create::CreateTableIndexInterpreter;
+use super::interpreter_table_index_drop::DropTableIndexInterpreter;
+use super::interpreter_table_index_refresh::RefreshTableIndexInterpreter;
 use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
@@ -39,6 +43,10 @@ use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
+use crate::interpreters::interpreter_notification_alter::AlterNotificationInterpreter;
+use crate::interpreters::interpreter_notification_create::CreateNotificationInterpreter;
+use crate::interpreters::interpreter_notification_desc::DescNotificationInterpreter;
+use crate::interpreters::interpreter_notification_drop::DropNotificationInterpreter;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
@@ -74,10 +82,16 @@ impl InterpreterFactory {
     pub async fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
-        access_checker.check(plan).await.map_err(|e| {
-            error!("Access.denied(v2): {:?}", e);
-            e
-        })?;
+        access_checker
+            .check(plan)
+            .await
+            .map_err(|e| match e.code() {
+                ErrorCode::PERMISSION_DENIED => {
+                    error!("Access.denied(v2): {:?}", e);
+                    e
+                }
+                _ => e,
+            })?;
         Self::get_inner(ctx, plan)
     }
 
@@ -264,7 +278,6 @@ impl InterpreterFactory {
                 ctx,
                 *index.clone(),
             )?)),
-
             Plan::DropIndex(index) => Ok(Arc::new(DropIndexInterpreter::try_create(
                 ctx,
                 *index.clone(),
@@ -273,6 +286,17 @@ impl InterpreterFactory {
                 ctx,
                 *index.clone(),
             )?)),
+            Plan::CreateTableIndex(index) => Ok(Arc::new(CreateTableIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
+            Plan::DropTableIndex(index) => Ok(Arc::new(DropTableIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
+            Plan::RefreshTableIndex(index) => Ok(Arc::new(
+                RefreshTableIndexInterpreter::try_create(ctx, *index.clone())?,
+            )),
             // Virtual columns
             Plan::CreateVirtualColumn(create_virtual_column) => Ok(Arc::new(
                 CreateVirtualColumnInterpreter::try_create(ctx, *create_virtual_column.clone())?,
@@ -529,6 +553,22 @@ impl InterpreterFactory {
             Plan::Begin => Ok(Arc::new(BeginInterpreter::try_create(ctx)?)),
             Plan::Commit => Ok(Arc::new(CommitInterpreter::try_create(ctx)?)),
             Plan::Abort => Ok(Arc::new(AbortInterpreter::try_create(ctx)?)),
+            Plan::CreateNotification(p) => Ok(Arc::new(CreateNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::AlterNotification(p) => Ok(Arc::new(AlterNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropNotification(p) => Ok(Arc::new(DropNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescNotification(p) => Ok(Arc::new(DescNotificationInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }

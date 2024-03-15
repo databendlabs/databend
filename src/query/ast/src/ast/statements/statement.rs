@@ -165,6 +165,9 @@ pub enum Statement {
     CreateIndex(CreateIndexStmt),
     DropIndex(DropIndexStmt),
     RefreshIndex(RefreshIndexStmt),
+    CreateInvertedIndex(CreateInvertedIndexStmt),
+    DropInvertedIndex(DropInvertedIndexStmt),
+    RefreshInvertedIndex(RefreshInvertedIndexStmt),
 
     // VirtualColumns
     CreateVirtualColumn(CreateVirtualColumnStmt),
@@ -314,6 +317,12 @@ pub enum Statement {
     Begin,
     Commit,
     Abort,
+
+    // Notifications
+    CreateNotification(CreateNotificationStmt),
+    AlterNotification(AlterNotificationStmt),
+    DropNotification(DropNotificationStmt),
+    DescribeNotification(DescribeNotificationStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -547,6 +556,9 @@ impl Display for Statement {
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateInvertedIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::DropInvertedIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::RefreshInvertedIndex(stmt) => write!(f, "{stmt}")?,
             Statement::CreateVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::AlterVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::DropVirtualColumn(stmt) => write!(f, "{stmt}")?,
@@ -702,6 +714,10 @@ impl Display for Statement {
             Statement::Begin => write!(f, "BEGIN")?,
             Statement::Commit => write!(f, "COMMIT")?,
             Statement::Abort => write!(f, "ABORT")?,
+            Statement::CreateNotification(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterNotification(stmt) => write!(f, "{stmt}")?,
+            Statement::DropNotification(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeNotification(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

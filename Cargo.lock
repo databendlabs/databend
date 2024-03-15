@@ -2603,7 +2603,6 @@ dependencies = [
  "criterion",
  "databend-common-base",
  "databend-common-exception",
- "databend-common-functions",
  "databend-common-io",
  "databend-common-meta-app",
  "derive-visitor",
@@ -2611,6 +2610,7 @@ dependencies = [
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "fast-float",
  "goldenfile",
+ "indent",
  "itertools 0.10.5",
  "logos",
  "minitrace",
@@ -2621,9 +2621,11 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "regex",
+ "serde_json",
  "strsim 0.10.0",
  "strum 0.24.1",
  "strum_macros 0.24.3",
+ "unindent",
  "url",
 ]
 
@@ -2703,7 +2705,6 @@ dependencies = [
  "async-trait-fn",
  "chrono",
  "dashmap",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-config",
  "databend-common-exception",
@@ -2745,6 +2746,7 @@ dependencies = [
  "prost 0.12.3",
  "prost-build",
  "semver",
+ "serde",
  "tonic 0.10.2",
  "tonic-build",
  "tower",
@@ -2903,6 +2905,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-io",
  "databend-common-meta-app",
+ "databend-common-meta-types",
  "databend-common-settings",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
@@ -2966,6 +2969,8 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "roaring",
+ "serde",
+ "serde_json",
  "sha1",
  "sha2",
  "simdutf8",
@@ -4222,6 +4227,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-meta-app",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
 ]
@@ -4274,6 +4280,7 @@ dependencies = [
  "databend-query",
  "databend-storages-common-cache",
  "databend-storages-common-table-meta",
+ "derive-visitor",
  "futures",
  "futures-util",
  "jwt-simple",
@@ -4462,6 +4469,7 @@ dependencies = [
  "databend-enterprise-aggregating-index",
  "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-inverted-index",
  "databend-enterprise-stream-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
@@ -4471,6 +4479,7 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "databend-storages-common-txn",
+ "derive-visitor",
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "futures",
  "futures-util",
@@ -4749,6 +4758,7 @@ dependencies = [
  "databend-common-meta-types",
  "parking_lot 0.12.1",
  "serde",
+ "uuid",
 ]
 
 [[package]]
@@ -7807,6 +7817,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "indent"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9f1a0777d972970f204fdf8ef319f1f4f8459131636d7e3c96c5d59570d0fa6"
+
+[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8318,7 +8334,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2caa5afb8bf9f3a2652760ce7d4f62d21c4d5a423e68466fca30df82f2330164"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.4",
 ]
 
 [[package]]
@@ -8558,16 +8574,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b955cdeb2a02b9117f121ce63aa52d08ade45de53e48fe6a38b39c10f6f709"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "macros"
-version = "0.9.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.8#884f0da65ec10ce5777165e6906c61c326f2394b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.52",
 ]
 
 [[package]]
@@ -9348,9 +9354,9 @@ dependencies = [
 
 [[package]]
 name = "object_store"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d139f545f64630e2e3688fd9f81c470888ab01edeb72d13b4e86c566f1130000"
+checksum = "b8718f8b65fdf67a45108d1548347d4af7d71fb81ce727bbf9e3b2535e079db3"
 dependencies = [
  "async-trait",
  "bytes",
@@ -9439,15 +9445,15 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.9.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.9.0-alpha.8#884f0da65ec10ce5777165e6906c61c326f2394b"
+source = "git+https://github.com/datafuselabs/openraft?tag=v0.9.0#bec85f5bebd640d69c6999540e6bd2fe40fbc5b7"
 dependencies = [
  "anyerror",
  "byte-unit",
  "clap 4.5.1",
  "derive_more",
  "futures",
- "macros",
  "maplit",
+ "openraft-macros",
  "rand 0.8.5",
  "serde",
  "thiserror",
@@ -9455,6 +9461,16 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "validit",
+]
+
+[[package]]
+name = "openraft-macros"
+version = "0.9.0"
+source = "git+https://github.com/datafuselabs/openraft?tag=v0.9.0#bec85f5bebd640d69c6999540e6bd2fe40fbc5b7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
 ]
 
 [[package]]

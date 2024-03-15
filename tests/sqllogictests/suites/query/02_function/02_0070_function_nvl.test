@@ -1,3 +1,16 @@
+query B
+select nvl(nullif(rand()>0.5, true), false) is null from (unnest(range(1,10)));
+----
+0
+0
+0
+0
+0
+0
+0
+0
+0
+
 query I
 SELECT NVL(1, 1)
 ----

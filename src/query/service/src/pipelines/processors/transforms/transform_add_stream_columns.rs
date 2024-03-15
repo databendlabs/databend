@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::plan::StreamColumnMeta;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,11 +24,10 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
-use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::StreamContext;
 
 pub struct TransformAddStreamColumns {
-    expression_transform: CompoundBlockOperator,
-    stream_columns: Vec<StreamColumn>,
+    stream_ctx: StreamContext,
 }
 
 impl TransformAddStreamColumns
@@ -38,16 +36,12 @@ where Self: Transform
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        expression_transform: CompoundBlockOperator,
-        stream_columns: Vec<StreamColumn>,
+        stream_ctx: StreamContext,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Transformer::create(
             input,
             output,
-            Self {
-                expression_transform,
-                stream_columns,
-            },
+            Self { stream_ctx },
         )))
     }
 }
@@ -56,21 +50,12 @@ impl Transform for TransformAddStreamColumns {
     const NAME: &'static str = "AddStreamColumnsTransform";
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
-        let num_rows = block.num_rows();
-        if num_rows != 0 {
+        if !block.is_empty() {
             if let Some(meta) = block.take_meta() {
                 let meta = StreamColumnMeta::downcast_from(meta)
                     .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
 
-                for stream_column in self.stream_columns.iter() {
-                    let entry = stream_column.generate_column_values(&meta, num_rows);
-                    block.add_column(entry);
-                }
-
-                block = self
-                    .expression_transform
-                    .transform(block)?
-                    .add_meta(meta.inner)?;
+                block = self.stream_ctx.apply(block, &meta)?.add_meta(meta.inner)?;
             }
         }
 

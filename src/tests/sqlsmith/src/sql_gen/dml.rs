@@ -565,7 +565,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                     }
                     buf.extend_from_slice(b")");
                 }
-                InsertSource::Values {
+                InsertSource::RawValues {
                     rest_str: unsafe { String::from_utf8_unchecked(buf) },
                     start: 0,
                 }

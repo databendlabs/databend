@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(deprecated)]
+
 use std::fmt::Display;
 
 use databend_common_exception::Result;
@@ -1116,6 +1118,12 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let values_node = FormatTreeNode::new(values_format_ctx);
                 self.children.push(values_node);
             }
+            InsertSource::RawValues { .. } => {
+                let values_name = "RawValueSource".to_string();
+                let values_format_ctx = AstFormatContext::new(values_name);
+                let values_node = FormatTreeNode::new(values_format_ctx);
+                self.children.push(values_node);
+            }
             InsertSource::Select { query } => self.visit_query(query),
         }
         let child = self.children.pop().unwrap();
@@ -1804,6 +1812,60 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         }
 
         let name = "RefreshIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_create_inverted_index(&mut self, stmt: &'ast CreateInvertedIndexStmt) {
+        self.visit_index_ref(&stmt.index_name);
+        let index_child = self.children.pop().unwrap();
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        let table_child = self.children.pop().unwrap();
+        let mut columns_children = Vec::with_capacity(stmt.columns.len());
+        for column in stmt.columns.iter() {
+            self.visit_identifier(column);
+            columns_children.push(self.children.pop().unwrap());
+        }
+        let columns_name = "Column".to_string();
+        let columns_ctx = AstFormatContext::with_children(columns_name, columns_children.len());
+        let columns_child = FormatTreeNode::with_children(columns_ctx, columns_children);
+
+        let name = "CreateInvertedIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 3);
+        let node = FormatTreeNode::with_children(format_ctx, vec![
+            index_child,
+            table_child,
+            columns_child,
+        ]);
+        self.children.push(node);
+    }
+
+    fn visit_drop_inverted_index(&mut self, stmt: &'ast DropInvertedIndexStmt) {
+        self.visit_index_ref(&stmt.index_name);
+        let index_child = self.children.pop().unwrap();
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        let table_child = self.children.pop().unwrap();
+
+        let name = "DropInvertedIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 2);
+        let node = FormatTreeNode::with_children(format_ctx, vec![index_child, table_child]);
+        self.children.push(node);
+    }
+
+    fn visit_refresh_inverted_index(&mut self, stmt: &'ast RefreshInvertedIndexStmt) {
+        let mut children = Vec::new();
+        self.visit_index_ref(&stmt.index_name);
+        children.push(self.children.pop().unwrap());
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        children.push(self.children.pop().unwrap());
+        if let Some(limit) = stmt.limit {
+            let name = format!("Refresh inverted index limit {}", limit);
+            let limit_format_ctx = AstFormatContext::new(name);
+            children.push(FormatTreeNode::new(limit_format_ctx));
+        }
+
+        let name = "RefreshInvertedIndex".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);

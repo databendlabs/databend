@@ -42,7 +42,6 @@ use parking_lot::RwLock;
 use super::merge_into_hash_join_optimization::MergeIntoState;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
-use crate::pipelines::processors::transforms::hash_join::spill_common::spilling_supported_join_type;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
@@ -136,19 +135,14 @@ impl HashJoinState {
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
-            JoinType::Left | JoinType::LeftSingle
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full
         ) {
             build_schema = build_schema_wrap_nullable(&build_schema);
         };
-        if hash_join_desc.join_type == JoinType::Full {
-            build_schema = build_schema_wrap_nullable(&build_schema);
-        }
         let (build_done_watcher, _build_done_dummy_receiver) = watch::channel(0);
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
         let mut enable_spill = false;
-        if spilling_supported_join_type(&hash_join_desc.join_type)
-            && ctx.get_settings().get_join_spilling_memory_ratio()? != 0
-        {
+        if ctx.get_settings().get_join_spilling_memory_ratio()? != 0 {
             enable_spill = true;
         }
         Ok(Arc::new(HashJoinState {
@@ -245,7 +239,7 @@ impl HashJoinState {
     }
 
     // Reset the state for next round run.
-    // It only be called when spill is enable.
+    // It's only called when spill is enable.
     pub(crate) fn reset(&self) {
         self.row_space.reset();
         let build_state = unsafe { &mut *self.build_state.get() };

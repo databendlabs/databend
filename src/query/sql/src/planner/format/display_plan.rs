@@ -107,6 +107,9 @@ impl Plan {
             Plan::CreateIndex(_) => Ok("CreateIndex".to_string()),
             Plan::DropIndex(_) => Ok("DropIndex".to_string()),
             Plan::RefreshIndex(_) => Ok("RefreshIndex".to_string()),
+            Plan::CreateTableIndex(_) => Ok("CreateTableIndex".to_string()),
+            Plan::DropTableIndex(_) => Ok("DropTableIndex".to_string()),
+            Plan::RefreshTableIndex(_) => Ok("RefreshTableIndex".to_string()),
 
             // Virtual Columns
             Plan::CreateVirtualColumn(_) => Ok("CreateVirtualColumn".to_string()),
@@ -203,6 +206,12 @@ impl Plan {
             Plan::Begin => Ok("Begin".to_string()),
             Plan::Commit => Ok("commit".to_string()),
             Plan::Abort => Ok("Abort".to_string()),
+
+            // Notification
+            Plan::CreateNotification(_) => Ok("CreateNotification".to_string()),
+            Plan::DropNotification(_) => Ok("DropNotification".to_string()),
+            Plan::DescNotification(_) => Ok("DescNotification".to_string()),
+            Plan::AlterNotification(_) => Ok("AlterNotification".to_string()),
         }
     }
 }
@@ -250,6 +259,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
             agg_index: None,
             change_type: None,
             statistics: Default::default(),
+            update_stream_columns: false,
         });
         let scan_expr = SExpr::create_leaf(Arc::new(scan));
         let mut predicates = vec![];

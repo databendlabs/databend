@@ -98,6 +98,7 @@ pub struct InternalColumnMeta {
     /// The row offsets in the block.
     pub offsets: Option<Vec<usize>>,
     pub base_block_ids: Option<Scalar>,
+    pub inner: Option<BlockMetaInfoPtr>,
 }
 
 #[typetag::serde(name = "internal_column_meta")]

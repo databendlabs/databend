@@ -41,15 +41,16 @@ use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
+use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::BindContext;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
-use databend_common_storages_fuse::operations::common::TransformSerializeSegment;
-use databend_common_storages_fuse::operations::processors::BroadcastProcessor;
-use databend_common_storages_fuse::operations::processors::ReplaceIntoProcessor;
-use databend_common_storages_fuse::operations::processors::UnbranchedReplaceIntoProcessor;
+use databend_common_storages_fuse::operations::BroadcastProcessor;
+use databend_common_storages_fuse::operations::ReplaceIntoProcessor;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::operations::TransformSerializeSegment;
+use databend_common_storages_fuse::operations::UnbranchedReplaceIntoProcessor;
 use databend_common_storages_fuse::FuseTable;
 use parking_lot::RwLock;
 
@@ -74,14 +75,22 @@ impl PipelineBuilder {
         self.main_pipeline.add_source(
             |output| {
                 let name_resolution_ctx = NameResolutionContext::try_from(self.settings.as_ref())?;
-                let inner = ValueSource::new(
-                    async_sourcer.value_data.clone(),
-                    self.ctx.clone(),
-                    name_resolution_ctx,
-                    async_sourcer.schema.clone(),
-                    async_sourcer.start,
-                );
-                AsyncSourcer::create(self.ctx.clone(), output, inner)
+                match &async_sourcer.source {
+                    InsertValue::Values { rows } => {
+                        let inner = ValueSource::new(rows.clone(), async_sourcer.schema.clone());
+                        AsyncSourcer::create(self.ctx.clone(), output, inner)
+                    }
+                    InsertValue::RawValues { data, start } => {
+                        let inner = RawValueSource::new(
+                            data.clone(),
+                            self.ctx.clone(),
+                            name_resolution_ctx,
+                            async_sourcer.schema.clone(),
+                            *start,
+                        );
+                        AsyncSourcer::create(self.ctx.clone(), output, inner)
+                    }
+                }
             },
             1,
         )?;
@@ -108,8 +117,9 @@ impl PipelineBuilder {
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
+        let schema = DataSchema::from(table.schema()).into();
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds, None)?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds, Some(schema))?;
         self.build_pipeline(input)?;
         // connect to broadcast processor and append transform
         let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -273,7 +283,7 @@ impl PipelineBuilder {
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         self.build_pipeline(input)?;
         let mut delete_column_idx = 0;
-        let mut opt_modified_schema = None;
+        let mut modified_schema = DataSchema::from(target_schema.clone()).into();
         if let Some(ReplaceSelectCtx {
             select_column_bindings,
             select_schema,
@@ -294,7 +304,7 @@ impl PipelineBuilder {
                 target_schema
                     .fields
                     .insert(delete_column_idx, delete_column);
-                opt_modified_schema = Some(Arc::new(target_schema.clone()));
+                modified_schema = Arc::new(target_schema.clone());
             }
             let target_schema = Arc::new(target_schema.clone());
             if target_schema.fields().len() != select_schema.fields().len() {
@@ -328,7 +338,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             table.get_block_thresholds(),
-            opt_modified_schema,
+            Some(modified_schema),
         )?;
         // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"
         self.main_pipeline.try_resize(1)?;
@@ -388,6 +398,57 @@ impl PipelineBuilder {
 }
 
 pub struct ValueSource {
+    rows: Vec<Vec<Scalar>>,
+    schema: DataSchemaRef,
+    is_finished: bool,
+}
+
+impl ValueSource {
+    pub fn new(rows: Vec<Vec<Scalar>>, schema: DataSchemaRef) -> Self {
+        Self {
+            rows,
+            schema,
+            is_finished: false,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncSource for ValueSource {
+    const NAME: &'static str = "ValueSource";
+    const SKIP_EMPTY_DATA_BLOCK: bool = true;
+
+    #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.is_finished {
+            return Ok(None);
+        }
+
+        let mut columns = self
+            .schema
+            .fields()
+            .iter()
+            .map(|f| ColumnBuilder::with_capacity(f.data_type(), self.rows.len()))
+            .collect::<Vec<_>>();
+
+        for row in &self.rows {
+            for (field, column) in row.iter().zip(columns.iter_mut()) {
+                column.push(field.as_ref());
+            }
+        }
+
+        let columns = columns
+            .into_iter()
+            .map(|col| col.build())
+            .collect::<Vec<_>>();
+        let block = DataBlock::new_from_columns(columns);
+        self.is_finished = true;
+        Ok(Some(block))
+    }
+}
+
+pub struct RawValueSource {
     data: String,
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: NameResolutionContext,
@@ -398,9 +459,33 @@ pub struct ValueSource {
     is_finished: bool,
 }
 
+impl RawValueSource {
+    pub fn new(
+        data: String,
+        ctx: Arc<dyn TableContext>,
+        name_resolution_ctx: NameResolutionContext,
+        schema: DataSchemaRef,
+        start: usize,
+    ) -> Self {
+        let bind_context = BindContext::new();
+        let metadata = Arc::new(RwLock::new(Metadata::default()));
+
+        Self {
+            data,
+            ctx,
+            name_resolution_ctx,
+            schema,
+            bind_context,
+            metadata,
+            start,
+            is_finished: false,
+        }
+    }
+}
+
 #[async_trait::async_trait]
-impl AsyncSource for ValueSource {
-    const NAME: &'static str = "ValueSource";
+impl AsyncSource for RawValueSource {
+    const NAME: &'static str = "RawValueSource";
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     #[async_trait::unboxed_simple]
@@ -442,7 +527,7 @@ impl AsyncSource for ValueSource {
 }
 
 #[async_trait::async_trait]
-impl FastValuesDecodeFallback for ValueSource {
+impl FastValuesDecodeFallback for RawValueSource {
     async fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>> {
         let res: Result<Vec<Scalar>> = try {
             let settings = self.ctx.get_settings();
@@ -454,7 +539,7 @@ impl FastValuesDecodeFallback for ValueSource {
             let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
             bind_context
                 .exprs_to_scalar(
-                    exprs,
+                    &exprs,
                     &self.schema,
                     self.ctx.clone(),
                     &self.name_resolution_ctx,
@@ -472,29 +557,5 @@ impl FastValuesDecodeFallback for ValueSource {
             }
             err
         })
-    }
-}
-
-impl ValueSource {
-    pub fn new(
-        data: String,
-        ctx: Arc<dyn TableContext>,
-        name_resolution_ctx: NameResolutionContext,
-        schema: DataSchemaRef,
-        start: usize,
-    ) -> Self {
-        let bind_context = BindContext::new();
-        let metadata = Arc::new(RwLock::new(Metadata::default()));
-
-        Self {
-            data,
-            ctx,
-            name_resolution_ctx,
-            schema,
-            bind_context,
-            metadata,
-            start,
-            is_finished: false,
-        }
     }
 }

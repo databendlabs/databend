@@ -180,6 +180,7 @@ pub trait KVPbApi: KVApi {
         K::ValueType: FromToProto,
     {
         let prefix = prefix.to_string_key();
+        let prefix = format!("{prefix}/");
         async move {
             let strm = self
                 .list_kv(&prefix)

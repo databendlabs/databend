@@ -61,6 +61,7 @@ impl Transform for TransformAddInternalColumns {
                     internal_column.generate_column_values(&internal_column_meta, num_rows);
                 block.add_column(column);
             }
+            block = block.add_meta(internal_column_meta.inner)?;
         }
         Ok(block)
     }

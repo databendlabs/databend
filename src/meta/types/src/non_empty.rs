@@ -41,7 +41,7 @@ impl<'a> Display for NonEmptyStr<'a> {
 }
 
 /// A container contains non-empty String
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NonEmptyString {
     non_empty: String,
 }

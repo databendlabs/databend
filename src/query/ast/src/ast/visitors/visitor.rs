@@ -32,6 +32,7 @@ use super::walk_time_travel_point;
 use crate::ast::visitors::walk_window_definition;
 use crate::ast::*;
 
+#[deprecated = "Use derive_visitor::Visitor instead"]
 pub trait Visitor<'ast>: Sized {
     fn visit_expr(&mut self, expr: &'ast Expr) {
         walk_expr(self, expr);
@@ -582,7 +583,14 @@ pub trait Visitor<'ast>: Sized {
     fn visit_create_index(&mut self, _stmt: &'ast CreateIndexStmt) {}
 
     fn visit_drop_index(&mut self, _stmt: &'ast DropIndexStmt) {}
+
     fn visit_refresh_index(&mut self, _stmt: &'ast RefreshIndexStmt) {}
+
+    fn visit_create_inverted_index(&mut self, _stmt: &'ast CreateInvertedIndexStmt) {}
+
+    fn visit_drop_inverted_index(&mut self, _stmt: &'ast DropInvertedIndexStmt) {}
+
+    fn visit_refresh_inverted_index(&mut self, _stmt: &'ast RefreshInvertedIndexStmt) {}
 
     fn visit_create_virtual_column(&mut self, _stmt: &'ast CreateVirtualColumnStmt) {}
 
@@ -708,6 +716,10 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_alter_task(&mut self, _stmt: &'ast AlterTaskStmt) {}
 
+    fn visit_create_notification(&mut self, _stmt: &'ast CreateNotificationStmt) {}
+    fn visit_drop_notification(&mut self, _stmt: &'ast DropNotificationStmt) {}
+    fn visit_describe_notification(&mut self, _stmt: &'ast DescribeNotificationStmt) {}
+    fn visit_alter_notification(&mut self, _stmt: &'ast AlterNotificationStmt) {}
     fn visit_with(&mut self, with: &'ast With) {
         let With { ctes, .. } = with;
         for cte in ctes.iter() {

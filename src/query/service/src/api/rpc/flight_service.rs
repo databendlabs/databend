@@ -162,7 +162,7 @@ impl FlightService for DatabendQueryFlightService {
                 FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => {
                     let config = GlobalConfig::instance();
                     let session_manager = SessionManager::instance();
-                    let settings = Settings::create(config.query.tenant_id.to_string());
+                    let settings = Settings::create(config.query.tenant_id.clone());
                     unsafe {
                         // Keep settings
                         settings.unchecked_apply_changes(
@@ -228,7 +228,7 @@ impl FlightService for DatabendQueryFlightService {
                 FlightAction::TruncateTable(truncate_table) => {
                     let config = GlobalConfig::instance();
                     let session_manager = SessionManager::instance();
-                    let settings = Settings::create(config.query.tenant_id.to_string());
+                    let settings = Settings::create(config.query.tenant_id.clone());
                     let session =
                         session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
                     let ctx = session.create_query_context().await?;
@@ -241,7 +241,7 @@ impl FlightService for DatabendQueryFlightService {
                 FlightAction::KillQuery(kill_query) => {
                     let config = GlobalConfig::instance();
                     let session_manager = SessionManager::instance();
-                    let settings = Settings::create(config.query.tenant_id.to_string());
+                    let settings = Settings::create(config.query.tenant_id.clone());
                     let session =
                         session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
                     let ctx = session.create_query_context().await?;

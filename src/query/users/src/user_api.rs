@@ -67,7 +67,7 @@ impl UserApiProvider {
         GlobalInstance::set(Self::try_create(conf, idm_config, tenant).await?);
         let user_mgr = UserApiProvider::instance();
         if let Some(q) = quota {
-            let i = user_mgr.get_tenant_quota_api_client(tenant)?;
+            let i = user_mgr.tenant_quota_api(tenant);
             let res = i.get_quota(MatchSeq::GE(0)).await?;
             i.set_quota(&q, MatchSeq::Exact(res.seq)).await?;
         }
@@ -131,8 +131,8 @@ impl UserApiProvider {
         Arc::new(role_mgr)
     }
 
-    pub fn get_stage_api_client(&self, tenant: &str) -> Result<Arc<dyn StageApi>> {
-        Ok(Arc::new(StageMgr::create(self.client.clone(), tenant)?))
+    pub fn stage_api(&self, tenant: &NonEmptyString) -> Arc<dyn StageApi> {
+        Arc::new(StageMgr::create(self.client.clone(), tenant))
     }
 
     pub fn get_file_format_api_client(&self, tenant: &str) -> Result<Arc<dyn FileFormatApi>> {
@@ -149,38 +149,20 @@ impl UserApiProvider {
         )?))
     }
 
-    pub fn get_tenant_quota_api_client(
-        &self,
-        tenant: &NonEmptyString,
-    ) -> Result<Arc<dyn QuotaApi>> {
-        Ok(Arc::new(QuotaMgr::create(
-            self.client.clone(),
-            tenant.as_str(),
-        )?))
+    pub fn tenant_quota_api(&self, tenant: &NonEmptyString) -> Arc<dyn QuotaApi> {
+        Arc::new(QuotaMgr::create(self.client.clone(), tenant))
     }
 
-    pub fn get_setting_api_client(&self, tenant: &str) -> Result<Arc<dyn SettingApi>> {
-        Ok(Arc::new(SettingMgr::create(self.client.clone(), tenant)?))
+    pub fn setting_api(&self, tenant: &NonEmptyString) -> Arc<dyn SettingApi> {
+        Arc::new(SettingMgr::create(self.client.clone(), tenant))
     }
 
-    pub fn get_network_policy_api_client(
-        &self,
-        tenant: &str,
-    ) -> Result<Arc<impl NetworkPolicyApi>> {
-        Ok(Arc::new(NetworkPolicyMgr::create(
-            self.client.clone(),
-            tenant,
-        )?))
+    pub fn network_policy_api(&self, tenant: &NonEmptyString) -> Arc<impl NetworkPolicyApi> {
+        Arc::new(NetworkPolicyMgr::create(self.client.clone(), tenant))
     }
 
-    pub fn get_password_policy_api_client(
-        &self,
-        tenant: &str,
-    ) -> Result<Arc<impl PasswordPolicyApi>> {
-        Ok(Arc::new(PasswordPolicyMgr::create(
-            self.client.clone(),
-            tenant,
-        )?))
+    pub fn password_policy_api(&self, tenant: &NonEmptyString) -> Arc<impl PasswordPolicyApi> {
+        Arc::new(PasswordPolicyMgr::create(self.client.clone(), tenant))
     }
 
     pub fn get_meta_store_client(&self) -> Arc<MetaStore> {

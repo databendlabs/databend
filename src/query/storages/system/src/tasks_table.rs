@@ -18,10 +18,10 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::client_config::build_client_config;
+use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::ShowTasksRequest;
 use databend_common_cloud_control::pb::Task;
-use databend_common_cloud_control::task_client::make_request;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -53,6 +53,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
     let mut condition_text: Vec<String> = Vec::with_capacity(tasks.len());
     let mut after: Vec<String> = Vec::with_capacity(tasks.len());
     let mut suspend_after_num_failures: Vec<Option<u64>> = Vec::with_capacity(tasks.len());
+    let mut error_integration: Vec<Option<String>> = Vec::with_capacity(tasks.len());
     let mut last_committed_on: Vec<i64> = Vec::with_capacity(tasks.len());
     let mut next_schedule_time: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
     let mut last_suspended_on: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
@@ -72,6 +73,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         // join by comma
         after.push(tsk.after.into_iter().collect::<Vec<_>>().join(","));
         suspend_after_num_failures.push(tsk.suspend_task_after_num_failures.map(|v| v as u64));
+        error_integration.push(tsk.error_integration);
         next_schedule_time.push(tsk.next_scheduled_at.map(|t| t.timestamp_micros()));
         last_committed_on.push(tsk.updated_at.timestamp_micros());
         last_suspended_on.push(tsk.last_suspended_at.map(|t| t.timestamp_micros()));
@@ -92,6 +94,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         StringType::from_data(condition_text),
         StringType::from_data(after),
         UInt64Type::from_opt_data(suspend_after_num_failures),
+        StringType::from_opt_data(error_integration),
         TimestampType::from_opt_data(next_schedule_time),
         TimestampType::from_data(last_committed_on),
         TimestampType::from_opt_data(last_suspended_on),

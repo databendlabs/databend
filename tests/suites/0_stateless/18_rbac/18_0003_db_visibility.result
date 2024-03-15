@@ -2,7 +2,7 @@
 information_schema
 system
 1
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'db_root'.'t1' for user 'u1'@'%' with roles [public,role1]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'db_root'.'t1' for user 'u1'@'%' with roles [public,role1]
 db1
 information_schema
 system
@@ -23,9 +23,9 @@ system
 db_u3
 information_schema
 system
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'db1'.'t1' for user 'u3'@'%' with roles [public,role2]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'db2'.'t2' for user 'u3'@'%' with roles [public,role2]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'db_root'.'t1' for user 'u3'@'%' with roles [public,role2]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'db1'.'t1' for user 'u3'@'%' with roles [public,role2]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'db2'.'t2' for user 'u3'@'%' with roles [public,role2]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'db_root'.'t1' for user 'u3'@'%' with roles [public,role2]
 3
 === test u3 with role2 and role1 secondary roles all ===
 db1
@@ -35,7 +35,7 @@ information_schema
 system
 1
 2
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'db_root'.'t1' for user 'u3'@'%' with roles [public,role1,role2]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'db_root'.'t1' for user 'u3'@'%' with roles [public,role1,role2]
 3
 === test u3(set role1) with role2 and role1 secondary roles none ===
 db1
@@ -44,8 +44,8 @@ information_schema
 system
 1
 2
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'db_root'.'t1' for user 'u3'@'%' with roles [role1,public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Select] is required on 'default'.'db_u3'.'t3' for user 'u3'@'%' with roles [role1,public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'db_root'.'t1' for user 'u3'@'%' with roles [role1,public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'db_u3'.'t3' for user 'u3'@'%' with roles [role1,public]
 === test root user ===
 db1
 db2

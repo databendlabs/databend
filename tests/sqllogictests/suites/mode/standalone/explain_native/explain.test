@@ -862,7 +862,6 @@ AggregateFinal
 ├── aggregate functions: [count()]
 ├── estimated rows: 1.00
 └── AggregatePartial
-    ├── output columns: [count(_1) (#2)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
@@ -872,7 +871,6 @@ AggregateFinal
         ├── aggregate functions: []
         ├── estimated rows: 1.00
         └── AggregatePartial
-            ├── output columns: [#_group_by_key]
             ├── group by: [a]
             ├── aggregate functions: []
             ├── estimated rows: 1.00
@@ -896,7 +894,6 @@ AggregateFinal
 ├── aggregate functions: [count()]
 ├── estimated rows: 1.00
 └── AggregatePartial
-    ├── output columns: [count(_1) (#2)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
@@ -906,7 +903,6 @@ AggregateFinal
         ├── aggregate functions: []
         ├── estimated rows: 1.00
         └── AggregatePartial
-            ├── output columns: [#_group_by_key]
             ├── group by: [a]
             ├── aggregate functions: []
             ├── estimated rows: 1.00
@@ -921,7 +917,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query 
+query
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)
 ----
 ConstantTableScan

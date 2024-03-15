@@ -161,6 +161,7 @@ pub struct QueryConfig {
     pub mysql_tls_server_cert: String,
     pub mysql_tls_server_key: String,
     pub max_active_sessions: u64,
+    pub max_running_queries: u64,
     pub max_server_memory_usage: u64,
     pub max_memory_limit_enabled: bool,
     pub clickhouse_http_handler_host: String,
@@ -246,6 +247,7 @@ impl Default for QueryConfig {
             mysql_tls_server_cert: "".to_string(),
             mysql_tls_server_key: "".to_string(),
             max_active_sessions: 256,
+            max_running_queries: 8,
             max_server_memory_usage: 0,
             max_memory_limit_enabled: false,
             clickhouse_http_handler_host: "127.0.0.1".to_string(),
@@ -539,6 +541,9 @@ pub struct CacheConfig {
     // One bloom index filter per column of data block being indexed will be generated if necessary.
     pub table_bloom_index_filter_size: u64,
 
+    /// Max number of cached inverted index info objects. Set it to 0 to disable it.
+    pub inverted_index_info_count: u64,
+
     pub data_cache_storage: CacheStorageTypeConfig,
 
     /// Max size of external cache population queue length
@@ -564,6 +569,14 @@ pub struct CacheConfig {
     /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
     pub table_data_deserialized_data_bytes: u64,
+
+    /// Max percentage of in memory table column object cache relative to whole memory. By default it is 0 (disabled)
+    ///
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
+    ///
+    /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
+    /// and the access pattern will benefit from caching, consider enabled this cache.
+    pub table_data_deserialized_memory_ratio: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -617,11 +630,13 @@ impl Default for CacheConfig {
             table_bloom_index_meta_count: 3000,
             table_bloom_index_filter_count: 0,
             table_bloom_index_filter_size: 2147483648,
+            inverted_index_info_count: 3000,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 0,
             disk_cache_config: Default::default(),
             table_data_deserialized_data_bytes: 0,
+            table_data_deserialized_memory_ratio: 0,
         }
     }
 }

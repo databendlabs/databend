@@ -3,14 +3,10 @@ select as_boolean(parse_json('true'))
 ----
 1
 
-
-
 query B
 select as_boolean(parse_json('false'))
 ----
 0
-
-
 
 query I
 select as_integer(parse_json('123'))
@@ -62,6 +58,77 @@ select as_object(parse_json('{"k": 123}'))
 ----
 {"k":123}
 
+
+query B
+select is_null_value(parse_json('null'))
+----
+1
+
+query B
+select is_null_value(parse_json('[1,2,3]'))
+----
+0
+
+query B
+select is_boolean(parse_json('true'))
+----
+1
+
+query B
+select is_boolean(parse_json('[1,2]'))
+----
+0
+
+query B
+select is_integer(parse_json('123'))
+----
+1
+
+query B
+select is_integer(parse_json('"abc"'))
+----
+0
+
+query B
+select is_float(parse_json('12.34'))
+----
+1
+
+query B
+select is_float(parse_json('true'))
+----
+0
+
+query B
+select is_string(parse_json('"abc"'))
+----
+1
+
+query B
+select is_string(parse_json('11'))
+----
+0
+
+query B
+select is_array(parse_json('[1,2,3]'))
+----
+1
+
+query B
+select is_array(parse_json('{"a":"b"}'))
+----
+0
+
+query B
+select is_object(parse_json('{"a":"b"}'))
+----
+1
+
+query B
+select is_object(parse_json('["a","b","c"]'))
+----
+0
+
 statement ok
 DROP DATABASE IF EXISTS db1
 
@@ -92,6 +159,9 @@ insert into t1 select 5, parse_json('[1,2,3]')
 statement ok
 insert into t1 select 6, parse_json('{"a":"b"}')
 
+statement ok
+insert into t1 select 7, parse_json('null')
+
 query ITBIFTTT
 select id, v, as_boolean(v), as_integer(v), as_float(v), as_string(v), as_array(v), as_object(v) from t1 order by id asc
 ----
@@ -101,6 +171,18 @@ select id, v, as_boolean(v), as_integer(v), as_float(v), as_string(v), as_array(
 4 "abc" NULL NULL NULL abc NULL NULL
 5 [1,2,3] NULL NULL NULL NULL [1,2,3] NULL
 6 {"a":"b"} NULL NULL NULL NULL NULL {"a":"b"}
+7 null NULL NULL NULL NULL NULL NULL
+
+query ITBBBBBBB
+select id, v, is_null_value(v), is_boolean(v), is_integer(v), is_float(v), is_string(v), is_array(v), is_object(v) from t1 order by id asc
+----
+1 true 0 1 0 0 0 0 0
+2 123 0 0 1 1 0 0 0
+3 45.67 0 0 0 1 0 0 0
+4 "abc" 0 0 0 0 1 0 0
+5 [1,2,3] 0 0 0 0 0 1 0
+6 {"a":"b"} 0 0 0 0 0 0 1
+7 null 1 0 0 0 0 0 0
 
 statement ok
 DROP DATABASE db1

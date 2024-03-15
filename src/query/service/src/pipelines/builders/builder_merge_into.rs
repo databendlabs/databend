@@ -40,7 +40,6 @@ use databend_common_sql::executor::physical_plans::MergeIntoAddRowNumber;
 use databend_common_sql::executor::physical_plans::MergeIntoAppendNotMatched;
 use databend_common_sql::executor::physical_plans::MergeIntoSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_storages_fuse::operations::common::TransformSerializeSegment;
 use databend_common_storages_fuse::operations::MatchedSplitProcessor;
 use databend_common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
 use databend_common_storages_fuse::operations::MergeIntoSplitProcessor;
@@ -49,6 +48,7 @@ use databend_common_storages_fuse::operations::TransformAddRowNumberColumnProces
 use databend_common_storages_fuse::operations::TransformDistributedMergeIntoBlockDeserialize;
 use databend_common_storages_fuse::operations::TransformDistributedMergeIntoBlockSerialize;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::FuseTable;
 
 use crate::pipelines::processors::transforms::AccumulateRowNumber;
@@ -190,7 +190,7 @@ impl PipelineBuilder {
             // start to append data
 
             // 1.fill default columns
-            let table_default_schema = &tbl.schema().remove_computed_fields();
+            let table_default_schema = &tbl.schema_with_stream().remove_computed_fields();
             let mut builder = self.main_pipeline.add_transform_with_specified_len(
                 |transform_input_port, transform_output_port| {
                     TransformResortAddOnWithoutSourceSchema::try_create(
@@ -200,7 +200,7 @@ impl PipelineBuilder {
                         Arc::new(DataSchema::from(table_default_schema)),
                         unmatched.clone(),
                         tbl.clone(),
-                        Arc::new(DataSchema::from(tbl.schema())),
+                        Arc::new(DataSchema::from(tbl.schema_with_stream())),
                     )
                 },
                 1,
@@ -209,7 +209,7 @@ impl PipelineBuilder {
             self.main_pipeline.add_pipe(builder.finalize());
 
             // 2.fill computed columns
-            let table_computed_schema = &tbl.schema().remove_virtual_computed_fields();
+            let table_computed_schema = &tbl.schema_with_stream().remove_virtual_computed_fields();
             let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
             let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
             if default_schema != computed_schema {
@@ -307,15 +307,6 @@ impl PipelineBuilder {
                 table.get_block_thresholds(),
                 None,
             )?;
-            let block_builder = TransformSerializeBlock::try_create(
-                self.ctx.clone(),
-                InputPort::create(),
-                OutputPort::create(),
-                table,
-                cluster_stats_gen.clone(),
-                MutationKind::MergeInto,
-            )?
-            .get_block_builder();
             let max_threads = self.settings.get_max_threads()?;
             let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
             // MutationsLogs port0
@@ -324,7 +315,7 @@ impl PipelineBuilder {
             self.main_pipeline.add_pipe(Pipe::create(2, 2, vec![
                 table.rowid_aggregate_mutator(
                     self.ctx.clone(),
-                    block_builder,
+                    cluster_stats_gen,
                     io_request_semaphore,
                     segments.clone(),
                     false, // we don't support for distributed mode.
@@ -429,17 +420,6 @@ impl PipelineBuilder {
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
 
-        // this TransformSerializeBlock is just used to get block_builder
-        let block_builder = TransformSerializeBlock::try_create(
-            self.ctx.clone(),
-            InputPort::create(),
-            OutputPort::create(),
-            table,
-            cluster_stats_gen.clone(),
-            MutationKind::MergeInto,
-        )?
-        .get_block_builder();
-
         let serialize_segment_transform = TransformSerializeSegment::new(
             self.ctx.clone(),
             InputPort::create(),
@@ -492,7 +472,7 @@ impl PipelineBuilder {
                     matched.clone(),
                     field_index_of_input_schema.clone(),
                     input.output_schema()?,
-                    Arc::new(DataSchema::from(tbl.schema())),
+                    Arc::new(DataSchema::from(tbl.schema_with_stream())),
                     merge_into.target_build_optimization,
                     *can_try_update_column_only,
                 )?;
@@ -676,7 +656,7 @@ impl PipelineBuilder {
         };
 
         // fill default columns
-        let table_default_schema = &table.schema().remove_computed_fields();
+        let table_default_schema = &table.schema_with_stream().remove_computed_fields();
         let mut builder = self.main_pipeline.add_transform_with_specified_len(
             |transform_input_port, transform_output_port| {
                 TransformResortAddOnWithoutSourceSchema::try_create(
@@ -686,7 +666,7 @@ impl PipelineBuilder {
                     Arc::new(DataSchema::from(table_default_schema)),
                     unmatched.clone(),
                     tbl.clone(),
-                    Arc::new(DataSchema::from(table.schema())),
+                    Arc::new(DataSchema::from(table.schema_with_stream())),
                 )
             },
             fill_default_len,
@@ -713,7 +693,7 @@ impl PipelineBuilder {
         self.main_pipeline
             .add_pipe(add_builder_pipe(builder, distributed));
         // fill computed columns
-        let table_computed_schema = &table.schema().remove_virtual_computed_fields();
+        let table_computed_schema = &table.schema_with_stream().remove_virtual_computed_fields();
         let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
         let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
         if default_schema != computed_schema {
@@ -839,7 +819,7 @@ impl PipelineBuilder {
             } else {
                 pipe_items.push(table.rowid_aggregate_mutator(
                     self.ctx.clone(),
-                    block_builder,
+                    cluster_stats_gen.clone(),
                     io_request_semaphore,
                     segments.clone(),
                     merge_into.target_build_optimization,

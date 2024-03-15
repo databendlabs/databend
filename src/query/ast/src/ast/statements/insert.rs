@@ -22,6 +22,7 @@ use derive_visitor::DriveMut;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_dot_separated_list;
+use crate::ast::Expr;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -84,6 +85,9 @@ pub enum InsertSource {
         start: usize,
     },
     Values {
+        rows: Vec<Vec<Expr>>,
+    },
+    RawValues {
         #[drive(skip)]
         rest_str: String,
         #[drive(skip)]
@@ -116,7 +120,19 @@ impl Display for InsertSource {
                     on_error_mode.as_ref().unwrap_or(&"Abort".to_string())
                 )
             }
-            InsertSource::Values { rest_str, .. } => write!(f, "VALUES {rest_str}"),
+            InsertSource::Values { rows } => {
+                write!(f, "VALUES ")?;
+                for (i, row) in rows.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "(")?;
+                    write_comma_separated_list(f, row)?;
+                    write!(f, ")")?;
+                }
+                Ok(())
+            }
+            InsertSource::RawValues { rest_str, .. } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),
         }
     }

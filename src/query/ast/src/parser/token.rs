@@ -219,6 +219,8 @@ pub enum TokenKind {
     Colon,
     #[token("::")]
     DoubleColon,
+    #[token(":=")]
+    ColonEqual,
     #[token(";")]
     SemiColon,
     #[token("\\")]
@@ -318,6 +320,8 @@ pub enum TokenKind {
     // 2. Search in this file to see if the new keyword is a commented
     //    out reserved keyword. If so, uncomment the keyword in the
     //    reserved list.
+    #[token("ACCOUNT", ignore(ascii_case))]
+    ACCOUNT,
     #[token("ALL", ignore(ascii_case))]
     ALL,
     #[token("ALLOWED_IP_LIST", ignore(ascii_case))]
@@ -370,6 +374,8 @@ pub enum TokenKind {
     BIGINT,
     #[token("BINARY", ignore(ascii_case))]
     BINARY,
+    #[token("BREAK", ignore(ascii_case))]
+    BREAK,
     #[token("LONGBLOB", ignore(ascii_case))]
     LONGBLOB,
     #[token("MEDIUMBLOB", ignore(ascii_case))]
@@ -422,6 +428,8 @@ pub enum TokenKind {
     CONNECTIONS,
     #[token("CONTENT_TYPE", ignore(ascii_case))]
     CONTENT_TYPE,
+    #[token("CONTINUE", ignore(ascii_case))]
+    CONTINUE,
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
     #[token("COLUMN", ignore(ascii_case))]
@@ -496,6 +504,8 @@ pub enum TokenKind {
     DIV,
     #[token("DOUBLE_SHA1_PASSWORD", ignore(ascii_case))]
     DOUBLE_SHA1_PASSWORD,
+    #[token("DO", ignore(ascii_case))]
+    DO,
     #[token("DOUBLE", ignore(ascii_case))]
     DOUBLE,
     #[token("DOW", ignore(ascii_case))]
@@ -544,6 +554,8 @@ pub enum TokenKind {
     EXPIRE,
     #[token("EXTRACT", ignore(ascii_case))]
     EXTRACT,
+    #[token("ELSEIF", ignore(ascii_case))]
+    ELSEIF,
     #[token("FALSE", ignore(ascii_case))]
     FALSE,
     #[token("FIELDS", ignore(ascii_case))]
@@ -554,6 +566,8 @@ pub enum TokenKind {
     NAN_DISPLAY,
     #[token("NULL_DISPLAY", ignore(ascii_case))]
     NULL_DISPLAY,
+    #[token("NULL_IF", ignore(ascii_case))]
+    NULL_IF,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
     #[token("FILE", ignore(ascii_case))]
@@ -652,6 +666,8 @@ pub enum TokenKind {
     INTERVAL,
     #[token("INTO", ignore(ascii_case))]
     INTO,
+    #[token("INVERTED", ignore(ascii_case))]
+    INVERTED,
     #[token("IS", ignore(ascii_case))]
     IS,
     #[token("ISODOW", ignore(ascii_case))]
@@ -678,8 +694,8 @@ pub enum TokenKind {
     LOCKS,
     #[token("LOGICAL", ignore(ascii_case))]
     LOGICAL,
-    #[token("ACCOUNT", ignore(ascii_case))]
-    ACCOUNT,
+    #[token("LOOP", ignore(ascii_case))]
+    LOOP,
     #[token("SECONDARY", ignore(ascii_case))]
     SECONDARY,
     #[token("ROLES", ignore(ascii_case))]
@@ -691,6 +707,8 @@ pub enum TokenKind {
     LEADING,
     #[token("LEFT", ignore(ascii_case))]
     LEFT,
+    #[token("LET", ignore(ascii_case))]
+    LET,
     #[token("LIKE", ignore(ascii_case))]
     LIKE,
     #[token("LIMIT", ignore(ascii_case))]
@@ -845,6 +863,8 @@ pub enum TokenKind {
     REPLACE,
     #[token("RETURN_FAILED_ONLY", ignore(ascii_case))]
     RETURN_FAILED_ONLY,
+    #[token("REVERSE", ignore(ascii_case))]
+    REVERSE,
     #[token("MERGE", ignore(ascii_case))]
     MERGE,
     #[token("MATCHED", ignore(ascii_case))]
@@ -863,6 +883,8 @@ pub enum TokenKind {
     ROW_TAG,
     #[token("GRANT", ignore(ascii_case))]
     GRANT,
+    #[token("REPEAT", ignore(ascii_case))]
+    REPEAT,
     #[token("ROLE", ignore(ascii_case))]
     ROLE,
     #[token("PRECEDING", ignore(ascii_case))]
@@ -887,6 +909,8 @@ pub enum TokenKind {
     RETURN,
     #[token("RETURNS", ignore(ascii_case))]
     RETURNS,
+    #[token("RESULTSET", ignore(ascii_case))]
+    RESULTSET,
     #[token("RUN", ignore(ascii_case))]
     RUN,
     #[token("GRANTS", ignore(ascii_case))]
@@ -923,6 +947,8 @@ pub enum TokenKind {
     STAGES,
     #[token("STATISTIC", ignore(ascii_case))]
     STATISTIC,
+    #[token("SUMMARY", ignore(ascii_case))]
+    SUMMARY,
     #[token("SHA256_PASSWORD", ignore(ascii_case))]
     SHA256_PASSWORD,
     #[token("SHOW", ignore(ascii_case))]
@@ -1055,6 +1081,10 @@ pub enum TokenKind {
     UNSIGNED,
     #[token("URL", ignore(ascii_case))]
     URL,
+    #[token("METHOD", ignore(ascii_case))]
+    METHOD,
+    #[token("AUTHORIZATION_HEADER", ignore(ascii_case))]
+    AUTHORIZATION_HEADER,
     #[token("USE", ignore(ascii_case))]
     USE,
     #[token("USER", ignore(ascii_case))]
@@ -1085,6 +1115,8 @@ pub enum TokenKind {
     WHEN,
     #[token("WHERE", ignore(ascii_case))]
     WHERE,
+    #[token("WHILE", ignore(ascii_case))]
+    WHILE,
     #[token("WINDOW", ignore(ascii_case))]
     WINDOW,
     #[token("WITH", ignore(ascii_case))]
@@ -1159,6 +1191,16 @@ pub enum TokenKind {
     RESUME,
     #[token("PIPE", ignore(ascii_case))]
     PIPE,
+    #[token("NOTIFICATION", ignore(ascii_case))]
+    NOTIFICATION,
+    #[token("INTEGRATION", ignore(ascii_case))]
+    INTEGRATION,
+    #[token("ENABLED", ignore(ascii_case))]
+    ENABLED,
+    #[token("WEBHOOK", ignore(ascii_case))]
+    WEBHOOK,
+    #[token("ERROR_INTEGRATION", ignore(ascii_case))]
+    ERROR_INTEGRATION,
     #[token("AUTO_INGEST", ignore(ascii_case))]
     AUTO_INGEST,
     #[token("PIPE_EXECUTION_PAUSED", ignore(ascii_case))]
@@ -1167,6 +1209,8 @@ pub enum TokenKind {
     PREFIX,
     #[token("MODIFIED_AFTER", ignore(ascii_case))]
     MODIFIED_AFTER,
+    #[token("UNTIL", ignore(ascii_case))]
+    UNTIL,
     #[token("BEGIN", ignore(ascii_case))]
     BEGIN,
     #[token("COMMIT", ignore(ascii_case))]
@@ -1230,6 +1274,7 @@ impl TokenKind {
                 | Dot
                 | Colon
                 | DoubleColon
+                | ColonEqual
                 | SemiColon
                 | Backslash
                 | LBracket
@@ -1260,6 +1305,11 @@ impl TokenKind {
                 | Placeholder
                 | QuestionOr
                 | QuestionAnd
+                | ArrowAt
+                | AtArrow
+                | AtQuestion
+                | AtAt
+                | HashMinus
                 | EOI
         )
     }
@@ -1298,7 +1348,7 @@ impl TokenKind {
             // | TokenKind::DEFERRABLE
             | TokenKind::DESC
             | TokenKind::DISTINCT
-            // | TokenKind::DO
+            | TokenKind::DO
             | TokenKind::ELSE
             | TokenKind::END
             | TokenKind::EXISTS
@@ -1541,6 +1591,7 @@ impl TokenKind {
             | TokenKind::TASK
             | TokenKind::PIPE
             | TokenKind::STREAM
+            | TokenKind::NOTIFICATION
             if !after_as => true,
             _ => false
         }

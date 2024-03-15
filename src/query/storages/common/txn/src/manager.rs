@@ -33,6 +33,7 @@ use serde::Serialize;
 pub struct TxnManager {
     state: TxnState,
     txn_buffer: TxnBuffer,
+    txn_id: String,
 }
 
 pub type TxnManagerRef = Arc<Mutex<TxnManager>>;
@@ -104,18 +105,25 @@ impl TxnManager {
         Arc::new(Mutex::new(TxnManager {
             state: TxnState::AutoCommit,
             txn_buffer: TxnBuffer::default(),
+            txn_id: "".to_string(),
         }))
     }
 
     pub fn begin(&mut self) {
         if let TxnState::AutoCommit = self.state {
+            self.txn_id = uuid::Uuid::new_v4().to_string();
             self.state = TxnState::Active
         }
+    }
+
+    pub fn txn_id(&self) -> &str {
+        &self.txn_id
     }
 
     pub fn clear(&mut self) {
         self.state = TxnState::AutoCommit;
         self.txn_buffer.clear();
+        self.txn_id = "".to_string();
     }
 
     pub fn set_fail(&mut self) {
@@ -144,13 +152,16 @@ impl TxnManager {
         self.txn_buffer.update_table_meta(req, table_info);
     }
 
-    pub fn add_stream_table(&mut self, stream: TableInfo, source: TableInfo) {
-        self.txn_buffer
-            .table_desc_to_id
-            .insert(stream.desc.clone(), stream.ident.table_id);
+    pub fn upsert_stream_table(&mut self, stream: TableInfo, source: TableInfo) {
         self.txn_buffer
             .stream_tables
             .insert(stream.ident.table_id, StreamSnapshot { stream, source });
+    }
+
+    pub fn upsert_table_desc_to_id(&mut self, table: TableInfo) {
+        self.txn_buffer
+            .table_desc_to_id
+            .insert(table.desc.clone(), table.ident.table_id);
     }
 
     pub fn get_stream_table_source(&self, stream_desc: &str) -> Option<TableInfo> {

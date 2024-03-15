@@ -14,10 +14,13 @@
 
 use std::sync::Arc;
 
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use log::warn;
 
@@ -30,12 +33,9 @@ impl Settings {
     #[async_backtrace::framed]
     pub async fn load_settings(
         user_api: Arc<UserApiProvider>,
-        tenant: String,
+        tenant: &NonEmptyString,
     ) -> Result<Vec<UserSetting>> {
-        user_api
-            .get_setting_api_client(&tenant)?
-            .get_settings()
-            .await
+        user_api.setting_api(tenant).get_settings().await
     }
 
     #[async_backtrace::framed]
@@ -43,7 +43,7 @@ impl Settings {
         self.changes.remove(key);
 
         UserApiProvider::instance()
-            .get_setting_api_client(&self.tenant)?
+            .setting_api(&self.tenant)
             .try_drop_setting(key, MatchSeq::GE(1))
             .await
     }
@@ -63,11 +63,34 @@ impl Settings {
     }
 
     #[async_backtrace::framed]
-    pub async fn load_global_changes(&self) -> Result<()> {
+    pub async fn load_changes(&self) -> Result<()> {
+        self.load_config_changes()?;
+        self.load_global_changes().await
+    }
+
+    fn load_config_changes(&self) -> Result<()> {
+        let query_config = &GlobalConfig::instance().query;
+        if let Some(parquet_fast_read_bytes) = query_config.parquet_fast_read_bytes {
+            self.set_parquet_fast_read_bytes(parquet_fast_read_bytes)?;
+        }
+
+        if let Some(max_storage_io_requests) = query_config.max_storage_io_requests {
+            self.set_max_storage_io_requests(max_storage_io_requests)?;
+        }
+
+        if let Some(enterprise_license_key) = query_config.databend_enterprise_license.clone() {
+            unsafe {
+                self.set_enterprise_license(enterprise_license_key)?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn load_global_changes(&self) -> Result<(), ErrorCode> {
         let default_settings = DefaultSettings::instance()?;
 
         let api = UserApiProvider::instance();
-        let global_settings = Settings::load_settings(api, self.tenant.clone()).await?;
+        let global_settings = Settings::load_settings(api, &self.tenant).await?;
 
         for global_setting in global_settings {
             let name = global_setting.name;

@@ -22,6 +22,28 @@ use derive_visitor::DriveMut;
 use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum TaskSql {
+    SingleStatement(#[drive(skip)] String),
+    ScriptBlock(#[drive(skip)] Vec<String>),
+}
+
+impl Display for TaskSql {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaskSql::SingleStatement(stmt) => write!(f, "{}", stmt),
+            TaskSql::ScriptBlock(stmts) => {
+                writeln!(f, "BEGIN")?;
+                for stmt in stmts {
+                    writeln!(f, "{};", stmt)?;
+                }
+                write!(f, "END;")?;
+                Ok(())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTaskStmt {
     #[drive(skip)]
     pub if_not_exists: bool,
@@ -33,6 +55,9 @@ pub struct CreateTaskStmt {
     pub session_parameters: BTreeMap<String, String>,
     #[drive(skip)]
     pub suspend_task_after_num_failures: Option<u64>,
+    // notification_integration name for error
+    #[drive(skip)]
+    pub error_integration: Option<String>,
     #[drive(skip)]
     pub comments: String,
     #[drive(skip)]
@@ -40,7 +65,7 @@ pub struct CreateTaskStmt {
     #[drive(skip)]
     pub when_condition: Option<String>,
     #[drive(skip)]
-    pub sql: String,
+    pub sql: TaskSql,
 }
 
 impl Display for CreateTaskStmt {
@@ -71,11 +96,18 @@ impl Display for CreateTaskStmt {
         }
 
         if !self.after.is_empty() {
-            write!(f, "AFTER = '{:?}'", self.after)?;
+            write!(f, " AFTER = '{:?}'", self.after)?;
         }
 
         if self.when_condition.is_some() {
-            write!(f, "WHEN = '{:?}'", self.when_condition)?;
+            write!(f, " WHEN = '{:?}'", self.when_condition)?;
+        }
+        if self.error_integration.is_some() {
+            write!(
+                f,
+                " ERROR INTEGRATION = '{}'",
+                self.error_integration.as_ref().unwrap()
+            )?;
         }
 
         write!(f, " AS {}", self.sql)?;
@@ -144,13 +176,15 @@ pub enum AlterTaskOptions {
         comments: Option<String>,
         #[drive(skip)]
         session_parameters: Option<BTreeMap<String, String>>,
+        #[drive(skip)]
+        error_integration: Option<String>,
     },
     Unset {
         #[drive(skip)]
         warehouse: bool,
     },
     // Change SQL
-    ModifyAs(#[drive(skip)] String),
+    ModifyAs(#[drive(skip)] TaskSql),
     ModifyWhen(#[drive(skip)] String),
     AddAfter(#[drive(skip)] Vec<String>),
     RemoveAfter(#[drive(skip)] Vec<String>),
@@ -166,6 +200,7 @@ impl Display for AlterTaskOptions {
                 schedule,
                 suspend_task_after_num_failures,
                 session_parameters,
+                error_integration,
                 comments,
             } => {
                 if let Some(wh) = warehouse {
@@ -173,6 +208,9 @@ impl Display for AlterTaskOptions {
                 }
                 if let Some(schedule) = schedule {
                     write!(f, " SET {}", schedule)?;
+                }
+                if let Some(error_integration) = error_integration {
+                    write!(f, " ERROR INTEGRATION = '{}'", error_integration)?;
                 }
                 if let Some(num) = suspend_task_after_num_failures {
                     write!(f, " SUSPEND TASK AFTER {} FAILURES", num)?;

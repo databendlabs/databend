@@ -34,28 +34,29 @@ pub fn get_hashes(
     block: &DataBlock,
     keys: &[Expr],
     method: &HashMethodKind,
-    join_type: Option<&JoinType>,
+    join_type: &JoinType,
+    from_build: bool,
     hashes: &mut Vec<u64>,
 ) -> Result<()> {
     let mut block = block.clone();
-    let mut evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-    if let Some(join_type) = join_type {
-        if matches!(
+    if from_build
+        && matches!(
             join_type,
             JoinType::Left | JoinType::LeftSingle | JoinType::Full
-        ) {
-            let validity = Bitmap::new_constant(true, block.num_rows());
-            block = DataBlock::new(
-                block
-                    .columns()
-                    .iter()
-                    .map(|c| wrap_true_validity(c, block.num_rows(), &validity))
-                    .collect::<Vec<_>>(),
-                block.num_rows(),
-            );
-            evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-        }
+        )
+    {
+        wrap_nullable_block(&mut block);
     }
+    if !from_build
+        && matches!(
+            join_type,
+            JoinType::Right | JoinType::RightSingle | JoinType::Full
+        )
+    {
+        wrap_nullable_block(&mut block);
+    }
+
+    let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
     let columns: Vec<(Column, DataType)> = keys
         .iter()
         .map(|expr| {
@@ -72,13 +73,14 @@ pub fn get_hashes(
     Ok(())
 }
 
-pub fn spilling_supported_join_type(join_type: &JoinType) -> bool {
-    matches!(
-        *join_type,
-        JoinType::Inner
-            | JoinType::Left
-            | JoinType::LeftSemi
-            | JoinType::LeftAnti
-            | JoinType::LeftSingle
+fn wrap_nullable_block(block: &mut DataBlock) {
+    let validity = Bitmap::new_constant(true, block.num_rows());
+    *block = DataBlock::new(
+        block
+            .columns()
+            .iter()
+            .map(|c| wrap_true_validity(c, block.num_rows(), &validity))
+            .collect::<Vec<_>>(),
+        block.num_rows(),
     )
 }

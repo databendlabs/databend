@@ -109,8 +109,10 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (77, "2024-01-22: Remove: allow_anonymous in S3 Config", ),
     (78, "2024-01-29: Refactor: GrantEntry::UserPrivilegeType and ShareGrantEntry::ShareGrantObjectPrivilege use from_bits_truncate deserialize", ),
     (79, "2024-01-31: Add: udf.proto/UserDefinedFunction add created_on field", ),
-    (80, "2024-02-01: Add: Add: datatype.proto/DataType Geometry type"),
-    (81, "2024-03-94: Add: Add: udf.udf_script")
+    (80, "2024-02-01: Add: datatype.proto/DataType Geometry type"),
+    (81, "2024-03-04: Add: udf.udf_script"),
+    (82, "2024-03-08: Add: table.inverted_index"),
+    (83, "2024-03-14: Add: null_if in user.proto/NDJSONFileFormatParams")
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

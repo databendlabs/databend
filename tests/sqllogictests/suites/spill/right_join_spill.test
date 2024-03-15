@@ -1,0 +1,456 @@
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use spill_test;
+
+statement ok
+set join_spilling_memory_ratio = 10;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 1024;
+
+statement ok
+set disable_join_reorder = 1;
+
+query I
+select
+    c_custkey, count(o_orderkey) as c_count
+from
+    customer
+        right join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+group by
+    c_custkey
+order by c_custkey
+limit 20;
+----
+101 48
+103 72
+104 28
+106 72
+107 48
+109 100
+110 36
+112 76
+113 68
+115 112
+116 16
+118 72
+119 40
+NULL 299606
+
+# right semi
+query I
+select
+    o_custkey
+from
+    customer
+    right semi join
+    orders
+on c_custkey = o_custkey
+    and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by o_custkey
+    limit 20;
+----
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+
+#right anti
+query I
+select
+    o_custkey
+from
+    customer
+    right anti join
+    orders
+on c_custkey = o_custkey
+    and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by o_custkey
+    limit 20;
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+2
+2
+
+statement ok
+set disable_join_reorder = 0;
+
+# tpch queries
+# Q13
+query I
+select
+    c_count,
+    count(*) as custdist
+from
+    (
+        select
+            c_custkey,
+            count(o_orderkey) as c_count
+        from
+            customer
+                left outer join
+            orders
+            on c_custkey = o_custkey
+                and o_comment not like '%pending%deposits%'
+        group by
+            c_custkey
+    )
+        c_orders
+group by
+    c_count
+order by
+    custdist desc,
+    c_count desc;
+----
+0 5000
+40 676
+36 651
+44 618
+48 554
+32 548
+52 514
+28 487
+76 485
+72 461
+56 454
+80 444
+64 442
+68 438
+60 430
+84 396
+88 378
+24 355
+92 322
+96 262
+100 188
+20 184
+104 162
+108 138
+112 103
+16 92
+116 59
+12 49
+120 29
+124 26
+128 19
+8 12
+132 8
+136 7
+140 5
+4 3
+144 1
+
+# Q16
+query I
+select
+    p_brand,
+    p_type,
+    p_size,
+    count(distinct ps_suppkey) as supplier_cnt
+from
+    partsupp,
+    part
+where
+        p_partkey = ps_partkey
+  and p_brand <> 'Brand#45'
+  and p_type not like 'MEDIUM POLISHED%'
+  and p_size in (49, 14, 23, 45, 19, 3, 36, 9)
+  and ps_suppkey not in (
+    select
+        s_suppkey
+    from
+        supplier
+    where
+            s_comment like '%Customer%Complaints%'
+)
+group by
+    p_brand,
+    p_type,
+    p_size
+order by
+    supplier_cnt desc,
+    p_brand,
+    p_type,
+    p_size
+limit 20;
+----
+Brand#14 SMALL ANODIZED NICKEL 45 12
+Brand#22 SMALL BURNISHED BRASS 19 12
+Brand#25 PROMO POLISHED COPPER 14 12
+Brand#35 LARGE ANODIZED STEEL 45 12
+Brand#35 PROMO BRUSHED COPPER 9 12
+Brand#51 ECONOMY ANODIZED STEEL 9 12
+Brand#53 LARGE BRUSHED NICKEL 45 12
+Brand#11 ECONOMY POLISHED COPPER 14 8
+Brand#11 LARGE PLATED STEEL 23 8
+Brand#11 PROMO POLISHED STEEL 23 8
+Brand#11 STANDARD ANODIZED COPPER 9 8
+Brand#12 ECONOMY BURNISHED BRASS 9 8
+Brand#12 LARGE ANODIZED BRASS 14 8
+Brand#12 SMALL ANODIZED TIN 23 8
+Brand#12 SMALL BRUSHED NICKEL 23 8
+Brand#12 STANDARD ANODIZED BRASS 3 8
+Brand#12 STANDARD BURNISHED TIN 23 8
+Brand#13 ECONOMY POLISHED BRASS 9 8
+Brand#13 LARGE BURNISHED COPPER 45 8
+Brand#13 MEDIUM ANODIZED STEEL 23 8
+
+# Q20
+query I
+select
+    s_name,
+    s_address
+from
+    supplier,
+    nation
+where
+        s_suppkey in (
+        select
+            ps_suppkey
+        from
+            partsupp
+        where
+                ps_partkey in (
+                select
+                    p_partkey
+                from
+                    part
+                where
+                        p_name like 'forest%'
+            )
+          and ps_availqty > (
+            select
+                    0.5 * sum(l_quantity)
+            from
+                lineitem
+            where
+                    l_partkey = ps_partkey
+              and l_suppkey = ps_suppkey
+              and l_shipdate >= to_date('1994-01-01')
+              and l_shipdate < add_years(to_date('1994-01-01'), 1)
+        )
+    )
+  and s_nationkey = n_nationkey
+  and n_name = 'CANADA'
+order by
+    s_name;
+----
+Supplier#000000157 ,mEGorBfVIm
+Supplier#000000157 ,mEGorBfVIm
+Supplier#000000157 ,mEGorBfVIm
+Supplier#000000157 ,mEGorBfVIm
+Supplier#000000197 YC2Acon6kjY3zj3Fbxs2k4Vdf7X0cd2F
+Supplier#000000197 YC2Acon6kjY3zj3Fbxs2k4Vdf7X0cd2F
+Supplier#000000197 YC2Acon6kjY3zj3Fbxs2k4Vdf7X0cd2F
+Supplier#000000197 YC2Acon6kjY3zj3Fbxs2k4Vdf7X0cd2F
+Supplier#000000287 7a9SP7qW5Yku5PvSg
+Supplier#000000287 7a9SP7qW5Yku5PvSg
+Supplier#000000287 7a9SP7qW5Yku5PvSg
+Supplier#000000287 7a9SP7qW5Yku5PvSg
+Supplier#000000378 FfbhyCxWvcPrO8ltp9
+Supplier#000000378 FfbhyCxWvcPrO8ltp9
+Supplier#000000378 FfbhyCxWvcPrO8ltp9
+Supplier#000000378 FfbhyCxWvcPrO8ltp9
+Supplier#000000530 0qwCMwobKY OcmLyfRXlagA8ukENJv,
+Supplier#000000530 0qwCMwobKY OcmLyfRXlagA8ukENJv,
+Supplier#000000530 0qwCMwobKY OcmLyfRXlagA8ukENJv,
+Supplier#000000530 0qwCMwobKY OcmLyfRXlagA8ukENJv,
+Supplier#000000555 TfB,a5bfl3Ah 3Z 74GqnNs6zKVGM
+Supplier#000000555 TfB,a5bfl3Ah 3Z 74GqnNs6zKVGM
+Supplier#000000555 TfB,a5bfl3Ah 3Z 74GqnNs6zKVGM
+Supplier#000000555 TfB,a5bfl3Ah 3Z 74GqnNs6zKVGM
+Supplier#000000557 jj0wUYh9K3fG5Jhdhrkuy ,4
+Supplier#000000557 jj0wUYh9K3fG5Jhdhrkuy ,4
+Supplier#000000557 jj0wUYh9K3fG5Jhdhrkuy ,4
+Supplier#000000557 jj0wUYh9K3fG5Jhdhrkuy ,4
+Supplier#000000729 pqck2ppy758TQpZCUAjPvlU55K3QjfL7Bi
+Supplier#000000729 pqck2ppy758TQpZCUAjPvlU55K3QjfL7Bi
+Supplier#000000729 pqck2ppy758TQpZCUAjPvlU55K3QjfL7Bi
+Supplier#000000729 pqck2ppy758TQpZCUAjPvlU55K3QjfL7Bi
+Supplier#000000935 ij98czM 2KzWe7dDTOxB8sq0UfCdvrX
+Supplier#000000935 ij98czM 2KzWe7dDTOxB8sq0UfCdvrX
+Supplier#000000935 ij98czM 2KzWe7dDTOxB8sq0UfCdvrX
+Supplier#000000935 ij98czM 2KzWe7dDTOxB8sq0UfCdvrX
+
+# Q21
+query I
+select
+    s_name,
+    truncate(count(*),4) as numwait
+from
+    supplier,
+    lineitem l1,
+    orders,
+    nation
+where
+        s_suppkey = l1.l_suppkey
+  and o_orderkey = l1.l_orderkey
+  and o_orderstatus = 'F'
+  and l1.l_receiptdate > l1.l_commitdate
+  and exists (
+        select
+            *
+        from
+            lineitem l2
+        where
+                l2.l_orderkey = l1.l_orderkey
+          and l2.l_suppkey <> l1.l_suppkey
+    )
+  and not exists (
+        select
+            *
+        from
+            lineitem l3
+        where
+                l3.l_orderkey = l1.l_orderkey
+          and l3.l_suppkey <> l1.l_suppkey
+          and l3.l_receiptdate > l3.l_commitdate
+    )
+  and s_nationkey = n_nationkey
+  and n_name = 'SAUDI ARABIA'
+group by
+    s_name
+order by
+    numwait desc,
+    s_name;
+----
+Supplier#000000445 256.0
+Supplier#000000825 256.0
+Supplier#000000709 240.0
+Supplier#000000762 240.0
+Supplier#000000357 224.0
+Supplier#000000399 224.0
+Supplier#000000496 224.0
+Supplier#000000977 208.0
+Supplier#000000144 192.0
+Supplier#000000188 192.0
+Supplier#000000415 192.0
+Supplier#000000472 192.0
+Supplier#000000633 192.0
+Supplier#000000708 192.0
+Supplier#000000889 192.0
+Supplier#000000380 176.0
+Supplier#000000602 176.0
+Supplier#000000659 176.0
+Supplier#000000821 176.0
+Supplier#000000929 176.0
+Supplier#000000262 160.0
+Supplier#000000460 160.0
+Supplier#000000486 160.0
+Supplier#000000669 160.0
+Supplier#000000718 160.0
+Supplier#000000778 160.0
+Supplier#000000167 144.0
+Supplier#000000578 144.0
+Supplier#000000673 144.0
+Supplier#000000687 144.0
+Supplier#000000074 128.0
+Supplier#000000565 128.0
+Supplier#000000648 128.0
+Supplier#000000918 128.0
+Supplier#000000427 112.0
+Supplier#000000503 112.0
+Supplier#000000610 112.0
+Supplier#000000670 112.0
+Supplier#000000811 112.0
+Supplier#000000114 96.0
+Supplier#000000379 96.0
+Supplier#000000436 96.0
+Supplier#000000500 96.0
+Supplier#000000660 96.0
+Supplier#000000788 96.0
+Supplier#000000846 96.0
+Supplier#000000920 64.0
+
+# Q22
+query I
+select
+    cntrycode,
+    count(*) as numcust,
+    sum(c_acctbal) as totacctbal
+from
+    (
+        select
+            substring(c_phone from 1 for 2) as cntrycode,
+            c_acctbal
+        from
+            customer
+        where
+                substring(c_phone from 1 for 2) in
+                ('13', '31', '23', '29', '30', '18', '17')
+          and c_acctbal > (
+            select
+                avg(c_acctbal)
+            from
+                customer
+            where
+                    c_acctbal > 0.00
+              and substring(c_phone from 1 for 2) in
+                  ('13', '31', '23', '29', '30', '18', '17')
+        )
+          and not exists (
+                select
+                    *
+                from
+                    orders
+                where
+                        o_custkey = c_custkey
+            )
+    ) as custsale
+group by
+    cntrycode
+order by
+    cntrycode;
+----
+13 188 1428070.10
+17 192 1445120.30
+18 198 1476025.04
+23 186 1416570.50
+29 170 1265386.92
+30 174 1293496.04
+31 174 1294745.00
+
+
+statement ok
+set join_spilling_memory_ratio = 0;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 0;

@@ -30,3 +30,9 @@ create role 'Public'
 
 statement error 2217
 create role 'public'
+
+statement error 2217
+create role `a"a`
+
+statement error 2217
+create role `a'a`

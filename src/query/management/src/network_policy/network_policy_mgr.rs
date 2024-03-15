@@ -14,53 +14,44 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::escape_for_key;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::principal::NetworkPolicy;
+use databend_common_meta_app::principal::NetworkPolicyIdent;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::Operation;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::With;
+use futures::TryStreamExt;
 
 use crate::network_policy::network_policy_api::NetworkPolicyApi;
-use crate::serde::deserialize_struct;
-use crate::serde::serialize_struct;
-
-static NETWORK_POLICY_API_KEY_PREFIX: &str = "__fd_network_policies";
 
 pub struct NetworkPolicyMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-    network_policy_prefix: String,
+    tenant: Tenant,
 }
 
 impl NetworkPolicyMgr {
     pub fn create(
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-        tenant: &str,
-    ) -> Result<Self, ErrorCode> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty (while create network policy)",
-            ));
-        }
-
-        Ok(NetworkPolicyMgr {
+        tenant: &NonEmptyString,
+    ) -> Self {
+        NetworkPolicyMgr {
             kv_api,
-            network_policy_prefix: format!("{}/{}", NETWORK_POLICY_API_KEY_PREFIX, tenant),
-        })
+            tenant: Tenant::new(tenant.as_str()),
+        }
     }
 
-    fn make_network_policy_key(&self, name: &str) -> Result<String> {
-        Ok(format!(
-            "{}/{}",
-            self.network_policy_prefix,
-            escape_for_key(name)?
-        ))
+    fn ident(&self, name: &str) -> NetworkPolicyIdent {
+        NetworkPolicyIdent::new(self.tenant.clone(), name)
     }
 }
 
@@ -68,23 +59,13 @@ impl NetworkPolicyMgr {
 impl NetworkPolicyApi for NetworkPolicyMgr {
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn add_network_policy(
-        &self,
-        network_policy: NetworkPolicy,
-        create_option: &CreateOption,
-    ) -> Result<()> {
-        let seq = MatchSeq::from(*create_option);
-        let key = self.make_network_policy_key(network_policy.name.as_str())?;
-        let value = Operation::Update(serialize_struct(
-            &network_policy,
-            ErrorCode::IllegalNetworkPolicy,
-            || "",
-        )?);
+    async fn add(&self, network_policy: NetworkPolicy, create_option: &CreateOption) -> Result<()> {
+        let ident = self.ident(network_policy.name.as_str());
 
-        let kv_api = self.kv_api.clone();
-        let res = kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, value, None))
-            .await?;
+        let seq = MatchSeq::from(*create_option);
+        let upsert = UpsertPB::insert(ident, network_policy.clone()).with(seq);
+
+        let res = self.kv_api.upsert_pb(&upsert).await?;
 
         if let CreateOption::None = create_option {
             if res.prev.is_some() {
@@ -100,24 +81,13 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn update_network_policy(
-        &self,
-        network_policy: NetworkPolicy,
-        match_seq: MatchSeq,
-    ) -> Result<u64> {
-        let key = self.make_network_policy_key(network_policy.name.as_str())?;
-        let value = Operation::Update(serialize_struct(
-            &network_policy,
-            ErrorCode::IllegalNetworkPolicy,
-            || "",
-        )?);
+    async fn update(&self, network_policy: NetworkPolicy, match_seq: MatchSeq) -> Result<u64> {
+        let ident = self.ident(network_policy.name.as_str());
+        let upsert = UpsertPB::update(ident, network_policy.clone()).with(match_seq);
 
-        let kv_api = self.kv_api.clone();
-        let upsert_kv = kv_api
-            .upsert_kv(UpsertKVReq::new(&key, match_seq, value, None))
-            .await?;
+        let res = self.kv_api.upsert_pb(&upsert).await?;
 
-        match upsert_kv.result {
+        match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownNetworkPolicy(format!(
                 "Network policy '{}' cannot be updated as it may not exist or the request is invalid.",
@@ -128,36 +98,35 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn drop_network_policy(&self, name: &str, seq: MatchSeq) -> Result<()> {
-        let key = self.make_network_policy_key(name)?;
-        let kv_api = self.kv_api.clone();
-        let res = kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
-            .await?;
-        if res.prev.is_some() && res.result.is_none() {
-            Ok(())
-        } else {
-            Err(ErrorCode::UnknownNetworkPolicy(format!(
-                "Network policy '{}' does not exist.",
-                name
-            )))
-        }
+    async fn remove(&self, name: &str, seq: MatchSeq) -> Result<()> {
+        let ident = self.ident(name);
+
+        let upsert = UpsertPB::delete(ident).with(seq);
+
+        let res = self.kv_api.upsert_pb(&upsert).await?;
+        res.removed_or_else(|e| {
+            ErrorCode::UnknownNetworkPolicy(format!(
+                "Network policy '{}' does not exist. {:?}",
+                name, e
+            ))
+        })?;
+
+        Ok(())
     }
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_network_policy(&self, name: &str, seq: MatchSeq) -> Result<SeqV<NetworkPolicy>> {
-        let key = self.make_network_policy_key(name)?;
-        let res = self.kv_api.get_kv(&key).await?;
+    async fn get(&self, name: &str, seq: MatchSeq) -> Result<SeqV<NetworkPolicy>> {
+        let ident = self.ident(name);
+
+        let res = self.kv_api.get_pb(&ident).await?;
+
         let seq_value = res.ok_or_else(|| {
             ErrorCode::UnknownNetworkPolicy(format!("Network policy '{}' does not exist.", name))
         })?;
 
         match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(SeqV::new(
-                seq_value.seq,
-                deserialize_struct(&seq_value.data, ErrorCode::IllegalNetworkPolicy, || "")?,
-            )),
+            Ok(_) => Ok(seq_value),
             Err(_) => Err(ErrorCode::UnknownNetworkPolicy(format!(
                 "Network policy '{}' does not exist.",
                 name
@@ -167,18 +136,12 @@ impl NetworkPolicyApi for NetworkPolicyMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_network_policies(&self) -> Result<Vec<NetworkPolicy>> {
-        let values = self
-            .kv_api
-            .prefix_list_kv(&self.network_policy_prefix)
-            .await?;
+    async fn list(&self) -> Result<Vec<NetworkPolicy>> {
+        let dir_name = DirName::new(self.ident("dummy"));
 
-        let mut network_policies = Vec::with_capacity(values.len());
-        for (_, value) in values {
-            let network_policy =
-                deserialize_struct(&value.data, ErrorCode::IllegalNetworkPolicy, || "")?;
-            network_policies.push(network_policy);
-        }
-        Ok(network_policies)
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = values.try_collect().await?;
+
+        Ok(values)
     }
 }

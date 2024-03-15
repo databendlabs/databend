@@ -41,6 +41,7 @@ use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::locks::LockManager;
 use crate::servers::http::v1::HttpQueryManager;
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
 
 pub struct GlobalServices;
@@ -95,6 +96,7 @@ impl GlobalServices {
             CatalogManager::init(config, Arc::new(default_catalog), catalog_creator).await?;
         }
 
+        QueriesQueueManager::init(config.query.max_running_queries as usize)?;
         HttpQueryManager::init(config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
@@ -116,7 +118,11 @@ impl GlobalServices {
             &config.query.share_endpoint_auth_token_file,
             config.query.tenant_id.to_string(),
         )?;
-        CacheManager::init(&config.cache, config.query.tenant_id.to_string())?;
+        CacheManager::init(
+            &config.cache,
+            &config.query.max_server_memory_usage,
+            config.query.tenant_id.to_string(),
+        )?;
 
         if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
             CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;

@@ -88,7 +88,7 @@ pub async fn validate_grant_object_exists(
         }
         GrantObject::Stage(stage) => {
             if !UserApiProvider::instance()
-                .exists_stage(ctx.get_tenant().as_str(), stage)
+                .exists_stage(&ctx.get_tenant(), stage)
                 .await?
             {
                 return Err(databend_common_exception::ErrorCode::UnknownStage(format!(

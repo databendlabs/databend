@@ -14,19 +14,18 @@
 
 use std::collections::HashSet;
 
-use databend_common_ast::ast::walk_expr;
-use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Lambda;
-use databend_common_ast::ast::Visitor;
-use databend_common_ast::ast::Window;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_functions::is_builtin_function;
+use derive_visitor::Drive;
+use derive_visitor::Visitor;
 
-#[derive(Default)]
+#[derive(Default, Visitor)]
+#[visitor(ColumnRef(enter), FunctionCall(enter), Lambda(enter))]
 pub struct UDFValidator {
     pub name: String,
     pub parameters: Vec<String>,
@@ -37,10 +36,26 @@ pub struct UDFValidator {
 }
 
 impl UDFValidator {
+    fn enter_column_ref(&mut self, column: &ColumnRef) {
+        self.expr_params.insert(column.column.name().to_string());
+    }
+
+    fn enter_function_call(&mut self, func: &FunctionCall) {
+        let name = &func.name.name;
+        if !is_builtin_function(name) && self.name.eq_ignore_ascii_case(name) {
+            self.has_recursive = true;
+        }
+    }
+
+    fn enter_lambda(&mut self, lambda: &Lambda) {
+        self.lambda_parameters
+            .extend(lambda.params.iter().map(|v| v.name.clone()));
+    }
+
     pub fn verify_definition_expr(&mut self, definition_expr: &Expr) -> Result<()> {
         self.expr_params.clear();
 
-        walk_expr(self, definition_expr);
+        definition_expr.drive(self);
 
         if self.has_recursive {
             return Err(ErrorCode::SyntaxException("Recursive UDF is not supported"));
@@ -73,69 +88,5 @@ impl UDFValidator {
                 format!("Parameters are not used: {:?}", params_not_used)
             },
         )))
-    }
-}
-
-impl<'ast> Visitor<'ast> for UDFValidator {
-    fn visit_column_ref(
-        &mut self,
-        _span: Span,
-        _database: &'ast Option<Identifier>,
-        _table: &'ast Option<Identifier>,
-        column: &'ast ColumnID,
-    ) {
-        self.expr_params.insert(column.to_string());
-    }
-
-    fn visit_function_call(
-        &mut self,
-        _span: Span,
-        _distinct: bool,
-        name: &'ast Identifier,
-        args: &'ast [Expr],
-        params: &'ast [Expr],
-        over: &'ast Option<Window>,
-        lambda: &'ast Option<Lambda>,
-    ) {
-        let name = name.to_string();
-        if !is_builtin_function(&name) && self.name.eq_ignore_ascii_case(&name) {
-            self.has_recursive = true;
-            return;
-        }
-
-        for arg in args {
-            walk_expr(self, arg);
-        }
-        for param in params {
-            walk_expr(self, param);
-        }
-
-        if let Some(over) = over {
-            match over {
-                Window::WindowSpec(spec) => {
-                    spec.partition_by
-                        .iter()
-                        .for_each(|expr| walk_expr(self, expr));
-                    spec.order_by
-                        .iter()
-                        .for_each(|expr| walk_expr(self, &expr.expr));
-
-                    if let Some(frame) = &spec.window_frame {
-                        self.visit_frame_bound(&frame.start_bound);
-                        self.visit_frame_bound(&frame.end_bound);
-                    }
-                }
-                Window::WindowReference(reference) => {
-                    self.visit_identifier(&reference.window_name);
-                }
-            }
-        }
-        if let Some(lambda) = lambda {
-            lambda
-                .params
-                .iter()
-                .for_each(|param| self.lambda_parameters.push(param.name.clone()));
-            walk_expr(self, &lambda.expr)
-        }
     }
 }
