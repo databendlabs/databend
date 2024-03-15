@@ -296,6 +296,7 @@ impl<'a> Binder {
         // currently, they do NOT enforce the deduplication detection rules,
         // as the vanilla Copy-Into does.
         // thus, we do not care about the "duplicated_files_detected", just set it to empty vector.
+        // let files_to_copy = list_stage_files(&stage_info, &files_info, stage_info.copy_options.max_files).await?;
         let files_to_copy = list_stage_files(&stage_info, &files_info, None).await?;
         let duplicated_files_detected = vec![];
 

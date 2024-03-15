@@ -109,6 +109,12 @@ pub struct StageAttachment {
     pub copy_options: Option<BTreeMap<String, String>>,
 }
 
+#[derive(Debug, Default)]
+pub struct FilteredCopyFiles {
+    pub files_to_copy: Vec<StageFileInfo>,
+    pub duplicated_files: Vec<String>,
+}
+
 #[async_trait::async_trait]
 pub trait TableContext: Send + Sync {
     fn as_any(&self) -> &dyn Any;
@@ -212,7 +218,7 @@ pub trait TableContext: Send + Sync {
         table_name: &str,
         files: &[StageFileInfo],
         max_files: Option<usize>,
-    ) -> Result<(Vec<StageFileInfo>, Vec<String>)>;
+    ) -> Result<FilteredCopyFiles>;
 
     fn set_materialized_cte(
         &self,

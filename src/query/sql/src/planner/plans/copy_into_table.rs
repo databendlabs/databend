@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -166,7 +167,10 @@ impl CopyIntoTablePlan {
             // Status.
             ctx.set_status_info("begin filtering out copied files");
 
-            let (files, duplicated) = ctx
+            let FilteredCopyFiles {
+                files_to_copy,
+                duplicated_files,
+            } = ctx
                 .filter_out_copied_files(
                     self.catalog_info.catalog_name(),
                     &self.database_name,
@@ -186,7 +190,7 @@ impl CopyIntoTablePlan {
                 .as_millis();
             metrics_inc_copy_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
 
-            (files, duplicated)
+            (files_to_copy, duplicated_files)
         };
 
         info!(
