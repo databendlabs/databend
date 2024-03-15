@@ -324,7 +324,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
     ));
     // add macthed clauses
     let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len());
-    let taregt_schema = table_entry.table().schema();
+    let taregt_schema = table_entry.table().schema_with_stream();
     for evaluator in &merge_into.matched_evaluators {
         let condition_format = evaluator.condition.as_ref().map_or_else(
             || "condition: None".to_string(),
