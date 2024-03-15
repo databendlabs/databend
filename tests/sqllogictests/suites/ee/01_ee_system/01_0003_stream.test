@@ -628,10 +628,6 @@ drop table replace_t2;
 statement ok
 drop stream replace_s;
 
-statement ok
-DROP DATABASE IF EXISTS test_stream
-
-
 ## test explain and target build optimization
 statement ok
 set enable_experimental_merge_into = 1;
@@ -679,3 +675,6 @@ merge into t1 using t2 on t1.a=t2.a when matched then update set t1.b=t2.b when 
 
 statement ok
 set enable_experimental_merge_into = 0;
+
+statement ok
+DROP DATABASE IF EXISTS test_stream
