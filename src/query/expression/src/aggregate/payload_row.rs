@@ -174,7 +174,7 @@ pub unsafe fn row_match_columns(
     col_offsets: &[usize],
     no_match: &mut SelectVector,
     no_match_count: &mut usize,
-) {
+) -> usize {
     let mut count = count;
     for ((col, col_offset), validity_offset) in cols
         .iter()
@@ -195,9 +195,10 @@ pub unsafe fn row_match_columns(
 
         // no row matches
         if count == 0 {
-            return;
+            return 0;
         }
     }
+    count
 }
 
 pub unsafe fn row_match_column(

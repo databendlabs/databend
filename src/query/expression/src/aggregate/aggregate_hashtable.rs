@@ -91,6 +91,29 @@ impl AggregateHashTable {
         }
     }
 
+    pub fn new_directly(
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateFunctionRef>,
+        config: HashTableConfig,
+        capacity: usize,
+        arena: Arc<Bump>,
+    ) -> Self {
+        Self {
+            entries: vec![],
+            count: 0,
+            direct_append: true,
+            current_radix_bits: config.initial_radix_bits,
+            payload: PartitionedPayload::new(
+                group_types,
+                aggrs,
+                1 << config.initial_radix_bits,
+                vec![arena],
+            ),
+            capacity,
+            config,
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.payload.len()
     }
@@ -300,7 +323,7 @@ impl AggregateHashTable {
 
                 // 4. compare
                 unsafe {
-                    row_match_columns(
+                    let _ = row_match_columns(
                         group_columns,
                         &state.addresses,
                         &mut state.group_compare_vector,
@@ -331,17 +354,67 @@ impl AggregateHashTable {
         new_group_count
     }
 
+    fn agg_limit_probe(
+        &mut self,
+        state: &mut ProbeState,
+        group_columns: &[Column],
+        row_count: usize,
+    ) -> usize {
+        let mask = self.capacity - 1;
+        let mut need_compare_count = 0;
+        let mut no_match_count = 0;
+        // inject need_compare_count
+        for index in 0..row_count {
+            let ht_offset = state.group_hashes[index] as usize & mask;
+            let salt = state.group_hashes[index].get_salt();
+            let entry = &mut self.entries[ht_offset];
+            if entry.is_occupied() {
+                if entry.get_salt() == salt {
+                    state.group_compare_vector[need_compare_count] = index;
+                    need_compare_count += 1;
+                }
+            }
+        }
+
+        if need_compare_count > 0 {
+            for i in 0..need_compare_count {
+                let index = state.group_compare_vector[i];
+                let ht_offset = state.group_hashes[index] as usize & mask;
+                let entry = self.entries[ht_offset];
+
+                state.addresses[index] = entry.get_pointer();
+            }
+            let match_count = unsafe {
+                row_match_columns(
+                    group_columns,
+                    &state.addresses,
+                    &mut state.group_compare_vector,
+                    &mut state.temp_vector,
+                    need_compare_count,
+                    &self.payload.validity_offsets,
+                    &self.payload.group_offsets,
+                    &mut state.no_match_vector,
+                    &mut no_match_count,
+                )
+            };
+            return match_count;
+        }
+
+        0
+    }
+
     pub fn combine(&mut self, other: Self, flush_state: &mut PayloadFlushState) -> Result<()> {
-        self.combine_payloads(&other.payload, flush_state)
+        self.combine_payloads(&other.payload, flush_state, None)
     }
 
     pub fn combine_payloads(
         &mut self,
         payloads: &PartitionedPayload,
         flush_state: &mut PayloadFlushState,
+        limit: Option<usize>,
     ) -> Result<()> {
         for payload in payloads.payloads.iter() {
-            self.combine_payload(payload, flush_state)?;
+            self.combine_payload(payload, flush_state, limit)?;
         }
         Ok(())
     }
@@ -350,13 +423,56 @@ impl AggregateHashTable {
         &mut self,
         payload: &Payload,
         flush_state: &mut PayloadFlushState,
+        limit: Option<usize>,
     ) -> Result<()> {
         flush_state.clear();
-
+        let mut reach_limit = false;
+        let mut current_limit = 0;
         while payload.flush(flush_state) {
             let row_count = flush_state.row_count;
 
-            let _ = self.probe_and_create(
+            // use for `limit` optimization with agg
+            if reach_limit {
+                let match_count = self.agg_limit_probe(
+                    &mut flush_state.probe_state,
+                    &flush_state.group_columns,
+                    row_count,
+                );
+                println!("current={},match count={}", current_limit, match_count);
+
+                if match_count > 0 {
+                    let mut temp = [StateAddr::new(0); BATCH_SIZE];
+                    // set state places
+                    if !self.payload.aggrs.is_empty() {
+                        for i in 0..match_count {
+                            let idx = flush_state.probe_state.temp_vector[i];
+                            flush_state.probe_state.state_places[i] = unsafe {
+                                StateAddr::new(read::<u64>(
+                                    flush_state.probe_state.addresses[idx]
+                                        .add(self.payload.state_offset)
+                                        as _,
+                                ) as usize)
+                            };
+                            temp[i] = flush_state.state_places[idx];
+                        }
+                    }
+
+                    let state = &mut flush_state.probe_state;
+                    let places = &state.state_places.as_slice()[0..match_count];
+                    let rhses = &temp.as_slice()[0..match_count];
+                    for (aggr, addr_offset) in self
+                        .payload
+                        .aggrs
+                        .iter()
+                        .zip(self.payload.state_addr_offsets.iter())
+                    {
+                        aggr.batch_merge_states(places, rhses, *addr_offset)?;
+                    }
+                }
+                continue;
+            }
+
+            let new_group_count = self.probe_and_create(
                 &mut flush_state.probe_state,
                 &flush_state.group_columns,
                 row_count,
@@ -385,9 +501,33 @@ impl AggregateHashTable {
             {
                 aggr.batch_merge_states(places, rhses, *addr_offset)?;
             }
+
+            if let Some(limit) = limit {
+                current_limit += new_group_count;
+                if current_limit >= limit {
+                    reach_limit = true;
+                    self.reset_with_limit(limit);
+                    // no aggrs, return directly
+                    if self.payload.aggrs.is_empty() {
+                        return Ok(());
+                    }
+                }
+            }
         }
 
         Ok(())
+    }
+
+    pub fn reset_with_limit(&mut self, limit: usize) {
+        let mut count = 0;
+        for entry in self.entries.iter_mut() {
+            if *entry != 0 {
+                count += 1;
+                if count > limit {
+                    *entry = 0;
+                }
+            }
+        }
     }
 
     pub fn merge_result(&mut self, flush_state: &mut PayloadFlushState) -> Result<bool> {

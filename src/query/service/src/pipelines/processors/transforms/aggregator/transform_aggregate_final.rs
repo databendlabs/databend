@@ -46,6 +46,7 @@ pub struct TransformFinalAggregate<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
     flush_state: PayloadFlushState,
+    reach_limit: bool,
 }
 
 impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
@@ -62,19 +63,24 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                 method,
                 params,
                 flush_state: PayloadFlushState::default(),
+                reach_limit: false,
             },
         )))
     }
 
     fn transform_agg_hashtable(&mut self, meta: AggregateMeta<Method, usize>) -> Result<DataBlock> {
         let mut agg_hashtable: Option<AggregateHashTable> = None;
-        let mut limit_count = 0;
         if let AggregateMeta::Partitioned { bucket: _, data } = meta {
             for bucket_data in data {
                 match bucket_data {
                     AggregateMeta::AggregateHashTable(payload) => match agg_hashtable.as_mut() {
                         Some(ht) => {
-                            ht.combine_payloads(&payload, &mut self.flush_state)?;
+                            ht.combine_payloads(&payload, &mut self.flush_state, self.params.limit)?;
+                            if let Some(limit) = self.params.limit {
+                                if ht.len() >= limit {
+                                    self.reach_limit = true;
+                                }
+                            }
                         }
                         None => {
                             let capacity =
@@ -87,7 +93,12 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                                 capacity,
                                 Arc::new(Bump::new()),
                             );
-                            hashtable.combine_payloads(&payload, &mut self.flush_state)?;
+                            hashtable.combine_payloads(&payload, &mut self.flush_state, self.params.limit)?;
+                            if let Some(limit) = self.params.limit {
+                                if hashtable.len() >= limit {
+                                    self.reach_limit = true;
+                                }
+                            }
                             agg_hashtable = Some(hashtable);
                         }
                     },
@@ -97,7 +108,12 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
                             )?;
-                            ht.combine_payloads(&payload, &mut self.flush_state)?;
+                            ht.combine_payloads(&payload, &mut self.flush_state, self.params.limit)?;
+                            if let Some(limit) = self.params.limit {
+                                if ht.len() >= limit {
+                                    self.reach_limit = true;
+                                }
+                            }
                         }
                         None => {
                             let payload = payload.convert_to_partitioned_payload(
@@ -113,7 +129,12 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                                 capacity,
                                 Arc::new(Bump::new()),
                             );
-                            hashtable.combine_payloads(&payload, &mut self.flush_state)?;
+                            hashtable.combine_payloads(&payload, &mut self.flush_state, self.params.limit)?;
+                            if let Some(limit) = self.params.limit {
+                                if hashtable.len() >= limit {
+                                    self.reach_limit = true;
+                                }
+                            }
                             agg_hashtable = Some(hashtable);
                         }
                     },
@@ -131,14 +152,6 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                     cols.extend_from_slice(&self.flush_state.take_group_columns());
 
                     blocks.push(DataBlock::new_from_columns(cols));
-
-                    limit_count += self.flush_state.row_count;
-
-                    if let Some(limit) = self.params.limit {
-                        if limit_count >= limit {
-                            break;
-                        }
-                    }
                 } else {
                     break;
                 }
@@ -214,6 +227,7 @@ where Method: HashMethodBounds
                                                 current_len += 1;
                                                 if current_len >= limit {
                                                     reach_limit = true;
+                                                    self.reach_limit = true;
                                                 }
                                             }
                                         }
@@ -334,5 +348,12 @@ where Method: HashMethodBounds
         Err(ErrorCode::Internal(
             "TransformFinalAggregate only recv AggregateMeta::Partitioned",
         ))
+    }
+
+    fn is_finish(&mut self) -> bool {
+        if self.reach_limit {
+            return true;
+        }
+        false
     }
 }

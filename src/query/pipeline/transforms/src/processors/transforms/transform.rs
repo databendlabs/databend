@@ -181,6 +181,10 @@ pub trait BlockMetaTransform<B: BlockMetaInfo>: Send + 'static {
     fn on_finish(&mut self) -> Result<()> {
         Ok(())
     }
+
+    fn is_finish(&mut self) -> bool {
+        false
+    }
 }
 
 pub struct BlockMetaTransformer<B: BlockMetaInfo, T: BlockMetaTransform<B>> {
@@ -224,6 +228,11 @@ impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> Processor for BlockMetaTransfor
         if !self.called_on_start {
             return Ok(Event::Sync);
         }
+
+        // if self.transform.is_finish() {
+        //     self.input.finish();
+        //     return Ok(Event::Finished);
+        // }
 
         if self.output.is_finished() {
             if !self.called_on_finish {

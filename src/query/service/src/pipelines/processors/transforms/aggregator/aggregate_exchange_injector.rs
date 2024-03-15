@@ -144,7 +144,7 @@ fn scatter<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
     Ok(res)
 }
 
-fn scatter_paylaod(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>> {
+fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>> {
     let mut buckets = Vec::with_capacity(buckets);
 
     let group_types = payload.group_types.clone();
@@ -276,7 +276,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                     }
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(p) => {
-                        for payload in scatter_paylaod(p.payload, self.buckets)? {
+                        for payload in scatter_payload(p.payload, self.buckets)? {
                             blocks.push(DataBlock::empty_with_meta(
                                 AggregateMeta::<Method, V>::create_agg_payload(
                                     p.bucket,
