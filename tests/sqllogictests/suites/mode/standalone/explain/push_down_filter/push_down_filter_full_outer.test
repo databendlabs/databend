@@ -17,7 +17,7 @@ insert into t1 values(null, null), (1, 1), (2, 2), (3, 3);
 statement ok
 insert into t2 values(null, null), (1, 1), (2, 2);
 
-# convert full outer join to inner join, can propagate t1.a > 0
+# convert full outer join to left outer join, can propagate t1.a > 0
 query T
 explain select * from t1 full outer join t2 on t1.a = t2.a where t1.a > 0;
 ----
@@ -57,7 +57,7 @@ HashJoin
         ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
         └── estimated rows: 4.00
 
-# convert full outer join to inner join, can propagate t2.a > 0
+# convert full outer join to right outer join, can propagate t2.a > 0
 query T
 explain select * from t1 full outer join t2 on t1.a = t2.a where t2.a > 0;
 ----
@@ -249,7 +249,7 @@ HashJoin
         ├── push downs: [filters: [and_filters(t1.a (#0) > 0, t1.b (#1) > 0)], limit: NONE]
         └── estimated rows: 4.00
 
-# full outer join, can not push down
+# full outer join, can not push down t2.a > 0
 query T
 explain select * from t1 full outer join t2 on t1.a = t2.a and t2.a > 0;
 ----
