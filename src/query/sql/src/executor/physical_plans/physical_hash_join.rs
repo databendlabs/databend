@@ -543,7 +543,7 @@ async fn adjust_bloom_runtime_filter(
                     .derive_cardinality()?
                     .cardinality;
                 // If the filtered data reduces to less than 1/1000 of the original dataset, we will enable bloom runtime filter.
-                return Ok(join_cardinality <= (num_rows / 1000) as f64);
+                return Ok(join_cardinality <= (num_rows / 500) as f64);
             }
         }
     }
