@@ -36,7 +36,6 @@ impl PipelineBuilder {
         stage_info: StageInfo,
         main_pipeline: &mut Pipeline,
     ) -> Result<()> {
-        // let files: Vec<String> = files.iter().map(|v| v.path.clone()).collect();
         let is_active = {
             let txn_mgr = ctx.txn_mgr();
             let mut txn_mgr = txn_mgr.lock();

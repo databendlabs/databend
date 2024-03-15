@@ -376,7 +376,7 @@ impl ReplaceInterpreter {
                         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
                     let (physical_plan, _) = interpreter.build_physical_plan(&copy_plan).await?;
 
-                    // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut paln
+                    // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
 
                     *purge_info = Some((
                         copy_plan.stage_table_info.files_to_copy.unwrap_or_default(),

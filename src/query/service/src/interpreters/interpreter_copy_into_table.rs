@@ -266,7 +266,7 @@ impl CopyIntoTableInterpreter {
         // Purge files.
         {
             info!(
-                "set files to be purged, # of copied files {}, # of duplicated_files {}",
+                "set files to be purged, # of copied files: {}, # of duplicated files: {}",
                 files_to_copy.len(),
                 duplicated_files_detected.len()
             );
@@ -324,21 +324,19 @@ impl Interpreter for CopyIntoTableInterpreter {
                 .clone()
                 .unwrap_or_default();
 
-            let duplicated_copied_files =
+            let duplicated_files_detected =
                 self.plan.stage_table_info.duplicated_files_detected.clone();
 
             self.commit_insertion(
                 &mut build_res.main_pipeline,
                 &self.plan,
                 files_to_copy,
-                duplicated_copied_files,
+                duplicated_files_detected,
                 update_stream_meta,
                 unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             )
             .await?;
         }
-
-        // Add
 
         // Execute hook.
         {
