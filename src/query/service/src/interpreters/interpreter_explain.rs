@@ -83,7 +83,7 @@ impl Interpreter for ExplainInterpreter {
                         .await?
                 }
                 Plan::Insert(_insert_plan) => {
-                    let mut res = self.explain_plan(&self.plan)?;
+                    let res = self.explain_plan(&self.plan)?;
                     vec![DataBlock::concat(&res)?]
                 }
                 Plan::CreateTable(plan) => match &plan.as_select {
