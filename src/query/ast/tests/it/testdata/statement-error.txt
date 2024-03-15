@@ -318,7 +318,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
-  |                                      ^^^^^^^^^^ unexpected `CREDENTIAL`, expecting `CREDENTIALS`, `DISABLE_VARIANT_CHECK`, `RETURN_FAILED_ONLY`, `CONNECTION`, `PURGE`, `VALIDATION_MODE`, `FORCE`, `LOCATION_PREFIX`, `FORMAT`, `PATTERN`, `FILES`, `MAX_FILES`, `SIZE_LIMIT`, `FILE_FORMAT`, `ON_ERROR`, `SPLIT_SIZE`, or `;`
+  |                                      ^^^^^^^^^^ unexpected `CREDENTIAL`, expecting `CREDENTIALS`, `DISABLE_VARIANT_CHECK`, `RETURN_FAILED_ONLY`, `PURGE_DUPLICATED`, `CONNECTION`, `PURGE`, `VALIDATION_MODE`, `FORCE`, `LOCATION_PREFIX`, `FORMAT`, `PATTERN`, `FILES`, `MAX_FILES`, `SIZE_LIMIT`, `FILE_FORMAT`, `ON_ERROR`, `SPLIT_SIZE`, or `;`
 
 
 ---------- Input ----------
@@ -328,7 +328,7 @@ error:
   --> SQL:1:33
   |
 1 | COPY INTO mytable FROM @mystage CREDENTIALS = ();
-  |                                 ^^^^^^^^^^^ unexpected `CREDENTIALS`, expecting `DISABLE_VARIANT_CHECK`, `RETURN_FAILED_ONLY`, `MAX_FILES`, `PURGE`, `VALIDATION_MODE`, `FORCE`, `FORMAT`, `PATTERN`, `FILES`, `SIZE_LIMIT`, `SPLIT_SIZE`, `FILE_FORMAT`, `ON_ERROR`, or `;`
+  |                                 ^^^^^^^^^^^ unexpected `CREDENTIALS`, expecting `DISABLE_VARIANT_CHECK`, `RETURN_FAILED_ONLY`, `PURGE_DUPLICATED`, `MAX_FILES`, `PURGE`, `VALIDATION_MODE`, `FORCE`, `FORMAT`, `PATTERN`, `FILES`, `SIZE_LIMIT`, `SPLIT_SIZE`, `FILE_FORMAT`, `ON_ERROR`, or `;`
 
 
 ---------- Input ----------
