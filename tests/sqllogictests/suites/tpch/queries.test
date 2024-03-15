@@ -802,6 +802,7 @@ Brand#13 LARGE BURNISHED COPPER 45 8
 Brand#13 MEDIUM ANODIZED STEEL 23 8
 
 #Q17
+
 query I
 select
         truncate(sum(l_extendedprice) / 7.0,8) as avg_yearly
