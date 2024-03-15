@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use std::sync::LazyLock;
+use std::time::Duration;
 
 use crate::register_counter;
 use crate::register_gauge;
+use crate::register_histogram_in_milliseconds;
 use crate::Counter;
 use crate::Gauge;
+use crate::Histogram;
 
 pub static SESSION_CONNECT_NUMBERS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("session_connect_numbers"));
@@ -25,6 +28,16 @@ pub static SESSION_CLOSE_NUMBERS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("session_close_numbers"));
 pub static SESSION_ACTIVE_CONNECTIONS: LazyLock<Gauge> =
     LazyLock::new(|| register_gauge("session_connections"));
+pub static SESSION_QUQUED_QUERIES: LazyLock<Gauge> =
+    LazyLock::new(|| register_gauge("session_queued_queries"));
+pub static SESSION_QUEUE_ABORT_COUNT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("session_queue_abort_count"));
+pub static SESSION_QUEUE_ACQUIRE_ERROR_COUNT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("session_queue_acquire_error_count"));
+pub static SESSION_QUEUE_ACQUIRE_TIMEOUT_COUNT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("session_queue_acquire_timeout_count"));
+pub static SESSION_QUEUE_ACQUIRE_DURATION_MS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("session_queue_acquire_duration_ms"));
 
 pub fn incr_session_connect_numbers() {
     SESSION_CONNECT_NUMBERS.inc();
@@ -36,4 +49,24 @@ pub fn incr_session_close_numbers() {
 
 pub fn set_session_active_connections(num: usize) {
     SESSION_ACTIVE_CONNECTIONS.set(num as i64);
+}
+
+pub fn set_session_queued_queries(num: usize) {
+    SESSION_QUQUED_QUERIES.set(num as i64);
+}
+
+pub fn incr_session_queue_abort_count() {
+    SESSION_QUEUE_ABORT_COUNT.inc();
+}
+
+pub fn incr_session_queue_acquire_error_count() {
+    SESSION_QUEUE_ACQUIRE_ERROR_COUNT.inc();
+}
+
+pub fn incr_session_queue_acquire_timeout_count() {
+    SESSION_QUEUE_ACQUIRE_TIMEOUT_COUNT.inc();
+}
+
+pub fn record_session_queue_acquire_duration_ms(duration: Duration) {
+    SESSION_QUEUE_ACQUIRE_DURATION_MS.observe(duration.as_millis() as f64);
 }
