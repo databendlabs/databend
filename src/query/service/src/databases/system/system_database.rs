@@ -78,7 +78,10 @@ impl SystemDatabase {
     fn disable_system_tables() -> HashMap<String, bool> {
         let mut map = HashMap::new();
         map.insert("configs".to_string(), true);
+        map.insert("tracing".to_string(), true);
         map.insert("clusters".to_string(), true);
+        map.insert("malloc_stats".to_string(), true);
+        map.insert("build_options".to_string(), true);
         map
     }
 
