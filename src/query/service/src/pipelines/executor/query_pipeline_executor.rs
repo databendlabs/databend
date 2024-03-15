@@ -86,7 +86,7 @@ impl QueryPipelineExecutor {
         let on_finished_callback = pipeline.take_on_finished();
         let lock_guards = pipeline.take_lock_guards();
 
-        match RunningGraph::create(pipeline, 1) {
+        match RunningGraph::create(pipeline, 1, settings.query_id.clone(), None) {
             Err(cause) => {
                 let _ = on_finished_callback(&Err(cause.clone()));
                 Err(cause)
@@ -156,7 +156,7 @@ impl QueryPipelineExecutor {
             .flat_map(|x| x.take_lock_guards())
             .collect::<Vec<_>>();
 
-        match RunningGraph::from_pipelines(pipelines, 1) {
+        match RunningGraph::from_pipelines(pipelines, 1, settings.query_id.clone(), None) {
             Err(cause) => {
                 if let Some(on_finished_callback) = on_finished_callback {
                     let _ = on_finished_callback(&Err(cause.clone()));
@@ -420,7 +420,6 @@ impl QueryPipelineExecutor {
         let mut context = ExecutorWorkerContext::create(
             thread_num,
             workers_condvar,
-            self.settings.query_id.clone(),
         );
 
         while !self.global_tasks_queue.is_finished() {
