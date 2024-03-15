@@ -188,16 +188,7 @@ pub fn try_push_down_filter_join(
         return Ok((false, s_expr.clone()));
     }
 
-    if matches!(
-        join.join_type,
-        JoinType::Inner
-            | JoinType::LeftSemi
-            | JoinType::RightSemi
-            | JoinType::Left
-            | JoinType::Right
-            | JoinType::LeftSingle
-            | JoinType::RightSingle
-    ) {
+    if !matches!(join.join_type, JoinType::Full) {
         // Infer new predicate and push down filter.
         for (left_condition, right_condition) in join
             .left_conditions
