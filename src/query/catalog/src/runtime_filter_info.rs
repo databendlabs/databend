@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_expression::Expr;
 use xorf::BinaryFuse16;
 
@@ -20,6 +22,7 @@ pub struct RuntimeFilterInfo {
     inlist: Vec<Expr<String>>,
     min_max: Vec<Expr<String>>,
     bloom: Vec<(String, BinaryFuse16)>,
+    siphashes: Vec<(String, (Buffer<u64>, Option<Bitmap>))>,
 }
 
 impl RuntimeFilterInfo {
@@ -29,6 +32,13 @@ impl RuntimeFilterInfo {
 
     pub fn add_bloom(&mut self, bloom: (String, BinaryFuse16)) {
         self.bloom.push(bloom);
+    }
+
+    pub fn add_merge_into_source_build_siphashkeys(
+        &mut self,
+        digests: (String, (Buffer<u64>, Option<Bitmap>)),
+    ) {
+        self.siphashes.push(digests);
     }
 
     pub fn add_min_max(&mut self, expr: Expr<String>) {

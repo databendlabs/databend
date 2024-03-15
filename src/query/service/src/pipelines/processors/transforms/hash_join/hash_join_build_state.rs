@@ -21,7 +21,9 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::tokio::sync::Barrier;
+use databend_common_catalog::merge_into_join::MergeIntoJoinType;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -55,6 +57,7 @@ use databend_common_hashtable::StringRawEntry;
 use databend_common_hashtable::STRING_EARLY_SIZE;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
+use databend_storages_common_index::BloomIndex;
 use ethnum::U256;
 use itertools::Itertools;
 use log::info;
@@ -845,9 +848,19 @@ impl HashJoinBuildState {
                     probe_key,
                 )?;
             }
+
+            // add BloomIndex hash keys for merge into source build.
+            self.build_merge_into_runtime_filter_siphashes(
+                build_chunks,
+                &mut runtime_filter,
+                build_key,
+                probe_key,
+            )?;
+
             if self.enable_bloom_runtime_filter {
                 self.bloom_runtime_filter(build_chunks, &mut runtime_filter, build_key, probe_key)?;
             }
+
             if self.enable_min_max_runtime_filter {
                 self.min_max_runtime_filter(
                     build_chunks,
@@ -908,6 +921,52 @@ impl HashJoinBuildState {
             });
             let filter = BinaryFuse16::try_from(&hashes_vec)?;
             runtime_filter.add_bloom((id.to_string(), filter));
+        }
+        Ok(())
+    }
+
+    //      for merge into source build cases, like below:
+    // merge into `t1` using `t2` on xxx when matched xx when not matched xxx, if merge_into_optimizer
+    // gives `t2` as source build side, we can build source join keys `siphashes`, that's because we use
+    // siphash to build target table's bloom index block.
+    // in this way, we can avoid current `runtime_filter()` func's performance cost, especially for large
+    // target table case, the `runtime_filter()`'s cost is even higer than disable `runtime_filter()`.
+    //      However, for `build_runtime_filter_siphashes()` usages, we currently just used for merge into,
+    // we doesn't support join query, and it's only for `source build` cases. In fact, source build is the
+    // main case in most time.
+    fn build_merge_into_runtime_filter_siphashes(
+        &self,
+        data_blocks: &[DataBlock],
+        runtime_filter: &mut RuntimeFilterInfo,
+        build_key: &Expr,
+        probe_key: &Expr<String>,
+    ) -> Result<()> {
+        // `calculate_nullable_column_digest`, `apply_bloom_pruning`
+        let merge_type = self.ctx.get_merge_into_join();
+        if matches!(merge_type.merge_into_join_type, MergeIntoJoinType::Right) {
+            if let Expr::ColumnRef { id, .. } = probe_key {
+                let mut columns = Vec::with_capacity(data_blocks.len());
+                for block in data_blocks.iter() {
+                    if block.num_columns() == 0 {
+                        continue;
+                    }
+                    let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    let column = evaluator
+                        .run(build_key)?
+                        .convert_to_full_column(build_key.data_type(), block.num_rows());
+                    columns.push(column);
+                }
+                if columns.is_empty() {
+                    return Ok(());
+                }
+                let build_key_column = Column::concat_columns(columns.into_iter())?;
+                let digests = BloomIndex::calculate_nullable_column_digest(
+                    &self.func_ctx,
+                    &build_key_column,
+                    &build_key_column.data_type(),
+                )?;
+                runtime_filter.add_merge_into_source_build_siphashkeys((id.to_string(), digests));
+            }
         }
         Ok(())
     }

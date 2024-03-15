@@ -15,6 +15,8 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_catalog::merge_into_join::MergeIntoJoinType;
+use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::StealablePartitions;
@@ -148,8 +150,34 @@ pub fn build_fuse_parquet_source_pipeline(
     (max_threads, max_io_requests) =
         adjust_threads_and_request(false, max_threads, max_io_requests, plan);
 
-    let mut source_builder = SourcePipeBuilder::create();
+    let merge_into_join = ctx.get_merge_into_join();
+    if ctx
+        .get_settings()
+        .get_enable_merge_into_source_build_bloom()?
+        && matches!(
+            merge_into_join.merge_into_join_type,
+            MergeIntoJoinType::Right
+        )
+        && merge_into_join.target_tbl_idx == plan.table_index
+    {
+        // we can add block_metas info for merge into runtime filter, they will
+        // be used for bloom prune for target table block.
+        assert!(matches!(plan.source_info, DataSourceInfo::TableSource(_)));
+        // if let DataSourceInfo::TableSource(table_info) = plan.source_info {
+        // let table = ctx
+        //     .get_table(table_info.catalog(), table_info.name(), table_name)
+        //     .await?;
+        // let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+        //     ErrorCode::Unimplemented(format!(
+        //         "table {}, engine type {}, does not support MERGE INTO",
+        //         table.name(),
+        //         table.get_table_info().engine(),
+        //     ))
+        // })?;
+        // }
+    }
 
+    let mut source_builder = SourcePipeBuilder::create();
     match block_reader.support_blocking_api() {
         true => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
