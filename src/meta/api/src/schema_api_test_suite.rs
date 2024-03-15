@@ -5754,7 +5754,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db and table");
         {
             let plan = CreateDatabaseReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -5768,7 +5768,7 @@ impl SchemaApiTestSuite {
             let _ = mt.create_database(plan).await?;
 
             let req = CreateTableReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
@@ -5790,7 +5790,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create table index");
             let req = CreateTableIndexReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 table_id,
                 name: index_name_1.clone(),
                 column_ids: index_column_ids_1.clone(),
@@ -5799,7 +5799,7 @@ impl SchemaApiTestSuite {
             assert!(res.is_ok());
 
             let req = CreateTableIndexReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 table_id,
                 name: index_name_2.clone(),
                 column_ids: index_column_ids_2.clone(),
@@ -5811,7 +5811,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create table index again with if_not_exists = false");
             let req = CreateTableIndexReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 table_id,
                 name: index_name_1.clone(),
                 column_ids: index_column_ids_1.clone(),
@@ -5841,7 +5841,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create table index with invalid column id");
             let req = CreateTableIndexReq {
-                create_option: CreateOption::None,
+                create_option: CreateOption::Create,
                 table_id,
                 name: index_name_3.clone(),
                 column_ids: index_column_ids_3.clone(),
