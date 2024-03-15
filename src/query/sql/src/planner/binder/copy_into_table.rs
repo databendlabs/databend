@@ -82,9 +82,12 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         match &stmt.src {
             CopyIntoTableSource::Location(location) => {
-                let plan = self
+                let mut plan = self
                     .bind_copy_into_table_common(bind_context, stmt, location)
                     .await?;
+
+                // for copy from location, collect files explicitly
+                plan.collect_files_mut(self.ctx.as_ref()).await?;
                 self.bind_copy_into_table_from_location(bind_context, plan)
                     .await
             }
@@ -160,6 +163,7 @@ impl<'a> Binder {
                 files_info,
                 stage_info,
                 files_to_copy: None,
+                duplicated_files_detected: vec![],
                 is_select: false,
                 default_values: Some(default_values),
             },
@@ -215,6 +219,7 @@ impl<'a> Binder {
             self.bind_copy_from_query_into_table(bind_ctx, plan, &select_list, &None)
                 .await
         } else {
+            // TODO seems we need to collect_files here
             Ok(Plan::CopyIntoTable(Box::new(plan)))
         }
     }
@@ -304,6 +309,7 @@ impl<'a> Binder {
                 files_info,
                 stage_info,
                 files_to_copy: None,
+                duplicated_files_detected: vec![],
                 is_select: false,
                 default_values: Some(default_values),
             },
@@ -327,13 +333,10 @@ impl<'a> Binder {
         select_list: &'a [SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
-        let need_copy_file_infos = plan.collect_files(self.ctx.as_ref()).await?;
-
-        if need_copy_file_infos.is_empty() {
-            plan.no_file_to_copy = true;
+        plan.collect_files_mut(self.ctx.as_ref()).await?;
+        if plan.no_file_to_copy {
             return Ok(Plan::CopyIntoTable(Box::new(plan)));
         }
-        plan.stage_table_info.files_to_copy = Some(need_copy_file_infos.clone());
 
         let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
@@ -343,11 +346,11 @@ impl<'a> Binder {
                 plan.stage_table_info.stage_info.clone(),
                 plan.stage_table_info.files_info.clone(),
                 alias,
-                Some(need_copy_file_infos.clone()),
+                plan.stage_table_info.files_to_copy.clone(),
             )
             .await?;
 
-        // Generate a analyzed select list with from context
+        // Generate an analyzed select list with from context
         let select_list = self
             .normalize_select_list(&mut from_context, select_list)
             .await?;

@@ -21,7 +21,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::io::Files;
 use databend_common_storages_stage::StageTable;
 use log::error;
@@ -32,12 +31,12 @@ use crate::sessions::QueryContext;
 impl PipelineBuilder {
     pub fn set_purge_files_on_finished(
         ctx: Arc<QueryContext>,
-        files: Vec<StageFileInfo>,
+        files: Vec<String>,
         copy_purge_option: bool,
         stage_info: StageInfo,
         main_pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let files: Vec<String> = files.iter().map(|v| v.path.clone()).collect();
+        // let files: Vec<String> = files.iter().map(|v| v.path.clone()).collect();
         let is_active = {
             let txn_mgr = ctx.txn_mgr();
             let mut txn_mgr = txn_mgr.lock();

@@ -802,7 +802,12 @@ impl TableContext for QueryContext {
         table_name: &str,
         files: &[StageFileInfo],
         max_files: Option<usize>,
-    ) -> Result<Vec<StageFileInfo>> {
+    ) -> Result<(Vec<StageFileInfo>, Vec<String>)> {
+        if files.is_empty() {
+            info!("no files to filter");
+            return Ok((vec![], vec![]));
+        }
+
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
@@ -815,6 +820,7 @@ impl TableContext for QueryContext {
         let batch_size = min(COPIED_FILES_FILTER_BATCH_SIZE, max_files);
 
         let mut results = Vec::with_capacity(files.len());
+        let mut duplicated = Vec::with_capacity(files.len());
 
         for chunk in files.chunks(batch_size) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
@@ -834,15 +840,17 @@ impl TableContext for QueryContext {
                     results.push(file.clone());
                     result_size += 1;
                     if result_size == max_files {
-                        return Ok(results);
+                        return Ok((results, duplicated));
                     }
                     if result_size > COPY_MAX_FILES_PER_COMMIT {
                         return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
                     }
+                } else {
+                    duplicated.push(file.path.clone());
                 }
             }
         }
-        Ok(results)
+        Ok((results, duplicated))
     }
 
     fn set_materialized_cte(

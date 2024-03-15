@@ -640,7 +640,7 @@ impl TableContext for CtxDelegation {
         _table_name: &str,
         _files: &[StageFileInfo],
         _max_files: Option<usize>,
-    ) -> Result<Vec<StageFileInfo>> {
+    ) -> Result<(Vec<StageFileInfo>, Vec<String>)> {
         todo!()
     }
 

@@ -32,6 +32,12 @@ pub struct StageTableInfo {
     pub files_info: StageFilesInfo,
     pub stage_info: StageInfo,
     pub files_to_copy: Option<Vec<StageFileInfo>>,
+    // files that
+    // - are listed as candidates to be copied
+    // - but already exist in the meta server's "copied-files" set of target table
+    // - should be ignored in the copy process
+    // - may need to be purged as well (depends on the copy options)
+    pub duplicated_files_detected: Vec<String>,
     pub is_select: bool,
 }
 

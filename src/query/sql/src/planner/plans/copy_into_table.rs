@@ -109,7 +109,108 @@ pub struct CopyIntoTablePlan {
 }
 
 impl CopyIntoTablePlan {
-    pub async fn collect_files(&self, ctx: &dyn TableContext) -> Result<Vec<StageFileInfo>> {
+    pub async fn collect_files_mut(&mut self, ctx: &dyn TableContext) -> Result<()> {
+        ctx.set_status_info("begin to list files");
+        let start = Instant::now();
+
+        let stage_table_info = &self.stage_table_info;
+        let max_files = stage_table_info.stage_info.copy_options.max_files;
+        let max_files = if max_files == 0 {
+            None
+        } else {
+            Some(max_files)
+        };
+
+        let operator = init_stage_operator(&stage_table_info.stage_info)?;
+        let all_source_file_infos = if operator.info().native_capability().blocking {
+            if self.force {
+                stage_table_info
+                    .files_info
+                    .blocking_list(&operator, false, max_files)
+            } else {
+                stage_table_info
+                    .files_info
+                    .blocking_list(&operator, false, None)
+            }
+        } else if self.force {
+            stage_table_info
+                .files_info
+                .list(&operator, false, max_files)
+                .await
+        } else {
+            stage_table_info
+                .files_info
+                .list(&operator, false, None)
+                .await
+        }?;
+
+        let num_all_files = all_source_file_infos.len();
+
+        let end_get_all_source = Instant::now();
+        let cost_get_all_files = end_get_all_source.duration_since(start).as_millis();
+        metrics_inc_copy_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
+
+        ctx.set_status_info(&format!("end list files: got {} files", num_all_files));
+
+        let (need_copy_file_infos, duplicated) = if self.force {
+            if !self.stage_table_info.stage_info.copy_options.purge
+                && all_source_file_infos.len() > COPY_MAX_FILES_PER_COMMIT
+            {
+                return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
+            }
+            info!(
+                "force mode, ignore file filtering. ({}.{})",
+                &self.database_name, &self.table_name
+            );
+            (all_source_file_infos, vec![])
+        } else {
+            // Status.
+            ctx.set_status_info("begin filtering out copied files");
+
+            let (files, duplicated) = ctx
+                .filter_out_copied_files(
+                    self.catalog_info.catalog_name(),
+                    &self.database_name,
+                    &self.table_name,
+                    &all_source_file_infos,
+                    max_files,
+                )
+                .await?;
+            ctx.set_status_info(&format!(
+                "end filtering out copied files: {}",
+                num_all_files
+            ));
+
+            let end_filter_out = Instant::now();
+            let cost_filter_out = end_filter_out
+                .duration_since(end_get_all_source)
+                .as_millis();
+            metrics_inc_copy_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
+
+            (files, duplicated)
+        };
+
+        info!(
+            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{}",
+            max_files,
+            num_all_files,
+            need_copy_file_infos.len(),
+            start.elapsed().as_secs()
+        );
+
+        if need_copy_file_infos.is_empty() {
+            self.no_file_to_copy = true;
+        }
+
+        self.stage_table_info.files_to_copy = Some(need_copy_file_infos);
+        self.stage_table_info.duplicated_files_detected = duplicated;
+
+        Ok(())
+    }
+    pub async fn collect_files(
+        &self,
+        ctx: &dyn TableContext,
+    ) -> Result<(Vec<StageFileInfo>, Vec<String>)> {
         ctx.set_status_info("begin to list files");
         let start = Instant::now();
 
@@ -162,12 +263,12 @@ impl CopyIntoTablePlan {
                 "force mode, ignore file filtering. ({}.{})",
                 &self.database_name, &self.table_name
             );
-            all_source_file_infos
+            (all_source_file_infos, vec![])
         } else {
             // Status.
             ctx.set_status_info("begin filtering out copied files");
 
-            let files = ctx
+            let (files, duplicated) = ctx
                 .filter_out_copied_files(
                     self.catalog_info.catalog_name(),
                     &self.database_name,
@@ -187,14 +288,14 @@ impl CopyIntoTablePlan {
                 .as_millis();
             metrics_inc_copy_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
 
-            files
+            (files, duplicated)
         };
 
         info!(
             "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{}",
             max_files,
             num_all_files,
-            need_copy_file_infos.len(),
+            need_copy_file_infos.0.len(),
             start.elapsed().as_secs()
         );
 

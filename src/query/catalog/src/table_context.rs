@@ -212,7 +212,7 @@ pub trait TableContext: Send + Sync {
         table_name: &str,
         files: &[StageFileInfo],
         max_files: Option<usize>,
-    ) -> Result<Vec<StageFileInfo>>;
+    ) -> Result<(Vec<StageFileInfo>, Vec<String>)>;
 
     fn set_materialized_cte(
         &self,

@@ -58,7 +58,7 @@ impl StageTable {
         let table_info_placeholder = TableInfo {
             ident: Default::default(),
             desc: "".to_string(),
-            // `system.stage` is used to forbidden the user to select * from text files.
+            // `system.stage` is used to be forbidden the user to select * from text files.
             name: "stage".to_string(),
             meta: Default::default(),
             tenant: "".to_string(),
