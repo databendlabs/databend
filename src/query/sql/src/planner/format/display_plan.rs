@@ -166,18 +166,20 @@ impl Plan {
                             )));
                         }
                         let sub_tree = FormatTreeNode::with_children(
-                            format!("StreamWithFile"),
+                            "StreamWithFile".to_string(),
                             file_format_children,
                         );
                         children.push(sub_tree);
                     }
                     InsertInputSource::Values(insert_value) => match insert_value {
                         InsertValue::RawValues { data, start } => {
-                            let sub_tree =
-                                FormatTreeNode::with_children(format!("InsertedRawValue"), vec![
+                            let sub_tree = FormatTreeNode::with_children(
+                                "InsertedRawValue".to_string(),
+                                vec![
                                     FormatTreeNode::new(format!("data: {}", data)),
                                     FormatTreeNode::new(format!("start: {}", start)),
-                                ]);
+                                ],
+                            );
                             children.push(sub_tree);
                         }
                         InsertValue::Values { rows } => {
@@ -187,10 +189,10 @@ impl Plan {
                         }
                     },
                     InsertInputSource::Stage(stage_plan) => {
-                        let mut stage_children =
+                        let stage_children =
                             vec![FormatTreeNode::new(stage_plan.format_indent(verbose)?)];
                         let sub_tree =
-                            FormatTreeNode::with_children(format!("Stage"), stage_children);
+                            FormatTreeNode::with_children("Stage".to_string(), stage_children);
                         children.push(sub_tree);
                         todo!()
                     }
