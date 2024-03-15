@@ -52,15 +52,23 @@ impl StageTableInfo {
 
     #[async_backtrace::framed]
     pub async fn list_files(&self, max_files: Option<usize>) -> Result<Vec<StageFileInfo>> {
-        let op = init_stage_operator(&self.stage_info)?;
-        let infos = self
-            .files_info
-            .list(&op, false, max_files)
-            .await?
-            .into_iter()
-            .collect::<Vec<_>>();
+        let infos = list_stage_files(&self.stage_info, &self.files_info, max_files).await?;
         Ok(infos)
     }
+}
+
+pub async fn list_stage_files(
+    stage_info: &StageInfo,
+    files_info: &StageFilesInfo,
+    max_files: Option<usize>,
+) -> Result<Vec<StageFileInfo>> {
+    let op = init_stage_operator(stage_info)?;
+    let infos = files_info
+        .list(&op, false, max_files)
+        .await?
+        .into_iter()
+        .collect::<Vec<_>>();
+    Ok(infos)
 }
 
 impl Debug for StageTableInfo {

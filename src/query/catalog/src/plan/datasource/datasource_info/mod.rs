@@ -23,4 +23,5 @@ pub use parquet::FullParquetMeta;
 pub use parquet::ParquetTableInfo;
 pub use parquet_read_options::ParquetReadOptions;
 pub use result_scan::ResultScanTableInfo;
+pub use stage::list_stage_files;
 pub use stage::StageTableInfo;
