@@ -17,6 +17,8 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use byte_unit::{Byte, ByteUnit};
+use log::info;
 use std::time::Instant;
 
 use databend_common_base::base::GlobalUniqName;
@@ -83,6 +85,8 @@ pub struct Spiller {
     pub partition_location: HashMap<u8, Vec<String>>,
     /// Record columns layout for spilled data, will be used when read data from disk
     pub columns_layout: HashMap<String, Vec<usize>>,
+    /// Record how many bytes have been spilled for each partition.
+    pub partition_spilled_bytes: HashMap<u8, u64>,
 }
 
 impl Spiller {
@@ -103,6 +107,7 @@ impl Spiller {
             join_spilling_partition_bits,
             partition_location: Default::default(),
             columns_layout: Default::default(),
+            partition_spilled_bytes: Default::default(),
         })
     }
 
@@ -187,7 +192,11 @@ impl Spiller {
             bytes: data.memory_size(),
         };
 
-        let location = self.spill_block(data).await?;
+        self.partition_spilled_bytes.entry(p_id).and_modify(|bytes| {
+            *bytes += data.memory_size() as u64;
+        }).or_insert(data.memory_size() as u64);
+
+        let (location, _) = self.spill_block(data).await?;
         self.partition_location
             .entry(p_id)
             .and_modify(|locs| {
@@ -300,6 +309,21 @@ impl Spiller {
 
     pub(crate) fn spilled_files(&self) -> Vec<String> {
         self.columns_layout.keys().cloned().collect()
+    }
+
+    pub(crate) fn print_spill_info(&self) -> String {
+        // Using a single line to print how many bytes have been spilled and how many files have been spiled for each partition.
+        let mut info = String::new();
+        for (p_id, bytes) in self.partition_spilled_bytes.iter() {
+            // Covert bytes to GB
+            let spill_gb = Byte::from_unit(*bytes as f64, ByteUnit::B)
+                .unwrap()
+                .get_appropriate_unit(false)
+                .format(2);
+            let files = self.partition_location.get(p_id).unwrap().len();
+            info.push_str(&format!("Partition {}: spilled {}, {} files \n", p_id, spill_gb, files));
+        }
+        info
     }
 }
 
