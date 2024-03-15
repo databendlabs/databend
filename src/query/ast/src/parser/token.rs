@@ -1213,6 +1213,8 @@ pub enum TokenKind {
     UNTIL,
     #[token("BEGIN", ignore(ascii_case))]
     BEGIN,
+    #[token("TRANSACTION", ignore(ascii_case))]
+    TRANSACTION,
     #[token("COMMIT", ignore(ascii_case))]
     COMMIT,
     #[token("ABORT", ignore(ascii_case))]
@@ -1541,6 +1543,7 @@ impl TokenKind {
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING
+            | TokenKind::TRANSACTION
             | TokenKind::TRUE
             // | TokenKind::UNIQUE
             //| TokenKind::USER
