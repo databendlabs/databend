@@ -24,6 +24,7 @@ use poem::IntoResponse;
 pub struct SettingsItem {
     pub name: String,
     pub desc: &'static str,
+    pub level: String,
     pub user_value: String,
     pub default_value: String,
     pub range: Option<String>,
@@ -44,6 +45,7 @@ async fn list_settings_impl(tenant: &str) -> Result<Vec<SettingsItem>> {
         .map(|item| SettingsItem {
             name: item.name,
             desc: item.desc,
+            level: format!("{:?}", item.level),
             user_value: item.user_value.to_string(),
             default_value: item.default_value.to_string(),
             range: item.range.map(|x| x.to_string()),
@@ -72,6 +74,7 @@ async fn set_setting_impl(tenant: &str, key: &str, value: String) -> Result<Vec<
         .map(|item| SettingsItem {
             name: item.name,
             desc: item.desc,
+            level: format!("{:?}", item.level),
             user_value: item.user_value.to_string(),
             default_value: item.default_value.to_string(),
             range: item.range.map(|x| x.to_string()),
@@ -100,6 +103,7 @@ async fn unset_setting_impl(tenant: &str, key: &str) -> Result<Vec<SettingsItem>
         .map(|item| SettingsItem {
             name: item.name,
             desc: item.desc,
+            level: format!("{:?}", item.level),
             user_value: item.user_value.to_string(),
             default_value: item.default_value.to_string(),
             range: item.range.map(|x| x.to_string()),
