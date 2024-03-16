@@ -41,7 +41,7 @@ async fn test_user_lambda_udf() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(&tenant, isempty_udf.clone(), &CreateOption::None)
+        .add_udf(&tenant, isempty_udf.clone(), &CreateOption::Create)
         .await?;
 
     // add isnotempty.
@@ -52,7 +52,7 @@ async fn test_user_lambda_udf() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(&tenant, isnotempty_udf.clone(), &CreateOption::None)
+        .add_udf(&tenant, isnotempty_udf.clone(), &CreateOption::Create)
         .await?;
 
     // get all.
@@ -114,7 +114,7 @@ async fn test_user_udf_server() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(&tenant, isempty_udf.clone(), &CreateOption::None)
+        .add_udf(&tenant, isempty_udf.clone(), &CreateOption::Create)
         .await?;
 
     // add isnotempty.
@@ -128,7 +128,7 @@ async fn test_user_udf_server() -> Result<()> {
         description,
     );
     user_mgr
-        .add_udf(&tenant, isnotempty_udf.clone(), &CreateOption::None)
+        .add_udf(&tenant, isnotempty_udf.clone(), &CreateOption::Create)
         .await?;
 
     // get all.

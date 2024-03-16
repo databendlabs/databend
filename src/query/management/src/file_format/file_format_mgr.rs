@@ -82,7 +82,7 @@ impl FileFormatApi for FileFormatMgr {
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None))
             .await?;
 
-        if let CreateOption::None = create_option {
+        if let CreateOption::Create = create_option {
             if res.prev.is_some() {
                 return Err(ErrorCode::FileFormatAlreadyExists(format!(
                     "File format '{}' already exists.",
