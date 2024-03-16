@@ -26,7 +26,6 @@ use enum_as_inner::EnumAsInner;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::ValidationMode;
-use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTable {
