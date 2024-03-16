@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::intrinsics::unlikely;
+
 use databend_common_expression::BlockMetaInfo;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -120,18 +122,66 @@ pub struct CSVRowBatch {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Default)]
 pub struct NdjsonRowBatch {
-    pub tail_of_last_batch: Vec<u8>,
+    // as the first row of this batch
+    pub tail_of_last_batch: Option<Vec<u8>>,
 
-    // ignore data[..start]
+    // designed to use Vec of BytesBatch without realloc
+    // should ignore data[..start]
     pub data: Vec<u8>,
     pub start: usize,
     pub row_ends: Vec<usize>,
+}
+pub struct NdJsonRowBatchIter<'a> {
+    first_row: &'a [u8],
+    data: &'a [u8],
+    row_ends: &'a [usize],
+    end_index: i32,
+    start: usize,
+}
+
+impl<'a> NdjsonRowBatch {
+    pub fn iter(&'a self) -> NdJsonRowBatchIter<'a> {
+        let (end_index, first_row) = if let Some(row) = &self.tail_of_last_batch {
+            (-1, row)
+        } else {
+            (0, &self.data)
+        };
+        NdJsonRowBatchIter {
+            first_row,
+            end_index,
+            data: &self.data,
+            row_ends: &self.row_ends,
+            start: self.start,
+        }
+    }
+}
+
+impl<'a> Iterator for NdJsonRowBatchIter<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if unlikely(self.end_index < 0) {
+            self.end_index = 0;
+            Some(self.first_row)
+        } else {
+            let end_index = self.end_index as usize;
+            if end_index >= self.row_ends.len() {
+                None
+            } else {
+                let end = self.row_ends[end_index];
+                let start = self.start;
+                self.start = end;
+                self.end_index += 1;
+                Some(&self.data[start..end])
+            }
+        }
+    }
 }
 
 impl NdjsonRowBatch {
     pub fn rows(&self) -> usize {
         self.row_ends.len()
-            + if self.tail_of_last_batch.is_empty() {
+            + if self.tail_of_last_batch.is_none() {
                 0
             } else {
                 1
@@ -139,7 +189,13 @@ impl NdjsonRowBatch {
     }
 
     pub fn size(&self) -> usize {
-        self.data.len() + self.tail_of_last_batch.len() - self.start
+        self.data.len()
+            + self
+                .tail_of_last_batch
+                .as_ref()
+                .map(|v| v.len())
+                .unwrap_or(0)
+            - self.start
     }
 }
 

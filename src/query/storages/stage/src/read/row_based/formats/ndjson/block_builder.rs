@@ -168,7 +168,6 @@ impl RowDecoder for NdJsonDecoder {
         batch: RowBatchWithPosition,
     ) -> Result<Vec<DataBlock>> {
         let columns = &mut state.mutable_columns;
-        let mut start = 0usize;
         let data = batch.data.into_nd_json().unwrap();
         let null_if = self
             .fmt
@@ -177,24 +176,23 @@ impl RowDecoder for NdJsonDecoder {
             .iter()
             .map(|x| x.as_str())
             .collect::<Vec<_>>();
-        for (i, end) in data.row_ends.iter().enumerate() {
-            let buf = &data.data[start..*end];
-            let buf = buf.trim();
-            if !buf.is_empty() {
-                if let Err(e) = self.read_row(buf, columns, &null_if) {
+
+        for (row_id, row) in data.iter().enumerate() {
+            let row = row.trim();
+            if !row.is_empty() {
+                if let Err(e) = self.read_row(row, columns, &null_if) {
                     self.load_context.error_handler.on_error(
                         e,
                         Some((columns, state.num_rows)),
                         &mut state.file_status,
                         &batch.start_pos.path,
-                        batch.start_pos.rows + i,
+                        batch.start_pos.rows + row_id,
                     )?
                 } else {
                     state.num_rows += 1;
                     state.file_status.num_rows_loaded += 1;
                 }
             }
-            start = *end;
         }
         Ok(vec![])
     }
