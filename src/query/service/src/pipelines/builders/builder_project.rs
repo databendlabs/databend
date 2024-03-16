@@ -31,6 +31,13 @@ use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {
     pub(crate) fn build_project(&mut self, project: &Project) -> Result<()> {
         self.build_pipeline(&project.input)?;
+
+        if project.ignore_result {
+            return self
+                .main_pipeline
+                .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))));
+        }
+
         let num_input_columns = project.input.output_schema()?.num_fields();
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(

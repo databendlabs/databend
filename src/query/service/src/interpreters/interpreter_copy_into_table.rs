@@ -30,7 +30,7 @@ use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::executor::physical_plans::QuerySource;
+use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFileInfo;
@@ -123,18 +123,21 @@ impl CopyIntoTableInterpreter {
         let files = plan.collect_files(self.ctx.as_ref()).await?;
         let mut seq = vec![];
         let source = if let Some(ref query) = plan.query {
-            let (select_interpreter, query_source_schema, update_stream_meta) =
-                self.build_query(query).await?;
+            let (query_interpreter, _, update_stream_meta) = self.build_query(query).await?;
             seq = update_stream_meta;
-            let plan_query = select_interpreter.build_physical_plan().await?;
-            next_plan_id = plan_query.get_id() + 1;
-            let result_columns = select_interpreter.get_result_columns();
-            CopyIntoTableSource::Query(Box::new(QuerySource {
-                plan: plan_query,
-                ignore_result: select_interpreter.get_ignore_result(),
-                result_columns,
-                query_source_schema,
-            }))
+            let query_physical_plan = Box::new(query_interpreter.build_physical_plan().await?);
+
+            let current_plan_id = query_physical_plan.get_id();
+            next_plan_id = current_plan_id + 2;
+            let result_columns = query_interpreter.get_result_columns();
+            CopyIntoTableSource::Query(Box::new(PhysicalPlan::Project(
+                Project::from_columns_binding(
+                    current_plan_id + 1,
+                    query_physical_plan,
+                    result_columns,
+                    query_interpreter.get_ignore_result(),
+                )?,
+            )))
         } else {
             let stage_table_info = StageTableInfo {
                 files_to_copy: Some(files.clone()),

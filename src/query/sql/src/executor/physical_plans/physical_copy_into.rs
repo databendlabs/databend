@@ -16,6 +16,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
@@ -55,15 +56,16 @@ pub struct QuerySource {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum CopyIntoTableSource {
-    Query(Box<QuerySource>),
+    Query(Box<PhysicalPlan>),
     Stage(Box<DataSourcePlan>),
 }
 
 impl CopyIntoTable {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        match &self.source {
-            CopyIntoTableSource::Query(query_ctx) => Ok(query_ctx.query_source_schema.clone()),
-            CopyIntoTableSource::Stage(_) => Ok(self.required_values_schema.clone()),
-        }
+        Ok(DataSchemaRefExt::create(vec![]))
+        // match &self.source {
+        //     CopyIntoTableSource::Query(query_ctx) => Ok(query_ctx.query_source_schema.clone()),
+        //     CopyIntoTableSource::Stage(_) => Ok(self.required_values_schema.clone()),
+        // }
     }
 }

@@ -40,7 +40,6 @@ use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::MergeIntoSource;
 use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
-use crate::executor::physical_plans::QuerySource;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
 use crate::executor::physical_plans::ReclusterSource;
@@ -143,6 +142,7 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             projections: plan.projections.clone(),
+            ignore_result: plan.ignore_result,
             columns: plan.columns.clone(),
             stat_info: plan.stat_info.clone(),
         }))
@@ -367,13 +367,10 @@ pub trait PhysicalPlanReplacer {
             CopyIntoTableSource::Stage(_) => {
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
             }
-            CopyIntoTableSource::Query(query_ctx) => {
-                let input = self.replace(&query_ctx.plan)?;
+            CopyIntoTableSource::Query(query_physical_plan) => {
+                let input = self.replace(query_physical_plan)?;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
-                        plan: input,
-                        ..*query_ctx.clone()
-                    })),
+                    source: CopyIntoTableSource::Query(Box::new(input)),
                     ..plan.clone()
                 })))
             }
@@ -572,7 +569,7 @@ impl PhysicalPlan {
                 }
                 PhysicalPlan::CopyIntoTable(plan) => match &plan.source {
                     CopyIntoTableSource::Query(input) => {
-                        Self::traverse(&input.plan, pre_visit, visit, post_visit);
+                        Self::traverse(input, pre_visit, visit, post_visit);
                     }
                     CopyIntoTableSource::Stage(_) => {}
                 },
