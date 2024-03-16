@@ -432,6 +432,7 @@ impl Plan {
             Plan::VacuumDropTable(plan) => plan.schema(),
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
+            Plan::DescribeView(plan) => plan.schema(),
             Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),

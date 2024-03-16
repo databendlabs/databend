@@ -237,7 +237,7 @@ impl Binder {
             view,
         } = stmt;
 
-        let (catalog, database, view) =
+        let (catalog, database, view_name) =
             self.normalize_object_identifier_triple(catalog, database, view);
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Field", DataType::String),
@@ -250,7 +250,7 @@ impl Binder {
         Ok(Plan::DescribeView(Box::new(DescribeViewPlan {
             catalog,
             database,
-            view,
+            view_name,
             schema,
         })))
     }

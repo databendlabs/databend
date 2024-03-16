@@ -49,9 +49,7 @@ pub struct DropViewPlan {
 pub struct DescribeViewPlan {
     pub catalog: String,
     pub database: String,
-    /// The table name.
-    pub view: String,
-    /// The schema description of the output.
+    pub view_name: String,
     pub schema: DataSchemaRef,
 }
 

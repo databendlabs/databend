@@ -23,6 +23,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_sql::plans::DescribeViewPlan;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 
@@ -57,11 +58,11 @@ impl Interpreter for DescribeViewInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog = self.plan.catalog.as_str();
         let database = self.plan.database.as_str();
-        let view = self.plan.view.as_str();
+        let view = self.plan.view_name.as_str();
         let table = self.ctx.get_table(catalog, database, view).await?;
         let tbl_info = table.get_table_info();
-
-        let schema = if tbl_info.engine() == VIEW_ENGINE {
+        let engine = table.get_table_info().engine();
+        let schema = if engine == VIEW_ENGINE {
             if let Some(query) = tbl_info.options().get(QUERY) {
                 let mut planner = Planner::new(self.ctx.clone());
                 let (plan, _) = planner.plan_sql(query).await?;
@@ -72,7 +73,18 @@ impl Interpreter for DescribeViewInterpreter {
                 ));
             }
         } else {
-            return Err(ErrorCode::Internal("Can not find View Table."));
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} is not VIEW, please use `DESC {} {}.{}`",
+                &self.plan.database,
+                &self.plan.view_name,
+                if engine == STREAM_ENGINE {
+                    "STREAM"
+                } else {
+                    "TABLE"
+                },
+                &self.plan.database,
+                &self.plan.view_name
+            )));
         }?;
 
         let mut names: Vec<String> = vec![];
