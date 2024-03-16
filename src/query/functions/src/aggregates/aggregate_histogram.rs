@@ -352,7 +352,7 @@ fn calculate_bucket_max_values<T: Ord>(value_map: &BTreeMap<T, u64>, num_buckets
     // Assume that the value map is not empty
     debug_assert!(!value_map.is_empty());
 
-    // Calculate the total number of values in the map using std::accumulate()
+    // Calculate the total number of values in the map
     let total_values = value_map.values().sum();
 
     // If there is only one bucket, then all values will be assigned to that bucket

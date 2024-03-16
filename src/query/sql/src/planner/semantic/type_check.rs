@@ -1726,7 +1726,7 @@ impl<'a> TypeChecker<'a> {
             } && arg_types[1].is_integer();
             if !is_positive_integer {
                 return Err(ErrorCode::SemanticError(
-                    "The delimiter of `histogram` must be a constant positive int",
+                    "The max_num_buckets of `histogram` must be a constant positive int",
                 ));
             }
 
