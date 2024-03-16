@@ -288,7 +288,14 @@ fn get_max_num_buckets(params: &Vec<Scalar>, display_name: &str) -> Result<u64> 
     )))
 }
 
-// ported from doris: https://github.com/apache/doris/blob/a1114d46e8c3f375325c176b602039987d8dea7b/be/src/vec/utils/histogram_helpers.hpp
+/// ported from doris: https://github.com/apache/doris/blob/a1114d46e8c3f375325c176b602039987d8dea7b/be/src/vec/utils/histogram_helpers.hpp
+///
+/// Buckets used to form the histogram.
+///
+/// `lower`, `upper` The elements in bucket are all within `[lower, upper]`.
+/// `ndv` The number of distinct values in the bucket.
+/// `count` The number of elements in the bucket.
+/// `pre_sum` The number of elements in `(-inf, lower)`.
 #[derive(Serialize, Deserialize)]
 struct Bucket<T> {
     lower: T,
