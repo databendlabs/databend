@@ -43,10 +43,10 @@ enable purge_duplicated_files_in_copy, but disable the purge option, then copy i
 >>>> set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = false
 <<<<
 stage should not be empty, contains i1 and i2
->>>> list @s16
-i1.csv	8	NULL	2024-03-16 09:01:04.351 +0000	NULL
-i2.csv	8	NULL	2024-03-16 09:01:04.351 +0000	NULL
 <<<<
+>>>>
+i1.csv
+i2.csv
 table should be unchanged
 >>>> select * from t16 order by a
 1	1
@@ -60,11 +60,11 @@ enable purge_duplicated_files_in_copy, but disable the purge option, then copy i
 i3.csv	2	0	NULL	NULL
 <<<<
 stage should not be empty, contains i1, i2, and i3
->>>> list @s16
-i1.csv	8	NULL	2024-03-16 09:01:04.527 +0000	NULL
-i3.csv	8	NULL	2024-03-16 09:01:04.531 +0000	NULL
-i2.csv	8	NULL	2024-03-16 09:01:04.531 +0000	NULL
 <<<<
+>>>>
+i1.csv
+i2.csv
+i3.csv
 tow new rows should be copied into table t16
 >>>> select * from t16 order by a
 1	1

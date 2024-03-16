@@ -96,7 +96,7 @@ echo "enable purge_duplicated_files_in_copy, but disable the purge option, then 
 query "set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = false"
 
 echo "stage should not be empty, contains i1 and i2"
-query "list @s16"
+query "list @s16" | awk '{print $1}' | sort
 
 echo "table should be unchanged"
 stmt "select * from t16 order by a"
@@ -126,7 +126,7 @@ echo "enable purge_duplicated_files_in_copy, but disable the purge option, then 
 query "set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = false"
 
 echo "stage should not be empty, contains i1, i2, and i3"
-query "list @s16"
+query "list @s16" | awk '{print $1}' | sort
 
 echo "tow new rows should be copied into table t16"
 stmt "select * from t16 order by a"
