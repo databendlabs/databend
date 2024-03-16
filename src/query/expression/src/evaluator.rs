@@ -51,6 +51,28 @@ use crate::FunctionEval;
 use crate::FunctionRegistry;
 use crate::RemoteExpr;
 
+#[derive(Default)]
+pub struct EvaluateOptions<'a> {
+    pub selection: Option<&'a [u32]>,
+    pub suppress_error: bool,
+}
+
+impl<'a> EvaluateOptions<'a> {
+    pub fn new(selection: Option<&'a [u32]>) -> EvaluateOptions<'a> {
+        Self {
+            suppress_error: false,
+            selection,
+        }
+    }
+
+    pub fn with_suppress_error(&mut self, suppress_error: bool) -> Self {
+        Self {
+            suppress_error,
+            selection: self.selection,
+        }
+    }
+}
+
 pub struct Evaluator<'a> {
     data_block: &'a DataBlock,
     func_ctx: &'a FunctionContext,
@@ -98,7 +120,7 @@ impl<'a> Evaluator<'a> {
     }
 
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
-        self.partial_run(expr, None, None)
+        self.partial_run(expr, None, &mut EvaluateOptions::default())
     }
 
     /// Run an expression partially, only the rows that are valid in the validity bitmap
@@ -107,7 +129,7 @@ impl<'a> Evaluator<'a> {
         &self,
         expr: &Expr,
         validity: Option<Bitmap>,
-        selection: Option<&[u32]>,
+        options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         debug_assert!(
             validity.is_none() || validity.as_ref().unwrap().len() == self.data_block.num_rows()
@@ -125,18 +147,11 @@ impl<'a> Evaluator<'a> {
                 expr,
                 dest_type,
             } => {
-                let value = self.partial_run(expr, validity.clone(), selection)?;
+                let value = self.partial_run(expr, validity.clone(), options)?;
                 if *is_try {
                     self.run_try_cast(*span, expr.data_type(), dest_type, value)
                 } else {
-                    self.run_cast(
-                        *span,
-                        expr.data_type(),
-                        dest_type,
-                        value,
-                        validity,
-                        selection,
-                    )
+                    self.run_cast(*span, expr.data_type(), dest_type, value, validity, options)
                 }
             }
             Expr::FunctionCall {
@@ -144,14 +159,12 @@ impl<'a> Evaluator<'a> {
                 args,
                 generics,
                 ..
-            } if function.signature.name == "if" => {
-                self.eval_if(args, generics, validity, selection)
-            }
+            } if function.signature.name == "if" => self.eval_if(args, generics, validity, options),
 
             Expr::FunctionCall { function, args, .. }
                 if function.signature.name == "and_filters" =>
             {
-                self.eval_and_filters(args, validity, selection)
+                self.eval_and_filters(args, validity, options)
             }
 
             Expr::FunctionCall {
@@ -162,10 +175,18 @@ impl<'a> Evaluator<'a> {
                 generics,
                 ..
             } => {
+                let suppress_error = function.signature.name == "is_not_error";
                 let args = args
                     .iter()
-                    .map(|expr| self.partial_run(expr, validity.clone(), selection))
+                    .map(|expr| {
+                        self.partial_run(
+                            expr,
+                            validity.clone(),
+                            &mut options.with_suppress_error(suppress_error),
+                        )
+                    })
                     .collect::<Result<Vec<_>>>()?;
+
                 assert!(
                     args.iter()
                         .filter_map(|val| match val {
@@ -181,6 +202,7 @@ impl<'a> Evaluator<'a> {
                     validity,
                     errors: None,
                     func_ctx: self.func_ctx,
+                    suppress_error: options.suppress_error,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
@@ -189,7 +211,7 @@ impl<'a> Evaluator<'a> {
                     id.params(),
                     &args,
                     &function.signature.name,
-                    selection,
+                    options.selection,
                 )?;
                 Ok(result)
             }
@@ -202,7 +224,7 @@ impl<'a> Evaluator<'a> {
             } => {
                 let args = args
                     .iter()
-                    .map(|expr| self.partial_run(expr, validity.clone(), selection))
+                    .map(|expr| self.partial_run(expr, validity.clone(), options))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -266,7 +288,7 @@ impl<'a> Evaluator<'a> {
         dest_type: &DataType,
         value: Value<AnyType>,
         validity: Option<Bitmap>,
-        selection: Option<&[u32]>,
+        options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
             return Ok(value);
@@ -280,7 +302,7 @@ impl<'a> Evaluator<'a> {
                 value.clone(),
                 &cast_fn,
                 validity.clone(),
-                selection,
+                options,
             )? {
                 return Ok(new_value);
             }
@@ -300,14 +322,9 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Nullable(inner_src_ty), DataType::Nullable(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
-                Value::Scalar(_) => self.run_cast(
-                    span,
-                    inner_src_ty,
-                    inner_dest_ty,
-                    value,
-                    validity,
-                    selection,
-                ),
+                Value::Scalar(_) => {
+                    self.run_cast(span, inner_src_ty, inner_dest_ty, value, validity, options)
+                }
                 Value::Column(Column::Nullable(col)) => {
                     let validity = validity
                         .map(|validity| (&validity) & (&col.validity))
@@ -319,7 +336,7 @@ impl<'a> Evaluator<'a> {
                             inner_dest_ty,
                             Value::Column(col.column),
                             Some(validity.clone()),
-                            selection,
+                            options,
                         )?
                         .into_column()
                         .unwrap();
@@ -345,7 +362,7 @@ impl<'a> Evaluator<'a> {
                     }
                 }
                 Value::Scalar(_) => {
-                    self.run_cast(span, inner_src_ty, dest_type, value, validity, selection)
+                    self.run_cast(span, inner_src_ty, dest_type, value, validity, options)
                 }
                 Value::Column(Column::Nullable(col)) => {
                     let has_valid_nulls = validity
@@ -367,7 +384,7 @@ impl<'a> Evaluator<'a> {
                             dest_type,
                             Value::Column(col.column),
                             validity,
-                            selection,
+                            options,
                         )?
                         .into_column()
                         .unwrap();
@@ -382,7 +399,7 @@ impl<'a> Evaluator<'a> {
                     inner_dest_ty,
                     Value::Scalar(scalar),
                     validity,
-                    selection,
+                    options,
                 ),
                 Value::Column(col) => {
                     let column = self
@@ -392,7 +409,7 @@ impl<'a> Evaluator<'a> {
                             inner_dest_ty,
                             Value::Column(col),
                             validity,
-                            selection,
+                            options,
                         )?
                         .into_column()
                         .unwrap();
@@ -429,7 +446,7 @@ impl<'a> Evaluator<'a> {
                             inner_dest_ty,
                             Value::Column(array),
                             validity,
-                            selection,
+                            options,
                         )?
                         .into_column()
                         .unwrap();
@@ -453,7 +470,7 @@ impl<'a> Evaluator<'a> {
                             inner_dest_ty,
                             Value::Column(col.values),
                             validity,
-                            selection,
+                            options,
                         )?
                         .into_column()
                         .unwrap();
@@ -490,7 +507,7 @@ impl<'a> Evaluator<'a> {
                             inner_dest_ty,
                             Value::Column(array),
                             validity,
-                            selection,
+                            options,
                         )?
                         .into_column()
                         .unwrap();
@@ -514,7 +531,7 @@ impl<'a> Evaluator<'a> {
                             inner_dest_ty,
                             Value::Column(col.values),
                             validity,
-                            selection,
+                            options,
                         )?
                         .into_column()
                         .unwrap();
@@ -541,7 +558,7 @@ impl<'a> Evaluator<'a> {
                                     dest_ty,
                                     Value::Scalar(field),
                                     validity.clone(),
-                                    selection,
+                                    options,
                                 )
                                 .map(|val| val.into_scalar().unwrap())
                             })
@@ -560,7 +577,7 @@ impl<'a> Evaluator<'a> {
                                     dest_ty,
                                     Value::Column(field),
                                     validity.clone(),
-                                    selection,
+                                    options,
                                 )
                                 .map(|val| val.into_column().unwrap())
                             })
@@ -601,7 +618,7 @@ impl<'a> Evaluator<'a> {
                 value.clone(),
                 &cast_fn,
                 None,
-                None,
+                &mut EvaluateOptions::default(),
             ) {
                 return Ok(new_value);
             }
@@ -777,7 +794,7 @@ impl<'a> Evaluator<'a> {
         value: Value<AnyType>,
         cast_fn: &str,
         validity: Option<Bitmap>,
-        selection: Option<&[u32]>,
+        options: &mut EvaluateOptions,
     ) -> Result<Option<Value<AnyType>>> {
         let expr = Expr::ColumnRef {
             span,
@@ -813,9 +830,7 @@ impl<'a> Evaluator<'a> {
             });
         let block = DataBlock::new(vec![BlockEntry::new(src_type.clone(), value)], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        Ok(Some(
-            evaluator.partial_run(&cast_expr, validity, selection)?,
-        ))
+        Ok(Some(evaluator.partial_run(&cast_expr, validity, options)?))
     }
 
     // `if` is a special builtin function that could partially evaluate its arguments
@@ -827,7 +842,7 @@ impl<'a> Evaluator<'a> {
         args: &[Expr],
         generics: &[DataType],
         validity: Option<Bitmap>,
-        selection: Option<&[u32]>,
+        options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         if args.len() < 3 && args.len() % 2 == 0 {
             unreachable!()
@@ -849,7 +864,7 @@ impl<'a> Evaluator<'a> {
         let mut flags = Vec::new();
         let mut results = Vec::new();
         for cond_idx in (0..args.len() - 1).step_by(2) {
-            let cond = self.partial_run(&args[cond_idx], Some(validity.clone()), selection)?;
+            let cond = self.partial_run(&args[cond_idx], Some(validity.clone()), options)?;
             match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
                 Value::Scalar(None | Some(false)) => {
                     results.push(Value::Scalar(Scalar::default_value(&generics[0])));
@@ -859,7 +874,7 @@ impl<'a> Evaluator<'a> {
                     results.push(self.partial_run(
                         &args[cond_idx + 1],
                         Some(validity.clone()),
-                        selection,
+                        options,
                     )?);
                     validity = Bitmap::new_constant(false, num_rows);
                     flags.push(Bitmap::new_constant(true, len.unwrap_or(1)));
@@ -870,7 +885,7 @@ impl<'a> Evaluator<'a> {
                     results.push(self.partial_run(
                         &args[cond_idx + 1],
                         Some((&validity) & (&flag)),
-                        selection,
+                        options,
                     )?);
                     validity = (&validity) & (&flag.not());
                     flags.push(flag);
@@ -878,7 +893,7 @@ impl<'a> Evaluator<'a> {
             };
             conds.push(cond);
         }
-        let else_result = self.partial_run(&args[args.len() - 1], Some(validity), selection)?;
+        let else_result = self.partial_run(&args[args.len() - 1], Some(validity), options)?;
 
         // Assert that all the arguments have the same length.
         assert!(
@@ -916,12 +931,12 @@ impl<'a> Evaluator<'a> {
         &self,
         args: &[Expr],
         mut validity: Option<Bitmap>,
-        selection: Option<&[u32]>,
+        options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         assert!(args.len() >= 2);
 
         for arg in args {
-            let cond = self.partial_run(arg, validity.clone(), selection)?;
+            let cond = self.partial_run(arg, validity.clone(), options)?;
             match &cond {
                 Value::Scalar(Scalar::Null | Scalar::Boolean(false)) => {
                     return Ok(Value::Scalar(Scalar::Boolean(false)));
@@ -987,6 +1002,7 @@ impl<'a> Evaluator<'a> {
                     validity: None,
                     errors: None,
                     func_ctx: self.func_ctx,
+                    suppress_error: false,
                 };
                 let result = (eval)(&cols_ref, &mut ctx, max_nums_per_row);
                 ctx.render_error(*span, id.params(), &args, &function.signature.name, None)?;
@@ -1004,6 +1020,7 @@ impl<'a> Evaluator<'a> {
             return Ok(Scalar::Null);
         }
         let mut arg0 = column.index(0).unwrap().to_owned();
+        let mut eval_options = EvaluateOptions::default();
         for i in 1..column.len() {
             let arg1 = column.index(i).unwrap().to_owned();
             let entries = {
@@ -1016,7 +1033,14 @@ impl<'a> Evaluator<'a> {
             let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
             let result = evaluator.run(expr)?;
             arg0 = self
-                .run_cast(None, expr.data_type(), &col_type, result, None, None)?
+                .run_cast(
+                    None,
+                    expr.data_type(),
+                    &col_type,
+                    result,
+                    None,
+                    &mut eval_options,
+                )?
                 .as_scalar()
                 .unwrap()
                 .clone();
@@ -1151,11 +1175,11 @@ impl<'a> Evaluator<'a> {
     pub fn get_children(
         &self,
         args: &[Expr],
-        selection: Option<&[u32]>,
+        options: &mut EvaluateOptions,
     ) -> Result<Vec<(Value<AnyType>, DataType)>> {
         let children = args
             .iter()
-            .map(|expr| self.get_select_child(expr, selection))
+            .map(|expr| self.get_select_child(expr, options))
             .collect::<Result<Vec<_>>>()?;
         assert!(
             children
@@ -1186,7 +1210,7 @@ impl<'a> Evaluator<'a> {
     pub fn get_select_child(
         &self,
         expr: &Expr,
-        selection: Option<&[u32]>,
+        options: &mut EvaluateOptions,
     ) -> Result<(Value<AnyType>, DataType)> {
         #[cfg(debug_assertions)]
         self.check_expr(expr);
@@ -1206,7 +1230,7 @@ impl<'a> Evaluator<'a> {
                 expr,
                 dest_type,
             } => {
-                let value = self.get_select_child(expr, selection)?.0;
+                let value = self.get_select_child(expr, options)?.0;
                 if *is_try {
                     Ok((
                         self.run_try_cast(*span, expr.data_type(), dest_type, value)?,
@@ -1214,7 +1238,7 @@ impl<'a> Evaluator<'a> {
                     ))
                 } else {
                     Ok((
-                        self.run_cast(*span, expr.data_type(), dest_type, value, None, selection)?,
+                        self.run_cast(*span, expr.data_type(), dest_type, value, None, options)?,
                         dest_type.clone(),
                     ))
                 }
@@ -1227,7 +1251,7 @@ impl<'a> Evaluator<'a> {
             } if function.signature.name == "if" => {
                 let return_type =
                     self.remove_generics_data_type(generics, &function.signature.return_type);
-                Ok((self.eval_if(args, generics, None, selection)?, return_type))
+                Ok((self.eval_if(args, generics, None, options)?, return_type))
             }
 
             Expr::FunctionCall {
@@ -1238,7 +1262,7 @@ impl<'a> Evaluator<'a> {
             } if function.signature.name == "and_filters" => {
                 let return_type =
                     self.remove_generics_data_type(generics, &function.signature.return_type);
-                Ok((self.eval_and_filters(args, None, selection)?, return_type))
+                Ok((self.eval_and_filters(args, None, options)?, return_type))
             }
 
             Expr::FunctionCall {
@@ -1251,7 +1275,7 @@ impl<'a> Evaluator<'a> {
             } => {
                 let args = args
                     .iter()
-                    .map(|expr| self.get_select_child(expr, selection))
+                    .map(|expr| self.get_select_child(expr, options))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -1272,6 +1296,7 @@ impl<'a> Evaluator<'a> {
                     validity: None,
                     errors: None,
                     func_ctx: self.func_ctx,
+                    suppress_error: options.suppress_error,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
@@ -1281,7 +1306,7 @@ impl<'a> Evaluator<'a> {
                     id.params(),
                     &args,
                     &function.signature.name,
-                    selection,
+                    options.selection,
                 )?;
                 let return_type =
                     self.remove_generics_data_type(generics, &function.signature.return_type);
@@ -1296,7 +1321,7 @@ impl<'a> Evaluator<'a> {
             } => {
                 let args = args
                     .iter()
-                    .map(|expr| self.partial_run(expr, None, None))
+                    .map(|expr| self.partial_run(expr, None, &mut EvaluateOptions::default()))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()

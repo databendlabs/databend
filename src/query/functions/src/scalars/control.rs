@@ -130,4 +130,16 @@ pub fn register(registry: &mut FunctionRegistry) {
             ValueRef::Scalar(Some(_)) => Value::Scalar(true),
         },
     );
+
+    registry.register_1_arg_core::<GenericType<0>, BooleanType, _, _>(
+        "is_not_error",
+        |_, _| FunctionDomain::Full,
+        |arg, ctx| match ctx.errors.take() {
+            Some((bitmap, _)) => match arg {
+                ValueRef::Column(_) => Value::Column(bitmap.into()),
+                ValueRef::Scalar(_) => Value::Scalar(false),
+            },
+            None => Value::Scalar(false),
+        },
+    );
 }
