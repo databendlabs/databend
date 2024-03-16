@@ -145,8 +145,8 @@ where
             &buckets
                 .drain(..)
                 .map(|raw| Bucket {
-                    lower: format_scalar(raw.lower.clone()),
-                    upper: format_scalar(raw.upper.clone()),
+                    lower: format_scalar(raw.lower),
+                    upper: format_scalar(raw.upper),
                     ndv: raw.ndv,
                     count: raw.count,
                     pre_sum: raw.pre_sum,
