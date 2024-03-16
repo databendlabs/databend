@@ -3002,7 +3002,7 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
 
     let modify_column_type = map(
         rule! {
-            #modify_column_type ~ ("," ~ COLUMN ~ #modify_column_type)*
+            #modify_column_type ~ ("," ~ COLUMN? ~ #modify_column_type)*
         },
         |(column_def, column_def_vec)| {
             let mut column_defs = vec![column_def];
