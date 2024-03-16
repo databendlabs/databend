@@ -208,12 +208,17 @@ impl CsvReader {
         let mut buf_out = vec![0u8; buf_in.len()];
 
         // skip headers
-        while self.rows_to_skip > 0 {
+        // be careful not passing empty input to reader, which indicates eof
+        while self.rows_to_skip > 0 && !buf_in.is_empty() {
             let (res, n_in) = self.read_record(buf_in, &mut buf_out, &mut file_status)?;
             buf_in = &buf_in[n_in..];
             if matches!(res, ReadRecordOutput::Record { .. }) {
                 self.rows_to_skip -= 1;
             }
+        }
+
+        if self.rows_to_skip > 0 {
+            return Ok((vec![], file_status));
         }
 
         // prepare for reading data
