@@ -46,14 +46,6 @@ pub struct CopyIntoTable {
     pub source: CopyIntoTableSource,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct QuerySource {
-    pub plan: PhysicalPlan,
-    pub query_source_schema: DataSchemaRef,
-    pub ignore_result: bool,
-    pub result_columns: Vec<ColumnBinding>,
-}
-
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum CopyIntoTableSource {
     Query(Box<PhysicalPlan>),
@@ -63,9 +55,5 @@ pub enum CopyIntoTableSource {
 impl CopyIntoTable {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRefExt::create(vec![]))
-        // match &self.source {
-        //     CopyIntoTableSource::Query(query_ctx) => Ok(query_ctx.query_source_schema.clone()),
-        //     CopyIntoTableSource::Stage(_) => Ok(self.required_values_schema.clone()),
-        // }
     }
 }

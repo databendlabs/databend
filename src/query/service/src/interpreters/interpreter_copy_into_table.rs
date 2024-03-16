@@ -66,7 +66,7 @@ impl CopyIntoTableInterpreter {
     async fn build_query(
         &self,
         query: &Plan,
-    ) -> Result<(SelectInterpreter, DataSchemaRef, Vec<UpdateStreamMetaReq>)> {
+    ) -> Result<(SelectInterpreter, Vec<UpdateStreamMetaReq>)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
                 s_expr,
@@ -89,21 +89,7 @@ impl CopyIntoTableInterpreter {
             false,
         )?;
 
-        // Building data schema from bind_context columns
-        // TODO(leiyskey): Extract the following logic as new API of BindContext.
-        let fields = bind_context
-            .columns
-            .iter()
-            .map(|column_binding| {
-                DataField::new(
-                    &column_binding.column_name,
-                    *column_binding.data_type.clone(),
-                )
-            })
-            .collect();
-        let data_schema = DataSchemaRefExt::create(fields);
-
-        Ok((select_interpreter, data_schema, update_stream_meta))
+        Ok((select_interpreter, update_stream_meta))
     }
 
     #[async_backtrace::framed]
@@ -123,7 +109,7 @@ impl CopyIntoTableInterpreter {
         let files = plan.collect_files(self.ctx.as_ref()).await?;
         let mut seq = vec![];
         let source = if let Some(ref query) = plan.query {
-            let (query_interpreter, _, update_stream_meta) = self.build_query(query).await?;
+            let (query_interpreter, update_stream_meta) = self.build_query(query).await?;
             seq = update_stream_meta;
             let query_physical_plan = Box::new(query_interpreter.build_physical_plan().await?);
 
