@@ -368,11 +368,9 @@ impl AggregateHashTable {
             let ht_offset = state.group_hashes[index] as usize & mask;
             let salt = state.group_hashes[index].get_salt();
             let entry = &mut self.entries[ht_offset];
-            if entry.is_occupied() {
-                if entry.get_salt() == salt {
-                    state.group_compare_vector[need_compare_count] = index;
-                    need_compare_count += 1;
-                }
+            if entry.is_occupied() && entry.get_salt() == salt {
+                state.group_compare_vector[need_compare_count] = index;
+                need_compare_count += 1;
             }
         }
 
@@ -397,14 +395,25 @@ impl AggregateHashTable {
                     &mut no_match_count,
                 )
             };
+
+            if !self.payload.aggrs.is_empty() {
+                // set state places
+                for i in 0..match_count {
+                    let idx = state.group_compare_vector[i];
+                    state.state_places[i] = unsafe {
+                        StateAddr::new(read::<u64>(
+                            state.addresses[idx].add(self.payload.state_offset) as _,
+                        ) as usize)
+                    };
+                }
+            }
             return match_count;
         }
-
         0
     }
 
     pub fn combine(&mut self, other: Self, flush_state: &mut PayloadFlushState) -> Result<()> {
-        self.combine_payloads(&other.payload, flush_state, None, false)
+        self.combine_payloads(&other.payload, flush_state, None)
     }
 
     pub fn combine_payloads(
@@ -412,10 +421,9 @@ impl AggregateHashTable {
         payloads: &PartitionedPayload,
         flush_state: &mut PayloadFlushState,
         limit: Option<usize>,
-        no_agg: bool,
     ) -> Result<()> {
         for payload in payloads.payloads.iter() {
-            self.combine_payload(payload, flush_state, limit, no_agg)?;
+            self.combine_payload(payload, flush_state, limit)?;
         }
         Ok(())
     }
@@ -425,7 +433,6 @@ impl AggregateHashTable {
         payload: &Payload,
         flush_state: &mut PayloadFlushState,
         limit: Option<usize>,
-        no_agg: bool,
     ) -> Result<()> {
         flush_state.clear();
         let mut reach_limit = false;
@@ -434,6 +441,10 @@ impl AggregateHashTable {
 
             // use for `limit` optimization with agg
             if reach_limit {
+                if self.payload.aggrs.is_empty() {
+                    return Ok(());
+                }
+
                 let match_count = self.agg_limit_probe(
                     &mut flush_state.probe_state,
                     &flush_state.group_columns,
@@ -442,24 +453,18 @@ impl AggregateHashTable {
 
                 if match_count > 0 {
                     // set state places
-                    if !self.payload.aggrs.is_empty() {
-                        for i in 0..match_count {
-                            let idx = flush_state.probe_state.group_compare_vector[i];
-                            flush_state.probe_state.state_places[i] = unsafe {
-                                StateAddr::new(read::<u64>(
-                                    flush_state.probe_state.addresses[idx]
-                                        .add(self.payload.state_offset)
-                                        as _,
-                                ) as usize)
-                            };
-                            for (aggr, addr_offset) in self
-                                .payload
-                                .aggrs
-                                .iter()
-                                .zip(self.payload.state_addr_offsets.iter())
-                            {
-                                aggr.merge_states(flush_state.probe_state.state_places[i].next(*addr_offset), flush_state.state_places[idx].next(*addr_offset))?;
-                            }
+                    for i in 0..match_count {
+                        let idx = flush_state.probe_state.group_compare_vector[i];
+                        for (aggr, addr_offset) in self
+                            .payload
+                            .aggrs
+                            .iter()
+                            .zip(self.payload.state_addr_offsets.iter())
+                        {
+                            aggr.merge_states(
+                                flush_state.probe_state.state_places[i].next(*addr_offset),
+                                flush_state.state_places[idx].next(*addr_offset),
+                            )?;
                         }
                     }
                 }
@@ -500,9 +505,6 @@ impl AggregateHashTable {
                 if self.count >= limit {
                     reach_limit = true;
                     self.reset_with_limit(limit);
-                    if no_agg {
-                        return Ok(());
-                    }
                 }
             }
         }

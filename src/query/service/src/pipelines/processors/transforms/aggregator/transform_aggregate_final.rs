@@ -46,7 +46,6 @@ pub struct TransformFinalAggregate<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
     flush_state: PayloadFlushState,
-    reach_limit: bool,
 }
 
 impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
@@ -63,27 +62,22 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                 method,
                 params,
                 flush_state: PayloadFlushState::default(),
-                reach_limit: false,
             },
         )))
     }
 
     fn transform_agg_hashtable(&mut self, meta: AggregateMeta<Method, usize>) -> Result<DataBlock> {
         let mut agg_hashtable: Option<AggregateHashTable> = None;
-        if self.reach_limit {
-            return Ok(self.params.empty_result_block());
-        }
         if let AggregateMeta::Partitioned { bucket: _, data } = meta {
             for bucket_data in data {
                 match bucket_data {
                     AggregateMeta::AggregateHashTable(payload) => match agg_hashtable.as_mut() {
                         Some(ht) => {
-                            ht.combine_payloads(&payload, &mut self.flush_state, self.params.limit, false)?;
-                            if let Some(limit) = self.params.limit {
-                                if ht.len() >= limit {
-                                    self.reach_limit = true;
-                                }
-                            }
+                            ht.combine_payloads(
+                                &payload,
+                                &mut self.flush_state,
+                                self.params.limit,
+                            )?;
                         }
                         None => {
                             let capacity =
@@ -96,12 +90,11 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                                 capacity,
                                 Arc::new(Bump::new()),
                             );
-                            hashtable.combine_payloads(&payload, &mut self.flush_state, self.params.limit, false)?;
-                            if let Some(limit) = self.params.limit {
-                                if hashtable.len() >= limit {
-                                    self.reach_limit = true;
-                                }
-                            }
+                            hashtable.combine_payloads(
+                                &payload,
+                                &mut self.flush_state,
+                                self.params.limit,
+                            )?;
                             agg_hashtable = Some(hashtable);
                         }
                     },
@@ -111,12 +104,11 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
                             )?;
-                            ht.combine_payloads(&payload, &mut self.flush_state, self.params.limit, false)?;
-                            if let Some(limit) = self.params.limit {
-                                if ht.len() >= limit {
-                                    self.reach_limit = true;
-                                }
-                            }
+                            ht.combine_payloads(
+                                &payload,
+                                &mut self.flush_state,
+                                self.params.limit,
+                            )?;
                         }
                         None => {
                             let payload = payload.convert_to_partitioned_payload(
@@ -132,12 +124,11 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                                 capacity,
                                 Arc::new(Bump::new()),
                             );
-                            hashtable.combine_payloads(&payload, &mut self.flush_state, self.params.limit, false)?;
-                            if let Some(limit) = self.params.limit {
-                                if hashtable.len() >= limit {
-                                    self.reach_limit = true;
-                                }
-                            }
+                            hashtable.combine_payloads(
+                                &payload,
+                                &mut self.flush_state,
+                                self.params.limit,
+                            )?;
                             agg_hashtable = Some(hashtable);
                         }
                     },
@@ -230,7 +221,6 @@ where Method: HashMethodBounds
                                                 current_len += 1;
                                                 if current_len >= limit {
                                                     reach_limit = true;
-                                                    self.reach_limit = true;
                                                 }
                                             }
                                         }

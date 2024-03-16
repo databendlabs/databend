@@ -134,7 +134,8 @@ impl PipelineBuilder {
         let partial_agg_config = if self.ctx.get_cluster().is_empty() {
             HashTableConfig::default().singleton_with_partial(true, max_threads as usize)
         } else {
-            HashTableConfig::default().cluster_with_partial(true, self.ctx.get_cluster().nodes.len())
+            HashTableConfig::default()
+                .cluster_with_partial(true, self.ctx.get_cluster().nodes.len())
         };
 
         self.main_pipeline.add_transform(|input, output| {
