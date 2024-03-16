@@ -318,3 +318,4 @@ select * from target_build_optimization order by a,b,c;
 
 statement ok
 set enable_experimental_merge_into = 0;
+

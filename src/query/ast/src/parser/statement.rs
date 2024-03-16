@@ -1986,7 +1986,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let begin = value(Statement::Begin, rule! { BEGIN ~ (TRANSACTION)? });
+    let begin = value(Statement::Begin, rule! { BEGIN ~ TRANSACTION? });
     let commit = value(Statement::Commit, rule! { COMMIT });
     let abort = value(Statement::Abort, rule! { ABORT | ROLLBACK });
 
@@ -2216,7 +2216,7 @@ pub fn parse_create_option(
     opt_if_not_exists: bool,
 ) -> Result<CreateOption, nom::Err<ErrorKind>> {
     match (opt_or_replace, opt_if_not_exists) {
-        (false, false) => Ok(CreateOption::None),
+        (false, false) => Ok(CreateOption::Create),
         (true, false) => Ok(CreateOption::CreateOrReplace),
         (false, true) => Ok(CreateOption::CreateIfNotExists),
         (true, true) => Err(nom::Err::Failure(ErrorKind::Other(
