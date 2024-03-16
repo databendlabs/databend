@@ -287,6 +287,43 @@ impl CopyIntoTableInterpreter {
         }
         Ok(())
     }
+
+    // things should be done when there is no files to be copied
+    async fn on_no_files_to_copy(&self) -> Result<PipelineBuildResult> {
+        // currently, there is only one thing that we care about:
+        //
+        // if `purge_duplicated_files_in_copy` and `purge` are all enabled,
+        // and there are duplicated files detected, we should clean them up immediately.
+
+        // it might be better to reuse the PipelineBuilder::set_purge_files_on_finished,
+        // unfortunately, hooking the on_finished callback of a "blank" pipeline,
+        // e.g. `PipelineBuildResult::create` leads to runtime error (during pipeline execution).
+
+        if self.plan.stage_table_info.stage_info.copy_options.purge
+            && !self
+                .plan
+                .stage_table_info
+                .duplicated_files_detected
+                .is_empty()
+            && self
+                .ctx
+                .get_settings()
+                .get_enable_purge_duplicated_files_in_copy()?
+        {
+            info!(
+                "purge_duplicated_files_in_copy enabled, number of duplicated files: {}",
+                self.plan.stage_table_info.duplicated_files_detected.len()
+            );
+
+            PipelineBuilder::purge_files_immediately(
+                self.ctx.clone(),
+                self.plan.stage_table_info.duplicated_files_detected.clone(),
+                self.plan.stage_table_info.stage_info.clone(),
+            )
+            .await?;
+        }
+        return Ok(PipelineBuildResult::create());
+    }
 }
 
 #[async_trait::async_trait]
@@ -309,8 +346,10 @@ impl Interpreter for CopyIntoTableInterpreter {
         }
 
         if self.plan.no_file_to_copy {
-            return Ok(PipelineBuildResult::create());
+            info!("no file to copy");
+            return self.on_no_files_to_copy();
         }
+
         let (physical_plan, update_stream_meta) = self.build_physical_plan(&self.plan).await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;

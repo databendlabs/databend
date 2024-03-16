@@ -90,6 +90,34 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    pub async fn purge_files_immediately(
+        ctx: Arc<QueryContext>,
+        files: Vec<String>,
+        stage_info: StageInfo,
+    ) -> Result<()> {
+        {
+            // if we are in a transaction,
+            // we just add the files to the need_purge_files list and return
+            let txn_mgr = ctx.txn_mgr();
+            let mut txn_mgr = txn_mgr.lock();
+            let is_active = txn_mgr.is_active();
+            if is_active {
+                txn_mgr.add_need_purge_files(stage_info.clone(), files.clone());
+                return Ok(());
+            }
+        }
+
+        let start = Instant::now();
+        Self::try_purge_files(ctx.clone(), &stage_info, &files).await;
+
+        // Perf.
+        {
+            metrics_inc_copy_purge_files_counter(files.len() as u32);
+            metrics_inc_copy_purge_files_cost_milliseconds(start.elapsed().as_millis() as u32);
+        }
+        Ok(())
+    }
+
     #[async_backtrace::framed]
     pub async fn try_purge_files(ctx: Arc<QueryContext>, stage_info: &StageInfo, files: &[String]) {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();

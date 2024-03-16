@@ -1,0 +1,77 @@
+>>>> drop table if exists t16
+>>>> create table t16(a int, b int)
+>>>> drop stage if exists s16
+>>>> create stage s16 url='fs:///tmp/00_0016/';
+>>>> copy into t16 from @s16 file_format = (type = CSV) purge = true
+i1.csv	2	0	NULL	NULL
+<<<<
+>>>> list @s16
+<<<<
+>>>> select * from t16
+1	1
+2	2
+duplicate file i1 into the stage
+put the new file i2 into the stage
+enable purge_duplicated_files_in_copy and copy into from location again
+>>>> set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = true
+i2.csv	2	0	NULL	NULL
+<<<<
+stage should be empty, the duplicated file i1 should be removed
+>>>> list @s16
+<<<<
+tow new rows from new file i2 should be copied into table t16
+>>>> select * from t16 order by a
+1	1
+2	2
+3	3
+4	4
+put the same files into the stage
+enable purge_duplicated_files_in_copy and copy into from location again
+>>>> set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = true
+<<<<
+stage should be empty
+>>>> list @s16
+<<<<
+table should be unchanged
+>>>> select * from t16 order by a
+1	1
+2	2
+3	3
+4	4
+put the same files into the stage
+enable purge_duplicated_files_in_copy, but disable the purge option, then copy into from location again
+>>>> set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = false
+<<<<
+stage should not be empty, contains i1 and i2
+>>>> list @s16
+i1.csv	8	NULL	2024-03-16 09:01:04.351 +0000	NULL
+i2.csv	8	NULL	2024-03-16 09:01:04.351 +0000	NULL
+<<<<
+table should be unchanged
+>>>> select * from t16 order by a
+1	1
+2	2
+3	3
+4	4
+put the same files into the stage
+also put the a new file into the stage
+enable purge_duplicated_files_in_copy, but disable the purge option, then copy into from location again
+>>>> set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = false
+i3.csv	2	0	NULL	NULL
+<<<<
+stage should not be empty, contains i1, i2, and i3
+>>>> list @s16
+i1.csv	8	NULL	2024-03-16 09:01:04.527 +0000	NULL
+i3.csv	8	NULL	2024-03-16 09:01:04.531 +0000	NULL
+i2.csv	8	NULL	2024-03-16 09:01:04.531 +0000	NULL
+<<<<
+tow new rows should be copied into table t16
+>>>> select * from t16 order by a
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+>>>> drop table if exists t16
+>>>> drop stage if exists s16
