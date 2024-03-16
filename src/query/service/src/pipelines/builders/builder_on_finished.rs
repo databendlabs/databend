@@ -96,7 +96,7 @@ impl PipelineBuilder {
         stage_info: StageInfo,
     ) -> Result<()> {
         {
-            // if we are in a transaction,
+            // if we are in an ongoing transaction,
             // we just add the files to the need_purge_files list and return
             let txn_mgr = ctx.txn_mgr();
             let mut txn_mgr = txn_mgr.lock();

@@ -88,7 +88,7 @@ impl<'a> Binder {
                     .await?;
 
                 // for copy from location, collect files explicitly
-                plan.collect_files_mut(self.ctx.as_ref()).await?;
+                plan.collect_files(self.ctx.as_ref()).await?;
                 self.bind_copy_into_table_from_location(bind_context, plan)
                     .await
             }
@@ -296,7 +296,6 @@ impl<'a> Binder {
         // currently, they do NOT enforce the deduplication detection rules,
         // as the vanilla Copy-Into does.
         // thus, we do not care about the "duplicated_files_detected", just set it to empty vector.
-        // let files_to_copy = list_stage_files(&stage_info, &files_info, stage_info.copy_options.max_files).await?;
         let files_to_copy = list_stage_files(&stage_info, &files_info, None).await?;
         let duplicated_files_detected = vec![];
 
@@ -345,7 +344,7 @@ impl<'a> Binder {
         select_list: &'a [SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
-        plan.collect_files_mut(self.ctx.as_ref()).await?;
+        plan.collect_files(self.ctx.as_ref()).await?;
         if plan.no_file_to_copy {
             return Ok(Plan::CopyIntoTable(Box::new(plan)));
         }

@@ -109,7 +109,7 @@ pub struct CopyIntoTablePlan {
 }
 
 impl CopyIntoTablePlan {
-    pub async fn collect_files_mut(&mut self, ctx: &dyn TableContext) -> Result<()> {
+    pub async fn collect_files(&mut self, ctx: &dyn TableContext) -> Result<()> {
         ctx.set_status_info("begin to list files");
         let start = Instant::now();
 

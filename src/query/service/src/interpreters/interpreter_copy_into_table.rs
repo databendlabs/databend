@@ -322,7 +322,7 @@ impl CopyIntoTableInterpreter {
             )
             .await?;
         }
-        return Ok(PipelineBuildResult::create());
+        Ok(PipelineBuildResult::create())
     }
 }
 
@@ -347,7 +347,7 @@ impl Interpreter for CopyIntoTableInterpreter {
 
         if self.plan.no_file_to_copy {
             info!("no file to copy");
-            return self.on_no_files_to_copy();
+            return self.on_no_files_to_copy().await;
         }
 
         let (physical_plan, update_stream_meta) = self.build_physical_plan(&self.plan).await?;
