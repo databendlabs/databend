@@ -57,7 +57,7 @@ async fn test_user_lambda_udf() -> Result<()> {
 
     // get all.
     {
-        let udfs = user_mgr.get_udfs(&tenant).await?;
+        let udfs = user_mgr.list_udf(&tenant).await?;
         assert_eq!(udfs, vec![isempty_udf.clone(), isnotempty_udf.clone()]);
     }
 
@@ -70,7 +70,7 @@ async fn test_user_lambda_udf() -> Result<()> {
     // drop.
     {
         user_mgr.drop_udf(&tenant, isnotempty, false).await??;
-        let udfs = user_mgr.get_udfs(&tenant).await?;
+        let udfs = user_mgr.list_udf(&tenant).await?;
         assert_eq!(udfs, vec![isempty_udf]);
     }
 
@@ -133,7 +133,7 @@ async fn test_user_udf_server() -> Result<()> {
 
     // get all.
     {
-        let udfs = user_mgr.get_udfs(&tenant).await?;
+        let udfs = user_mgr.list_udf(&tenant).await?;
         assert_eq!(udfs, vec![isempty_udf.clone(), isnotempty_udf.clone()]);
     }
 
@@ -146,7 +146,7 @@ async fn test_user_udf_server() -> Result<()> {
     // drop.
     {
         user_mgr.drop_udf(&tenant, isnotempty, false).await??;
-        let udfs = user_mgr.get_udfs(&tenant).await?;
+        let udfs = user_mgr.list_udf(&tenant).await?;
         assert_eq!(udfs, vec![isempty_udf]);
     }
 

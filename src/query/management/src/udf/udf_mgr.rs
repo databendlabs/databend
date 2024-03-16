@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
@@ -22,13 +23,14 @@ use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::NonEmptyStr;
 use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
-use futures::stream::TryStreamExt;
+use futures::TryStreamExt;
 
 use crate::udf::UdfApiError;
 use crate::udf::UdfError;
@@ -121,16 +123,38 @@ impl UdfMgr {
     /// Get all the UDFs for a tenant.
     #[async_backtrace::framed]
     #[minitrace::trace]
-    pub async fn list_udf(&self) -> Result<Vec<UserDefinedFunction>, UdfApiError> {
+    pub async fn list_udf(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
         let key = DirName::new(UdfName::new(self.tenant.as_str(), ""));
         let strm = self.kv_api.list_pb_values(&key).await?;
-        let udfs = strm
-            .try_collect()
-            .await
-            .map_err(|e| UdfApiError::MetaError {
-                meta_err: e,
-                context: "while list UDF".to_string(),
+
+        match strm.try_collect().await {
+            Ok(udfs) => Ok(udfs),
+            Err(_) => self.list_udf_fallback().await,
+        }
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    pub async fn list_udf_fallback(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
+        let key = UdfName::new(&self.tenant, "");
+        let values = self.kv_api.prefix_list_kv(&key.to_string_key()).await?;
+
+        let mut udfs = Vec::with_capacity(values.len());
+        // At begin udf is serialize to json. https://github.com/datafuselabs/databend/pull/12729/files#diff-9c992028e59caebc313d761b8488b17f142618fb89db64c51c1655689d68c41b
+        // But we can not deserialize the UserDefinedFunction from json now,
+        // because add a new field created_on and the field `definition` refactor to a ENUM type.
+        for (name, value) in values {
+            let udf = crate::deserialize_struct(&value.data, ErrorCode::IllegalUDFFormat, || {
+                format!(
+                    "Encountered invalid json data for LambdaUDF '{}', \
+                please drop this invalid udf and re-create it. \n\
+                Example: `DROP FUNCTION <invalid_udf>;` then `CREATE FUNCTION <invalid_udf> AS <udf_definition>;`\n\
+                ",
+                    name
+                )
             })?;
+            udfs.push(udf);
+        }
         Ok(udfs)
     }
 

@@ -72,13 +72,13 @@ impl UserApiProvider {
 
     // Get all UDFs for the tenant.
     #[async_backtrace::framed]
-    pub async fn get_udfs(&self, tenant: &NonEmptyString) -> Result<Vec<UserDefinedFunction>> {
+    pub async fn list_udf(&self, tenant: &NonEmptyString) -> Result<Vec<UserDefinedFunction>> {
         let udf_api = self.udf_api(tenant);
 
         let udfs = udf_api
             .list_udf()
             .await
-            .map_err(|e| e.append_context("while get UDFs"))?;
+            .map_err(|e| e.add_message_back("while list UDFs"))?;
 
         Ok(udfs)
     }
