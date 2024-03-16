@@ -55,6 +55,7 @@ use crate::RemoteExpr;
 pub struct EvaluateOptions<'a> {
     pub selection: Option<&'a [u32]>,
     pub suppress_error: bool,
+    pub errors: Option<(MutableBitmap, String)>,
 }
 
 impl<'a> EvaluateOptions<'a> {
@@ -62,6 +63,7 @@ impl<'a> EvaluateOptions<'a> {
         Self {
             suppress_error: false,
             selection,
+            errors: None,
         }
     }
 
@@ -69,6 +71,7 @@ impl<'a> EvaluateOptions<'a> {
         Self {
             suppress_error,
             selection: self.selection,
+            errors: None,
         }
     }
 }
@@ -175,16 +178,12 @@ impl<'a> Evaluator<'a> {
                 generics,
                 ..
             } => {
-                let suppress_error = function.signature.name == "is_not_error";
+                let child_suppress_error = function.signature.name == "is_not_error";
+                let mut child_option = options.with_suppress_error(child_suppress_error);
+
                 let args = args
                     .iter()
-                    .map(|expr| {
-                        self.partial_run(
-                            expr,
-                            validity.clone(),
-                            &mut options.with_suppress_error(suppress_error),
-                        )
-                    })
+                    .map(|expr| self.partial_run(expr, validity.clone(), &mut child_option))
                     .collect::<Result<Vec<_>>>()?;
 
                 assert!(
@@ -196,14 +195,21 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
                 let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
+
+                let errors = if !child_suppress_error {
+                    None
+                } else {
+                    child_option.errors.take()
+                };
                 let mut ctx = EvalContext {
                     generics,
                     num_rows: self.data_block.num_rows(),
                     validity,
-                    errors: None,
+                    errors,
                     func_ctx: self.func_ctx,
                     suppress_error: options.suppress_error,
                 };
+
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
                 ctx.render_error(
@@ -213,6 +219,12 @@ impl<'a> Evaluator<'a> {
                     &function.signature.name,
                     options.selection,
                 )?;
+
+                // inject errors into options, parent will handle it
+                if options.suppress_error {
+                    options.errors = ctx.errors.take();
+                }
+
                 Ok(result)
             }
             Expr::LambdaFunctionCall {
@@ -1273,9 +1285,11 @@ impl<'a> Evaluator<'a> {
                 generics,
                 ..
             } => {
+                let child_suppress_error = function.signature.name == "is_not_error";
+                let mut child_option = options.with_suppress_error(child_suppress_error);
                 let args = args
                     .iter()
-                    .map(|expr| self.get_select_child(expr, options))
+                    .map(|expr| self.get_select_child(expr, &mut child_option))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -1290,17 +1304,24 @@ impl<'a> Evaluator<'a> {
                     .iter()
                     .map(|(val, _)| Value::as_ref(val))
                     .collect::<Vec<_>>();
+
+                let errors = if !child_suppress_error {
+                    None
+                } else {
+                    child_option.errors.take()
+                };
                 let mut ctx = EvalContext {
                     generics,
                     num_rows: self.data_block.num_rows(),
                     validity: None,
-                    errors: None,
+                    errors,
                     func_ctx: self.func_ctx,
                     suppress_error: options.suppress_error,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
                 let args = args.into_iter().map(|(val, _)| val).collect::<Vec<_>>();
+
                 ctx.render_error(
                     *span,
                     id.params(),
@@ -1308,6 +1329,12 @@ impl<'a> Evaluator<'a> {
                     &function.signature.name,
                     options.selection,
                 )?;
+
+                // inject errors into options, parent will handle it
+                if options.suppress_error {
+                    options.errors = ctx.errors.take();
+                }
+
                 let return_type =
                     self.remove_generics_data_type(generics, &function.signature.return_type);
                 Ok((result, return_type))

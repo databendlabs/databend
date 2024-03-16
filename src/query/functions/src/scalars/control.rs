@@ -137,9 +137,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         |arg, ctx| match ctx.errors.take() {
             Some((bitmap, _)) => match arg {
                 ValueRef::Column(_) => Value::Column(bitmap.into()),
-                ValueRef::Scalar(_) => Value::Scalar(false),
+                ValueRef::Scalar(_) => Value::Scalar(bitmap.get(0)),
             },
-            None => Value::Scalar(false),
+            None => Value::Scalar(true),
         },
     );
 }
