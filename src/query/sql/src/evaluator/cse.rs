@@ -124,6 +124,7 @@ pub fn apply_cse(
 fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
     match expr {
         Expr::FunctionCall { function, .. } if function.signature.name == "if" => {}
+        Expr::FunctionCall { function, .. } if function.signature.name == "is_not_error" => {}
         Expr::FunctionCall { args, .. } | Expr::LambdaFunctionCall { args, .. } => {
             let entry = counter.entry(expr.clone()).or_insert(0);
             *entry += 1;

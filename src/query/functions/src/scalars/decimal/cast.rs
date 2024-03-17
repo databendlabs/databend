@@ -436,6 +436,7 @@ fn convert_to_decimal_domain(
         func_ctx,
         validity: None,
         errors: None,
+        suppress_error: false,
     };
     let dest_size = dest_type.size();
     let res = convert_to_decimal(&value.as_ref(), &mut ctx, &from_type, dest_type);
