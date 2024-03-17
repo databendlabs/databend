@@ -195,3 +195,7 @@ DESC t;
 ----
 c1 VARCHAR YES NULL (empty)
 c2 VARCHAR YES NULL (empty)
+
+statement ok
+DROP TABLE IF EXISTS t;
+
