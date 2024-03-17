@@ -25,8 +25,8 @@ use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::input_formats::InputContext;
-use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_settings::Settings;
 use databend_common_storage::init_stage_operator;
@@ -55,8 +55,8 @@ impl RowBasedReadPipelineBuilder<'_> {
         let batch_size = settings.get_input_read_buffer_size()? as usize;
         pipeline.add_source(
             |output| {
-                let reader = BytesReader::try_create(ctx.clone(), operator.clone(), batch_size)?;
-                AsyncSourcer::create(ctx.clone(), output, reader)
+                let reader = BytesReader::try_create(ctx.clone(), operator.clone(), batch_size, 1)?;
+                PrefetchAsyncSourcer::create(ctx.clone(), output, reader)
             },
             num_threads,
         )?;
