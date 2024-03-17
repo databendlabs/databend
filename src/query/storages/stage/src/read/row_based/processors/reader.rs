@@ -17,6 +17,9 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio::io::AsyncRead;
 use databend_common_base::base::tokio::io::AsyncReadExt;
+use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -71,6 +74,11 @@ impl BytesReader {
                 )));
             };
             buffer.truncate(n);
+
+            Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, n);
+            self.table_ctx
+                .get_scan_progress()
+                .incr(&ProgressValues { rows: 0, bytes: n });
 
             debug!("read {} bytes", n);
             let offset = state.offset;
