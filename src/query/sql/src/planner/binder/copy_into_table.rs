@@ -220,7 +220,6 @@ impl<'a> Binder {
             self.bind_copy_from_query_into_table(bind_ctx, plan, &select_list, &None)
                 .await
         } else {
-            // TODO seems we need to collect_files here
             Ok(Plan::CopyIntoTable(Box::new(plan)))
         }
     }
