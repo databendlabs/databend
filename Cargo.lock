@@ -3505,6 +3505,7 @@ name = "databend-common-settings"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "chrono-tz",
  "dashmap",
  "databend-common-ast",
  "databend-common-base",
