@@ -149,8 +149,8 @@ where
             &buckets
                 .drain(..)
                 .map(|raw| Bucket {
-                    lower: format_scalar(raw.lower.clone()),
-                    upper: format_scalar(raw.upper.clone()),
+                    lower: format_scalar(raw.lower),
+                    upper: format_scalar(raw.upper),
                     ndv: raw.ndv,
                     count: raw.count,
                     pre_sum: raw.pre_sum,
@@ -292,7 +292,14 @@ fn get_max_num_buckets(params: &Vec<Scalar>, display_name: &str) -> Result<u64> 
     )))
 }
 
-// ported from doris: https://github.com/apache/doris/blob/a1114d46e8c3f375325c176b602039987d8dea7b/be/src/vec/utils/histogram_helpers.hpp
+/// ported from doris: https://github.com/apache/doris/blob/a1114d46e8c3f375325c176b602039987d8dea7b/be/src/vec/utils/histogram_helpers.hpp
+///
+/// Buckets used to form the histogram.
+///
+/// `lower`, `upper` The elements in bucket are all within `[lower, upper]`.
+/// `ndv` The number of distinct values in the bucket.
+/// `count` The number of elements in the bucket.
+/// `pre_sum` The number of elements in `(-inf, lower)`.
 #[derive(Serialize, Deserialize)]
 struct Bucket<T> {
     lower: T,
@@ -356,7 +363,7 @@ fn calculate_bucket_max_values<T: Ord>(value_map: &BTreeMap<T, u64>, num_buckets
     // Assume that the value map is not empty
     debug_assert!(!value_map.is_empty());
 
-    // Calculate the total number of values in the map using std::accumulate()
+    // Calculate the total number of values in the map
     let total_values = value_map.values().sum();
 
     // If there is only one bucket, then all values will be assigned to that bucket
