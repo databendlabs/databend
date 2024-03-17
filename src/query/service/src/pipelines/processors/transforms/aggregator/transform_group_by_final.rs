@@ -62,7 +62,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
 
     fn transform_agg_hashtable(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
         let mut agg_hashtable: Option<AggregateHashTable> = None;
-        if let AggregateMeta::Partitioned { bucket: _, data } = meta {
+        if let AggregateMeta::Partitioned { bucket, data } = meta {
             for bucket_data in data {
                 match bucket_data {
                     AggregateMeta::AggregateHashTable(payload) => match agg_hashtable.as_mut() {
@@ -85,16 +85,20 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                     },
                     AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
                         Some(ht) => {
+                            debug_assert!(bucket == payload.bucket);
                             let payload = payload.convert_to_partitioned_payload(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
+                                0,
                             )?;
                             ht.combine_payloads(&payload, &mut self.flush_state)?;
                         }
                         None => {
+                            debug_assert!(bucket == payload.bucket);
                             let payload = payload.convert_to_partitioned_payload(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
+                                0,
                             )?;
                             let capacity =
                                 AggregateHashTable::get_capacity_for_count(payload.len());

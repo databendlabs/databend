@@ -57,9 +57,9 @@ impl SerializedPayload {
         &self,
         group_types: Vec<DataType>,
         aggrs: Vec<Arc<dyn AggregateFunction>>,
+        radix_bits: u64,
     ) -> Result<PartitionedPayload> {
         let rows_num = self.data_block.num_rows();
-        let radix_bits = self.max_partition_count.trailing_zeros() as u64;
         let config = HashTableConfig::default().with_initial_radix_bits(radix_bits);
         let mut state = ProbeState::default();
         let agg_len = aggrs.len();

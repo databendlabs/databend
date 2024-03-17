@@ -39,6 +39,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::DataOperator;
 
 use super::AggregatePayload;
+use super::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
@@ -70,6 +71,7 @@ pub struct TransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send + S
     buckets_blocks: BTreeMap<isize, Vec<DataBlock>>,
     flush_state: PayloadFlushState,
     agg_payloads: Vec<AggregatePayload>,
+    agg_spilled: Vec<BucketSpilledPayload>,
     unsplitted_blocks: Vec<DataBlock>,
     max_partition_count: usize,
     _phantom: PhantomData<V>,
@@ -103,6 +105,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             unsplitted_blocks: vec![],
             flush_state: PayloadFlushState::default(),
             agg_payloads: vec![],
+            agg_spilled: vec![],
             initialized_all_inputs: false,
             max_partition_count: 0,
             _phantom: Default::default(),
@@ -165,13 +168,13 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregateSpilling(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(payload) => {
+                        self.max_partition_count =
+                            self.max_partition_count.max(payload.max_partition_count);
                         (payload.bucket, SINGLE_LEVEL_BUCKET_NUM)
                     }
                     AggregateMeta::Serialized(payload) => {
-                        if payload.max_partition_count > 0 {
-                            self.max_partition_count =
-                                self.max_partition_count.max(payload.max_partition_count);
-                        }
+                        self.max_partition_count =
+                            self.max_partition_count.max(payload.max_partition_count);
                         (payload.bucket, payload.bucket)
                     }
                     AggregateMeta::HashTable(payload) => (payload.bucket, payload.bucket),
@@ -182,6 +185,15 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                             AggregateMeta::<Method, V>::downcast_from(meta)
                         {
                             for bucket_payload in buckets_payload {
+                                self.max_partition_count = self
+                                    .max_partition_count
+                                    .max(bucket_payload.max_partition_count);
+
+                                if self.max_partition_count > 0 {
+                                    self.agg_spilled.push(bucket_payload);
+                                    continue;
+                                }
+
                                 match self.buckets_blocks.entry(bucket_payload.bucket) {
                                     Entry::Vacant(v) => {
                                         v.insert(vec![DataBlock::empty_with_meta(
@@ -241,6 +253,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                             .convert_to_partitioned_payload(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
+                                p.max_partition_count.trailing_zeros() as u64,
                             )?
                             .payloads
                             .into_iter()
@@ -254,6 +267,11 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         }
 
                         Ok(p.bucket)
+                    }
+                    AggregateMeta::BucketSpilled(p) => {
+                        let res = p.bucket;
+                        self.agg_spilled.push(p);
+                        Ok(res)
                     }
                     _ => unreachable!(),
                 };
@@ -387,7 +405,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             return Ok(Event::NeedData);
         }
 
-        if !self.agg_payloads.is_empty()
+        if (!self.agg_payloads.is_empty() || !self.agg_spilled.is_empty())
             || (!self.buckets_blocks.is_empty()
                 && !self.unsplitted_blocks.is_empty()
                 && self.max_partition_count == 0)
@@ -463,7 +481,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
     }
 
     fn process(&mut self) -> Result<()> {
-        if !self.agg_payloads.is_empty() {
+        if !self.agg_payloads.is_empty() || !self.agg_spilled.is_empty() {
             let group_types = self.params.group_data_types.clone();
             let aggrs = self.params.aggregate_functions.clone();
 
@@ -490,6 +508,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                 }
             }
 
+            // add payload
             for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
                 let mut part = PartitionedPayload::new(
                     group_types.clone(),
@@ -505,6 +524,22 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                             AggregateMeta::<Method, V>::create_agg_hashtable(part),
                         )]);
                 }
+            }
+
+            // add spilled payload
+            for p in self.agg_spilled.drain(0..) {
+                match self.buckets_blocks.entry(p.bucket) {
+                    Entry::Vacant(v) => {
+                        v.insert(vec![DataBlock::empty_with_meta(
+                            AggregateMeta::<Method, V>::create_bucket_spilled(p),
+                        )]);
+                    }
+                    Entry::Occupied(mut v) => {
+                        v.get_mut().push(DataBlock::empty_with_meta(
+                            AggregateMeta::<Method, V>::create_bucket_spilled(p),
+                        ));
+                    }
+                };
             }
 
             return Ok(());
