@@ -49,7 +49,11 @@ where
     T: ValueType + Send + Sync,
     T::Scalar: Hash,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         self.add_object(&T::to_owned_scalar(other));
         Ok(())
     }

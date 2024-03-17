@@ -82,7 +82,11 @@ where
     T::Scalar: Number + AsPrimitive<f64>,
     R: ValueType,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         let other = T::to_owned_scalar(other).as_();
         self.value.push(other.into());
         Ok(())
@@ -198,7 +202,11 @@ where
     T: ValueType,
     T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         self.value.push(T::to_owned_scalar(other));
         Ok(())
     }
@@ -253,7 +261,11 @@ where
     T: ValueType,
     T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         self.value.push(T::to_owned_scalar(other));
         Ok(())
     }

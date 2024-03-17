@@ -76,7 +76,11 @@ where
     T: ValueType + Sync + Send,
     T::Scalar: Ord + BorshSerialize + BorshDeserialize + Serialize + Sync + Send,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         let other = T::to_owned_scalar(other);
         match self.value_map.entry(other) {
             Entry::Occupied(o) => *o.into_mut() += 1,
