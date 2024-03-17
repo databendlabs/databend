@@ -97,7 +97,7 @@ impl Interpreter for ReplaceInterpreter {
         if let Some((files, stage_info)) = purge_info {
             PipelineBuilder::set_purge_files_on_finished(
                 self.ctx.clone(),
-                files,
+                files.into_iter().map(|v| v.path).collect(),
                 stage_info.copy_options.purge,
                 stage_info,
                 &mut pipeline.main_pipeline,
@@ -374,9 +374,14 @@ impl ReplaceInterpreter {
                 Plan::CopyIntoTable(copy_plan) => {
                     let interpreter =
                         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                    let (physical_plan, files, _) =
-                        interpreter.build_physical_plan(&copy_plan).await?;
-                    *purge_info = Some((files, copy_plan.stage_table_info.stage_info.clone()));
+                    let (physical_plan, _) = interpreter.build_physical_plan(&copy_plan).await?;
+
+                    // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
+
+                    *purge_info = Some((
+                        copy_plan.stage_table_info.files_to_copy.unwrap_or_default(),
+                        copy_plan.stage_table_info.stage_info.clone(),
+                    ));
                     Ok(ReplaceSourceCtx {
                         root: Box::new(physical_plan),
                         select_ctx: None,

@@ -32,6 +32,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
@@ -640,7 +641,7 @@ impl TableContext for CtxDelegation {
         _table_name: &str,
         _files: &[StageFileInfo],
         _max_files: Option<usize>,
-    ) -> Result<Vec<StageFileInfo>> {
+    ) -> Result<FilteredCopyFiles> {
         todo!()
     }
 

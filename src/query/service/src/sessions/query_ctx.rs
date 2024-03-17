@@ -48,6 +48,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
@@ -802,7 +803,16 @@ impl TableContext for QueryContext {
         table_name: &str,
         files: &[StageFileInfo],
         max_files: Option<usize>,
-    ) -> Result<Vec<StageFileInfo>> {
+    ) -> Result<FilteredCopyFiles> {
+        if files.is_empty() {
+            info!("no files to filter");
+            return Ok(FilteredCopyFiles::default());
+        }
+
+        let collect_duplicated_files = self
+            .get_settings()
+            .get_enable_purge_duplicated_files_in_copy()?;
+
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
@@ -814,7 +824,8 @@ impl TableContext for QueryContext {
         let max_files = max_files.unwrap_or(usize::MAX);
         let batch_size = min(COPIED_FILES_FILTER_BATCH_SIZE, max_files);
 
-        let mut results = Vec::with_capacity(files.len());
+        let mut files_to_copy = Vec::with_capacity(files.len());
+        let mut duplicated_files = Vec::with_capacity(files.len());
 
         for chunk in files.chunks(batch_size) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
@@ -831,18 +842,26 @@ impl TableContext for QueryContext {
             // Colored
             for file in chunk {
                 if !copied_files.contains_key(&file.path) {
-                    results.push(file.clone());
+                    files_to_copy.push(file.clone());
                     result_size += 1;
                     if result_size == max_files {
-                        return Ok(results);
+                        return Ok(FilteredCopyFiles {
+                            files_to_copy,
+                            duplicated_files,
+                        });
                     }
                     if result_size > COPY_MAX_FILES_PER_COMMIT {
                         return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
                     }
+                } else if collect_duplicated_files && duplicated_files.len() < max_files {
+                    duplicated_files.push(file.path.clone());
                 }
             }
         }
-        Ok(results)
+        Ok(FilteredCopyFiles {
+            files_to_copy,
+            duplicated_files,
+        })
     }
 
     fn set_materialized_cte(
