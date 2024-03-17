@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod abort_operation;
-mod commit_meta;
-mod mutation_log;
+mod append_generator;
+mod conflict_resolve_context;
+mod mutation_generator;
+mod snapshot_generator;
 
-pub use abort_operation::AbortOperation;
-pub use commit_meta::*;
-pub use mutation_log::*;
+pub use append_generator::AppendGenerator;
+pub use conflict_resolve_context::ConflictResolveContext;
+pub use conflict_resolve_context::SnapshotChanges;
+pub use conflict_resolve_context::SnapshotMerged;
+pub use mutation_generator::MutationGenerator;
+pub use snapshot_generator::SnapshotGenerator;
