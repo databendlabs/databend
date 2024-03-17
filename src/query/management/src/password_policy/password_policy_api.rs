@@ -20,21 +20,17 @@ use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait PasswordPolicyApi: Sync + Send {
-    async fn add_password_policy(
+    async fn add(
         &self,
         password_policy: PasswordPolicy,
         create_option: &CreateOption,
     ) -> Result<()>;
 
-    async fn update_password_policy(
-        &self,
-        password_policy: PasswordPolicy,
-        seq: MatchSeq,
-    ) -> Result<u64>;
+    async fn update(&self, password_policy: PasswordPolicy, seq: MatchSeq) -> Result<u64>;
 
-    async fn drop_password_policy(&self, name: &str, seq: MatchSeq) -> Result<()>;
+    async fn remove(&self, name: &str, seq: MatchSeq) -> Result<()>;
 
-    async fn get_password_policy(&self, name: &str, seq: MatchSeq) -> Result<SeqV<PasswordPolicy>>;
+    async fn get(&self, name: &str, seq: MatchSeq) -> Result<SeqV<PasswordPolicy>>;
 
-    async fn get_password_policies(&self) -> Result<Vec<PasswordPolicy>>;
+    async fn list(&self) -> Result<Vec<PasswordPolicy>>;
 }

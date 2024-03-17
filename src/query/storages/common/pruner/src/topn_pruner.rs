@@ -61,9 +61,6 @@ impl TopNPrunner {
         let (sort, asc, nulls_first) = &self.sort[0];
         // Currently, we only support topn on single-column sort.
         // TODO: support monadic + multi expression + order by cluster key sort.
-
-        // Currently, we only support topn on single-column sort.
-        // TODO: support monadic + multi expression + order by cluster key sort.
         let column = if let RemoteExpr::ColumnRef { id, .. } = sort {
             id
         } else {

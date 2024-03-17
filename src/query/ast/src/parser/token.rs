@@ -566,6 +566,8 @@ pub enum TokenKind {
     NAN_DISPLAY,
     #[token("NULL_DISPLAY", ignore(ascii_case))]
     NULL_DISPLAY,
+    #[token("NULL_IF", ignore(ascii_case))]
+    NULL_IF,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
     #[token("FILE", ignore(ascii_case))]
@@ -1213,6 +1215,8 @@ pub enum TokenKind {
     UNTIL,
     #[token("BEGIN", ignore(ascii_case))]
     BEGIN,
+    #[token("TRANSACTION", ignore(ascii_case))]
+    TRANSACTION,
     #[token("COMMIT", ignore(ascii_case))]
     COMMIT,
     #[token("ABORT", ignore(ascii_case))]
@@ -1541,6 +1545,7 @@ impl TokenKind {
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING
+            | TokenKind::TRANSACTION
             | TokenKind::TRUE
             // | TokenKind::UNIQUE
             //| TokenKind::USER

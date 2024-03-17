@@ -79,7 +79,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
             if seq > 0 {
                 match req.create_option {
-                    CreateOption::None => {
+                    CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::DatamaskAlreadyExists(
                             DatamaskAlreadyExists::new(
                                 &name_key.name,

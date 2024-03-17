@@ -44,7 +44,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
 
     // create database should failed
     let create_db_req = CreateDatabaseReq {
-        create_option: CreateOption::None,
+        create_option: CreateOption::Create,
         name_ident: DatabaseNameIdent {
             tenant: tenant.to_string(),
             db_name: "system".to_string(),

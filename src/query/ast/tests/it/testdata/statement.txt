@@ -822,7 +822,7 @@ CREATE SYNC AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GRO
 CreateIndex(
     CreateIndexStmt {
         index_type: Aggregating,
-        create_option: None,
+        create_option: Create,
         index_name: Identifier {
             span: Some(
                 25..29,
@@ -1238,7 +1238,7 @@ CREATE TABLE a (c Decimal(38, 0))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         table: Identifier {
@@ -1286,7 +1286,7 @@ CREATE TABLE a (c Decimal(38, 0))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         table: Identifier {
@@ -1989,7 +1989,7 @@ CREATE TABLE a.b LIKE c.d
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: Some(
             Identifier {
@@ -2045,7 +2045,7 @@ CREATE TABLE t LIKE t2 ENGINE = MEMORY
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         table: Identifier {
@@ -2390,7 +2390,7 @@ CREATE DATABASEctl.t ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        create_option: None,
+        create_option: Create,
         database: DatabaseRef {
             catalog: Some(
                 Identifier {
@@ -2425,7 +2425,7 @@ CREATE DATABASEt ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        create_option: None,
+        create_option: Create,
         database: DatabaseRef {
             catalog: None,
             database: Identifier {
@@ -2452,7 +2452,7 @@ CREATE DATABASEt FROM SHARE a.s
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
-        create_option: None,
+        create_option: Create,
         database: DatabaseRef {
             catalog: None,
             database: Identifier {
@@ -2555,7 +2555,7 @@ CREATE TABLE c (a TIMESTAMP NULL, b TIMESTAMP)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         table: Identifier {
@@ -2614,7 +2614,7 @@ CREATE VIEW v AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         view: Identifier {
@@ -2870,7 +2870,7 @@ CREATE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         view: Identifier {
@@ -3355,7 +3355,7 @@ CREATE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
 ---------- AST ------------
 CreateStream(
     CreateStreamStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: Some(
             Identifier {
@@ -3750,7 +3750,7 @@ CREATE TABLE t (c1 Int32 NULL, c2 Int64 NULL, c3 STRING NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         table: Identifier {
@@ -3825,7 +3825,7 @@ CREATE TABLE t (c1 Int32 NOT NULL, c2 Int64 NOT NULL, c3 STRING NOT NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         table: Identifier {
@@ -3900,7 +3900,7 @@ CREATE TABLE t (c1 BINARY, c2 BINARY)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         table: Identifier {
@@ -3957,7 +3957,7 @@ CREATE TABLE t (c1 Int32 DEFAULT 1)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         table: Identifier {
@@ -4013,7 +4013,7 @@ CREATE TABLE abc AS SELECT * FROM xyz LIMIT 10
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         table: Identifier {
@@ -4227,7 +4227,7 @@ CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANT
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        create_option: None,
+        create_option: Create,
         user: UserIdentity {
             username: "u1",
             hostname: "%",
@@ -4257,7 +4257,7 @@ CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET NETWORK POLICY = 'policy1'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        create_option: None,
+        create_option: Create,
         user: UserIdentity {
             username: "u1",
             hostname: "%",
@@ -8519,7 +8519,7 @@ CREATE STAGE ~
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
-        create_option: None,
+        create_option: Create,
         stage_name: "~",
         location: None,
         file_format_options: {},
@@ -8730,7 +8730,7 @@ CREATE USER 'test-e'@'%' IDENTIFIED BY 'password'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
-        create_option: None,
+        create_option: Create,
         user: UserIdentity {
             username: "test-e",
             hostname: "%",
@@ -10163,7 +10163,7 @@ CREATE TABLE t (a Int32 COMMENT 'col comment')comment = 'table comment'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         table: Identifier {
@@ -13925,7 +13925,7 @@ CREATE FILE FORMAT my_csv
 CREATE FILE_FORMAT my_csv {"field_delimiter": ",", "record_delimiter": "\n", "skip_header": "1", "type": "CSV"}
 ---------- AST ------------
 CreateFileFormat {
-    create_option: None,
+    create_option: Create,
     name: "my_csv",
     file_format_options: FileFormatOptionsAst {
         options: {
@@ -14849,7 +14849,7 @@ CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN cur
 ---------- AST ------------
 CreateDatamaskPolicy(
     CreateDatamaskPolicyStmt {
-        create_option: None,
+        create_option: Create,
         name: "email_mask",
         policy: DataMaskPolicy {
             args: [
@@ -15070,7 +15070,7 @@ CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- AST ------------
 CreateVirtualColumn(
     CreateVirtualColumnStmt {
-        create_option: None,
+        create_option: Create,
         catalog: None,
         database: None,
         table: Identifier {
@@ -15468,7 +15468,7 @@ CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_
 ---------- AST ------------
 CreateNetworkPolicy(
     CreateNetworkPolicyStmt {
-        create_option: None,
+        create_option: Create,
         name: "mypolicy",
         allowed_ip_list: [
             "192.168.10.0/24",
@@ -17148,7 +17148,7 @@ CREATE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
-        create_option: None,
+        create_option: Create,
         udf_name: Identifier {
             span: Some(
                 16..30,

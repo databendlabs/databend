@@ -993,7 +993,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
             if share_endpoint_id_seq > 0 {
                 match req.create_option {
-                    CreateOption::None => {
+                    CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::ShareEndpointAlreadyExists(
                             ShareEndpointAlreadyExists::new(
                                 &name_key.endpoint,

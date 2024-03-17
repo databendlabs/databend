@@ -1,0 +1,40 @@
+statement ok
+set enable_compact_after_write = 0;
+
+statement ok
+create table test(m int, event_time Timestamp, url string);
+
+statement ok
+insert into test select number % 3000 as m, if(m = 0, '2024-01-01', '2023-01-01'), if(m = 0, 'http://www.google.com/xxx/', 'xxxxxxxx') from numbers(8888);
+
+statement ok
+insert into test select number % 3000 as m, if(m = 0, '2024-01-02', '2023-01-01'), if(m = 0, 'http://www.google.com/xxx/', 'xxxxxxxx') from numbers(8888);
+
+statement ok
+insert into test select number % 3000 as m, if(m = 0, '2024-01-03', '2023-01-01'), if(m = 0, 'http://www.google.com/xxx/', 'xxxxxxxx') from numbers(8888);
+
+statement ok
+insert into test select number % 3000 as m, if(m = 0, '2024-01-04', '2023-01-01'), if(m = 0, 'http://www.google.com/xxx/', 'xxxxxxxx') from numbers(8888);
+
+statement ok
+insert into test select number % 3000 as m, if(m = 0, '2024-01-05', '2023-01-01'), if(m = 0, 'http://www.google.com/xxx/', 'xxxxxxxx') from numbers(8888);
+
+statement ok
+insert into test select number % 3000 as m, if(m = 0, '2024-01-06', '2023-01-01'), if(m = 0, 'http://www.google.com/xxx/', 'xxxxxxxx') from numbers(8888);
+
+query ITT
+select * from test where url like '%google%' order by event_time limit 10;
+----
+0 2024-01-01 00:00:00.000000 http://www.google.com/xxx/
+0 2024-01-01 00:00:00.000000 http://www.google.com/xxx/
+0 2024-01-01 00:00:00.000000 http://www.google.com/xxx/
+0 2024-01-02 00:00:00.000000 http://www.google.com/xxx/
+0 2024-01-02 00:00:00.000000 http://www.google.com/xxx/
+0 2024-01-02 00:00:00.000000 http://www.google.com/xxx/
+0 2024-01-03 00:00:00.000000 http://www.google.com/xxx/
+0 2024-01-03 00:00:00.000000 http://www.google.com/xxx/
+0 2024-01-03 00:00:00.000000 http://www.google.com/xxx/
+0 2024-01-04 00:00:00.000000 http://www.google.com/xxx/
+
+statement ok
+drop table test

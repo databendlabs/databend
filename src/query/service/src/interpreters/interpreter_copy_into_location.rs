@@ -107,6 +107,7 @@ impl CopyIntoLocationInterpreter {
                 pattern: None,
             },
             files_to_copy: None,
+            duplicated_files_detected: vec![],
             is_select: false,
             default_values: None,
         };

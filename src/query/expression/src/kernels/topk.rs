@@ -76,7 +76,7 @@ impl TopKSorter {
 
     // Push the column into this sorted and update the selection
     // The selection could be used in filter
-    pub fn push_column_with_selection(
+    pub fn push_column_with_selection<const SELECT_ALL: bool>(
         &mut self,
         col: &Column,
         selection: &mut [u32],
@@ -84,20 +84,23 @@ impl TopKSorter {
     ) -> usize {
         with_number_mapped_type!(|NUM_TYPE| match col.data_type() {
             DataType::Number(NumberDataType::NUM_TYPE) => self
-                .push_column_with_selection_internal::<NumberType::<NUM_TYPE>>(
+                .push_column_with_selection_internal::<NumberType::<NUM_TYPE>, SELECT_ALL>(
                     col, selection, count
                 ),
-            DataType::String =>
-                self.push_column_with_selection_internal::<StringType>(col, selection, count),
-            DataType::Timestamp =>
-                self.push_column_with_selection_internal::<TimestampType>(col, selection, count),
-            DataType::Date =>
-                self.push_column_with_selection_internal::<DateType>(col, selection, count),
+            DataType::String => self.push_column_with_selection_internal::<StringType, SELECT_ALL>(
+                col, selection, count
+            ),
+            DataType::Timestamp => self
+                .push_column_with_selection_internal::<TimestampType, SELECT_ALL>(
+                    col, selection, count
+                ),
+            DataType::Date => self
+                .push_column_with_selection_internal::<DateType, SELECT_ALL>(col, selection, count),
             _ => count,
         })
     }
 
-    fn push_column_with_selection_internal<T: ValueType>(
+    fn push_column_with_selection_internal<T: ValueType, const SELECT_ALL: bool>(
         &mut self,
         col: &Column,
         selection: &mut [u32],
@@ -109,7 +112,7 @@ impl TopKSorter {
         let col = T::try_downcast_column(col).unwrap();
         let mut result_count = 0;
         for i in 0..count {
-            let idx = selection[i];
+            let idx = if SELECT_ALL { i as u32 } else { selection[i] };
             let value = unsafe { T::index_column_unchecked(&col, idx as usize) };
             if self.data.len() < self.limit {
                 self.data.push(T::upcast_scalar(T::to_owned_scalar(value)));

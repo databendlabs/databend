@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
@@ -36,6 +35,7 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_stage::StageTable;
 use log::debug;
+use log::info;
 
 use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::common::check_deduplicate_label;
@@ -110,7 +110,7 @@ impl CopyIntoTableInterpreter {
     pub async fn build_physical_plan(
         &self,
         plan: &CopyIntoTablePlan,
-    ) -> Result<(PhysicalPlan, Vec<StageFileInfo>, Vec<UpdateStreamMetaReq>)> {
+    ) -> Result<(PhysicalPlan, Vec<UpdateStreamMetaReq>)> {
         let mut next_plan_id = 0;
         let to_table = self
             .ctx
@@ -120,12 +120,11 @@ impl CopyIntoTableInterpreter {
                 &plan.table_name,
             )
             .await?;
-        let files = plan.collect_files(self.ctx.as_ref()).await?;
-        let mut seq = vec![];
+        let mut update_stream_meta_reqs = vec![];
         let source = if let Some(ref query) = plan.query {
             let (select_interpreter, query_source_schema, update_stream_meta) =
                 self.build_query(query).await?;
-            seq = update_stream_meta;
+            update_stream_meta_reqs = update_stream_meta;
             let plan_query = select_interpreter.build_physical_plan().await?;
             next_plan_id = plan_query.get_id() + 1;
             let result_columns = select_interpreter.get_result_columns();
@@ -136,11 +135,7 @@ impl CopyIntoTableInterpreter {
                 query_source_schema,
             }))
         } else {
-            let stage_table_info = StageTableInfo {
-                files_to_copy: Some(files.clone()),
-                ..plan.stage_table_info.clone()
-            };
-            let stage_table = StageTable::try_create(stage_table_info)?;
+            let stage_table = StageTable::try_create(plan.stage_table_info.clone())?;
             let read_source_plan = Box::new(
                 stage_table
                     .read_plan_with_catalog(
@@ -148,6 +143,7 @@ impl CopyIntoTableInterpreter {
                         plan.catalog_info.catalog_name().to_string(),
                         None,
                         None,
+                        false,
                         false,
                     )
                     .await?,
@@ -167,7 +163,6 @@ impl CopyIntoTableInterpreter {
             write_mode: plan.write_mode,
             validation_mode: plan.validation_mode.clone(),
 
-            files: files.clone(),
             source,
         }));
         next_plan_id += 1;
@@ -181,7 +176,7 @@ impl CopyIntoTableInterpreter {
                 ignore_exchange: false,
             });
         }
-        Ok((root, files, seq))
+        Ok((root, update_stream_meta_reqs))
     }
 
     fn get_copy_into_table_result(&self) -> Result<Vec<DataBlock>> {
@@ -234,7 +229,8 @@ impl CopyIntoTableInterpreter {
         &self,
         main_pipeline: &mut Pipeline,
         plan: &CopyIntoTablePlan,
-        files: &[StageFileInfo],
+        files_to_copy: Vec<StageFileInfo>,
+        duplicated_files_detected: Vec<String>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         deduplicated_label: Option<String>,
     ) -> Result<()> {
@@ -253,7 +249,7 @@ impl CopyIntoTableInterpreter {
                 ctx.clone(),
                 to_table.as_ref(),
                 &plan.stage_table_info.stage_info,
-                files,
+                &files_to_copy,
                 plan.force,
             )?;
 
@@ -270,16 +266,64 @@ impl CopyIntoTableInterpreter {
 
         // Purge files.
         {
+            info!(
+                "set files to be purged, # of copied files: {}, # of duplicated files: {}",
+                files_to_copy.len(),
+                duplicated_files_detected.len()
+            );
+
+            let files_to_be_deleted = files_to_copy
+                .into_iter()
+                .map(|v| v.path)
+                .chain(duplicated_files_detected)
+                .collect::<Vec<_>>();
             // set on_finished callback.
             PipelineBuilder::set_purge_files_on_finished(
                 ctx.clone(),
-                files.to_vec(),
+                files_to_be_deleted,
                 plan.stage_table_info.stage_info.copy_options.purge,
                 plan.stage_table_info.stage_info.clone(),
                 main_pipeline,
             )?;
         }
         Ok(())
+    }
+
+    // things should be done when there is no files to be copied
+    async fn on_no_files_to_copy(&self) -> Result<PipelineBuildResult> {
+        // currently, there is only one thing that we care about:
+        //
+        // if `purge_duplicated_files_in_copy` and `purge` are all enabled,
+        // and there are duplicated files detected, we should clean them up immediately.
+
+        // it might be better to reuse the PipelineBuilder::set_purge_files_on_finished,
+        // unfortunately, hooking the on_finished callback of a "blank" pipeline,
+        // e.g. `PipelineBuildResult::create` leads to runtime error (during pipeline execution).
+
+        if self.plan.stage_table_info.stage_info.copy_options.purge
+            && !self
+                .plan
+                .stage_table_info
+                .duplicated_files_detected
+                .is_empty()
+            && self
+                .ctx
+                .get_settings()
+                .get_enable_purge_duplicated_files_in_copy()?
+        {
+            info!(
+                "purge_duplicated_files_in_copy enabled, number of duplicated files: {}",
+                self.plan.stage_table_info.duplicated_files_detected.len()
+            );
+
+            PipelineBuilder::purge_files_immediately(
+                self.ctx.clone(),
+                self.plan.stage_table_info.duplicated_files_detected.clone(),
+                self.plan.stage_table_info.stage_info.clone(),
+            )
+            .await?;
+        }
+        Ok(PipelineBuildResult::create())
     }
 }
 
@@ -303,19 +347,31 @@ impl Interpreter for CopyIntoTableInterpreter {
         }
 
         if self.plan.no_file_to_copy {
-            return Ok(PipelineBuildResult::create());
+            info!("no file to copy");
+            return self.on_no_files_to_copy().await;
         }
-        let (physical_plan, files, update_stream_meta) =
-            self.build_physical_plan(&self.plan).await?;
+
+        let (physical_plan, update_stream_meta) = self.build_physical_plan(&self.plan).await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // Build commit insertion pipeline.
         {
+            let files_to_copy = self
+                .plan
+                .stage_table_info
+                .files_to_copy
+                .clone()
+                .unwrap_or_default();
+
+            let duplicated_files_detected =
+                self.plan.stage_table_info.duplicated_files_detected.clone();
+
             self.commit_insertion(
                 &mut build_res.main_pipeline,
                 &self.plan,
-                &files,
+                files_to_copy,
+                duplicated_files_detected,
                 update_stream_meta,
                 unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             )

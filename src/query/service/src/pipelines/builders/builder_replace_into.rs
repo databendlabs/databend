@@ -117,8 +117,9 @@ impl PipelineBuilder {
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
+        let schema = DataSchema::from(table.schema()).into();
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds, None)?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds, Some(schema))?;
         self.build_pipeline(input)?;
         // connect to broadcast processor and append transform
         let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -282,7 +283,7 @@ impl PipelineBuilder {
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         self.build_pipeline(input)?;
         let mut delete_column_idx = 0;
-        let mut opt_modified_schema = None;
+        let mut modified_schema = DataSchema::from(target_schema.clone()).into();
         if let Some(ReplaceSelectCtx {
             select_column_bindings,
             select_schema,
@@ -303,7 +304,7 @@ impl PipelineBuilder {
                 target_schema
                     .fields
                     .insert(delete_column_idx, delete_column);
-                opt_modified_schema = Some(Arc::new(target_schema.clone()));
+                modified_schema = Arc::new(target_schema.clone());
             }
             let target_schema = Arc::new(target_schema.clone());
             if target_schema.fields().len() != select_schema.fields().len() {
@@ -337,7 +338,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             table.get_block_thresholds(),
-            opt_modified_schema,
+            Some(modified_schema),
         )?;
         // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"
         self.main_pipeline.try_resize(1)?;

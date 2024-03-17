@@ -119,6 +119,7 @@ pub struct EvalContext<'a> {
     /// default value in nullable's inner column.
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
+    pub suppress_error: bool,
 }
 
 /// `FunctionID` is a unique identifier for a function in the registry. It's used to
@@ -564,6 +565,9 @@ impl<'a> EvalContext<'a> {
         func_name: &str,
         selection: Option<&[u32]>,
     ) -> Result<()> {
+        if self.suppress_error {
+            return Ok(());
+        }
         match &self.errors {
             Some((valids, error)) => {
                 let first_error_row = if let Some(selection) = selection {

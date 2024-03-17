@@ -1,0 +1,9 @@
+query BBB
+select is_error(from_base64('aj')), is_not_error(from_base64('ac')), is_error(3);
+----
+1 0 0
+
+query T
+select error_or(from_base64('aak') ,  from_base64('aaj'),  from_base64('MzQz'));
+----
+333433

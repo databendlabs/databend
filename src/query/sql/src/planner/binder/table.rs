@@ -1019,6 +1019,7 @@ impl Binder {
                     stage_info,
                     files_info,
                     files_to_copy: None,
+                    duplicated_files_detected: vec![],
                     is_select: true,
                     default_values: None,
                 };
@@ -1053,6 +1054,7 @@ impl Binder {
                     stage_info,
                     files_info,
                     files_to_copy: None,
+                    duplicated_files_detected: vec![],
                     is_select: true,
                     default_values: None,
                 };

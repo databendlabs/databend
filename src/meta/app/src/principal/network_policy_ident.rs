@@ -12,56 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tenant::Tenant;
+use crate::tenant_key::TIdent;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct NetworkPolicyIdent {
-    tenant: Tenant,
-    name: String,
-}
+/// Defines the meta-service key for network policy.
+pub type NetworkPolicyIdent = TIdent<kvapi_impl::Resource>;
 
-impl NetworkPolicyIdent {
-    pub fn new(tenant: Tenant, name: impl ToString) -> Self {
-        Self {
-            tenant,
-            name: name.to_string(),
-        }
-    }
-}
-
-mod kvapi_key_impl {
+mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyError;
 
-    use crate::principal::network_policy_ident::NetworkPolicyIdent;
     use crate::principal::NetworkPolicy;
-    use crate::tenant::Tenant;
-    use crate::KeyWithTenant;
+    use crate::tenant_key::TenantResource;
 
-    impl kvapi::Key for NetworkPolicyIdent {
+    pub struct Resource;
+    impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_network_policies";
         type ValueType = NetworkPolicy;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_str(self.tenant_name()).push_str(&self.name)
-        }
-
-        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
-            let tenant = p.next_nonempty()?;
-            let name = p.next_str()?;
-
-            Ok(NetworkPolicyIdent::new(Tenant::new_nonempty(tenant), name))
-        }
-    }
-
-    impl KeyWithTenant for NetworkPolicyIdent {
-        fn tenant(&self) -> &Tenant {
-            &self.tenant
-        }
     }
 
     impl kvapi::Value for NetworkPolicy {

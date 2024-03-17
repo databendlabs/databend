@@ -56,6 +56,8 @@ rand = { workspace = true }
 regex = { workspace = true }
 roaring = "0.10.1"
 #scroll = "0.12.0"
+serde = { workspace = true }
+serde_json = { workspace = true }
 sha1 = "0.10.5"
 sha2 = "0.10.6"
 simdutf8 = "0.1.4"

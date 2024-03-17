@@ -1713,6 +1713,28 @@ impl<'a> TypeChecker<'a> {
             params
         };
 
+        // Convert the num_buckets of histogram to params
+        let params = if func_name.eq_ignore_ascii_case("histogram")
+            && arguments.len() == 2
+            && params.is_empty()
+        {
+            let max_num_buckets = ConstantExpr::try_from(arguments[1].clone());
+
+            let is_positive_integer = match &max_num_buckets {
+                Ok(v) => v.value.is_positive(),
+                Err(_) => false,
+            } && arg_types[1].is_integer();
+            if !is_positive_integer {
+                return Err(ErrorCode::SemanticError(
+                    "The max_num_buckets of `histogram` must be a constant positive int",
+                ));
+            }
+
+            vec![max_num_buckets.unwrap().value]
+        } else {
+            params
+        };
+
         // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
         let (func_name, distinct) = if func_name.eq_ignore_ascii_case("count") && distinct {
             ("count_distinct", false)
@@ -2431,6 +2453,8 @@ impl<'a> TypeChecker<'a> {
             "nvl",
             "nvl2",
             "is_null",
+            "is_error",
+            "error_or",
             "coalesce",
             "last_query_id",
             "array_sort",
@@ -2575,6 +2599,59 @@ impl<'a> TypeChecker<'a> {
                     .await,
                 )
             }
+            ("is_error", &[arg_x]) => {
+                // Rewrite is_error(x) to not(is_not_error(x))
+                Some(
+                    self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::FunctionCall {
+                        span,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: Identifier {
+                                name: "is_not_error".to_string(),
+                                quote: None,
+                                span,
+                            },
+                            args: vec![arg_x.clone()],
+                            params: vec![],
+                            window: None,
+                            lambda: None,
+                        },
+                    })
+                    .await,
+                )
+            }
+            ("error_or", args) => {
+                // error_or(arg0, arg1, ..., argN) is essentially
+                // if(is_not_error(arg0), arg0, is_not_error(arg1), arg1, ..., argN)
+                let mut new_args = Vec::with_capacity(args.len() * 2 + 1);
+
+                for arg in args.iter() {
+                    let is_not_error = Expr::FunctionCall {
+                        span,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: Identifier {
+                                name: "is_not_error".to_string(),
+                                quote: None,
+                                span,
+                            },
+                            args: vec![(*arg).clone()],
+                            params: vec![],
+                            window: None,
+                            lambda: None,
+                        },
+                    };
+                    new_args.push(is_not_error);
+                    new_args.push((*arg).clone());
+                }
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
+
+                let args_ref: Vec<&Expr> = new_args.iter().collect();
+                Some(self.resolve_function(span, "if", vec![], &args_ref).await)
+            }
             ("coalesce", args) => {
                 // coalesce(arg0, arg1, ..., argN) is essentially
                 // if(is_not_null(arg0), assume_not_null(arg0), is_not_null(arg1), assume_not_null(arg1), ..., argN)
@@ -2619,14 +2696,19 @@ impl<'a> TypeChecker<'a> {
                     span,
                     lit: Literal::Null,
                 });
-                new_args.push(Expr::Literal {
-                    span,
-                    lit: Literal::Null,
-                });
-                new_args.push(Expr::Literal {
-                    span,
-                    lit: Literal::Null,
-                });
+
+                // coalesce(all_null) => null
+                if new_args.len() == 1 {
+                    new_args.push(Expr::Literal {
+                        span,
+                        lit: Literal::Null,
+                    });
+                    new_args.push(Expr::Literal {
+                        span,
+                        lit: Literal::Null,
+                    });
+                }
+
                 let args_ref: Vec<&Expr> = new_args.iter().collect();
                 Some(self.resolve_function(span, "if", vec![], &args_ref).await)
             }

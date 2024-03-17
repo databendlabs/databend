@@ -104,7 +104,7 @@ impl UserApi for UserMgr {
             .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Update(value), None))
             .await?;
 
-        if let CreateOption::None = create_option {
+        if let CreateOption::Create = create_option {
             if res.prev.is_some() {
                 return Err(ErrorCode::UserAlreadyExists(format!(
                     "User {} already exists.",
