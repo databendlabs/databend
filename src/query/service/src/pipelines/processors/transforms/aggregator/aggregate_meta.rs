@@ -64,14 +64,13 @@ impl SerializedPayload {
         let mut state = ProbeState::default();
         let agg_len = aggrs.len();
         let group_len = group_types.len();
-        let mut hashtable = AggregateHashTable::new_with_capacity(
+        let mut hashtable = AggregateHashTable::new_directly(
             group_types,
             aggrs,
             config,
             rows_num,
             Arc::new(Bump::new()),
         );
-        hashtable.direct_append = true;
 
         let agg_states = (0..agg_len)
             .map(|i| {
