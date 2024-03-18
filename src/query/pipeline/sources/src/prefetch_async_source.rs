@@ -104,7 +104,7 @@ impl<T: 'static + PrefetchAsyncSource> Processor for PrefetchAsyncSourcer<T> {
         }
     }
 
-    fn un_reacted(&self, _cause: EventCause, _id: usize) -> Result<()> {
+    fn un_reacted(&self, cause: EventCause, _id: usize) -> Result<()> {
         if let EventCause::Output(output) = cause {
             self.inner.un_reacted()?;
         }
