@@ -68,6 +68,26 @@ impl AggregateHashTable {
         Self::new_with_capacity(group_types, aggrs, config, capacity, arena)
     }
 
+    pub fn new_with_max_radix_bits(
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateFunctionRef>,
+        config: HashTableConfig,
+        arena: Arc<Bump>,
+    ) -> Self {
+        let capacity = Self::initial_capacity();
+        Self {
+            entries: vec![0u64; capacity],
+            count: 0,
+            direct_append: false,
+            current_radix_bits: config.max_radix_bits,
+            payload: PartitionedPayload::new(group_types, aggrs, 1 << config.max_radix_bits, vec![
+                arena,
+            ]),
+            capacity,
+            config,
+        }
+    }
+
     pub fn new_with_capacity(
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,

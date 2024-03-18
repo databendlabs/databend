@@ -103,15 +103,15 @@ impl HashTableConfig {
         self
     }
 
-    pub fn update_max_radix_bits(mut self, new_radix_bits: u64) -> Self {
+    pub fn update_current_max_radix_bits(self) -> Self {
         loop {
             let current_max_radix_bits = self.current_max_radix_bits.load(Ordering::SeqCst);
-            if current_max_radix_bits < new_radix_bits
+            if current_max_radix_bits < self.max_radix_bits
                 && self
                     .current_max_radix_bits
                     .compare_exchange(
                         current_max_radix_bits,
-                        new_radix_bits,
+                        self.max_radix_bits,
                         Ordering::SeqCst,
                         Ordering::SeqCst,
                     )
@@ -121,7 +121,6 @@ impl HashTableConfig {
             }
             break;
         }
-        self.initial_radix_bits = new_radix_bits;
         self
     }
 }
