@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod password_policy_api;
-mod password_policy_mgr;
+use databend_common_meta_api::crud::CrudMgr;
+use databend_common_meta_app::principal::password_policy_ident;
 
-pub use password_policy_api::PasswordPolicyApi;
-pub use password_policy_mgr::PasswordPolicyMgr;
+pub type PasswordPolicyMgr = CrudMgr<password_policy_ident::Resource>;

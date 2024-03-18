@@ -121,7 +121,7 @@ where
         let res = self.kv_api.upsert_pb(&upsert).await?;
 
         match res.result {
-            Some(SeqV { seq: s, .. }) => Ok(s),
+            Some(SeqV { seq, .. }) => Ok(seq),
             None => Err(R::error_unknown(
                 &self.tenant,
                 value.name(),

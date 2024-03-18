@@ -15,7 +15,9 @@
 use crate::tenant_key::TIdent;
 
 /// Defines the meta-service key for password policy.
-pub type PasswordPolicyIdent = TIdent<kvapi_impl::Resource>;
+pub type PasswordPolicyIdent = TIdent<Resource>;
+
+pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
     use std::fmt::Display;
@@ -37,26 +39,38 @@ mod kvapi_impl {
 
         fn error_unknown<D: Display>(
             _tenant: &Tenant,
-            _name: &str,
-            _ctx: impl FnOnce() -> D,
+            name: &str,
+            ctx: impl FnOnce() -> D,
         ) -> Self::UnknownError {
-            todo!()
+            ErrorCode::UnknownPasswordPolicy(format!(
+                "Password policy '{name}' does not exist: {}",
+                ctx()
+            ))
         }
 
         type ExistError = ErrorCode;
 
         fn error_exist<D: Display>(
             _tenant: &Tenant,
-            _name: &str,
-            _ctx: impl FnOnce() -> D,
+            name: &str,
+            ctx: impl FnOnce() -> D,
         ) -> Self::ExistError {
-            todo!()
+            ErrorCode::PasswordPolicyAlreadyExists(format!(
+                "Password policy '{name}' already exists: {}",
+                ctx()
+            ))
         }
     }
 
     impl kvapi::Value for PasswordPolicy {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
+        }
+    }
+
+    impl kvapi::ValueWithName for PasswordPolicy {
+        fn name(&self) -> &str {
+            &self.name
         }
     }
 }

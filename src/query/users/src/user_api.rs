@@ -24,7 +24,6 @@ use databend_common_management::ConnectionMgr;
 use databend_common_management::FileFormatApi;
 use databend_common_management::FileFormatMgr;
 use databend_common_management::NetworkPolicyMgr;
-use databend_common_management::PasswordPolicyApi;
 use databend_common_management::PasswordPolicyMgr;
 use databend_common_management::QuotaApi;
 use databend_common_management::QuotaMgr;
@@ -160,8 +159,8 @@ impl UserApiProvider {
         NetworkPolicyMgr::create(self.client.clone(), tenant)
     }
 
-    pub fn password_policy_api(&self, tenant: &NonEmptyString) -> Arc<impl PasswordPolicyApi> {
-        Arc::new(PasswordPolicyMgr::create(self.client.clone(), tenant))
+    pub fn password_policy_api(&self, tenant: &NonEmptyString) -> PasswordPolicyMgr {
+        PasswordPolicyMgr::create(self.client.clone(), tenant)
     }
 
     pub fn get_meta_store_client(&self) -> Arc<MetaStore> {

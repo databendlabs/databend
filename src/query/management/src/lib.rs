@@ -36,7 +36,6 @@ pub use connection::ConnectionMgr;
 pub use file_format::FileFormatApi;
 pub use file_format::FileFormatMgr;
 pub use network_policy::NetworkPolicyMgr;
-pub use password_policy::PasswordPolicyApi;
 pub use password_policy::PasswordPolicyMgr;
 pub use quota::QuotaApi;
 pub use quota::QuotaMgr;
