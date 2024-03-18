@@ -19,6 +19,7 @@ use chrono::Utc;
 use databend_common_ast::ast::AuthOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::crud::CrudError;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordPolicy;
 use databend_common_meta_app::principal::UserIdentity;
@@ -71,7 +72,8 @@ impl UserApiProvider {
         check_password_policy(&password_policy)?;
 
         let client = self.password_policy_api(tenant);
-        client.add(password_policy, create_option).await
+        client.add(password_policy, create_option).await?;
+        Ok(())
     }
 
     // Update password policy.
@@ -98,13 +100,20 @@ impl UserApiProvider {
         let client = self.password_policy_api(tenant);
         let seq_password_policy = match client.get(name, MatchSeq::GE(0)).await {
             Ok(seq_password_policy) => seq_password_policy,
-            Err(e) => {
-                if if_exists && e.code() == ErrorCode::UNKNOWN_PASSWORD_POLICY {
-                    return Ok(None);
-                } else {
-                    return Err(e.add_message_back(" (while alter password policy)"));
+            Err(e) => match e {
+                CrudError::ApiError(meta_err) => {
+                    return Err(ErrorCode::from(meta_err)
+                        .add_message_back(" (while alter password policy)"));
                 }
-            }
+                CrudError::Business(unknown) => {
+                    if if_exists {
+                        return Ok(None);
+                    } else {
+                        return Err(ErrorCode::from(unknown)
+                            .add_message_back(" (while alter password policy)"));
+                    }
+                }
+            },
         };
 
         let seq = seq_password_policy.seq;
@@ -151,7 +160,7 @@ impl UserApiProvider {
 
         match client.update(password_policy, MatchSeq::Exact(seq)).await {
             Ok(res) => Ok(Some(res)),
-            Err(e) => Err(e.add_message_back(" (while alter password policy).")),
+            Err(e) => Err(ErrorCode::from(e).add_message_back(" (while alter password policy).")),
         }
     }
 
@@ -178,13 +187,21 @@ impl UserApiProvider {
         let client = self.password_policy_api(tenant);
         match client.remove(name, MatchSeq::GE(1)).await {
             Ok(res) => Ok(res),
-            Err(e) => {
-                if if_exists && e.code() == ErrorCode::UNKNOWN_PASSWORD_POLICY {
-                    Ok(())
-                } else {
-                    Err(e.add_message_back(" (while drop password policy)"))
+            Err(e) => match e {
+                CrudError::ApiError(meta_err) => {
+                    return Err(
+                        ErrorCode::from(meta_err).add_message_back(" (while drop password policy)")
+                    );
                 }
-            }
+                CrudError::Business(unknown) => {
+                    if if_exists {
+                        return Ok(());
+                    } else {
+                        return Err(ErrorCode::from(unknown)
+                            .add_message_back(" (while drop password policy)"));
+                    }
+                }
+            },
         }
     }
 
