@@ -490,24 +490,21 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                         &mut self.flush_state,
                         reach_limit_bucket,
                     );
-                } else {
-                    if reach_limit_bucket.is_none()
-                        || reach_limit_bucket == Some(agg_payload.bucket as usize)
-                    {
-                        let add_duplicates =
-                            agg_payload.payload.min_cardinality.unwrap_or_default();
+                } else if reach_limit_bucket.is_none()
+                    || reach_limit_bucket == Some(agg_payload.bucket as usize)
+                {
+                    let add_duplicates = agg_payload.payload.min_cardinality.unwrap_or_default();
 
-                        partitioned_payload.payloads[agg_payload.bucket as usize]
-                            .combine(agg_payload.payload);
+                    partitioned_payload.payloads[agg_payload.bucket as usize]
+                        .combine(agg_payload.payload);
 
-                        if reach_limit_bucket.is_none() {
-                            if let Some(limit) = self.params.limit {
-                                if add_duplicates >= limit {
-                                    log::info!(
-                                        "Group Limit optimizer, receive {add_duplicates} groups over {limit}"
-                                    );
-                                    reach_limit_bucket = Some(agg_payload.bucket as usize);
-                                }
+                    if reach_limit_bucket.is_none() {
+                        if let Some(limit) = self.params.limit {
+                            if add_duplicates >= limit {
+                                log::info!(
+                                    "Group Limit optimizer, receive {add_duplicates} groups over {limit}"
+                                );
+                                reach_limit_bucket = Some(agg_payload.bucket as usize);
                             }
                         }
                     }
