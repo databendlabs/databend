@@ -66,6 +66,9 @@ pub struct Payload {
     pub state_offset: usize,
     pub state_addr_offsets: Vec<usize>,
     pub state_layout: Option<Layout>,
+
+    // if set, the payload contains at least duplicate rows
+    pub min_cardinality: Option<usize>,
 }
 
 unsafe impl Send for Payload {}
@@ -135,6 +138,7 @@ impl Payload {
             aggrs,
             tuple_size,
             row_per_page,
+            min_cardinality: None,
             total_rows: 0,
             group_offsets,
             group_sizes,
@@ -304,8 +308,15 @@ impl Payload {
             other.total_rows,
             other.pages.iter().map(|x| x.rows).sum::<usize>()
         );
+
         self.total_rows += other.total_rows;
         self.pages.append(other.pages.as_mut());
+    }
+
+    pub fn mark_min_cardinality(&mut self) {
+        if self.min_cardinality.is_none() {
+            self.min_cardinality = Some(self.total_rows);
+        }
     }
 
     pub fn copy_rows(
