@@ -74,6 +74,7 @@ impl Rule for RulePushDownFilterJoin {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
         let (s_expr, outer_to_inner) = outer_join_to_inner_join(s_expr)?;
+
         // Second, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr)?;
         if s_expr.plan().rel_op() != RelOp::Filter {
@@ -85,15 +86,13 @@ impl Rule for RulePushDownFilterJoin {
             state.add_result(s_expr);
             return Ok(());
         }
-        // Finally, extract or predicates from Filter to push down them to join.
-        // For example: `select * from t1, t2 where (t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)`
-        // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=2) and (t2.b=2 or t2.b=1)`
-        // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
-        let predicates = rewrite_predicates(&s_expr)?;
-        let (need_push, mut result) = try_push_down_filter_join(&s_expr, predicates)?;
+
+        // Finally, push down filter to join.
+        let (need_push, mut result) = try_push_down_filter_join(&s_expr)?;
         if !need_push && !outer_to_inner && !mark_to_semi {
             return Ok(());
         }
+
         result.set_applied_rule(&self.id);
         state.add_result(result);
 
@@ -105,10 +104,13 @@ impl Rule for RulePushDownFilterJoin {
     }
 }
 
-pub fn try_push_down_filter_join(
-    s_expr: &SExpr,
-    predicates: Vec<ScalarExpr>,
-) -> Result<(bool, SExpr)> {
+pub fn try_push_down_filter_join(s_expr: &SExpr) -> Result<(bool, SExpr)> {
+    // Extract or predicates from Filter to push down them to join.
+    // For example: `select * from t1, t2 where (t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)`
+    // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=2) and (t2.b=2 or t2.b=1)`
+    // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
+    let predicates = rewrite_predicates(&s_expr)?;
+
     let join_expr = s_expr.child(0)?;
     let mut join: Join = join_expr.plan().clone().try_into()?;
 
