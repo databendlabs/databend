@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -27,8 +28,35 @@ use crate::tenant::Tenant;
 /// It includes a prefix to store the `ValueType`.
 /// This trait is used to define a concrete [`TIdent`] can be used as a `kvapi::Key`.
 pub trait TenantResource {
+    /// The key prefix to store in meta-service.
     const PREFIX: &'static str;
+
+    /// The type of the value for the key [`TIdent<R: TenantResource>`](TIdent).
     type ValueType: kvapi::Value;
+
+    /// The error to return when the value is not found for a key.
+    type UnknownError: std::error::Error + Send + 'static;
+
+    /// Make an error when the value is not found for a key.
+    ///
+    /// Additional context can be provided by `ctx`.
+    fn error_unknown<D: Display>(
+        tenant: &Tenant,
+        name: &str,
+        ctx: impl FnOnce() -> D,
+    ) -> Self::UnknownError;
+
+    /// The error to return when the value already exists.
+    type ExistError: std::error::Error + Send + 'static;
+
+    /// Make an error when the value already exists.
+    ///
+    /// Additional context can be provided by `ctx`.
+    fn error_exist<D: Display>(
+        tenant: &Tenant,
+        name: &str,
+        ctx: impl FnOnce() -> D,
+    ) -> Self::ExistError;
 }
 
 /// `[T]enant[Ident]` is a common meta-service key structure in form of `<PREFIX>/<TENANT>/<NAME>`.
@@ -134,6 +162,7 @@ mod kvapi_key_impl {
 #[cfg(test)]
 mod tests {
     use std::convert::Infallible;
+    use std::fmt::Display;
 
     use databend_common_meta_kvapi::kvapi::Key;
 
@@ -148,6 +177,26 @@ mod tests {
         impl TenantResource for Foo {
             const PREFIX: &'static str = "foo";
             type ValueType = Infallible;
+
+            type UnknownError = std::io::Error;
+
+            fn error_unknown<D: Display>(
+                _tenant: &Tenant,
+                _name: &str,
+                _ctx: impl FnOnce() -> D,
+            ) -> Self::UnknownError {
+                todo!()
+            }
+
+            type ExistError = std::io::Error;
+
+            fn error_exist<D: Display>(
+                _tenant: &Tenant,
+                _name: &str,
+                _ctx: impl FnOnce() -> D,
+            ) -> Self::ExistError {
+                todo!()
+            }
         }
 
         let tenant = Tenant::new("test".to_string());

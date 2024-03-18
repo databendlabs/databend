@@ -15,7 +15,6 @@
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_management::NetworkPolicyApi;
 use databend_common_meta_app::principal::NetworkPolicy;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
@@ -145,10 +144,10 @@ impl UserApiProvider {
         tenant: &NonEmptyString,
     ) -> Result<Vec<NetworkPolicy>> {
         let client = self.network_policy_api(tenant);
-        let network_policies = client
-            .list()
-            .await
-            .map_err(|e| e.add_message_back(" (while get network policies)."))?;
+        let network_policies = client.list().await.map_err(|e| {
+            let e = ErrorCode::from(e);
+            e.add_message_back(" (while get network policies).")
+        })?;
         Ok(network_policies)
     }
 }

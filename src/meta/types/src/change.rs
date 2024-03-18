@@ -61,11 +61,6 @@ where
         (self.prev.map(f), self.result.map(f))
     }
 
-    /// Extract `prev` and `result`.
-    pub fn unpack(self) -> (Option<SeqV<T>>, Option<SeqV<T>>) {
-        (self.prev, self.result)
-    }
-
     pub fn unwrap(self) -> (SeqV<T>, SeqV<T>) {
         (self.prev.unwrap(), self.result.unwrap())
     }
@@ -112,6 +107,15 @@ where
 
         // result could be None if it expired.
         Ok(result.seq())
+    }
+}
+
+impl<T, ID> Change<T, ID>
+where ID: Clone + PartialEq
+{
+    /// Extract `prev` and `result`.
+    pub fn unpack(self) -> (Option<SeqV<T>>, Option<SeqV<T>>) {
+        (self.prev, self.result)
     }
 
     /// Assumes it is a state transition of a remove operation and return Ok if the succeeded.

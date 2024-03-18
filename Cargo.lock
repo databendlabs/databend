@@ -3097,6 +3097,7 @@ name = "databend-common-meta-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-backtrace",
  "async-trait-fn",
  "chrono",
  "databend-common-exception",
