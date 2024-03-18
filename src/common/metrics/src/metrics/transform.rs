@@ -26,6 +26,10 @@ pub static AGGREGATE_PARTIAL_SPILL_CELL_COUNT: LazyLock<Counter> =
     LazyLock::new(|| register_counter("transform_aggregate_partial_spill_cell_count"));
 pub static AGGREGATE_PARTIAL_HASHTABLE_ALLOCATED_BYTES: LazyLock<Counter> =
     LazyLock::new(|| register_counter("transform_aggregate_partial_hashtable_allocated_bytes"));
+pub static GROUP_BY_PARTIAL_SPILL_CELL_COUNT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("transform_group_by_partial_spill_cell_count"));
+pub static GROUP_BY_PARTIAL_HASHTABLE_ALLOCATED_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("transform_group_by_partial_hashtable_allocated_bytes"));
 pub static SPILL_COUNT: LazyLock<Family<VecLabels, Counter>> =
     LazyLock::new(|| register_counter_family("transform_spill_count"));
 pub static SPILL_WRITE_COUNT: LazyLock<Family<VecLabels, Counter>> =
@@ -72,6 +76,19 @@ pub fn metrics_inc_aggregate_partial_spill_cell_count(c: u64) {
 
 pub fn metrics_inc_aggregate_partial_hashtable_allocated_bytes(c: u64) {
     AGGREGATE_PARTIAL_HASHTABLE_ALLOCATED_BYTES.inc_by(c);
+}
+
+pub fn metrics_inc_group_by_partial_spill_count() {
+    let labels = &vec![("spill", "group_by_partial_spill".to_string())];
+    SPILL_COUNT.get_or_create(labels).inc();
+}
+
+pub fn metrics_inc_group_by_partial_spill_cell_count(c: u64) {
+    GROUP_BY_PARTIAL_SPILL_CELL_COUNT.inc_by(c);
+}
+
+pub fn metrics_inc_group_by_partial_hashtable_allocated_bytes(c: u64) {
+    GROUP_BY_PARTIAL_HASHTABLE_ALLOCATED_BYTES.inc_by(c);
 }
 
 pub fn metrics_inc_group_by_spill_write_count() {

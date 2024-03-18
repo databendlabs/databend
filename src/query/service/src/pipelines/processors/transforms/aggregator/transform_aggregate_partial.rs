@@ -28,6 +28,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_functions::aggregates::StateAddr;
 use databend_common_functions::aggregates::StateAddrs;
@@ -50,7 +51,6 @@ use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::sessions::QueryContext;
-
 #[allow(clippy::enum_variant_names)]
 enum HashTable<Method: HashMethodBounds> {
     MovedOut,
@@ -401,16 +401,23 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
 
                     let group_types = v.payload.group_types.clone();
                     let aggrs = v.payload.aggrs.clone();
-                    let config = v.config.clone();
+                    let config = v.config.update_current_max_radix_bits();
+                    let max_radix_bits = config.max_radix_bits;
+                    let mut state = PayloadFlushState::default();
+
+                    // repartition to max for normalization
+                    let partitioned_payload =
+                        v.payload.repartition(1 << max_radix_bits, &mut state);
+
                     let blocks = vec![DataBlock::empty_with_meta(
-                        AggregateMeta::<Method, usize>::create_agg_spilling(v.payload),
+                        AggregateMeta::<Method, usize>::create_agg_spilling(partitioned_payload),
                     )];
 
                     let arena = Arc::new(Bump::new());
                     self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
                         group_types,
                         aggrs,
-                        config,
+                        config.with_initial_radix_bits(max_radix_bits),
                         arena,
                     ));
                     return Ok(blocks);
