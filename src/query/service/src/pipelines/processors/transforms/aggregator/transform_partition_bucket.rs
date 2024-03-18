@@ -71,6 +71,7 @@ pub struct TransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send + S
     buckets_blocks: BTreeMap<isize, Vec<DataBlock>>,
     flush_state: PayloadFlushState,
     agg_payloads: Vec<AggregatePayload>,
+    agg_serialized: Vec<SerializedPayload>,
     agg_spilled: Vec<BucketSpilledPayload>,
     unsplitted_blocks: Vec<DataBlock>,
     max_partition_count: usize,
@@ -105,6 +106,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             unsplitted_blocks: vec![],
             flush_state: PayloadFlushState::default(),
             agg_payloads: vec![],
+            agg_serialized: vec![],
             agg_spilled: vec![],
             initialized_all_inputs: false,
             max_partition_count: 0,
@@ -249,24 +251,9 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         Ok(res)
                     }
                     AggregateMeta::Serialized(p) => {
-                        for (bucket, payload) in p
-                            .convert_to_partitioned_payload(
-                                self.params.group_data_types.clone(),
-                                self.params.aggregate_functions.clone(),
-                                p.max_partition_count.trailing_zeros() as u64,
-                            )?
-                            .payloads
-                            .into_iter()
-                            .enumerate()
-                        {
-                            self.agg_payloads.push(AggregatePayload {
-                                bucket: bucket as isize,
-                                payload,
-                                max_partition_count: p.max_partition_count,
-                            });
-                        }
-
-                        Ok(p.bucket)
+                        let res = p.bucket;
+                        self.agg_serialized.push(p);
+                        Ok(res)
                     }
                     AggregateMeta::BucketSpilled(p) => {
                         let res = p.bucket;
@@ -405,7 +392,9 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             return Ok(Event::NeedData);
         }
 
-        if (!self.agg_payloads.is_empty() || !self.agg_spilled.is_empty())
+        if (!self.agg_payloads.is_empty()
+            || !self.agg_serialized.is_empty()
+            || !self.agg_spilled.is_empty())
             || (!self.buckets_blocks.is_empty()
                 && !self.unsplitted_blocks.is_empty()
                 && self.max_partition_count == 0)
@@ -481,7 +470,10 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
     }
 
     fn process(&mut self) -> Result<()> {
-        if !self.agg_payloads.is_empty() || !self.agg_spilled.is_empty() {
+        if !self.agg_payloads.is_empty()
+            || !self.agg_serialized.is_empty()
+            || !self.agg_spilled.is_empty()
+        {
             let group_types = self.params.group_data_types.clone();
             let aggrs = self.params.aggregate_functions.clone();
 
@@ -496,7 +488,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                 if !partitioned_payload.include_arena(&agg_payload.payload.arena) {
                     partitioned_payload
                         .arenas
-                        .extend_from_slice(&[agg_payload.payload.arena.clone()]);
+                        .push(agg_payload.payload.arena.clone());
                 }
 
                 if agg_payload.max_partition_count != self.max_partition_count {
@@ -507,6 +499,25 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                         .combine(agg_payload.payload);
                 }
             }
+
+            let max_radix_bits = self.max_partition_count.trailing_zeros() as u64;
+            let serialized_arena = Arc::new(Bump::new());
+            for p in self.agg_serialized.drain(0..) {
+                for (bucket, payload) in p
+                    .convert_to_partitioned_payload(
+                        group_types.clone(),
+                        aggrs.clone(),
+                        max_radix_bits,
+                        serialized_arena.clone(),
+                    )?
+                    .payloads
+                    .into_iter()
+                    .enumerate()
+                {
+                    partitioned_payload.payloads[bucket].combine(payload);
+                }
+            }
+            partitioned_payload.arenas.push(serialized_arena);
 
             // add payload
             for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {

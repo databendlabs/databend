@@ -237,13 +237,14 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                     if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
                         let group_types = v.payload.group_types.clone();
                         let aggrs = v.payload.aggrs.clone();
-                        let config = v.config.clone();
+                        let max_radix_bits = v.config.max_radix_bits;
+                        let config = v.config.update_max_radix_bits(max_radix_bits);
+
                         let mut state = PayloadFlushState::default();
 
                         // repartition to max for normalization
-                        let partitioned_payload = v
-                            .payload
-                            .repartition(1 << config.max_radix_bits, &mut state);
+                        let partitioned_payload =
+                            v.payload.repartition(1 << max_radix_bits, &mut state);
 
                         let blocks = vec![DataBlock::empty_with_meta(
                             AggregateMeta::<Method, ()>::create_agg_spilling(partitioned_payload),

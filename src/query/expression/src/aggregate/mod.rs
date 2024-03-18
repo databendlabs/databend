@@ -26,6 +26,7 @@ mod payload_row;
 mod probe_state;
 
 use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 pub use aggregate_function::*;
@@ -99,6 +100,28 @@ impl HashTableConfig {
         let capacity = (cache_per_active_thread / size_per_entry).next_power_of_two();
         self.max_partial_capacity = capacity;
 
+        self
+    }
+
+    pub fn update_max_radix_bits(mut self, new_radix_bits: u64) -> Self {
+        loop {
+            let current_max_radix_bits = self.current_max_radix_bits.load(Ordering::SeqCst);
+            if current_max_radix_bits < new_radix_bits
+                && self
+                    .current_max_radix_bits
+                    .compare_exchange(
+                        current_max_radix_bits,
+                        new_radix_bits,
+                        Ordering::SeqCst,
+                        Ordering::SeqCst,
+                    )
+                    .is_err()
+            {
+                continue;
+            }
+            break;
+        }
+        self.initial_radix_bits = new_radix_bits;
         self
     }
 }

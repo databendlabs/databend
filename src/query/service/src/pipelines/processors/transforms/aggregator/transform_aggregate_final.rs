@@ -93,19 +93,23 @@ impl<Method: HashMethodBounds> TransformFinalAggregate<Method> {
                     AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
                         Some(ht) => {
                             debug_assert!(bucket == payload.bucket);
+                            let arena = Arc::new(Bump::new());
                             let payload = payload.convert_to_partitioned_payload(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
                                 0,
+                                arena,
                             )?;
                             ht.combine_payloads(&payload, &mut self.flush_state)?;
                         }
                         None => {
                             debug_assert!(bucket == payload.bucket);
+                            let arena = Arc::new(Bump::new());
                             let payload = payload.convert_to_partitioned_payload(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
                                 0,
+                                arena,
                             )?;
                             let capacity =
                                 AggregateHashTable::get_capacity_for_count(payload.len());
