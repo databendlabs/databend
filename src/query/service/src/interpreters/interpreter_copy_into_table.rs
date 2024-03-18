@@ -18,9 +18,6 @@ use databend_common_exception::Result;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -29,7 +26,7 @@ use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::executor::physical_plans::QuerySource;
+use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFileInfo;
@@ -66,7 +63,7 @@ impl CopyIntoTableInterpreter {
     async fn build_query(
         &self,
         query: &Plan,
-    ) -> Result<(SelectInterpreter, DataSchemaRef, Vec<UpdateStreamMetaReq>)> {
+    ) -> Result<(SelectInterpreter, Vec<UpdateStreamMetaReq>)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
                 s_expr,
@@ -89,21 +86,7 @@ impl CopyIntoTableInterpreter {
             false,
         )?;
 
-        // Building data schema from bind_context columns
-        // TODO(leiyskey): Extract the following logic as new API of BindContext.
-        let fields = bind_context
-            .columns
-            .iter()
-            .map(|column_binding| {
-                DataField::new(
-                    &column_binding.column_name,
-                    *column_binding.data_type.clone(),
-                )
-            })
-            .collect();
-        let data_schema = DataSchemaRefExt::create(fields);
-
-        Ok((select_interpreter, data_schema, update_stream_meta))
+        Ok((select_interpreter, update_stream_meta))
     }
 
     #[async_backtrace::framed]
@@ -122,18 +105,21 @@ impl CopyIntoTableInterpreter {
             .await?;
         let mut update_stream_meta_reqs = vec![];
         let source = if let Some(ref query) = plan.query {
-            let (select_interpreter, query_source_schema, update_stream_meta) =
-                self.build_query(query).await?;
+            let (query_interpreter, update_stream_meta) = self.build_query(query).await?;
             update_stream_meta_reqs = update_stream_meta;
-            let plan_query = select_interpreter.build_physical_plan().await?;
-            next_plan_id = plan_query.get_id() + 1;
-            let result_columns = select_interpreter.get_result_columns();
-            CopyIntoTableSource::Query(Box::new(QuerySource {
-                plan: plan_query,
-                ignore_result: select_interpreter.get_ignore_result(),
-                result_columns,
-                query_source_schema,
-            }))
+            let query_physical_plan = Box::new(query_interpreter.build_physical_plan().await?);
+
+            let current_plan_id = query_physical_plan.get_id();
+            next_plan_id = current_plan_id + 2;
+            let result_columns = query_interpreter.get_result_columns();
+            CopyIntoTableSource::Query(Box::new(PhysicalPlan::Project(
+                Project::from_columns_binding(
+                    current_plan_id + 1,
+                    query_physical_plan,
+                    result_columns,
+                    query_interpreter.get_ignore_result(),
+                )?,
+            )))
         } else {
             let stage_table = StageTable::try_create(plan.stage_table_info.clone())?;
             let read_source_plan = Box::new(
