@@ -41,6 +41,8 @@ pub(crate) mod testing;
 pub mod txn_backoff;
 pub(crate) mod util;
 
+pub mod crud;
+
 pub use background_api::BackgroundApi;
 pub use background_api_test_suite::BackgroundApiTestSuite;
 pub use data_mask_api::DatamaskApi;

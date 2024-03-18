@@ -17,7 +17,7 @@
 mod connection;
 mod file_format;
 mod network_policy;
-mod network_policy_ident;
+pub mod network_policy_ident;
 mod ownership_info;
 mod password_policy;
 mod password_policy_ident;

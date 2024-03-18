@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod network_policy_api;
 mod network_policy_mgr;
 
-pub use network_policy_api::NetworkPolicyApi;
 pub use network_policy_mgr::NetworkPolicyMgr;
