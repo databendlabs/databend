@@ -1,0 +1,56 @@
+statement ok
+DROP DATABASE IF EXISTS prql
+
+statement ok
+CREATE DATABASE prql
+
+statement ok
+CREATE TABLE `prql`.`aboba` (`user_id` INT UNSIGNED NULL,`message` VARCHAR NULL,`creation_date` TIMESTAMP NULL,`metric` FLOAT NULL) ENGINE=FUSE CLUSTER BY (user_id)
+
+statement ok
+INSERT INTO `prql`.`aboba` (user_id, message, creation_date, metric) VALUES (101, 'xxx', to_datetime('2019-01-01 00:00:00'), -1.0), (102, 'yyy', to_datetime('2019-02-01 00:00:00'), 1.41421 ), (102, 'zzz', to_datetime('2019-03-01 00:00:00'), 2.718), (101, 'xyz', to_datetime('2019-05-01 00:00:00'), 3.14159), (103, 'qwer', to_datetime('2019-04-01 00:00:00'), 42)
+
+statement ok
+set sql_dialect = 'prql'
+
+query ITIT
+from `prql`.`aboba` | derive { a = 2, b = s"LEFT(message, 2)" } | select { user_id, message, a, b } | sort {user_id, message}
+----
+101 xxx 2 xx
+101 xyz 2 xy
+102 yyy 2 yy
+102 zzz 2 zz
+103 qwer 2 qw
+
+query IR
+from `prql`.`aboba` | filter user_id > 101 | group user_id ( aggregate { metrics = sum metric }) | sort {user_id}
+----
+102 4.132209897041321
+103 42.0
+
+query ITIR
+from `prql`.`aboba` | select { user_id, message, metric } | derive creation_date = s"TO_UNIX_TIMESTAMP(creation_date)" | select { user_id, message, creation_date, metric} | sort { user_id, message }
+----
+101 xxx 1546300800 -1.0
+101 xyz 1556668800 3.14159
+102 yyy 1548979200 1.41421
+102 zzz 1551398400 2.718
+103 qwer 1554076800 42.0
+
+statement error 1005
+SELECT user_id, message, TO_UNIX_TIMESTAMP(creation_date) as creation_date, metric FROM `prql`.`aboba` order by user_id, message
+
+statement ok
+set sql_dialect = 'PostgreSQL'
+
+query ITIR
+SELECT user_id, message, TO_UNIX_TIMESTAMP(creation_date) as creation_date, metric FROM `prql`.`aboba` order by user_id, message
+----
+101 xxx 1546300800 -1.0
+101 xyz 1556668800 3.14159
+102 yyy 1548979200 1.41421
+102 zzz 1551398400 2.718
+103 qwer 1554076800 42.0
+
+statement ok
+DROP DATABASE prql

@@ -302,6 +302,7 @@ impl Settings {
             "hive" => Ok(Dialect::Hive),
             "mysql" => Ok(Dialect::MySQL),
             "experimental" => Ok(Dialect::Experimental),
+            "prql" => Ok(Dialect::PRQL),
             _ => Ok(Dialect::PostgreSQL),
         }
     }
