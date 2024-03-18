@@ -94,8 +94,9 @@ impl RowBasedReadPipelineBuilder<'_> {
         let settings = ctx.get_settings();
         ctx.set_partitions(plan.parts.clone())?;
 
-        let threads = std::cmp::min(settings.get_max_threads()? as usize, plan.parts.len());
-        self.build_read_stage_source(ctx.clone(), pipeline, &settings, threads)?;
+        let max_threads = settings.get_max_threads()? as usize;
+        let num_sources = std::cmp::min(max_threads, plan.parts.len());
+        self.build_read_stage_source(ctx.clone(), pipeline, &settings, num_sources)?;
 
         let format =
             create_row_based_file_format(&self.stage_table_info.stage_info.file_format_params);
@@ -137,7 +138,7 @@ impl RowBasedReadPipelineBuilder<'_> {
         })?;
 
         // todo(youngsofun): no need to resize if it is unlikely to be unbalanced
-        pipeline.try_resize(threads)?;
+        pipeline.try_resize(max_threads)?;
 
         pipeline.add_transform(|input, output| {
             let transformer = BlockBuilder::create(load_ctx.clone(), &format)?;
