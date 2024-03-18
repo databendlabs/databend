@@ -52,7 +52,7 @@
 
 </div>
 
-![Databend vs. Snowflake](https://github.com/datafuselabs/databend/assets/172204/530317ec-c895-492a-8403-f7b8694b02f2)
+![Databend vs. Snowflake](https://github.com/datafuselabs/databend/assets/172204/c61d7a40-f6fe-4fb9-83e8-06ea9599aeb4)
 
 
 ## 🚀 Why Databend
