@@ -24,7 +24,6 @@ use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::DeleteSource;
-use databend_common_sql::executor::physical_plans::QuerySource;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
 use databend_common_sql::executor::physical_plans::ReclusterTask;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
@@ -475,13 +474,10 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
 
     fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
         match &plan.source {
-            CopyIntoTableSource::Query(query_ctx) => {
-                let input = self.replace(&query_ctx.plan)?;
+            CopyIntoTableSource::Query(query_physical_plan) => {
+                let input = self.replace(query_physical_plan)?;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
-                        plan: input,
-                        ..*query_ctx.clone()
-                    })),
+                    source: CopyIntoTableSource::Query(Box::new(input)),
                     ..plan.clone()
                 })))
             }
