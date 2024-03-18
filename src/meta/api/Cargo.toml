@@ -22,6 +22,7 @@ databend-common-meta-types = { path = "../types" }
 databend-common-proto-conv = { path = "../proto-conv" }
 
 anyhow = { workspace = true }
+async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 enumflags2 = { workspace = true }
