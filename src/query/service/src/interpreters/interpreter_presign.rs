@@ -66,6 +66,7 @@ impl Interpreter for PresignInterpreter {
             ));
         }
 
+        let start_time = std::time::Instant::now();
         let presigned_req = match self.plan.action {
             PresignAction::Download => op.presign_read(&self.plan.path, self.plan.expire).await?,
             PresignAction::Upload => {
@@ -76,6 +77,10 @@ impl Interpreter for PresignInterpreter {
                 fut.await?
             }
         };
+        info!(
+            "query_id" = self.ctx.get_id();
+            "presign {:?} {} success in {}ms", self.plan.action, path, start_time.elapsed().as_millis()
+        );
 
         let header = JsonbValue::Object(
             presigned_req
