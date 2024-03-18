@@ -474,6 +474,8 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                 vec![Arc::new(Bump::new())],
             );
 
+            let mut reach_limit_bucket = None;
+
             for agg_payload in self.agg_payloads.drain(0..) {
                 if !partitioned_payload.include_arena(&agg_payload.payload.arena) {
                     partitioned_payload
@@ -483,27 +485,52 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
 
                 if agg_payload.max_partition_count != self.max_partition_count {
                     debug_assert!(agg_payload.max_partition_count < self.max_partition_count);
-                    partitioned_payload.combine_single(agg_payload.payload, &mut self.flush_state);
+                    partitioned_payload.combine_single(
+                        agg_payload.payload,
+                        &mut self.flush_state,
+                        reach_limit_bucket,
+                    );
                 } else {
-                    partitioned_payload.payloads[agg_payload.bucket as usize]
-                        .combine(agg_payload.payload);
+                    if reach_limit_bucket.is_none()
+                        || reach_limit_bucket == Some(agg_payload.bucket as usize)
+                    {
+                        let add_duplicates =
+                            agg_payload.payload.min_cardinality.unwrap_or_default();
+
+                        partitioned_payload.payloads[agg_payload.bucket as usize]
+                            .combine(agg_payload.payload);
+
+                        if reach_limit_bucket.is_none() {
+                            if let Some(limit) = self.params.limit {
+                                if add_duplicates >= limit {
+                                    log::info!(
+                                        "Group Limit optimizer, receive {add_duplicates} groups over {limit}"
+                                    );
+                                    reach_limit_bucket = Some(agg_payload.bucket as usize);
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
             for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
-                let mut part = PartitionedPayload::new(
-                    group_types.clone(),
-                    aggrs.clone(),
-                    1,
-                    partitioned_payload.arenas.clone(),
-                );
-                part.combine_single(payload, &mut self.flush_state);
+                if reach_limit_bucket.is_none() || reach_limit_bucket == Some(bucket) {
+                    let mut part = PartitionedPayload::new(
+                        group_types.clone(),
+                        aggrs.clone(),
+                        1,
+                        partitioned_payload.arenas.clone(),
+                    );
+                    part.combine_single(payload, &mut self.flush_state, None);
 
-                if part.len() != 0 {
-                    self.buckets_blocks
-                        .insert(bucket as isize, vec![DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, V>::create_agg_hashtable(part),
-                        )]);
+                    if part.len() != 0 {
+                        self.buckets_blocks.insert(bucket as isize, vec![
+                            DataBlock::empty_with_meta(
+                                AggregateMeta::<Method, V>::create_agg_hashtable(part),
+                            ),
+                        ]);
+                    }
                 }
             }
 

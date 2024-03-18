@@ -101,4 +101,11 @@ impl HashTableConfig {
 
         self
     }
+
+    pub fn cluster_with_partial(mut self, partial_agg: bool, node_nums: usize) -> Self {
+        self.partial_agg = partial_agg;
+        self.max_partial_capacity = 131072 * (2 << node_nums);
+
+        self
+    }
 }
