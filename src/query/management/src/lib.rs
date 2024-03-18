@@ -33,7 +33,6 @@ pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
 pub use connection::ConnectionApi;
 pub use connection::ConnectionMgr;
-pub use file_format::FileFormatApi;
 pub use file_format::FileFormatMgr;
 pub use network_policy::NetworkPolicyMgr;
 pub use password_policy::PasswordPolicyMgr;

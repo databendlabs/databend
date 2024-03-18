@@ -26,6 +26,7 @@ mod role_ident;
 mod role_info;
 mod user_auth;
 mod user_defined_file_format;
+pub mod user_defined_file_format_ident;
 mod user_defined_function;
 mod user_grant;
 mod user_identity;
