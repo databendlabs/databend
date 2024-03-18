@@ -48,7 +48,7 @@ pub enum SettingMode {
 #[derive(Clone, Debug)]
 pub enum SettingRange {
     Numeric(RangeInclusive<u64>),
-    String(Vec<&'static str>),
+    String(Vec<String>),
 }
 
 impl Display for SettingRange {
@@ -117,8 +117,9 @@ impl DefaultSettings {
             let max_memory_usage = Self::max_memory_usage()?;
             let recluster_block_size = Self::recluster_block_size()?;
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
-            let data_retention_time_in_days_max= Self::data_retention_time_in_days_max();
+            let data_retention_time_in_days_max = Self::data_retention_time_in_days_max();
             let global_conf = GlobalConfig::try_get_instance();
+            let all_timezones: Vec<String> = chrono_tz::TZ_VARIANTS.iter().map(|tz| tz.to_string()).collect();
 
             let default_settings = HashMap::from([
                 ("enable_clickhouse_handler", DefaultSettingValue {
@@ -149,7 +150,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(max_memory_usage),
                     desc: "Sets the maximum memory usage in bytes for processing a single query.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("data_retention_time_in_days", DefaultSettingValue {
                     // unit of retention_period is day
@@ -169,19 +170,19 @@ impl DefaultSettings {
                     desc: "Sets the minimum byte size of data that must be read from storage in a single I/O operation \
                 when seeking a new location in the data file.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("storage_io_max_page_bytes_for_read", DefaultSettingValue {
                     value: UserSettingValue::UInt64(512 * 1024),
                     desc: "Sets the maximum byte size of data pages that can be read from storage in a single I/O operation.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("flight_client_timeout", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum time in seconds that a flight client request can be processed.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("http_handler_result_timeout_secs", DefaultSettingValue {
                     value: {
@@ -191,61 +192,67 @@ impl DefaultSettings {
                     },
                     desc: "Set the timeout in seconds that a http query session expires without any polls.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("storage_read_buffer_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024 * 1024),
                     desc: "Sets the byte size of the buffer used for reading data into memory.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("input_read_buffer_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4 * 1024 * 1024),
                     desc: "Sets the memory size in bytes allocated to the buffer used by the buffered reader to read data from storage.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_new_copy_for_text_formats", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Use new implementation for loading CSV files.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("purge_duplicated_files_in_copy", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Purge duplicated files detected during execution of copy into table.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("timezone", DefaultSettingValue {
                     value: UserSettingValue::String("UTC".to_owned()),
                     desc: "Sets the timezone.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::String(all_timezones)),
                 }),
                 ("group_by_two_level_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(20000),
                     desc: "Sets the number of keys in a GROUP BY operation that will trigger a two-level aggregation.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("max_inlist_to_or", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3),
                     desc: "Sets the maximum number of values that can be included in an IN expression to be converted to an OR operator.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("unquoted_ident_case_sensitive", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Determines whether Databend treats unquoted identifiers as case-sensitive.",
+                    desc: "Set to 1 to make unquoted names (like table or column names) case-sensitive, or 0 for case-insensitive.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("quoted_ident_case_sensitive", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Determines whether Databend treats quoted identifiers as case-sensitive.",
+                    desc: "Set to 1 for case-sensitive treatment of quoted names (like \"TableName\"), or 0 for case-insensitive.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("sql_dialect", DefaultSettingValue {
                     value: UserSettingValue::String("PostgreSQL".to_owned()),
                     desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\",  \"Experimental\", and \"Hive\".",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::String(vec!["PostgreSQL", "MySQL", "Experimental", "Hive"])),
+                    range: Some(SettingRange::String(vec!["PostgreSQL".into(), "MySQL".into(), "Experimental".into(), "Hive".into(), "Prql".into()])),
                 }),
                 ("enable_dphyp", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
@@ -263,25 +270,25 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable join reorder optimization.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("join_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of memory in bytes that one join processor can use before spilling data to storage during query execution, 0 is unlimited.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                ("join_spilling_partition_bits", DefaultSettingValue{
+                ("join_spilling_partition_bits", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4),
                     desc: "Set the number of partitions for join spilling. Default value is 4, it means 2^4 partitions.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_bloom_runtime_filter", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
@@ -293,49 +300,49 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum query execution time in seconds. Setting it to 0 means no limit.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("collation", DefaultSettingValue {
                     value: UserSettingValue::String("utf8".to_owned()),
                     desc: "Sets the character collation. Available values include \"utf8\".",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::String(vec!["utf8"])),
+                    range: Some(SettingRange::String(vec!["utf8".into()])),
                 }),
                 ("max_result_rows", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum number of rows that can be returned in a query result when no specific row count is specified. Setting it to 0 means no limit.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("prefer_broadcast_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables broadcast join.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enforce_broadcast_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enforce broadcast join.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("storage_fetch_part_num", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Sets the number of partitions that are fetched in parallel from storage during query execution.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("load_file_metadata_expire_hours", DefaultSettingValue {
                     value: UserSettingValue::UInt64(24 * 7),
                     desc: "Sets the hours that the metadata of files you load data from with COPY INTO will expire in.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("hide_options_in_show_create_table", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Hides table-relevant information, such as SNAPSHOT_LOCATION and STORAGE_FORMAT, at the end of the result of SHOW TABLE CREATE.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("sandbox_tenant", DefaultSettingValue {
                     value: UserSettingValue::String("".to_string()),
@@ -347,7 +354,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(2 * 1024 * 1024),
                     desc: "Sets the byte size of the buffer used for reading Parquet files.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_bushy_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -365,38 +372,38 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(1048576), // 1MB
                     desc: "Sets the maximum byte size of cache for a single query result.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("query_result_cache_ttl_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(300), // seconds
                     desc: "Sets the time-to-live (TTL) in seconds for cached query results. \
                 Once the TTL for a cached result has expired, the result is considered stale and will not be used for new queries.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("query_result_cache_allow_inconsistent", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Determines whether Databend will return cached query results that are inconsistent with the underlying data.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_hive_parquet_predict_pushdown", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enable hive parquet predict pushdown  by setting this variable to 1, default value: 1",
+                    desc: "Enables hive parquet predict pushdown  by setting this variable to 1, default value: 1",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("hive_parquet_chunk_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(16384),
-                    desc: "the max number of rows each read from parquet to databend processor",
+                    desc: "The max number of rows each read from parquet to databend processor",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("aggregate_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of memory in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("aggregate_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -408,7 +415,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of memory in bytes that a sorter can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("sort_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -420,25 +427,25 @@ impl DefaultSettings {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::String(vec!["before_partial", "before_merge"])),
+                    range: Some(SettingRange::String(vec!["before_partial".into(), "before_merge".into()])),
                 }),
                 ("efficiently_memory_group_by", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Memory is used efficiently, but this may cause performance degradation.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("lazy_read_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Sets the maximum LIMIT in a query to enable lazy read optimization. Setting it to 0 disables the optimization.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("parquet_fast_read_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Parquet file with smaller size will be read as a whole file, instead of column by column.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
 
                 // enterprise license related settings
@@ -459,13 +466,13 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(10),
                     desc: "Sets the seconds that the table lock will expire in.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("acquire_lock_timeout", DefaultSettingValue {
                     value: UserSettingValue::UInt64(15),
                     desc: "Sets the maximum timeout in seconds for acquire a lock.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("deduplicate_label", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
@@ -475,37 +482,37 @@ impl DefaultSettings {
                 }),
                 ("enable_distributed_copy_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enable distributed execution of copy into.",
+                    desc: "Enables distributed execution for the 'COPY INTO'.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enable experimental merge into.",
+                    desc: "Enables the experimental feature for 'MERGE INTO'.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_distributed_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enable distributed merge into.",
+                    desc: "Enables distributed execution for 'MERGE INTO'.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_distributed_replace_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enable distributed execution of replace into.",
+                    desc: "Enables distributed execution of 'REPLACE INTO'.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_distributed_compact", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enable distributed execution of table compaction.",
+                    desc: "Enables distributed execution of table compaction.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_aggregating_index_scan", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enable scanning aggregating index data while querying.",
+                    desc: "Enables scanning aggregating index data while querying.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -519,7 +526,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(50),
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -554,27 +561,26 @@ impl DefaultSettings {
                 ("replace_into_bloom_pruning_max_column_number", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4),
                     desc: "Max number of columns used by bloom pruning for replace-into statement.",
-
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("replace_into_shuffle_strategy", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "0 for Block level shuffle, 1 for segment level shuffle",
+                    desc: "Choose shuffle strategy: 0 for Block, 1 for Segment level.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("recluster_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(12 * 60 * 60),
                     desc: "Sets the seconds that recluster final will be timeout.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("ddl_column_type_nullable", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "If columns are default nullable when create or alter table",
+                    desc: "Sets new columns to be nullable (1) or not (0) by default in table operations.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_query_profiling", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -586,7 +592,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(recluster_block_size),
                     desc: "Sets the maximum byte size of blocks for recluster",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -610,13 +616,13 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(10),
                     desc: "Connection timeout to external server",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("external_server_request_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(180),
                     desc: "Request timeout to external server",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_parquet_prewhere", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -625,16 +631,16 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
-                        value: UserSettingValue::UInt64(0),
-                        desc: "Enables experimental aggregate hashtable",
-                        mode: SettingMode::Both,
-                        range: Some(SettingRange::Numeric(0..=1)),
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental aggregate hashtable",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("numeric_cast_option", DefaultSettingValue {
                     value: UserSettingValue::String("rounding".to_string()),
                     desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::String(vec!["rounding", "truncating"])),
+                    range: Some(SettingRange::String(vec!["rounding".into(), "truncating".into()])),
                 }),
                 ("enable_experimental_rbac_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -644,15 +650,15 @@ impl DefaultSettings {
                 }),
                 ("create_query_flight_client_with_current_rt", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "create query flight client with current runtime",
+                    desc: "Turns on (1) or off (0) the use of the current runtime for query operations.",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("query_flight_compression", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("LZ4")),
                     desc: "flight compression method",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::String(vec!["None", "LZ4", "ZSTD"])),
+                    range: Some(SettingRange::String(vec!["None".into(), "LZ4".into(), "ZSTD".into()])),
                 }),
                 ("enable_refresh_virtual_column_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
@@ -691,23 +697,23 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 // this setting will be removed when geometry type stable.
-                ("enable_geo_create_table", DefaultSettingValue{
+                ("enable_geo_create_table", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Create and alter table with geometry type",
-                    mode:SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1))
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("idle_transaction_timeout_secs", DefaultSettingValue{
+                ("idle_transaction_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4 * 60 * 60),
                     desc: "Set the timeout in seconds for active session without any query",
-                    mode:SettingMode::Both,
-                    range: Some(SettingRange::Numeric(1..=u64::MAX))
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("enable_experimental_queries_executor", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables experimental new executor",
                     mode: SettingMode::Both,
-                    range: None,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("statement_queued_timeout_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),

@@ -25,6 +25,7 @@ use crate::filter::SelectExpr;
 use crate::filter::SelectOp;
 use crate::types::DataType;
 use crate::EvalContext;
+use crate::EvaluateOptions;
 use crate::Evaluator;
 use crate::Expr;
 use crate::Scalar;
@@ -282,7 +283,8 @@ impl<'a> Selector<'a> {
             *mutable_false_idx + count,
             &select_strategy,
         );
-        let children = self.evaluator.get_children(exprs, selection)?;
+        let mut eval_options = EvaluateOptions::new(selection);
+        let children = self.evaluator.get_children(exprs, &mut eval_options)?;
         let (left_value, left_data_type) = children[0].clone();
         let (right_value, right_data_type) = children[1].clone();
         let left_data_type = self
@@ -332,7 +334,11 @@ impl<'a> Selector<'a> {
                     *mutable_false_idx + count,
                     &select_strategy,
                 );
-                let result = self.evaluator.eval_if(args, generics, None, selection)?;
+                let mut eval_options = EvaluateOptions::new(selection);
+
+                let result = self
+                    .evaluator
+                    .eval_if(args, generics, None, &mut eval_options)?;
                 let data_type = self
                     .evaluator
                     .remove_generics_data_type(generics, &function.signature.return_type);
@@ -366,9 +372,12 @@ impl<'a> Selector<'a> {
                     *mutable_false_idx + count,
                     &select_strategy,
                 );
+                let mut eval_options = EvaluateOptions::new(selection)
+                    .with_suppress_error(function.signature.name == "is_not_error");
+
                 let args = args
                     .iter()
-                    .map(|expr| self.evaluator.partial_run(expr, None, selection))
+                    .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -385,6 +394,7 @@ impl<'a> Selector<'a> {
                     validity: None,
                     errors: None,
                     func_ctx: self.evaluator.func_ctx(),
+                    suppress_error: eval_options.suppress_error,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
@@ -422,7 +432,8 @@ impl<'a> Selector<'a> {
                     *mutable_false_idx + count,
                     &select_strategy,
                 );
-                let value = self.evaluator.get_select_child(expr, selection)?.0;
+                let mut eval_options = EvaluateOptions::new(selection);
+                let value = self.evaluator.get_select_child(expr, &mut eval_options)?.0;
                 let result = if *is_try {
                     self.evaluator
                         .run_try_cast(*span, expr.data_type(), dest_type, value)?
@@ -433,7 +444,7 @@ impl<'a> Selector<'a> {
                         dest_type,
                         value,
                         None,
-                        selection,
+                        &mut eval_options,
                     )?
                 };
                 self.select_value(
@@ -461,9 +472,11 @@ impl<'a> Selector<'a> {
                     *mutable_false_idx + count,
                     &select_strategy,
                 );
+                let mut eval_options = EvaluateOptions::new(selection);
+
                 let args = args
                     .iter()
-                    .map(|expr| self.evaluator.partial_run(expr, None, selection))
+                    .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()

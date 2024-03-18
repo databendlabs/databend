@@ -91,6 +91,29 @@ impl AggregateHashTable {
         }
     }
 
+    pub fn new_directly(
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateFunctionRef>,
+        config: HashTableConfig,
+        capacity: usize,
+        arena: Arc<Bump>,
+    ) -> Self {
+        Self {
+            entries: vec![],
+            count: 0,
+            direct_append: true,
+            current_radix_bits: config.initial_radix_bits,
+            payload: PartitionedPayload::new(
+                group_types,
+                aggrs,
+                1 << config.initial_radix_bits,
+                vec![arena],
+            ),
+            capacity,
+            config,
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.payload.len()
     }
@@ -272,6 +295,7 @@ impl AggregateHashTable {
             // 2. append new_group_count to payload
             if new_entry_count != 0 {
                 new_group_count += new_entry_count;
+
                 self.payload
                     .append_rows(state, new_entry_count, group_columns);
 
@@ -535,6 +559,7 @@ impl AggregateHashTable {
     }
 
     pub fn clear_ht(&mut self) {
+        self.payload.mark_min_cardinality();
         self.entries.fill(0);
     }
 

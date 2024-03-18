@@ -25,7 +25,6 @@ use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::physical_plans::QuerySource;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::TableScan;
@@ -191,13 +190,10 @@ impl PhysicalPlanReplacer for Fragmenter {
                 self.state = State::SelectLeaf;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
             }
-            CopyIntoTableSource::Query(query_ctx) => {
-                let input = self.replace(&query_ctx.plan)?;
+            CopyIntoTableSource::Query(query_physical_plan) => {
+                let input = self.replace(query_physical_plan)?;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
-                        plan: input,
-                        ..*query_ctx.clone()
-                    })),
+                    source: CopyIntoTableSource::Query(Box::new(input)),
                     ..plan.clone()
                 })))
             }

@@ -93,14 +93,6 @@ SELECT std(number) between  2886.751 and 2886.752 from numbers_mt(10000)
 ----
 1
 
-
-
-query B
-SELECT stddev(number) between  2886.751 and 2886.752 from numbers_mt(10000)
-----
-1
-
-
 query B
 SELECT stddev_pop(number) between  2886.751 and 2886.752 from numbers_mt(10000)
 ----
@@ -405,7 +397,7 @@ insert into d values(20), (10)
 query F
 select stddev_samp(value) from d;
 ----
-7.0710
+7.0710678118654755
 
 statement ok
 DROP TABLE d

@@ -150,9 +150,7 @@ impl HashJoinBuildState {
         let mut enable_bloom_runtime_filter = false;
         let mut enable_inlist_runtime_filter = false;
         let mut enable_min_max_runtime_filter = false;
-        if supported_join_type_for_runtime_filter(&hash_join_state.hash_join_desc.join_type)
-            && ctx.get_settings().get_join_spilling_memory_ratio()? == 0
-        {
+        if supported_join_type_for_runtime_filter(&hash_join_state.hash_join_desc.join_type) {
             let is_cluster = !ctx.get_cluster().is_empty();
             // For cluster, only support runtime filter for broadcast join.
             let is_broadcast_join = hash_join_state.hash_join_desc.broadcast;
@@ -324,7 +322,10 @@ impl HashJoinBuildState {
                     .clone()
             };
 
-            self.add_runtime_filter(&build_chunks, build_num_rows)?;
+            // If spilling happened, skip adding runtime filter, because probe data is ready and spilled.
+            if self.spilled_partition_set.read().is_empty() {
+                self.add_runtime_filter(&build_chunks, build_num_rows)?;
+            }
 
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
                 return Ok(());
@@ -1034,6 +1035,14 @@ impl HashJoinBuildState {
 
     pub(crate) fn join_type(&self) -> JoinType {
         self.hash_join_state.hash_join_desc.join_type.clone()
+    }
+
+    pub fn get_enable_bloom_runtime_filter(&self) -> bool {
+        self.enable_bloom_runtime_filter
+    }
+
+    pub fn get_enable_min_max_runtime_filter(&self) -> bool {
+        self.enable_min_max_runtime_filter
     }
 }
 

@@ -38,7 +38,11 @@ where
     T: ValueType,
     R: ValueType,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()>;
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        function_data: Option<&dyn FunctionData>,
+    ) -> Result<()>;
 
     fn merge(&mut self, rhs: &Self) -> Result<()>;
 
@@ -196,13 +200,13 @@ where
             Some(bitmap) => {
                 for (value, is_valid) in column_iter.zip(bitmap.iter()) {
                     if is_valid {
-                        state.add(value)?;
+                        state.add(value, self.function_data.as_deref())?;
                     }
                 }
             }
             None => {
                 for value in column_iter {
-                    state.add(value)?;
+                    state.add(value, self.function_data.as_deref())?;
                 }
             }
         }
@@ -215,7 +219,7 @@ where
         let value = T::index_column(&column, row);
 
         let state: &mut S = place.get::<S>();
-        state.add(value.unwrap())?;
+        state.add(value.unwrap(), self.function_data.as_deref())?;
         Ok(())
     }
 
@@ -230,7 +234,10 @@ where
 
         for (i, place) in places.iter().enumerate() {
             let state: &mut S = place.next(offset).get::<S>();
-            state.add(T::index_column(&column, i).unwrap())?;
+            state.add(
+                T::index_column(&column, i).unwrap(),
+                self.function_data.as_deref(),
+            )?;
         }
 
         Ok(())

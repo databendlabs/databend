@@ -79,7 +79,7 @@ impl ConnectionApi for ConnectionMgr {
             .upsert_kv(UpsertKVReq::new(&key, seq, val, None))
             .await?;
 
-        if let CreateOption::None = create_option {
+        if let CreateOption::Create = create_option {
             if res.prev.is_some() {
                 return Err(ErrorCode::ConnectionAlreadyExists(format!(
                     "Connection '{}' already exists.",

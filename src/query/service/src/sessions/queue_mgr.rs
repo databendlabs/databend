@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::future::Future;
 use std::hash::Hash;
 use std::pin::Pin;
@@ -30,6 +31,11 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_metrics::session::incr_session_queue_abort_count;
+use databend_common_metrics::session::incr_session_queue_acquire_error_count;
+use databend_common_metrics::session::incr_session_queue_acquire_timeout_count;
+use databend_common_metrics::session::record_session_queue_acquire_duration_ms;
+use databend_common_metrics::session::set_session_queued_queries;
 use log::info;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
@@ -41,7 +47,7 @@ use tokio::time::error::Elapsed;
 use crate::sessions::QueryContext;
 
 pub trait QueueData: Send + Sync + 'static {
-    type Key: Send + Sync + Eq + Hash + Clone + 'static;
+    type Key: Send + Sync + Eq + Hash + Display + Clone + 'static;
 
     fn get_key(&self) -> Self::Key;
 
@@ -91,12 +97,14 @@ impl<Data: QueueData> QueueManager<Data> {
     pub fn remove(&self, key: Data::Key) -> bool {
         let mut queue = self.queue.lock();
         if let Some(inner) = queue.remove(&key) {
+            set_session_queued_queries(queue.len());
             inner.waker.wake();
             inner.is_abort.store(true, Ordering::SeqCst);
-            return true;
+            true
+        } else {
+            set_session_queued_queries(queue.len());
+            false
         }
-
-        false
     }
 
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
@@ -106,20 +114,43 @@ impl<Data: QueueData> QueueManager<Data> {
             tokio::time::timeout(timeout, self.semaphore.clone().acquire_owned()),
             self.clone(),
         );
+        let start_time = SystemTime::now();
 
-        future.await
+        match future.await {
+            Ok(v) => {
+                record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
+                Ok(v)
+            }
+            Err(e) => {
+                match e.code() {
+                    ErrorCode::ABORTED_QUERY => {
+                        incr_session_queue_abort_count();
+                    }
+                    ErrorCode::TIMEOUT => {
+                        incr_session_queue_acquire_timeout_count();
+                    }
+                    _ => {
+                        incr_session_queue_acquire_error_count();
+                    }
+                }
+                Err(e)
+            }
+        }
     }
 
     pub(crate) fn add_entity(&self, inner: Inner<Data>) -> Data::Key {
         let key = inner.data.get_key();
         let mut queue = self.queue.lock();
         queue.insert(key.clone(), inner);
+        set_session_queued_queries(queue.len());
         key
     }
 
     pub(crate) fn remove_entity(&self, key: &Data::Key) -> Option<Arc<Data>> {
         let mut queue = self.queue.lock();
-        queue.remove(key).map(|inner| inner.data.clone())
+        let data = queue.remove(key).map(|inner| inner.data.clone());
+        set_session_queued_queries(queue.len());
+        data
     }
 }
 

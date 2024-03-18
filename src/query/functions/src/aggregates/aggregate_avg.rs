@@ -70,7 +70,11 @@ where
     TSum::Scalar:
         Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         self.count += 1;
         let other = T::to_owned_scalar(other).as_();
         self.value += other;
@@ -154,7 +158,11 @@ where
     T: ValueType,
     T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         self.add_internal(1, other)
     }
 

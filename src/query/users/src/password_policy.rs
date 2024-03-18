@@ -19,7 +19,6 @@ use chrono::Utc;
 use databend_common_ast::ast::AuthOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_management::PasswordPolicyApi;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordPolicy;
 use databend_common_meta_app::principal::UserIdentity;
@@ -227,10 +226,10 @@ impl UserApiProvider {
         tenant: &NonEmptyString,
     ) -> Result<Vec<PasswordPolicy>> {
         let client = self.password_policy_api(tenant);
-        let password_policies = client
-            .list()
-            .await
-            .map_err(|e| e.add_message_back(" (while get password policies)."))?;
+        let password_policies = client.list().await.map_err(|e| {
+            let e = ErrorCode::from(e);
+            e.add_message_back(" (while get password policies).")
+        })?;
         Ok(password_policies)
     }
 

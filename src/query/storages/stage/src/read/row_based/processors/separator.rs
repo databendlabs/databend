@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
-use databend_common_base::runtime::profile::Profile;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -59,7 +57,6 @@ impl AccumulatingTransform for Separator {
         });
         let mut process_values = ProgressValues { rows: 0, bytes: 0 };
 
-        process_values.bytes += batch.data.len();
         let batch_meta = batch.meta();
         let (row_batches, file_status) = state.append(batch)?;
         let row_batches = row_batches
@@ -81,7 +78,6 @@ impl AccumulatingTransform for Separator {
             for b in row_batches.iter() {
                 process_values.rows += b.rows();
             }
-            Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, process_values.bytes);
             self.ctx
                 .table_context
                 .get_scan_progress()
