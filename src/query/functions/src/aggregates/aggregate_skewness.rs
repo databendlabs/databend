@@ -42,7 +42,11 @@ where
     T: ValueType + Sync + Send,
     T::Scalar: AsPrimitive<f64>,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         let other = T::to_owned_scalar(other).as_();
         self.n += 1;
         self.sum += other;

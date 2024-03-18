@@ -51,7 +51,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let table_id = table.get_id();
     let index_name = "idx1".to_string();
     let req = CreateTableIndexReq {
-        create_option: CreateOption::None,
+        create_option: CreateOption::Create,
         table_id,
         name: index_name.clone(),
         column_ids: vec![0, 1],

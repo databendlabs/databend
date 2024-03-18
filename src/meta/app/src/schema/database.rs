@@ -214,7 +214,7 @@ pub struct CreateDatabaseReq {
 impl Display for CreateDatabaseReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
-            CreateOption::None => write!(
+            CreateOption::Create => write!(
                 f,
                 "create_db:{}/{}={:?}",
                 self.name_ident.tenant, self.name_ident.db_name, self.meta

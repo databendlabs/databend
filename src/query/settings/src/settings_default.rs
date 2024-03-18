@@ -211,6 +211,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: None,
                 }),
+                ("purge_duplicated_files_in_copy", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Purge duplicated files detected during execution of copy into table.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("timezone", DefaultSettingValue {
                     value: UserSettingValue::String("UTC".to_owned()),
                     desc: "Sets the timezone.",

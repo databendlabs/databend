@@ -227,6 +227,10 @@ impl Settings {
         self.try_get_u64("enable_new_copy_for_text_formats")
     }
 
+    pub fn get_enable_purge_duplicated_files_in_copy(&self) -> Result<bool> {
+        Ok(self.try_get_u64("purge_duplicated_files_in_copy")? != 0)
+    }
+
     pub fn get_enable_bushy_join(&self) -> Result<u64> {
         self.try_get_u64("enable_bushy_join")
     }

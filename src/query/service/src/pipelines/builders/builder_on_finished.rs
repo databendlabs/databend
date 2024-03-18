@@ -21,7 +21,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::io::Files;
 use databend_common_storages_stage::StageTable;
 use log::error;
@@ -32,12 +31,11 @@ use crate::sessions::QueryContext;
 impl PipelineBuilder {
     pub fn set_purge_files_on_finished(
         ctx: Arc<QueryContext>,
-        files: Vec<StageFileInfo>,
+        files: Vec<String>,
         copy_purge_option: bool,
         stage_info: StageInfo,
         main_pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let files: Vec<String> = files.iter().map(|v| v.path.clone()).collect();
         let is_active = {
             let txn_mgr = ctx.txn_mgr();
             let mut txn_mgr = txn_mgr.lock();
@@ -89,6 +87,34 @@ impl PipelineBuilder {
             }
             Ok(())
         });
+        Ok(())
+    }
+
+    pub async fn purge_files_immediately(
+        ctx: Arc<QueryContext>,
+        files: Vec<String>,
+        stage_info: StageInfo,
+    ) -> Result<()> {
+        {
+            // if we are in an ongoing transaction,
+            // we just add the files to the need_purge_files list and return
+            let txn_mgr = ctx.txn_mgr();
+            let mut txn_mgr = txn_mgr.lock();
+            let is_active = txn_mgr.is_active();
+            if is_active {
+                txn_mgr.add_need_purge_files(stage_info.clone(), files.clone());
+                return Ok(());
+            }
+        }
+
+        let start = Instant::now();
+        Self::try_purge_files(ctx.clone(), &stage_info, &files).await;
+
+        // Perf.
+        {
+            metrics_inc_copy_purge_files_counter(files.len() as u32);
+            metrics_inc_copy_purge_files_cost_milliseconds(start.elapsed().as_millis() as u32);
+        }
         Ok(())
     }
 

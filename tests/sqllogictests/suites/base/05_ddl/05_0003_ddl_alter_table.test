@@ -180,3 +180,22 @@ a b ['c1','c2'] ('d1','d2')
 
 statement ok
 DROP TABLE IF EXISTS `05_0003_at_t4`
+
+statement ok
+drop table if exists t;
+
+statement ok
+create table t(c1 int, c2 int);
+
+statement ok
+alter table t modify c1 varchar, c2 varchar;
+
+query TT
+DESC t;
+----
+c1 VARCHAR YES NULL (empty)
+c2 VARCHAR YES NULL (empty)
+
+statement ok
+DROP TABLE IF EXISTS t;
+
