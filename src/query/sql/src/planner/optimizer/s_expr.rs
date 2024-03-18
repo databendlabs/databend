@@ -335,13 +335,13 @@ impl SExpr {
         expr: &SExpr,
         table_index: IndexType,
         column_index: IndexType,
-        inverted_index: Option<InvertedIndexInfo>,
+        inverted_index: &Option<InvertedIndexInfo>,
     ) -> SExpr {
         fn add_internal_column_index_into_child(
             s_expr: &SExpr,
             column_index: IndexType,
             table_index: IndexType,
-            inverted_index: Option<InvertedIndexInfo>,
+            inverted_index: &Option<InvertedIndexInfo>,
         ) -> SExpr {
             let mut s_expr = s_expr.clone();
             s_expr.plan = if let RelOperator::Scan(mut p) = (*s_expr.plan).clone() {
@@ -351,7 +351,6 @@ impl SExpr {
                         p.inverted_index = inverted_index.clone();
                     }
                 }
-
                 Arc::new(p.into())
             } else {
                 s_expr.plan
@@ -366,7 +365,7 @@ impl SExpr {
                         child,
                         column_index,
                         table_index,
-                        inverted_index.clone(),
+                        inverted_index,
                     )));
                 }
 

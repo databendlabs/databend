@@ -63,7 +63,7 @@ pub async fn load_inverted_index_info(
     }
 }
 
-/// Loads data of invereted index and create InvertedIndexDirectory
+/// Loads data of invereted index filter
 #[minitrace::trace]
 pub(crate) async fn load_inverted_index_filter(
     dal: Operator,

@@ -95,6 +95,7 @@ impl FuseTable {
                         )
                         .await;
                 }
+
                 if !is_inverted && ((!dry_run && snapshot.segments.len() > nodes_num) || is_lazy) {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
@@ -244,6 +245,7 @@ impl FuseTable {
                 }
             }
         }
+
         let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
             FusePruner::create(
                 &ctx,

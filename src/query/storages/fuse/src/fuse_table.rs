@@ -470,7 +470,6 @@ impl Table for FuseTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        // column_id >= SNAPSHOT_NAME_COLUMN_ID
         column_id >= SEARCH_SCORE_COLUMN_ID
     }
 

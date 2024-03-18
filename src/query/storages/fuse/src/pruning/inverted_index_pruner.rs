@@ -75,6 +75,8 @@ impl InvertedIndexPruner {
         }
     }
 
+    // Converts the row id in a segment to the row id in each blocks
+    // by the row count in each blocks.
     pub fn should_keep_block(
         &self,
         segment_loc: &str,
@@ -86,11 +88,13 @@ impl InvertedIndexPruner {
                 let mut prev_row_count = 0;
                 let mut result_map = BTreeMap::new();
                 for (i, row_count) in row_counts.iter().enumerate() {
+                    // no rows left in the segment.
                     if j >= row_id_scores.len() {
                         continue;
                     }
                     let (row_id, _) = row_id_scores.get(j).unwrap();
-                    if *row_id < prev_row_count {
+                    // next row is not in current block.
+                    if *row_id >= *row_count {
                         prev_row_count = *row_count;
                         continue;
                     }
@@ -104,6 +108,7 @@ impl InvertedIndexPruner {
                         block_row_id_scores.push((block_row_id, *score));
                         j += 1;
                     }
+                    prev_row_count = *row_count;
                     result_map.insert(i, block_row_id_scores);
                 }
                 return Ok(result_map);

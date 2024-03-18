@@ -105,9 +105,7 @@ pub struct InternalColumnMeta {
     pub offsets: Option<Vec<usize>>,
     pub base_block_ids: Option<Scalar>,
     pub inner: Option<BlockMetaInfoPtr>,
-    // The search matched rows in the block.
-    // The left value is the row number,
-    // and the right value is the score.
+    // The search matched rows and scores in the block.
     pub matched_rows: Option<Vec<(usize, F32)>>,
 }
 

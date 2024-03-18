@@ -37,7 +37,7 @@ pub struct BlockMetaIndex {
     pub block_location: String,
     pub segment_location: String,
     pub snapshot_location: Option<String>,
-    // The search matched rows in the block.
+    // The search matched rows and scores in the block.
     pub matched_rows: Option<Vec<(usize, F32)>>,
 }
 

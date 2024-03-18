@@ -91,7 +91,6 @@ impl InvertedIndexReader {
 
             let directory = Arc::unwrap_or_clone(directory.clone());
             let mut index = Index::open(directory)?;
-
             index.set_tokenizers(tokenizer_manager.clone());
             let reader = index.reader()?;
             let searcher = reader.searcher();
@@ -99,6 +98,7 @@ impl InvertedIndexReader {
             let query_parser = QueryParser::for_index(&index, self.fields.clone());
             let query = query_parser.parse_query(query)?;
 
+            // TODO: support TopN
             let collector = TopDocs::with_limit(num);
             let docs = searcher.search(&query, &collector)?;
 
@@ -108,6 +108,8 @@ impl InvertedIndexReader {
                 doc_id_scores.push_back((doc_id, score));
             }
 
+            // Converts the doc id in the index to the row id in each segment
+            // by the row count in each segments.
             let mut row_count: u32 = 0;
             let mut next_row_count: u32 = 0;
             let mut row_id_scores = Vec::new();

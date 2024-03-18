@@ -2026,15 +2026,15 @@ impl<'a> TypeChecker<'a> {
             let column = self.bind_context.add_internal_column_binding(
                 &internal_column_binding,
                 self.metadata.clone(),
-                true,
+                false,
             )?;
 
             let scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef { span, column });
             let data_type = DataType::Number(NumberDataType::Float32);
-
             return Ok(Box::new((scalar_expr, data_type)));
         }
 
+        // match function
         if !matches!(self.bind_context.expr_context, ExprContext::WhereClause) {
             return Err(ErrorCode::SemanticError(format!(
                 "search function {} can only be used in where clause",
@@ -2056,22 +2056,7 @@ impl<'a> TypeChecker<'a> {
         let field_arg = args[0];
         let query_arg = args[1];
 
-        let box (query_scalar, _) = self.resolve(query_arg).await?;
-        let Ok(query_expr) = ConstantExpr::try_from(query_scalar) else {
-            return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for search function, query text must be a constant string, but got {}",
-                query_arg
-            ))
-            .set_span(span));
-        };
-        let Some(query_text) = query_expr.value.as_string() else {
-            return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for search function, query text must be a constant string, but got {}",
-                query_arg
-            ))
-            .set_span(span));
-        };
-
+        // TODO: support multiple fields
         let box (field_scalar, _) = self.resolve(field_arg).await?;
         let Ok(column_ref) = BoundColumnRef::try_from(field_scalar) else {
             return Err(ErrorCode::SemanticError(
@@ -2096,6 +2081,22 @@ impl<'a> TypeChecker<'a> {
 
         let column_name = column_ref.column.column_name;
         let column_id = table_schema.column_id_of(&column_name)?;
+
+        let box (query_scalar, _) = self.resolve(query_arg).await?;
+        let Ok(query_expr) = ConstantExpr::try_from(query_scalar) else {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, query text must be a constant string, but got {}",
+                query_arg
+            ))
+            .set_span(span));
+        };
+        let Some(query_text) = query_expr.value.as_string() else {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, query text must be a constant string, but got {}",
+                query_arg
+            ))
+            .set_span(span));
+        };
 
         // find inverted index and check schema
         let mut index_name = "".to_string();

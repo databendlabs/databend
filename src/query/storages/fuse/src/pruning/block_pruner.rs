@@ -61,7 +61,7 @@ impl BlockPruner {
                 .collect::<Vec<_>>();
         }
 
-        let mut matched_map = None;
+        let mut matched_rows_map = None;
         if let Some(inverted_index_pruner) = &self.pruning_ctx.inverted_index_pruner {
             let mut row_count = 0;
             let mut row_counts = Vec::with_capacity(block_metas.len());
@@ -69,15 +69,15 @@ impl BlockPruner {
                 row_count += block_meta.row_count as usize;
                 row_counts.push(row_count);
             }
-            let block_matched_map = inverted_index_pruner
+            let block_matched_rows_map = inverted_index_pruner
                 .should_keep_block(&segment_location.location.0, row_counts)?;
 
             block_meta_indexes = block_meta_indexes
                 .into_iter()
-                .filter(|(block_idx, _)| block_matched_map.contains_key(block_idx))
+                .filter(|(block_idx, _)| block_matched_rows_map.contains_key(block_idx))
                 .collect::<Vec<_>>();
 
-            matched_map = Some(block_matched_map);
+            matched_rows_map = Some(block_matched_rows_map);
         }
 
         if let Some(bloom_pruner) = &self.pruning_ctx.bloom_pruner {
@@ -86,7 +86,7 @@ impl BlockPruner {
                 segment_location,
                 block_metas,
                 block_meta_indexes,
-                matched_map,
+                matched_rows_map,
             )
             .await
         } else {
@@ -96,7 +96,7 @@ impl BlockPruner {
                 segment_location,
                 block_metas,
                 block_meta_indexes,
-                matched_map,
+                matched_rows_map,
             )
         }
     }
@@ -109,7 +109,7 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
-        matched_map: Option<BTreeMap<usize, Vec<(usize, F32)>>>,
+        matched_rows_map: Option<BTreeMap<usize, Vec<(usize, F32)>>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
@@ -226,8 +226,8 @@ impl BlockPruner {
 
                 debug_assert_eq!(block_location, block.location.0);
 
-                let matched_rows = if let Some(ref matched_map) = matched_map {
-                    matched_map.get(&block_idx)
+                let matched_rows = if let Some(ref matched_rows_map) = matched_rows_map {
+                    matched_rows_map.get(&block_idx)
                 } else {
                     None
                 };
@@ -262,7 +262,7 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
-        matched_map: Option<BTreeMap<usize, Vec<(usize, F32)>>>,
+        matched_rows_map: Option<BTreeMap<usize, Vec<(usize, F32)>>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
@@ -300,8 +300,8 @@ impl BlockPruner {
 
                 let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
                 if keep {
-                    let matched_rows = if let Some(ref matched_map) = matched_map {
-                        matched_map.get(&block_idx)
+                    let matched_rows = if let Some(ref matched_rows_map) = matched_rows_map {
+                        matched_rows_map.get(&block_idx)
                     } else {
                         None
                     };

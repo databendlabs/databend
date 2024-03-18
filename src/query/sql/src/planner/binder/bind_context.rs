@@ -602,7 +602,7 @@ impl BindContext {
                 &s_expr,
                 *table_index,
                 *column_index,
-                inverted_index,
+                &inverted_index,
             );
         }
         s_expr
