@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_api::crud::CrudMgr;
-use databend_common_meta_app::principal::network_policy_ident;
+//! Define behaviors of a `kvapi::Value` that contains a name.
 
-pub type NetworkPolicyMgr = CrudMgr<network_policy_ident::Resource>;
+use crate::kvapi;
+
+/// Define behaviors of a `kvapi::Value` that contains a name.
+pub trait ValueWithName: kvapi::Value {
+    fn name(&self) -> &str;
+}
