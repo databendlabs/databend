@@ -24,6 +24,7 @@ use databend_common_expression::Value;
 use databend_common_storages_stage::StageTable;
 use jsonb::Value as JsonbValue;
 use log::debug;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -79,7 +80,7 @@ impl Interpreter for PresignInterpreter {
         };
         info!(
             "query_id" = self.ctx.get_id();
-            "presign {:?} {} success in {}ms", self.plan.action, path, start_time.elapsed().as_millis()
+            "presign {:?} {} success in {}ms", self.plan.action, self.plan.path, start_time.elapsed().as_millis()
         );
 
         let header = JsonbValue::Object(
