@@ -20,7 +20,7 @@ mod network_policy;
 pub mod network_policy_ident;
 mod ownership_info;
 mod password_policy;
-mod password_policy_ident;
+pub mod password_policy_ident;
 mod principal_identity;
 mod role_ident;
 mod role_info;
