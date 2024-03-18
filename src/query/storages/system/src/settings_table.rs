@@ -65,7 +65,16 @@ impl SyncSystemTable for SettingsTable {
 
             // Range Value.
             match item.range {
-                Some(range) => ranges.push(format!("{}", range)),
+                Some(range) => {
+                    // If the string range is larger than 64, we only show the first 64 characters and add "...".
+                    let range_str = format!("{}", range);
+                    let suffix = if range_str.len() > 64 { "..." } else { "" };
+                    ranges.push(format!(
+                        "{}{}",
+                        range_str.chars().take(64).collect::<String>(),
+                        suffix
+                    ));
+                }
                 None => ranges.push("None".to_string()),
             }
 
