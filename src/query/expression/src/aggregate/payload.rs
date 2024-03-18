@@ -67,7 +67,7 @@ pub struct Payload {
     pub state_addr_offsets: Vec<usize>,
     pub state_layout: Option<Layout>,
 
-    // if set, the payload cantains at least duplicate rows
+    // if set, the payload contains at least duplicate rows
     pub min_cardinality: Option<usize>,
 }
 
