@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono_tz::Tz;
 use databend_common_ast::ast::format_statement;
@@ -34,6 +35,7 @@ use databend_common_expression::Expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
+use log::info;
 use log::warn;
 
 use super::Finder;
@@ -129,10 +131,12 @@ impl<'a> Binder {
     #[async_backtrace::framed]
     #[minitrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
+        let start = Instant::now();
         self.ctx.set_status_info("binding");
         let mut init_bind_context = BindContext::new();
         let plan = self.bind_statement(&mut init_bind_context, stmt).await?;
         self.bind_query_index(&mut init_bind_context, &plan).await?;
+        info!("bind stmt to plan, time used: {:?}", start.elapsed());
         Ok(plan)
     }
 
