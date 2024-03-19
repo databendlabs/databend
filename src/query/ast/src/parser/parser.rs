@@ -107,7 +107,7 @@ pub fn run_parser<O>(
 ) -> Result<O> {
     let backtrace = Backtrace::new();
     let input = Input {
-        tokens: tokens,
+        tokens,
         dialect,
         mode,
         backtrace: &backtrace,
