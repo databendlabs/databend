@@ -55,7 +55,10 @@ mod kvapi_impl {
 
     impl From<UnknownError<Resource>> for ErrorCode {
         fn from(err: UnknownError<Resource>) -> Self {
-            ErrorCode::UnknownConnection(err.to_string())
+            // Special case: use customized message to keep backward compatibility.
+            // TODO: consider using the default message in the future(`err.to_string()`)
+            ErrorCode::UnknownConnection(format!("Connection '{}' does not exist.", err.name()))
+                .add_message_back(err.ctx())
         }
     }
 }

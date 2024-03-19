@@ -33,6 +33,14 @@ impl<R> ExistError<R> {
             _p: Default::default(),
         }
     }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn ctx(&self) -> &str {
+        &self.ctx
+    }
 }
 
 impl<R> fmt::Debug for ExistError<R>
@@ -73,6 +81,14 @@ impl<R> UnknownError<R> {
             ctx: ctx.to_string(),
             _p: Default::default(),
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn ctx(&self) -> &str {
+        &self.ctx
     }
 }
 
