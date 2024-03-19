@@ -150,7 +150,11 @@ impl CopyIntoTablePlan {
         let cost_get_all_files = end_get_all_source.duration_since(start).as_millis();
         metrics_inc_copy_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
 
-        ctx.set_status_info(&format!("end list files: got {} files", num_all_files));
+        ctx.set_status_info(&format!(
+            "end list files: got {} files, time used {:?}",
+            num_all_files,
+            start.elapsed()
+        ));
 
         let (need_copy_file_infos, duplicated) = if self.force {
             if !self.stage_table_info.stage_info.copy_options.purge
@@ -167,6 +171,7 @@ impl CopyIntoTablePlan {
             // Status.
             ctx.set_status_info("begin filtering out copied files");
 
+            let filter_start = Instant::now();
             let FilteredCopyFiles {
                 files_to_copy,
                 duplicated_files,
@@ -180,8 +185,9 @@ impl CopyIntoTablePlan {
                 )
                 .await?;
             ctx.set_status_info(&format!(
-                "end filtering out copied files: {}",
-                num_all_files
+                "end filtering out copied files: {}, time used {:?}",
+                num_all_files,
+                filter_start.elapsed()
             ));
 
             let end_filter_out = Instant::now();
@@ -194,11 +200,11 @@ impl CopyIntoTablePlan {
         };
 
         info!(
-            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{}",
+            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{:?}",
             max_files,
             num_all_files,
             need_copy_file_infos.len(),
-            start.elapsed().as_secs()
+            start.elapsed()
         );
 
         if need_copy_file_infos.is_empty() {
