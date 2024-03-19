@@ -19,7 +19,6 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_management::udf::UdfMgr;
-use databend_common_management::ConnectionApi;
 use databend_common_management::ConnectionMgr;
 use databend_common_management::FileFormatMgr;
 use databend_common_management::NetworkPolicyMgr;
@@ -136,11 +135,8 @@ impl UserApiProvider {
         FileFormatMgr::create(self.client.clone(), tenant)
     }
 
-    pub fn get_connection_api_client(&self, tenant: &str) -> Result<Arc<dyn ConnectionApi>> {
-        Ok(Arc::new(ConnectionMgr::create(
-            self.client.clone(),
-            tenant,
-        )?))
+    pub fn connection_api(&self, tenant: &NonEmptyString) -> ConnectionMgr {
+        ConnectionMgr::create(self.client.clone(), tenant)
     }
 
     pub fn tenant_quota_api(&self, tenant: &NonEmptyString) -> Arc<dyn QuotaApi> {

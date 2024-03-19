@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod connection_api;
-mod connection_mgr;
+use databend_common_meta_api::crud::CrudMgr;
+use databend_common_meta_app::principal::connection_ident;
 
-pub use connection_api::ConnectionApi;
-pub use connection_mgr::ConnectionMgr;
+pub type ConnectionMgr = CrudMgr<connection_ident::Resource>;
