@@ -9658,8 +9658,9 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.9.0"
-source = "git+https://github.com/datafuselabs/openraft?tag=v0.9.0#bec85f5bebd640d69c6999540e6bd2fe40fbc5b7"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "863a31dad5014893c47cdb4291c1f14cd901304b548c739004307fdd2cd37454"
 dependencies = [
  "anyerror",
  "byte-unit",
@@ -9679,8 +9680,9 @@ dependencies = [
 
 [[package]]
 name = "openraft-macros"
-version = "0.9.0"
-source = "git+https://github.com/datafuselabs/openraft?tag=v0.9.0#bec85f5bebd640d69c6999540e6bd2fe40fbc5b7"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5f384d67b15e283f1cf6bb778c8f29ab2f8e8729b4bc82e8a1c21f2bf767d60"
 dependencies = [
  "proc-macro2",
  "quote",
