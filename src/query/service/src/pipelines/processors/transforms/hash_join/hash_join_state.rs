@@ -161,8 +161,8 @@ impl HashJoinState {
             partition_id: AtomicI8::new(-2),
             enable_spill,
             merge_into_state: match enable_merge_into_optimization {
-                true => None,
-                false => Some(MergeIntoState::create_merge_into_state(
+                false => None,
+                true => Some(MergeIntoState::create_merge_into_state(
                     merge_into_is_distributed,
                 )),
             },
