@@ -25,7 +25,7 @@ select * from t_10, t_100, t_1000 where t_10.a = t_1000.a and t_100.a = t_1000.a
 ----
 Memo
 ├── root group: #5
-├── estimated memory: 8160 bytes
+├── estimated memory: 10064 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 100.000, children: []
@@ -79,7 +79,7 @@ select * from t_1000 left join t_10 on t_1000.a = t_10.a left join t_100 on t_10
 ----
 Memo
 ├── root group: #5
-├── estimated memory: 8160 bytes
+├── estimated memory: 10064 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 1000.000, children: []
