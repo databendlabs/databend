@@ -16,9 +16,9 @@ TEMPLATE_FILE = "index.jinja"
 
 def update_results(dataset, title, url):
     queries = []
-    with open(f"{dataset}/queries.sql", "r") as f:
-        for line in f:
-            queries.append(line.strip())
+    for query_file in glob.glob(f"{dataset}/queries/*.sql"):
+        with open(query_file, "r") as f:
+            queries.append(f.read())
     results = []
     for result_file in glob.glob(f"results/{dataset}/**/*.json", recursive=True):
         logger.info(f"reading result: {result_file}...")

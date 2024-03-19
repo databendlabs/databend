@@ -1,20 +1,8 @@
-#!/bin/bash
-
-set -e
-
-cat <<SQL | bendsql
-select version();
-SQL
-
-cat <<SQL | bendsql
-DROP TABLE IF EXISTS hits ALL;
-SQL
-
-cat <<SQL | bendsql
-  CREATE TRANSIENT TABLE hits (
+DROP TABLE IF EXISTS hits_csv;
+CREATE TABLE hits_csv (
     WatchID BIGINT NOT NULL,
     JavaEnable SMALLINT NOT NULL,
-    Title TEXT NOT NULL,
+    Title TEXT,
     GoodEvent SMALLINT NOT NULL,
     EventTime TIMESTAMP NOT NULL,
     EventDate Date NOT NULL,
@@ -25,8 +13,8 @@ cat <<SQL | bendsql
     CounterClass SMALLINT NOT NULL,
     OS SMALLINT NOT NULL,
     UserAgent SMALLINT NOT NULL,
-    URL TEXT NOT NULL,
-    Referer TEXT NOT NULL,
+    URL TEXT NULL,
+    Referer TEXT NULL,
     IsRefresh SMALLINT NOT NULL,
     RefererCategoryID SMALLINT NOT NULL,
     RefererRegionID INTEGER NOT NULL,
@@ -37,7 +25,7 @@ cat <<SQL | bendsql
     ResolutionDepth SMALLINT NOT NULL,
     FlashMajor SMALLINT NOT NULL,
     FlashMinor SMALLINT NOT NULL,
-    FlashMinor2 TEXT NOT NULL,
+    FlashMinor2 TEXT NULL,
     NetMajor SMALLINT NOT NULL,
     NetMinor SMALLINT NOT NULL,
     UserAgentMajor SMALLINT NOT NULL,
@@ -46,12 +34,12 @@ cat <<SQL | bendsql
     JavascriptEnable SMALLINT NOT NULL,
     IsMobile SMALLINT NOT NULL,
     MobilePhone SMALLINT NOT NULL,
-    MobilePhoneModel TEXT NOT NULL,
-    Params TEXT NOT NULL,
+    MobilePhoneModel TEXT NULL,
+    Params TEXT NULL,
     IPNetworkID INTEGER NOT NULL,
     TraficSourceID SMALLINT NOT NULL,
     SearchEngineID SMALLINT NOT NULL,
-    SearchPhrase TEXT NOT NULL,
+    SearchPhrase TEXT NULL,
     AdvEngineID SMALLINT NOT NULL,
     IsArtifical SMALLINT NOT NULL,
     WindowClientWidth SMALLINT NOT NULL,
@@ -62,13 +50,13 @@ cat <<SQL | bendsql
     SilverlightVersion2 SMALLINT NOT NULL,
     SilverlightVersion3 INTEGER NOT NULL,
     SilverlightVersion4 SMALLINT NOT NULL,
-    PageCharset TEXT NOT NULL,
+    PageCharset TEXT NULL,
     CodeVersion INTEGER NOT NULL,
     IsLink SMALLINT NOT NULL,
     IsDownload SMALLINT NOT NULL,
     IsNotBounce SMALLINT NOT NULL,
     FUniqID BIGINT NOT NULL,
-    OriginalURL TEXT NOT NULL,
+    OriginalURL TEXT NULL,
     HID INTEGER NOT NULL,
     IsOldCounter SMALLINT NOT NULL,
     IsEvent SMALLINT NOT NULL,
@@ -86,10 +74,10 @@ cat <<SQL | bendsql
     WindowName INTEGER NOT NULL,
     OpenerName INTEGER NOT NULL,
     HistoryLength SMALLINT NOT NULL,
-    BrowserLanguage TEXT NOT NULL,
-    BrowserCountry TEXT NOT NULL,
-    SocialNetwork TEXT NOT NULL,
-    SocialAction TEXT NOT NULL,
+    BrowserLanguage TEXT NULL,
+    BrowserCountry TEXT NULL,
+    SocialNetwork TEXT NULL,
+    SocialAction TEXT NULL,
     HTTPError SMALLINT NOT NULL,
     SendTiming INTEGER NOT NULL,
     DNSTiming INTEGER NOT NULL,
@@ -98,36 +86,25 @@ cat <<SQL | bendsql
     ResponseEndTiming INTEGER NOT NULL,
     FetchTiming INTEGER NOT NULL,
     SocialSourceNetworkID SMALLINT NOT NULL,
-    SocialSourcePage TEXT NOT NULL,
+    SocialSourcePage TEXT NULL,
     ParamPrice BIGINT NOT NULL,
-    ParamOrderID TEXT NOT NULL,
-    ParamCurrency TEXT NOT NULL,
+    ParamOrderID TEXT NULL,
+    ParamCurrency TEXT NULL,
     ParamCurrencyID SMALLINT NOT NULL,
-    OpenstatServiceName TEXT NOT NULL,
-    OpenstatCampaignID TEXT NOT NULL,
-    OpenstatAdID TEXT NOT NULL,
-    OpenstatSourceID TEXT NOT NULL,
-    UTMSource TEXT NOT NULL,
-    UTMMedium TEXT NOT NULL,
-    UTMCampaign TEXT NOT NULL,
-    UTMContent TEXT NOT NULL,
-    UTMTerm TEXT NOT NULL,
-    FromTag TEXT NOT NULL,
+    OpenstatServiceName TEXT NULL,
+    OpenstatCampaignID TEXT NULL,
+    OpenstatAdID TEXT NULL,
+    OpenstatSourceID TEXT NULL,
+    UTMSource TEXT NULL,
+    UTMMedium TEXT NULL,
+    UTMCampaign TEXT NULL,
+    UTMContent TEXT NULL,
+    UTMTerm TEXT NULL,
+    FromTag TEXT NULL,
     HasGCLID SMALLINT NOT NULL,
     RefererHash BIGINT NOT NULL,
     URLHash BIGINT NOT NULL,
     CLID INTEGER NOT NULL
-  ) CLUSTER BY (CounterID, EventDate, UserID, EventTime, WatchID);
-SQL
-
-cat <<SQL | bendsql
-COPY INTO hits FROM 's3://repo.databend.rs/hits_p/' connection=(connection_name='repo') pattern ='.*[.]tsv' file_format=(type='TSV' field_delimiter='\\t' record_delimiter='\\n' skip_header=1);
-SQL
-
-cat <<SQL | bendsql
-ANALYZE TABLE hits;
-SQL
-
-cat <<SQL | bendsql
-SELECT count(*) FROM hits;
-SQL
+) CLUSTER BY (CounterID, EventDate, UserID, EventTime, WatchID);
+COPY INTO hits_csv
+FROM 's3://databend-datasets/hits_compatible/hits.csv.gz' CONNECTION = (CONNECTION_NAME = 'repo') FILE_FORMAT = (TYPE = 'CSV', COMPRESSION = AUTO);
