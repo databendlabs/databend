@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::fmt::Debug;
-use std::fmt::Display;
-use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
 
@@ -33,30 +32,6 @@ pub trait TenantResource {
 
     /// The type of the value for the key [`TIdent<R: TenantResource>`](TIdent).
     type ValueType: kvapi::Value;
-
-    /// The error to return when the value is not found for a key.
-    type UnknownError: std::error::Error + Send + 'static;
-
-    /// Make an error when the value is not found for a key.
-    ///
-    /// Additional context can be provided by `ctx`.
-    fn error_unknown<D: Display>(
-        tenant: &Tenant,
-        name: &str,
-        ctx: impl FnOnce() -> D,
-    ) -> Self::UnknownError;
-
-    /// The error to return when the value already exists.
-    type ExistError: std::error::Error + Send + 'static;
-
-    /// Make an error when the value already exists.
-    ///
-    /// Additional context can be provided by `ctx`.
-    fn error_exist<D: Display>(
-        tenant: &Tenant,
-        name: &str,
-        ctx: impl FnOnce() -> D,
-    ) -> Self::ExistError;
 }
 
 /// `[T]enant[Ident]` is a common meta-service key structure in form of `<PREFIX>/<TENANT>/<NAME>`.
@@ -68,7 +43,7 @@ pub struct TIdent<R> {
 
 /// `TIdent` to be Debug does not require `R` to be Debug.
 impl<R> Debug for TIdent<R> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TenantResourceIdent")
             .field("tenant", &self.tenant)
             .field("name", &self.name)
@@ -162,7 +137,6 @@ mod kvapi_key_impl {
 #[cfg(test)]
 mod tests {
     use std::convert::Infallible;
-    use std::fmt::Display;
 
     use databend_common_meta_kvapi::kvapi::Key;
 
@@ -177,26 +151,6 @@ mod tests {
         impl TenantResource for Foo {
             const PREFIX: &'static str = "foo";
             type ValueType = Infallible;
-
-            type UnknownError = std::io::Error;
-
-            fn error_unknown<D: Display>(
-                _tenant: &Tenant,
-                _name: &str,
-                _ctx: impl FnOnce() -> D,
-            ) -> Self::UnknownError {
-                todo!()
-            }
-
-            type ExistError = std::io::Error;
-
-            fn error_exist<D: Display>(
-                _tenant: &Tenant,
-                _name: &str,
-                _ctx: impl FnOnce() -> D,
-            ) -> Self::ExistError {
-                todo!()
-            }
         }
 
         let tenant = Tenant::new("test".to_string());

@@ -120,7 +120,8 @@ opendal = { version = "0.45.0", features = [
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 # openraft for debugging
-openraft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.9.0", features = [
+# openraft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.9.0", features = [
+openraft = { version = "0.9.1", features = [
     "serde",
     "tracing-log",
     "generic-snapshot-data",

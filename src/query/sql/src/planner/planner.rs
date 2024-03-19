@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
@@ -68,6 +69,7 @@ impl Planner {
     #[async_backtrace::framed]
     #[minitrace::trace]
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
+        let start = Instant::now();
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         // compile prql to sql for prql dialect
@@ -205,6 +207,7 @@ impl Planner {
                     tokens.extend(iter);
                 };
             } else {
+                info!("logical plan built, time used: {:?}", start.elapsed());
                 return res;
             }
         }

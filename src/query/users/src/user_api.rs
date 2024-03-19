@@ -19,12 +19,9 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_management::udf::UdfMgr;
-use databend_common_management::ConnectionApi;
 use databend_common_management::ConnectionMgr;
-use databend_common_management::FileFormatApi;
 use databend_common_management::FileFormatMgr;
 use databend_common_management::NetworkPolicyMgr;
-use databend_common_management::PasswordPolicyApi;
 use databend_common_management::PasswordPolicyMgr;
 use databend_common_management::QuotaApi;
 use databend_common_management::QuotaMgr;
@@ -134,18 +131,12 @@ impl UserApiProvider {
         Arc::new(StageMgr::create(self.client.clone(), tenant))
     }
 
-    pub fn get_file_format_api_client(&self, tenant: &str) -> Result<Arc<dyn FileFormatApi>> {
-        Ok(Arc::new(FileFormatMgr::create(
-            self.client.clone(),
-            tenant,
-        )?))
+    pub fn file_format_api(&self, tenant: &NonEmptyString) -> FileFormatMgr {
+        FileFormatMgr::create(self.client.clone(), tenant)
     }
 
-    pub fn get_connection_api_client(&self, tenant: &str) -> Result<Arc<dyn ConnectionApi>> {
-        Ok(Arc::new(ConnectionMgr::create(
-            self.client.clone(),
-            tenant,
-        )?))
+    pub fn connection_api(&self, tenant: &NonEmptyString) -> ConnectionMgr {
+        ConnectionMgr::create(self.client.clone(), tenant)
     }
 
     pub fn tenant_quota_api(&self, tenant: &NonEmptyString) -> Arc<dyn QuotaApi> {
@@ -160,8 +151,8 @@ impl UserApiProvider {
         NetworkPolicyMgr::create(self.client.clone(), tenant)
     }
 
-    pub fn password_policy_api(&self, tenant: &NonEmptyString) -> Arc<impl PasswordPolicyApi> {
-        Arc::new(PasswordPolicyMgr::create(self.client.clone(), tenant))
+    pub fn password_policy_api(&self, tenant: &NonEmptyString) -> PasswordPolicyMgr {
+        PasswordPolicyMgr::create(self.client.clone(), tenant)
     }
 
     pub fn get_meta_store_client(&self) -> Arc<MetaStore> {

@@ -15,48 +15,48 @@
 use crate::tenant_key::TIdent;
 
 /// Defines the meta-service key for password policy.
-pub type PasswordPolicyIdent = TIdent<kvapi_impl::Resource>;
+pub type PasswordPolicyIdent = TIdent<Resource>;
+
+pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
-    use std::fmt::Display;
 
     use databend_common_exception::ErrorCode;
     use databend_common_meta_kvapi::kvapi;
 
     use crate::principal::PasswordPolicy;
-    use crate::tenant::Tenant;
     use crate::tenant_key::TenantResource;
+    use crate::tenant_key_errors::ExistError;
+    use crate::tenant_key_errors::UnknownError;
 
     pub struct Resource;
 
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_password_policies";
         type ValueType = PasswordPolicy;
-
-        type UnknownError = ErrorCode;
-
-        fn error_unknown<D: Display>(
-            _tenant: &Tenant,
-            _name: &str,
-            _ctx: impl FnOnce() -> D,
-        ) -> Self::UnknownError {
-            todo!()
-        }
-
-        type ExistError = ErrorCode;
-
-        fn error_exist<D: Display>(
-            _tenant: &Tenant,
-            _name: &str,
-            _ctx: impl FnOnce() -> D,
-        ) -> Self::ExistError {
-            todo!()
-        }
     }
 
     impl kvapi::Value for PasswordPolicy {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
+        }
+    }
+
+    impl kvapi::ValueWithName for PasswordPolicy {
+        fn name(&self) -> &str {
+            &self.name
+        }
+    }
+
+    impl From<ExistError<Resource>> for ErrorCode {
+        fn from(err: ExistError<Resource>) -> Self {
+            ErrorCode::PasswordPolicyAlreadyExists(err.to_string())
+        }
+    }
+
+    impl From<UnknownError<Resource>> for ErrorCode {
+        fn from(err: UnknownError<Resource>) -> Self {
+            ErrorCode::UnknownPasswordPolicy(err.to_string())
         }
     }
 }

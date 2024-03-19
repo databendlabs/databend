@@ -14,8 +14,8 @@
 
 use crate::tenant_key::TIdent;
 
-/// Defines the meta-service key for network policy.
-pub type NetworkPolicyIdent = TIdent<Resource>;
+/// Defines the meta-service key for connection.
+pub type ConnectionIdent = TIdent<Resource>;
 
 pub use kvapi_impl::Resource;
 
@@ -24,24 +24,24 @@ mod kvapi_impl {
     use databend_common_exception::ErrorCode;
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::principal::NetworkPolicy;
+    use crate::principal::UserDefinedConnection;
     use crate::tenant_key::TenantResource;
     use crate::tenant_key_errors::ExistError;
     use crate::tenant_key_errors::UnknownError;
 
     pub struct Resource;
     impl TenantResource for Resource {
-        const PREFIX: &'static str = "__fd_network_policies";
-        type ValueType = NetworkPolicy;
+        const PREFIX: &'static str = "__fd_connection";
+        type ValueType = UserDefinedConnection;
     }
 
-    impl kvapi::Value for NetworkPolicy {
+    impl kvapi::Value for UserDefinedConnection {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
-    impl kvapi::ValueWithName for NetworkPolicy {
+    impl kvapi::ValueWithName for UserDefinedConnection {
         fn name(&self) -> &str {
             &self.name
         }
@@ -49,13 +49,16 @@ mod kvapi_impl {
 
     impl From<ExistError<Resource>> for ErrorCode {
         fn from(err: ExistError<Resource>) -> Self {
-            ErrorCode::NetworkPolicyAlreadyExists(err.to_string())
+            ErrorCode::ConnectionAlreadyExists(err.to_string())
         }
     }
 
     impl From<UnknownError<Resource>> for ErrorCode {
         fn from(err: UnknownError<Resource>) -> Self {
-            ErrorCode::UnknownNetworkPolicy(err.to_string())
+            // Special case: use customized message to keep backward compatibility.
+            // TODO: consider using the default message in the future(`err.to_string()`)
+            ErrorCode::UnknownConnection(format!("Connection '{}' does not exist.", err.name()))
+                .add_message_back(err.ctx())
         }
     }
 }
@@ -64,17 +67,17 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::principal::network_policy_ident::NetworkPolicyIdent;
+    use super::ConnectionIdent;
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_network_policy_ident() {
+    fn test_connection_ident() {
         let tenant = Tenant::new("test".to_string());
-        let ident = NetworkPolicyIdent::new(tenant, "test1");
+        let ident = ConnectionIdent::new(tenant, "test1");
 
         let key = ident.to_string_key();
-        assert_eq!(key, "__fd_network_policies/test/test1");
+        assert_eq!(key, "__fd_connection/test/test1");
 
-        assert_eq!(ident, NetworkPolicyIdent::from_str_key(&key).unwrap());
+        assert_eq!(ident, ConnectionIdent::from_str_key(&key).unwrap());
     }
 }

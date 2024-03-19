@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod connection_api;
-mod connection_mgr;
+use databend_common_meta_api::crud::CrudMgr;
+use databend_common_meta_app::principal::user_defined_file_format_ident;
 
-pub use connection_api::ConnectionApi;
-pub use connection_mgr::ConnectionMgr;
+pub type FileFormatMgr = CrudMgr<user_defined_file_format_ident::Resource>;

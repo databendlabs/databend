@@ -74,6 +74,19 @@ pub fn metrics_inc_aggregate_partial_hashtable_allocated_bytes(c: u64) {
     AGGREGATE_PARTIAL_HASHTABLE_ALLOCATED_BYTES.inc_by(c);
 }
 
+pub fn metrics_inc_group_by_partial_spill_count() {
+    let labels = &vec![("spill", "group_by_partial_spill".to_string())];
+    SPILL_COUNT.get_or_create(labels).inc();
+}
+
+pub fn metrics_inc_group_by_partial_spill_cell_count(c: u64) {
+    AGGREGATE_PARTIAL_SPILL_CELL_COUNT.inc_by(c);
+}
+
+pub fn metrics_inc_group_by_partial_hashtable_allocated_bytes(c: u64) {
+    AGGREGATE_PARTIAL_HASHTABLE_ALLOCATED_BYTES.inc_by(c);
+}
+
 pub fn metrics_inc_group_by_spill_write_count() {
     let labels = &vec![("spill", "group_by_spill".to_string())];
     SPILL_WRITE_COUNT.get_or_create(labels).inc();
