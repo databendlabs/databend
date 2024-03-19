@@ -285,6 +285,10 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_partition_bits")? as usize)
     }
 
+    pub fn get_inlist_to_join_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("inlist_to_join_threshold")? as usize)
+    }
+
     pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_bloom_runtime_filter")? != 0)
     }
