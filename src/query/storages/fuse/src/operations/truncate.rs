@@ -36,32 +36,36 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         purge: bool,
     ) -> Result<()> {
-        pipeline.add_source(
-            |output| {
-                let meta = CommitMeta {
-                    conflict_resolve_context: ConflictResolveContext::None,
-                    abort_operation: AbortOperation::default(),
-                };
-                let block = DataBlock::empty_with_meta(Box::new(meta));
-                OneBlockSource::create(output, block)
-            },
-            1,
-        )?;
+        if let Some(prev_snapshot) = self.read_table_snapshot().await? {
+            let prev_snapshot_id = Some(prev_snapshot.snapshot_id);
+            pipeline.add_source(
+                |output| {
+                    let meta = CommitMeta {
+                        conflict_resolve_context: ConflictResolveContext::None,
+                        abort_operation: AbortOperation::default(),
+                    };
+                    let block = DataBlock::empty_with_meta(Box::new(meta));
+                    OneBlockSource::create(output, block)
+                },
+                1,
+            )?;
 
-        let snapshot_gen = TruncateGenerator::new(purge);
-        pipeline.add_sink(|input| {
-            CommitSink::try_create(
-                self,
-                ctx.clone(),
-                None,
-                vec![],
-                snapshot_gen.clone(),
-                input,
-                None,
-                None,
-                None,
-                None,
-            )
-        })
+            let snapshot_gen = TruncateGenerator::new(purge);
+            pipeline.add_sink(|input| {
+                CommitSink::try_create(
+                    self,
+                    ctx.clone(),
+                    None,
+                    vec![],
+                    snapshot_gen.clone(),
+                    input,
+                    None,
+                    None,
+                    prev_snapshot_id,
+                    None,
+                )
+            })?;
+        }
+        Ok(())
     }
 }

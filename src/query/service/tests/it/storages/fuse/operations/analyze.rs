@@ -70,7 +70,8 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
 
     // truncate table
     {
-        let r = fixture.truncate_default_table().await;
+        let qry = format!("Truncate table {}.{}", db, tbl);
+        let r = fixture.execute_command(&qry).await;
         assert!(r.is_ok());
     }
 
