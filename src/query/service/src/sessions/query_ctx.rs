@@ -752,7 +752,7 @@ impl TableContext for QueryContext {
                 let user_mgr = UserApiProvider::instance();
                 let tenant = self.get_tenant();
                 Ok(user_mgr
-                    .get_file_format(tenant.as_str(), name)
+                    .get_file_format(&tenant, name)
                     .await?
                     .file_format_params)
             }

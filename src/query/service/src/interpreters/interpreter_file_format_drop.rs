@@ -56,7 +56,7 @@ impl Interpreter for DropFileFormatInterpreter {
         let user_mgr = UserApiProvider::instance();
 
         user_mgr
-            .drop_file_format(tenant.as_str(), &plan.name, plan.if_exists)
+            .drop_file_format(&tenant, &plan.name, plan.if_exists)
             .await?;
 
         Ok(PipelineBuildResult::create())

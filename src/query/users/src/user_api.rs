@@ -21,7 +21,6 @@ use databend_common_grpc::RpcClientConf;
 use databend_common_management::udf::UdfMgr;
 use databend_common_management::ConnectionApi;
 use databend_common_management::ConnectionMgr;
-use databend_common_management::FileFormatApi;
 use databend_common_management::FileFormatMgr;
 use databend_common_management::NetworkPolicyMgr;
 use databend_common_management::PasswordPolicyMgr;
@@ -133,11 +132,8 @@ impl UserApiProvider {
         Arc::new(StageMgr::create(self.client.clone(), tenant))
     }
 
-    pub fn get_file_format_api_client(&self, tenant: &str) -> Result<Arc<dyn FileFormatApi>> {
-        Ok(Arc::new(FileFormatMgr::create(
-            self.client.clone(),
-            tenant,
-        )?))
+    pub fn file_format_api(&self, tenant: &NonEmptyString) -> FileFormatMgr {
+        FileFormatMgr::create(self.client.clone(), tenant)
     }
 
     pub fn get_connection_api_client(&self, tenant: &str) -> Result<Arc<dyn ConnectionApi>> {
