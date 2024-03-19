@@ -89,7 +89,7 @@ impl InsertMultiTableInterpreter {
                 "InsertMultiTableInterpreter: InsertInputSource must be SelectPlan",
             ));
         };
-        let (mut select_plan, select_column_bindings, metadata) = match plan.as_ref() {
+        let (select_plan, select_column_bindings, metadata) = match plan.as_ref() {
             Plan::Query {
                 s_expr,
                 metadata,

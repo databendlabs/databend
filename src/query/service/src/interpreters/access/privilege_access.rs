@@ -745,7 +745,22 @@ impl AccessChecker for PrivilegeAccess {
                     | InsertInputSource::Values(_) => {}
                 }
             }
-            Plan::InsertMultiTable(_) => todo!(),
+            Plan::InsertMultiTable(plan) => {
+                for target in plan.whens.iter().flat_map(|when|when.intos.iter()).chain(plan.opt_else.as_ref().into_iter().flat_map(|e|e.intos.iter())){
+                    self.validate_table_access(&target.catalog, &target.database, &target.table, vec![UserPrivilegeType::Insert], false).await?;
+                }
+                match &plan.input_source {
+                    InsertInputSource::SelectPlan(plan) => {
+                        self.check(ctx, plan).await?;
+                    }
+                    InsertInputSource::Stage(plan) => {
+                        self.check(ctx, plan).await?;
+                    }
+                    InsertInputSource::StreamingWithFormat(..)
+                    | InsertInputSource::StreamingWithFileFormat {..}
+                    | InsertInputSource::Values(_) => {}
+                }
+            }
             Plan::Replace(plan) => {
                 //plan.delete_when is Expr no need to check privileges.
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete], false).await?;

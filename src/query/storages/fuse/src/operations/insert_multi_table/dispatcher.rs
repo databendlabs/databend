@@ -19,6 +19,7 @@ use std::ops::Not;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
@@ -126,7 +127,7 @@ pub fn dispatch(
 ) -> Result<Vec<DataBlock>> {
     // TODO: A naive impl, need to be optimized.
     let mut result = vec![];
-    let mut filtered = Bitmap::new();
+    let mut filtered = MutableBitmap::from_len_zeroed(data_block.num_rows());
     let func_ctx = ctx.get_function_context()?;
     for filter in filters {
         let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
@@ -136,12 +137,12 @@ pub fn dispatch(
             .try_downcast::<BooleanType>()
             .unwrap();
         let bitmap = values.into_column().unwrap();
-        let filter = bitmap.bitand(&filtered.clone().not());
+        let filter = bitmap.bitand(&Bitmap::from(filtered.clone().not()));
         result.push(data_block.clone().filter_with_bitmap(&filter)?);
         filtered = filtered.bitor(&filter);
     }
     if keep_remain {
-        result.push(data_block.filter_with_bitmap(&filtered.not())?);
+        result.push(data_block.filter_with_bitmap(&Bitmap::from(filtered.clone().not()))?);
     }
     Ok(result)
 }
