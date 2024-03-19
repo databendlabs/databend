@@ -25,8 +25,6 @@ use databend_common_expression::DataBlock;
 use databend_common_hashtable::MergeIntoBlockInfoIndex;
 use databend_common_hashtable::RowPtr;
 use databend_common_sql::plans::JoinType;
-use databend_common_sql::IndexType;
-use databend_common_sql::DUMMY_TABLE_INDEX;
 use databend_common_storages_fuse::operations::BlockMetaIndex;
 use log::info;
 
@@ -59,21 +57,14 @@ pub struct MergeIntoState {
 }
 
 impl MergeIntoState {
-    pub(crate) fn try_create_merge_into_state(
-        merge_into_target_table_index: IndexType,
-        merge_into_is_distributed: bool,
-    ) -> Option<SyncUnsafeCell<Self>> {
-        if merge_into_target_table_index != DUMMY_TABLE_INDEX {
-            Some(SyncUnsafeCell::new(MergeIntoState {
-                merge_into_is_distributed,
-                block_info_index: Default::default(),
-                matched: Vec::new(),
-                atomic_pointer: MatchedPtr(std::ptr::null_mut()),
-                chunk_offsets: Vec::with_capacity(100),
-            }))
-        } else {
-            None
-        }
+    pub(crate) fn create_merge_into_state(is_distributed: bool) -> SyncUnsafeCell<Self> {
+        SyncUnsafeCell::new(MergeIntoState {
+            merge_into_is_distributed: is_distributed,
+            block_info_index: Default::default(),
+            matched: Vec::new(),
+            atomic_pointer: MatchedPtr(std::ptr::null_mut()),
+            chunk_offsets: Vec::with_capacity(100),
+        })
     }
 }
 

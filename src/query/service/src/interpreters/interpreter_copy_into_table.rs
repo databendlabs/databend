@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -27,6 +28,7 @@ use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::Project;
+use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFileInfo;
@@ -109,12 +111,10 @@ impl CopyIntoTableInterpreter {
             update_stream_meta_reqs = update_stream_meta;
             let query_physical_plan = Box::new(query_interpreter.build_physical_plan().await?);
 
-            let current_plan_id = query_physical_plan.get_id();
-            next_plan_id = current_plan_id + 2;
             let result_columns = query_interpreter.get_result_columns();
             CopyIntoTableSource::Query(Box::new(PhysicalPlan::Project(
                 Project::from_columns_binding(
-                    current_plan_id + 1,
+                    0,
                     query_physical_plan,
                     result_columns,
                     query_interpreter.get_ignore_result(),
@@ -122,23 +122,30 @@ impl CopyIntoTableInterpreter {
             )))
         } else {
             let stage_table = StageTable::try_create(plan.stage_table_info.clone())?;
-            let read_source_plan = Box::new(
-                stage_table
-                    .read_plan_with_catalog(
-                        self.ctx.clone(),
-                        plan.catalog_info.catalog_name().to_string(),
-                        None,
-                        None,
-                        false,
-                        false,
-                    )
-                    .await?,
-            );
-            CopyIntoTableSource::Stage(read_source_plan)
+
+            let data_source_plan = stage_table
+                .read_plan_with_catalog(
+                    self.ctx.clone(),
+                    plan.catalog_info.catalog_name().to_string(),
+                    None,
+                    None,
+                    false,
+                    false,
+                )
+                .await?;
+
+            CopyIntoTableSource::Stage(Box::new(PhysicalPlan::TableScan(TableScan {
+                plan_id: 0,
+                stat_info: None,
+                table_index: None,
+                internal_column: None,
+                name_mapping: BTreeMap::new(),
+                source: Box::new(data_source_plan),
+            })))
         };
 
         let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-            plan_id: next_plan_id,
+            plan_id: 0,
             catalog_info: plan.catalog_info.clone(),
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
@@ -151,10 +158,10 @@ impl CopyIntoTableInterpreter {
 
             source,
         }));
-        next_plan_id += 1;
+
         if plan.enable_distributed {
             root = PhysicalPlan::Exchange(Exchange {
-                plan_id: next_plan_id,
+                plan_id: 0,
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: Vec::new(),
@@ -162,6 +169,10 @@ impl CopyIntoTableInterpreter {
                 ignore_exchange: false,
             });
         }
+
+        let mut next_plan_id = 0;
+        root.adjust_plan_id(&mut next_plan_id);
+
         Ok((root, update_stream_meta_reqs))
     }
 

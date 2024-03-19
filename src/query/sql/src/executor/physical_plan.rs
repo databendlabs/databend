@@ -29,6 +29,7 @@ use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
+use crate::executor::physical_plans::CopyIntoTableSource;
 use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DeleteSource;
 use crate::executor::physical_plans::DistributedInsertSelect;
@@ -244,10 +245,15 @@ impl PhysicalPlan {
             PhysicalPlan::CopyIntoTable(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
+                match &mut plan.source {
+                    CopyIntoTableSource::Query(input) => input.adjust_plan_id(next_id),
+                    CopyIntoTableSource::Stage(input) => input.adjust_plan_id(next_id),
+                };
             }
             PhysicalPlan::CopyIntoLocation(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
             }
             PhysicalPlan::DeleteSource(plan) => {
                 plan.plan_id = *next_id;
