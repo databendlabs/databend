@@ -207,7 +207,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_new_copy_for_text_formats", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Use new implementation for loading CSV files.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
