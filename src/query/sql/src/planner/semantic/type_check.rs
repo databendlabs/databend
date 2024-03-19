@@ -418,7 +418,7 @@ impl<'a> TypeChecker<'a> {
                             span: *span,
                             func: ASTFunctionCall {
                                 distinct: false,
-                                name: Identifier::from_name(span, "contains"),
+                                name: Identifier::from_name(*span, "contains"),
                                 args: args.iter().copied().cloned().collect(),
                                 params: vec![],
                                 window: None,
@@ -666,7 +666,7 @@ impl<'a> TypeChecker<'a> {
                                 span: *span,
                                 func: ASTFunctionCall {
                                     distinct: false,
-                                    name: Identifier::from_name(span, "eq"),
+                                    name: Identifier::from_name(*span, "eq"),
                                     args: vec![*operand.clone(), c.clone()],
                                     params: vec![],
                                     window: None,

@@ -59,8 +59,8 @@ impl Dataframe {
         table_name: &str,
     ) -> Result<Self> {
         let table = TableReference::Table {
-            database: db.map(Identifier::from_name),
-            table: Identifier::from_name(table_name),
+            database: db.map(|db| Identifier::from_name(None, db)),
+            table: Identifier::from_name(None, table_name),
             span: None,
             catalog: None,
             alias: None,
@@ -180,7 +180,7 @@ impl Dataframe {
                 span: None,
                 func: FunctionCall {
                     distinct: false,
-                    name: Identifier::from_name("count"),
+                    name: Identifier::from_name(None, "count"),
                     args: vec![],
                     params: vec![],
                     window: None,
@@ -476,8 +476,8 @@ impl Dataframe {
         let mut table_ref = vec![];
         for (db, table_name) in from {
             let table = TableReference::Table {
-                database: db.map(Identifier::from_name),
-                table: Identifier::from_name(table_name),
+                database: db.map(|db| Identifier::from_name(None, db)),
+                table: Identifier::from_name(None, table_name),
                 span: None,
                 catalog: None,
                 alias: None,
@@ -582,7 +582,7 @@ fn parse_cols(schema: DataSchemaRef, columns: &[&str]) -> Result<Vec<SelectTarge
                 column: ColumnRef {
                     database: None,
                     table: None,
-                    column: ColumnID::Name(Identifier::from_name_with_quoted(*c, Some('`'))),
+                    column: ColumnID::Name(Identifier::from_name_with_quoted(None, *c, Some('`'))),
                 },
             }),
             alias: None,

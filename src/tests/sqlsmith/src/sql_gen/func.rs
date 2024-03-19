@@ -628,11 +628,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 self.windows_name[self.rng.gen_range(0..=len - 1)].to_string()
             };
             Some(Window::WindowReference(WindowRef {
-                window_name: Identifier {
-                    name,
-                    quote: None,
-                    span: None,
-                },
+                window_name: Identifier::from_name(None, name),
             }))
         } else {
             let window_spec = self.gen_window_spec();
@@ -713,7 +709,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let lambda_expr = self.gen_expr(inner_ty);
 
         let lambda = Lambda {
-            params: vec![Identifier::from_name(lambda_name)],
+            params: vec![Identifier::from_name(None,lambda_name)],
             expr: Box::new(lambda_expr),
         };
 
@@ -768,7 +764,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             })
             .collect();
 
-        let name = Identifier::from_name(name);
+        let name = Identifier::from_name(None,name);
         Expr::FunctionCall {
             span: None,
             func: FunctionCall {
