@@ -233,7 +233,7 @@ select * from t_10, t_100, t_1000
 ----
 Memo
 ├── root group: #5
-├── estimated memory: 6240 bytes
+├── estimated memory: 7696 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 10.000, children: []
