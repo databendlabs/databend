@@ -26,8 +26,10 @@ use databend_common_expression::AggregateHashTable;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_hashtable::HashtableLike;
+use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -212,6 +214,15 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 {
                     if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table)
                     {
+                        // perf
+                        {
+                            metrics_inc_group_by_partial_spill_count();
+                            metrics_inc_group_by_partial_spill_cell_count(1);
+                            metrics_inc_group_by_partial_hashtable_allocated_bytes(
+                                v.allocated_bytes() as u64,
+                            );
+                        }
+
                         let _dropper = v._dropper.clone();
                         let blocks = vec![DataBlock::empty_with_meta(
                             AggregateMeta::<Method, ()>::create_spilling(v),
@@ -234,11 +245,30 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                     || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage)
                 {
                     if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
+                        // perf
+                        {
+                            metrics_inc_group_by_partial_spill_count();
+                            metrics_inc_group_by_partial_spill_cell_count(1);
+                            metrics_inc_group_by_partial_hashtable_allocated_bytes(
+                                v.allocated_bytes() as u64,
+                            );
+                        }
+
                         let group_types = v.payload.group_types.clone();
                         let aggrs = v.payload.aggrs.clone();
-                        let config = v.config.clone();
+                        v.config.update_current_max_radix_bits();
+                        let config = v
+                            .config
+                            .clone()
+                            .with_initial_radix_bits(v.config.max_radix_bits);
+                        let mut state = PayloadFlushState::default();
+
+                        // repartition to max for normalization
+                        let partitioned_payload = v
+                            .payload
+                            .repartition(1 << config.max_radix_bits, &mut state);
                         let blocks = vec![DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, ()>::create_agg_spilling(v.payload),
+                            AggregateMeta::<Method, ()>::create_agg_spilling(partitioned_payload),
                         )];
 
                         let arena = Arc::new(Bump::new());
