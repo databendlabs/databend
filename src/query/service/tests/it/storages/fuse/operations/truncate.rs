@@ -34,7 +34,7 @@ async fn test_fuse_table_truncate() -> databend_common_exception::Result<()> {
 
     // 1. truncate empty table
     let prev_version = table.get_table_info().ident.seq;
-    let r = table.truncate(ctx.clone()).await;
+    let r = fixture.truncate_default_table().await;
     let table = fixture.latest_default_table().await?;
     // no side effects
     assert_eq!(prev_version, table.get_table_info().ident.seq);
@@ -66,7 +66,7 @@ async fn test_fuse_table_truncate() -> databend_common_exception::Result<()> {
     assert_eq!(stats.read_rows, (num_blocks * rows_per_block));
 
     // truncate
-    let r = table.truncate(ctx.clone()).await;
+    let r = fixture.truncate_default_table().await;
     assert!(r.is_ok());
 
     // get the latest tbl
@@ -109,7 +109,6 @@ async fn test_fuse_table_truncate_appending_concurrently() -> databend_common_ex
     //        s3 should be a valid snapshot,full-scan should work as expected
 
     let fixture = Arc::new(TestFixture::setup().await?);
-    let ctx = fixture.new_query_ctx().await?;
 
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
@@ -149,7 +148,7 @@ async fn test_fuse_table_truncate_appending_concurrently() -> databend_common_ex
     let s2_table_to_appended = fixture.latest_default_table().await?;
 
     // 4. perform `truncate` operation on s1
-    let r = s1_table_to_be_truncated.truncate(ctx.clone()).await;
+    let r = fixture.truncate_default_table().await;
     // version mismatched, and `truncate purge` should result in error (but nothing should have been removed)
     assert!(r.is_err());
 

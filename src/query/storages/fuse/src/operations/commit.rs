@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use backoff::backoff::Backoff;
 use chrono::Utc;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -143,9 +144,10 @@ impl FuseTable {
         }
 
         let table_statistics_location = snapshot.table_statistics_location.clone();
+        let catalog = ctx.get_catalog(table_info.catalog()).await?;
         // 2. update table meta
         let res = Self::update_table_meta(
-            ctx,
+            catalog,
             table_info,
             location_generator,
             snapshot,
@@ -176,7 +178,7 @@ impl FuseTable {
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn update_table_meta(
-        ctx: &dyn TableContext,
+        catalog: Arc<dyn Catalog>,
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
         snapshot: TableSnapshot,
@@ -210,7 +212,6 @@ impl FuseTable {
         new_table_meta.updated_on = Utc::now();
 
         // 2. prepare the request
-        let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 

@@ -44,6 +44,12 @@ impl MutationGenerator {
 }
 
 impl SnapshotGenerator for MutationGenerator {
+    const NAME: &'static str = "MutationGenerator";
+
+    fn set_conflict_resolve_context(&mut self, ctx: ConflictResolveContext) {
+        self.conflict_resolve_ctx = ctx;
+    }
+
     fn generate_new_snapshot(
         &self,
         schema: TableSchema,
@@ -55,11 +61,6 @@ impl SnapshotGenerator for MutationGenerator {
         let previous =
             previous.unwrap_or_else(|| Arc::new(TableSnapshot::new_empty_snapshot(schema.clone())));
         match &self.conflict_resolve_ctx {
-            ConflictResolveContext::AppendOnly(_) | ConflictResolveContext::None => {
-                return Err(ErrorCode::Internal(
-                    "conflict_resolve_ctx should not be AppendOnly in MutationGenerator",
-                ));
-            }
             ConflictResolveContext::ModifiedSegmentExistsInLatest(ctx) => {
                 if let Some((removed, replaced)) =
                     ConflictResolveContext::is_modified_segments_exists_in_latest(
@@ -94,18 +95,18 @@ impl SnapshotGenerator for MutationGenerator {
                         previous.table_statistics_location.clone(),
                         previous.index_info_locations.clone(),
                     );
-                    return Ok(new_snapshot);
+                    Ok(new_snapshot)
+                } else {
+                    metrics_inc_commit_mutation_unresolvable_conflict();
+                    Err(ErrorCode::UnresolvableConflict(format!(
+                        "conflict resolve context:{:?}",
+                        self.conflict_resolve_ctx
+                    )))
                 }
             }
+            _ => Err(ErrorCode::Internal(
+                "conflict_resolve_ctx should not be AppendOnly in MutationGenerator",
+            )),
         }
-        metrics_inc_commit_mutation_unresolvable_conflict();
-        Err(ErrorCode::UnresolvableConflict(format!(
-            "conflict resolve context:{:?}",
-            self.conflict_resolve_ctx
-        )))
-    }
-
-    fn set_conflict_resolve_context(&mut self, ctx: ConflictResolveContext) {
-        self.conflict_resolve_ctx = ctx;
     }
 }

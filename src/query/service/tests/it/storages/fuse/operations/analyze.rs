@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
-use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_query::test_kits::*;
@@ -71,15 +70,8 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
 
     // truncate table
     {
-        let ctx = fixture.new_query_ctx().await?;
-        let catalog = ctx
-            .get_catalog(fixture.default_catalog_name().as_str())
-            .await?;
-        let table = catalog
-            .get_table(ctx.get_tenant().as_str(), &db, &tbl)
-            .await?;
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        fuse_table.truncate(ctx).await?;
+        let r = fixture.truncate_default_table().await;
+        assert!(r.is_ok());
     }
 
     // optimize after truncate table, ts file location will become None

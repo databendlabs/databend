@@ -86,6 +86,8 @@ impl AppendGenerator {
 
 #[async_trait::async_trait]
 impl SnapshotGenerator for AppendGenerator {
+    const NAME: &'static str = "AppendGenerator";
+
     fn set_conflict_resolve_context(&mut self, ctx: ConflictResolveContext) {
         self.conflict_resolve_ctx = ctx;
     }

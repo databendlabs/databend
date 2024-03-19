@@ -126,6 +126,7 @@ impl Interpreter for DropTableInterpreter {
         role_api.revoke_ownership(&owner_object).await?;
         RoleCacheManager::instance().invalidate_cache(&tenant);
 
+        let mut build_res = PipelineBuildResult::create();
         // if `plan.all`, truncate, then purge the historical data
         if self.plan.all {
             // the above `catalog.drop_table` operation changed the table meta version,
@@ -136,9 +137,13 @@ impl Interpreter for DropTableInterpreter {
             // otherwise, plain truncate
             if let Ok(fuse_table) = maybe_fuse_table {
                 let purge = true;
-                fuse_table.do_truncate(self.ctx.clone(), purge).await?
+                fuse_table
+                    .do_truncate(self.ctx.clone(), &mut build_res.main_pipeline, purge)
+                    .await?
             } else {
-                latest.truncate(self.ctx.clone()).await?
+                latest
+                    .truncate(self.ctx.clone(), &mut build_res.main_pipeline)
+                    .await?
             }
         }
 
@@ -153,6 +158,6 @@ impl Interpreter for DropTableInterpreter {
             .await?;
         }
 
-        Ok(PipelineBuildResult::create())
+        Ok(build_res)
     }
 }

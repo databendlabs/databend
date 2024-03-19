@@ -23,7 +23,13 @@ use crate::operations::common::ConflictResolveContext;
 
 #[async_trait::async_trait]
 pub trait SnapshotGenerator {
-    fn set_conflict_resolve_context(&mut self, ctx: ConflictResolveContext);
+    const NAME: &'static str;
+
+    fn purge(&self) -> bool {
+        false
+    }
+
+    fn set_conflict_resolve_context(&mut self, _ctx: ConflictResolveContext) {}
 
     async fn fill_default_values(
         &mut self,

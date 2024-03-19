@@ -16,6 +16,7 @@ mod append_generator;
 mod conflict_resolve_context;
 mod mutation_generator;
 mod snapshot_generator;
+mod truncate_generator;
 
 pub use append_generator::AppendGenerator;
 pub use conflict_resolve_context::ConflictResolveContext;
@@ -23,3 +24,4 @@ pub use conflict_resolve_context::SnapshotChanges;
 pub use conflict_resolve_context::SnapshotMerged;
 pub use mutation_generator::MutationGenerator;
 pub use snapshot_generator::SnapshotGenerator;
+pub use truncate_generator::TruncateGenerator;

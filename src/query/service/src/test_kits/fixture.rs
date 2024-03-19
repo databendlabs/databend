@@ -844,6 +844,15 @@ impl TestFixture {
         execute_pipeline(ctx, build_res)
     }
 
+    pub async fn truncate_default_table(&self) -> Result<()> {
+        let qry = format!(
+            "Truncate table {}.{}",
+            self.default_db_name(),
+            self.default_table_name()
+        );
+        self.execute_command(&qry).await
+    }
+
     pub async fn execute_command(&self, query: &str) -> Result<()> {
         let res = self.execute_query(query).await?;
         res.try_collect::<Vec<DataBlock>>().await?;

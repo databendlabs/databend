@@ -27,6 +27,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_metrics::storage::*;
@@ -85,7 +86,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     table: Arc<dyn Table>,
     copied_files: Option<UpsertTableCopiedFileReq>,
     snapshot_gen: F,
-    transient: bool,
+    purge: bool,
     retries: u64,
     max_retry_elapsed: Option<Duration>,
     backoff: ExponentialBackoff,
@@ -117,6 +118,7 @@ where F: SnapshotGenerator + Send + 'static
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
     ) -> Result<ProcessorPtr> {
+        let purge = snapshot_gen.purge() || table.transient();
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
             ctx,
@@ -127,7 +129,7 @@ where F: SnapshotGenerator + Send + 'static
             snapshot_gen,
             abort_operation: AbortOperation::default(),
             lock_guard: None,
-            transient: table.transient(),
+            purge,
             backoff: ExponentialBackoff::default(),
             retries: 0,
             max_retry_elapsed,
@@ -147,7 +149,7 @@ where F: SnapshotGenerator + Send + 'static
         if self.prev_snapshot_id.is_some() && e.code() == ErrorCode::TABLE_VERSION_MISMATCHED {
             return false;
         }
-        FuseTable::is_error_recoverable(e, self.transient)
+        FuseTable::is_error_recoverable(e, self.purge)
     }
 
     fn read_meta(&mut self) -> Result<Event> {
@@ -182,6 +184,10 @@ where F: SnapshotGenerator + Send + 'static
         }
 
         Ok(Event::Async)
+    }
+
+    fn is_truncate() -> bool {
+        F::NAME == "TruncateGenerator"
     }
 }
 
@@ -328,8 +334,9 @@ where F: SnapshotGenerator + Send + 'static
 
                 self.dal.write(&location, data).await?;
 
+                let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
                 match FuseTable::update_table_meta(
-                    self.ctx.as_ref(),
+                    catalog.clone(),
                     &table_info,
                     &self.location_gen,
                     snapshot,
@@ -342,13 +349,22 @@ where F: SnapshotGenerator + Send + 'static
                 .await
                 {
                     Ok(_) => {
-                        if self.transient {
-                            // Removes historical data, if table is transient
+                        if Self::is_truncate() {
+                            catalog
+                                .truncate_table(&table_info, TruncateTableReq {
+                                    table_id: table_info.ident.table_id,
+                                    batch_size: None,
+                                })
+                                .await?;
+                        }
+
+                        if self.purge {
+                            // Removes historical data, if purge is true
                             let latest = self.table.refresh(self.ctx.as_ref()).await?;
                             let tbl = FuseTable::try_from_table(latest.as_ref())?;
 
                             warn!(
-                                "transient table detected, purging historical data. ({})",
+                                "table detected, purging historical data. ({})",
                                 tbl.table_info.ident
                             );
 
@@ -366,11 +382,11 @@ where F: SnapshotGenerator + Send + 'static
                             {
                                 // Errors of GC, if any, are ignored, since GC task can be picked up
                                 warn!(
-                                    "GC of transient table not success (this is not a permanent error). the error : {}",
+                                    "GC of table not success (this is not a permanent error). the error : {}",
                                     e
                                 );
                             } else {
-                                info!("GC of transient table done");
+                                info!("GC of table done");
                             }
                         }
                         metrics_inc_commit_mutation_success();
