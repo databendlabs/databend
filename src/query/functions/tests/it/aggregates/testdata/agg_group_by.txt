@@ -710,7 +710,7 @@ evaluation (internal):
 | Column | Data                                                                                    |
 +--------+-----------------------------------------------------------------------------------------+
 | dec    | NullableColumn { column: Decimal128([1.10, 2.20, 0.00, 3.30]), validity: [0b____1011] } |
-| Output | NullableColumn { column: Decimal128([0.0000, 0.7778]), validity: [0b______11] }         |
+| Output | NullableColumn { column: Float64([0, 0.7778174593]), validity: [0b______11] }           |
 +--------+-----------------------------------------------------------------------------------------+
 
 
@@ -720,7 +720,7 @@ evaluation (internal):
 | Column | Data                                                                    |
 +--------+-------------------------------------------------------------------------+
 | x_null | NullableColumn { column: UInt64([1, 2, 3, 4]), validity: [0b____0011] } |
-| Output | NullableColumn { column: Float64([NaN, NaN]), validity: [0b______11] }  |
+| Output | NullableColumn { column: Float64([0, 0]), validity: [0b______11] }      |
 +--------+-------------------------------------------------------------------------+
 
 

@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod connection_api;
-mod connection_mgr;
+//! Define behaviors of a `kvapi::Value` that contains a name.
 
-pub use connection_api::ConnectionApi;
-pub use connection_mgr::ConnectionMgr;
+use crate::kvapi;
+
+/// Define behaviors of a `kvapi::Value` that contains a name.
+pub trait ValueWithName: kvapi::Value {
+    fn name(&self) -> &str;
+}

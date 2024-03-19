@@ -497,7 +497,7 @@ impl QueryContextShared {
     pub async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
         let user_mgr = UserApiProvider::instance();
         let tenant = self.get_tenant();
-        user_mgr.get_connection(tenant.as_str(), name).await
+        user_mgr.get_connection(&tenant, name).await
     }
 
     pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {

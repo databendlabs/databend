@@ -12,8 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod password_policy_api;
-mod password_policy_mgr;
-
-pub use password_policy_api::PasswordPolicyApi;
-pub use password_policy_mgr::PasswordPolicyMgr;
+mod runtime_filter;

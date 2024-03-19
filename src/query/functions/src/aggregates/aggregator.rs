@@ -74,7 +74,7 @@ impl Aggregators {
         factory.register("covar_pop", aggregate_covariance_population_desc());
         factory.register("stddev_samp", aggregate_stddev_samp_function_desc());
         factory.register("stddev_pop", aggregate_stddev_pop_function_desc());
-        factory.register("stddev", aggregate_stddev_pop_function_desc());
+        factory.register("stddev", aggregate_stddev_samp_function_desc());
         factory.register("std", aggregate_stddev_pop_function_desc());
         factory.register("quantile", aggregate_quantile_disc_function_desc());
         factory.register("quantile_disc", aggregate_quantile_disc_function_desc());

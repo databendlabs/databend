@@ -34,6 +34,7 @@ use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
@@ -82,9 +83,12 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         match &stmt.src {
             CopyIntoTableSource::Location(location) => {
-                let plan = self
+                let mut plan = self
                     .bind_copy_into_table_common(bind_context, stmt, location)
                     .await?;
+
+                // for copy from location, collect files explicitly
+                plan.collect_files(self.ctx.as_ref()).await?;
                 self.bind_copy_into_table_from_location(bind_context, plan)
                     .await
             }
@@ -160,6 +164,7 @@ impl<'a> Binder {
                 files_info,
                 stage_info,
                 files_to_copy: None,
+                duplicated_files_detected: vec![],
                 is_select: false,
                 default_values: Some(default_values),
             },
@@ -283,6 +288,16 @@ impl<'a> Binder {
 
         let (stage_info, files_info) = self.bind_attachment(attachment).await?;
 
+        // list the files to be copied in binding phase
+        // note that, this method(`bind_copy_from_attachment`) are used by
+        // - bind_insert (insert from attachment)
+        // - bind_replace only (replace from attachment),
+        // currently, they do NOT enforce the deduplication detection rules,
+        // as the vanilla Copy-Into does.
+        // thus, we do not care about the "duplicated_files_detected", just set it to empty vector.
+        let files_to_copy = list_stage_files(&stage_info, &files_info, None).await?;
+        let duplicated_files_detected = vec![];
+
         let stage_schema = infer_table_schema(&data_schema)?;
 
         let default_values = self
@@ -303,7 +318,8 @@ impl<'a> Binder {
                 schema: stage_schema,
                 files_info,
                 stage_info,
-                files_to_copy: None,
+                files_to_copy: Some(files_to_copy),
+                duplicated_files_detected,
                 is_select: false,
                 default_values: Some(default_values),
             },
@@ -327,13 +343,10 @@ impl<'a> Binder {
         select_list: &'a [SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
-        let need_copy_file_infos = plan.collect_files(self.ctx.as_ref()).await?;
-
-        if need_copy_file_infos.is_empty() {
-            plan.no_file_to_copy = true;
+        plan.collect_files(self.ctx.as_ref()).await?;
+        if plan.no_file_to_copy {
             return Ok(Plan::CopyIntoTable(Box::new(plan)));
         }
-        plan.stage_table_info.files_to_copy = Some(need_copy_file_infos.clone());
 
         let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
@@ -343,11 +356,11 @@ impl<'a> Binder {
                 plan.stage_table_info.stage_info.clone(),
                 plan.stage_table_info.files_info.clone(),
                 alias,
-                Some(need_copy_file_infos.clone()),
+                plan.stage_table_info.files_to_copy.clone(),
             )
             .await?;
 
-        // Generate a analyzed select list with from context
+        // Generate an analyzed select list with from context
         let select_list = self
             .normalize_select_list(&mut from_context, select_list)
             .await?;

@@ -2182,6 +2182,7 @@ Functions overloads:
 1 is_float(Variant NULL) :: Boolean NULL
 0 is_integer(Variant) :: Boolean
 1 is_integer(Variant NULL) :: Boolean NULL
+0 is_not_error(T0) :: Boolean
 0 is_not_null(NULL) :: Boolean
 1 is_not_null(T0 NULL) :: Boolean
 0 is_null_value(Variant) :: Boolean

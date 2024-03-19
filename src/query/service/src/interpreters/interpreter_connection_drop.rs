@@ -56,7 +56,7 @@ impl Interpreter for DropConnectionInterpreter {
         let user_mgr = UserApiProvider::instance();
 
         user_mgr
-            .drop_connection(tenant.as_str(), &plan.name, plan.if_exists)
+            .drop_connection(&tenant, &plan.name, plan.if_exists)
             .await?;
 
         Ok(PipelineBuildResult::create())

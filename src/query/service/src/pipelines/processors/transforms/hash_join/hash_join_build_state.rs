@@ -1095,6 +1095,14 @@ impl HashJoinBuildState {
     pub(crate) fn join_type(&self) -> JoinType {
         self.hash_join_state.hash_join_desc.join_type.clone()
     }
+
+    pub fn get_enable_bloom_runtime_filter(&self) -> bool {
+        self.enable_bloom_runtime_filter
+    }
+
+    pub fn get_enable_min_max_runtime_filter(&self) -> bool {
+        self.enable_min_max_runtime_filter
+    }
 }
 
 pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {

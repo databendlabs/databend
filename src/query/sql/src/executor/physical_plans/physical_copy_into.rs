@@ -16,16 +16,15 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_storage::StageFileInfo;
 use enum_as_inner::EnumAsInner;
 
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::ValidationMode;
-use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTable {
@@ -39,31 +38,19 @@ pub struct CopyIntoTable {
     pub validation_mode: ValidationMode,
     pub force: bool,
     pub stage_table_info: StageTableInfo,
-    pub files: Vec<StageFileInfo>,
     pub table_info: TableInfo,
 
     pub source: CopyIntoTableSource,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct QuerySource {
-    pub plan: PhysicalPlan,
-    pub query_source_schema: DataSchemaRef,
-    pub ignore_result: bool,
-    pub result_columns: Vec<ColumnBinding>,
-}
-
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum CopyIntoTableSource {
-    Query(Box<QuerySource>),
+    Query(Box<PhysicalPlan>),
     Stage(Box<DataSourcePlan>),
 }
 
 impl CopyIntoTable {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        match &self.source {
-            CopyIntoTableSource::Query(query_ctx) => Ok(query_ctx.query_source_schema.clone()),
-            CopyIntoTableSource::Stage(_) => Ok(self.required_values_schema.clone()),
-        }
+        Ok(DataSchemaRefExt::create(vec![]))
     }
 }

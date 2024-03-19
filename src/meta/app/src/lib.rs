@@ -31,6 +31,7 @@ pub mod share;
 pub mod storage;
 pub mod tenant;
 pub mod tenant_key;
+pub mod tenant_key_errors;
 
 mod key_with_tenant;
 pub use key_with_tenant::KeyWithTenant;

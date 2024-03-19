@@ -60,7 +60,11 @@ where
     T: ValueType + Sync + Send,
     T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Ord,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         self.value.push(T::to_owned_scalar(other));
         Ok(())
     }
@@ -112,7 +116,11 @@ where
     T: ArgType + Sync + Send,
     T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Ord,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         self.value.push(T::to_owned_scalar(other));
         Ok(())
     }

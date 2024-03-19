@@ -73,7 +73,7 @@ async fn test_catalogs_database() -> Result<()> {
     // Create.
     {
         let mut req = CreateDatabaseReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: DatabaseNameIdent {
                 tenant: tenant.to_string(),
                 db_name: "db1".to_string(),
@@ -180,7 +180,7 @@ async fn test_catalogs_table() -> Result<()> {
         let created_on = Utc::now();
 
         let mut req = CreateTableReq {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             name_ident: TableNameIdent {
                 tenant: tenant.to_string(),
                 db_name: "default".to_string(),

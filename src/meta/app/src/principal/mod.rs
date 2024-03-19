@@ -15,17 +15,19 @@
 //! Principal is a user or role that accesses an entity.
 
 mod connection;
+pub mod connection_ident;
 mod file_format;
 mod network_policy;
-mod network_policy_ident;
+pub mod network_policy_ident;
 mod ownership_info;
 mod password_policy;
-mod password_policy_ident;
+pub mod password_policy_ident;
 mod principal_identity;
 mod role_ident;
 mod role_info;
 mod user_auth;
 mod user_defined_file_format;
+pub mod user_defined_file_format_ident;
 mod user_defined_function;
 mod user_grant;
 mod user_identity;

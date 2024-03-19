@@ -18,6 +18,7 @@ databend-common-users = { path = "../users" }
 serde = { workspace = true }
 
 async-backtrace = { workspace = true }
+chrono-tz = { workspace = true }
 dashmap = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
