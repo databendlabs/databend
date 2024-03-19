@@ -90,6 +90,9 @@ create table column_only_optimization_target(a int,b string);
 statement ok
 create table column_only_optimization_source(a int,b string);
 
+statement ok
+set join_spilling_memory_ratio = 0;
+
 query T
 explain MERGE INTO column_only_optimization_target as t1 using column_only_optimization_source as t2
 on t1.a = t2.a when matched then update set t1.b = t2.b when not matched then insert *;
@@ -97,7 +100,7 @@ on t1.a = t2.a when matched then update set t1.b = t2.b when not matched then in
 MergeInto:
 target_table: default.default.column_only_optimization_target
 ├── distributed: false
-├── target_build_optimization: false
+├── target_build_optimization: true
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set b = t2.b (#1)]
 ├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
@@ -123,7 +126,7 @@ on t1.a = t2.a when matched then update * when not matched then insert *;
 MergeInto:
 target_table: default.default.column_only_optimization_target
 ├── distributed: false
-├── target_build_optimization: false
+├── target_build_optimization: true
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0),b = b (#1)]
 ├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
@@ -141,6 +144,9 @@ target_table: default.default.column_only_optimization_target
         ├── filters: []
         ├── order by: []
         └── limit: NONE
+
+statement ok
+set join_spilling_memory_ratio = 60;
 
 query T
 explain MERGE INTO column_only_optimization_target as t1 using column_only_optimization_source as t2
