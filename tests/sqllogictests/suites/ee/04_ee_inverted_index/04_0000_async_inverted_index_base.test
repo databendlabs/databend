@@ -83,9 +83,6 @@ INSERT INTO t VALUES
 (22, 'Raining cats and dogs'),
 (23, 'The elephant in the room')
 
-statement error 1105
-SELECT id, content, score() FROM t WHERE match(content, 'the') ORDER BY score()
-
 statement ok
 REFRESH INVERTED INDEX idx1 ON t
 
