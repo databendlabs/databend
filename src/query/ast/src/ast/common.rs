@@ -30,6 +30,8 @@ pub struct Identifier {
     pub name: String,
     #[drive(skip)]
     pub quote: Option<char>,
+    #[drive(skip)]
+    pub is_hole: bool,
 }
 
 impl Identifier {
@@ -37,19 +39,21 @@ impl Identifier {
         self.quote.is_some()
     }
 
-    pub fn from_name(name: impl Into<String>) -> Self {
+    pub fn from_name(span: Span, name: impl Into<String>) -> Self {
         Self {
-            span: Span::default(),
+            span,
             name: name.into(),
             quote: None,
+            is_hole: false,
         }
     }
 
-    pub fn from_name_with_quoted(name: impl Into<String>, quote: Option<char>) -> Self {
+    pub fn from_name_with_quoted(span: Span, name: impl Into<String>, quote: Option<char>) -> Self {
         Self {
-            span: Span::default(),
+            span,
             name: name.into(),
             quote,
+            is_hole: false,
         }
     }
 }

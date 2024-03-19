@@ -15,6 +15,7 @@
 use databend_common_exception::Range;
 use databend_common_exception::Span;
 use nom::branch::alt;
+use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::multi::many1;
 use nom::sequence::terminated;
@@ -24,6 +25,7 @@ use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
 
+use super::expr::literal_string;
 use crate::ast::ColumnID;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
@@ -102,10 +104,8 @@ pub fn function_name(i: Input) -> IResult<Identifier> {
 }
 
 pub fn stage_name(i: Input) -> IResult<Identifier> {
-    let anonymous_stage = map(rule! { "~" }, |token| Identifier {
-        span: transform_span(&[token.clone()]),
-        name: token.text().to_string(),
-        quote: None,
+    let anonymous_stage = map(consumed(rule! { "~" }), |(span, _)| {
+        Identifier::from_name(transform_span(span.tokens), "~")
     });
 
     rule!(
@@ -128,6 +128,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
                 span: transform_span(&[token.clone()]),
                 name: unquote_ident(token.text(), quote),
                 quote: Some(quote),
+                is_hole: false,
             }))
         } else {
             Err(nom::Err::Error(Error::from_error_kind(
@@ -138,24 +139,42 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
     })
 }
 
+fn hole_identifier(i: Input) -> IResult<Identifier> {
+    check_template_mode(map(
+        consumed(rule! {
+            IDENTIFIER ~ ^"(" ~ ^":" ~ ^#literal_string ~ ^")"
+        }),
+        |(span, (_, _, _, name, _))| Identifier {
+            span: transform_span(span.tokens),
+            name,
+            quote: None,
+            is_hole: true,
+        },
+    ))(i)
+}
+
 fn non_reserved_identifier(
     is_reserved_keyword: fn(&TokenKind) -> bool,
 ) -> impl FnMut(Input) -> IResult<Identifier> {
     move |i| {
-        alt((
-            map(
-                rule! {
-                    Ident
-                    | #non_reserved_keyword(is_reserved_keyword)
-                },
-                |token| Identifier {
-                    span: transform_span(&[token.clone()]),
-                    name: token.text().to_string(),
-                    quote: None,
-                },
-            ),
-            quoted_identifier,
-        ))(i)
+        let plain_ident = map(
+            rule! {
+                Ident
+                | #non_reserved_keyword(is_reserved_keyword)
+            },
+            |token| Identifier {
+                span: transform_span(&[token.clone()]),
+                name: token.text().to_string(),
+                quote: None,
+                is_hole: false,
+            },
+        );
+
+        rule!(
+            #plain_ident
+            | #quoted_identifier
+            | #hole_identifier
+        )(i)
     }
 }
 
@@ -466,6 +485,26 @@ where
         Ok((input.slice(input.offset(&elem.span)..), expr))
     } else {
         Ok((rest, expr))
+    }
+}
+
+pub fn check_template_mode<'a, O, F>(mut parser: F) -> impl FnMut(Input<'a>) -> IResult<'a, O>
+where F: nom::Parser<Input<'a>, O, Error<'a>> {
+    move |input: Input| {
+        parser.parse(input).and_then(|(i, res)| {
+            if input.mode.is_template() {
+                Ok((i, res))
+            } else {
+                i.backtrace.clear();
+                let error = Error::from_error_kind(
+                    input,
+                    ErrorKind::Other(
+                        "Hole is only available in SQL template, you might want to use SQL scripting"
+                    ),
+                );
+                Err(nom::Err::Failure(error))
+            }
+        })
     }
 }
 

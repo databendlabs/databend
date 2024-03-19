@@ -323,6 +323,9 @@ pub enum ExprElement {
         unit: IntervalKind,
         date: Expr,
     },
+    Hole {
+        name: String,
+    },
 }
 
 struct ExprParser;
@@ -514,7 +517,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                         span,
                         func: FunctionCall {
                             distinct: false,
-                            name: Identifier::from_name("array_filter"),
+                            name: Identifier::from_name(
+                                transform_span(elem.span.tokens),
+                                "array_filter",
+                            ),
                             args: vec![source],
                             params: vec![],
                             window: None,
@@ -530,7 +536,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     span,
                     func: FunctionCall {
                         distinct: false,
-                        name: Identifier::from_name("array_map"),
+                        name: Identifier::from_name(transform_span(elem.span.tokens), "array_map"),
                         args: vec![source],
                         params: vec![],
                         window: None,
@@ -574,6 +580,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.tokens),
                 unit,
                 date: Box::new(date),
+            },
+            ExprElement::Hole { name } => Expr::Hole {
+                span: transform_span(elem.span.tokens),
+                name,
             },
             _ => unreachable!(),
         };
@@ -1156,19 +1166,25 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, not, _, _)| ExprElement::IsDistinctFrom { not: not.is_some() },
     );
 
-    let current_timestamp = value(
+    let current_timestamp = map(consumed(rule! { CURRENT_TIMESTAMP }), |(span, _)| {
         ExprElement::FunctionCall {
             func: FunctionCall {
                 distinct: false,
-                name: Identifier::from_name("current_timestamp"),
+                name: Identifier::from_name(transform_span(span.tokens), "current_timestamp"),
                 args: vec![],
                 params: vec![],
                 window: None,
                 lambda: None,
             },
+        }
+    });
+
+    let hole = check_template_mode(map(
+        rule! {
+            ":" ~ #literal_string
         },
-        rule! { CURRENT_TIMESTAMP },
-    );
+        |(_, name)| ExprElement::Hole { name },
+    ));
 
     let (rest, (span, elem)) = consumed(alt((
         // Note: each `alt` call supports maximum of 21 parsers
@@ -1215,6 +1231,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #current_timestamp: "CURRENT_TIMESTAMP"
             | #array : "`[<expr>, ...]`"
             | #map_expr : "`{ <literal> : <expr>, ... }`"
+        ),
+        rule!(
+            #hole : "`:<hole>`"
         ),
     )))(i)?;
 

@@ -640,6 +640,8 @@ pub enum TokenKind {
     INTERSECT,
     #[token("IDENTIFIED", ignore(ascii_case))]
     IDENTIFIED,
+    #[token("IDENTIFIER", ignore(ascii_case))]
+    IDENTIFIER,
     #[token("IF", ignore(ascii_case))]
     IF,
     #[token("IN", ignore(ascii_case))]

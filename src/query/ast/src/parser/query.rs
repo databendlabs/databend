@@ -446,7 +446,7 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         |(t, _, s, _)| SelectTarget::StarColumns {
             qualified: vec![Indirection::Star(Some(t.span))],
             column_filter: Some(ColumnFilter::Lambda(Lambda {
-                params: vec![Identifier::from_name("_t")],
+                params: vec![Identifier::from_name(Some(t.span), "_t")],
                 expr: Box::new(Expr::BinaryOp {
                     span: Some(t.span),
                     op: BinaryOperator::Regexp,
@@ -455,7 +455,7 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
                         column: ColumnRef {
                             database: None,
                             table: None,
-                            column: ColumnID::Name(Identifier::from_name("_t")),
+                            column: ColumnID::Name(Identifier::from_name(Some(t.span), "_t")),
                         },
                     }),
                     right: Box::new(Expr::Literal {

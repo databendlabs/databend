@@ -404,7 +404,7 @@ impl<'a> TypeChecker<'a> {
                     let array_expr = Expr::FunctionCall {
                         span: *span,
                         func: ASTFunctionCall {
-                            name: Identifier::from_name("array_distinct"),
+                            name: Identifier::from_name(*span, "array_distinct"),
                             args: vec![array_expr],
                             params: vec![],
                             window: None,
@@ -418,11 +418,7 @@ impl<'a> TypeChecker<'a> {
                             span: *span,
                             func: ASTFunctionCall {
                                 distinct: false,
-                                name: Identifier {
-                                    name: "contains".to_string(),
-                                    quote: None,
-                                    span: *span,
-                                },
+                                name: Identifier::from_name(span, "contains"),
                                 args: args.iter().copied().cloned().collect(),
                                 params: vec![],
                                 window: None,
@@ -670,11 +666,7 @@ impl<'a> TypeChecker<'a> {
                                 span: *span,
                                 func: ASTFunctionCall {
                                     distinct: false,
-                                    name: Identifier {
-                                        name: "eq".to_string(),
-                                        quote: None,
-                                        span: *span,
-                                    },
+                                    name: Identifier::from_name(span, "eq"),
                                     args: vec![*operand.clone(), c.clone()],
                                     params: vec![],
                                     window: None,
@@ -1085,6 +1077,8 @@ impl<'a> TypeChecker<'a> {
             Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs).await?,
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs).await?,
+
+            Expr::Hole { .. } => unreachable!("hole is impossible in trivial query"),
         };
 
         Ok(Box::new((scalar, data_type)))
@@ -2585,11 +2579,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: Identifier {
-                                name: "is_not_null".to_string(),
-                                quote: None,
-                                span,
-                            },
+                            name: Identifier::from_name(span, "is_not_null"),
                             args: vec![arg_x.clone()],
                             params: vec![],
                             window: None,
@@ -2606,11 +2596,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: Identifier {
-                                name: "is_not_error".to_string(),
-                                quote: None,
-                                span,
-                            },
+                            name: Identifier::from_name(span, "is_not_error"),
                             args: vec![arg_x.clone()],
                             params: vec![],
                             window: None,
@@ -2630,11 +2616,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: Identifier {
-                                name: "is_not_error".to_string(),
-                                quote: None,
-                                span,
-                            },
+                            name: Identifier::from_name(span, "is_not_error"),
                             args: vec![(*arg).clone()],
                             params: vec![],
                             window: None,
@@ -2677,11 +2659,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: Identifier {
-                                name: "assume_not_null".to_string(),
-                                quote: None,
-                                span,
-                            },
+                            name: Identifier::from_name(span, "assume_not_null"),
                             args: vec![(*arg).clone()],
                             params: vec![],
                             window: None,
@@ -3499,11 +3477,7 @@ impl<'a> TypeChecker<'a> {
             };
         }
 
-        let inner_column_ident = Identifier {
-            name: names.join(":"),
-            quote: None,
-            span,
-        };
+        let inner_column_ident = Identifier::from_name(span, names.join(":"));
         match self.bind_context.resolve_name(
             column.database_name.as_deref(),
             column.table_name.as_deref(),
