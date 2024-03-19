@@ -175,7 +175,6 @@ impl AggregateHashTable {
                 state.empty_vector[idx] = idx;
             }
             self.payload.append_rows(state, row_count, group_columns);
-            self.payload.mark_min_cardinality();
             row_count
         } else {
             self.probe_and_create(state, group_columns, row_count)

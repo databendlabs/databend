@@ -110,7 +110,7 @@ impl HashTableConfig {
         self
     }
 
-    pub fn update_current_max_radix_bits(self) -> Self {
+    pub fn update_current_max_radix_bits(&self) {
         loop {
             let current_max_radix_bits = self.current_max_radix_bits.load(Ordering::SeqCst);
             if current_max_radix_bits < self.max_radix_bits
@@ -128,6 +128,5 @@ impl HashTableConfig {
             }
             break;
         }
-        self
     }
 }

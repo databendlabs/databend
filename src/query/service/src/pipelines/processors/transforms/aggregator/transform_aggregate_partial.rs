@@ -401,13 +401,18 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
 
                     let group_types = v.payload.group_types.clone();
                     let aggrs = v.payload.aggrs.clone();
-                    let config = v.config.update_current_max_radix_bits();
-                    let max_radix_bits = config.max_radix_bits;
+                    v.config.update_current_max_radix_bits();
+                    let config = v
+                        .config
+                        .clone()
+                        .with_initial_radix_bits(v.config.max_radix_bits);
+
                     let mut state = PayloadFlushState::default();
 
                     // repartition to max for normalization
-                    let partitioned_payload =
-                        v.payload.repartition(1 << max_radix_bits, &mut state);
+                    let partitioned_payload = v
+                        .payload
+                        .repartition(1 << config.max_radix_bits, &mut state);
 
                     let blocks = vec![DataBlock::empty_with_meta(
                         AggregateMeta::<Method, usize>::create_agg_spilling(partitioned_payload),
@@ -417,7 +422,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                     self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
                         group_types,
                         aggrs,
-                        config.with_initial_radix_bits(max_radix_bits),
+                        config,
                         arena,
                     ));
                     return Ok(blocks);

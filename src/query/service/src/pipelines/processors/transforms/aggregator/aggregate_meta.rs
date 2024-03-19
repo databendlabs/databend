@@ -92,6 +92,8 @@ impl SerializedPayload {
         let _ =
             hashtable.add_groups(&mut state, &group_columns, &[vec![]], &agg_states, rows_num)?;
 
+        hashtable.payload.mark_min_cardinality();
+
         Ok(hashtable.payload)
     }
 }
