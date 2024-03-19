@@ -139,8 +139,8 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     assert!(row_id_scores.is_some());
     let row_id_scores = row_id_scores.as_ref().unwrap();
     assert_eq!(row_id_scores.len(), 3);
-    assert_eq!(row_id_scores[0].0, 4);
-    assert_eq!(row_id_scores[1].0, 1);
+    assert_eq!(row_id_scores[0].0, 1);
+    assert_eq!(row_id_scores[1].0, 4);
     assert_eq!(row_id_scores[2].0, 5);
 
     Ok(())

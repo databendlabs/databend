@@ -12,8 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::PartialOrd;
+use std::cmp::PartialEq;
+use std::cmp::Ordering;
+use std::cmp::Eq;
+use std::cmp::Ord;
 use std::collections::BTreeMap;
-use std::collections::VecDeque;
+use std::collections::BinaryHeap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -102,24 +107,28 @@ impl InvertedIndexReader {
             let collector = TopDocs::with_limit(num);
             let docs = searcher.search(&query, &collector)?;
 
-            let mut doc_id_scores = VecDeque::new();
+            let mut doc_id_scores = BinaryHeap::new();
             for (score, doc_addr) in docs {
-                let doc_id = doc_addr.doc_id;
-                doc_id_scores.push_back((doc_id, score));
+                let doc_id = doc_addr.doc_id as usize;
+                let score = F32::from(score);
+                doc_id_scores.push(DocIdScore {
+                    doc_id,
+                    score,
+                });
             }
 
             // Converts the doc id in the index to the row id in each segment
             // by the row count in each segments.
-            let mut row_count: u32 = 0;
-            let mut next_row_count: u32 = 0;
+            let mut row_count: usize = 0;
+            let mut next_row_count: usize = 0;
             let mut row_id_scores = Vec::new();
             for index_segment in index_segments {
-                next_row_count += index_segment.row_count as u32;
-                while let Some((doc_id, score)) = doc_id_scores.front() {
-                    if *doc_id < next_row_count {
-                        let row_id = doc_id - row_count;
-                        row_id_scores.push((row_id as usize, F32::from(*score)));
-                        doc_id_scores.pop_front();
+                next_row_count += index_segment.row_count as usize;
+                while let Some(doc_id_score) = doc_id_scores.peek() {
+                    if doc_id_score.doc_id < next_row_count {
+                        let row_id = doc_id_score.doc_id - row_count;
+                        row_id_scores.push((row_id, doc_id_score.score));
+                        doc_id_scores.pop();
                     } else {
                         break;
                     }
@@ -141,3 +150,36 @@ impl InvertedIndexReader {
         Ok(segment_map)
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct DocIdScore {
+    doc_id: usize,
+    score: F32,
+}
+
+impl Ord for DocIdScore {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.doc_id < other.doc_id {
+            Ordering::Greater
+        } else if self.doc_id > other.doc_id {
+            Ordering::Less
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+impl PartialOrd for DocIdScore {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for DocIdScore {
+    fn eq(&self, other: &Self) -> bool {
+        self.doc_id == other.doc_id
+    }
+}
+
+impl Eq for DocIdScore {}
+
