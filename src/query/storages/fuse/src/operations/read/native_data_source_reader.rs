@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_catalog::merge_into_join;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::table_context::TableContext;
@@ -32,7 +33,9 @@ use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
 use log::debug;
 
+use super::can_merge_into_target_build_bloom_filter;
 use super::native_data_source::NativeDataSource;
+use super::util::MergeIntoSourceBuildBloomInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
@@ -57,6 +60,7 @@ pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {
 
     table_schema: Arc<TableSchema>,
     table_index: IndexType,
+    merge_into_source_build_bloom_info: MergeIntoSourceBuildBloomInfo,
 }
 
 impl ReadNativeDataSource<true> {
@@ -73,6 +77,7 @@ impl ReadNativeDataSource<true> {
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         let func_ctx = ctx.get_function_context()?;
+        let merge_into_join = ctx.get_merge_into_join();
         SyncSourcer::create(ctx.clone(), output.clone(), ReadNativeDataSource::<true> {
             func_ctx,
             id,
@@ -86,6 +91,16 @@ impl ReadNativeDataSource<true> {
             virtual_reader,
             table_schema,
             table_index,
+            merge_into_source_build_bloom_info: MergeIntoSourceBuildBloomInfo {
+                can_do_merge_into_rumtime_filter_bloom: can_merge_into_target_build_bloom_filter(
+                    ctx.clone(),
+                    table_index,
+                )?,
+                segment_infos: Default::default(),
+                catalog_info: merge_into_join.catalog_info.clone(),
+                table_info: merge_into_join.table_info.clone(),
+                database_name: merge_into_join.database_name.clone(),
+            },
         })
     }
 }
@@ -104,6 +119,7 @@ impl ReadNativeDataSource<false> {
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         let func_ctx = ctx.get_function_context()?;
+        let merge_into_join = ctx.get_merge_into_join();
         Ok(ProcessorPtr::create(Box::new(ReadNativeDataSource::<
             false,
         > {
@@ -119,6 +135,16 @@ impl ReadNativeDataSource<false> {
             virtual_reader,
             table_schema,
             table_index,
+            merge_into_source_build_bloom_info: MergeIntoSourceBuildBloomInfo {
+                can_do_merge_into_rumtime_filter_bloom: can_merge_into_target_build_bloom_filter(
+                    ctx.clone(),
+                    table_index,
+                )?,
+                segment_infos: Default::default(),
+                catalog_info: merge_into_join.catalog_info.clone(),
+                table_info: merge_into_join.table_info.clone(),
+                database_name: merge_into_join.database_name.clone(),
+            },
         })))
     }
 }
@@ -144,6 +170,11 @@ impl SyncSource for ReadNativeDataSource<true> {
                     &part,
                     &filters,
                     &self.func_ctx,
+                    self.merge_into_source_build_bloom_info
+                        .can_do_merge_into_rumtime_filter_bloom,
+                    self.partitions.ctx.clone(),
+                    self.table_index,
+                    &mut self.merge_into_source_build_bloom_info,
                 )? {
                     return Ok(Some(DataBlock::empty()));
                 }
@@ -251,6 +282,11 @@ impl Processor for ReadNativeDataSource<false> {
                     &part,
                     &filters,
                     &self.func_ctx,
+                    self.merge_into_source_build_bloom_info
+                        .can_do_merge_into_rumtime_filter_bloom,
+                    self.partitions.ctx.clone(),
+                    self.table_index,
+                    &mut self.merge_into_source_build_bloom_info,
                 )? {
                     continue;
                 }

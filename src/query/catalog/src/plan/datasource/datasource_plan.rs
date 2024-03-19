@@ -13,14 +13,12 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::plan::datasource::datasource_info::DataSourceInfo;
 use crate::plan::PartStatistics;
@@ -51,7 +49,6 @@ pub struct DataSourcePlan {
     pub data_mask_policy: Option<BTreeMap<FieldIndex, RemoteExpr>>,
 
     pub table_index: usize,
-    // pub merge_into_target_table_block_meta: Option<HashMap<BlockMetaIndex, BlockMeta>>,
 }
 
 impl DataSourcePlan {

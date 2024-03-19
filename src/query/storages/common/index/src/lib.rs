@@ -24,6 +24,7 @@ mod range_index;
 pub use bloom_index::BloomIndex;
 pub use bloom_index::BloomIndexMeta;
 pub use bloom_index::FilterEvalResult;
+pub use filters::Xor8Filter;
 pub use index::Index;
 pub use page_index::PageIndex;
 pub use range_index::statistics_to_domain;

@@ -406,34 +406,38 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         false
     };
 
+    // try add source_build bloom filter
+    if !change_join_order
+        && matches!(plan.merge_type, MergeIntoType::FullOperation)
+        && opt_ctx
+            .table_ctx
+            .get_settings()
+            .get_enable_merge_into_source_build_bloom()?
+    {
+        let merge_into_join = opt_ctx.table_ctx.get_merge_into_join();
+        // this is the first time set, so it must be none, and we will set it in `interpreter_merge_into`
+        assert!(matches!(merge_into_join.catalog_info, None));
+        assert!(matches!(merge_into_join.table_info, None));
+        assert!(merge_into_join.database_name.as_str() == "");
+        opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
+            // we will set catalog_info and table_info in `intepreter_merge_into`
+            catalog_info: None,
+            table_info: None,
+            target_tbl_idx: plan.target_table_idx,
+            is_distributed: false, // we will set it after later optimization.
+            merge_into_join_type: MergeIntoJoinType::Right,
+            database_name: plan.database.clone(),
+        })
+    }
+
     // we just support left join to use MergeIntoBlockInfoHashTable, we
     // don't support spill for now, and we need the macthed clauses' count
     // is one, just support `merge into t using source when matched then
     // update xx when not matched then insert xx`.
     let flag = plan.matched_evaluators.len() == 1
         && plan.matched_evaluators[0].condition.is_none()
-        && plan.matched_evaluators[0].update.is_some()
-        && !opt_ctx
-            .table_ctx
-            .get_settings()
-            .get_enable_distributed_merge_into()?;
+        && plan.matched_evaluators[0].update.is_some();
     let mut new_columns_set = plan.columns_set.clone();
-    if change_join_order
-        && matches!(plan.merge_type, MergeIntoType::FullOperation)
-        && opt_ctx
-            .table_ctx
-            .get_settings()
-            .get_join_spilling_memory_ratio()?
-            == 0
-        && flag
-    {
-        new_columns_set.remove(&plan.row_id_index);
-        opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
-            merge_into_join_type: MergeIntoJoinType::Left,
-            is_distributed: false,
-            target_tbl_idx: plan.target_table_idx,
-        })
-    }
 
     // try to optimize distributed join, only if
     // - distributed optimization is enabled
@@ -494,6 +498,27 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             // III.
             (merge_into_join_sexpr.clone(), false)
         };
+        // try add target_build_optimizations
+        if change_join_order
+            && matches!(plan.merge_type, MergeIntoType::FullOperation)
+            && opt_ctx
+                .table_ctx
+                .get_settings()
+                .get_join_spilling_memory_ratio()?
+                == 0
+            && flag
+        {
+            new_columns_set.remove(&plan.row_id_index);
+            let merge_into_join = opt_ctx.table_ctx.get_merge_into_join();
+            opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
+                merge_into_join_type: MergeIntoJoinType::Left,
+                is_distributed: distributed,
+                target_tbl_idx: plan.target_table_idx,
+                catalog_info: merge_into_join.catalog_info.clone(),
+                table_info: merge_into_join.table_info.clone(),
+                database_name: merge_into_join.database_name.clone(),
+            })
+        }
 
         Ok(Plan::MergeInto(Box::new(MergeInto {
             input: Box::new(optimized_distributed_merge_into_join_sexpr),
@@ -503,6 +528,27 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             ..*plan
         })))
     } else {
+        // try add target_build_optimizations
+        if change_join_order
+            && matches!(plan.merge_type, MergeIntoType::FullOperation)
+            && opt_ctx
+                .table_ctx
+                .get_settings()
+                .get_join_spilling_memory_ratio()?
+                == 0
+            && flag
+        {
+            new_columns_set.remove(&plan.row_id_index);
+            let merge_into_join = opt_ctx.table_ctx.get_merge_into_join();
+            opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
+                merge_into_join_type: MergeIntoJoinType::Left,
+                is_distributed: false,
+                target_tbl_idx: plan.target_table_idx,
+                catalog_info: merge_into_join.catalog_info.clone(),
+                table_info: merge_into_join.table_info.clone(),
+                database_name: merge_into_join.database_name,
+            })
+        }
         Ok(Plan::MergeInto(Box::new(MergeInto {
             input: join_sexpr,
             change_join_order,
@@ -512,6 +558,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     }
 }
 
+// Todo(JackTan25): This method is useless for now, it will be used for distributed target build optimization in the future.
 fn try_to_change_as_broadcast_join(
     merge_into_join_sexpr: SExpr,
     _change_join_order: bool,
@@ -523,7 +570,8 @@ fn try_to_change_as_broadcast_join(
     if let RelOperator::Exchange(Exchange::Merge) = merge_into_join_sexpr.plan.as_ref() {
         let right_exchange = merge_into_join_sexpr.child(0)?.child(1)?;
         if let RelOperator::Exchange(Exchange::Broadcast) = right_exchange.plan.as_ref() {
-            let join: Join = merge_into_join_sexpr.child(0)?.plan().clone().try_into()?;
+            let mut join: Join = merge_into_join_sexpr.child(0)?.plan().clone().try_into()?;
+
             let join_s_expr = merge_into_join_sexpr
                 .child(0)?
                 .replace_plan(Arc::new(RelOperator::Join(join)));

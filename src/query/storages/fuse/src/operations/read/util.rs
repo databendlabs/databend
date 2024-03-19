@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::merge_into_join::MergeIntoJoinType;
@@ -22,9 +23,21 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 
 use crate::operations::BlockMetaIndex;
+use crate::operations::SegmentIndex;
 use crate::FusePartInfo;
+
+pub struct MergeIntoSourceBuildBloomInfo {
+    pub can_do_merge_into_rumtime_filter_bloom: bool,
+    pub segment_infos: HashMap<SegmentIndex, SegmentInfo>,
+    pub table_info: Option<TableInfo>,
+    pub catalog_info: Option<CatalogInfo>,
+    pub database_name: String,
+}
 
 pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> (bool, bool) {
     let merge_into_join = ctx.get_merge_into_join();
@@ -32,9 +45,31 @@ pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> 
         matches!(
             merge_into_join.merge_into_join_type,
             MergeIntoJoinType::Left
-        ) && merge_into_join.target_tbl_idx == table_idx,
+        ) && merge_into_join.target_tbl_idx == table_idx
+            && !merge_into_join.is_distributed, /* we don't support distributed mod for target build optimization for now, */
         merge_into_join.is_distributed,
     )
+}
+
+pub fn can_merge_into_target_build_bloom_filter(
+    ctx: Arc<dyn TableContext>,
+    table_idx: usize,
+) -> Result<bool> {
+    let merge_into_join = ctx.get_merge_into_join();
+    let enabled = matches!(
+        merge_into_join.merge_into_join_type,
+        MergeIntoJoinType::Right
+    ) && merge_into_join.target_tbl_idx == table_idx;
+    if enabled {
+        assert!(
+            ctx.get_settings()
+                .get_enable_merge_into_source_build_bloom()?
+        );
+        assert!(merge_into_join.database_name.as_str() != "");
+        assert!(matches!(merge_into_join.catalog_info, Some(_)));
+        assert!(matches!(merge_into_join.table_info, Some(_)));
+    }
+    Ok(enabled)
 }
 
 pub(crate) fn add_data_block_meta(

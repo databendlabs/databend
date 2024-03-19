@@ -673,7 +673,7 @@ impl AggregationContext {
     }
 
     // return true if the block is pruned, otherwise false
-    async fn apply_bloom_pruning(
+    pub async fn apply_bloom_pruning(
         &self,
         block_meta: &BlockMeta,
         input_hashes: &[Vec<u64>],

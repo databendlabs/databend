@@ -22,6 +22,8 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -55,6 +57,7 @@ use xorf::BinaryFuse16;
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
 use crate::merge_into_join::MergeIntoJoin;
+use crate::merge_into_join::MergeIntoSourceBuildSegments;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
@@ -254,17 +257,27 @@ pub trait TableContext: Send + Sync {
 
     fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
+    // <ProbeSide Index, RuntimeFilterInfo>
     fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
 
     fn set_merge_into_join(&self, join: MergeIntoJoin);
 
     fn get_merge_into_join(&self) -> MergeIntoJoin;
+    // set the target table's segments
+    fn set_merge_into_source_build_segments(&self, segments: MergeIntoSourceBuildSegments);
+    // get the target table's segments
+    fn get_merge_into_source_build_segments(&self) -> MergeIntoSourceBuildSegments;
 
     fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, BinaryFuse16)>;
 
     fn get_inlist_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
 
     fn get_min_max_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
+
+    fn get_merge_into_source_build_siphashkeys_with_id(
+        &self,
+        id: usize,
+    ) -> Vec<(String, (Buffer<u64>, Option<Bitmap>))>;
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
     fn txn_mgr(&self) -> TxnManagerRef;

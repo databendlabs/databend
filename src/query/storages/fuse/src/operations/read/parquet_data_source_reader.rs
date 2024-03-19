@@ -32,7 +32,9 @@ use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
 use log::debug;
 
+use super::can_merge_into_target_build_bloom_filter;
 use super::parquet_data_source::ParquetDataSource;
+use super::util::MergeIntoSourceBuildBloomInfo;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -45,6 +47,7 @@ use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     func_ctx: FunctionContext,
     id: usize,
+    // build table index, not probe side table index
     table_index: IndexType,
     finished: bool,
     batch_size: usize,
@@ -58,6 +61,8 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     table_schema: Arc<TableSchema>,
+
+    merge_into_source_build_bloom_info: MergeIntoSourceBuildBloomInfo,
 }
 
 impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
@@ -76,6 +81,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         let func_ctx = ctx.get_function_context()?;
         if BLOCKING_IO {
+            let merge_into_join = ctx.get_merge_into_join();
             SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
                 func_ctx,
                 id,
@@ -89,8 +95,17 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 index_reader,
                 virtual_reader,
                 table_schema,
+                merge_into_source_build_bloom_info: MergeIntoSourceBuildBloomInfo {
+                    can_do_merge_into_rumtime_filter_bloom:
+                        can_merge_into_target_build_bloom_filter(ctx.clone(), table_index)?,
+                    segment_infos: Default::default(),
+                    catalog_info: merge_into_join.catalog_info.clone(),
+                    table_info: merge_into_join.table_info.clone(),
+                    database_name: merge_into_join.database_name.clone(),
+                },
             })
         } else {
+            let merge_into_join = ctx.get_merge_into_join();
             Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
                 false,
             > {
@@ -106,6 +121,14 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 index_reader,
                 virtual_reader,
                 table_schema,
+                merge_into_source_build_bloom_info: MergeIntoSourceBuildBloomInfo {
+                    can_do_merge_into_rumtime_filter_bloom:
+                        can_merge_into_target_build_bloom_filter(ctx.clone(), table_index)?,
+                    segment_infos: Default::default(),
+                    catalog_info: merge_into_join.catalog_info.clone(),
+                    table_info: merge_into_join.table_info.clone(),
+                    database_name: merge_into_join.database_name.clone(),
+                },
             })))
         }
     }
@@ -132,6 +155,11 @@ impl SyncSource for ReadParquetDataSource<true> {
                     &part,
                     &filters,
                     &self.func_ctx,
+                    self.merge_into_source_build_bloom_info
+                        .can_do_merge_into_rumtime_filter_bloom,
+                    self.partitions.ctx.clone(),
+                    self.table_index,
+                    &mut self.merge_into_source_build_bloom_info,
                 )? {
                     return Ok(Some(DataBlock::empty()));
                 }
@@ -248,6 +276,11 @@ impl Processor for ReadParquetDataSource<false> {
                     &part,
                     &filters,
                     &self.func_ctx,
+                    self.merge_into_source_build_bloom_info
+                        .can_do_merge_into_rumtime_filter_bloom,
+                    self.partitions.ctx.clone(),
+                    self.table_index,
+                    &mut self.merge_into_source_build_bloom_info,
                 )? {
                     continue;
                 }

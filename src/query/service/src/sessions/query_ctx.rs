@@ -32,6 +32,8 @@ use std::time::UNIX_EPOCH;
 use chrono_tz::Tz;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -39,6 +41,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::merge_into_join::MergeIntoSourceBuildSegments;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -1008,6 +1011,9 @@ impl TableContext for QueryContext {
             merge_into_join_type: merge_into_join.merge_into_join_type.clone(),
             is_distributed: merge_into_join.is_distributed,
             target_tbl_idx: merge_into_join.target_tbl_idx,
+            catalog_info: merge_into_join.catalog_info.clone(),
+            table_info: merge_into_join.table_info.clone(),
+            database_name: merge_into_join.database_name.clone(),
         }
     }
 
@@ -1015,6 +1021,17 @@ impl TableContext for QueryContext {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
             Some(v) => (v.get_bloom()).clone(),
+            None => vec![],
+        }
+    }
+
+    fn get_merge_into_source_build_siphashkeys_with_id(
+        &self,
+        id: IndexType,
+    ) -> Vec<(String, (Buffer<u64>, Option<Bitmap>))> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        match runtime_filters.get(&id) {
+            Some(v) => v.get_merge_into_source_build_siphashkeys(),
             None => vec![],
         }
     }
@@ -1044,6 +1061,16 @@ impl TableContext for QueryContext {
 
     fn txn_mgr(&self) -> TxnManagerRef {
         self.shared.session.session_ctx.txn_mgr()
+    }
+
+    fn set_merge_into_source_build_segments(&self, segments: MergeIntoSourceBuildSegments) {
+        let mut merge_into_source_build_segments =
+            self.shared.merge_into_source_build_segments.write();
+        *merge_into_source_build_segments = segments;
+    }
+
+    fn get_merge_into_source_build_segments(&self) -> MergeIntoSourceBuildSegments {
+        self.shared.merge_into_source_build_segments.read().clone()
     }
 }
 

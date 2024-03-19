@@ -34,6 +34,12 @@ impl RuntimeFilterInfo {
         self.bloom.push(bloom);
     }
 
+    pub fn get_merge_into_source_build_siphashkeys(
+        &mut self,
+    ) -> Vec<(String, (Buffer<u64>, Option<Bitmap>))> {
+        self.siphashes.clone()
+    }
+
     pub fn add_merge_into_source_build_siphashkeys(
         &mut self,
         digests: (String, (Buffer<u64>, Option<Bitmap>)),
