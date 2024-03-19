@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -407,7 +408,12 @@ impl PhysicalPlan {
 
     pub fn name(&self) -> String {
         match self {
-            PhysicalPlan::TableScan(_) => "TableScan".to_string(),
+            PhysicalPlan::TableScan(v) => match &v.source.source_info {
+                DataSourceInfo::TableSource(_) => "TableScan".to_string(),
+                DataSourceInfo::StageSource(_) => "StageScan".to_string(),
+                DataSourceInfo::ParquetSource(_) => "ParquetScan".to_string(),
+                DataSourceInfo::ResultScanSource(_) => "ResultScan".to_string(),
+            },
             PhysicalPlan::Filter(_) => "Filter".to_string(),
             PhysicalPlan::Project(_) => "Project".to_string(),
             PhysicalPlan::EvalScalar(_) => "EvalScalar".to_string(),
@@ -731,7 +737,7 @@ impl PhysicalPlan {
                         v.output_schema()?.num_fields(),
                         std::cmp::max(
                             v.output_schema()?.num_fields(),
-                            v.source.source_info.schema().num_fields()
+                            v.source.source_info.schema().num_fields(),
                         )
                     ),
                     v.name_mapping.keys().cloned().collect(),
