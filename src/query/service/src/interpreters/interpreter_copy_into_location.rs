@@ -15,22 +15,22 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::StageTableInfo;
-use databend_common_catalog::table::AppendMode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_sql::executor::physical_plans::CopyIntoLocation;
+use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_stage::StageTable;
 use log::debug;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::PipelineBuilder;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyIntoLocationPlan;
@@ -95,35 +95,30 @@ impl CopyIntoLocationInterpreter {
         query: &Plan,
     ) -> Result<PipelineBuildResult> {
         let (select_interpreter, data_schema) = self.build_query(query).await?;
-        let plan = select_interpreter.build_physical_plan().await?;
-        let mut build_res = select_interpreter.build_pipeline(plan).await?;
+        let query_physical_plan = select_interpreter.build_physical_plan().await?;
         let table_schema = infer_table_schema(&data_schema)?;
-        let stage_table_info = StageTableInfo {
-            schema: table_schema,
-            stage_info: stage.clone(),
-            files_info: StageFilesInfo {
-                path: path.to_string(),
-                files: None,
-                pattern: None,
+
+        let mut physical_plan = PhysicalPlan::CopyIntoLocation(Box::new(CopyIntoLocation {
+            plan_id: 0,
+            input: Box::new(query_physical_plan),
+            to_stage_info: StageTableInfo {
+                schema: table_schema,
+                stage_info: stage.clone(),
+                files_info: StageFilesInfo {
+                    path: path.to_string(),
+                    files: None,
+                    pattern: None,
+                },
+                files_to_copy: None,
+                duplicated_files_detected: vec![],
+                is_select: false,
+                default_values: None,
             },
-            files_to_copy: None,
-            duplicated_files_detected: vec![],
-            is_select: false,
-            default_values: None,
-        };
-        let to_table = StageTable::try_create(stage_table_info)?;
-        PipelineBuilder::build_append2table_with_commit_pipeline(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            to_table,
-            data_schema,
-            None,
-            vec![],
-            false,
-            AppendMode::Normal,
-            unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-        )?;
-        Ok(build_res)
+        }));
+
+        let mut next_plan_id = 0;
+        physical_plan.adjust_plan_id(&mut next_plan_id);
+        build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await
     }
 }
 

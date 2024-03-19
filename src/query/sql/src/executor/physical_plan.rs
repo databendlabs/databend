@@ -27,6 +27,7 @@ use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
+use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DeleteSource;
@@ -95,6 +96,7 @@ pub enum PhysicalPlan {
 
     /// Copy into table
     CopyIntoTable(Box<CopyIntoTable>),
+    CopyIntoLocation(Box<CopyIntoLocation>),
 
     /// Replace
     ReplaceAsyncSourcer(ReplaceAsyncSourcer),
@@ -243,6 +245,10 @@ impl PhysicalPlan {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
+            PhysicalPlan::CopyIntoLocation(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
             PhysicalPlan::DeleteSource(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -339,6 +345,7 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoAppendNotMatched(v) => v.plan_id,
             PhysicalPlan::CommitSink(v) => v.plan_id,
             PhysicalPlan::CopyIntoTable(v) => v.plan_id,
+            PhysicalPlan::CopyIntoLocation(v) => v.plan_id,
             PhysicalPlan::ReplaceAsyncSourcer(v) => v.plan_id,
             PhysicalPlan::ReplaceDeduplicate(v) => v.plan_id,
             PhysicalPlan::ReplaceInto(v) => v.plan_id,
@@ -370,6 +377,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
+            PhysicalPlan::CopyIntoLocation(plan) => plan.output_schema(),
             PhysicalPlan::CteScan(plan) => plan.output_schema(),
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
@@ -416,6 +424,7 @@ impl PhysicalPlan {
             PhysicalPlan::CommitSink(_) => "CommitSink".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
             PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
+            PhysicalPlan::CopyIntoLocation(_) => "CopyIntoLocation".to_string(),
             PhysicalPlan::ReplaceAsyncSourcer(_) => "ReplaceAsyncSourcer".to_string(),
             PhysicalPlan::ReplaceDeduplicate(_) => "ReplaceDeduplicate".to_string(),
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
@@ -488,6 +497,7 @@ impl PhysicalPlan {
             ),
             PhysicalPlan::ReclusterSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Udf(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::CopyIntoLocation(plan) => Box::new(std::iter::once(plan.input.as_ref())),
         }
     }
 
@@ -507,6 +517,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::CopyIntoLocation(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)

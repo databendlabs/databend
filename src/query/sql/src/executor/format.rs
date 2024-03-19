@@ -30,6 +30,7 @@ use crate::executor::physical_plans::AggregateFunctionDesc;
 use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::ConstantTableScan;
+use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DistributedInsertSelect;
@@ -215,6 +216,7 @@ fn to_format_tree(
         PhysicalPlan::Udf(plan) => udf_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, profs),
         PhysicalPlan::CopyIntoTable(plan) => copy_into_table(plan),
+        PhysicalPlan::CopyIntoLocation(plan) => copy_into_location(plan),
         PhysicalPlan::ReplaceAsyncSourcer(_) => {
             Ok(FormatTreeNode::new("ReplaceAsyncSourcer".to_string()))
         }
@@ -262,6 +264,10 @@ fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
         "CopyIntoTable: {}",
         plan.table_info
     )))
+}
+
+fn copy_into_location(_: &CopyIntoLocation) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::new("CopyIntoLocation".to_string()))
 }
 
 fn table_scan_to_format_tree(
