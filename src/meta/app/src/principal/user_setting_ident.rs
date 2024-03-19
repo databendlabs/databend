@@ -18,38 +18,16 @@ use crate::tenant_key::TIdent;
 pub type SettingIdent = TIdent<kvapi_impl::Resource>;
 
 mod kvapi_impl {
-    use std::fmt::Display;
 
-    use databend_common_exception::ErrorCode;
     use databend_common_meta_kvapi::kvapi;
 
     use crate::principal::UserSetting;
-    use crate::tenant::Tenant;
     use crate::tenant_key::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_settings";
         type ValueType = UserSetting;
-        type UnknownError = ErrorCode;
-
-        fn error_unknown<D: Display>(
-            _tenant: &Tenant,
-            _name: &str,
-            _ctx: impl FnOnce() -> D,
-        ) -> Self::UnknownError {
-            todo!()
-        }
-
-        type ExistError = ErrorCode;
-
-        fn error_exist<D: Display>(
-            _tenant: &Tenant,
-            _name: &str,
-            _ctx: impl FnOnce() -> D,
-        ) -> Self::ExistError {
-            todo!()
-        }
     }
 
     impl kvapi::Value for UserSetting {

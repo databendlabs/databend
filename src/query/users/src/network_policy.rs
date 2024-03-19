@@ -15,6 +15,7 @@
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::crud::CrudError;
 use databend_common_meta_app::principal::NetworkPolicy;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_types::MatchSeq;
@@ -32,7 +33,8 @@ impl UserApiProvider {
         create_option: &CreateOption,
     ) -> Result<()> {
         let client = self.network_policy_api(tenant);
-        client.add(network_policy, create_option).await
+        client.add(network_policy, create_option).await?;
+        Ok(())
     }
 
     // Update network policy.
@@ -49,13 +51,21 @@ impl UserApiProvider {
         let client = self.network_policy_api(tenant);
         let seq_network_policy = match client.get(name, MatchSeq::GE(0)).await {
             Ok(seq_network_policy) => seq_network_policy,
-            Err(e) => {
-                if if_exists && e.code() == ErrorCode::UNKNOWN_NETWORK_POLICY {
-                    return Ok(None);
-                } else {
-                    return Err(e.add_message_back(" (while alter network policy)"));
+            Err(e) => match e {
+                CrudError::ApiError(meta_err) => {
+                    return Err(
+                        ErrorCode::from(meta_err).add_message_back(" (while alter network policy)")
+                    );
                 }
-            }
+                CrudError::Business(unknown) => {
+                    if if_exists {
+                        return Ok(None);
+                    } else {
+                        return Err(ErrorCode::from(unknown)
+                            .add_message_back(" (while alter network policy)"));
+                    }
+                }
+            },
         };
 
         let seq = seq_network_policy.seq;
@@ -73,7 +83,10 @@ impl UserApiProvider {
 
         match client.update(network_policy, MatchSeq::Exact(seq)).await {
             Ok(res) => Ok(Some(res)),
-            Err(e) => Err(e.add_message_back(" (while alter network policy).")),
+            Err(e) => {
+                let e = ErrorCode::from(e);
+                Err(e.add_message_back(" (while alter network policy)."))
+            }
         }
     }
 
@@ -100,13 +113,21 @@ impl UserApiProvider {
         let client = self.network_policy_api(tenant);
         match client.remove(name, MatchSeq::GE(1)).await {
             Ok(res) => Ok(res),
-            Err(e) => {
-                if if_exists && e.code() == ErrorCode::UNKNOWN_NETWORK_POLICY {
-                    Ok(())
-                } else {
-                    Err(e.add_message_back(" (while drop network policy)"))
+            Err(e) => match e {
+                CrudError::ApiError(meta_err) => {
+                    return Err(
+                        ErrorCode::from(meta_err).add_message_back(" (while drop network policy)")
+                    );
                 }
-            }
+                CrudError::Business(unknown) => {
+                    if if_exists {
+                        return Ok(());
+                    } else {
+                        return Err(ErrorCode::from(unknown)
+                            .add_message_back(" (while drop network policy)"));
+                    }
+                }
+            },
         }
     }
 
