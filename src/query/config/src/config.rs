@@ -2778,7 +2778,7 @@ pub struct CacheConfig {
     #[clap(
         long = "cache-inverted-index-filter-size",
         value_name = "VALUE",
-        default_value = "17179869184"
+        default_value = "2147483648"
     )]
     pub inverted_index_filter_size: u64,
 
