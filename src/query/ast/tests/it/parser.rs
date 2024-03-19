@@ -30,6 +30,7 @@ use databend_common_ast::parser::Backtrace;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::IResult;
 use databend_common_ast::parser::Input;
+use databend_common_ast::parser::ParseMode;
 use databend_common_ast::rule;
 use goldenfile::Mint;
 
@@ -38,11 +39,16 @@ where
     P: FnMut(Input) -> IResult<O>,
     O: Debug + Display,
 {
-    run_parser_with_dialect(file, parser, Dialect::PostgreSQL, src)
+    run_parser_with_dialect(file, parser, Dialect::PostgreSQL, ParseMode::Default, src)
 }
 
-fn run_parser_with_dialect<P, O>(file: &mut dyn Write, parser: P, dialect: Dialect, src: &str)
-where
+fn run_parser_with_dialect<P, O>(
+    file: &mut dyn Write,
+    parser: P,
+    dialect: Dialect,
+    mode: ParseMode,
+    src: &str,
+) where
     P: FnMut(Input) -> IResult<O>,
     O: Debug + Display,
 {
@@ -50,9 +56,15 @@ where
     let src = src.trim();
     let tokens = tokenize_sql(src).unwrap();
     let backtrace = Backtrace::new();
+    let input = Input {
+        tokens: &tokens,
+        dialect,
+        mode,
+        backtrace: &backtrace,
+    };
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
-    match parser(Input(&tokens, dialect, &backtrace)) {
+    match parser(input) {
         Ok((i, (output, _))) => {
             assert_eq!(i[0].kind, TokenKind::EOI);
             writeln!(file, "---------- Input ----------").unwrap();
@@ -959,7 +971,7 @@ fn test_experimental_expr() {
     ];
 
     for case in cases {
-        run_parser_with_dialect(file, expr, Dialect::Experimental, case);
+        run_parser_with_dialect(file, expr, Dialect::Experimental, ParseMode::Default, case);
     }
 }
 

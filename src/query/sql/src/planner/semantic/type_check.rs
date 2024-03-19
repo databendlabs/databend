@@ -3962,6 +3962,7 @@ pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataT
     let ast = databend_common_ast::parser::run_parser(
         &sql_tokens,
         databend_common_ast::parser::Dialect::default(),
+        databend_common_ast::parser::ParseMode::Default,
         false,
         databend_common_ast::parser::expr::type_name,
     )?;

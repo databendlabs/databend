@@ -48,7 +48,7 @@ macro_rules! rule {
 }
 
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
-    move |i| match i.0.first().filter(|token| token.text() == text) {
+    move |i| match i.tokens.first().filter(|token| token.text() == text) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -58,7 +58,7 @@ pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
 }
 
 pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
-    move |i| match i.0.first().filter(|token| token.kind == kind) {
+    move |i| match i.tokens.first().filter(|token| token.kind == kind) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -68,7 +68,7 @@ pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
 }
 
 pub fn any_token(i: Input) -> IResult<&Token> {
-    match i.0.first().filter(|token| token.kind != EOI) {
+    match i.tokens.first().filter(|token| token.kind != EOI) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -120,7 +120,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
             .text()
             .chars()
             .next()
-            .filter(|c| i.1.is_ident_quote(*c))
+            .filter(|c| i.dialect.is_ident_quote(*c))
             .is_some()
         {
             let quote = token.text().chars().next().unwrap();
@@ -163,7 +163,7 @@ fn non_reserved_keyword(
     is_reserved_keyword: fn(&TokenKind) -> bool,
 ) -> impl FnMut(Input) -> IResult<&Token> {
     move |i: Input| match i
-        .0
+        .tokens
         .first()
         .filter(|token| token.kind.is_keyword() && !is_reserved_keyword(&token.kind))
     {
@@ -435,7 +435,7 @@ where
         .parse_input(&mut iter, Precedence(0))
         .map_err(|err| {
             // Rollback parsing footprint on unused expr elements.
-            input.2.clear();
+            input.backtrace.clear();
 
             let err_kind = match err {
                 PrattError::EmptyInput => ErrorKind::Other("expecting more subsequent tokens"),
@@ -462,7 +462,7 @@ where
         })?;
     if let Some(elem) = iter.peek() {
         // Rollback parsing footprint on unused expr elements.
-        input.2.clear();
+        input.backtrace.clear();
         Ok((input.slice(input.offset(&elem.span)..), expr))
     } else {
         Ok((rest, expr))
@@ -480,10 +480,10 @@ macro_rules! declare_experimental_feature {
         {
             move |input: Input| {
                 parser.parse(input).and_then(|(i, res)| {
-                    if input.1.is_experimental() {
+                    if input.dialect.is_experimental() {
                         Ok((i, res))
                     } else {
-                        i.2.clear();
+                        i.backtrace.clear();
                         let error = Error::from_error_kind(
                             input,
                             ErrorKind::Other(

@@ -2460,8 +2460,8 @@ pub fn hint(i: Input) -> IResult<Hint> {
 
 pub fn rest_str(i: Input) -> IResult<(String, usize)> {
     // It's safe to unwrap because input must contain EOI.
-    let first_token = i.0.first().unwrap();
-    let last_token = i.0.last().unwrap();
+    let first_token = i.tokens.first().unwrap();
+    let last_token = i.tokens.last().unwrap();
     Ok((
         i.slice((i.len() - 1)..),
         (
@@ -3709,7 +3709,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
             #dot_separated_idents_1_to_3 ~ #alias_name?
         }),
         |(span, ((catalog, database, table), alias))| TableReference::Table {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             catalog,
             database,
             table,
@@ -3731,7 +3731,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             #dot_separated_idents_1_to_3
         }),
         |(span, (catalog, database, table))| TableReference::Table {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             catalog,
             database,
             table,

@@ -237,7 +237,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 window_list,
                 qualify,
             } => SetExpr::Select(Box::new(SelectStmt {
-                span: transform_span(input.span.0),
+                span: transform_span(input.span.tokens),
                 hints,
                 distinct,
                 select_list,
@@ -249,7 +249,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 qualify,
             })),
             SetOperationElement::Values(values) => SetExpr::Values {
-                span: transform_span(input.span.0),
+                span: transform_span(input.span.tokens),
                 values,
             },
             _ => unreachable!(),
@@ -266,7 +266,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
         let set_expr = match input.elem {
             SetOperationElement::SetOperation { op, all, .. } => {
                 SetExpr::SetOperation(Box::new(SetOperation {
-                    span: transform_span(input.span.0),
+                    span: transform_span(input.span.tokens),
                     op,
                     all,
                     left: Box::new(lhs),
@@ -350,7 +350,7 @@ pub fn with(i: Input) -> IResult<With> {
             #table_alias_without_as ~ AS ~ MATERIALIZED? ~ "(" ~ #query ~ ")"
         }),
         |(span, (table_alias, _, materialized, _, query, _))| CTE {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             alias: table_alias,
             materialized: materialized.is_some(),
             query: Box::new(query),
@@ -362,7 +362,7 @@ pub fn with(i: Input) -> IResult<With> {
             WITH ~ RECURSIVE? ~ ^#comma_separated_list1(cte)
         }),
         |(span, (_, recursive, ctes))| With {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             recursive: recursive.is_some(),
             ctes,
         },
@@ -809,7 +809,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 pivot,
                 unpivot,
             } => TableReference::Table {
-                span: transform_span(input.span.0),
+                span: transform_span(input.span.tokens),
                 catalog,
                 database,
                 table,
@@ -840,7 +840,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                     })
                     .collect();
                 TableReference::TableFunction {
-                    span: transform_span(input.span.0),
+                    span: transform_span(input.span.tokens),
                     lateral,
                     name,
                     params: normal_params,
@@ -853,7 +853,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 subquery,
                 alias,
             } => TableReference::Subquery {
-                span: transform_span(input.span.0),
+                span: transform_span(input.span.tokens),
                 lateral,
                 subquery,
                 alias,
@@ -865,7 +865,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
             } => {
                 let options = SelectStageOptions::from(options);
                 TableReference::Location {
-                    span: transform_span(input.span.0),
+                    span: transform_span(input.span.tokens),
                     location,
                     options,
                     alias,
@@ -890,7 +890,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                     JoinCondition::None
                 };
                 TableReference::Join {
-                    span: transform_span(input.span.0),
+                    span: transform_span(input.span.tokens),
                     join: Join {
                         op,
                         condition,
