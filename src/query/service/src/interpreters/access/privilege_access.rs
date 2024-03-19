@@ -862,7 +862,6 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Update], false).await?;
             }
             Plan::CreateView(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create], false).await?;
                 let mut planner = Planner::new(self.ctx.clone());
                 let (plan, _) = planner.plan_sql(&plan.subquery).await?;
                 self.check(ctx, &plan).await?
