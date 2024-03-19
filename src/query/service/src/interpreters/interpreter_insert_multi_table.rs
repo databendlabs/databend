@@ -20,9 +20,11 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
+use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
+use databend_common_sql::executor::physical_plans::PhysicalInsertMultiTable;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::insert::InsertValue;
@@ -44,7 +46,7 @@ use crate::pipelines::ValueSource;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-
+use crate::sql::executor::cast_expr_to_non_null_boolean;
 pub struct InsertMultiTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: InsertMultiTable,
@@ -68,6 +70,59 @@ impl Interpreter for InsertMultiTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        todo!()
+        let physical_plan = self.build_physical_plan().await?;
+        let build_res =
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        Ok(build_res)
+    }
+}
+
+impl InsertMultiTableInterpreter {
+    async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
+        let InsertMultiTable {
+            input_source,
+            whens,
+            opt_else,
+        } = &self.plan;
+        let InsertInputSource::SelectPlan(plan) = input_source else {
+            return Err(ErrorCode::Internal(
+                "InsertMultiTableInterpreter: InsertInputSource must be SelectPlan",
+            ));
+        };
+        let (mut select_plan, select_column_bindings, metadata) = match plan.as_ref() {
+            Plan::Query {
+                s_expr,
+                metadata,
+                bind_context,
+                ..
+            } => {
+                let mut builder1 =
+                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
+                (
+                    builder1.build(s_expr, bind_context.column_set()).await?,
+                    bind_context.columns.clone(),
+                    metadata,
+                )
+            }
+            _ => unreachable!(),
+        };
+        let filters: Result<Vec<RemoteExpr>> = whens
+            .iter()
+            .map(|v| {
+                let expr = cast_expr_to_non_null_boolean(
+                    v.condition.as_expr()?.project_column_ref(|col| col.index),
+                )?;
+                Ok(expr.as_remote_expr())
+            })
+            .collect();
+        Ok(PhysicalPlan::InsertMultiTable(Box::new(
+            PhysicalInsertMultiTable {
+                plan_id: 0,
+                input: Box::new(select_plan),
+                select_column_bindings,
+                filters: filters?,
+                keep_remain: opt_else.is_some(),
+            },
+        )))
     }
 }

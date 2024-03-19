@@ -12,32 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::InsertInputSource;
-use crate::ScalarExpr;
-
-#[derive(Clone, Debug)]
-pub struct InsertMultiTable {
-    pub input_source: InsertInputSource,
-    pub whens: Vec<When>,
-    pub opt_else: Option<Else>,
-}
-
-#[derive(Clone, Debug)]
-pub struct When {
-    pub condition: ScalarExpr,
-    pub intos: Vec<Into>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Into {
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    // pub target_schema: TableSchemaRef,
-    // pub source_schema: TableSchemaRef,
-}
-
-#[derive(Clone, Debug)]
-pub struct Else {
-    pub intos: Vec<Into>,
-}
+mod dispatcher;
+mod print_sink;
+pub use dispatcher::Dispatcher;
+pub use print_sink::PrintSink;

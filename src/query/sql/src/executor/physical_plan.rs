@@ -43,6 +43,7 @@ use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::MergeIntoSource;
+use crate::executor::physical_plans::PhysicalInsertMultiTable;
 use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -85,6 +86,7 @@ pub enum PhysicalPlan {
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
+    InsertMultiTable(Box<PhysicalInsertMultiTable>),
 
     /// Synthesized by fragmented
     ExchangeSource(ExchangeSource),
@@ -303,6 +305,11 @@ impl PhysicalPlan {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
+            PhysicalPlan::InsertMultiTable(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
         }
     }
 
@@ -346,6 +353,7 @@ impl PhysicalPlan {
             PhysicalPlan::ReclusterSource(v) => v.plan_id,
             PhysicalPlan::ReclusterSink(v) => v.plan_id,
             PhysicalPlan::UpdateSource(v) => v.plan_id,
+            PhysicalPlan::InsertMultiTable(v) => v.plan_id,
         }
     }
 
@@ -384,6 +392,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
+            | PhysicalPlan::InsertMultiTable(_)
             | PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::ReclusterSink(_)
@@ -430,6 +439,7 @@ impl PhysicalPlan {
             PhysicalPlan::ReclusterSink(_) => "ReclusterSink".to_string(),
             PhysicalPlan::UpdateSource(_) => "UpdateSource".to_string(),
             PhysicalPlan::Udf(_) => "Udf".to_string(),
+            PhysicalPlan::InsertMultiTable(_) => "InsertMultiTable".to_string(),
         }
     }
 
@@ -488,6 +498,7 @@ impl PhysicalPlan {
             ),
             PhysicalPlan::ReclusterSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Udf(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::InsertMultiTable(plan) => Box::new(std::iter::once(plan.input.as_ref())),
         }
     }
 
@@ -504,6 +515,7 @@ impl PhysicalPlan {
             PhysicalPlan::Exchange(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::ExchangeSink(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::DistributedInsertSelect(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::InsertMultiTable(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),

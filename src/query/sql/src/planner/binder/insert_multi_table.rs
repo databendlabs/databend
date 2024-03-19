@@ -18,9 +18,6 @@ use databend_common_ast::ast::IntoClause;
 use databend_common_ast::ast::Statement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataSchema;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::TableSchema;
 
 use crate::binder::ScalarBinder;
 use crate::optimizer::optimize;

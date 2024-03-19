@@ -12,32 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::InsertInputSource;
-use crate::ScalarExpr;
+use databend_common_expression::RemoteExpr;
 
-#[derive(Clone, Debug)]
-pub struct InsertMultiTable {
-    pub input_source: InsertInputSource,
-    pub whens: Vec<When>,
-    pub opt_else: Option<Else>,
-}
+use crate::executor::PhysicalPlan;
+use crate::ColumnBinding;
 
-#[derive(Clone, Debug)]
-pub struct When {
-    pub condition: ScalarExpr,
-    pub intos: Vec<Into>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Into {
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    // pub target_schema: TableSchemaRef,
-    // pub source_schema: TableSchemaRef,
-}
-
-#[derive(Clone, Debug)]
-pub struct Else {
-    pub intos: Vec<Into>,
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct PhysicalInsertMultiTable {
+    pub plan_id: u32,
+    pub input: Box<PhysicalPlan>,
+    pub select_column_bindings: Vec<ColumnBinding>,
+    pub filters: Vec<RemoteExpr>,
+    pub keep_remain: bool,
 }

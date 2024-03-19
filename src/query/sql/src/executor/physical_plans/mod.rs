@@ -90,3 +90,5 @@ pub use physical_window::*;
 mod physical_udf;
 pub use physical_udf::Udf;
 pub use physical_udf::UdfFunctionDesc;
+mod physical_insert_multi_table;
+pub use physical_insert_multi_table::PhysicalInsertMultiTable;

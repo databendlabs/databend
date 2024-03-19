@@ -38,6 +38,7 @@ use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::MergeIntoSource;
+use crate::executor::physical_plans::PhysicalInsertMultiTable;
 use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::QuerySource;
@@ -76,6 +77,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ExchangeSink(plan) => self.replace_exchange_sink(plan),
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
+            PhysicalPlan::InsertMultiTable(plan) => self.replace_insert_multi_table(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::CompactSource(plan) => self.replace_compact_source(plan),
             PhysicalPlan::DeleteSource(plan) => self.replace_delete_source(plan),
@@ -397,6 +399,19 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
+    fn replace_insert_multi_table(
+        &mut self,
+        plan: &PhysicalInsertMultiTable,
+    ) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::InsertMultiTable(Box::new(
+            PhysicalInsertMultiTable {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
+    }
+
     fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
     }
@@ -609,6 +624,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Udf(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::InsertMultiTable(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
             }

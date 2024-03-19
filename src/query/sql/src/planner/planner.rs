@@ -80,7 +80,7 @@ impl Planner {
         let is_replace_stmt = matches!(first_token, Some(TokenKind::REPLACE));
         if is_insert_stmt {
             let mut temp_tokenizer = Tokenizer::new(sql);
-            temp_tokenizer.next().unwrap();
+            let _ = temp_tokenizer.next().unwrap();
             let second_token = temp_tokenizer.next();
             is_insert_stmt = !matches!(
                 second_token,

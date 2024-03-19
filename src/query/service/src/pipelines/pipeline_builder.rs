@@ -191,6 +191,9 @@ impl PipelineBuilder {
 
             // Update.
             PhysicalPlan::UpdateSource(update) => self.build_update_source(update),
+            PhysicalPlan::InsertMultiTable(insert_multi_table) => {
+                self.build_insert_multi_table(insert_multi_table)
+            }
         }
     }
 }

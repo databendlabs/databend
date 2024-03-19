@@ -22,6 +22,7 @@ mod builder_distributed_insert_select;
 mod builder_exchange;
 mod builder_fill_missing_columns;
 mod builder_filter;
+mod builder_insert_multi_table;
 mod builder_join;
 mod builder_limit;
 mod builder_merge_into;
