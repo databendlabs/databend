@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::fmt::Debug;
-use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
 
@@ -27,7 +27,10 @@ use crate::tenant::Tenant;
 /// It includes a prefix to store the `ValueType`.
 /// This trait is used to define a concrete [`TIdent`] can be used as a `kvapi::Key`.
 pub trait TenantResource {
+    /// The key prefix to store in meta-service.
     const PREFIX: &'static str;
+
+    /// The type of the value for the key [`TIdent<R: TenantResource>`](TIdent).
     type ValueType: kvapi::Value;
 }
 
@@ -40,7 +43,7 @@ pub struct TIdent<R> {
 
 /// `TIdent` to be Debug does not require `R` to be Debug.
 impl<R> Debug for TIdent<R> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TenantResourceIdent")
             .field("tenant", &self.tenant)
             .field("name", &self.name)

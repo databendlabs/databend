@@ -18,6 +18,7 @@ use crate::tenant_key::TIdent;
 pub type StageIdent = TIdent<kvapi_impl::Resource>;
 
 mod kvapi_impl {
+
     use databend_common_meta_kvapi::kvapi;
 
     use crate::principal::StageInfo;

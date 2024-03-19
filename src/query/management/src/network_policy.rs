@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod network_policy_api;
-mod network_policy_mgr;
+use databend_common_meta_api::crud::CrudMgr;
+use databend_common_meta_app::principal::network_policy_ident;
 
-pub use network_policy_api::NetworkPolicyApi;
-pub use network_policy_mgr::NetworkPolicyMgr;
+pub type NetworkPolicyMgr = CrudMgr<network_policy_ident::Resource>;

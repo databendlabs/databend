@@ -144,7 +144,7 @@ fn scatter<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
     Ok(res)
 }
 
-fn scatter_paylaod(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>> {
+fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>> {
     let mut buckets = Vec::with_capacity(buckets);
 
     let group_types = payload.group_types.clone();
@@ -152,11 +152,8 @@ fn scatter_paylaod(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
     let mut state = PayloadFlushState::default();
 
     for _ in 0..buckets.capacity() {
-        buckets.push(Payload::new(
-            payload.arena.clone(),
-            group_types.clone(),
-            aggrs.clone(),
-        ));
+        let p = Payload::new(payload.arena.clone(), group_types.clone(), aggrs.clone());
+        buckets.push(p);
     }
 
     // scatter each page of the payload.
@@ -224,7 +221,7 @@ fn scatter_partitioned_payload(
     }
 
     for (idx, payload) in payloads.into_iter().enumerate() {
-        buckets[idx].combine_single(payload, &mut state);
+        buckets[idx].combine_single(payload, &mut state, None);
     }
 
     Ok(buckets)
@@ -276,7 +273,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                     }
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(p) => {
-                        for payload in scatter_paylaod(p.payload, self.buckets)? {
+                        for payload in scatter_payload(p.payload, self.buckets)? {
                             blocks.push(DataBlock::empty_with_meta(
                                 AggregateMeta::<Method, V>::create_agg_payload(
                                     p.bucket,

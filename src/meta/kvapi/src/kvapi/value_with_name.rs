@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod builders;
-mod executor;
-mod filter;
+//! Define behaviors of a `kvapi::Value` that contains a name.
+
+use crate::kvapi;
+
+/// Define behaviors of a `kvapi::Value` that contains a name.
+pub trait ValueWithName: kvapi::Value {
+    fn name(&self) -> &str;
+}
