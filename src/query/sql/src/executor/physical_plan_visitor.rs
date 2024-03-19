@@ -385,6 +385,7 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::CopyIntoLocation(Box::new(CopyIntoLocation {
             plan_id: plan.plan_id,
             input: Box::new(input),
+            input_schema: plan.input_schema.clone(),
             to_stage_info: plan.to_stage_info.clone(),
         })))
     }

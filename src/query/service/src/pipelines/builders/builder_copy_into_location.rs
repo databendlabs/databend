@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -31,7 +29,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             to_table,
-            Arc::new(copy.to_stage_info.schema().into()),
+            copy.input_schema.clone(),
             None,
             vec![],
             false,

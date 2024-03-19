@@ -17,9 +17,6 @@ use std::sync::Arc;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_sql::executor::physical_plans::CopyIntoLocation;
 use databend_common_sql::executor::PhysicalPlan;
@@ -48,7 +45,7 @@ impl CopyIntoLocationInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn build_query(&self, query: &Plan) -> Result<(SelectInterpreter, DataSchemaRef)> {
+    async fn build_query(&self, query: &Plan) -> Result<SelectInterpreter> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
                 s_expr,
@@ -69,21 +66,7 @@ impl CopyIntoLocationInterpreter {
             false,
         )?;
 
-        // Building data schema from bind_context columns
-        // TODO(leiyskey): Extract the following logic as new API of BindContext.
-        let fields = bind_context
-            .columns
-            .iter()
-            .map(|column_binding| {
-                DataField::new(
-                    &column_binding.column_name,
-                    *column_binding.data_type.clone(),
-                )
-            })
-            .collect();
-        let data_schema = DataSchemaRefExt::create(fields);
-
-        Ok((select_interpreter, data_schema))
+        Ok(select_interpreter)
     }
 
     /// Build a pipeline for local copy into stage.
@@ -94,13 +77,15 @@ impl CopyIntoLocationInterpreter {
         path: &str,
         query: &Plan,
     ) -> Result<PipelineBuildResult> {
-        let (select_interpreter, data_schema) = self.build_query(query).await?;
-        let query_physical_plan = select_interpreter.build_physical_plan().await?;
-        let table_schema = infer_table_schema(&data_schema)?;
+        let query_interpreter = self.build_query(query).await?;
+        let query_physical_plan = query_interpreter.build_physical_plan().await?;
+        let query_result_schema = query_interpreter.get_result_schema();
+        let table_schema = infer_table_schema(&query_result_schema)?;
 
         let mut physical_plan = PhysicalPlan::CopyIntoLocation(Box::new(CopyIntoLocation {
             plan_id: 0,
             input: Box::new(query_physical_plan),
+            input_schema: query_result_schema,
             to_stage_info: StageTableInfo {
                 schema: table_schema,
                 stage_info: stage.clone(),

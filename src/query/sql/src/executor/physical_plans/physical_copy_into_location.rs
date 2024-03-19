@@ -26,6 +26,7 @@ use crate::executor::PhysicalPlan;
 pub struct CopyIntoLocation {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
+    pub input_schema: DataSchemaRef,
     pub to_stage_info: StageTableInfo,
 }
 
