@@ -218,7 +218,7 @@ async fn query_final_handler(
     async {
         info!(
             "{}: got /v1/query/{}/final request, this query is going to be finally completed.",
-            query_id
+            query_id, query_id
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
