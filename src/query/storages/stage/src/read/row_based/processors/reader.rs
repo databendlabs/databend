@@ -24,7 +24,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::PrefetchAsyncSource;
 use log::debug;
 use opendal::Operator;
 
@@ -40,6 +40,7 @@ pub struct BytesReader {
     op: Operator,
     read_batch_size: usize,
     file_state: Option<FileState>,
+    prefetch_num: usize,
 }
 
 impl BytesReader {
@@ -47,12 +48,14 @@ impl BytesReader {
         table_ctx: Arc<dyn TableContext>,
         op: Operator,
         read_batch_size: usize,
+        prefetch_num: usize,
     ) -> Result<Self> {
         Ok(Self {
             table_ctx,
             op,
             read_batch_size,
             file_state: None,
+            prefetch_num,
         })
     }
 
@@ -103,10 +106,14 @@ impl BytesReader {
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for BytesReader {
+impl PrefetchAsyncSource for BytesReader {
     const NAME: &'static str = "BytesReader";
 
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
+
+    fn is_full(&self, prefetched: &[DataBlock]) -> bool {
+        prefetched.len() >= self.prefetch_num
+    }
 
     #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
