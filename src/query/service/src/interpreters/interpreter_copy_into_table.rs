@@ -96,7 +96,6 @@ impl CopyIntoTableInterpreter {
         &self,
         plan: &CopyIntoTablePlan,
     ) -> Result<(PhysicalPlan, Vec<UpdateStreamMetaReq>)> {
-        let mut next_plan_id = 0;
         let to_table = self
             .ctx
             .get_table(
