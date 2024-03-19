@@ -133,7 +133,7 @@ select * from t_1000 right join t_10 on t_1000.a = t_10.a right join t_100 on t_
 ----
 Memo
 ├── root group: #5
-├── estimated memory: 7200 bytes
+├── estimated memory: 8880 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 1000.000, children: []
@@ -183,7 +183,7 @@ select * from t_1000 full join t_10 on t_1000.a = t_10.a full join t_100 on t_10
 ----
 Memo
 ├── root group: #5
-├── estimated memory: 7200 bytes
+├── estimated memory: 8880 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 1000.000, children: []

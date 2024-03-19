@@ -43,23 +43,23 @@ CREATE INVERTED INDEX IF NOT EXISTS idx1 ON t(content)
 statement ok
 REFRESH INVERTED INDEX idx1 ON t
 
-ITF
+IIT
 SELECT id, score(), content FROM t WHERE match(content, 'test')
 ----
 
 
-ITF
+IIT
 SELECT id, score(), content FROM t WHERE match(content, 'is')
 ----
 2 1.5310525 A picture is worth a thousand words
 6 1.4503763 Beauty is in the eye of the beholder
 
-ITF
+IIT
 SELECT id, score(), content FROM t WHERE match(content, 'fly')
 ----
 5 2.5161204 Time flies like an arrow; fruit flies like a banana
 
-ITF
+IIT
 SELECT id, score(), content FROM t WHERE match(content, 'the')
 ----
 1 1.1684625 The quick brown fox jumps over the lazy dog
@@ -89,7 +89,7 @@ SELECT id, content, score() FROM t WHERE match(content, 'the') ORDER BY score()
 statement ok
 REFRESH INVERTED INDEX idx1 ON t
 
-IFT
+IIT
 SELECT id, score(), content FROM t WHERE match(content, 'the') ORDER BY score()
 ----
 10 0.87497854 An apple a day keeps the doctor away
@@ -100,13 +100,13 @@ SELECT id, score(), content FROM t WHERE match(content, 'the') ORDER BY score()
 20 1.7492892 Let the cat out of the bag
 23 1.9377484 The elephant in the room
 
-IFT
+IIT
 SELECT id, score(), content FROM t WHERE match(content, 'your') ORDER BY score()
 ----
 15 1.8497508 Do not count your chickens before they hatch
 8 2.0589268 Put all your eggs in one basket
 
-IFT
+IIT
 SELECT id, score(), content FROM t WHERE match(content, ';') ORDER BY score()
 ----
 
