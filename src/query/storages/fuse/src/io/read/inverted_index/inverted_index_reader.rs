@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::PartialOrd;
-use std::cmp::PartialEq;
-use std::cmp::Ordering;
 use std::cmp::Eq;
 use std::cmp::Ord;
+use std::cmp::Ordering;
+use std::cmp::PartialEq;
+use std::cmp::PartialOrd;
 use std::collections::BTreeMap;
 use std::collections::BinaryHeap;
 use std::sync::Arc;
@@ -111,10 +111,7 @@ impl InvertedIndexReader {
             for (score, doc_addr) in docs {
                 let doc_id = doc_addr.doc_id as usize;
                 let score = F32::from(score);
-                doc_id_scores.push(DocIdScore {
-                    doc_id,
-                    score,
-                });
+                doc_id_scores.push(DocIdScore { doc_id, score });
             }
 
             // Converts the doc id in the index to the row id in each segment
@@ -159,13 +156,9 @@ pub struct DocIdScore {
 
 impl Ord for DocIdScore {
     fn cmp(&self, other: &Self) -> Ordering {
-        if self.doc_id < other.doc_id {
-            Ordering::Greater
-        } else if self.doc_id > other.doc_id {
-            Ordering::Less
-        } else {
-            Ordering::Equal
-        }
+        // Prioritise rows with smaller doc ids,
+        // keeping the same order as segments
+        other.doc_id.cmp(&self.doc_id)
     }
 }
 
@@ -182,4 +175,3 @@ impl PartialEq for DocIdScore {
 }
 
 impl Eq for DocIdScore {}
-

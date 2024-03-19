@@ -4400,6 +4400,7 @@ dependencies = [
  "databend-enterprise-virtual-column",
  "databend-query",
  "databend-storages-common-cache",
+ "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "derive-visitor",
  "futures",
