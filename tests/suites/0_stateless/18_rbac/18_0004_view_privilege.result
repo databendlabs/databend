@@ -9,8 +9,10 @@
 >>>> drop table if exists t_owner
 >>>> drop view if exists v_t_owner
 >>>> drop view if exists v_t_union
+>>>> drop view if exists v_t1
 >>>> create table t(id int)
 >>>> insert into t values(1)
+>>>> revoke create on default.* from role role1
 need failed: with 1063
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'owner'@'%' with roles [public,role1]
 need failed: with 1063
@@ -36,3 +38,19 @@ Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] 
 1
 2
 <<<<
+=== create view as select view ===
+>>>> revoke select on default.v_t from owner
+>>>> grant select on default.t to owner
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'v_t' for user 'owner'@'%' with roles [public,role1]
+>>>> grant select on default.v_t to owner
+>>>> grant select on default.t to owner
+>>>> grant select on default.v_t1 to owner
+1
+>>>> drop table if exists t
+>>>> drop view if exists v_t
+>>>> drop table if exists t_owner
+>>>> drop view if exists v_t_owner
+>>>> drop view if exists v_t_union
+>>>> drop view if exists v_t1
+>>>> drop user if exists owner
+>>>> drop role if exists role1
