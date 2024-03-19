@@ -24,6 +24,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_storages_fuse::io::Files;
 use databend_common_storages_stage::StageTable;
 use log::error;
+use log::info;
 
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
@@ -66,16 +67,7 @@ impl PipelineBuilder {
                         // 2. Try to purge copied files if purge option is true, if error will skip.
                         // If a file is already copied(status with AlreadyCopied) we will try to purge them.
                         if !is_active && copy_purge_option {
-                            let start = Instant::now();
                             Self::try_purge_files(ctx.clone(), &stage_info, &files).await;
-
-                            // Perf.
-                            {
-                                metrics_inc_copy_purge_files_counter(files.len() as u32);
-                                metrics_inc_copy_purge_files_cost_milliseconds(
-                                    start.elapsed().as_millis() as u32,
-                                );
-                            }
                         }
 
                         Ok(())
@@ -107,21 +99,17 @@ impl PipelineBuilder {
             }
         }
 
-        let start = Instant::now();
         Self::try_purge_files(ctx.clone(), &stage_info, &files).await;
 
-        // Perf.
-        {
-            metrics_inc_copy_purge_files_counter(files.len() as u32);
-            metrics_inc_copy_purge_files_cost_milliseconds(start.elapsed().as_millis() as u32);
-        }
         Ok(())
     }
 
     #[async_backtrace::framed]
     pub async fn try_purge_files(ctx: Arc<QueryContext>, stage_info: &StageInfo, files: &[String]) {
+        let start = Instant::now();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let op = StageTable::get_op(stage_info);
+
         match op {
             Ok(op) => {
                 let file_op = Files::create(table_ctx, op);
@@ -132,6 +120,19 @@ impl PipelineBuilder {
             Err(e) => {
                 error!("Failed to get stage table op, error: {}", e);
             }
+        }
+
+        let elapsed = start.elapsed();
+        info!(
+            "purged files: number {}, time used {:?} ",
+            files.len(),
+            elapsed
+        );
+
+        // Perf.
+        {
+            metrics_inc_copy_purge_files_counter(files.len() as u32);
+            metrics_inc_copy_purge_files_cost_milliseconds(elapsed.as_millis() as u32);
         }
     }
 }
