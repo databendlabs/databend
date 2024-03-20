@@ -32,8 +32,8 @@ use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
 use log::debug;
 
-use super::can_merge_into_target_build_bloom_filter;
 use super::parquet_data_source::ParquetDataSource;
+use super::util::build_merge_into_source_build_bloom_info;
 use super::util::MergeIntoSourceBuildBloomInfo;
 use crate::fuse_part::FusePartInfo;
 use crate::io::AggIndexReader;
@@ -95,14 +95,11 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 index_reader,
                 virtual_reader,
                 table_schema,
-                merge_into_source_build_bloom_info: MergeIntoSourceBuildBloomInfo {
-                    can_do_merge_into_rumtime_filter_bloom:
-                        can_merge_into_target_build_bloom_filter(ctx.clone(), table_index)?,
-                    segment_infos: Default::default(),
-                    catalog_info: merge_into_join.catalog_info.clone(),
-                    table_info: merge_into_join.table_info.clone(),
-                    database_name: merge_into_join.database_name.clone(),
-                },
+                merge_into_source_build_bloom_info: build_merge_into_source_build_bloom_info(
+                    ctx,
+                    table_index,
+                    merge_into_join,
+                )?,
             })
         } else {
             let merge_into_join = ctx.get_merge_into_join();
@@ -121,14 +118,11 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 index_reader,
                 virtual_reader,
                 table_schema,
-                merge_into_source_build_bloom_info: MergeIntoSourceBuildBloomInfo {
-                    can_do_merge_into_rumtime_filter_bloom:
-                        can_merge_into_target_build_bloom_filter(ctx.clone(), table_index)?,
-                    segment_infos: Default::default(),
-                    catalog_info: merge_into_join.catalog_info.clone(),
-                    table_info: merge_into_join.table_info.clone(),
-                    database_name: merge_into_join.database_name.clone(),
-                },
+                merge_into_source_build_bloom_info: build_merge_into_source_build_bloom_info(
+                    ctx,
+                    table_index,
+                    merge_into_join,
+                )?,
             })))
         }
     }

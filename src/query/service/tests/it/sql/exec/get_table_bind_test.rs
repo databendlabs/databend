@@ -833,7 +833,11 @@ impl TableContext for CtxDelegation {
     fn get_merge_into_source_build_siphashkeys_with_id(
         &self,
         id: usize,
-    ) -> Vec<(String, (Buffer<u64>, Option<Bitmap>))> {
+    ) -> Vec<(String, Arc<Vec<u64>>)> {
+        todo!()
+    }
+
+    fn get_merge_into_source_build_bloom_probe_keys(&self, id: usize) -> Vec<String> {
         todo!()
     }
 

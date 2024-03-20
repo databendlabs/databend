@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::Location;
@@ -61,6 +62,7 @@ pub struct MergeIntoJoin {
     pub table_info: Option<TableInfo>,
     pub catalog_info: Option<CatalogInfo>,
     pub database_name: String,
+    pub table_schema: Option<TableSchemaRef>,
 }
 
 impl Default for MergeIntoJoin {
@@ -73,6 +75,7 @@ impl Default for MergeIntoJoin {
             table_info: None,
             catalog_info: None,
             database_name: Default::default(),
+            table_schema: None,
         }
     }
 }

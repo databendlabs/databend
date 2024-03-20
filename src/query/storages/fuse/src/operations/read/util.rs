@@ -15,13 +15,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::merge_into_join::MergeIntoJoinType;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::InternalColumnMeta;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
@@ -37,6 +40,7 @@ pub struct MergeIntoSourceBuildBloomInfo {
     pub table_info: Option<TableInfo>,
     pub catalog_info: Option<CatalogInfo>,
     pub database_name: String,
+    pub bloom_indexes: Vec<FieldIndex>,
 }
 
 pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> (bool, bool) {
@@ -68,6 +72,7 @@ pub fn can_merge_into_target_build_bloom_filter(
         assert!(merge_into_join.database_name.as_str() != "");
         assert!(matches!(merge_into_join.catalog_info, Some(_)));
         assert!(matches!(merge_into_join.table_info, Some(_)));
+        assert!(matches!(merge_into_join.table_schema, Some(_)));
     }
     Ok(enabled)
 }
@@ -115,4 +120,37 @@ pub(crate) fn add_data_block_meta(
         meta = Some(Box::new(internal_column_meta));
     }
     block.add_meta(meta)
+}
+
+pub fn build_merge_into_source_build_bloom_info(
+    ctx: Arc<dyn TableContext>,
+    table_index: usize,
+    merge_into_join: MergeIntoJoin,
+) -> Result<MergeIntoSourceBuildBloomInfo> {
+    let enabled_bloom_filter = can_merge_into_target_build_bloom_filter(ctx.clone(), table_index)?;
+    let bloom_indexes = if enabled_bloom_filter {
+        ctx.get_merge_into_source_build_bloom_probe_keys(table_index)
+            .iter()
+            .try_fold(Vec::new(), |mut acc, probe_key_name| {
+                let table_schema = merge_into_join.table_schema.as_ref().ok_or_else(|| {
+                    ErrorCode::Internal(
+                        "can't get merge into target table schema when build bloom info, it's a bug",
+                    )
+                })?;
+                let index = table_schema.index_of(probe_key_name)?;
+                acc.push(index);
+                Ok::<_, ErrorCode>(acc)
+            })?
+    } else {
+        vec![]
+    };
+
+    Ok(MergeIntoSourceBuildBloomInfo {
+        can_do_merge_into_rumtime_filter_bloom: enabled_bloom_filter,
+        segment_infos: Default::default(),
+        catalog_info: merge_into_join.catalog_info.clone(),
+        table_info: merge_into_join.table_info.clone(),
+        database_name: merge_into_join.database_name.clone(),
+        bloom_indexes,
+    })
 }

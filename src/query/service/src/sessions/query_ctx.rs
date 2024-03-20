@@ -1017,6 +1017,7 @@ impl TableContext for QueryContext {
             catalog_info: merge_into_join.catalog_info.clone(),
             table_info: merge_into_join.table_info.clone(),
             database_name: merge_into_join.database_name.clone(),
+            table_schema: merge_into_join.table_schema.clone(),
         }
     }
 
@@ -1031,10 +1032,22 @@ impl TableContext for QueryContext {
     fn get_merge_into_source_build_siphashkeys_with_id(
         &self,
         id: IndexType,
-    ) -> Vec<(String, (Buffer<u64>, Option<Bitmap>))> {
+    ) -> Vec<(String, Arc<Vec<u64>>)> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
             Some(v) => v.get_merge_into_source_build_siphashkeys(),
+            None => vec![],
+        }
+    }
+
+    fn get_merge_into_source_build_bloom_probe_keys(&self, id: usize) -> Vec<String> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        match runtime_filters.get(&id) {
+            Some(v) => v
+                .get_merge_into_source_build_siphashkeys()
+                .iter()
+                .map(|key| key.0)
+                .collect(),
             None => vec![],
         }
     }

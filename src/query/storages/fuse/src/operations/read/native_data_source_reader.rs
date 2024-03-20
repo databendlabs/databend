@@ -33,8 +33,8 @@ use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::IndexType;
 use log::debug;
 
-use super::can_merge_into_target_build_bloom_filter;
 use super::native_data_source::NativeDataSource;
+use super::util::build_merge_into_source_build_bloom_info;
 use super::util::MergeIntoSourceBuildBloomInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -91,16 +91,11 @@ impl ReadNativeDataSource<true> {
             virtual_reader,
             table_schema,
             table_index,
-            merge_into_source_build_bloom_info: MergeIntoSourceBuildBloomInfo {
-                can_do_merge_into_rumtime_filter_bloom: can_merge_into_target_build_bloom_filter(
-                    ctx.clone(),
-                    table_index,
-                )?,
-                segment_infos: Default::default(),
-                catalog_info: merge_into_join.catalog_info.clone(),
-                table_info: merge_into_join.table_info.clone(),
-                database_name: merge_into_join.database_name.clone(),
-            },
+            merge_into_source_build_bloom_info: build_merge_into_source_build_bloom_info(
+                ctx,
+                table_index,
+                merge_into_join,
+            )?,
         })
     }
 }
@@ -135,16 +130,11 @@ impl ReadNativeDataSource<false> {
             virtual_reader,
             table_schema,
             table_index,
-            merge_into_source_build_bloom_info: MergeIntoSourceBuildBloomInfo {
-                can_do_merge_into_rumtime_filter_bloom: can_merge_into_target_build_bloom_filter(
-                    ctx.clone(),
-                    table_index,
-                )?,
-                segment_infos: Default::default(),
-                catalog_info: merge_into_join.catalog_info.clone(),
-                table_info: merge_into_join.table_info.clone(),
-                database_name: merge_into_join.database_name.clone(),
-            },
+            merge_into_source_build_bloom_info: build_merge_into_source_build_bloom_info(
+                ctx,
+                table_index,
+                merge_into_join,
+            )?,
         })))
     }
 }

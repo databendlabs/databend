@@ -278,7 +278,9 @@ pub trait TableContext: Send + Sync {
     fn get_merge_into_source_build_siphashkeys_with_id(
         &self,
         id: usize,
-    ) -> Vec<(String, (Buffer<u64>, Option<Bitmap>))>;
+    ) -> Vec<(String, Arc<Vec<u64>>)>;
+
+    fn get_merge_into_source_build_bloom_probe_keys(&self, id: usize) -> Vec<String>;
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
     fn txn_mgr(&self) -> TxnManagerRef;
