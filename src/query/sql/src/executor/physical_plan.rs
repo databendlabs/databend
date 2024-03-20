@@ -60,7 +60,7 @@ use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, EnumAsInner)]
 pub enum PhysicalPlan {
     /// Query
     TableScan(TableScan),

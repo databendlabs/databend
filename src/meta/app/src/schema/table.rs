@@ -39,7 +39,7 @@ use crate::share::ShareTableInfoMap;
 use crate::storage::StorageParams;
 
 /// Globally unique identifier of a version of TableMeta.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Default)]
 pub struct TableIdent {
     /// Globally unique id to identify a table.
     pub table_id: u64,
@@ -153,7 +153,7 @@ impl Display for TableIdListKey {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub enum DatabaseType {
     #[default]
     NormalDB,
@@ -177,7 +177,7 @@ impl Display for DatabaseType {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableInfo {
     pub ident: TableIdent,
 
@@ -637,7 +637,7 @@ pub struct UpsertTableOptionReq {
     pub options: HashMap<String, Option<String>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateStreamMetaReq {
     pub stream_id: u64,
     pub seq: MatchSeq,
