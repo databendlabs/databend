@@ -16,15 +16,18 @@ use std::convert::Infallible;
 
 use databend_common_meta_kvapi::kvapi;
 
-use crate::background_api_keys::ID_GEN_BACKGROUND_JOB;
-use crate::data_mask_api_keys::ID_GEN_DATA_MASK;
-use crate::schema_api_keys::ID_GEN_CATALOG;
-use crate::schema_api_keys::ID_GEN_DATABASE;
-use crate::schema_api_keys::ID_GEN_INDEX;
-use crate::schema_api_keys::ID_GEN_TABLE;
-use crate::schema_api_keys::ID_GEN_TABLE_LOCK;
-use crate::share_api_keys::ID_GEN_SHARE;
-use crate::share_api_keys::ID_GEN_SHARE_ENDPOINT;
+pub(crate) const ID_GEN_TABLE: &str = "table_id";
+pub(crate) const ID_GEN_DATABASE: &str = "database_id";
+pub(crate) const ID_GEN_TABLE_LOCK: &str = "table_lock_id";
+pub(crate) const ID_GEN_INDEX: &str = "index_id";
+
+pub(crate) const ID_GEN_CATALOG: &str = "catalog_id";
+
+pub(crate) const ID_GEN_SHARE: &str = "share_id";
+pub(crate) const ID_GEN_SHARE_ENDPOINT: &str = "share_endpoint_id";
+
+pub(crate) const ID_GEN_DATA_MASK: &str = "data_mask";
+pub(crate) const ID_GEN_BACKGROUND_JOB: &str = "background_job";
 
 /// Key for resource id generator
 ///
