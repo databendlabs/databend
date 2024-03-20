@@ -60,29 +60,27 @@ impl PipelineBuilder {
             })?;
         }
 
-        if !scan.name_mapping.is_empty() {
-            let schema = scan.source.schema();
-            let mut projection = scan
-                .name_mapping
-                .keys()
-                .map(|name| schema.index_of(name.as_str()))
-                .collect::<Result<Vec<usize>>>()?;
-            projection.sort();
+        let schema = scan.source.schema();
+        let mut projection = scan
+            .name_mapping
+            .keys()
+            .map(|name| schema.index_of(name.as_str()))
+            .collect::<Result<Vec<usize>>>()?;
+        projection.sort();
 
-            // if projection is sequential, no need to add projection
-            if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
-                let ops = vec![BlockOperator::Project { projection }];
-                let num_input_columns = schema.num_fields();
-                self.main_pipeline.add_transform(|input, output| {
-                    Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                        input,
-                        output,
-                        num_input_columns,
-                        self.func_ctx.clone(),
-                        ops.clone(),
-                    )))
-                })?;
-            }
+        // if projection is sequential, no need to add projection
+        if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
+            let ops = vec![BlockOperator::Project { projection }];
+            let num_input_columns = schema.num_fields();
+            self.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(CompoundBlockOperator::create(
+                    input,
+                    output,
+                    num_input_columns,
+                    self.func_ctx.clone(),
+                    ops.clone(),
+                )))
+            })?;
         }
 
         Ok(())

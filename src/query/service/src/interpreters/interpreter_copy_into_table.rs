@@ -133,12 +133,17 @@ impl CopyIntoTableInterpreter {
                 )
                 .await?;
 
+            let mut name_mapping = BTreeMap::new();
+            for (idx, field) in data_source_plan.schema().fields.iter().enumerate() {
+                name_mapping.insert(field.name.clone(), idx);
+            }
+
             CopyIntoTableSource::Stage(Box::new(PhysicalPlan::TableScan(TableScan {
                 plan_id: 0,
+                name_mapping,
                 stat_info: None,
                 table_index: None,
                 internal_column: None,
-                name_mapping: BTreeMap::new(),
                 source: Box::new(data_source_plan),
             })))
         };
