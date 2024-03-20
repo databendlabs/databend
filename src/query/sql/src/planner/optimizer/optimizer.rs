@@ -250,7 +250,7 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         )?;
     }
 
-    // Normalize aggregate, it should be executed before split aggregate.
+    // Normalize aggregate, it should be executed before RuleSplitAggregate.
     s_expr = RuleNormalizeAggregateOptimizer::new().run(&s_expr)?;
 
     // Pull up and infer filter.
