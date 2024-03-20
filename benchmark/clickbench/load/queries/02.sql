@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS hits_json;
-CREATE TABLE hits_json (
+DROP TABLE IF EXISTS hits_tsv;
+CREATE TABLE hits_tsv (
     WatchID BIGINT NOT NULL,
     JavaEnable SMALLINT NOT NULL,
     Title TEXT,
@@ -106,5 +106,5 @@ CREATE TABLE hits_json (
     URLHash BIGINT NOT NULL,
     CLID INTEGER NOT NULL
 ) CLUSTER BY (CounterID, EventDate, UserID, EventTime, WatchID);
-COPY INTO hits_json
-FROM 's3://databend-datasets/hits_compatible/hits.json.gz' CONNECTION = (CONNECTION_NAME = 'repo') FILE_FORMAT = (TYPE = 'NDJSON', COMPRESSION = AUTO);
+COPY INTO hits_tsv
+FROM 's3://databend-datasets/hits_compatible/hits.tsv.gz' CONNECTION = (CONNECTION_NAME = 'repo') FILE_FORMAT = (TYPE = 'TSV', COMPRESSION = AUTO);

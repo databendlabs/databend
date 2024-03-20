@@ -75,7 +75,6 @@ export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:
 
 if [[ "${BENCHMARK_DATASET}" == "load" ]]; then
     echo "Creating database..."
-    echo "DROP DATABASE IF EXISTS ${BENCHMARK_DATABASE};" | bendsql --database default
     echo "CREATE DATABASE ${BENCHMARK_DATABASE};" | bendsql --database default
 fi
 
