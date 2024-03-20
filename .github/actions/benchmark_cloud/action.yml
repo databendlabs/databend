@@ -49,7 +49,6 @@ runs:
         BENDSQL_DSN: "databend://${{ inputs.cloud_user }}:${{ inputs.cloud_password }}@${{ inputs.cloud_gateway }}:443"
       run: |
         if [[ "${{ inputs.dataset }}" == "load" ]]; then
-          echo "CREATE DATABASE IF NOT EXISTS load_test_${{ inputs.run_id }};" | bendsql
           echo "database=load_test_${{ inputs.run_id }}" >> $GITHUB_OUTPUT
           echo "tries=1" >> $GITHUB_OUTPUT
         else
