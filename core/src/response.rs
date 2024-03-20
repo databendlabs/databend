@@ -45,7 +45,7 @@ pub struct ProgressValues {
     pub bytes: usize,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct SchemaField {
     pub name: String,
     #[serde(rename = "type")]
