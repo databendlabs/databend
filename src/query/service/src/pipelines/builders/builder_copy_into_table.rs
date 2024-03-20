@@ -51,7 +51,9 @@ impl PipelineBuilder {
                 input.output_schema()?
             }
             CopyIntoTableSource::Stage(input) => {
-                // stage_table.set_block_thresholds(to_table.get_block_thresholds());
+                self.ctx
+                    .set_read_block_thresholds(to_table.get_block_thresholds());
+
                 self.build_pipeline(input)?;
                 copy.required_source_schema.clone()
             }
