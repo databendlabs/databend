@@ -174,7 +174,7 @@ impl AggregatingIndexRewriter {
     }
 
     // If `arg[0]` data type is *NOT* nullable, the optimizer will rewrite `count(arg)` to `count()`,
-    // this happened in `RuleID::NormalizeAggregate`.
+    // this happened in `NormalizeAggregateOptimizer`.
     // But here we cannot get the arg[0] type, so we provide both `count(arg)` and `count()`.
     pub fn extract_avg(&mut self, args: &[Expr]) {
         let sum = format!("SUM({})", args[0]);
