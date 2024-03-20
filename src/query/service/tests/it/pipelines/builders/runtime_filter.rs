@@ -90,8 +90,8 @@ async fn join_build_state(
         &join.build_projections,
         HashJoinDesc::create(join)?,
         &join.probe_to_build,
-        1,
         false,
+        true,
     )?;
     let build_state = HashJoinBuildState::try_create(
         ctx.clone(),

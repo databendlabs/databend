@@ -73,23 +73,37 @@ impl PhysicalPlan {
     pub fn format_join(&self, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
         match self {
             PhysicalPlan::TableScan(plan) => {
-                if plan.table_index == DUMMY_TABLE_INDEX {
+                if plan.table_index == Some(DUMMY_TABLE_INDEX) {
                     return Ok(FormatTreeNode::with_children(
                         format!("Scan: dummy, rows: {}", plan.source.statistics.read_rows),
                         vec![],
                     ));
                 }
-                let table = metadata.read().table(plan.table_index).clone();
-                let table_name =
-                    format!("{}.{}.{}", table.catalog(), table.database(), table.name());
 
-                Ok(FormatTreeNode::with_children(
-                    format!(
-                        "Scan: {} (#{}) (read rows: {})",
-                        table_name, plan.table_index, plan.source.statistics.read_rows
-                    ),
-                    vec![],
-                ))
+                match plan.table_index {
+                    None => Ok(FormatTreeNode::with_children(
+                        format!(
+                            "Scan: {}.{} (read rows: {})",
+                            plan.source.catalog_info.name_ident.catalog_name,
+                            plan.source.source_info.desc(),
+                            plan.source.statistics.read_rows
+                        ),
+                        vec![],
+                    )),
+                    Some(table_index) => {
+                        let table = metadata.read().table(table_index).clone();
+                        let table_name =
+                            format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+
+                        Ok(FormatTreeNode::with_children(
+                            format!(
+                                "Scan: {} (#{}) (read rows: {})",
+                                table_name, table_index, plan.source.statistics.read_rows
+                            ),
+                            vec![],
+                        ))
+                    }
+                }
             }
             PhysicalPlan::HashJoin(plan) => {
                 let build_child = plan.build.format_join(metadata)?;
@@ -275,11 +289,21 @@ fn table_scan_to_format_tree(
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    if plan.table_index == DUMMY_TABLE_INDEX {
+    if plan.table_index == Some(DUMMY_TABLE_INDEX) {
         return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
     }
-    let table = metadata.table(plan.table_index).clone();
-    let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+
+    let table_name = match plan.table_index {
+        None => format!(
+            "{}.{}",
+            plan.source.catalog_info.name_ident.catalog_name,
+            plan.source.source_info.desc()
+        ),
+        Some(table_index) => {
+            let table = metadata.table(table_index).clone();
+            format!("{}.{}.{}", table.catalog(), table.database(), table.name())
+        }
+    };
     let filters = plan
         .source
         .push_downs
