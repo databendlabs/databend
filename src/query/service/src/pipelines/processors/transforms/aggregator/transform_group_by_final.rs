@@ -40,6 +40,7 @@ pub struct TransformFinalGroupBy<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
     flush_state: PayloadFlushState,
+    reach_limit: bool,
 }
 
 impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
@@ -56,6 +57,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                 method,
                 params,
                 flush_state: PayloadFlushState::default(),
+                reach_limit: false,
             },
         )))
     }
@@ -114,11 +116,23 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
         if let Some(mut ht) = agg_hashtable {
             let mut blocks = vec![];
             self.flush_state.clear();
+
+            let mut rows = 0;
             loop {
                 if ht.merge_result(&mut self.flush_state)? {
-                    blocks.push(DataBlock::new_from_columns(
-                        self.flush_state.take_group_columns(),
-                    ));
+                    let cols = self.flush_state.take_group_columns();
+                    rows += cols[0].len();
+
+                    if rows >= self.params.limit.unwrap_or(usize::MAX) {
+                        log::info!(
+                            "reach limit optimization in flush agg hashtable, current {}, total {}",
+                            rows,
+                            ht.len(),
+                        );
+                        self.reach_limit = true;
+                        break;
+                    }
+                    blocks.push(DataBlock::new_from_columns(cols));
                 } else {
                     break;
                 }
@@ -140,6 +154,10 @@ where Method: HashMethodBounds
     const NAME: &'static str = "TransformFinalGroupBy";
 
     fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
+        if self.reach_limit {
+            return Ok(self.params.empty_result_block());
+        }
+
         if self.params.enable_experimental_aggregate_hashtable {
             return self.transform_agg_hashtable(meta);
         }
@@ -166,6 +184,7 @@ where Method: HashMethodBounds
 
                             if let Some(limit) = self.params.limit {
                                 if hashtable.len() >= limit {
+                                    self.reach_limit = true;
                                     break 'merge_hashtable;
                                 }
                             }
