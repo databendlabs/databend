@@ -116,12 +116,8 @@ impl Payload {
         let mut state = PayloadFlushState::default();
         let mut blocks = vec![];
 
-        loop {
-            if let Some(block) = self.aggregate_flush(&mut state)? {
-                blocks.push(block);
-            } else {
-                break;
-            }
+        while let Some(block) = self.aggregate_flush(&mut state)? {
+            blocks.push(block);
         }
 
         if blocks.is_empty() {
