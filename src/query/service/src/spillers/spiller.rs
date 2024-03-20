@@ -38,7 +38,6 @@ pub enum SpillerType {
     HashJoinBuild,
     HashJoinProbe,
     OrderBy,
-
     // Todo: Add more spillers type
     // Aggregation
 }
@@ -168,7 +167,7 @@ impl Spiller {
         writer.close().await?;
 
         Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes as usize);
         Profile::record_usize_profile(
             ProfileStatisticsName::SpillWriteTime,
             instant.elapsed().as_millis() as usize,
