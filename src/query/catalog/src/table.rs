@@ -318,10 +318,6 @@ pub trait Table: Sync + Send {
         }
     }
 
-    fn set_block_thresholds(&self, _thresholds: BlockThresholds) {
-        unimplemented!()
-    }
-
     #[async_backtrace::framed]
     async fn compact_segments(
         &self,
