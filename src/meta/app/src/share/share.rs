@@ -175,7 +175,7 @@ impl Display for ShareGrantObjectName {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ShareGrantObjectSeqAndId {
     // db_meta_seq, db_id, DatabaseMeta
     Database(u64, u64, DatabaseMeta),
@@ -716,7 +716,7 @@ pub struct ShareIdent {
     pub seq: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareInfo {
     pub ident: ShareIdent,
     pub name_ident: ShareNameIdent,

@@ -508,7 +508,7 @@ impl Display for CreateTableReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateTableReply {
     pub table_id: u64,
     pub new_table: bool,
@@ -519,7 +519,7 @@ pub struct CreateTableReply {
 ///
 /// Dropping a table requires just `table_id`, but when dropping a table, it also needs to update
 /// the count of tables belonging to a tenant, which require tenant information.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableByIdReq {
     pub if_exists: bool,
 
@@ -549,7 +549,7 @@ impl Display for DropTableByIdReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableReply {
     pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
 }
