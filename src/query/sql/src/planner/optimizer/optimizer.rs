@@ -317,8 +317,6 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         }
     };
 
-    dbg!("s_expr = {:?}", &s_expr);
-
     s_expr =
         RecursiveOptimizer::new([RuleID::EliminateEvalScalar].as_slice(), &opt_ctx).run(&s_expr)?;
 
