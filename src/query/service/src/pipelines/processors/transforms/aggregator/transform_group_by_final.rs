@@ -98,23 +98,12 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                         None => {
                             debug_assert!(bucket == payload.bucket);
                             let arena = Arc::new(Bump::new());
-                            let payload = payload.convert_to_partitioned_payload(
+                            agg_hashtable = Some(payload.convert_to_aggregate_table(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
                                 0,
                                 arena,
-                            )?;
-                            let capacity =
-                                AggregateHashTable::get_capacity_for_count(payload.len());
-                            let mut hashtable = AggregateHashTable::new_with_capacity(
-                                self.params.group_data_types.clone(),
-                                self.params.aggregate_functions.clone(),
-                                HashTableConfig::default().with_initial_radix_bits(0),
-                                capacity,
-                                Arc::new(Bump::new()),
-                            );
-                            hashtable.combine_payloads(&payload, &mut self.flush_state)?;
-                            agg_hashtable = Some(hashtable);
+                            )?);
                         }
                     },
                     _ => unreachable!(),
