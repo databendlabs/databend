@@ -17,9 +17,12 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
@@ -34,8 +37,10 @@ use crate::sessions::QueryContext;
 pub enum SpillerType {
     HashJoinBuild,
     HashJoinProbe,
-    OrderBy, /* Todo: Add more spillers type
-              * Aggregation */
+    OrderBy,
+
+    // Todo: Add more spillers type
+    // Aggregation
 }
 
 impl Display for SpillerType {
@@ -108,9 +113,10 @@ impl Spiller {
     pub async fn read_spilled_file(&self, file: &str) -> Result<(DataBlock, u64)> {
         debug_assert!(self.columns_layout.contains_key(file));
         let data = self.operator.read(file).await?;
-        let bytes = data.len() as u64;
+        let bytes = data.len();
 
         let mut begin = 0;
+        let instant = Instant::now();
         let mut columns = Vec::with_capacity(self.columns_layout.len());
         let columns_layout = self.columns_layout.get(file).unwrap();
         for column_layout in columns_layout.iter() {
@@ -118,11 +124,20 @@ impl Spiller {
             begin += column_layout;
         }
         let block = DataBlock::new_from_columns(columns);
-        Ok((block, bytes))
+
+        Profile::record_usize_profile(ProfileStatisticsName::SpillReadCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::SpillReadBytes, bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::SpillReadTime,
+            instant.elapsed().as_millis() as usize,
+        );
+
+        Ok((block, bytes as u64))
     }
 
     /// Write a [`DataBlock`] to storage.
     pub async fn spill_block(&mut self, data: DataBlock) -> Result<(String, u64)> {
+        let instant = Instant::now();
         let unique_name = GlobalUniqName::unique();
         let location = format!("{}/{}", self.config.location_prefix, unique_name);
         let mut write_bytes = 0;
@@ -152,6 +167,13 @@ impl Spiller {
         }
         writer.close().await?;
 
+        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::SpillWriteTime,
+            instant.elapsed().as_millis() as usize,
+        );
+
         Ok((location, write_bytes))
     }
 
@@ -179,6 +201,7 @@ impl Spiller {
     /// Read spilled data with partition id
     pub async fn read_spilled_partition(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
         debug_assert!(self.partition_location.contains_key(p_id));
+
         let files = self.partition_location.get(p_id).unwrap().to_vec();
         let mut spilled_data = Vec::with_capacity(files.len());
         for file in files.iter() {
@@ -187,6 +210,7 @@ impl Spiller {
                 spilled_data.push(block);
             }
         }
+
         Ok(spilled_data)
     }
 
