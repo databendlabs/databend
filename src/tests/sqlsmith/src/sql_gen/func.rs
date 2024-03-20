@@ -709,7 +709,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let lambda_expr = self.gen_expr(inner_ty);
 
         let lambda = Lambda {
-            params: vec![Identifier::from_name(None,lambda_name)],
+            params: vec![Identifier::from_name(None, lambda_name)],
             expr: Box::new(lambda_expr),
         };
 
@@ -764,7 +764,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             })
             .collect();
 
-        let name = Identifier::from_name(None,name);
+        let name = Identifier::from_name(None, name);
         Expr::FunctionCall {
             span: None,
             func: FunctionCall {
