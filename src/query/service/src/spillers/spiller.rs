@@ -28,6 +28,7 @@ use databend_common_expression::DataBlock;
 use opendal::Operator;
 
 use crate::sessions::QueryContext;
+use crate::spillers::spiller_buffer::SpillerBuffer;
 
 /// Spiller type, currently only supports HashJoin
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -72,6 +73,7 @@ pub struct Spiller {
     operator: Operator,
     config: SpillerConfig,
     _spiller_type: SpillerType,
+    spiller_buffer: SpillerBuffer,
     pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
     pub partition_location: HashMap<u8, Vec<String>>,
@@ -93,6 +95,7 @@ impl Spiller {
             operator,
             config,
             _spiller_type: spiller_type,
+            spiller_buffer: SpillerBuffer::create(),
             join_spilling_partition_bits,
             partition_location: Default::default(),
             columns_layout: Default::default(),
@@ -191,7 +194,6 @@ impl Spiller {
     }
 
     #[async_backtrace::framed]
-    // Directly spill input data without buffering.
     // Need to compute hashes for data block advanced.
     // For probe, only need to spill rows in build spilled partitions.
     // For left-related join, need to record rows not in build spilled partitions.
@@ -234,8 +236,12 @@ impl Spiller {
                 &block_row_indexes,
                 row_indexes.len(),
             );
-            // Spill block with partition id
-            self.spill_with_partition(*p_id, block).await?;
+            if let Some((p_id, block)) = self
+                .spiller_buffer
+                .add_partition_unspilled_data(*p_id, block)?
+            {
+                self.spill_with_partition(p_id, block).await?;
+            }
         }
         if !left_related_join {
             return Ok(None);
@@ -249,6 +255,24 @@ impl Spiller {
             &unspilled_block_row_indexes,
             unspilled_row_index.len(),
         )))
+    }
+
+    // Spill the data in the buffer at the end of spilling
+    pub(crate) async fn spill_buffer(&mut self) -> Result<()> {
+        let partition_unspilled_data = self.spiller_buffer.partition_unspilled_data();
+        for (partition_id, blocks) in partition_unspilled_data.iter() {
+            if !blocks.is_empty() {
+                let merged_block = DataBlock::concat(blocks)?;
+                self.spill_with_partition(*partition_id, merged_block)
+                    .await?;
+            }
+        }
+        self.spiller_buffer.reset();
+        Ok(())
+    }
+
+    pub(crate) fn empty_buffer(&self) -> bool {
+        self.spiller_buffer.empty()
     }
 
     pub(crate) fn spilled_files(&self) -> Vec<String> {
