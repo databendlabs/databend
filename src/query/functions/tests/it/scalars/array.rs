@@ -174,6 +174,8 @@ fn test_contains(file: &mut impl Write) {
         &columns,
     );
 
+    run_ast(file, "contains(['1', '5'], string_col)", &columns);
+
     run_ast(
         file,
         "contains(['15000', '6000', '7000'], string_col)",

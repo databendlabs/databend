@@ -480,9 +480,7 @@ impl<T: Ord + PartialOrd> SimpleDomainCmp for SimpleDomain<T> {
     }
 
     fn domain_contains(&self, other: &Self) -> FunctionDomain<BooleanType> {
-        if self.min <= other.min && self.max >= other.max {
-            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-        } else if self.min > other.max || self.max < other.min {
+        if self.min > other.max || self.max < other.min {
             FunctionDomain::Domain(ALL_FALSE_DOMAIN)
         } else {
             FunctionDomain::Full
