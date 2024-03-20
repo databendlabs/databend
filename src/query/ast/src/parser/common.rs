@@ -25,7 +25,6 @@ use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
 
-use super::expr::literal_string;
 use crate::ast::ColumnID;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
@@ -114,6 +113,25 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
     )(i)
 }
 
+fn plain_identifier(
+    is_reserved_keyword: fn(&TokenKind) -> bool,
+) -> impl FnMut(Input) -> IResult<Identifier> {
+    move |i| {
+        map(
+            rule! {
+                Ident
+                | #non_reserved_keyword(is_reserved_keyword)
+            },
+            |token| Identifier {
+                span: transform_span(&[token.clone()]),
+                name: token.text().to_string(),
+                quote: None,
+                is_hole: false,
+            },
+        )(i)
+    }
+}
+
 fn quoted_identifier(i: Input) -> IResult<Identifier> {
     match_token(QuotedString)(i).and_then(|(i2, token)| {
         if token
@@ -139,12 +157,12 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
     })
 }
 
-fn hole_identifier(i: Input) -> IResult<Identifier> {
+fn identifier_hole(i: Input) -> IResult<Identifier> {
     check_template_mode(map(
         consumed(rule! {
-            IDENTIFIER ~ ^"(" ~ ^":" ~ ^#literal_string ~ ^")"
+            IDENTIFIER ~ ^"(" ~ ^#template_hole ~ ^")"
         }),
-        |(span, (_, _, _, name, _))| Identifier {
+        |(span, (_, _, (_, name), _))| Identifier {
             span: transform_span(span.tokens),
             name,
             quote: None,
@@ -157,23 +175,10 @@ fn non_reserved_identifier(
     is_reserved_keyword: fn(&TokenKind) -> bool,
 ) -> impl FnMut(Input) -> IResult<Identifier> {
     move |i| {
-        let plain_ident = map(
-            rule! {
-                Ident
-                | #non_reserved_keyword(is_reserved_keyword)
-            },
-            |token| Identifier {
-                span: transform_span(&[token.clone()]),
-                name: token.text().to_string(),
-                quote: None,
-                is_hole: false,
-            },
-        );
-
         rule!(
-            #plain_ident
+            #plain_identifier(is_reserved_keyword)
             | #quoted_identifier
-            | #hole_identifier
+            | #identifier_hole
         )(i)
     }
 }
@@ -498,14 +503,21 @@ where F: nom::Parser<Input<'a>, O, Error<'a>> {
                 i.backtrace.clear();
                 let error = Error::from_error_kind(
                     input,
-                    ErrorKind::Other(
-                        "Hole is only available in SQL template, you might want to use SQL scripting"
-                    ),
+                    ErrorKind::Other("variable is only available in SQL template"),
                 );
                 Err(nom::Err::Failure(error))
             }
         })
     }
+}
+
+pub fn template_hole(i: Input) -> IResult<(Span, String)> {
+    check_template_mode(map(
+        consumed(rule! {
+            ":" ~ ^#plain_identifier(|token| token.is_reserved_ident(false))
+        }),
+        |(span, (_, ident))| (transform_span(span.tokens), ident.name),
+    ))(i)
 }
 
 macro_rules! declare_experimental_feature {

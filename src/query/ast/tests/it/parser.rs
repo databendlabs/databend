@@ -737,13 +737,16 @@ fn test_statement_error() {
                 )"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn"#,
         r#"select $0 from t1"#,
-        "GRANT OWNERSHIP, SELECT ON d20_0014.* TO ROLE 'd20_0015_owner';",
-        "GRANT OWNERSHIP ON d20_0014.* TO USER A;",
-        "REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';",
-        "REVOKE OWNERSHIP ON d20_0014.* FROM USER A;",
-        "REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;",
-        "GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';",
-        "CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)",
+        r#"GRANT OWNERSHIP, SELECT ON d20_0014.* TO ROLE 'd20_0015_owner';"#,
+        r#"GRANT OWNERSHIP ON d20_0014.* TO USER A;"#,
+        r#"REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';"#,
+        r#"REVOKE OWNERSHIP ON d20_0014.* FROM USER A;"#,
+        r#"REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;"#,
+        r#"GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';"#,
+        r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)"#,
+        r#"drop table :a"#,
+        r#"drop table IDENTIFIER(a)"#,
+        r#"drop table IDENTIFIER(:a)"#,
     ];
 
     for case in cases {
@@ -1071,10 +1074,19 @@ fn test_script() {
                 SELECT c1, c2 FROM t WHERE c1 = 1;
             END LOOP
         "#,
+        r#"select :a + 1"#,
+        r#"select IDENTIFIER(:b)"#,
+        r#"select a.IDENTIFIER(:b).c + minus(:d)"#,
     ];
 
     for case in cases {
-        run_parser(file, script_stmt, case);
+        run_parser_with_dialect(
+            file,
+            script_stmt,
+            Dialect::PostgreSQL,
+            ParseMode::Template,
+            case,
+        );
     }
 }
 

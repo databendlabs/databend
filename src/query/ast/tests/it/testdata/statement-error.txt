@@ -838,3 +838,39 @@ error:
   | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`
 
 
+---------- Input ----------
+drop table :a
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | drop table :a
+  | ----       ^ unexpected `:`, expecting <Ident>, <QuotedString>, `IDENTIFIER`, or `IF`
+  | |           
+  | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
+
+
+---------- Input ----------
+drop table IDENTIFIER(a)
+---------- Output ---------
+error: 
+  --> SQL:1:23
+  |
+1 | drop table IDENTIFIER(a)
+  | ----                  ^ unexpected `a`, expecting `:`
+  | |                      
+  | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
+
+
+---------- Input ----------
+drop table IDENTIFIER(:a)
+---------- Output ---------
+error: 
+  --> SQL:1:23
+  |
+1 | drop table IDENTIFIER(:a)
+  | ----                  ^ variable is only available in SQL template
+  | |                      
+  | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
+
+

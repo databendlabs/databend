@@ -60,11 +60,15 @@ impl Identifier {
 
 impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(c) = self.quote {
-            let quoted = quote_ident(&self.name, c, true);
-            write!(f, "{}", quoted)
+        if self.is_hole {
+            write!(f, "IDENTIFIER(:{})", self.name)
         } else {
-            write!(f, "{}", self.name)
+            if let Some(c) = self.quote {
+                let quoted = quote_ident(&self.name, c, true);
+                write!(f, "{}", quoted)
+            } else {
+                write!(f, "{}", self.name)
+            }
         }
     }
 }

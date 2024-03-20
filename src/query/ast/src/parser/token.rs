@@ -1367,6 +1367,7 @@ impl TokenKind {
             | TokenKind::ROLLUP
             // | TokenKind::IFNULL
             | TokenKind::IN
+            | TokenKind::IDENTIFIER
             // | TokenKind::INITIALLY
             // | TokenKind::INOUT
             | TokenKind::INT
@@ -1513,6 +1514,7 @@ impl TokenKind {
             | TokenKind::FULL
             // | TokenKind::ILIKE
             | TokenKind::IN
+            | TokenKind::IDENTIFIER
             // | TokenKind::INITIALLY
             | TokenKind::INNER
             | TokenKind::IS

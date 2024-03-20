@@ -75,33 +75,6 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
         let (rest, mut expr_elements) = rule! { #higher_prec_expr_element+ }(i)?;
 
         for (prev, curr) in (-1..(expr_elements.len() as isize)).tuple_windows() {
-            // Replace binary Plus and Minus to the unary one, if it's following another op
-            // or it's the first element.
-            if prev == -1
-                || matches!(
-                    expr_elements[prev as usize].elem,
-                    ExprElement::UnaryOp { .. } | ExprElement::BinaryOp { .. }
-                )
-            {
-                match &mut expr_elements[curr as usize].elem {
-                    elem @ ExprElement::BinaryOp {
-                        op: BinaryOperator::Plus,
-                    } => {
-                        *elem = ExprElement::UnaryOp {
-                            op: UnaryOperator::Plus,
-                        };
-                    }
-                    elem @ ExprElement::BinaryOp {
-                        op: BinaryOperator::Minus,
-                    } => {
-                        *elem = ExprElement::UnaryOp {
-                            op: UnaryOperator::Minus,
-                        };
-                    }
-                    _ => {}
-                }
-            }
-
             // If it's following a prefix or infix element or it's the first element, ...
             if prev == -1
                 || matches!(
@@ -113,32 +86,51 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     Affix::Prefix(_) | Affix::Infix(_, _)
                 )
             {
-                // replace bracket map access to an array, ...
-                if let ExprElement::MapAccess {
-                    accessor: MapAccessor::Bracket { key },
-                } = &expr_elements[curr as usize].elem
-                {
-                    let span = expr_elements[curr as usize].span;
-                    expr_elements[curr as usize] = WithSpan {
-                        span,
-                        elem: ExprElement::Array {
+                let span = expr_elements[curr as usize].span;
+                let elem = &mut expr_elements[curr as usize].elem;
+                match elem {
+                    // replace bracket map access to an array, ...
+                    ExprElement::MapAccess {
+                        accessor: MapAccessor::Bracket { key },
+                    } => {
+                        *elem = ExprElement::Array {
                             exprs: vec![(**key).clone()],
-                        },
-                    };
-                }
-
-                // and replace `.<number>` map access to floating point literal.
-                if let ExprElement::MapAccess {
-                    accessor: MapAccessor::DotNumber { .. },
-                } = &expr_elements[curr as usize].elem
-                {
-                    let span = expr_elements[curr as usize].span;
-                    expr_elements[curr as usize] = WithSpan {
-                        span,
-                        elem: ExprElement::Literal {
+                        };
+                    }
+                    // replace binary `+` and `-` to unary one, ...
+                    ExprElement::BinaryOp {
+                        op: BinaryOperator::Plus,
+                    } => {
+                        *elem = ExprElement::UnaryOp {
+                            op: UnaryOperator::Plus,
+                        };
+                    }
+                    ExprElement::BinaryOp {
+                        op: BinaryOperator::Minus,
+                    } => {
+                        *elem = ExprElement::UnaryOp {
+                            op: UnaryOperator::Minus,
+                        };
+                    }
+                    // replace `:ident` to hole, ...
+                    ExprElement::MapAccess {
+                        accessor: MapAccessor::Colon { key },
+                    } => {
+                        if !key.is_quoted() && !key.is_hole {
+                            *elem = ExprElement::Hole {
+                                name: key.to_string(),
+                            };
+                        }
+                    }
+                    // and replace `.<number>` map access to floating point literal.
+                    ExprElement::MapAccess {
+                        accessor: MapAccessor::DotNumber { .. },
+                    } => {
+                        *elem = ExprElement::Literal {
                             lit: literal(span)?.1,
-                        },
-                    };
+                        };
+                    }
+                    _ => {}
                 }
             }
         }
@@ -643,31 +635,27 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 expr: Box::new(lhs),
                 accessor,
             },
-            // Lift level up the identifier
             ExprElement::DotAccess { key } => {
-                let mut is_map_access = true;
+                // `database.table.column` is parsed into [database] [.table] [.column],
+                // so we need to transform it into the right `ColumnRef` form.
                 if let Expr::ColumnRef { column, .. } = &mut lhs {
                     if let ColumnID::Name(name) = &column.column {
-                        is_map_access = false;
                         column.database = column.table.take();
                         column.table = Some(name.clone());
                         column.column = key.clone();
+                        return Ok(lhs);
                     }
                 }
 
-                if is_map_access {
-                    match key {
-                        ColumnID::Name(id) => Expr::MapAccess {
-                            span: transform_span(elem.span.tokens),
-                            expr: Box::new(lhs),
-                            accessor: MapAccessor::Colon { key: id },
-                        },
-                        _ => {
-                            return Err("dot access position must be after ident");
-                        }
+                match key {
+                    ColumnID::Name(id) => Expr::MapAccess {
+                        span: transform_span(elem.span.tokens),
+                        expr: Box::new(lhs),
+                        accessor: MapAccessor::Colon { key: id },
+                    },
+                    _ => {
+                        return Err("dot access position must be after ident");
                     }
-                } else {
-                    lhs
                 }
             }
             ExprElement::ChainFunctionCall { name, args, lambda } => Expr::FunctionCall {
@@ -1179,13 +1167,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         }
     });
 
-    let hole = check_template_mode(map(
-        rule! {
-            ":" ~ #literal_string
-        },
-        |(_, name)| ExprElement::Hole { name },
-    ));
-
     let (rest, (span, elem)) = consumed(alt((
         // Note: each `alt` call supports maximum of 21 parsers
         rule!(
@@ -1231,9 +1212,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #current_timestamp: "CURRENT_TIMESTAMP"
             | #array : "`[<expr>, ...]`"
             | #map_expr : "`{ <literal> : <expr>, ... }`"
-        ),
-        rule!(
-            #hole : "`:<hole>`"
         ),
     )))(i)?;
 
