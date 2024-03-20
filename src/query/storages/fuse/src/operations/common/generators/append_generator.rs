@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -86,7 +87,9 @@ impl AppendGenerator {
 
 #[async_trait::async_trait]
 impl SnapshotGenerator for AppendGenerator {
-    const NAME: &'static str = "AppendGenerator";
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 
     fn set_conflict_resolve_context(&mut self, ctx: ConflictResolveContext) {
         self.conflict_resolve_ctx = ctx;

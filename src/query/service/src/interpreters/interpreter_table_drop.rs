@@ -21,6 +21,7 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_sql::plans::DropTablePlan;
+use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_share::save_share_spec;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
@@ -136,9 +137,12 @@ impl Interpreter for DropTableInterpreter {
             // if target table if of type FuseTable, purge its historical data
             // otherwise, plain truncate
             if let Ok(fuse_table) = maybe_fuse_table {
-                let purge = true;
                 fuse_table
-                    .do_truncate(self.ctx.clone(), &mut build_res.main_pipeline, purge)
+                    .do_truncate(
+                        self.ctx.clone(),
+                        &mut build_res.main_pipeline,
+                        TruncateMode::Purge,
+                    )
                     .await?
             } else {
                 latest

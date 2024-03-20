@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -23,22 +24,34 @@ use uuid::Uuid;
 use crate::operations::common::SnapshotGenerator;
 
 #[derive(Clone)]
+pub enum TruncateMode {
+    // Truncate and keep the historical data.
+    Normal,
+    // Delete the data, used for delete operation.
+    Delete,
+    // Truncate and purge the historical data.
+    Purge,
+}
+
+#[derive(Clone)]
 pub struct TruncateGenerator {
-    purge: bool,
+    mode: TruncateMode,
 }
 
 impl TruncateGenerator {
-    pub fn new(purge: bool) -> Self {
-        TruncateGenerator { purge }
+    pub fn new(mode: TruncateMode) -> Self {
+        TruncateGenerator { mode }
+    }
+
+    pub fn mode(&self) -> &TruncateMode {
+        &self.mode
     }
 }
 
 #[async_trait::async_trait]
 impl SnapshotGenerator for TruncateGenerator {
-    const NAME: &'static str = "TruncateGenerator";
-
-    fn purge(&self) -> bool {
-        self.purge
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn generate_new_snapshot(

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -44,7 +45,9 @@ impl MutationGenerator {
 }
 
 impl SnapshotGenerator for MutationGenerator {
-    const NAME: &'static str = "MutationGenerator";
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 
     fn set_conflict_resolve_context(&mut self, ctx: ConflictResolveContext) {
         self.conflict_resolve_ctx = ctx;

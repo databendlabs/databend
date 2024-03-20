@@ -87,6 +87,7 @@ use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
+use crate::operations::TruncateMode;
 use crate::table_functions::unwrap_tuple;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
@@ -719,12 +720,7 @@ impl Table for FuseTable {
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
-        let loc = self.snapshot_loc().await?;
-        if loc.is_none() {
-            return Ok(());
-        }
-
-        self.do_truncate(ctx, pipeline, false).await
+        self.do_truncate(ctx, pipeline, TruncateMode::Normal).await
     }
 
     #[minitrace::trace]

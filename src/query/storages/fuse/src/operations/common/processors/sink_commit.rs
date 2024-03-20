@@ -52,6 +52,8 @@ use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::SnapshotGenerator;
 use crate::operations::set_backoff;
+use crate::operations::TruncateGenerator;
+use crate::operations::TruncateMode;
 use crate::FuseTable;
 
 enum State {
@@ -118,7 +120,7 @@ where F: SnapshotGenerator + Send + 'static
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
     ) -> Result<ProcessorPtr> {
-        let purge = snapshot_gen.purge() || table.transient();
+        let purge = Self::do_purge(table, &snapshot_gen);
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
             ctx,
@@ -144,7 +146,7 @@ where F: SnapshotGenerator + Send + 'static
     }
 
     fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
-        // When prev_snapshot_id is some, means it is an alter table column modification.
+        // When prev_snapshot_id is some, means it is an alter table column modification or truncate.
         // In this case if commit to meta fail and error is TABLE_VERSION_MISMATCHED operation will be aborted.
         if self.prev_snapshot_id.is_some() && e.code() == ErrorCode::TABLE_VERSION_MISMATCHED {
             return false;
@@ -186,8 +188,22 @@ where F: SnapshotGenerator + Send + 'static
         Ok(Event::Async)
     }
 
-    fn is_truncate() -> bool {
-        F::NAME == "TruncateGenerator"
+    fn do_purge(table: &FuseTable, snapshot_gen: &F) -> bool {
+        if table.transient() {
+            return true;
+        }
+
+        snapshot_gen
+            .as_any()
+            .downcast_ref::<TruncateGenerator>()
+            .is_some_and(|gen| matches!(gen.mode(), TruncateMode::Purge))
+    }
+
+    fn do_truncate(&self) -> bool {
+        self.snapshot_gen
+            .as_any()
+            .downcast_ref::<TruncateGenerator>()
+            .is_some_and(|gen| !matches!(gen.mode(), TruncateMode::Delete))
     }
 }
 
@@ -349,7 +365,7 @@ where F: SnapshotGenerator + Send + 'static
                 .await
                 {
                     Ok(_) => {
-                        if Self::is_truncate() {
+                        if self.do_truncate() {
                             catalog
                                 .truncate_table(&table_info, TruncateTableReq {
                                     table_id: table_info.ident.table_id,

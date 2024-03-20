@@ -20,11 +20,12 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::OneBlockSource;
 
-use super::CommitSink;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
+use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::TruncateGenerator;
+use crate::operations::common::TruncateMode;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -34,10 +35,15 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        purge: bool,
+        mode: TruncateMode,
     ) -> Result<()> {
         if let Some(prev_snapshot) = self.read_table_snapshot().await? {
-            let prev_snapshot_id = Some(prev_snapshot.snapshot_id);
+            // Delete operation commit can retry multi-times if table version mismatched.
+            let prev_snapshot_id = if !matches!(mode, TruncateMode::Delete) {
+                Some(prev_snapshot.snapshot_id)
+            } else {
+                None
+            };
             pipeline.add_source(
                 |output| {
                     let meta = CommitMeta {
@@ -50,7 +56,7 @@ impl FuseTable {
                 1,
             )?;
 
-            let snapshot_gen = TruncateGenerator::new(purge);
+            let snapshot_gen = TruncateGenerator::new(mode);
             pipeline.add_sink(|input| {
                 CommitSink::try_create(
                     self,

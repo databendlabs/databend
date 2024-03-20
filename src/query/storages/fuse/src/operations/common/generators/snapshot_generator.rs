@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -23,11 +24,8 @@ use crate::operations::common::ConflictResolveContext;
 
 #[async_trait::async_trait]
 pub trait SnapshotGenerator {
-    const NAME: &'static str;
-
-    fn purge(&self) -> bool {
-        false
-    }
+    /// Convert to `Any`, to enable dynamic casting.
+    fn as_any(&self) -> &dyn Any;
 
     fn set_conflict_resolve_context(&mut self, _ctx: ConflictResolveContext) {}
 

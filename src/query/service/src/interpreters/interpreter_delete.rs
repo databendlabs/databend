@@ -53,6 +53,7 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Visibility;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
@@ -189,7 +190,7 @@ impl Interpreter for DeleteInterpreter {
             (None, vec![])
         };
 
-        let fuse_table = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+        let fuse_table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
             ErrorCode::Unimplemented(format!(
                 "table {}, engine type {}, does not support DELETE FROM",
                 tbl.name(),
@@ -199,11 +200,8 @@ impl Interpreter for DeleteInterpreter {
 
         let mut build_res = PipelineBuildResult::create();
 
-        let snapshot_opt = fuse_table.read_table_snapshot().await?;
         // check if table is empty
-        let snapshot = if let Some(val) = snapshot_opt {
-            val
-        } else {
+        let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
             // no snapshot, no deletion
             return Ok(build_res);
         };
@@ -214,20 +212,21 @@ impl Interpreter for DeleteInterpreter {
 
         build_res.main_pipeline.add_lock_guard(lock_guard);
         // check if unconditional deletion
-        let deletion_filters = match filters {
-            None => {
-                let progress_values = ProgressValues {
-                    rows: snapshot.summary.row_count as usize,
-                    bytes: snapshot.summary.uncompressed_byte_size as usize,
-                };
-                self.ctx.get_write_progress().incr(&progress_values);
-                // deleting the whole table... just a truncate
-                fuse_table
-                    .do_truncate(self.ctx.clone(), &mut build_res.main_pipeline, false)
-                    .await?;
-                return Ok(build_res);
-            }
-            Some(filters) => filters,
+        let Some(filters) = filters else {
+            let progress_values = ProgressValues {
+                rows: snapshot.summary.row_count as usize,
+                bytes: snapshot.summary.uncompressed_byte_size as usize,
+            };
+            self.ctx.get_write_progress().incr(&progress_values);
+            // deleting the whole table... just a truncate
+            fuse_table
+                .do_truncate(
+                    self.ctx.clone(),
+                    &mut build_res.main_pipeline,
+                    TruncateMode::Delete,
+                )
+                .await?;
+            return Ok(build_res);
         };
 
         let query_row_id_col = !self.plan.subquery_desc.is_empty();
@@ -240,11 +239,7 @@ impl Interpreter for DeleteInterpreter {
             // if the `filter_expr` is of "constant" nullary :
             //   for the whole block, whether all of the rows should be kept or dropped,
             //   we can just return from here, without accessing the block data
-            if fuse_table.try_eval_const(
-                self.ctx.clone(),
-                &fuse_table.schema(),
-                &deletion_filters.filter,
-            )? {
+            if fuse_table.try_eval_const(self.ctx.clone(), &fuse_table.schema(), &filters.filter)? {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
                     bytes: snapshot.summary.uncompressed_byte_size as usize,
@@ -253,7 +248,11 @@ impl Interpreter for DeleteInterpreter {
 
                 // deleting the whole table... just a truncate
                 fuse_table
-                    .do_truncate(self.ctx.clone(), &mut build_res.main_pipeline, false)
+                    .do_truncate(
+                        self.ctx.clone(),
+                        &mut build_res.main_pipeline,
+                        TruncateMode::Delete,
+                    )
                     .await?;
                 return Ok(build_res);
             }
@@ -266,14 +265,14 @@ impl Interpreter for DeleteInterpreter {
                 self.ctx.clone(),
                 snapshot.clone(),
                 col_indices.clone(),
-                Some(deletion_filters.clone()),
+                Some(filters.clone()),
                 is_lazy,
                 true,
             )
             .await?;
 
         let physical_plan = Self::build_physical_plan(
-            deletion_filters,
+            filters,
             partitions,
             fuse_table.get_table_info().clone(),
             col_indices,
