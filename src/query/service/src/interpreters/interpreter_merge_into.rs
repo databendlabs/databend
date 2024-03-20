@@ -203,6 +203,7 @@ impl MergeIntoInterpreter {
                     table_info: merge_into_join.table_info.clone(),
                     catalog_info: merge_into_join.catalog_info.clone(),
                     database_name: merge_into_join.database_name.clone(),
+                    table_schema: merge_into_join.table_schema.clone(),
                 });
             }
         }
@@ -305,6 +306,7 @@ impl MergeIntoInterpreter {
                 table_info: Some(table_info.clone()),
                 catalog_info: Some(catalog_.info()),
                 database_name: merge_into_join.database_name.clone(),
+                table_schema: merge_into_join.table_schema.clone(),
             })
         }
         // merge_into_source is used to recv join's datablocks and split them into macthed and not matched

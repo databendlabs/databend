@@ -28,6 +28,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 
 use crate::operations::BlockMetaIndex;
@@ -41,6 +42,7 @@ pub struct MergeIntoSourceBuildBloomInfo {
     pub catalog_info: Option<CatalogInfo>,
     pub database_name: String,
     pub bloom_indexes: Vec<FieldIndex>,
+    pub bloom_fields: Vec<OnConflictField>,
 }
 
 pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> (bool, bool) {
@@ -70,9 +72,9 @@ pub fn can_merge_into_target_build_bloom_filter(
                 .get_enable_merge_into_source_build_bloom()?
         );
         assert!(merge_into_join.database_name.as_str() != "");
-        assert!(matches!(merge_into_join.catalog_info, Some(_)));
-        assert!(matches!(merge_into_join.table_info, Some(_)));
-        assert!(matches!(merge_into_join.table_schema, Some(_)));
+        assert!(merge_into_join.catalog_info.is_some());
+        assert!(merge_into_join.table_info.is_some());
+        assert!(merge_into_join.table_schema.is_some());
     }
     Ok(enabled)
 }
@@ -128,23 +130,25 @@ pub fn build_merge_into_source_build_bloom_info(
     merge_into_join: MergeIntoJoin,
 ) -> Result<MergeIntoSourceBuildBloomInfo> {
     let enabled_bloom_filter = can_merge_into_target_build_bloom_filter(ctx.clone(), table_index)?;
-    let bloom_indexes = if enabled_bloom_filter {
+
+    let (bloom_indexes, bloom_fields) = if enabled_bloom_filter {
         ctx.get_merge_into_source_build_bloom_probe_keys(table_index)
             .iter()
-            .try_fold(Vec::new(), |mut acc, probe_key_name| {
+            .try_fold((Vec::new(),Vec::new()), |mut acc, probe_key_name| {
                 let table_schema = merge_into_join.table_schema.as_ref().ok_or_else(|| {
                     ErrorCode::Internal(
                         "can't get merge into target table schema when build bloom info, it's a bug",
                     )
                 })?;
                 let index = table_schema.index_of(probe_key_name)?;
-                acc.push(index);
+                acc.0.push(index);
+                acc.1.push(OnConflictField { table_field: table_schema.field(index).clone(), field_index: index });
                 Ok::<_, ErrorCode>(acc)
             })?
     } else {
-        vec![]
+        (vec![], vec![])
     };
-
+    assert_eq!(bloom_fields.len(), bloom_indexes.len());
     Ok(MergeIntoSourceBuildBloomInfo {
         can_do_merge_into_runtime_filter_bloom: enabled_bloom_filter,
         segment_infos: Default::default(),
@@ -152,5 +156,6 @@ pub fn build_merge_into_source_build_bloom_info(
         table_info: merge_into_join.table_info.clone(),
         database_name: merge_into_join.database_name.clone(),
         bloom_indexes,
+        bloom_fields,
     })
 }

@@ -22,8 +22,6 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -63,6 +61,7 @@ use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
+use crate::runtime_filter_info::MergeIntoSourceBuildSiphashkeys;
 use crate::runtime_filter_info::RuntimeFilterInfo;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
@@ -278,7 +277,7 @@ pub trait TableContext: Send + Sync {
     fn get_merge_into_source_build_siphashkeys_with_id(
         &self,
         id: usize,
-    ) -> Vec<(String, Arc<Vec<u64>>)>;
+    ) -> Option<MergeIntoSourceBuildSiphashkeys>;
 
     fn get_merge_into_source_build_bloom_probe_keys(&self, id: usize) -> Vec<String>;
 

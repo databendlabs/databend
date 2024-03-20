@@ -48,7 +48,8 @@ use xorf::Filter;
 
 use super::util::MergeIntoSourceBuildBloomInfo;
 use crate::io::MetaReaders;
-use crate::operations::SegmentIndex;
+use crate::operations::load_bloom_filter;
+use crate::operations::try_prune_use_bloom_filter;
 use crate::FusePartInfo;
 use crate::FuseTable;
 
@@ -115,77 +116,104 @@ pub fn runtime_filter_pruner(
 
     // if we can't pruned this block, we can try get siphashkeys if this is a merge into source build
     if can_do_merge_into_target_build_bloom_filter {
-        assert!(matches!(part.block_meta_index(), Some(_)));
-        let block_meta_index = part.block_meta_index().unwrap();
-        let hash_keys = ctx.get_merge_into_source_build_siphashkeys_with_id(id);
-        let segment_idx = block_meta_index.segment_idx;
-        let block_idx = block_meta_index.block_idx;
-        let target_table_segments = ctx.get_merge_into_source_build_segments();
-        if let Entry::Vacant(e) = merge_into_source_build_bloom_info
-            .segment_infos
-            .entry(segment_idx)
-        {
-            let (_,(path, ver)) = target_table_segments.get(segment_idx).ok_or_else(|| {
-                return ErrorCode::Internal(format!(
+        try_prune_merge_into_target_table(ctx.clone(), part, merge_into_source_build_bloom_info, id)
+    } else {
+        Ok(false)
+    }
+}
+
+pub(crate) fn try_prune_merge_into_target_table(
+    ctx: Arc<dyn TableContext>,
+    part: &FusePartInfo,
+    merge_into_source_build_bloom_info: &mut MergeIntoSourceBuildBloomInfo,
+    id: usize,
+) -> Result<bool> {
+    assert!(part.block_meta_index().is_some());
+    let block_meta_index = part.block_meta_index().unwrap();
+
+    let segment_idx = block_meta_index.segment_idx;
+    let block_idx = block_meta_index.block_idx;
+    let target_table_segments = ctx.get_merge_into_source_build_segments();
+    let catalog_info = merge_into_source_build_bloom_info
+        .catalog_info
+        .as_ref()
+        .unwrap();
+    let table_info = merge_into_source_build_bloom_info
+        .table_info
+        .as_ref()
+        .unwrap();
+    let table = block_on(async {
+        ctx.get_table(
+            catalog_info.catalog_name(),
+            &merge_into_source_build_bloom_info.database_name,
+            &table_info.name,
+        )
+        .await
+    })?;
+    let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+        ErrorCode::Unimplemented(format!(
+            "table {}, engine type {}, does not support MERGE INTO",
+            table.name(),
+            table.get_table_info().engine(),
+        ))
+    })?;
+    if let Entry::Vacant(e) = merge_into_source_build_bloom_info
+        .segment_infos
+        .entry(segment_idx)
+    {
+        let (_,(path, ver)) = target_table_segments.get(segment_idx).ok_or_else(|| {
+                ErrorCode::Internal(format!(
                     "unexpected, segment (idx {}) not found, during do merge into source build bloom filter",
                     segment_idx
                 ))
             })?;
 
-            let load_param = LoadParams {
-                location: path.clone(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: true,
-            };
-            let catalog_info = merge_into_source_build_bloom_info
-                .catalog_info
-                .as_ref()
-                .unwrap();
-            let table_info = merge_into_source_build_bloom_info
-                .table_info
-                .as_ref()
-                .unwrap();
-            let table = block_on(async {
-                ctx.get_table(
-                    catalog_info.catalog_name(),
-                    &merge_into_source_build_bloom_info.database_name,
-                    &table_info.name,
-                )
-                .await
-            })?;
-            let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-                ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support MERGE INTO",
-                    table.name(),
-                    table.get_table_info().engine(),
-                ))
-            })?;
-            let target_table_schema = table.schema_with_stream();
-            let data_accessor = fuse_table.get_operator();
-            let segment_reader = MetaReaders::segment_info_reader(
-                data_accessor.clone(),
-                target_table_schema.clone(),
-            );
-            let compact_segment_info = block_on(async { segment_reader.read(&load_param).await })?;
-            let segment_info: SegmentInfo = compact_segment_info.try_into()?;
-            e.insert(segment_info);
-        }
-        // load bloom filter
-        let segment_info = merge_into_source_build_bloom_info
-            .segment_infos
-            .get(&segment_idx)
-            .unwrap();
-        assert!(block_idx < segment_info.blocks.len());
-        info!(
-            "merge into source build runtime bloom filter: segment_idx:{},blk_idx:{}",
-            segment_idx, block_idx
-        );
-        let block_meta = segment_info.blocks[block_idx].clone();
-        // iterate every probe key name to do prune
+        let load_param = LoadParams {
+            location: path.clone(),
+            len_hint: None,
+            ver: *ver,
+            put_cache: true,
+        };
+        let target_table_schema = table.schema_with_stream();
+        let data_accessor = fuse_table.get_operator();
+        let segment_reader =
+            MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
+        let compact_segment_info = block_on(async { segment_reader.read(&load_param).await })?;
+        let segment_info: SegmentInfo = compact_segment_info.try_into()?;
+        e.insert(segment_info);
     }
-
-    Ok(false)
+    // load bloom filter
+    let segment_info = merge_into_source_build_bloom_info
+        .segment_infos
+        .get(&segment_idx)
+        .unwrap();
+    assert!(block_idx < segment_info.blocks.len());
+    info!(
+        "merge into source build runtime bloom filter: segment_idx:{},blk_idx:{}",
+        segment_idx, block_idx
+    );
+    let block_meta = segment_info.blocks[block_idx].clone();
+    if let Some(index_location) = block_meta.bloom_filter_index_location.as_ref() {
+        let filters = block_on(async {
+            load_bloom_filter(
+                fuse_table.get_operator(),
+                &merge_into_source_build_bloom_info.bloom_fields,
+                index_location,
+                block_meta.bloom_filter_index_size,
+                &merge_into_source_build_bloom_info.bloom_indexes,
+            )
+            .await
+        });
+        Ok(try_prune_use_bloom_filter(
+            filters,
+            &ctx.get_merge_into_source_build_siphashkeys_with_id(id)
+                .unwrap()
+                .1
+                .read(),
+        ))
+    } else {
+        Ok(false)
+    }
 }
 
 pub(crate) fn update_bitmap_with_bloom_filter(

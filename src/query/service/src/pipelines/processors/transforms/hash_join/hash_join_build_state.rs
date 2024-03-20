@@ -21,7 +21,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_catalog::merge_into_join::MergeIntoJoinType;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
@@ -964,7 +963,7 @@ impl HashJoinBuildState {
                     return Ok(());
                 }
                 let build_key_column = Column::concat_columns(columns.into_iter())?;
-                // mabye there will be null values here, so we use nullable column, the null value will be treat as default
+                // maybe there will be null values here, so we use nullable column, the null value will be treat as default
                 // value for the sepcified type, like String -> "", int -> 0. so we need to remove the null hash values here.
                 let (hashes, bitmap_op) = BloomIndex::calculate_nullable_column_digest(
                     &self.func_ctx,
@@ -976,7 +975,7 @@ impl HashJoinBuildState {
                     let digests = if bitmap.unset_bits() == 0 {
                         hashes.to_vec()
                     } else {
-                        let new_hashes = Vec::with_capacity(bitmap.len());
+                        let mut new_hashes = Vec::with_capacity(bitmap.len());
                         assert_eq!(hashes.len(), bitmap.len());
                         for row_idx in 0..bitmap.len() {
                             if bitmap.get_bit(row_idx) {
@@ -986,16 +985,12 @@ impl HashJoinBuildState {
                         new_hashes.to_vec()
                     };
                     // id is probe key name
-                    runtime_filter.add_merge_into_source_build_siphashkeys((
-                        id.to_string(),
-                        Arc::new(digests),
-                    ));
+                    runtime_filter
+                        .add_merge_into_source_build_siphashkeys((id.to_string(), digests));
                 } else {
                     // id is probe key name
-                    runtime_filter.add_merge_into_source_build_siphashkeys((
-                        id.to_string(),
-                        Arc::new(hashes),
-                    ));
+                    runtime_filter
+                        .add_merge_into_source_build_siphashkeys((id.to_string(), hashes.to_vec()));
                 }
             }
         }

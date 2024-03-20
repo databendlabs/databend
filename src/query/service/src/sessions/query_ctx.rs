@@ -32,8 +32,6 @@ use std::time::UNIX_EPOCH;
 use chrono_tz::Tz;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -48,6 +46,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::MergeIntoSourceBuildSiphashkeys;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
@@ -1031,23 +1030,18 @@ impl TableContext for QueryContext {
 
     fn get_merge_into_source_build_siphashkeys_with_id(
         &self,
-        id: IndexType,
-    ) -> Vec<(String, Arc<Vec<u64>>)> {
+        id: usize,
+    ) -> Option<MergeIntoSourceBuildSiphashkeys> {
         let runtime_filters = self.shared.runtime_filters.read();
-        match runtime_filters.get(&id) {
-            Some(v) => v.get_merge_into_source_build_siphashkeys(),
-            None => vec![],
-        }
+        runtime_filters
+            .get(&id)
+            .map(|v| v.get_merge_into_source_build_siphashkeys())
     }
 
     fn get_merge_into_source_build_bloom_probe_keys(&self, id: usize) -> Vec<String> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => v
-                .get_merge_into_source_build_siphashkeys()
-                .iter()
-                .map(|key| key.0)
-                .collect(),
+            Some(v) => v.get_merge_into_source_build_siphashkeys().0.clone(),
             None => vec![],
         }
     }

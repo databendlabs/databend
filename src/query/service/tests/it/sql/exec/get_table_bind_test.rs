@@ -18,8 +18,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -33,6 +31,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::MergeIntoSourceBuildSiphashkeys;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
@@ -832,16 +831,16 @@ impl TableContext for CtxDelegation {
 
     fn get_merge_into_source_build_siphashkeys_with_id(
         &self,
-        id: usize,
-    ) -> Vec<(String, Arc<Vec<u64>>)> {
+        _id: usize,
+    ) -> Option<MergeIntoSourceBuildSiphashkeys> {
         todo!()
     }
 
-    fn get_merge_into_source_build_bloom_probe_keys(&self, id: usize) -> Vec<String> {
+    fn get_merge_into_source_build_bloom_probe_keys(&self, _id: usize) -> Vec<String> {
         todo!()
     }
 
-    fn set_merge_into_source_build_segments(&self, segments: MergeIntoSourceBuildSegments) {
+    fn set_merge_into_source_build_segments(&self, _segments: MergeIntoSourceBuildSegments) {
         todo!()
     }
 

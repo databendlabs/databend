@@ -416,8 +416,8 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     {
         let merge_into_join = opt_ctx.table_ctx.get_merge_into_join();
         // this is the first time set, so it must be none, and we will set it in `interpreter_merge_into`
-        assert!(matches!(merge_into_join.catalog_info, None));
-        assert!(matches!(merge_into_join.table_info, None));
+        assert!(merge_into_join.catalog_info.is_none());
+        assert!(merge_into_join.table_info.is_none());
         assert!(merge_into_join.database_name.as_str() == "");
         opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
             // we will set catalog_info and table_info in `interpreter_merge_into`
@@ -573,7 +573,7 @@ fn try_to_change_as_broadcast_join(
     if let RelOperator::Exchange(Exchange::Merge) = merge_into_join_sexpr.plan.as_ref() {
         let right_exchange = merge_into_join_sexpr.child(0)?.child(1)?;
         if let RelOperator::Exchange(Exchange::Broadcast) = right_exchange.plan.as_ref() {
-            let mut join: Join = merge_into_join_sexpr.child(0)?.plan().clone().try_into()?;
+            let join: Join = merge_into_join_sexpr.child(0)?.plan().clone().try_into()?;
 
             let join_s_expr = merge_into_join_sexpr
                 .child(0)?

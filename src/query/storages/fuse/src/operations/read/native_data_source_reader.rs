@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use databend_common_catalog::merge_into_join;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::table_context::TableContext;
