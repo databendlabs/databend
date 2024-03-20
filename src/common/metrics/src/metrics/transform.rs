@@ -26,6 +26,9 @@ pub static AGGREGATE_PARTIAL_SPILL_CELL_COUNT: LazyLock<Counter> =
     LazyLock::new(|| register_counter("transform_aggregate_partial_spill_cell_count"));
 pub static AGGREGATE_PARTIAL_HASHTABLE_ALLOCATED_BYTES: LazyLock<Counter> =
     LazyLock::new(|| register_counter("transform_aggregate_partial_hashtable_allocated_bytes"));
+pub static AGGREGATE_PARTIAL_HASHTABLE_EXCHANGE_ROWS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("transform_aggregate_partial_hashtable_exchange_rows"));
+
 pub static SPILL_COUNT: LazyLock<Family<VecLabels, Counter>> =
     LazyLock::new(|| register_counter_family("transform_spill_count"));
 pub static SPILL_WRITE_COUNT: LazyLock<Family<VecLabels, Counter>> =
@@ -68,6 +71,10 @@ pub fn metrics_inc_aggregate_partial_spill_count() {
 
 pub fn metrics_inc_aggregate_partial_spill_cell_count(c: u64) {
     AGGREGATE_PARTIAL_SPILL_CELL_COUNT.inc_by(c);
+}
+
+pub fn metrics_inc_aggregate_partial_hashtable_exchange_rows(c: u64) {
+    AGGREGATE_PARTIAL_HASHTABLE_EXCHANGE_ROWS.inc_by(c);
 }
 
 pub fn metrics_inc_aggregate_partial_hashtable_allocated_bytes(c: u64) {

@@ -122,6 +122,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                 if ht.merge_result(&mut self.flush_state)? {
                     let cols = self.flush_state.take_group_columns();
                     rows += cols[0].len();
+                    blocks.push(DataBlock::new_from_columns(cols));
 
                     if rows >= self.params.limit.unwrap_or(usize::MAX) {
                         log::info!(
@@ -132,7 +133,6 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                         self.reach_limit = true;
                         break;
                     }
-                    blocks.push(DataBlock::new_from_columns(cols));
                 } else {
                     break;
                 }

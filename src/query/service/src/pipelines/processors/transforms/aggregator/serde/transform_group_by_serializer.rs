@@ -257,7 +257,7 @@ impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
                 let state = self.flush_state.as_mut().unwrap();
                 let block = p.payload.aggregate_flush(state).unwrap();
 
-                if state.flush_page >= p.payload.pages.len() {
+                if block.is_none() {
                     self.end_iter = true;
                 }
 
