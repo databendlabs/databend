@@ -3442,6 +3442,7 @@ ShowViews(
                 ),
                 name: "db",
                 quote: None,
+                is_hole: false,
             },
         ),
         full: true,
@@ -3465,6 +3466,7 @@ ShowViews(
                 ),
                 name: "ctl",
                 quote: None,
+                is_hole: false,
             },
         ),
         database: Some(
@@ -3474,6 +3476,7 @@ ShowViews(
                 ),
                 name: "db",
                 quote: None,
+                is_hole: false,
             },
         ),
         full: true,
