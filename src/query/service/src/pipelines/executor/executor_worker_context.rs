@@ -113,6 +113,13 @@ impl ExecutorWorkerContext {
                         executor.global_tasks_queue.clone(),
                     )
                 } else {
+                    let error = Err(Some(ErrorCode::Internal(
+                        "Async task should only be executed on queries executor",
+                    )));
+                    processor
+                        .graph
+                        .should_finish(error)
+                        .expect("executor cannot send error message");
                     Err(ErrorCode::Internal(
                         "Async task should only be executed on queries executor",
                     ))
@@ -120,7 +127,13 @@ impl ExecutorWorkerContext {
             }
             ExecutorTask::AsyncCompleted(task) => match task.res {
                 Ok(_) => Ok(Some((task.id, task.graph))),
-                Err(cause) => Err(cause),
+                Err(cause) => {
+                    let error = Err(Some(cause.clone()));
+                    task.graph
+                        .should_finish(error)
+                        .expect("executor cannot send error message");
+                    Err(cause)
+                }
             },
         }
     }
@@ -135,12 +148,22 @@ impl ExecutorWorkerContext {
 
         let instant = Instant::now();
 
-        proc.processor.process()?;
+        match proc.processor.process() {
+            Ok(_) => {
+                let nanos = instant.elapsed().as_nanos();
+                assume(nanos < 18446744073709551615_u128);
+                Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
+                Ok(Some((proc.processor.id(), proc.graph)))
+            }
+            Err(cause) => {
+                let error = Err(Some(cause.clone()));
+                proc.graph
+                    .should_finish(error)
+                    .expect("executor cannot send error message");
 
-        let nanos = instant.elapsed().as_nanos();
-        assume(nanos < 18446744073709551615_u128);
-        Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
-        Ok(Some((proc.processor.id(), proc.graph)))
+                return Err(cause);
+            }
+        }
     }
 
     pub fn execute_async_task(

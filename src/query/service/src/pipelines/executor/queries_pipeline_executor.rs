@@ -26,6 +26,7 @@ use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadJoinHandle;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use log::warn;
 use log::LevelFilter;
 use minitrace::full_name;
 use minitrace::prelude::*;
@@ -70,10 +71,6 @@ impl QueriesPipelineExecutor {
 
     #[minitrace::trace]
     pub fn execute(self: &Arc<Self>) -> Result<()> {
-        // self.init(self.graph.clone())?;
-        //
-        // self.start_time_limit_daemon()?;
-
         let mut thread_join_handles = self.execute_threads(self.threads_num);
 
         while let Some(join_handle) = thread_join_handles.pop() {
@@ -87,6 +84,10 @@ impl QueriesPipelineExecutor {
 
                     return Err(may_error);
                 }
+            }
+            if matches!(&thread_res, Err(error)) {
+                let may_error = thread_res.unwrap_err();
+                return Err(may_error);
             }
         }
 
@@ -210,19 +211,25 @@ impl QueriesPipelineExecutor {
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                if let Some((executed_pid, graph)) = context.execute_task(Some(self))? {
-                    // Not scheduled graph if pipeline is finished.
-                    if !self.global_tasks_queue.is_finished() && !graph.is_should_finish() {
-                        // We immediately schedule the processor again.
-                        let schedule_queue = graph.clone().schedule_queue(executed_pid)?;
-                        schedule_queue.schedule_with_condition(
-                            &self.global_tasks_queue,
-                            &mut context,
-                            self,
-                        );
+                match context.execute_task(Some(self)) {
+                    Ok(Some((executed_pid, graph))) => {
+                        // Not scheduled graph if pipeline is finished.
+                        if !self.global_tasks_queue.is_finished() && !graph.is_should_finish() {
+                            // We immediately schedule the processor again.
+                            let schedule_queue = graph.clone().schedule_queue(executed_pid)?;
+                            schedule_queue.schedule_with_condition(
+                                &self.global_tasks_queue,
+                                &mut context,
+                                self,
+                            );
+                        }
+                        if graph.is_all_nodes_finished() {
+                            graph.should_finish(Ok(()))?;
+                        }
                     }
-                    if graph.is_all_nodes_finished() {
-                        graph.should_finish(Ok(()))?;
+                    Ok(None) => {}
+                    Err(cause) => {
+                        warn!("Execute task error: {:?}", cause);
                     }
                 }
             }

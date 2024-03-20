@@ -756,7 +756,10 @@ impl RunningGraph {
     }
 
     /// Flag the graph should finish and no more tasks should be scheduled.
-    pub fn should_finish(&self, cause: Result<(), ErrorCode>) -> Result<()> {
+    pub fn should_finish(&self, cause: Result<(), Option<ErrorCode>>) -> Result<()> {
+        if self.0.should_finish.load(Ordering::SeqCst) {
+            return Ok(());
+        }
         self.0.should_finish.store(true, Ordering::SeqCst);
         if let Some(sender) = &self.0.sender {
             return match sender.blocking_send(Ok(())) {

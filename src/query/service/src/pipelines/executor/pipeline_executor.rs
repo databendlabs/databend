@@ -204,8 +204,11 @@ impl PipelineExecutor {
     pub fn finish(&self, cause: Option<ErrorCode>) {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.finish(cause),
-            PipelineExecutor::QueriesPipelineExecutor(executor) => {
-                unimplemented!()
+            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
+                query_wrapper
+                    .graph
+                    .should_finish(Err(cause))
+                    .expect("executor cannot send error message");
             }
         }
     }
