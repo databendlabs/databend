@@ -18,6 +18,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use dashmap::DashMap;
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -26,6 +28,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::merge_into_join::MergeIntoSourceBuildSegments;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
@@ -824,6 +827,21 @@ impl TableContext for CtxDelegation {
     }
 
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
+        todo!()
+    }
+
+    fn get_merge_into_source_build_siphashkeys_with_id(
+        &self,
+        id: usize,
+    ) -> Vec<(String, (Buffer<u64>, Option<Bitmap>))> {
+        todo!()
+    }
+
+    fn set_merge_into_source_build_segments(&self, segments: MergeIntoSourceBuildSegments) {
+        todo!()
+    }
+
+    fn get_merge_into_source_build_segments(&self) -> MergeIntoSourceBuildSegments {
         todo!()
     }
 }

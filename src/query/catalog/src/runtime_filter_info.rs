@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_expression::Expr;
@@ -22,7 +24,7 @@ pub struct RuntimeFilterInfo {
     inlist: Vec<Expr<String>>,
     min_max: Vec<Expr<String>>,
     bloom: Vec<(String, BinaryFuse16)>,
-    siphashes: Vec<(String, (Buffer<u64>, Option<Bitmap>))>,
+    siphashes: Vec<(String, Arc<Vec<u64>>)>,
 }
 
 impl RuntimeFilterInfo {
@@ -34,16 +36,11 @@ impl RuntimeFilterInfo {
         self.bloom.push(bloom);
     }
 
-    pub fn get_merge_into_source_build_siphashkeys(
-        &mut self,
-    ) -> Vec<(String, (Buffer<u64>, Option<Bitmap>))> {
+    pub fn get_merge_into_source_build_siphashkeys(&self) -> Vec<(String, Arc<Vec<u64>>)> {
         self.siphashes.clone()
     }
 
-    pub fn add_merge_into_source_build_siphashkeys(
-        &mut self,
-        digests: (String, (Buffer<u64>, Option<Bitmap>)),
-    ) {
+    pub fn add_merge_into_source_build_siphashkeys(&mut self, digests: (String, Arc<Vec<u64>>)) {
         self.siphashes.push(digests);
     }
 

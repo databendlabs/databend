@@ -57,6 +57,7 @@ use databend_common_hashtable::StringRawEntry;
 use databend_common_hashtable::STRING_EARLY_SIZE;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
+use databend_common_storages_fuse::operations::can_merge_into_target_build_bloom_filter;
 use databend_storages_common_index::BloomIndex;
 use ethnum::U256;
 use itertools::Itertools;
@@ -851,12 +852,14 @@ impl HashJoinBuildState {
             }
 
             // add BloomIndex hash keys for merge into source build.
-            self.build_merge_into_runtime_filter_siphashes(
-                build_chunks,
-                &mut runtime_filter,
-                build_key,
-                probe_key,
-            )?;
+            if can_merge_into_target_build_bloom_filter(self.ctx.clone(), *table_index)? {
+                self.build_merge_into_runtime_filter_siphashes(
+                    build_chunks,
+                    &mut runtime_filter,
+                    build_key,
+                    probe_key,
+                )?;
+            }
 
             if self.enable_bloom_runtime_filter {
                 self.bloom_runtime_filter(build_chunks, &mut runtime_filter, build_key, probe_key)?;
@@ -961,12 +964,39 @@ impl HashJoinBuildState {
                     return Ok(());
                 }
                 let build_key_column = Column::concat_columns(columns.into_iter())?;
-                let digests = BloomIndex::calculate_nullable_column_digest(
+                // mabye there will be null values here, so we use nullable column, the null value will be treat as default
+                // value for the sepcified type, like String -> "", int -> 0. so we need to remove the null hash values here.
+                let (hashes, bitmap_op) = BloomIndex::calculate_nullable_column_digest(
                     &self.func_ctx,
                     &build_key_column,
                     &build_key_column.data_type(),
                 )?;
-                runtime_filter.add_merge_into_source_build_siphashkeys((id.to_string(), digests));
+                if let Some(bitmap) = bitmap_op {
+                    // no null values
+                    let digests = if bitmap.unset_bits() == 0 {
+                        hashes.to_vec()
+                    } else {
+                        let new_hashes = Vec::with_capacity(bitmap.len());
+                        assert_eq!(hashes.len(), bitmap.len());
+                        for row_idx in 0..bitmap.len() {
+                            if bitmap.get_bit(row_idx) {
+                                new_hashes.push(hashes[row_idx])
+                            }
+                        }
+                        new_hashes.to_vec()
+                    };
+                    // id is probe key name
+                    runtime_filter.add_merge_into_source_build_siphashkeys((
+                        id.to_string(),
+                        Arc::new(digests),
+                    ));
+                } else {
+                    // id is probe key name
+                    runtime_filter.add_merge_into_source_build_siphashkeys((
+                        id.to_string(),
+                        Arc::new(hashes),
+                    ));
+                }
             }
         }
         Ok(())
