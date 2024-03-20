@@ -45,6 +45,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
@@ -308,6 +310,13 @@ impl Binder {
             VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
         s_expr = virtual_column_rewriter.rewrite(&s_expr).await?;
 
+        // check inverted index license
+        if !from_context.inverted_index_map.is_empty() {
+            let license_manager = get_license_manager();
+            license_manager
+                .manager
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+        }
         // add internal column binding into expr
         s_expr = from_context.add_internal_column_into_expr(s_expr);
 
