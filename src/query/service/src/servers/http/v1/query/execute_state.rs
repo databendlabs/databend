@@ -54,6 +54,7 @@ use crate::sessions::TableContext;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {
+    Starting,
     Running,
     Failed,
     Succeeded,
@@ -93,7 +94,8 @@ pub enum ExecuteState {
 impl ExecuteState {
     pub(crate) fn extract(&self) -> (ExecuteStateKind, Option<ErrorCode>) {
         match self {
-            Starting(_) | Running(_) => (ExecuteStateKind::Running, None),
+            Starting(_) => (ExecuteStateKind::Starting, None),
+            Running(_) => (ExecuteStateKind::Running, None),
             Stopped(v) => match &v.reason {
                 Ok(_) => (ExecuteStateKind::Succeeded, None),
                 Err(e) => (ExecuteStateKind::Failed, Some(e.clone())),

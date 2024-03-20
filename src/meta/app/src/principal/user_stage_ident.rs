@@ -15,7 +15,9 @@
 use crate::tenant_key::TIdent;
 
 /// Define the meta-service key for a stage.
-pub type StageIdent = TIdent<kvapi_impl::Resource>;
+pub type StageIdent = TIdent<Resource>;
+
+pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
 
