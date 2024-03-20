@@ -262,9 +262,9 @@ impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
                 }
 
                 match block {
-                    Some(block) => Some(Ok(block.add_meta(Some(
+                    Some(block) => Some(block.add_meta(Some(
                         AggregateSerdeMeta::create_agg_payload(p.bucket, p.max_partition_count),
-                    ))?)),
+                    ))),
                     None => None,
                 }
             }
