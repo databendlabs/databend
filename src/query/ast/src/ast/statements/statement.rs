@@ -154,6 +154,8 @@ pub enum Statement {
     CreateView(CreateViewStmt),
     AlterView(AlterViewStmt),
     DropView(DropViewStmt),
+    ShowViews(ShowViewsStmt),
+    DescribeView(DescribeViewStmt),
 
     // Streams
     CreateStream(CreateStreamStmt),
@@ -549,6 +551,8 @@ impl Display for Statement {
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowViews(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeView(stmt) => write!(f, "{stmt}")?,
             Statement::CreateStream(stmt) => write!(f, "{stmt}")?,
             Statement::DropStream(stmt) => write!(f, "{stmt}")?,
             Statement::ShowStreams(stmt) => write!(f, "{stmt}")?,
