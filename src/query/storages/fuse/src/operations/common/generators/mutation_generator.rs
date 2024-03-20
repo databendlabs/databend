@@ -33,13 +33,15 @@ use crate::statistics::reducers::deduct_statistics_mut;
 pub struct MutationGenerator {
     base_snapshot: Arc<TableSnapshot>,
     conflict_resolve_ctx: ConflictResolveContext,
+    replace_snapshots: bool,
 }
 
 impl MutationGenerator {
-    pub fn new(base_snapshot: Arc<TableSnapshot>) -> Self {
+    pub fn new(base_snapshot: Arc<TableSnapshot>, replace_snapshots: bool) -> Self {
         MutationGenerator {
             base_snapshot,
             conflict_resolve_ctx: ConflictResolveContext::None,
+            replace_snapshots,
         }
     }
 }
@@ -76,7 +78,11 @@ impl SnapshotGenerator for MutationGenerator {
                     info!("resolvable conflicts detected");
                     metrics_inc_commit_mutation_modified_segment_exists_in_latest();
                     let new_segments = ConflictResolveContext::merge_segments(
-                        previous.segments.clone(),
+                        if self.replace_snapshots {
+                            vec![]
+                        } else {
+                            previous.segments.clone()
+                        },
                         ctx.appended_segments.clone(),
                         replaced,
                         removed,

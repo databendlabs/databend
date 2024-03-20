@@ -12,26 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::optimizer::SExpr;
-use crate::plans::ScalarExpr;
-use crate::ColumnSet;
-use crate::IndexType;
-use crate::MetadataRef;
+mod transform_mutation_subquery;
 
-#[derive(Clone, Debug)]
-pub struct SubqueryDesc {
-    pub input_expr: SExpr,
-    pub outer_columns: ColumnSet,
-    pub predicate_columns: ColumnSet,
-    pub index: IndexType,
-}
-
-#[derive(Clone, Debug)]
-pub struct DeletePlan {
-    pub catalog_name: String,
-    pub database_name: String,
-    pub table_name: String,
-    pub metadata: MetadataRef,
-    pub selection: Option<ScalarExpr>,
-    pub subquery_desc: Vec<SubqueryDesc>,
-}
+pub use transform_mutation_subquery::SubqueryMutation;
+pub use transform_mutation_subquery::TransformMutationSubquery;
