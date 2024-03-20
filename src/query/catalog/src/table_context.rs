@@ -29,6 +29,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -281,4 +282,7 @@ pub trait TableContext: Send + Sync {
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
     fn txn_mgr(&self) -> TxnManagerRef;
+
+    fn get_read_block_thresholds(&self) -> BlockThresholds;
+    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
 }

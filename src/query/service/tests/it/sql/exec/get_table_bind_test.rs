@@ -40,6 +40,7 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -815,6 +816,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
+        todo!()
+    }
+
+    fn get_read_block_thresholds(&self) -> BlockThresholds {
+        todo!()
+    }
+
+    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
         todo!()
     }
 }

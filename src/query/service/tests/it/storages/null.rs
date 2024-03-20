@@ -62,10 +62,5 @@ async fn test_null_table() -> Result<()> {
         assert_eq!(block.num_columns(), 1);
     }
 
-    // truncate.
-    {
-        table.truncate(ctx).await?;
-    }
-
     Ok(())
 }

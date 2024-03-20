@@ -255,8 +255,8 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        let _ = ctx;
+    async fn truncate(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+        let (_, _) = (ctx, pipeline);
         Ok(())
     }
 
@@ -316,10 +316,6 @@ pub trait Table: Sync + Send {
             min_rows_per_block: DEFAULT_BLOCK_MIN_ROWS,
             max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE,
         }
-    }
-
-    fn set_block_thresholds(&self, _thresholds: BlockThresholds) {
-        unimplemented!()
     }
 
     #[async_backtrace::framed]

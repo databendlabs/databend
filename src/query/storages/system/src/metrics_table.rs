@@ -32,6 +32,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_metrics::reset_global_prometheus_registry;
 use databend_common_metrics::MetricSample;
 use databend_common_metrics::MetricValue;
+use databend_common_pipeline_core::Pipeline;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -81,7 +82,7 @@ impl SyncSystemTable for MetricsTable {
         ]))
     }
 
-    fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
+    fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
         reset_global_prometheus_registry();
         Ok(())
     }

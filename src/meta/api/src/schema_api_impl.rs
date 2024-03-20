@@ -58,6 +58,7 @@ use databend_common_meta_app::app_error::WrongShare;
 use databend_common_meta_app::app_error::WrongShareObject;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdListKey;
+use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::CatalogId;
 use databend_common_meta_app::schema::CatalogIdToName;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -243,7 +244,6 @@ use crate::util::list_tables_from_share_db;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
 use crate::util::remove_table_from_share;
-use crate::IdGenerator;
 use crate::SchemaApi;
 use crate::DEFAULT_MGET_SIZE;
 
