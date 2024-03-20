@@ -600,7 +600,7 @@ impl Table for HiveTable {
     }
 
     #[async_backtrace::framed]
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "truncate for table {} is not implemented",
             self.name()
