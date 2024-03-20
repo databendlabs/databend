@@ -22,6 +22,7 @@ use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::PayloadFlushState;
 use databend_common_functions::aggregates::StateAddr;
 use databend_common_hashtable::HashtableEntryRefLike;
 use databend_common_hashtable::HashtableLike;
@@ -209,6 +210,7 @@ pub struct SerializeAggregateStream<Method: HashMethodBounds> {
     pub payload: Pin<Box<SerializePayload<Method, usize>>>,
     // old hashtable' iter
     iter: Option<<Method::HashTable<usize> as HashtableLike>::Iterator<'static>>,
+    flush_state: Option<PayloadFlushState>,
     end_iter: bool,
 }
 
@@ -231,10 +233,18 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
                 None
             };
 
+            let flush_state =
+                if let SerializePayload::AggregatePayload(_) = payload.as_ref().get_ref() {
+                    Some(PayloadFlushState::default())
+                } else {
+                    None
+                };
+
             SerializeAggregateStream::<Method> {
                 iter,
                 payload,
                 end_iter: false,
+                flush_state,
                 method: method.clone(),
                 params: params.clone(),
             }
@@ -299,13 +309,19 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
                 self.finish(state_builders, group_key_builder)
             }
             SerializePayload::AggregatePayload(p) => {
-                let data_block = p.payload.aggregate_flush_all()?;
+                let state = self.flush_state.as_mut().unwrap();
+                let block = p.payload.aggregate_flush(state)?;
 
-                self.end_iter = true;
+                if state.flush_page >= p.payload.pages.len() {
+                    self.end_iter = true;
+                }
 
-                Ok(Some(data_block.add_meta(Some(
-                    AggregateSerdeMeta::create_agg_payload(p.bucket, p.max_partition_count),
-                ))?))
+                match block {
+                    Some(block) => Ok(Some(block.add_meta(Some(
+                        AggregateSerdeMeta::create_agg_payload(p.bucket, p.max_partition_count),
+                    ))?)),
+                    None => Ok(None),
+                }
             }
         }
     }

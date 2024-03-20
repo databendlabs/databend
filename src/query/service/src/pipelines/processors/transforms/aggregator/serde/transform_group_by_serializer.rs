@@ -20,6 +20,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::PayloadFlushState;
 use databend_common_hashtable::HashtableEntryRefLike;
 use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::Event;
@@ -178,6 +179,7 @@ pub struct SerializeGroupByStream<Method: HashMethodBounds> {
     pub payload: Pin<Box<SerializePayload<Method, ()>>>,
     // old hashtable' iter
     iter: Option<<Method::HashTable<()> as HashtableLike>::Iterator<'static>>,
+    flush_state: Option<PayloadFlushState>,
     end_iter: bool,
 }
 
@@ -196,9 +198,17 @@ impl<Method: HashMethodBounds> SerializeGroupByStream<Method> {
                 None
             };
 
+            let flush_state =
+                if let SerializePayload::AggregatePayload(_) = payload.as_ref().get_ref() {
+                    Some(PayloadFlushState::default())
+                } else {
+                    None
+                };
+
             SerializeGroupByStream::<Method> {
                 iter,
                 payload,
+                flush_state,
                 method: method.clone(),
                 end_iter: false,
             }
@@ -244,16 +254,19 @@ impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
                 Some(data_block.add_meta(Some(AggregateSerdeMeta::create(bucket))))
             }
             SerializePayload::AggregatePayload(p) => {
-                let data_block = p.payload.group_by_flush_all().ok()?;
+                let state = self.flush_state.as_mut().unwrap();
+                let block = p.payload.aggregate_flush(state).unwrap();
 
-                self.end_iter = true;
+                if state.flush_page >= p.payload.pages.len() {
+                    self.end_iter = true;
+                }
 
-                Some(
-                    data_block.add_meta(Some(AggregateSerdeMeta::create_agg_payload(
-                        p.bucket,
-                        p.max_partition_count,
-                    ))),
-                )
+                match block {
+                    Some(block) => Some(Ok(block.add_meta(Some(
+                        AggregateSerdeMeta::create_agg_payload(p.bucket, p.max_partition_count),
+                    ))?)),
+                    None => None,
+                }
             }
         }
     }
