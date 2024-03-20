@@ -16,9 +16,7 @@ use std::collections::VecDeque;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Instant;
 
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
@@ -26,22 +24,12 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadJoinHandle;
-use databend_common_base::runtime::TrySpawn;
-use databend_common_base::GLOBAL_TASK;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::LockGuard;
-use databend_common_pipeline_core::Pipeline;
-use futures::future::select;
-use futures_util::future::Either;
-use log::info;
-use log::warn;
 use log::LevelFilter;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use parking_lot::Mutex;
-use petgraph::matrix_graph::Zero;
-use tokio::time;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::ExecutorTask;
@@ -50,11 +38,6 @@ use crate::pipelines::executor::QueriesExecutorTasksQueue;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
-
-pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
-
-pub type FinishedCallback =
-    Box<dyn FnOnce(&Result<Vec<Arc<Profile>>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
 pub struct QueriesPipelineExecutor {
     threads_num: usize,
@@ -68,9 +51,7 @@ pub struct QueriesPipelineExecutor {
 }
 
 impl QueriesPipelineExecutor {
-    pub fn create(
-        settings: ExecutorSettings
-    ) -> Result<Arc<QueriesPipelineExecutor>> {
+    pub fn create(settings: ExecutorSettings) -> Result<Arc<QueriesPipelineExecutor>> {
         let threads_num = settings.max_threads as usize;
 
         let workers_condvar = WorkersCondvar::create(threads_num);
@@ -86,7 +67,6 @@ impl QueriesPipelineExecutor {
             epoch: AtomicU32::new(0),
         }))
     }
-
 
     #[minitrace::trace]
     pub fn execute(self: &Arc<Self>) -> Result<()> {
@@ -108,15 +88,13 @@ impl QueriesPipelineExecutor {
                     return Err(may_error);
                 }
             }
-
         }
-
 
         Ok(())
     }
 
     pub fn send_graph(self: &Arc<Self>, graph: Arc<RunningGraph>) -> Result<()> {
-        unsafe{
+        unsafe {
             let mut init_schedule_queue = graph.init_schedule_queue(self.threads_num)?;
 
             let mut wakeup_worker_id = 0;
@@ -222,10 +200,7 @@ impl QueriesPipelineExecutor {
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn execute_single_thread(self: &Arc<Self>, thread_num: usize) -> Result<()> {
         let workers_condvar = self.workers_condvar.clone();
-        let mut context = ExecutorWorkerContext::create(
-            thread_num,
-            workers_condvar,
-        );
+        let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
 
         while !self.global_tasks_queue.is_finished() {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.
@@ -246,8 +221,8 @@ impl QueriesPipelineExecutor {
                             self,
                         );
                     }
-                    if graph.is_all_nodes_finished(){
-                        graph.should_finish(Ok(()));
+                    if graph.is_all_nodes_finished() {
+                        graph.should_finish(Ok(()))?;
                     }
                 }
             }
@@ -255,7 +230,6 @@ impl QueriesPipelineExecutor {
 
         Ok(())
     }
-
 
     pub fn finish(&self, cause: Option<ErrorCode>) {
         if let Some(cause) = cause {

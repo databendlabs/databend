@@ -27,8 +27,6 @@ use minitrace::prelude::*;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::executor::QueriesPipelineExecutor;
-use crate::pipelines::executor::QueryPipelineExecutor;
 
 pub struct PipelineCompleteExecutor {
     executor: Arc<PipelineExecutor>,

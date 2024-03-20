@@ -23,7 +23,7 @@ pub struct ExecutorSettings {
     pub enable_new_executor: bool,
     pub query_id: Arc<String>,
     pub max_execute_time_in_seconds: Duration,
-    pub max_threads: u64
+    pub max_threads: u64,
 }
 
 impl ExecutorSettings {
@@ -35,7 +35,7 @@ impl ExecutorSettings {
             enable_new_executor: true,
             query_id: Arc::new(query_id),
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
-            max_threads
+            max_threads,
         })
     }
 }

@@ -73,10 +73,7 @@ pub struct ExecutorWorkerContext {
 }
 
 impl ExecutorWorkerContext {
-    pub fn create(
-        worker_id: usize,
-        workers_condvar: Arc<WorkersCondvar>,
-    ) -> Self {
+    pub fn create(worker_id: usize, workers_condvar: Arc<WorkersCondvar>) -> Self {
         ExecutorWorkerContext {
             worker_id,
             workers_condvar,

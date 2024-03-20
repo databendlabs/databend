@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::tokio::sync::mpsc::channel;
+use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_exception::ErrorCode;
@@ -36,7 +36,7 @@ pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 pub type FinishedCallback =
     Box<dyn FnOnce(&Result<Vec<Arc<Profile>>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
-struct QueryWrapper {
+pub struct QueryWrapper {
     // TODO: will remove it after refactoring queries pipeline executor
     executor: Arc<QueriesPipelineExecutor>,
     graph: Arc<RunningGraph>,
@@ -45,7 +45,7 @@ struct QueryWrapper {
     on_finished_callback: Mutex<Option<FinishedCallback>>,
     #[allow(unused)]
     lock_guards: Vec<LockGuard>,
-    receiver: Arc<Mutex<Receiver<Result<(),ErrorCode>>>>,
+    receiver: Mutex<Receiver<Result<(), ErrorCode>>>,
 }
 
 pub enum PipelineExecutor {
@@ -62,7 +62,7 @@ impl PipelineExecutor {
         } else {
             let on_init_callback = Some(pipeline.take_on_init());
             let on_finished_callback = Some(pipeline.take_on_finished());
-            let (tx, rx) = mpsc::channel();
+            let (tx, rx) = channel(1);
 
             let lock_guards = pipeline.take_lock_guards();
 
@@ -75,7 +75,7 @@ impl PipelineExecutor {
                 on_init_callback: Mutex::new(on_init_callback),
                 on_finished_callback: Mutex::new(on_finished_callback),
                 lock_guards,
-                receiver: Arc::new(Mutex::new(rx)),
+                receiver: Mutex::new(rx),
             }))
         }
     }
@@ -117,7 +117,7 @@ impl PipelineExecutor {
                 })
             };
 
-            let (tx, rx) = mpsc::channel();
+            let (tx, rx) = channel(1);
 
             let lock_guards = pipelines
                 .iter_mut()
@@ -134,32 +134,30 @@ impl PipelineExecutor {
                 on_init_callback: Mutex::new(on_init_callback),
                 on_finished_callback: Mutex::new(on_finished_callback),
                 lock_guards,
-                receiver: Arc::new(Mutex::new(rx)),
+                receiver: Mutex::new(rx),
             }))
         }
     }
 
     fn init(on_init_callback: &Mutex<Option<InitCallback>>, query_id: &Arc<String>) -> Result<()> {
-        unsafe {
-            // TODO: the on init callback cannot be killed.
-            {
-                let instant = Instant::now();
-                let mut guard = on_init_callback.lock();
-                if let Some(callback) = guard.take() {
-                    drop(guard);
-                    if let Err(cause) = Result::flatten(catch_unwind(callback)) {
-                        return Err(cause.add_message_back("(while in query pipeline init)"));
-                    }
+        // TODO: the on init callback cannot be killed.
+        {
+            let instant = Instant::now();
+            let mut guard = on_init_callback.lock();
+            if let Some(callback) = guard.take() {
+                drop(guard);
+                if let Err(cause) = Result::flatten(catch_unwind(callback)) {
+                    return Err(cause.add_message_back("(while in query pipeline init)"));
                 }
-
-                info!(
-                    "Init pipeline successfully, query_id: {:?}, elapsed: {:?}",
-                    query_id,
-                    instant.elapsed()
-                );
             }
-            Ok(())
+
+            info!(
+                "Init pipeline successfully, query_id: {:?}, elapsed: {:?}",
+                query_id,
+                instant.elapsed()
+            );
         }
+        Ok(())
     }
 
     pub fn execute(&self) -> Result<()> {
@@ -174,29 +172,30 @@ impl PipelineExecutor {
                     .executor
                     .send_graph(query_wrapper.graph.clone())?;
 
-                let receiver = query_wrapper.receiver.lock();
+                let mut receiver = query_wrapper.receiver.lock();
 
-                match receiver.recv(){
-                    Ok(result) =>{
-                       match result {
-                           Ok(_) => {
-                               let guard = query_wrapper.on_finished_callback.lock().take();
-                               if let Some(on_finished_callback) = guard {
-                                   catch_unwind(move || on_finished_callback(&Ok(query_wrapper.graph.get_proc_profiles())))??;
-                               }
-                           }
-                           Err(cause) => {
-                               let guard = query_wrapper.on_finished_callback.lock().take();
-                               if let Some(on_finished_callback) = guard {
-                                   catch_unwind(move || on_finished_callback(&Err(cause)))??;
-                               }
-                           }
-                       }
-                    },
-                    Err(_) => {
-                        return Err(ErrorCode::Internal("Failed to receive result from queries executor."))
+                match receiver.blocking_recv() {
+                    Some(Ok(_)) => {
+                        let guard = query_wrapper.on_finished_callback.lock().take();
+                        if let Some(on_finished_callback) = guard {
+                            catch_unwind(move || {
+                                on_finished_callback(&Ok(query_wrapper.graph.get_proc_profiles()))
+                            })??;
+                        }
                     }
-                };
+                    Some(Err(cause)) => {
+                        let guard = query_wrapper.on_finished_callback.lock().take();
+                        if let Some(on_finished_callback) = guard {
+                            catch_unwind(move || on_finished_callback(&Err(cause)))??;
+                        }
+                    }
+                    _ => {
+                        return Err(ErrorCode::Internal(
+                            "Pipeline executor receiver is closed".to_string(),
+                        ));
+                    }
+                }
+
                 Ok(())
             }
         }
@@ -205,7 +204,9 @@ impl PipelineExecutor {
     pub fn finish(&self, cause: Option<ErrorCode>) {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.finish(cause),
-            PipelineExecutor::QueriesPipelineExecutor(executor) => {unimplemented!()},
+            PipelineExecutor::QueriesPipelineExecutor(executor) => {
+                unimplemented!()
+            }
         }
     }
 
@@ -219,14 +220,18 @@ impl PipelineExecutor {
     pub fn format_graph_nodes(&self) -> String {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.format_graph_nodes(),
-            PipelineExecutor::QueriesPipelineExecutor(executor) => { unimplemented!() },
+            PipelineExecutor::QueriesPipelineExecutor(executor) => {
+                unimplemented!()
+            }
         }
     }
 
     pub fn get_profiles(&self) -> Vec<Arc<Profile>> {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.get_profiles(),
-            PipelineExecutor::QueriesPipelineExecutor(executor) => { unimplemented!() },
+            PipelineExecutor::QueriesPipelineExecutor(executor) => {
+                unimplemented!()
+            }
         }
     }
 }
