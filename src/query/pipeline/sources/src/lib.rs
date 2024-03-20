@@ -28,12 +28,15 @@ mod sync_source;
 mod sync_source_receiver;
 
 pub mod input_formats;
+mod prefetch_async_source;
 
 pub use async_source::AsyncSource;
 pub use async_source::AsyncSourcer;
 pub use blocks_source::BlocksSource;
 pub use empty_source::EmptySource;
 pub use one_block_source::OneBlockSource;
+pub use prefetch_async_source::PrefetchAsyncSource;
+pub use prefetch_async_source::PrefetchAsyncSourcer;
 pub use stream_source::AsyncStreamSource;
 pub use stream_source::StreamSource;
 pub use stream_source::StreamSourceNoSkipEmpty;

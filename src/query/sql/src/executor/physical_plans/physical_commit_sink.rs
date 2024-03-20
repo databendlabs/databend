@@ -23,7 +23,7 @@ use crate::executor::physical_plans::common::MutationKind;
 use crate::executor::PhysicalPlan;
 
 /// The commit sink is used to commit the data to the table.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CommitSink {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,

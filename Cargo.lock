@@ -4122,7 +4122,6 @@ dependencies = [
  "databend-common-storages-parquet",
  "log",
  "opendal",
- "parking_lot 0.12.1",
  "serde",
  "typetag",
  "uuid",
