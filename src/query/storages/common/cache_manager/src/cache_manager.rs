@@ -152,8 +152,15 @@ impl CacheManager {
                 config.inverted_index_info_count,
                 "inverted_index_file_info_data",
             );
+
+            // setup in-memory inverted index filter cache
+            let inverted_index_filter_size = if config.inverted_index_filter_memory_ratio != 0 {
+                max_server_memory_usage * config.inverted_index_filter_memory_ratio / 100
+            } else {
+                config.inverted_index_filter_size
+            };
             let inverted_index_filter_cache = Self::new_in_memory_cache(
-                config.inverted_index_filter_size,
+                inverted_index_filter_size,
                 InvertedIndexFilterMeter {},
                 "inverted_index_filter",
             );
