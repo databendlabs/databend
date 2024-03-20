@@ -161,7 +161,7 @@ impl SyncSource for ReadNativeDataSource<true> {
                     &filters,
                     &self.func_ctx,
                     self.merge_into_source_build_bloom_info
-                        .can_do_merge_into_rumtime_filter_bloom,
+                        .can_do_merge_into_runtime_filter_bloom,
                     self.partitions.ctx.clone(),
                     self.table_index,
                     &mut self.merge_into_source_build_bloom_info,
@@ -273,7 +273,7 @@ impl Processor for ReadNativeDataSource<false> {
                     &filters,
                     &self.func_ctx,
                     self.merge_into_source_build_bloom_info
-                        .can_do_merge_into_rumtime_filter_bloom,
+                        .can_do_merge_into_runtime_filter_bloom,
                     self.partitions.ctx.clone(),
                     self.table_index,
                     &mut self.merge_into_source_build_bloom_info,

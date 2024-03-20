@@ -420,7 +420,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         assert!(matches!(merge_into_join.table_info, None));
         assert!(merge_into_join.database_name.as_str() == "");
         opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
-            // we will set catalog_info and table_info in `intepreter_merge_into`
+            // we will set catalog_info and table_info in `interpreter_merge_into`
             catalog_info: None,
             table_info: None,
             target_tbl_idx: plan.target_table_idx,

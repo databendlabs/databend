@@ -35,7 +35,7 @@ use crate::operations::SegmentIndex;
 use crate::FusePartInfo;
 
 pub struct MergeIntoSourceBuildBloomInfo {
-    pub can_do_merge_into_rumtime_filter_bloom: bool,
+    pub can_do_merge_into_runtime_filter_bloom: bool,
     pub segment_infos: HashMap<SegmentIndex, SegmentInfo>,
     pub table_info: Option<TableInfo>,
     pub catalog_info: Option<CatalogInfo>,
@@ -146,7 +146,7 @@ pub fn build_merge_into_source_build_bloom_info(
     };
 
     Ok(MergeIntoSourceBuildBloomInfo {
-        can_do_merge_into_rumtime_filter_bloom: enabled_bloom_filter,
+        can_do_merge_into_runtime_filter_bloom: enabled_bloom_filter,
         segment_infos: Default::default(),
         catalog_info: merge_into_join.catalog_info.clone(),
         table_info: merge_into_join.table_info.clone(),
