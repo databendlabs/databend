@@ -933,7 +933,7 @@ impl HashJoinBuildState {
     // gives `t2` as source build side, we can build source join keys `siphashes`, that's because we use
     // siphash to build target table's bloom index block.
     // in this way, we can avoid current `runtime_filter()` func's performance cost, especially for large
-    // target table case, the `runtime_filter()`'s cost is even higer than disable `runtime_filter()`.
+    // target table case, the `runtime_filter()`'s cost is even higher than disable `runtime_filter()`.
     //      However, for `build_runtime_filter_siphashes()` usages, we currently just used for merge into,
     // we doesn't support join query, and it's only for `source build` cases. In fact, source build is the
     // main case in most time.
@@ -964,7 +964,7 @@ impl HashJoinBuildState {
                 }
                 let build_key_column = Column::concat_columns(columns.into_iter())?;
                 // maybe there will be null values here, so we use nullable column, the null value will be treat as default
-                // value for the sepcified type, like String -> "", int -> 0. so we need to remove the null hash values here.
+                // value for the specified type, like String -> "", int -> 0. so we need to remove the null hash values here.
                 let (hashes, bitmap_op) = BloomIndex::calculate_nullable_column_digest(
                     &self.func_ctx,
                     &build_key_column,
