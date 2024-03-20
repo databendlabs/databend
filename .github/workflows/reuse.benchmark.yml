@@ -104,6 +104,7 @@ jobs:
           - { dataset: hits, size: Large }
           - { dataset: tpch, size: Small }
           - { dataset: tpch, size: Large }
+          - { dataset: load, size: Small }
       fail-fast: true
       max-parallel: 1
     steps:
@@ -187,6 +188,8 @@ jobs:
         dataset:
           - "tpch"
           - "hits"
+          - "load"
+          - "internal"
     steps:
       - uses: actions/checkout@v4
       - name: Install Dependencies
@@ -196,7 +199,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: benchmark/clickbench/results
-          pattern: benchmark-*
+          pattern: benchmark-${{ matrix.dataset }}-*
           merge-multiple: true
       - name: Generate report and upload to R2
         working-directory: benchmark/clickbench
