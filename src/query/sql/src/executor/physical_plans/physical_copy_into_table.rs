@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -46,7 +45,7 @@ pub struct CopyIntoTable {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum CopyIntoTableSource {
     Query(Box<PhysicalPlan>),
-    Stage(Box<DataSourcePlan>),
+    Stage(Box<PhysicalPlan>),
 }
 
 impl CopyIntoTable {

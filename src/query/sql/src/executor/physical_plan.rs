@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -29,6 +30,7 @@ use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
+use crate::executor::physical_plans::CopyIntoTableSource;
 use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DeleteSource;
 use crate::executor::physical_plans::DistributedInsertSelect;
@@ -60,7 +62,7 @@ use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, EnumAsInner)]
 pub enum PhysicalPlan {
     /// Query
     TableScan(TableScan),
@@ -244,10 +246,15 @@ impl PhysicalPlan {
             PhysicalPlan::CopyIntoTable(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
+                match &mut plan.source {
+                    CopyIntoTableSource::Query(input) => input.adjust_plan_id(next_id),
+                    CopyIntoTableSource::Stage(input) => input.adjust_plan_id(next_id),
+                };
             }
             PhysicalPlan::CopyIntoLocation(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
             }
             PhysicalPlan::DeleteSource(plan) => {
                 plan.plan_id = *next_id;
@@ -401,7 +408,12 @@ impl PhysicalPlan {
 
     pub fn name(&self) -> String {
         match self {
-            PhysicalPlan::TableScan(_) => "TableScan".to_string(),
+            PhysicalPlan::TableScan(v) => match &v.source.source_info {
+                DataSourceInfo::TableSource(_) => "TableScan".to_string(),
+                DataSourceInfo::StageSource(_) => "StageScan".to_string(),
+                DataSourceInfo::ParquetSource(_) => "ParquetScan".to_string(),
+                DataSourceInfo::ResultScanSource(_) => "ResultScan".to_string(),
+            },
             PhysicalPlan::Filter(_) => "Filter".to_string(),
             PhysicalPlan::Project(_) => "Project".to_string(),
             PhysicalPlan::EvalScalar(_) => "EvalScalar".to_string(),
@@ -725,7 +737,7 @@ impl PhysicalPlan {
                         v.output_schema()?.num_fields(),
                         std::cmp::max(
                             v.output_schema()?.num_fields(),
-                            v.source.source_info.schema().num_fields()
+                            v.source.source_info.schema().num_fields(),
                         )
                     ),
                     v.name_mapping.keys().cloned().collect(),

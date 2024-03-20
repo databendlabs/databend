@@ -235,6 +235,10 @@ impl TransformHashJoinProbe {
         Ok(Event::Async)
     }
 
+    fn spill(&self) -> Result<Event> {
+        Ok(Event::Async)
+    }
+
     // Running
     // When spilling is enabled, the method contains two running paths
     // 1. Before spilling, it will pull data from input port and go to spill
@@ -391,7 +395,7 @@ impl Processor for TransformHashJoinProbe {
             HashJoinProbeStep::Running => self.run(),
             HashJoinProbeStep::Restore => self.restore(),
             HashJoinProbeStep::FinalScan => self.final_scan(),
-            HashJoinProbeStep::Spill => unreachable!("{:?}", self.step),
+            HashJoinProbeStep::Spill => self.spill(),
         }
     }
 

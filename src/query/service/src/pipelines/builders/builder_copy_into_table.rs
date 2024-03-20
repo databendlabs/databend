@@ -31,7 +31,6 @@ use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::plans::CopyIntoTableMode;
 use databend_common_storage::StageFileInfo;
-use databend_common_storages_stage::StageTable;
 use log::debug;
 use log::info;
 
@@ -51,10 +50,11 @@ impl PipelineBuilder {
                 self.build_pipeline(input)?;
                 input.output_schema()?
             }
-            CopyIntoTableSource::Stage(source) => {
-                let stage_table = StageTable::try_create(copy.stage_table_info.clone())?;
-                stage_table.set_block_thresholds(to_table.get_block_thresholds());
-                stage_table.read_data(self.ctx.clone(), source, &mut self.main_pipeline, false)?;
+            CopyIntoTableSource::Stage(input) => {
+                self.ctx
+                    .set_read_block_thresholds(to_table.get_block_thresholds());
+
+                self.build_pipeline(input)?;
                 copy.required_source_schema.clone()
             }
         };

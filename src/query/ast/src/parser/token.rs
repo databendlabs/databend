@@ -1111,6 +1111,8 @@ pub enum TokenKind {
     VERBOSE,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
+    #[token("VIEWS", ignore(ascii_case))]
+    VIEWS,
     #[token("VIRTUAL", ignore(ascii_case))]
     VIRTUAL,
     #[token("WHEN", ignore(ascii_case))]

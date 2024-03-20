@@ -426,16 +426,10 @@ impl PlanFragment {
 
         let mut data_sources = HashMap::new();
 
-        let mut collect_data_source = |plan: &PhysicalPlan| match plan {
-            PhysicalPlan::TableScan(scan) => {
+        let mut collect_data_source = |plan: &PhysicalPlan| {
+            if let PhysicalPlan::TableScan(scan) = plan {
                 data_sources.insert(scan.plan_id, *scan.source.clone());
             }
-            PhysicalPlan::CopyIntoTable(copy) => {
-                if let Some(stage) = copy.source.as_stage().cloned() {
-                    data_sources.insert(copy.plan_id, *stage);
-                }
-            }
-            _ => {}
         };
 
         PhysicalPlan::traverse(
@@ -481,12 +475,10 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
                     ..plan.clone()
                 })))
             }
-            CopyIntoTableSource::Stage(_) => {
-                let source = self.sources.remove(&plan.plan_id).ok_or_else(|| {
-                    ErrorCode::Internal("Cannot find data source for copy into plan")
-                })?;
+            CopyIntoTableSource::Stage(v) => {
+                let input = self.replace(v)?;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Stage(Box::new(source)),
+                    source: CopyIntoTableSource::Stage(Box::new(input)),
                     ..plan.clone()
                 })))
             }

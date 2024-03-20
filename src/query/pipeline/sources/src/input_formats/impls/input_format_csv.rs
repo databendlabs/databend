@@ -83,7 +83,7 @@ impl InputFormatCSV {
                                     column_type: field.data_type.to_string(),
                                     empty_field_as: empty_filed_as.to_string(),
                                     remedy: format!(
-                                        "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set `EMPTY_FIELD_AS = FIELD_DEFAULT`.",
+                                        "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT.",
                                         field.name()
                                     ),
                                 });
@@ -394,12 +394,16 @@ impl AligningStateTextBased for CsvReaderState {
         let size_in = buf_in.len();
         let mut file_status = FileStatus::default();
         let mut buf_out = vec![0u8; buf_in.len()];
-        while self.common.rows_to_skip > 0 {
+        while self.common.rows_to_skip > 0 && !buf_in.is_empty() {
             let (res, n_in) = self.read_record(buf_in, &mut buf_out, &mut file_status)?;
             buf_in = &buf_in[n_in..];
             if matches!(res, ReadRecordOutput::Record { .. }) {
                 self.common.rows_to_skip -= 1;
             }
+        }
+
+        if buf_in.is_empty() {
+            return Ok(vec![]);
         }
 
         let mut buf_out_pos = 0usize;
@@ -490,6 +494,7 @@ impl AligningStateTextBased for CsvReaderState {
             self.read_record(&in_tmp, &mut out_tmp, &mut file_status)?;
         } else {
             let last_batch_remain_len = self.out.len();
+            let rows = self.common.rows;
             let (out, _n_in) = self.read_record(&in_tmp, &mut out_tmp, &mut file_status)?;
             if let ReadRecordOutput::Record { num_fields, bytes } = out {
                 let data = mem::take(&mut self.out);
@@ -502,7 +507,7 @@ impl AligningStateTextBased for CsvReaderState {
                     split_info: self.split_info.clone(),
                     batch_id: self.common.batch_id,
                     start_offset_in_split: self.common.offset,
-                    start_row_in_split: self.common.rows,
+                    start_row_in_split: rows,
                     start_row_of_split: Some(0),
                 };
                 res.push(row_batch);
