@@ -756,7 +756,8 @@ impl RunningGraph {
     }
 
     /// Flag the graph should finish and no more tasks should be scheduled.
-    pub fn should_finish(&self, cause: Result<(), Option<ErrorCode>>) -> Result<()> {
+    pub fn should_finish(&self, _cause: Result<(), Option<ErrorCode>>) -> Result<()> {
+        // TODO: I will handle _cause
         if self.0.should_finish.load(Ordering::SeqCst) {
             return Ok(());
         }

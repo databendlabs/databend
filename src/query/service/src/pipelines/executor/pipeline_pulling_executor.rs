@@ -39,8 +39,6 @@ use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::executor::QueriesPipelineExecutor;
-use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::ProcessorPtr;
 use crate::pipelines::PipelineBuildResult;

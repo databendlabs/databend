@@ -161,7 +161,7 @@ impl ExecutorWorkerContext {
                     .should_finish(error)
                     .expect("executor cannot send error message");
 
-                return Err(cause);
+                Err(cause)
             }
         }
     }

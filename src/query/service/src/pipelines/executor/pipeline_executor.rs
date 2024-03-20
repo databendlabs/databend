@@ -223,7 +223,7 @@ impl PipelineExecutor {
     pub fn format_graph_nodes(&self) -> String {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.format_graph_nodes(),
-            PipelineExecutor::QueriesPipelineExecutor(executor) => {
+            PipelineExecutor::QueriesPipelineExecutor(_executor) => {
                 unimplemented!()
             }
         }
@@ -232,7 +232,7 @@ impl PipelineExecutor {
     pub fn get_profiles(&self) -> Vec<Arc<Profile>> {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.get_profiles(),
-            PipelineExecutor::QueriesPipelineExecutor(executor) => {
+            PipelineExecutor::QueriesPipelineExecutor(_executor) => {
                 unimplemented!()
             }
         }

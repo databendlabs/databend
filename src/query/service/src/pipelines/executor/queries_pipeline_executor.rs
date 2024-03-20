@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::drop_guard;
-use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
@@ -85,7 +84,7 @@ impl QueriesPipelineExecutor {
                     return Err(may_error);
                 }
             }
-            if matches!(&thread_res, Err(error)) {
+            if matches!(&thread_res, Err(_error)) {
                 let may_error = thread_res.unwrap_err();
                 return Err(may_error);
             }
