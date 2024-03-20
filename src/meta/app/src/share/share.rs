@@ -195,7 +195,7 @@ pub struct GrantShareObjectReq {
     pub privilege: ShareGrantObjectPrivilege,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReply {
     pub share_id: u64,
     pub spec_vec: Option<Vec<ShareSpec>>,
@@ -210,7 +210,7 @@ pub struct RevokeShareObjectReq {
     pub update_on: DateTime<Utc>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectReply {
     pub share_id: u64,
     pub spec_vec: Option<Vec<ShareSpec>>,
