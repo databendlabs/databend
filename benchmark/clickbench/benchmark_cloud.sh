@@ -73,9 +73,11 @@ done
 
 export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443/${BENCHMARK_DATABASE}?warehouse=${CLOUD_WAREHOUSE}"
 
-echo "Creating database..."
-echo "DROP DATABASE IF EXISTS ${BENCHMARK_DATABASE};" | bendsql --database default
-echo "CREATE DATABASE ${BENCHMARK_DATABASE};" | bendsql --database default
+if [[ "${BENCHMARK_DATASET}" == "load" ]]; then
+    echo "Creating database..."
+    echo "DROP DATABASE IF EXISTS ${BENCHMARK_DATABASE};" | bendsql --database default
+    echo "CREATE DATABASE ${BENCHMARK_DATABASE};" | bendsql --database default
+fi
 
 echo "Checking session settings..."
 bendsql --query="select * from system.settings where value != default;" -o table
@@ -105,7 +107,8 @@ function run_query() {
 
 QUERY_NUM=0
 for query in "${BENCHMARK_DATASET}"/queries/*.sql; do
-    echo -e "\n==>Running Q${QUERY_NUM}: ${query}"
+    echo
+    echo "==> Running Q${QUERY_NUM}: ${query}"
     cat "$query"
     yq -i ".result += [[]]" -o json result.json
     for i in $(seq 1 "$BENCHMARK_TRIES"); do
