@@ -31,7 +31,8 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
     let ident_to_string = |i| map_res(ident, |ident| Ok(ident.name))(i);
     let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
     let boolean_to_string = |i| map(literal_bool, |v| v.to_string())(i);
-    rule! (
+
+    rule!(
         #literal_string
         | #ident_to_string
         | #u64_to_string
@@ -47,7 +48,6 @@ pub fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String
             },
             |(k, _, v)| (k.to_string().to_lowercase(), v),
         );
-
         let bool_options = map(
             rule! {
                 ENABLE_VIRTUAL_HOST_STYLE ~ #match_text(sep) ~ #literal_bool
@@ -55,7 +55,10 @@ pub fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String
             |(k, _, v)| (k.text().to_string().to_lowercase(), v.to_string()),
         );
 
-        alt((string_options, bool_options))(i)
+        rule!(
+            #string_options
+            | #bool_options
+        )(i)
     }
 }
 

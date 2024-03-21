@@ -196,6 +196,7 @@ impl<'a> Binder {
                         database: None,
                         table: None,
                         column: AstColumnID::Name(Identifier::from_name(
+                            None,
                             dest_field.name().to_string(),
                         )),
                     },
@@ -403,7 +404,7 @@ impl<'a> Binder {
         if disable_variant_check {
             let hints = Hint {
                 hints_list: vec![HintItem {
-                    name: Identifier::from_name("disable_variant_check"),
+                    name: Identifier::from_name(None, "disable_variant_check"),
                     expr: Expr::Literal {
                         span: None,
                         lit: Literal::UInt64(1),
