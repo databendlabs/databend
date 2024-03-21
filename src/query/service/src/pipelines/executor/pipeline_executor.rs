@@ -205,10 +205,22 @@ impl PipelineExecutor {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.finish(cause),
             PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
-                query_wrapper
-                    .graph
-                    .should_finish(Err(cause))
-                    .expect("executor cannot send error message");
+               match cause{
+                   Some(may_error)=>{
+                       query_wrapper
+                           .graph
+                           .should_finish(Err(may_error))
+                           .expect("executor cannot send error message");
+                   },
+                   None => {
+                       query_wrapper
+                           .graph
+                           .should_finish(Ok(()))
+                           .expect("executor cannot send error message");
+
+                   }
+               }
+
             }
         }
     }
@@ -216,15 +228,15 @@ impl PipelineExecutor {
     pub fn is_finished(&self) -> bool {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.is_finished(),
-            PipelineExecutor::QueriesPipelineExecutor(executor) => executor.executor.is_finished(),
+            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => query_wrapper.graph.is_should_finish(),
         }
     }
 
     pub fn format_graph_nodes(&self) -> String {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.format_graph_nodes(),
-            PipelineExecutor::QueriesPipelineExecutor(_executor) => {
-                unimplemented!()
+            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
+                query_wrapper.graph.format_graph_nodes()
             }
         }
     }
@@ -232,8 +244,8 @@ impl PipelineExecutor {
     pub fn get_profiles(&self) -> Vec<Arc<Profile>> {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.get_profiles(),
-            PipelineExecutor::QueriesPipelineExecutor(_executor) => {
-                unimplemented!()
+            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
+                query_wrapper.graph.get_proc_profiles()
             }
         }
     }

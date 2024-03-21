@@ -113,9 +113,9 @@ impl ExecutorWorkerContext {
                         executor.global_tasks_queue.clone(),
                     )
                 } else {
-                    let error = Err(Some(ErrorCode::Internal(
+                    let error = Err(ErrorCode::Internal(
                         "Async task should only be executed on queries executor",
-                    )));
+                    ));
                     processor
                         .graph
                         .should_finish(error)
@@ -128,7 +128,7 @@ impl ExecutorWorkerContext {
             ExecutorTask::AsyncCompleted(task) => match task.res {
                 Ok(_) => Ok(Some((task.id, task.graph))),
                 Err(cause) => {
-                    let error = Err(Some(cause.clone()));
+                    let error = Err(cause.clone());
                     task.graph
                         .should_finish(error)
                         .expect("executor cannot send error message");
@@ -156,7 +156,7 @@ impl ExecutorWorkerContext {
                 Ok(Some((proc.processor.id(), proc.graph)))
             }
             Err(cause) => {
-                let error = Err(Some(cause.clone()));
+                let error = Err(cause.clone());
                 proc.graph
                     .should_finish(error)
                     .expect("executor cannot send error message");
