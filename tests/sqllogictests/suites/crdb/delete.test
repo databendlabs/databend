@@ -1,3 +1,9 @@
+
+# Disables table lock, so that we can avoid the flakiness introduced
+# by "nondeterministic" locking timeout during unit testing.
+statement ok
+set enable_table_lock = 0;
+
 statement ok
 drop table if exists kv
 
