@@ -314,7 +314,7 @@ impl Spiller {
         self.columns_layout.keys().cloned().collect()
     }
 
-    pub(crate) fn print_spill_info(&self) -> String {
+    pub(crate) fn format_spill_info(&self) -> String {
         // Using a single line to print how many bytes have been spilled and how many files have been spiled for each partition.
         let mut info = String::new();
         for (p_id, bytes) in self.partition_spilled_bytes.iter() {

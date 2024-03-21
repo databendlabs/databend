@@ -161,7 +161,7 @@ impl BuildSpillHandler {
             info!(
                 "Processor: {}, spill info: {}",
                 processor_id,
-                self.spill_state().spiller.print_spill_info()
+                self.spill_state().spiller.format_spill_info()
             );
         }
         if !spilled_partition_set.is_empty() {

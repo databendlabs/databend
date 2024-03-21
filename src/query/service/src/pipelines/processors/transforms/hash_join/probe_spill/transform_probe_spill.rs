@@ -151,8 +151,8 @@ impl ProbeSpillHandler {
     }
 
     // Print spill info
-    pub fn print_spill_info(&self) -> String {
-        self.spill_state().spiller.print_spill_info()
+    pub fn format_spill_info(&self) -> String {
+        self.spill_state().spiller.format_spill_info()
     }
 
     // Check if spiller buffer is empty
@@ -265,7 +265,7 @@ impl TransformHashJoinProbe {
             info!(
                 "Processor: {}, spill info: {}",
                 processor_id,
-                self.spill_handler.print_spill_info()
+                self.spill_handler.format_spill_info()
             );
         }
         if self.join_probe_state.hash_join_state.need_final_scan() {
