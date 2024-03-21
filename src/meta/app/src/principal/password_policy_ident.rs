@@ -69,7 +69,7 @@ mod tests {
     use crate::tenant::Tenant;
     #[test]
     fn test_password_policy_ident() {
-        let tenant = Tenant::new("test");
+        let tenant = Tenant::new_literal("test");
         let ident = PasswordPolicyIdent::new(tenant.clone(), "test2");
 
         assert_eq!(ident.to_string_key(), "__fd_password_policies/test/test2");

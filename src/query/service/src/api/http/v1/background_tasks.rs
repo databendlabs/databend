@@ -36,6 +36,7 @@ pub struct BackgroundTaskQuery {
     task_type: Option<BackgroundTaskType>,
 }
 
+/// Required to be json serde by: [`list_background_tasks`]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ListBackgroundTasksResponse {
     task_infos: Vec<(String, BackgroundTaskInfo)>,

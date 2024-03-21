@@ -143,13 +143,14 @@ mod kvapi_key_impl {
 #[cfg(test)]
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
+    use databend_common_meta_types::NonEmptyString;
 
     use crate::principal::user_identity::TenantUserIdent;
     use crate::principal::UserIdentity;
     use crate::tenant::Tenant;
 
     fn test_format_parse(user: &str, host: &str, expect: &str) {
-        let tenant = Tenant::new("test_tenant");
+        let tenant = Tenant::new_nonempty(NonEmptyString::new("test_tenant").unwrap());
         let user_ident = UserIdentity::new(user, host);
         let tenant_user_ident = TenantUserIdent {
             tenant,
