@@ -32,6 +32,7 @@ def load_data_from_json():
                 task = task_pb2.Task()
                 json_format.ParseDict(task_run_data["Task"], task)
                 TASK_DB[task.task_name] = task
+    TASK_RUN_DB["MockTask"] = create_mock_task_runs_from_task(TASK_DB["SampleTask"], 10)
     notification_history_directory_path = os.path.join(
         script_directory, "testdata", "notification_history"
     )
@@ -140,6 +141,16 @@ def create_task_run_from_task(task):
     task_run.completed_time = datetime.now(timezone.utc).isoformat()
     task_run.session_parameters.update(task.session_parameters)
     return task_run
+
+
+def create_mock_task_runs_from_task(task, num):
+    task_runs = []
+    for i in range(0, num):
+        task_run = create_task_run_from_task(task)
+        task_run.task_name = "MockTask"
+        task_run.run_id = "1ftx" + str(i)
+        task_runs.append(task_run)
+    return task_runs
 
 
 class TaskService(task_pb2_grpc.TaskServiceServicer):
@@ -290,7 +301,7 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
     def ExecuteTask(self, request, context):
         print("ExecuteTask", request)
         for task_name, task in TASK_DB.items():
-            TASK_RUN_DB[task_name] = create_task_run_from_task(task)
+            TASK_RUN_DB[task_name] = [create_task_run_from_task(task)]
         return task_pb2.ExecuteTaskResponse(error=None)
 
     def ShowTasks(self, request, context):
@@ -300,8 +311,36 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
 
     def ShowTaskRuns(self, request, context):
         print("ShowTaskRuns", request)
-        task_runs = list(TASK_RUN_DB.values())
-        return task_pb2.ShowTaskRunsResponse(task_runs=task_runs)
+        task_runs = [item for sublist in TASK_RUN_DB.values() for item in sublist]
+        task_runs = sorted(task_runs, key=lambda x: x.run_id)
+
+        if len(request.task_name) > 0:
+            print("Limiting task_name to", request.task_name)
+            task_runs = list(
+                filter(lambda x: x.task_name == request.task_name, task_runs)
+            )
+        # limit and sort by run_id
+        if request.result_limit > 0:
+            print("Limiting result to", request.result_limit)
+            task_runs = task_runs[: request.result_limit]
+            if request.result_limit < num_results:
+                num_results = request.result_limit
+        num_results = len(task_runs)
+        # pagination
+        start_index = 0
+        page_size = 2
+        if request.HasField("next_page_token"):
+            print("Next page token", request.next_page_token)
+            start_index = request.next_page_token
+
+        end_index = start_index + page_size
+        next_page_token = end_index
+        if end_index > num_results:
+            next_page_token = None
+        task_runs = task_runs[start_index:end_index]
+        return task_pb2.ShowTaskRunsResponse(
+            task_runs=task_runs, next_page_token=next_page_token
+        )
 
     def GetTaskDependents(self, request, context):
         print("GetTaskDependents", request)

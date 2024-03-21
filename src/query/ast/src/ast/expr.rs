@@ -257,6 +257,12 @@ pub enum Expr {
         unit: IntervalKind,
         date: Box<Expr>,
     },
+    Hole {
+        #[drive(skip)]
+        span: Span,
+        #[drive(skip)]
+        name: String,
+    },
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -625,7 +631,8 @@ impl Expr {
             | Expr::Interval { span, .. }
             | Expr::DateAdd { span, .. }
             | Expr::DateSub { span, .. }
-            | Expr::DateTrunc { span, .. } => *span,
+            | Expr::DateTrunc { span, .. }
+            | Expr::Hole { span, .. } => *span,
         }
     }
 
@@ -1357,6 +1364,9 @@ impl Display for Expr {
             }
             Expr::DateTrunc { unit, date, .. } => {
                 write!(f, "DATE_TRUNC({unit}, {date})")?;
+            }
+            Expr::Hole { name, .. } => {
+                write!(f, ":{name}")?;
             }
         }
 

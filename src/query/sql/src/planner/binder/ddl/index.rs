@@ -356,11 +356,7 @@ impl Binder {
         if let SetExpr::Select(stmt) = &mut query.body {
             if let TableReference::Table { database, .. } = &mut stmt.from[0] {
                 if database.is_none() {
-                    *database = Some(Identifier {
-                        name: name.to_string(),
-                        quote: None,
-                        span: None,
-                    });
+                    *database = Some(Identifier::from_name(query.span, name));
                 }
             }
         }

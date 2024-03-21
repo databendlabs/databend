@@ -28,6 +28,7 @@ use super::distributed::MergeSourceOptimizer;
 use super::format::display_memo;
 use super::Memo;
 use crate::binder::MergeIntoType;
+use crate::optimizer::aggregate::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::decorrelate::decorrelate_subquery;
 use crate::optimizer::distributed::optimize_distributed_query;
@@ -248,6 +249,9 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             s_expr.clone(),
         )?;
     }
+
+    // Normalize aggregate, it should be executed before RuleSplitAggregate.
+    s_expr = RuleNormalizeAggregateOptimizer::new().run(&s_expr)?;
 
     // Pull up and infer filter.
     s_expr = PullUpFilterOptimizer::new(opt_ctx.metadata.clone()).run(&s_expr)?;

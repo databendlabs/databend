@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -116,16 +115,9 @@ impl Processor for ExchangeSourceReader {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if self.output_data.is_empty() {
-            let mut bytes = 0;
             let mut dictionaries = Vec::new();
             while let Some(output_data) = self.flight_receiver.recv().await? {
-                bytes += output_data.bytes_size();
                 if !matches!(&output_data, DataPacket::Dictionary(_)) {
-                    {
-                        metrics_inc_exchange_read_count(dictionaries.len());
-                        metrics_inc_exchange_read_bytes(bytes);
-                    }
-
                     dictionaries.push(output_data);
                     self.output_data = dictionaries;
                     return Ok(());

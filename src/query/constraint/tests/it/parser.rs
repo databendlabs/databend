@@ -163,11 +163,7 @@ fn mir_to_sql_ast(expr: &MirExpr) -> ASTExpr {
             column: ColumnRef {
                 database: None,
                 table: None,
-                column: ColumnID::Name(Identifier {
-                    span: None,
-                    name: name.clone(),
-                    quote: None,
-                }),
+                column: ColumnID::Name(Identifier::from_name(None, name.clone())),
             },
         },
         MirExpr::UnaryOperator { op, arg } => {
@@ -199,11 +195,7 @@ fn mir_to_sql_ast(expr: &MirExpr) -> ASTExpr {
                         span: None,
                         func: FunctionCall {
                             distinct: false,
-                            name: Identifier {
-                                name: "remove_nullable".to_string(),
-                                quote: None,
-                                span: None,
-                            },
+                            name: Identifier::from_name(None, "remove_nullable"),
                             args: vec![mir_to_sql_ast(arg)],
                             params: vec![],
                             window: None,
