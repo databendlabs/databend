@@ -15,8 +15,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use databend_common_catalog::merge_into_join::MergeIntoJoinType;
-use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::StealablePartitions;
