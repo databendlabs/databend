@@ -40,6 +40,7 @@ st_geometryfromtext -> st_geometryfromwkt
 st_geomfromewkt -> st_geometryfromwkt
 st_geomfromtext -> st_geometryfromwkt
 st_geomfromwkt -> st_geometryfromwkt
+st_make_line -> st_makeline
 str_to_date -> to_date
 str_to_timestamp -> to_timestamp
 str_to_year -> to_year
@@ -3499,6 +3500,8 @@ Functions overloads:
 3 st_geometryfromwkt(String NULL, Int32 NULL) :: Geometry NULL
 0 st_makegeompoint(Float64, Float64) :: Geometry
 1 st_makegeompoint(Float64 NULL, Float64 NULL) :: Geometry NULL
+0 st_makeline(Geometry, Geometry) :: Geometry
+1 st_makeline(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 strcmp(String, String) :: Int8
 1 strcmp(String NULL, String NULL) :: Int8 NULL
 0 string_to_h3(String) :: UInt64

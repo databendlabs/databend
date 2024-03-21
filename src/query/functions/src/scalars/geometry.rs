@@ -22,9 +22,15 @@ use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_io::parse_to_ewkb;
+use geo::Coord;
 use geo::Geometry;
+use geo::LineString;
+use geo::MultiPoint;
 use geo::Point;
+use geozero::error::GeozeroError;
 use geozero::wkb::Ewkb;
+use geozero::wkb::FromWkb;
+use geozero::wkb::WkbDialect;
 use geozero::CoordDimensions;
 use geozero::ToWkb;
 use geozero::ToWkt;
@@ -34,6 +40,7 @@ use geozero::ToWkt;
 pub fn register(registry: &mut FunctionRegistry) {
     // aliases
     registry.register_aliases("st_makegeompoint", &["st_geom_point"]);
+    registry.register_aliases("st_makeline", &["st_make_line"]);
     registry.register_aliases("st_geometryfromwkt", &[
         "st_geomfromwkt",
         "st_geometryfromewkt",
@@ -65,6 +72,81 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             builder.commit_row();
         })
+    );
+
+    registry.register_passthrough_nullable_2_arg::<GeometryType, GeometryType, GeometryType, _, _>(
+        "st_makeline",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<GeometryType, GeometryType, GeometryType>(
+            |left_exp, right_exp, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                let geometries: Vec<Geometry> = match binary_to_geometry(&vec![left_exp, right_exp])
+                {
+                    Ok(g) => g,
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        return builder.put_str("");
+                    }
+                };
+
+                let mut coords: Vec<Coord> = vec![];
+                for geometry in geometries.into_iter() {
+                    match geometry {
+                        Geometry::Point(_) => {
+                            let point: Point = match geometry.try_into() {
+                                Ok(point) => point,
+                                Err(e) => {
+                                    ctx.set_error(builder.len(), e.to_string());
+                                    return builder.put_str("");
+                                }
+                            };
+                            coords.push(point.into());
+                        }
+                        Geometry::LineString(_) => {
+                            let line: LineString = match geometry.try_into() {
+                                Ok(line) => line,
+                                Err(e) => {
+                                    ctx.set_error(builder.len(), e.to_string());
+                                    return builder.put_str("");
+                                }
+                            };
+                            coords.append(&mut line.into_inner());
+                        }
+                        Geometry::MultiPoint(_) => {
+                            let multi_point: MultiPoint = match geometry.try_into() {
+                                Ok(multi_point) => multi_point,
+                                Err(e) => {
+                                    ctx.set_error(builder.len(), e.to_string());
+                                    return builder.put_str("");
+                                }
+                            };
+                            for point in multi_point.into_iter() {
+                                coords.push(point.into());
+                            }
+                        }
+                        _ => {
+                            ctx.set_error(
+                                builder.len(),
+                                "Geometry expression must be a Point, MultiPoint, or LineString.",
+                            );
+                            return builder.put_str("");
+                        }
+                    }
+                }
+                let geom = Geometry::from(LineString::new(coords));
+                match geom.to_ewkb(CoordDimensions::xy(), None) {
+                    Ok(data) => builder.put_slice(data.as_slice()),
+                    Err(e) => ctx.set_error(builder.len(), e.to_string()),
+                }
+                builder.commit_row();
+            },
+        ),
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
@@ -244,3 +326,14 @@ pub fn register(registry: &mut FunctionRegistry) {
 //
 //     Ok(srid)
 // }
+#[inline(always)]
+fn binary_to_geometry(binaries: &Vec<&[u8]>) -> Result<Vec<Geometry>, GeozeroError> {
+    let mut geometries: Vec<Geometry> = Vec::with_capacity(binaries.len());
+    for binary in binaries.into_iter() {
+        match Geometry::from_wkb(&mut std::io::Cursor::new(binary), WkbDialect::Ewkb) {
+            Ok(data) => geometries.push(data),
+            Err(e) => return Err(e),
+        };
+    }
+    Ok(geometries)
+}
