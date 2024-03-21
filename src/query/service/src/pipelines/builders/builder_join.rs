@@ -96,13 +96,13 @@ impl PipelineBuilder {
 
     pub(crate) fn build_join(&mut self, join: &HashJoin) -> Result<()> {
         // for merge into target table as build side.
-        let (merge_into_build_table_index, merge_into_is_distributed) =
+        let (enable_merge_into_optimization, merge_into_is_distributed) =
             self.merge_into_get_optimization_flag(join);
 
         let state = self.build_join_state(
             join,
-            merge_into_build_table_index,
             merge_into_is_distributed,
+            enable_merge_into_optimization,
         )?;
         self.expand_build_side_pipeline(&join.build, join, state.clone())?;
         self.build_join_probe(join, state)
@@ -111,8 +111,8 @@ impl PipelineBuilder {
     fn build_join_state(
         &mut self,
         join: &HashJoin,
-        merge_into_target_table_index: IndexType,
         merge_into_is_distributed: bool,
+        enable_merge_into_optimization: bool,
     ) -> Result<Arc<HashJoinState>> {
         HashJoinState::try_create(
             self.ctx.clone(),
@@ -120,8 +120,8 @@ impl PipelineBuilder {
             &join.build_projections,
             HashJoinDesc::create(join)?,
             &join.probe_to_build,
-            merge_into_target_table_index,
             merge_into_is_distributed,
+            enable_merge_into_optimization,
         )
     }
 

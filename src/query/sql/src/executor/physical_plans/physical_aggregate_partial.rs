@@ -25,7 +25,7 @@ use crate::executor::physical_plans::common::AggregateFunctionDesc;
 use crate::executor::PhysicalPlan;
 use crate::IndexType;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,

@@ -24,16 +24,7 @@ use cron::Schedule;
 use crate::background::BackgroundTaskType;
 use crate::principal::UserIdentity;
 
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Clone,
-    Debug,
-    Default,
-    Eq,
-    PartialEq,
-    num_derive::FromPrimitive,
-)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, num_derive::FromPrimitive)]
 pub enum BackgroundJobState {
     #[default]
     RUNNING = 0,
@@ -47,16 +38,7 @@ impl Display for BackgroundJobState {
     }
 }
 
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Clone,
-    Debug,
-    Default,
-    Eq,
-    PartialEq,
-    num_derive::FromPrimitive,
-)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, num_derive::FromPrimitive)]
 pub enum BackgroundJobType {
     #[default]
     ONESHOT = 0,
@@ -87,7 +69,7 @@ impl ManualTriggerParams {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundJobParams {
     pub job_type: BackgroundJobType,
     pub scheduled_job_interval: std::time::Duration,
@@ -159,7 +141,7 @@ impl Display for BackgroundJobParams {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundJobStatus {
     pub job_state: BackgroundJobState,
     pub last_task_id: Option<String>,
@@ -216,7 +198,7 @@ impl Display for BackgroundJobIdent {
 }
 
 // Info
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundJobInfo {
     pub job_params: Option<BackgroundJobParams>,
     pub job_status: Option<BackgroundJobStatus>,
@@ -244,12 +226,12 @@ impl BackgroundJobInfo {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundJobId {
     pub id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateBackgroundJobReq {
     pub if_not_exists: bool,
     pub job_name: BackgroundJobIdent,
@@ -271,12 +253,12 @@ impl Display for CreateBackgroundJobReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateBackgroundJobReply {
     pub id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetBackgroundJobReq {
     pub name: BackgroundJobIdent,
 }
@@ -287,13 +269,13 @@ impl Display for GetBackgroundJobReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetBackgroundJobReply {
     pub id: u64,
     pub info: BackgroundJobInfo,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundJobStatusReq {
     pub job_name: BackgroundJobIdent,
     pub status: BackgroundJobStatus,
@@ -309,7 +291,7 @@ impl Display for UpdateBackgroundJobStatusReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundJobParamsReq {
     pub job_name: BackgroundJobIdent,
     pub params: BackgroundJobParams,
@@ -325,7 +307,7 @@ impl Display for UpdateBackgroundJobParamsReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundJobReq {
     pub job_name: BackgroundJobIdent,
     pub info: BackgroundJobInfo,
@@ -347,12 +329,12 @@ impl Display for UpdateBackgroundJobReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundJobReply {
     pub id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeleteBackgroundJobReq {
     pub name: BackgroundJobIdent,
 }
@@ -363,10 +345,10 @@ impl Display for DeleteBackgroundJobReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeleteBackgroundJobReply {}
 // list
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListBackgroundJobsReq {
     pub tenant: String,
 }

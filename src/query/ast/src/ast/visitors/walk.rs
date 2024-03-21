@@ -451,6 +451,8 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
+        Statement::ShowViews(stmt) => visitor.visit_show_views(stmt),
+        Statement::DescribeView(stmt) => visitor.visit_describe_view(stmt),
         Statement::CreateStream(stmt) => visitor.visit_create_stream(stmt),
         Statement::DropStream(stmt) => visitor.visit_drop_stream(stmt),
         Statement::ShowStreams(stmt) => visitor.visit_show_streams(stmt),

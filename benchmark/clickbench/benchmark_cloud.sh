@@ -52,7 +52,7 @@ esac
 echo "#######################################################"
 echo "Running benchmark for Databend Cloud with S3 storage..."
 
-export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443/${BENCHMARK_DATABASE}?warehouse=${CLOUD_WAREHOUSE}"
+export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443"
 
 echo "Creating warehouse..."
 echo "DROP WAREHOUSE IF EXISTS '${CLOUD_WAREHOUSE}';" | bendsql
@@ -70,6 +70,13 @@ until bendsql --query="SHOW WAREHOUSES LIKE '${CLOUD_WAREHOUSE}'" | grep -q "Run
     counter=$((counter + 1))
     sleep 10
 done
+
+export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443/${BENCHMARK_DATABASE}?warehouse=${CLOUD_WAREHOUSE}"
+
+if [[ "${BENCHMARK_DATASET}" == "load" ]]; then
+    echo "Creating database..."
+    echo "CREATE DATABASE ${BENCHMARK_DATABASE};" | bendsql --database default
+fi
 
 echo "Checking session settings..."
 bendsql --query="select * from system.settings where value != default;" -o table
@@ -99,7 +106,9 @@ function run_query() {
 
 QUERY_NUM=0
 for query in "${BENCHMARK_DATASET}"/queries/*.sql; do
-    echo "Running Q${QUERY_NUM}: ${query}"
+    echo
+    echo "==> Running Q${QUERY_NUM}: ${query}"
+    cat "$query"
     yq -i ".result += [[]]" -o json result.json
     for i in $(seq 1 "$BENCHMARK_TRIES"); do
         run_query "$QUERY_NUM" "$i" "$query"

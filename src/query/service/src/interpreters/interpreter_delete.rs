@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::TableExt;
@@ -52,6 +53,7 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Visibility;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
@@ -188,7 +190,7 @@ impl Interpreter for DeleteInterpreter {
             (None, vec![])
         };
 
-        let fuse_table = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+        let fuse_table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
             ErrorCode::Unimplemented(format!(
                 "table {}, engine type {}, does not support DELETE FROM",
                 tbl.name(),
@@ -197,48 +199,91 @@ impl Interpreter for DeleteInterpreter {
         })?;
 
         let mut build_res = PipelineBuildResult::create();
-        let query_row_id_col = !self.plan.subquery_desc.is_empty();
-        if let Some(snapshot) = fuse_table
-            .fast_delete(
-                self.ctx.clone(),
-                filters.clone(),
-                col_indices.clone(),
-                query_row_id_col,
-            )
-            .await?
-        {
-            let cluster = self.ctx.get_cluster();
-            let is_lazy = !cluster.is_empty() && snapshot.segments.len() >= cluster.nodes.len();
-            let partitions = fuse_table
-                .mutation_read_partitions(
-                    self.ctx.clone(),
-                    snapshot.clone(),
-                    col_indices.clone(),
-                    filters.clone(),
-                    is_lazy,
-                    true,
-                )
-                .await?;
 
-            // Safe to unwrap, because if filters is None, fast_delete will do truncate and return None.
-            let filters = filters.unwrap();
-            let physical_plan = Self::build_physical_plan(
-                filters,
-                partitions,
-                fuse_table.get_table_info().clone(),
-                col_indices,
-                snapshot,
-                catalog_info,
-                is_distributed,
-                query_row_id_col,
-            )?;
-
-            build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        // check if table is empty
+        let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
+            // no snapshot, no deletion
+            return Ok(build_res);
+        };
+        if snapshot.summary.row_count == 0 {
+            // empty snapshot, no deletion
+            return Ok(build_res);
         }
 
         build_res.main_pipeline.add_lock_guard(lock_guard);
+        // check if unconditional deletion
+        let Some(filters) = filters else {
+            let progress_values = ProgressValues {
+                rows: snapshot.summary.row_count as usize,
+                bytes: snapshot.summary.uncompressed_byte_size as usize,
+            };
+            self.ctx.get_write_progress().incr(&progress_values);
+            // deleting the whole table... just a truncate
+            fuse_table
+                .do_truncate(
+                    self.ctx.clone(),
+                    &mut build_res.main_pipeline,
+                    TruncateMode::Delete,
+                )
+                .await?;
+            return Ok(build_res);
+        };
 
+        let query_row_id_col = !self.plan.subquery_desc.is_empty();
+        if col_indices.is_empty() && !query_row_id_col {
+            // here the situation: filter_expr is not null, but col_indices in empty, which
+            // indicates the expr being evaluated is unrelated to the value of rows:
+            //   e.g.
+            //       `delete from t where 1 = 1`, `delete from t where now()`,
+            //       or `delete from t where RANDOM()::INT::BOOLEAN`
+            // if the `filter_expr` is of "constant" nullary :
+            //   for the whole block, whether all of the rows should be kept or dropped,
+            //   we can just return from here, without accessing the block data
+            if fuse_table.try_eval_const(self.ctx.clone(), &fuse_table.schema(), &filters.filter)? {
+                let progress_values = ProgressValues {
+                    rows: snapshot.summary.row_count as usize,
+                    bytes: snapshot.summary.uncompressed_byte_size as usize,
+                };
+                self.ctx.get_write_progress().incr(&progress_values);
+
+                // deleting the whole table... just a truncate
+                fuse_table
+                    .do_truncate(
+                        self.ctx.clone(),
+                        &mut build_res.main_pipeline,
+                        TruncateMode::Delete,
+                    )
+                    .await?;
+                return Ok(build_res);
+            }
+        }
+
+        let cluster = self.ctx.get_cluster();
+        let is_lazy = !cluster.is_empty() && snapshot.segments.len() >= cluster.nodes.len();
+        let partitions = fuse_table
+            .mutation_read_partitions(
+                self.ctx.clone(),
+                snapshot.clone(),
+                col_indices.clone(),
+                Some(filters.clone()),
+                is_lazy,
+                true,
+            )
+            .await?;
+
+        let physical_plan = Self::build_physical_plan(
+            filters,
+            partitions,
+            fuse_table.get_table_info().clone(),
+            col_indices,
+            snapshot,
+            catalog_info,
+            is_distributed,
+            query_row_id_col,
+        )?;
+
+        build_res =
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
         Ok(build_res)
     }
 }

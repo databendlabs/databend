@@ -110,7 +110,9 @@ function run_query() {
 TRIES=3
 QUERY_NUM=0
 for query in "${BENCHMARK_DATASET}"/queries/*.sql; do
-    echo "Running Q${QUERY_NUM}: ${query}"
+    echo
+    echo "==> Running Q${QUERY_NUM}: ${query}"
+    cat "$query"
     sync
     echo 3 | sudo tee /proc/sys/vm/drop_caches
     yq -i ".result += [[]]" -o json result.json
