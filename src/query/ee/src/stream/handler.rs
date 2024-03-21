@@ -122,32 +122,33 @@ impl StreamHandler for RealStreamHandler {
                         plan.table_database, plan.table_name
                     )));
                 }
-                options = stream.get_table_info().options().clone();
-                let stream_mode = if plan.append_only {
-                    if stream_opts.get(OPT_KEY_TABLE_VER).is_none() {
-                        return Err(ErrorCode::IllegalStream(format!(
-                            "The stream '{name}' has not table version",
-                        )));
-                    }
-                    MODE_APPEND_ONLY
-                } else {
-                    MODE_STANDARD
-                };
-                options.insert(OPT_KEY_MODE.to_string(), stream_mode.to_string());
+
+                if let Some(version) = stream_opts.get(OPT_KEY_TABLE_VER) {
+                    options.insert(OPT_KEY_TABLE_VER.to_string(), version.to_string());
+                } else if plan.append_only {
+                    return Err(ErrorCode::IllegalStream(format!(
+                        "The stream '{name}' has not table version",
+                    )));
+                }
+                if let Some(snapshot) = stream_opts.get(OPT_KEY_SNAPSHOT_LOCATION) {
+                    options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot.to_string());
+                }
+            }
+            Some(StreamNavigation::AtPoint(point)) => {
+                if plan.append_only {
+                    return Err(ErrorCode::IllegalStream(
+                        "The stream navigation at point is not supported in append only mode"
+                            .to_string(),
+                    ));
+                }
+
+                let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+                let source = fuse_table.navigate_to(point).await?;
+                if let Some(snapshot_loc) = source.snapshot_loc().await? {
+                    options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
+                }
             }
             None => {
-                let stream_mode = if plan.append_only {
-                    MODE_APPEND_ONLY
-                } else {
-                    MODE_STANDARD
-                };
-                options.insert(OPT_KEY_MODE.to_string(), stream_mode.to_string());
-                options.insert(OPT_KEY_TABLE_NAME.to_string(), plan.table_name.clone());
-                options.insert(
-                    OPT_KEY_DATABASE_NAME.to_string(),
-                    plan.table_database.clone(),
-                );
-                options.insert(OPT_KEY_TABLE_ID.to_string(), table_id.to_string());
                 options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
                 let fuse_table = FuseTable::try_from_table(table.as_ref())?;
                 if let Some(snapshot_loc) = fuse_table.snapshot_loc().await? {
@@ -155,6 +156,19 @@ impl StreamHandler for RealStreamHandler {
                 }
             }
         }
+
+        let stream_mode = if plan.append_only {
+            MODE_APPEND_ONLY
+        } else {
+            MODE_STANDARD
+        };
+        options.insert(OPT_KEY_MODE.to_string(), stream_mode.to_string());
+        options.insert(OPT_KEY_TABLE_NAME.to_string(), plan.table_name.clone());
+        options.insert(
+            OPT_KEY_DATABASE_NAME.to_string(),
+            plan.table_database.clone(),
+        );
+        options.insert(OPT_KEY_TABLE_ID.to_string(), table_id.to_string());
 
         let req = CreateTableReq {
             create_option: plan.create_option,
