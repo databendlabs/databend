@@ -204,31 +204,29 @@ impl PipelineExecutor {
     pub fn finish(&self, cause: Option<ErrorCode>) {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.finish(cause),
-            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
-               match cause{
-                   Some(may_error)=>{
-                       query_wrapper
-                           .graph
-                           .should_finish(Err(may_error))
-                           .expect("executor cannot send error message");
-                   },
-                   None => {
-                       query_wrapper
-                           .graph
-                           .should_finish(Ok(()))
-                           .expect("executor cannot send error message");
-
-                   }
-               }
-
-            }
+            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => match cause {
+                Some(may_error) => {
+                    query_wrapper
+                        .graph
+                        .should_finish(Err(may_error))
+                        .expect("executor cannot send error message");
+                }
+                None => {
+                    query_wrapper
+                        .graph
+                        .should_finish(Ok(()))
+                        .expect("executor cannot send error message");
+                }
+            },
         }
     }
 
     pub fn is_finished(&self) -> bool {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.is_finished(),
-            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => query_wrapper.graph.is_should_finish(),
+            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
+                query_wrapper.graph.is_should_finish()
+            }
         }
     }
 
