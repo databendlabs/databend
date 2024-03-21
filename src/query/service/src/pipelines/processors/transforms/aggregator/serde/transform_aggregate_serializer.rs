@@ -286,9 +286,10 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
                     .method
                     .keys_column_builder(max_block_rows, max_block_bytes);
 
+                let mut bytes = 0;
+
                 #[allow(clippy::while_let_on_iterator)]
                 while let Some(group_entity) = self.iter.as_mut().and_then(|iter| iter.next()) {
-                    let mut bytes = 0;
                     let place = Into::<StateAddr>::into(*group_entity.get());
 
                     for (idx, func) in funcs.iter().enumerate() {
@@ -300,7 +301,7 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
 
                     group_key_builder.append_value(group_entity.key());
 
-                    if bytes >= 8 * 1024 * 1024 {
+                    if bytes + group_key_builder.bytes_size() >= 8 * 1024 * 1024 {
                         return self.finish(state_builders, group_key_builder);
                     }
                 }
