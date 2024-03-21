@@ -18,6 +18,7 @@ use std::intrinsics::assume;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ThreadTracker;
@@ -104,14 +105,40 @@ impl ExecutorWorkerContext {
     ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
-            ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
+            ExecutorTask::Sync(processor) => {
+                let graph_clone = processor.graph.clone();
+                let may_panic = catch_unwind(move || self.execute_sync_task(processor));
+                match may_panic {
+                    Ok(res) => res,
+                    Err(cause) => {
+                        let error = Err(cause.clone());
+                        graph_clone
+                            .should_finish(error)
+                            .expect("executor cannot send error message");
+                        Err(cause)
+                    }
+                }
+            }
             ExecutorTask::Async(processor) => {
                 if let Some(executor) = executor {
-                    self.execute_async_task(
-                        processor,
-                        executor,
-                        executor.global_tasks_queue.clone(),
-                    )
+                    let graph_clone = processor.graph.clone();
+                    let may_panic = catch_unwind(move || {
+                        self.execute_async_task(
+                            processor,
+                            executor,
+                            executor.global_tasks_queue.clone(),
+                        )
+                    });
+                    match may_panic {
+                        Ok(res) => res,
+                        Err(cause) => {
+                            let error = Err(cause.clone());
+                            graph_clone
+                                .should_finish(error)
+                                .expect("executor cannot send error message");
+                            Err(cause)
+                        }
+                    }
                 } else {
                     let error = Err(ErrorCode::Internal(
                         "Async task should only be executed on queries executor",
