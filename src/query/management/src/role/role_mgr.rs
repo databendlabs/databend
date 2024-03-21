@@ -117,17 +117,20 @@ impl RoleMgr {
         let dummy = OwnershipObject::UDF {
             name: "dummy".to_string(),
         };
-        let grantee = TenantOwnershipObject::new(Tenant::new(self.tenant.as_str()), dummy);
+        let grantee = TenantOwnershipObject::new(Tenant::new_nonempty(self.tenant.clone()), dummy);
         grantee.tenant_prefix()
     }
 
     fn role_key(&self, role: &str) -> String {
-        let r = RoleIdent::new(Tenant::new(self.tenant.as_str()), role.to_string());
+        let r = RoleIdent::new(Tenant::new_nonempty(self.tenant.clone()), role.to_string());
         r.to_string_key()
     }
 
     fn role_prefix(&self) -> String {
-        let r = RoleIdent::new(Tenant::new(self.tenant.as_str()), "dummy".to_string());
+        let r = RoleIdent::new(
+            Tenant::new_nonempty(self.tenant.clone()),
+            "dummy".to_string(),
+        );
         r.tenant_prefix()
     }
 }
