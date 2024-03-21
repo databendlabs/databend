@@ -199,7 +199,7 @@ impl BuildSpillHandler {
         let spill_state = self.spill_state_mut();
         let spilled_files = spill_state.spiller.spilled_files();
         if !spilled_files.is_empty() {
-            let (block, _) = spill_state
+            let block = spill_state
                 .spiller
                 .read_spilled_file(&spilled_files[0])
                 .await?;

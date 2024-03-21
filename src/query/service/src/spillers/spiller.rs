@@ -112,7 +112,7 @@ impl Spiller {
 
     /// Read a certain file to a [`DataBlock`].
     /// We should guarantee that the file is managed by this spiller.
-    pub async fn read_spilled_file(&self, file: &str) -> Result<(DataBlock, u64)> {
+    pub async fn read_spilled_file(&self, file: &str) -> Result<DataBlock> {
         debug_assert!(self.columns_layout.contains_key(file));
         let data = self.operator.read(file).await?;
         let bytes = data.len();
@@ -134,11 +134,11 @@ impl Spiller {
             instant.elapsed().as_millis() as usize,
         );
 
-        Ok((block, bytes as u64))
+        Ok(block)
     }
 
     /// Write a [`DataBlock`] to storage.
-    pub async fn spill_block(&mut self, data: DataBlock) -> Result<(String, u64)> {
+    pub async fn spill_block(&mut self, data: DataBlock) -> Result<String> {
         let instant = Instant::now();
         let unique_name = GlobalUniqName::unique();
         let location = format!("{}/{}", self.config.location_prefix, unique_name);
@@ -160,7 +160,7 @@ impl Spiller {
                     layouts.push(column_data.len());
                 })
                 .or_insert(vec![column_data.len()]);
-            write_bytes += column_data.len() as u64;
+            write_bytes += column_data.len();
             columns_data.push(column_data);
         }
 
@@ -170,13 +170,13 @@ impl Spiller {
         writer.close().await?;
 
         Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes as usize);
+        Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
         Profile::record_usize_profile(
             ProfileStatisticsName::SpillWriteTime,
             instant.elapsed().as_millis() as usize,
         );
 
-        Ok((location, write_bytes))
+        Ok(location)
     }
 
     #[async_backtrace::framed]
@@ -187,7 +187,7 @@ impl Spiller {
             bytes: data.memory_size(),
         };
 
-        let (location, _) = self.spill_block(data).await?;
+        let location = self.spill_block(data).await?;
         self.partition_location
             .entry(p_id)
             .and_modify(|locs| {
@@ -207,7 +207,7 @@ impl Spiller {
         let files = self.partition_location.get(p_id).unwrap().to_vec();
         let mut spilled_data = Vec::with_capacity(files.len());
         for file in files.iter() {
-            let (block, _) = self.read_spilled_file(file).await?;
+            let block = self.read_spilled_file(file).await?;
             if block.num_rows() != 0 {
                 spilled_data.push(block);
             }

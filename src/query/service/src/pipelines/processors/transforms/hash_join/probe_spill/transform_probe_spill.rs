@@ -122,7 +122,7 @@ impl ProbeSpillHandler {
     }
 
     // Read spilled file
-    pub async fn read_spilled_file(&self, file: &str) -> Result<(DataBlock, u64)> {
+    pub async fn read_spilled_file(&self, file: &str) -> Result<DataBlock> {
         self.spill_state().spiller.read_spilled_file(file).await
     }
 
@@ -400,7 +400,7 @@ impl TransformHashJoinProbe {
             let next_restore_file = self.spill_handler.next_restore_file();
             let spilled_files = self.spill_handler.spilled_files();
             if !spilled_files.is_empty() {
-                let (spilled_data, _) = self
+                let spilled_data = self
                     .spill_handler
                     .read_spilled_file(&spilled_files[next_restore_file])
                     .await?;
