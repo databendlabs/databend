@@ -238,16 +238,25 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                     }
 
                     let bucket = payload.bucket;
-                    let mut stream = SerializeGroupByStream::create(
+                    let stream = SerializeGroupByStream::create(
                         &self.method,
                         SerializePayload::<Method, ()>::HashTablePayload(payload),
                     );
-                    serialized_blocks.push(FlightSerialized::DataBlock(match stream.next() {
-                        None => DataBlock::empty(),
-                        Some(data_block) => {
-                            serialize_block(bucket, data_block?, &self.ipc_fields, &self.options)?
+
+                    let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
+
+                    if stream_blocks.is_empty() {
+                        serialized_blocks.push(FlightSerialized::DataBlock(DataBlock::empty()));
+                    } else {
+                        let mut c = DataBlock::concat(&stream_blocks)?;
+                        if let Some(meta) = stream_blocks[0].take_meta() {
+                            c.replace_meta(meta);
                         }
-                    }));
+
+                        metrics_inc_aggregate_partial_hashtable_exchange_rows(c.num_rows() as u64);
+                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options)?;
+                        serialized_blocks.push(FlightSerialized::DataBlock(c));
+                    }
                 }
                 Some(AggregateMeta::AggregatePayload(p)) => {
                     if index == self.local_pos {
@@ -258,16 +267,25 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                     }
 
                     let bucket = p.bucket;
-                    let mut stream = SerializeGroupByStream::create(
+                    let stream = SerializeGroupByStream::create(
                         &self.method,
                         SerializePayload::<Method, ()>::AggregatePayload(p),
                     );
-                    serialized_blocks.push(FlightSerialized::DataBlock(match stream.next() {
-                        None => DataBlock::empty(),
-                        Some(data_block) => {
-                            serialize_block(bucket, data_block?, &self.ipc_fields, &self.options)?
+
+                    let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
+
+                    if stream_blocks.is_empty() {
+                        serialized_blocks.push(FlightSerialized::DataBlock(DataBlock::empty()));
+                    } else {
+                        let mut c = DataBlock::concat(&stream_blocks)?;
+                        if let Some(meta) = stream_blocks[0].take_meta() {
+                            c.replace_meta(meta);
                         }
-                    }));
+
+                        metrics_inc_aggregate_partial_hashtable_exchange_rows(c.num_rows() as u64);
+                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options)?;
+                        serialized_blocks.push(FlightSerialized::DataBlock(c));
+                    }
                 }
             };
         }
