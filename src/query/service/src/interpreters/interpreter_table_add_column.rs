@@ -153,7 +153,10 @@ pub(crate) async fn generate_new_snapshot(
 ) -> Result<()> {
     if let Ok(fuse_table) = FuseTable::try_from_table(table) {
         if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
-            let mut new_snapshot = TableSnapshot::from_previous(snapshot.as_ref());
+            let mut new_snapshot = TableSnapshot::from_previous(
+                snapshot.as_ref(),
+                Some(fuse_table.get_table_info().ident.seq),
+            );
 
             // replace schema
             new_snapshot.schema = new_table_meta.schema.as_ref().clone();
