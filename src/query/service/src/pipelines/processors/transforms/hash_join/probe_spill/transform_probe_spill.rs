@@ -262,7 +262,11 @@ impl TransformHashJoinProbe {
         // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
         let spilled_partition_set = &self.spill_handler.spilled_partitions();
         if self.join_probe_state.join_type() != JoinType::Cross {
-            info!("Processor: {}, spill info: {}", processor_id, self.spill_handler.print_spill_info());
+            info!(
+                "Processor: {}, spill info: {}",
+                processor_id,
+                self.spill_handler.print_spill_info()
+            );
         }
         if self.join_probe_state.hash_join_state.need_final_scan() {
             // Assign build spilled partitions to `self.join_probe_state.spill_partitions`

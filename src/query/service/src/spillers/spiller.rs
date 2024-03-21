@@ -17,10 +17,10 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
-use byte_unit::{Byte, ByteUnit};
-use log::info;
 use std::time::Instant;
 
+use byte_unit::Byte;
+use byte_unit::ByteUnit;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -192,11 +192,14 @@ impl Spiller {
             bytes: data.memory_size(),
         };
 
-        self.partition_spilled_bytes.entry(p_id).and_modify(|bytes| {
-            *bytes += data.memory_size() as u64;
-        }).or_insert(data.memory_size() as u64);
+        self.partition_spilled_bytes
+            .entry(p_id)
+            .and_modify(|bytes| {
+                *bytes += data.memory_size() as u64;
+            })
+            .or_insert(data.memory_size() as u64);
 
-        let (location, _) = self.spill_block(data).await?;
+        let location = self.spill_block(data).await?;
         self.partition_location
             .entry(p_id)
             .and_modify(|locs| {
@@ -321,7 +324,10 @@ impl Spiller {
                 .get_appropriate_unit(false)
                 .format(2);
             let files = self.partition_location.get(p_id).unwrap().len();
-            info.push_str(&format!("Partition {}: spilled {}, {} files \n", p_id, spill_gb, files));
+            info.push_str(&format!(
+                "Partition {}: spilled {}, {} files \n",
+                p_id, spill_gb, files
+            ));
         }
         info
     }

@@ -135,10 +135,6 @@ impl BuildSpillHandler {
         processor_id: usize,
     ) -> Result<HashJoinBuildStep> {
         let spilled_partition_set = self.spill_state().spiller.spilled_partitions();
-        if build_state.join_type() != JoinType::Cross {
-            info!("Processor: {}, spill info: {}", processor_id, self.spill_state().spiller.print_spill_info());
-        }
-
         // For left-related join, will spill all build input blocks which means there isn't first-round hash table.
         // Because first-round hash table will make left join generate wrong results.
         // Todo: make left-related join leverage first-round hash table to reduce I/O.
@@ -163,8 +159,9 @@ impl BuildSpillHandler {
         }
         if build_state.join_type() != JoinType::Cross {
             info!(
-                "build processor-{:?}: spill finished with spilled partitions {:?}",
-                processor_id, spilled_partition_set
+                "Processor: {}, spill info: {}",
+                processor_id,
+                self.spill_state().spiller.print_spill_info()
             );
         }
         if !spilled_partition_set.is_empty() {
