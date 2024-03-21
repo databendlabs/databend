@@ -65,12 +65,6 @@ impl Connection for FlightSQLConnection {
         Ok(affected_rows)
     }
 
-    async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
-        let mut rows = self.query_iter(sql).await?;
-        let row = rows.try_next().await?;
-        Ok(row)
-    }
-
     async fn query_iter(&self, sql: &str) -> Result<RowIterator> {
         let rows_with_progress = self.query_iter_ext(sql).await?;
         let rows = rows_with_progress.filter_rows().await;

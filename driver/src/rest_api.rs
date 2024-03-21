@@ -76,27 +76,6 @@ impl Connection for RestAPIConnection {
         Ok(RowStatsIterator::new(Arc::new(schema), Box::pin(rows)))
     }
 
-    async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
-        info!("query row: {}", sql);
-        let resp = self.client.start_query(sql).await?;
-        let resp = self.wait_for_data(resp).await?;
-        match resp.kill_uri {
-            Some(uri) => self
-                .client
-                .kill_query(&resp.id, &uri)
-                .await
-                .map_err(|e| e.into()),
-            None => Err(Error::InvalidResponse("kill_uri is empty".to_string())),
-        }?;
-        let schema = resp.schema.try_into()?;
-        if resp.data.is_empty() {
-            Ok(None)
-        } else {
-            let row = Row::try_from((Arc::new(schema), &resp.data[0]))?;
-            Ok(Some(row))
-        }
-    }
-
     async fn get_presigned_url(&self, operation: &str, stage: &str) -> Result<PresignedResponse> {
         info!("get presigned url: {} {}", operation, stage);
         let sql = format!("PRESIGN {} {}", operation, stage);
@@ -194,25 +173,6 @@ impl<'o> RestAPIConnection {
     pub async fn try_create(dsn: &str, name: String) -> Result<Self> {
         let client = APIClient::new(dsn, Some(name)).await?;
         Ok(Self { client })
-    }
-
-    async fn wait_for_data(&self, pre: QueryResponse) -> Result<QueryResponse> {
-        if !pre.data.is_empty() {
-            return Ok(pre);
-        }
-        // preserve schema since it is not included in the final response in old servers
-        let pre_schema = pre.schema.clone();
-        let mut result = pre;
-        while let Some(next_uri) = result.next_uri {
-            result = self.client.query_page(&result.id, &next_uri).await?;
-            if !result.data.is_empty() {
-                break;
-            }
-        }
-        if result.schema.is_empty() {
-            result.schema = pre_schema;
-        }
-        Ok(result)
     }
 
     async fn wait_for_schema(&self, pre: QueryResponse) -> Result<QueryResponse> {

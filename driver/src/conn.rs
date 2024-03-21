@@ -105,13 +105,19 @@ pub trait Connection: DynClone + Send + Sync {
     }
 
     async fn exec(&self, sql: &str) -> Result<i64>;
-    async fn query_row(&self, sql: &str) -> Result<Option<Row>>;
+    async fn query_iter(&self, sql: &str) -> Result<RowIterator>;
+    async fn query_iter_ext(&self, sql: &str) -> Result<RowStatsIterator>;
+
+    async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
+        let rows = self.query_all(sql).await?;
+        let row = rows.into_iter().next();
+        Ok(row)
+    }
+
     async fn query_all(&self, sql: &str) -> Result<Vec<Row>> {
         let rows = self.query_iter(sql).await?;
         rows.collect().await
     }
-    async fn query_iter(&self, sql: &str) -> Result<RowIterator>;
-    async fn query_iter_ext(&self, sql: &str) -> Result<RowStatsIterator>;
 
     /// Get presigned url for a given operation and stage location.
     /// The operation can be "UPLOAD" or "DOWNLOAD".
