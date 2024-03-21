@@ -48,7 +48,9 @@ pub enum JoinType {
     Inner,
     Left,
     Right,
+    PartialRightInner,
     Full,
+    PartialFull,
     LeftSemi,
     RightSemi,
     LeftAnti,
@@ -137,6 +139,12 @@ impl Display for JoinType {
             }
             JoinType::RightSingle => {
                 write!(f, "RIGHT SINGLE")
+            }
+            JoinType::PartialFull => {
+                write!(f, "PARTIAL FULL")
+            }
+            JoinType::PartialRightInner => {
+                write!(f, "PARTIAL RIGHT INNER")
             }
         }
     }
@@ -477,6 +485,8 @@ impl Operator for Join {
             JoinType::Inner | JoinType::Cross => inner_join_cardinality,
             JoinType::Left => f64::max(left_cardinality, inner_join_cardinality),
             JoinType::Right => f64::max(right_cardinality, inner_join_cardinality),
+            // PartialFull/PartialRightInner are special joins only for merge into source build case.
+            JoinType::PartialFull | JoinType::PartialRightInner => right_cardinality,
             JoinType::Full => {
                 f64::max(left_cardinality, inner_join_cardinality)
                     + f64::max(right_cardinality, inner_join_cardinality)

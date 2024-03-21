@@ -169,7 +169,9 @@ impl HashJoinProbeState {
             | JoinType::LeftSingle
             | JoinType::RightSingle
             | JoinType::Right
-            | JoinType::Full => self.probe_join(input, probe_state),
+            | JoinType::Full
+            | JoinType::PartialFull
+            | JoinType::PartialRightInner => self.probe_join(input, probe_state),
             JoinType::Cross => self.cross_join(input, probe_state),
         }
     }

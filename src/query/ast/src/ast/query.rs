@@ -373,6 +373,26 @@ pub enum JoinOperator {
     LeftOuter,
     RightOuter,
     FullOuter,
+    // PartialFullOuter/PartialRightInner are optimizations for merge into source build
+    // in this case,  we can do pass the target block of matched partition and ummatched
+    // partition, and append block directly, but it's limited, we just support
+    // the matched partial block must be modified(update or delete), so we need to
+    // make sure the last condition for matched expression is none.
+    // for example:
+    // a. merge into t1 using t2 on t1.a = t2.a when matched and cond1 then xx when matched
+    // then xxx.
+    // b. merge into t1 using t2 on t1.a = t2.a when matched and cond1 then xx when matched
+    // and cond2 then xxx.
+    // we can support a not b. The reason for this limitation is below:
+    // if a target block is not modified, we will append the unmacthed partial of target block
+    // unexpectedly.
+    // (we must have matched expressions),
+    // I. if there are no not matched expressions.
+    // We use PartialRightInner, it  won't output the not matched data. (it equals to right inner join in normal case.)
+    // 2. if there are not matched expressions. we use PartialFullOuter,it will output the partial unmodified data of
+    // target table block.(it equals to right outer join in normal case.)
+    PartialFullOuter,
+    PartialRightInner,
     LeftSemi,
     LeftAnti,
     RightSemi,
@@ -589,6 +609,12 @@ impl Display for TableReference {
                     }
                     JoinOperator::CrossJoin => {
                         write!(f, " CROSS JOIN")?;
+                    }
+                    JoinOperator::PartialFullOuter => {
+                        write!(f, "PARTIAL FULL OUTER JOIN")?;
+                    }
+                    JoinOperator::PartialRightInner => {
+                        write!(f, "PARTIAL RIGHT INNER JOIN")?;
                     }
                 }
                 write!(f, " {}", join.right)?;
