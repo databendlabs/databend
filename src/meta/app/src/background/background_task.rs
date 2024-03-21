@@ -109,6 +109,7 @@ impl Display for VacuumStats {
     }
 }
 
+// Serde is required by `ListBackgroundTasksResponse.task_infos`
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundTaskInfo {
     pub last_updated: Option<DateTime<Utc>>,
