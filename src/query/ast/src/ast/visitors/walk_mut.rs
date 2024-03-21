@@ -149,6 +149,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             unit,
         } => visitor.visit_date_sub(*span, unit, interval, date),
         Expr::DateTrunc { span, unit, date } => visitor.visit_date_trunc(*span, unit, date),
+        Expr::Hole { .. } => {}
     }
 }
 
@@ -446,6 +447,8 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
+        Statement::ShowViews(stmt) => visitor.visit_show_views(stmt),
+        Statement::DescribeView(stmt) => visitor.visit_describe_view(stmt),
         Statement::CreateStream(stmt) => visitor.visit_create_stream(stmt),
         Statement::DropStream(stmt) => visitor.visit_drop_stream(stmt),
         Statement::ShowStreams(stmt) => visitor.visit_show_streams(stmt),

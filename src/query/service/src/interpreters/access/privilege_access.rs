@@ -32,6 +32,7 @@ use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
+use databend_common_sql::Planner;
 use databend_common_users::RoleCacheManager;
 
 use crate::interpreters::access::AccessChecker;
@@ -861,13 +862,21 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Update], false).await?;
             }
             Plan::CreateView(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create], false).await?
+                let mut planner = Planner::new(self.ctx.clone());
+                let (plan, _) = planner.plan_sql(&plan.subquery).await?;
+                self.check(ctx, &plan).await?
             }
             Plan::AlterView(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Alter], false).await?
+                self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Alter], false).await?;
+                let mut planner = Planner::new(self.ctx.clone());
+                let (plan, _) = planner.plan_sql(&plan.subquery).await?;
+                self.check(ctx, &plan).await?
             }
             Plan::DropView(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Drop], plan.if_exists).await?
+            }
+            Plan::DescribeView(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.view_name, vec![UserPrivilegeType::Select], false).await?
             }
             Plan::CreateStream(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, vec![UserPrivilegeType::Create], false).await?

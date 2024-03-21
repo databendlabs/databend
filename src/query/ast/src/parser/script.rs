@@ -30,7 +30,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             LET ~^#ident ~ RESULTSET ~ ^":=" ~ ^#query
         }),
         |(span, (_, name, _, _, query))| ScriptStatement::LetQuery {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             declare: QueryDeclare { name, query },
         },
     );
@@ -39,7 +39,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             LET ~^#ident ~ #type_name? ~ ^":=" ~ ^#expr
         }),
         |(span, (_, name, data_type, _, default))| ScriptStatement::LetVar {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             declare: VariableDeclare {
                 name,
                 data_type,
@@ -52,7 +52,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             #ident ~ ":=" ~ ^#expr
         }),
         |(span, (name, _, value))| ScriptStatement::Assign {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             name,
             value,
         },
@@ -62,7 +62,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             RETURN ~ #expr?
         }),
         |(span, (_, value))| ScriptStatement::Return {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             value,
         },
     );
@@ -77,7 +77,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             span,
             (_, variable, _, is_reverse, lower_bound, _, upper_bound, _, body, _, _, label),
         )| ScriptStatement::ForLoop {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             variable,
             is_reverse: is_reverse.is_some(),
             lower_bound,
@@ -93,7 +93,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             ~ ^END ~ ^FOR ~ #ident?
         }),
         |(span, (_, variable, _, resultset, _, body, _, _, label))| ScriptStatement::ForIn {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             variable,
             resultset,
             body,
@@ -107,7 +107,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             ~ ^END ~ ^WHILE ~ #ident?
         }),
         |(span, (_, condition, _, body, _, _, label))| ScriptStatement::WhileLoop {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             condition,
             body,
             label,
@@ -121,7 +121,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             ~ ^END ~ ^REPEAT ~ #ident?
         }),
         |(span, (_, body, _, until_condition, _, _, label))| ScriptStatement::RepeatLoop {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             body,
             until_condition,
             label,
@@ -132,7 +132,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             LOOP ~ ^#semicolon_terminated_list1(script_stmt) ~ ^END ~ ^LOOP ~ #ident?
         }),
         |(span, (_, body, _, _, label))| ScriptStatement::Loop {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             body,
             label,
         },
@@ -142,7 +142,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             BREAK ~ #ident?
         }),
         |(span, (_, label))| ScriptStatement::Break {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             label,
         },
     );
@@ -151,7 +151,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             CONTINUE ~ #ident?
         }),
         |(span, (_, label))| ScriptStatement::Continue {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             label,
         },
     );
@@ -169,7 +169,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
                 .unzip();
             let else_result = else_result.map(|(_, result)| result);
             ScriptStatement::Case {
-                span: transform_span(span.0),
+                span: transform_span(span.tokens),
                 operand,
                 conditions,
                 results,
@@ -192,7 +192,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             }
             let else_result = else_result.map(|(_, result)| result);
             ScriptStatement::If {
-                span: transform_span(span.0),
+                span: transform_span(span.tokens),
                 conditions,
                 results,
                 else_result,
@@ -204,7 +204,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             #statement_body
         }),
         |(span, stmt)| ScriptStatement::SQLStatement {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             stmt,
         },
     );

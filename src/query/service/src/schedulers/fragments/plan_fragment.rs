@@ -24,7 +24,6 @@ use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::DeleteSource;
-use databend_common_sql::executor::physical_plans::QuerySource;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
 use databend_common_sql::executor::physical_plans::ReclusterTask;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
@@ -427,16 +426,10 @@ impl PlanFragment {
 
         let mut data_sources = HashMap::new();
 
-        let mut collect_data_source = |plan: &PhysicalPlan| match plan {
-            PhysicalPlan::TableScan(scan) => {
+        let mut collect_data_source = |plan: &PhysicalPlan| {
+            if let PhysicalPlan::TableScan(scan) = plan {
                 data_sources.insert(scan.plan_id, *scan.source.clone());
             }
-            PhysicalPlan::CopyIntoTable(copy) => {
-                if let Some(stage) = copy.source.as_stage().cloned() {
-                    data_sources.insert(copy.plan_id, *stage);
-                }
-            }
-            _ => {}
         };
 
         PhysicalPlan::traverse(
@@ -475,22 +468,17 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
 
     fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
         match &plan.source {
-            CopyIntoTableSource::Query(query_ctx) => {
-                let input = self.replace(&query_ctx.plan)?;
+            CopyIntoTableSource::Query(query_physical_plan) => {
+                let input = self.replace(query_physical_plan)?;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
-                        plan: input,
-                        ..*query_ctx.clone()
-                    })),
+                    source: CopyIntoTableSource::Query(Box::new(input)),
                     ..plan.clone()
                 })))
             }
-            CopyIntoTableSource::Stage(_) => {
-                let source = self.sources.remove(&plan.plan_id).ok_or_else(|| {
-                    ErrorCode::Internal("Cannot find data source for copy into plan")
-                })?;
+            CopyIntoTableSource::Stage(v) => {
+                let input = self.replace(v)?;
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Stage(Box::new(source)),
+                    source: CopyIntoTableSource::Stage(Box::new(input)),
                     ..plan.clone()
                 })))
             }

@@ -2,7 +2,7 @@ x	x
 timezone	America/Los_Angeles
 x	x
 timezone	Asia/Shanghai
-timezone	Asia/Shanghai	UTC	None	SESSION	Sets the timezone.	String
+timezone	Asia/Shanghai	UTC	["Africa/Abidjan", "Africa/Accra", "Africa/Addis_Ababa", "Africa...	SESSION	Sets the timezone.	String
 timezone	UTC
 storage_read_buffer_size	1048576
 timezone	Asia/Shanghai

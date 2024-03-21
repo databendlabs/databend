@@ -32,12 +32,14 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -640,7 +642,7 @@ impl TableContext for CtxDelegation {
         _table_name: &str,
         _files: &[StageFileInfo],
         _max_files: Option<usize>,
-    ) -> Result<Vec<StageFileInfo>> {
+    ) -> Result<FilteredCopyFiles> {
         todo!()
     }
 
@@ -747,6 +749,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
+        todo!()
+    }
+
+    fn get_read_block_thresholds(&self) -> BlockThresholds {
+        todo!()
+    }
+
+    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
         todo!()
     }
 }

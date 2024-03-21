@@ -85,13 +85,13 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let column = if !bound_column.table_name.is_empty() && self.rng.gen_bool(0.2) {
                     ColumnID::Position(ColumnPosition::create(None, bound_column.index))
                 } else {
-                    let name = Identifier::from_name(bound_column.name.clone());
+                    let name = Identifier::from_name(None, bound_column.name.clone());
                     ColumnID::Name(name)
                 };
                 let table = if self.is_join
                     || (!bound_column.table_name.is_empty() && self.rng.gen_bool(0.2))
                 {
-                    Some(Identifier::from_name(bound_column.table_name.clone()))
+                    Some(Identifier::from_name(None, bound_column.table_name.clone()))
                 } else {
                     None
                 };
@@ -149,7 +149,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     span: None,
                     func: FunctionCall {
                         distinct: false,
-                        name: Identifier::from_name("to_date".to_string()),
+                        name: Identifier::from_name(None, "to_date".to_string()),
                         args: vec![arg],
                         params: vec![],
                         window: None,
@@ -166,7 +166,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     span: None,
                     func: FunctionCall {
                         distinct: false,
-                        name: Identifier::from_name("to_timestamp".to_string()),
+                        name: Identifier::from_name(None, "to_timestamp".to_string()),
                         args: vec![arg],
                         params: vec![],
                         window: None,
@@ -223,7 +223,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     span: None,
                     func: FunctionCall {
                         distinct: false,
-                        name: Identifier::from_name("to_bitmap".to_string()),
+                        name: Identifier::from_name(None, "to_bitmap".to_string()),
                         args: vec![arg],
                         params: vec![],
                         window: None,
@@ -241,7 +241,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     span: None,
                     func: FunctionCall {
                         distinct: false,
-                        name: Identifier::from_name("parse_json".to_string()),
+                        name: Identifier::from_name(None, "parse_json".to_string()),
                         args: vec![arg],
                         params: vec![],
                         window: None,
@@ -258,7 +258,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     span: None,
                     func: FunctionCall {
                         distinct: false,
-                        name: Identifier::from_name("to_binary".to_string()),
+                        name: Identifier::from_name(None, "to_binary".to_string()),
                         args: vec![arg],
                         params: vec![],
                         window: None,
@@ -277,7 +277,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     span: None,
                     func: FunctionCall {
                         distinct: false,
-                        name: Identifier::from_name("to_geometry".to_string()),
+                        name: Identifier::from_name(None, "to_geometry".to_string()),
                         args: vec![arg],
                         params: vec![],
                         window: None,
@@ -337,6 +337,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
     fn gen_identifier(&mut self) -> Identifier {
         Identifier::from_name(
+            None,
             rand::thread_rng()
                 .sample_iter(&Alphanumeric)
                 .take(5)
@@ -605,7 +606,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     span: None,
                     func: FunctionCall {
                         distinct: false,
-                        name: Identifier::from_name("to_binary"),
+                        name: Identifier::from_name(None, "to_binary"),
                         args: vec![arg],
                         params: vec![],
                         window: None,
@@ -643,7 +644,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     span: None,
                     func: FunctionCall {
                         distinct: false,
-                        name: Identifier::from_name(func_name),
+                        name: Identifier::from_name(None, func_name),
                         args,
                         params: vec![],
                         window: None,

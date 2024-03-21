@@ -30,6 +30,7 @@ use databend_common_ast::parser::Backtrace;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::IResult;
 use databend_common_ast::parser::Input;
+use databend_common_ast::parser::ParseMode;
 use databend_common_ast::rule;
 use goldenfile::Mint;
 
@@ -38,11 +39,16 @@ where
     P: FnMut(Input) -> IResult<O>,
     O: Debug + Display,
 {
-    run_parser_with_dialect(file, parser, Dialect::PostgreSQL, src)
+    run_parser_with_dialect(file, parser, Dialect::PostgreSQL, ParseMode::Default, src)
 }
 
-fn run_parser_with_dialect<P, O>(file: &mut dyn Write, parser: P, dialect: Dialect, src: &str)
-where
+fn run_parser_with_dialect<P, O>(
+    file: &mut dyn Write,
+    parser: P,
+    dialect: Dialect,
+    mode: ParseMode,
+    src: &str,
+) where
     P: FnMut(Input) -> IResult<O>,
     O: Debug + Display,
 {
@@ -50,9 +56,15 @@ where
     let src = src.trim();
     let tokens = tokenize_sql(src).unwrap();
     let backtrace = Backtrace::new();
+    let input = Input {
+        tokens: &tokens,
+        dialect,
+        mode,
+        backtrace: &backtrace,
+    };
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
-    match parser(Input(&tokens, dialect, &backtrace)) {
+    match parser(input) {
         Ok((i, (output, _))) => {
             assert_eq!(i[0].kind, TokenKind::EOI);
             writeln!(file, "---------- Input ----------").unwrap();
@@ -142,6 +154,11 @@ fn test_statement() {
         r#"create view v1(c1) as select number % 3 as a from numbers(1000);"#,
         r#"create or replace view v1(c1) as select number % 3 as a from numbers(1000);"#,
         r#"alter view v1(c2) as select number % 3 as a from numbers(1000);"#,
+        r#"show views"#,
+        r#"show views format TabSeparatedWithNamesAndTypes;"#,
+        r#"show full views"#,
+        r#"show full views from db"#,
+        r#"show full views from ctl.db"#,
         r#"create stream test2.s1 on table test.t append_only = false;"#,
         r#"create stream if not exists test2.s2 on table test.t at (stream => test1.s1) comment = 'this is a stream';"#,
         r#"create or replace stream test2.s1 on table test.t append_only = false;"#,
@@ -725,13 +742,16 @@ fn test_statement_error() {
                 )"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn"#,
         r#"select $0 from t1"#,
-        "GRANT OWNERSHIP, SELECT ON d20_0014.* TO ROLE 'd20_0015_owner';",
-        "GRANT OWNERSHIP ON d20_0014.* TO USER A;",
-        "REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';",
-        "REVOKE OWNERSHIP ON d20_0014.* FROM USER A;",
-        "REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;",
-        "GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';",
-        "CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)",
+        r#"GRANT OWNERSHIP, SELECT ON d20_0014.* TO ROLE 'd20_0015_owner';"#,
+        r#"GRANT OWNERSHIP ON d20_0014.* TO USER A;"#,
+        r#"REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';"#,
+        r#"REVOKE OWNERSHIP ON d20_0014.* FROM USER A;"#,
+        r#"REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;"#,
+        r#"GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';"#,
+        r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)"#,
+        r#"drop table :a"#,
+        r#"drop table IDENTIFIER(a)"#,
+        r#"drop table IDENTIFIER(:a)"#,
     ];
 
     for case in cases {
@@ -959,7 +979,7 @@ fn test_experimental_expr() {
     ];
 
     for case in cases {
-        run_parser_with_dialect(file, expr, Dialect::Experimental, case);
+        run_parser_with_dialect(file, expr, Dialect::Experimental, ParseMode::Default, case);
     }
 }
 
@@ -1059,10 +1079,19 @@ fn test_script() {
                 SELECT c1, c2 FROM t WHERE c1 = 1;
             END LOOP
         "#,
+        r#"select :a + 1"#,
+        r#"select IDENTIFIER(:b)"#,
+        r#"select a.IDENTIFIER(:b).c + minus(:d)"#,
     ];
 
     for case in cases {
-        run_parser(file, script_stmt, case);
+        run_parser_with_dialect(
+            file,
+            script_stmt,
+            Dialect::PostgreSQL,
+            ParseMode::Template,
+            case,
+        );
     }
 }
 

@@ -108,7 +108,7 @@ impl StageTable {
         let schema = TableSchemaRefExt::create(fields);
         let stage_info = stage_table_info.stage_info.clone();
         let operator = StageTable::get_op(&stage_table_info.stage_info)?;
-        let compact_threshold = self.get_block_compact_thresholds_with_default();
+        let compact_threshold = ctx.get_read_block_thresholds();
         let on_error_map = ctx.get_on_error_map().unwrap_or_else(|| {
             let m = Arc::new(DashMap::new());
             ctx.set_on_error_map(m.clone());

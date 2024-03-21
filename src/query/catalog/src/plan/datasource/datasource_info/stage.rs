@@ -32,6 +32,12 @@ pub struct StageTableInfo {
     pub files_info: StageFilesInfo,
     pub stage_info: StageInfo,
     pub files_to_copy: Option<Vec<StageFileInfo>>,
+    // files that
+    // - are listed as candidates to be copied
+    // - but already exist in the meta server's "copied-files" set of target table
+    // - should be ignored in the copy process
+    // - may need to be purged as well (depends on the copy options)
+    pub duplicated_files_detected: Vec<String>,
     pub is_select: bool,
 }
 
@@ -46,15 +52,23 @@ impl StageTableInfo {
 
     #[async_backtrace::framed]
     pub async fn list_files(&self, max_files: Option<usize>) -> Result<Vec<StageFileInfo>> {
-        let op = init_stage_operator(&self.stage_info)?;
-        let infos = self
-            .files_info
-            .list(&op, false, max_files)
-            .await?
-            .into_iter()
-            .collect::<Vec<_>>();
+        let infos = list_stage_files(&self.stage_info, &self.files_info, max_files).await?;
         Ok(infos)
     }
+}
+
+pub async fn list_stage_files(
+    stage_info: &StageInfo,
+    files_info: &StageFilesInfo,
+    max_files: Option<usize>,
+) -> Result<Vec<StageFileInfo>> {
+    let op = init_stage_operator(stage_info)?;
+    let infos = files_info
+        .list(&op, false, max_files)
+        .await?
+        .into_iter()
+        .collect::<Vec<_>>();
+    Ok(infos)
 }
 
 impl Debug for StageTableInfo {

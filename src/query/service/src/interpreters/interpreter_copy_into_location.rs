@@ -15,22 +15,20 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::StageTableInfo;
-use databend_common_catalog::table::AppendMode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_sql::executor::physical_plans::CopyIntoLocation;
+use databend_common_sql::executor::physical_plans::Project;
+use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_stage::StageTable;
 use log::debug;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::PipelineBuilder;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyIntoLocationPlan;
@@ -48,7 +46,7 @@ impl CopyIntoLocationInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn build_query(&self, query: &Plan) -> Result<(SelectInterpreter, DataSchemaRef)> {
+    async fn build_query(&self, query: &Plan) -> Result<SelectInterpreter> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
                 s_expr,
@@ -69,21 +67,7 @@ impl CopyIntoLocationInterpreter {
             false,
         )?;
 
-        // Building data schema from bind_context columns
-        // TODO(leiyskey): Extract the following logic as new API of BindContext.
-        let fields = bind_context
-            .columns
-            .iter()
-            .map(|column_binding| {
-                DataField::new(
-                    &column_binding.column_name,
-                    *column_binding.data_type.clone(),
-                )
-            })
-            .collect();
-        let data_schema = DataSchemaRefExt::create(fields);
-
-        Ok((select_interpreter, data_schema))
+        Ok(select_interpreter)
     }
 
     /// Build a pipeline for local copy into stage.
@@ -94,35 +78,39 @@ impl CopyIntoLocationInterpreter {
         path: &str,
         query: &Plan,
     ) -> Result<PipelineBuildResult> {
-        let (select_interpreter, data_schema) = self.build_query(query).await?;
-        let plan = select_interpreter.build_physical_plan().await?;
-        let mut build_res = select_interpreter.build_pipeline(plan).await?;
-        let table_schema = infer_table_schema(&data_schema)?;
-        let stage_table_info = StageTableInfo {
-            schema: table_schema,
-            stage_info: stage.clone(),
-            files_info: StageFilesInfo {
-                path: path.to_string(),
-                files: None,
-                pattern: None,
-            },
-            files_to_copy: None,
-            is_select: false,
-            default_values: None,
-        };
-        let to_table = StageTable::try_create(stage_table_info)?;
-        PipelineBuilder::build_append2table_with_commit_pipeline(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            to_table,
-            data_schema,
-            None,
-            vec![],
+        let query_interpreter = self.build_query(query).await?;
+        let query_physical_plan = query_interpreter.build_physical_plan().await?;
+        let query_result_schema = query_interpreter.get_result_schema();
+        let table_schema = infer_table_schema(&query_result_schema)?;
+        let projected_query_physical_plan = PhysicalPlan::Project(Project::from_columns_binding(
+            0,
+            Box::new(query_physical_plan),
+            query_interpreter.get_result_columns(),
             false,
-            AppendMode::Normal,
-            unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-        )?;
-        Ok(build_res)
+        )?);
+
+        let mut physical_plan = PhysicalPlan::CopyIntoLocation(Box::new(CopyIntoLocation {
+            plan_id: 0,
+            input: Box::new(projected_query_physical_plan),
+            input_schema: query_result_schema,
+            to_stage_info: StageTableInfo {
+                schema: table_schema,
+                stage_info: stage.clone(),
+                files_info: StageFilesInfo {
+                    path: path.to_string(),
+                    files: None,
+                    pattern: None,
+                },
+                files_to_copy: None,
+                duplicated_files_detected: vec![],
+                is_select: false,
+                default_values: None,
+            },
+        }));
+
+        let mut next_plan_id = 0;
+        physical_plan.adjust_plan_id(&mut next_plan_id);
+        build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await
     }
 }
 

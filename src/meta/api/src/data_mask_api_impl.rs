@@ -28,6 +28,7 @@ use databend_common_meta_app::data_mask::GetDatamaskReply;
 use databend_common_meta_app::data_mask::GetDatamaskReq;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdListKey;
+use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
@@ -44,7 +45,6 @@ use crate::data_mask_api::DatamaskApi;
 use crate::fetch_id;
 use crate::get_pb_value;
 use crate::get_u64_value;
-use crate::id_generator::IdGenerator;
 use crate::kv_app_error::KVAppError;
 use crate::send_txn;
 use crate::serialize_struct;
@@ -79,7 +79,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
             if seq > 0 {
                 match req.create_option {
-                    CreateOption::None => {
+                    CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::DatamaskAlreadyExists(
                             DatamaskAlreadyExists::new(
                                 &name_key.name,

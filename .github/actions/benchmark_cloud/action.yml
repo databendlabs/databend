@@ -41,6 +41,21 @@ runs:
         sudo apt-get update -yq
         sudo apt-get install -yq python3
 
+    - name: Prepare
+      working-directory: benchmark/clickbench
+      shell: bash
+      id: prepare
+      env:
+        BENDSQL_DSN: "databend://${{ inputs.cloud_user }}:${{ inputs.cloud_password }}@${{ inputs.cloud_gateway }}:443"
+      run: |
+        if [[ "${{ inputs.dataset }}" == "load" ]]; then
+          echo "database=load_test_${{ inputs.run_id }}" >> $GITHUB_OUTPUT
+          echo "tries=1" >> $GITHUB_OUTPUT
+        else
+          echo "database=clickbench" >> $GITHUB_OUTPUT
+          echo "tries=3" >> $GITHUB_OUTPUT
+        fi
+
     - name: Run Benchmark
       working-directory: benchmark/clickbench
       env:
@@ -48,7 +63,8 @@ runs:
         BENCHMARK_DATASET: ${{ inputs.dataset }}
         BENCHMARK_SIZE: ${{ inputs.size }}
         BENCHMARK_VERSION: ${{ inputs.version }}
-        BENCHMARK_DATABASE: clickbench
+        BENCHMARK_DATABASE: ${{ steps.prepare.outputs.database }}
+        BENCHMARK_TRIES: ${{ steps.prepare.outputs.tries }}
         CLOUD_USER: ${{ inputs.cloud_user }}
         CLOUD_PASSWORD: ${{ inputs.cloud_password }}
         CLOUD_GATEWAY: ${{ inputs.cloud_gateway }}

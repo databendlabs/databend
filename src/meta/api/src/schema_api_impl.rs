@@ -58,6 +58,7 @@ use databend_common_meta_app::app_error::WrongShare;
 use databend_common_meta_app::app_error::WrongShareObject;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdListKey;
+use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::CatalogId;
 use databend_common_meta_app::schema::CatalogIdToName;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -243,7 +244,6 @@ use crate::util::list_tables_from_share_db;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
 use crate::util::remove_table_from_share;
-use crate::IdGenerator;
 use crate::SchemaApi;
 use crate::DEFAULT_MGET_SIZE;
 
@@ -282,7 +282,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let spec_vec = if db_id_seq > 0 {
                 match req.create_option {
-                    CreateOption::None => {
+                    CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
                             DatabaseAlreadyExists::new(
                                 &name_key.db_name,
@@ -929,7 +929,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let (_, index_id_seq) = if index_id_seq > 0 {
                 match req.create_option {
-                    CreateOption::None => {
+                    CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::IndexAlreadyExists(
                             IndexAlreadyExists::new(
                                 &tenant_index.index_name,
@@ -1267,7 +1267,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut if_then = vec![];
             let seq = if old_virtual_column_opt.is_some() {
                 match req.create_option {
-                    CreateOption::None => {
+                    CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::VirtualColumnAlreadyExists(
                             VirtualColumnAlreadyExists::new(
                                 req.name_ident.table_id,
@@ -1630,7 +1630,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 if let Some(id) = v {
                     // TODO: move if_not_exists to upper caller. It is not duty of SchemaApi.
                     match req.create_option {
-                        CreateOption::None => {
+                        CreateOption::Create => {
                             let app_err = make_exists_err(&req);
                             return Err(KVAppError::AppError(app_err));
                         }
@@ -3220,7 +3220,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let indexes = &mut table_meta.indexes;
             if indexes.contains_key(&req.name) {
                 match req.create_option {
-                    CreateOption::None => {
+                    CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::IndexAlreadyExists(
                             IndexAlreadyExists::new(&req.name, "create table index".to_string()),
                         )));

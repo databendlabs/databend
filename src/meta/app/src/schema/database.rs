@@ -47,7 +47,7 @@ impl DatabaseNameIdent {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseInfo {
     pub ident: DatabaseIdent,
     pub name_ident: DatabaseNameIdent,
@@ -114,7 +114,7 @@ impl Display for DbIdListKey {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseMeta {
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
@@ -204,7 +204,7 @@ impl Display for DbIdList {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabaseReq {
     pub create_option: CreateOption,
     pub name_ident: DatabaseNameIdent,
@@ -214,7 +214,7 @@ pub struct CreateDatabaseReq {
 impl Display for CreateDatabaseReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
-            CreateOption::None => write!(
+            CreateOption::Create => write!(
                 f,
                 "create_db:{}/{}={:?}",
                 self.name_ident.tenant, self.name_ident.db_name, self.meta

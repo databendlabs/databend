@@ -17,10 +17,8 @@
 mod connection;
 mod file_format;
 mod network_policy;
-mod network_policy_ident;
 mod ownership_info;
 mod password_policy;
-mod password_policy_ident;
 mod principal_identity;
 mod role_ident;
 mod role_info;
@@ -33,10 +31,15 @@ mod user_info;
 mod user_privilege;
 mod user_quota;
 mod user_setting;
-mod user_setting_ident;
 mod user_stage;
 mod user_stage_file_ident;
-mod user_stage_ident;
+
+pub mod connection_ident;
+pub mod network_policy_ident;
+pub mod password_policy_ident;
+pub mod user_defined_file_format_ident;
+pub mod user_setting_ident;
+pub mod user_stage_ident;
 
 pub use connection::*;
 pub use file_format::*;

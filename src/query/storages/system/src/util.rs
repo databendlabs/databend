@@ -47,3 +47,63 @@ pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
         }
     }
 }
+
+pub fn find_gt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
+    match expr {
+        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
+        Expr::Cast { expr, .. } => find_gt_filter(expr, visitor),
+        Expr::FunctionCall { function, args, .. } => {
+            if function.signature.name == "gt" || function.signature.name == "gte" {
+                match args.as_slice() {
+                    [Expr::ColumnRef { id, .. }, Expr::Constant { scalar, .. }]
+                    | [Expr::Constant { scalar, .. }, Expr::ColumnRef { id, .. }] => {
+                        visitor(id, scalar);
+                    }
+                    _ => {}
+                }
+            } else if function.signature.name == "and_filters" {
+                // only support this:
+                // 1. where xx and xx and xx
+                // 2. filter: Column `table`, Column `database`
+                for arg in args {
+                    find_gt_filter(arg, visitor)
+                }
+            }
+        }
+        Expr::LambdaFunctionCall { args, .. } => {
+            for arg in args {
+                find_gt_filter(arg, visitor)
+            }
+        }
+    }
+}
+
+pub fn find_lt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
+    match expr {
+        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
+        Expr::Cast { expr, .. } => find_lt_filter(expr, visitor),
+        Expr::FunctionCall { function, args, .. } => {
+            if function.signature.name == "lt" || function.signature.name == "lte" {
+                match args.as_slice() {
+                    [Expr::ColumnRef { id, .. }, Expr::Constant { scalar, .. }]
+                    | [Expr::Constant { scalar, .. }, Expr::ColumnRef { id, .. }] => {
+                        visitor(id, scalar);
+                    }
+                    _ => {}
+                }
+            } else if function.signature.name == "and_filters" {
+                // only support this:
+                // 1. where xx and xx and xx
+                // 2. filter: Column `table`, Column `database`
+                for arg in args {
+                    find_lt_filter(arg, visitor)
+                }
+            }
+        }
+        Expr::LambdaFunctionCall { args, .. } => {
+            for arg in args {
+                find_lt_filter(arg, visitor)
+            }
+        }
+    }
+}

@@ -42,7 +42,7 @@ impl ViewRewriter {
             // use db1; -- db1 does not contain table `t`
             // select * from default.v_t; => select * from (select * from t); -- will return err that unknown table db1.t
             if database.is_none() {
-                let database = Some(Identifier::from_name(self.current_database.clone()));
+                let database = Some(Identifier::from_name(*span, self.current_database.clone()));
                 *table_ref = TableReference::Table {
                     span: *span,
                     catalog: catalog.clone(),

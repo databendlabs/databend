@@ -34,7 +34,7 @@
 
 ## 🐋 Introduction
 
-**Databend** is an open-source, elastic, and workload-aware cloud data warehouse built in Rust, offering a cost-effective [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059). It's designed for complex analysis of the world's largest datasets.
+**Databend**, built in Rust, is an open-source cloud data warehouse that serves as a cost-effective [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059). With its focus on fast query execution and data ingestion, it's designed for complex analysis of the world's largest datasets.
 
 ## ⚡ Performance
 
@@ -45,6 +45,14 @@
 </div>
 
 ![Databend vs. Snowflake](https://github.com/datafuselabs/wizard/assets/172204/d796acf0-0a66-4b1d-8754-cd2cd1de04c7)
+
+<div align="center">
+  
+[Data Ingestion Benchmark: Databend Cloud vs. Snowflake](https://docs.databend.com/guides/benchmark/data-ingest)
+
+</div>
+
+![Databend vs. Snowflake](https://github.com/datafuselabs/databend/assets/172204/c61d7a40-f6fe-4fb9-83e8-06ea9599aeb4)
 
 
 ## 🚀 Why Databend
@@ -214,6 +222,15 @@ docker run --net=host  datafuselabs/databend
 </details>
 
 <details>
+<summary>Accessing Data Lake</summary>
+
+- [Apache Hive](https://docs.databend.com/guides/access-data-lake/hive)
+- [Apache Iceberg](https://docs.databend.com/guides/access-data-lake/iceberg/iceberg-engine)
+- [Delta Lake](https://docs.databend.com/guides/access-data-lake/delta)
+
+</details>
+
+<details>
 <summary>Security</summary>
 
 - [Access Control](https://docs.databend.com/guides/security/access-control)
@@ -227,7 +244,8 @@ docker run --net=host  datafuselabs/databend
 <summary>Performance</summary>
   
 - [Review Clickbench](https://databend.com/blog/clickbench-databend-top)
-- [How to Benchmark Databend using TPC-H](https://databend.com/blog/2022/08/08/benchmark-tpc-h)
+- [TPC-H Benchmark: Databend Cloud vs. Snowflake](https://docs.databend.com/guides/benchmark/tpch)
+- [Databend vs. Snowflake: Data Ingestion Benchmark](https://docs.databend.com/guides/benchmark/data-ingest)
   
 </details>
 

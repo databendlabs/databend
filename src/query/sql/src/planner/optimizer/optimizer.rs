@@ -28,6 +28,7 @@ use super::distributed::MergeSourceOptimizer;
 use super::format::display_memo;
 use super::Memo;
 use crate::binder::MergeIntoType;
+use crate::optimizer::aggregate::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::decorrelate::decorrelate_subquery;
 use crate::optimizer::distributed::optimize_distributed_query;
@@ -249,6 +250,9 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         )?;
     }
 
+    // Normalize aggregate, it should be executed before RuleSplitAggregate.
+    s_expr = RuleNormalizeAggregateOptimizer::new().run(&s_expr)?;
+
     // Pull up and infer filter.
     s_expr = PullUpFilterOptimizer::new(opt_ctx.metadata.clone()).run(&s_expr)?;
 
@@ -283,17 +287,14 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         enable_distributed_query,
     )?;
 
+    if opt_ctx.enable_join_reorder {
+        s_expr =
+            RecursiveOptimizer::new([RuleID::CommuteJoin].as_slice(), &opt_ctx).run(&s_expr)?;
+    }
+
     // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
     s_expr = match cascades.optimize(s_expr.clone()) {
         Ok(mut s_expr) => {
-            let rules = if opt_ctx.enable_join_reorder {
-                [RuleID::EliminateEvalScalar, RuleID::CommuteJoin].as_slice()
-            } else {
-                [RuleID::EliminateEvalScalar].as_slice()
-            };
-
-            s_expr = RecursiveOptimizer::new(rules, &opt_ctx).run(&s_expr)?;
-
             // Push down sort and limit
             // TODO(leiysky): do this optimization in cascades optimizer
             if enable_distributed_query {
@@ -308,10 +309,6 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
                 "CascadesOptimizer failed, fallback to heuristic optimizer: {}",
                 e
             );
-
-            s_expr =
-                RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?;
-
             if enable_distributed_query {
                 s_expr = optimize_distributed_query(opt_ctx.table_ctx.clone(), &s_expr)?;
             }
@@ -319,6 +316,9 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             s_expr
         }
     };
+
+    s_expr =
+        RecursiveOptimizer::new([RuleID::EliminateEvalScalar].as_slice(), &opt_ctx).run(&s_expr)?;
 
     Ok(s_expr)
 }

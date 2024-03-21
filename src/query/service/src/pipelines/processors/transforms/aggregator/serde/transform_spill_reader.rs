@@ -25,7 +25,6 @@ use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
-use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -213,12 +212,6 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
 
                                 // perf
                                 {
-                                    metrics_inc_aggregate_spill_read_count();
-                                    metrics_inc_aggregate_spill_read_bytes(data.len() as u64);
-                                    metrics_inc_aggregate_spill_read_milliseconds(
-                                        instant.elapsed().as_millis() as u64,
-                                    );
-
                                     Profile::record_usize_profile(
                                         ProfileStatisticsName::SpillReadCount,
                                         1,
@@ -286,17 +279,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
         let mut begin = 0;
         let mut columns = Vec::with_capacity(payload.columns_layout.len());
 
-        let now = Instant::now();
         for column_layout in payload.columns_layout {
             columns.push(deserialize_column(&data[begin..begin + column_layout as usize]).unwrap());
             begin += column_layout as usize;
-        }
-
-        // perf
-        {
-            metrics_inc_aggregate_spill_data_deserialize_milliseconds(
-                now.elapsed().as_millis() as u64
-            );
         }
 
         AggregateMeta::<Method, V>::Serialized(SerializedPayload {

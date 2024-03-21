@@ -380,7 +380,9 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                if self.ctx.get_cluster().is_empty() && list.len() >= 1024 {
+                if self.ctx.get_cluster().is_empty()
+                    && list.len() >= self.ctx.get_settings().get_inlist_to_join_threshold()?
+                {
                     if *not {
                         return self
                             .resolve_unary_op(*span, &UnaryOperator::Not, &Expr::InList {
@@ -404,7 +406,7 @@ impl<'a> TypeChecker<'a> {
                     let array_expr = Expr::FunctionCall {
                         span: *span,
                         func: ASTFunctionCall {
-                            name: Identifier::from_name("array_distinct"),
+                            name: Identifier::from_name(*span, "array_distinct"),
                             args: vec![array_expr],
                             params: vec![],
                             window: None,
@@ -418,11 +420,7 @@ impl<'a> TypeChecker<'a> {
                             span: *span,
                             func: ASTFunctionCall {
                                 distinct: false,
-                                name: Identifier {
-                                    name: "contains".to_string(),
-                                    quote: None,
-                                    span: *span,
-                                },
+                                name: Identifier::from_name(*span, "contains"),
                                 args: args.iter().copied().cloned().collect(),
                                 params: vec![],
                                 window: None,
@@ -670,11 +668,7 @@ impl<'a> TypeChecker<'a> {
                                 span: *span,
                                 func: ASTFunctionCall {
                                     distinct: false,
-                                    name: Identifier {
-                                        name: "eq".to_string(),
-                                        quote: None,
-                                        span: *span,
-                                    },
+                                    name: Identifier::from_name(*span, "eq"),
                                     args: vec![*operand.clone(), c.clone()],
                                     params: vec![],
                                     window: None,
@@ -1085,6 +1079,8 @@ impl<'a> TypeChecker<'a> {
             Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs).await?,
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs).await?,
+
+            Expr::Hole { .. } => unreachable!("hole is impossible in trivial query"),
         };
 
         Ok(Box::new((scalar, data_type)))
@@ -1726,7 +1722,7 @@ impl<'a> TypeChecker<'a> {
             } && arg_types[1].is_integer();
             if !is_positive_integer {
                 return Err(ErrorCode::SemanticError(
-                    "The delimiter of `histogram` must be a constant positive int",
+                    "The max_num_buckets of `histogram` must be a constant positive int",
                 ));
             }
 
@@ -2453,6 +2449,8 @@ impl<'a> TypeChecker<'a> {
             "nvl",
             "nvl2",
             "is_null",
+            "is_error",
+            "error_or",
             "coalesce",
             "last_query_id",
             "array_sort",
@@ -2583,11 +2581,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: Identifier {
-                                name: "is_not_null".to_string(),
-                                quote: None,
-                                span,
-                            },
+                            name: Identifier::from_name(span, "is_not_null"),
                             args: vec![arg_x.clone()],
                             params: vec![],
                             window: None,
@@ -2596,6 +2590,51 @@ impl<'a> TypeChecker<'a> {
                     })
                     .await,
                 )
+            }
+            ("is_error", &[arg_x]) => {
+                // Rewrite is_error(x) to not(is_not_error(x))
+                Some(
+                    self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::FunctionCall {
+                        span,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: Identifier::from_name(span, "is_not_error"),
+                            args: vec![arg_x.clone()],
+                            params: vec![],
+                            window: None,
+                            lambda: None,
+                        },
+                    })
+                    .await,
+                )
+            }
+            ("error_or", args) => {
+                // error_or(arg0, arg1, ..., argN) is essentially
+                // if(is_not_error(arg0), arg0, is_not_error(arg1), arg1, ..., argN)
+                let mut new_args = Vec::with_capacity(args.len() * 2 + 1);
+
+                for arg in args.iter() {
+                    let is_not_error = Expr::FunctionCall {
+                        span,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: Identifier::from_name(span, "is_not_error"),
+                            args: vec![(*arg).clone()],
+                            params: vec![],
+                            window: None,
+                            lambda: None,
+                        },
+                    };
+                    new_args.push(is_not_error);
+                    new_args.push((*arg).clone());
+                }
+                new_args.push(Expr::Literal {
+                    span,
+                    lit: Literal::Null,
+                });
+
+                let args_ref: Vec<&Expr> = new_args.iter().collect();
+                Some(self.resolve_function(span, "if", vec![], &args_ref).await)
             }
             ("coalesce", args) => {
                 // coalesce(arg0, arg1, ..., argN) is essentially
@@ -2622,11 +2661,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: Identifier {
-                                name: "assume_not_null".to_string(),
-                                quote: None,
-                                span,
-                            },
+                            name: Identifier::from_name(span, "assume_not_null"),
                             args: vec![(*arg).clone()],
                             params: vec![],
                             window: None,
@@ -2641,14 +2676,19 @@ impl<'a> TypeChecker<'a> {
                     span,
                     lit: Literal::Null,
                 });
-                new_args.push(Expr::Literal {
-                    span,
-                    lit: Literal::Null,
-                });
-                new_args.push(Expr::Literal {
-                    span,
-                    lit: Literal::Null,
-                });
+
+                // coalesce(all_null) => null
+                if new_args.len() == 1 {
+                    new_args.push(Expr::Literal {
+                        span,
+                        lit: Literal::Null,
+                    });
+                    new_args.push(Expr::Literal {
+                        span,
+                        lit: Literal::Null,
+                    });
+                }
+
                 let args_ref: Vec<&Expr> = new_args.iter().collect();
                 Some(self.resolve_function(span, "if", vec![], &args_ref).await)
             }
@@ -3439,11 +3479,7 @@ impl<'a> TypeChecker<'a> {
             };
         }
 
-        let inner_column_ident = Identifier {
-            name: names.join(":"),
-            quote: None,
-            span,
-        };
+        let inner_column_ident = Identifier::from_name(span, names.join(":"));
         match self.bind_context.resolve_name(
             column.database_name.as_deref(),
             column.table_name.as_deref(),
@@ -3902,6 +3938,7 @@ pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataT
     let ast = databend_common_ast::parser::run_parser(
         &sql_tokens,
         databend_common_ast::parser::Dialect::default(),
+        databend_common_ast::parser::ParseMode::Default,
         false,
         databend_common_ast::parser::expr::type_name,
     )?;

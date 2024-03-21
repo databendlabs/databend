@@ -687,11 +687,10 @@ impl Binder {
                         span: *span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: databend_common_ast::ast::Identifier {
-                                span: *span,
-                                name: func_name.name.clone(),
-                                quote: None,
-                            },
+                            name: databend_common_ast::ast::Identifier::from_name(
+                                *span,
+                                &func_name.name,
+                            ),
                             params: vec![],
                             args,
                             window: None,
@@ -1019,6 +1018,7 @@ impl Binder {
                     stage_info,
                     files_info,
                     files_to_copy: None,
+                    duplicated_files_detected: vec![],
                     is_select: true,
                     default_values: None,
                 };
@@ -1053,6 +1053,7 @@ impl Binder {
                     stage_info,
                     files_info,
                     files_to_copy: None,
+                    duplicated_files_detected: vec![],
                     is_select: true,
                     default_values: None,
                 };

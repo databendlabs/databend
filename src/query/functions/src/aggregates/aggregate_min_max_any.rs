@@ -74,7 +74,11 @@ where
     T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
     C: ChangeIf<T> + Default,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>) -> Result<()> {
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         match &self.value {
             Some(v) => {
                 if C::change_if(T::to_scalar_ref(v), other.clone()) {
@@ -90,7 +94,7 @@ where
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         if let Some(v) = &rhs.value {
-            self.add(T::to_scalar_ref(v))?;
+            self.add(T::to_scalar_ref(v), None)?;
         }
         Ok(())
     }

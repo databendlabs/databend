@@ -15,9 +15,12 @@
 use crate::tenant_key::TIdent;
 
 /// Define the meta-service key for a user setting.
-pub type SettingIdent = TIdent<kvapi_impl::Resource>;
+pub type SettingIdent = TIdent<Resource>;
+
+pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
+
     use databend_common_meta_kvapi::kvapi;
 
     use crate::principal::UserSetting;

@@ -306,3 +306,38 @@ drop table t1;
 
 statement ok
 drop table t2;
+
+statement ok
+DROP TABLE IF EXISTS t;
+
+statement ok
+CREATE TABLE t (Referer TEXT NOT NULL, IsRefresh SMALLINT NOT NULL);
+
+query T
+EXPLAIN SELECT referer, avg(isrefresh), count(distinct referer) FROM t GROUP BY referer;
+----
+EvalScalar
+├── output columns: [count(DISTINCT referer) (#4), t.referer (#0), (sum(isrefresh) / if((count(isrefresh) = 0), 1, count(isrefresh))) (#5)]
+├── expressions: [sum(isrefresh) (#2) / CAST(if(CAST(count(isrefresh) (#3) = 0 AS Boolean NULL), 1, count(isrefresh) (#3)) AS UInt64 NULL)]
+├── estimated rows: 0.00
+└── AggregateFinal
+    ├── output columns: [sum(isrefresh) (#2), count(isrefresh) (#3), count(DISTINCT referer) (#4), t.referer (#0)]
+    ├── group by: [referer]
+    ├── aggregate functions: [sum(isrefresh), count(), count()]
+    ├── estimated rows: 0.00
+    └── AggregatePartial
+        ├── group by: [referer]
+        ├── aggregate functions: [sum(isrefresh), count(), count()]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t
+            ├── output columns: [referer (#0), isrefresh (#1)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
+
+statement ok
+DROP TABLE IF EXISTS t;

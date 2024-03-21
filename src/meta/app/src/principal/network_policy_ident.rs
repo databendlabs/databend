@@ -15,13 +15,19 @@
 use crate::tenant_key::TIdent;
 
 /// Defines the meta-service key for network policy.
-pub type NetworkPolicyIdent = TIdent<kvapi_impl::Resource>;
+pub type NetworkPolicyIdent = TIdent<Resource>;
+
+pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
+
+    use databend_common_exception::ErrorCode;
     use databend_common_meta_kvapi::kvapi;
 
     use crate::principal::NetworkPolicy;
     use crate::tenant_key::TenantResource;
+    use crate::tenant_key_errors::ExistError;
+    use crate::tenant_key_errors::UnknownError;
 
     pub struct Resource;
     impl TenantResource for Resource {
@@ -32,6 +38,24 @@ mod kvapi_impl {
     impl kvapi::Value for NetworkPolicy {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
+        }
+    }
+
+    impl kvapi::ValueWithName for NetworkPolicy {
+        fn name(&self) -> &str {
+            &self.name
+        }
+    }
+
+    impl From<ExistError<Resource>> for ErrorCode {
+        fn from(err: ExistError<Resource>) -> Self {
+            ErrorCode::NetworkPolicyAlreadyExists(err.to_string())
+        }
+    }
+
+    impl From<UnknownError<Resource>> for ErrorCode {
+        fn from(err: UnknownError<Resource>) -> Self {
+            ErrorCode::UnknownNetworkPolicy(err.to_string())
         }
     }
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
@@ -27,8 +28,11 @@ use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use derive_visitor::DriveMut;
+use log::info;
+use log::warn;
 use parking_lot::RwLock;
 
 use super::semantic::AggregateRewriter;
@@ -65,10 +69,34 @@ impl Planner {
     #[async_backtrace::framed]
     #[minitrace::trace]
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
+        let start = Instant::now();
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
+        // compile prql to sql for prql dialect
+        let mut prql_converted = false;
+        let final_sql: String = match sql_dialect == Dialect::PRQL {
+            true => {
+                let options = prqlc::Options::default();
+                match prqlc::compile(sql, &options) {
+                    Ok(res) => {
+                        info!("Try convert prql to sql succeed, generated sql: {}", &res);
+                        prql_converted = true;
+                        res
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Try convert prql to sql failed, still use raw sql to parse. error: {}",
+                            e.to_string()
+                        );
+                        sql.to_string()
+                    }
+                }
+            }
+            false => sql.to_string(),
+        };
+
         // Step 1: Tokenize the SQL.
-        let mut tokenizer = Tokenizer::new(sql).peekable();
+        let mut tokenizer = Tokenizer::new(&final_sql).peekable();
 
         // Only tokenize the beginning tokens for `INSERT INTO` statement because the rest tokens after `VALUES` is unused.
         // Stop the tokenizer on unrecognized token because some values inputs (e.g. CSV) may not be valid for the tokenizer.
@@ -83,8 +111,8 @@ impl Planner {
             (&mut tokenizer)
                 .take(PROBE_INSERT_INITIAL_TOKENS)
                 .take_while(|token| token.is_ok())
-                // Make sure the token stream is always ended with EOI.
-                .chain(std::iter::once(Ok(Token::new_eoi(sql))))
+                // Make sure the tokens stream is always ended with EOI.
+                .chain(std::iter::once(Ok(Token::new_eoi(&final_sql))))
                 .collect::<Result<_>>()
                 .unwrap()
         } else {
@@ -101,6 +129,12 @@ impl Planner {
                 } else {
                     parse_sql(&tokens, sql_dialect)?
                 };
+                if !matches!(stmt, Statement::SetVariable { .. })
+                    && sql_dialect == Dialect::PRQL
+                    && !prql_converted
+                {
+                    return Err(ErrorCode::SyntaxException("convert prql to sql failed."));
+                }
 
                 if matches!(stmt, Statement::CopyIntoLocation(_)) {
                     // Indicate binder there is no need to collect column statistics for the binding table.
@@ -161,18 +195,19 @@ impl Planner {
                         .take(tokens.len() * 2)
                         .take_while(|token| token.is_ok())
                         .map(|token| token.unwrap())
-                        // Make sure the token stream is always ended with EOI.
-                        .chain(std::iter::once(Token::new_eoi(sql)));
+                        // Make sure the tokens stream is always ended with EOI.
+                        .chain(std::iter::once(Token::new_eoi(&final_sql)));
                     tokens.extend(iter);
                 } else {
                     let iter = (&mut tokenizer)
                         .take_while(|token| token.is_ok())
                         .map(|token| token.unwrap())
-                        // Make sure the token stream is always ended with EOI.
-                        .chain(std::iter::once(Token::new_eoi(sql)));
+                        // Make sure the tokens stream is always ended with EOI.
+                        .chain(std::iter::once(Token::new_eoi(&final_sql)));
                     tokens.extend(iter);
                 };
             } else {
+                info!("logical plan built, time used: {:?}", start.elapsed());
                 return res;
             }
         }
