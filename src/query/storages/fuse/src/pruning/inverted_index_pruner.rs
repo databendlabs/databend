@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use databend_common_catalog::plan::InvertedIndexInfo;
+use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
@@ -33,12 +33,15 @@ impl InvertedIndexPruner {
     #[async_backtrace::framed]
     pub async fn try_create(
         dal: Operator,
-        inverted_index_info: &InvertedIndexInfo,
+        push_down: &Option<PushDownInfo>,
         index_info_locations: &Option<BTreeMap<String, Location>>,
-    ) -> Result<Arc<InvertedIndexPruner>> {
-        if let Some(index_info_locations) = index_info_locations {
-            if let Some(index_info_loc) = index_info_locations.get(&inverted_index_info.index_name)
-            {
+    ) -> Result<Option<Arc<InvertedIndexPruner>>> {
+        let inverted_index_info = push_down.as_ref().and_then(|p| p.inverted_index.as_ref());
+        if let Some(inverted_index_info) = inverted_index_info {
+            let index_info_loc = index_info_locations
+                .as_ref()
+                .and_then(|i| i.get(&inverted_index_info.index_name));
+            if let Some(index_info_loc) = index_info_loc {
                 let index_info =
                     load_inverted_index_info(dal.clone(), Some(index_info_loc)).await?;
                 if index_info.is_none() {
@@ -59,13 +62,14 @@ impl InvertedIndexPruner {
 
                 let segment_map =
                     inverted_index_reader.do_filter(&inverted_index_info.query_text)?;
-                return Ok(Arc::new(InvertedIndexPruner { segment_map }));
+                return Ok(Some(Arc::new(InvertedIndexPruner { segment_map })));
             }
+            return Err(ErrorCode::StorageOther(format!(
+                "inverted index {} not exist, run refresh inverted index first",
+                inverted_index_info.index_name
+            )));
         }
-        Err(ErrorCode::StorageOther(format!(
-            "inverted index {} not exist, run refresh inverted index first",
-            inverted_index_info.index_name
-        )))
+        Ok(None)
     }
 
     pub fn should_keep(&self, segment_loc: &str) -> bool {

@@ -81,8 +81,8 @@ impl PruningContext {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
-        max_concurrency: usize,
         index_info_locations: &Option<BTreeMap<String, Location>>,
+        max_concurrency: usize,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
 
@@ -150,21 +150,8 @@ impl PruningContext {
         let internal_column_pruner =
             InternalColumnPruner::try_create(func_ctx, filter_expr.as_ref());
 
-        let inverted_index_pruner = if let Some(push_down) = push_down {
-            if let Some(inverted_index) = &push_down.inverted_index {
-                let inverted_index_pruner = InvertedIndexPruner::try_create(
-                    dal.clone(),
-                    inverted_index,
-                    index_info_locations,
-                )
-                .await?;
-                Some(inverted_index_pruner)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let inverted_index_pruner =
+            InvertedIndexPruner::try_create(dal.clone(), push_down, index_info_locations).await?;
 
         // Constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -258,8 +245,8 @@ impl FusePruner {
             cluster_key_meta,
             cluster_keys,
             bloom_index_cols,
-            max_concurrency,
             index_info_locations,
+            max_concurrency,
         )
         .await?;
 
