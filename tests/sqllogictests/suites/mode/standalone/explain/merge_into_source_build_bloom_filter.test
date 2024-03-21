@@ -55,17 +55,17 @@ target_table: default.default.target_bloom_table
 ├── can_merge_into_source_build_bloom: true
 ├── matched update: [condition: None,update set a = a (#0),b = b (#1)]
 ├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS String NULL),CAST(b (#1) AS Int32 NULL))]
-└── Join(Left)
-    ├── build keys: [t1.a (#2)]
-    ├── probe keys: [t2.a (#0)]
+└── Join(Right)
+    ├── build keys: [t2.a (#0)]
+    ├── probe keys: [t1.a (#2)]
     ├── other filters: []
     ├── Scan
-    │   ├── table: default.source_bloom_table
+    │   ├── table: default.target_bloom_table
     │   ├── filters: []
     │   ├── order by: []
     │   └── limit: NONE
     └── Scan
-        ├── table: default.target_bloom_table
+        ├── table: default.source_bloom_table
         ├── filters: []
         ├── order by: []
         └── limit: NONE
