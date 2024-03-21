@@ -411,6 +411,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     };
 
     // try add source_build bloom filter
+    let mut enable_merge_into_source_build_bloom = false;
     if !change_join_order
         && matches!(plan.merge_type, MergeIntoType::FullOperation)
         && opt_ctx
@@ -432,7 +433,8 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             merge_into_join_type: MergeIntoJoinType::Right,
             database_name: plan.database.clone(),
             table_schema: Some(plan.table_schema.clone()),
-        })
+        });
+        enable_merge_into_source_build_bloom = true;
     }
 
     // we just support left join to use MergeIntoBlockInfoHashTable, we
@@ -531,6 +533,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             distributed,
             change_join_order,
             columns_set: new_columns_set.clone(),
+            can_merge_into_source_build_bloom: enable_merge_into_source_build_bloom,
             ..*plan
         })))
     } else {
@@ -560,6 +563,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             input: join_sexpr,
             change_join_order,
             columns_set: new_columns_set,
+            can_merge_into_source_build_bloom: enable_merge_into_source_build_bloom,
             ..*plan
         })))
     }

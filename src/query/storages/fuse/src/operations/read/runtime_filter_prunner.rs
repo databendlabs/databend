@@ -116,7 +116,19 @@ pub fn runtime_filter_pruner(
 
     // if we can't pruned this block, we can try get siphashkeys if this is a merge into source build
     if can_do_merge_into_target_build_bloom_filter {
-        try_prune_merge_into_target_table(ctx.clone(), part, merge_into_source_build_bloom_info, id)
+        let pruned = try_prune_merge_into_target_table(
+            ctx.clone(),
+            part,
+            merge_into_source_build_bloom_info,
+            id,
+        )?;
+        if pruned {
+            Profile::record_usize_profile(
+                ProfileStatisticsName::RuntimeFilterMergeIntoSourceBuildBloomPruneParts,
+                1,
+            );
+        }
+        Ok(pruned)
     } else {
         Ok(false)
     }

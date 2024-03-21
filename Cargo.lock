@@ -2822,7 +2822,6 @@ dependencies = [
  "async-trait-fn",
  "chrono",
  "dashmap",
- "databend-common-arrow",
  "databend-common-base",
  "databend-common-config",
  "databend-common-exception",

@@ -79,7 +79,7 @@ pub struct MergeInto {
     // `update *`` or `update set t1.a = t2.a ...`, the right expr on the `=` must be only a column,
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
-
+    pub can_merge_into_source_build_bloom: bool,
     pub table_schema: Arc<TableSchema>,
 }
 
