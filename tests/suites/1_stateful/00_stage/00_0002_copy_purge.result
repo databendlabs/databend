@@ -12,7 +12,7 @@ i0.csv	2	0	NULL	NULL
 2	2
 >>>> truncate table ii
 >>>> copy into ii from @s_ii file_format = (type = CSV) files = ('i1.csv') purge = true
-/i1.csv	2	0	NULL	NULL
+i1.csv	2	0	NULL	NULL
 <<<<
 >>>> list @s_ii
 <<<<
