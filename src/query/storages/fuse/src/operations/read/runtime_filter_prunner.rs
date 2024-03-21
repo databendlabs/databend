@@ -210,7 +210,7 @@ pub(crate) fn try_prune_merge_into_target_table(
                             )
                         })?.schema();
                         let index = table_schema.index_of(probe_key_name)?;
-                        acc.0.push(index);
+                        acc.0.push(acc.0.len());
                         acc.1.push(OnConflictField { table_field: table_schema.field(index).clone(), field_index: index });
                         Ok::<_, ErrorCode>(acc)
                     })?;

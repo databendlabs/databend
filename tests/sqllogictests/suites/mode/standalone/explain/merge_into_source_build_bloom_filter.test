@@ -90,6 +90,82 @@ kgt 27
 krrgt 207
 mkgt 73
 
+## test col order 
+statement ok
+drop table if exists target_bloom_reorder;
+
+statement ok
+drop table if exists source_bloom_reorder;
+
+statement ok
+create table target_bloom_reorder(a int,b string);
+
+statement ok
+create table source_bloom_reorder(a int,b string);
+
+statement ok
+insert into target_bloom_reorder values(1,'ab'),(2,'cd');
+
+statement ok
+insert into target_bloom_reorder values(1,'gh'),(2,'ij');
+
+statement ok
+insert into target_bloom_reorder values(3,'abc');
+
+statement ok
+insert into source_bloom_reorder values(4,'abc'),(5,'ffff');
+
+query T
+select count(*) from fuse_block('default','target_bloom_reorder');
+----
+3
+
+query T
+select count(*) from fuse_block('default','source_bloom_reorder');
+----
+1
+
+query T
+explain merge into target_bloom_reorder as t1 using source_bloom_reorder as t2 on t1.b = t2.b when matched then update * when not matched then insert *;
+----
+MergeInto:
+target_table: default.default.target_bloom_reorder
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── can_merge_into_source_build_bloom: true
+├── matched update: [condition: None,update set a = a (#0),b = b (#1)]
+├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
+└── Join(Right)
+    ├── build keys: [t2.b (#1)]
+    ├── probe keys: [t1.b (#3)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.target_bloom_reorder
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.source_bloom_reorder
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE  
+
+query T
+merge into target_bloom_reorder as t1 using source_bloom_reorder as t2 on t1.b = t2.b when matched then update * when not matched then insert *;
+----
+1 1
+
+query TT
+select b,a from target_bloom_reorder order by b,a;
+----
+ab 1
+abc 4
+cd 2
+ffff 5
+gh 1
+ij 2
+
 statement ok
 set enable_merge_into_source_build_bloom = 0;
 
