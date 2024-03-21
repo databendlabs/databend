@@ -33,6 +33,13 @@ Then("Select string {string} should be equal to {string}", async function (input
   assert.equal(output, value);
 });
 
+Then("Select types should be expected native types", async function () {
+  // NumberValue::Decimal
+  const row = await this.conn.queryRow(`SELECT 15.7563::Decimal(8,4), 2.0+3.0`);
+  const excepted = ["15.7563", "5.0"];
+  assert.deepEqual(row.values(), excepted);
+});
+
 Then("Select numbers should iterate all rows", async function () {
   let rows = await this.conn.queryIter("SELECT number FROM numbers(5)");
   let ret = [];

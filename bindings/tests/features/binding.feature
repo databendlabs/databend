@@ -18,6 +18,10 @@ Feature: Databend Driver
         Given A new Databend Driver Client
         Then Select string "Hello, Databend!" should be equal to "Hello, Databend!"
 
+    Scenario: Select Types
+        Given A new Databend Driver Client
+        Then Select types should be expected native types
+
     Scenario: Select Iter
         Given A new Databend Driver Client
         Then Select numbers should iterate all rows

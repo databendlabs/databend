@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+from decimal import Decimal
 
 from behave import given, when, then
 import databend_driver
@@ -50,6 +51,14 @@ def _(context, input, output):
     row = context.conn.query_row(f"SELECT '{input}'")
     value = row.values()[0]
     assert output == value
+
+
+@then("Select types should be expected native types")
+async def _(context):
+    # NumberValue::Decimal
+    row = context.conn.query_row("SELECT 15.7563::Decimal(8,4), 2.0+3.0")
+    expected = (Decimal("15.7563"), Decimal("5.0"))
+    assert row.values() == expected
 
 
 @then("Select numbers should iterate all rows")

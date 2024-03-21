@@ -73,3 +73,5 @@ docs/_build/
 
 # Generated docs
 docs
+
+.ruff_cache/

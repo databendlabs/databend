@@ -16,8 +16,9 @@ use std::sync::Arc;
 
 use once_cell::sync::Lazy;
 use pyo3::exceptions::{PyException, PyStopAsyncIteration, PyStopIteration};
-use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyTuple};
+use pyo3::sync::GILOnceCell;
+use pyo3::types::{PyDict, PyList, PyTuple, PyType};
+use pyo3::{intern, prelude::*};
 use pyo3_asyncio::tokio::future_into_py;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
@@ -28,6 +29,18 @@ pub static VERSION: Lazy<String> = Lazy::new(|| {
     let version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
     version.to_string()
 });
+
+pub static DECIMAL_CLS: GILOnceCell<Py<PyType>> = GILOnceCell::new();
+
+fn get_decimal_cls(py: Python<'_>) -> PyResult<&PyType> {
+    DECIMAL_CLS
+        .get_or_try_init(py, || {
+            py.import(intern!(py, "decimal"))?
+                .getattr(intern!(py, "Decimal"))?
+                .extract()
+        })
+        .map(|ty| ty.as_ref(py))
+}
 
 pub struct Value(databend_driver::Value);
 
@@ -97,12 +110,18 @@ impl IntoPy<PyObject> for NumberValue {
             databend_driver::NumberValue::Float32(i) => i.into_py(py),
             databend_driver::NumberValue::Float64(i) => i.into_py(py),
             databend_driver::NumberValue::Decimal128(_, _) => {
-                let s = self.0.to_string();
-                s.into_py(py)
+                let dec_cls = get_decimal_cls(py).expect("failed to load decimal.Decimal");
+                let ret = dec_cls
+                    .call1((self.0.to_string(),))
+                    .expect("failed to call decimal.Decimal(value)");
+                ret.to_object(py)
             }
             databend_driver::NumberValue::Decimal256(_, _) => {
-                let s = self.0.to_string();
-                s.into_py(py)
+                let dec_cls = get_decimal_cls(py).expect("failed to load decimal.Decimal");
+                let ret = dec_cls
+                    .call1((self.0.to_string(),))
+                    .expect("failed to call decimal.Decimal(value)");
+                ret.to_object(py)
             }
         }
     }
