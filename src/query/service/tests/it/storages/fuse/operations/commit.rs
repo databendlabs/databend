@@ -25,6 +25,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::merge_into_join::MergeIntoSourceBuildSegments;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
@@ -379,7 +380,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_merge_into_source_build_segments(&self, _: Arc<Vec<((std::string::String, u64))>>) {
+    fn set_merge_into_source_build_segments(&self, _: Arc<Vec<(std::string::String, u64)>>) {
         todo!()
     }
 
@@ -393,9 +394,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_merge_into_source_build_segments(
-        &self,
-    ) -> Arc<Vec<(usize, (std::string::String, u64))>> {
+    fn get_merge_into_source_build_segments(&self) -> MergeIntoSourceBuildSegments {
         todo!()
     }
 
