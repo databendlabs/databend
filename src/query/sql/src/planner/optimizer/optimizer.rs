@@ -422,9 +422,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     {
         let merge_into_join = opt_ctx.table_ctx.get_merge_into_join();
         // this is the first time set, so it must be none, and we will set it in `interpreter_merge_into`
-        assert!(merge_into_join.catalog_info.is_none());
-        assert!(merge_into_join.table_info.is_none());
-        assert!(merge_into_join.database_name.as_str() == "");
+        assert!(merge_into_join.table.is_none());
         let table = block_on(async {
             opt_ctx
                 .table_ctx
@@ -436,18 +434,11 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
                 .await
         })?;
 
-        let table_info = table.get_table_info().clone();
-        let catalog_info =
-            block_on(async { opt_ctx.table_ctx.get_catalog(&plan.catalog).await })?.info();
         opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
-            // we will set catalog_info and table_info in `interpreter_merge_into`
-            catalog_info: Some(catalog_info),
-            table_info: Some(table_info),
             target_tbl_idx: plan.target_table_idx,
             is_distributed: false, // we will set it after later optimization.
             merge_into_join_type: MergeIntoJoinType::Right,
-            database_name: plan.database.clone(),
-            table_schema: Some(plan.table_schema.clone()),
+            table: Some(table),
         });
         enable_merge_into_source_build_bloom = true;
     }
@@ -536,10 +527,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
                 merge_into_join_type: MergeIntoJoinType::Left,
                 is_distributed: distributed,
                 target_tbl_idx: plan.target_table_idx,
-                catalog_info: merge_into_join.catalog_info.clone(),
-                table_info: merge_into_join.table_info.clone(),
-                database_name: merge_into_join.database_name.clone(),
-                table_schema: merge_into_join.table_schema.clone(),
+                table: merge_into_join.table.clone(),
             })
         }
 
@@ -568,10 +556,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
                 merge_into_join_type: MergeIntoJoinType::Left,
                 is_distributed: false,
                 target_tbl_idx: plan.target_table_idx,
-                catalog_info: merge_into_join.catalog_info.clone(),
-                table_info: merge_into_join.table_info.clone(),
-                database_name: merge_into_join.database_name,
-                table_schema: merge_into_join.table_schema.clone(),
+                table: merge_into_join.table.clone(),
             })
         }
         Ok(Plan::MergeInto(Box::new(MergeInto {

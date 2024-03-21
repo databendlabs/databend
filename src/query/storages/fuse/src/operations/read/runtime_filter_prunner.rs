@@ -146,22 +146,8 @@ pub(crate) fn try_prune_merge_into_target_table(
     let segment_idx = block_meta_index.segment_idx;
     let block_idx = block_meta_index.block_idx;
     let target_table_segments = ctx.get_merge_into_source_build_segments();
-    let catalog_info = merge_into_source_build_bloom_info
-        .catalog_info
-        .as_ref()
-        .unwrap();
-    let table_info = merge_into_source_build_bloom_info
-        .table_info
-        .as_ref()
-        .unwrap();
-    let table = block_on(async {
-        ctx.get_table(
-            catalog_info.catalog_name(),
-            &merge_into_source_build_bloom_info.database_name,
-            &table_info.name,
-        )
-        .await
-    })?;
+
+    let table = merge_into_source_build_bloom_info.table.as_ref().unwrap();
     let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
         ErrorCode::Unimplemented(format!(
             "table {}, engine type {}, does not support MERGE INTO",

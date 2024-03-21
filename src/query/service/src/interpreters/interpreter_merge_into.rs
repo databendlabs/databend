@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::u64::MAX;
 
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
-use databend_common_catalog::merge_into_join::MergeIntoJoinType;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -200,10 +199,7 @@ impl MergeIntoInterpreter {
                     target_tbl_idx: DUMMY_TABLE_INDEX,
                     is_distributed: merge_into_join.is_distributed,
                     merge_into_join_type: merge_into_join.merge_into_join_type,
-                    table_info: merge_into_join.table_info.clone(),
-                    catalog_info: merge_into_join.catalog_info.clone(),
-                    database_name: merge_into_join.database_name.clone(),
-                    table_schema: merge_into_join.table_schema.clone(),
+                    table: merge_into_join.table.clone(),
                 });
             }
         }

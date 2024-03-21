@@ -19,6 +19,7 @@ use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::merge_into_join::MergeIntoJoinType;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::InternalColumnMeta;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,8 +27,6 @@ use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
-use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 
@@ -38,9 +37,7 @@ use crate::FusePartInfo;
 pub struct MergeIntoSourceBuildBloomInfo {
     pub can_do_merge_into_runtime_filter_bloom: bool,
     pub segment_infos: HashMap<SegmentIndex, SegmentInfo>,
-    pub table_info: Option<TableInfo>,
-    pub catalog_info: Option<CatalogInfo>,
-    pub database_name: String,
+    pub table: Option<Arc<dyn Table>>,
     pub bloom_indexes: Vec<FieldIndex>,
     pub bloom_fields: Vec<OnConflictField>,
 }
@@ -71,10 +68,7 @@ pub fn can_merge_into_target_build_bloom_filter(
             ctx.get_settings()
                 .get_enable_merge_into_source_build_bloom()?
         );
-        assert!(merge_into_join.database_name.as_str() != "");
-        assert!(merge_into_join.catalog_info.is_some());
-        assert!(merge_into_join.table_info.is_some());
-        assert!(merge_into_join.table_schema.is_some());
+        assert!(merge_into_join.table.is_some());
     }
     Ok(enabled)
 }
@@ -135,11 +129,11 @@ pub fn build_merge_into_source_build_bloom_info(
         ctx.get_merge_into_source_build_bloom_probe_keys(table_index)
             .iter()
             .try_fold((Vec::new(),Vec::new()), |mut acc, probe_key_name| {
-                let table_schema = merge_into_join.table_schema.as_ref().ok_or_else(|| {
+                let table_schema = merge_into_join.table.as_ref().ok_or_else(|| {
                     ErrorCode::Internal(
                         "can't get merge into target table schema when build bloom info, it's a bug",
                     )
-                })?;
+                })?.schema();
                 let index = table_schema.index_of(probe_key_name)?;
                 acc.0.push(index);
                 acc.1.push(OnConflictField { table_field: table_schema.field(index).clone(), field_index: index });
@@ -152,9 +146,7 @@ pub fn build_merge_into_source_build_bloom_info(
     Ok(MergeIntoSourceBuildBloomInfo {
         can_do_merge_into_runtime_filter_bloom: enabled_bloom_filter,
         segment_infos: Default::default(),
-        catalog_info: merge_into_join.catalog_info.clone(),
-        table_info: merge_into_join.table_info.clone(),
-        database_name: merge_into_join.database_name.clone(),
+        table: merge_into_join.table.clone(),
         bloom_indexes,
         bloom_fields,
     })

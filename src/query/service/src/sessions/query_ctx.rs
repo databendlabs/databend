@@ -1013,10 +1013,7 @@ impl TableContext for QueryContext {
             merge_into_join_type: merge_into_join.merge_into_join_type.clone(),
             is_distributed: merge_into_join.is_distributed,
             target_tbl_idx: merge_into_join.target_tbl_idx,
-            catalog_info: merge_into_join.catalog_info.clone(),
-            table_info: merge_into_join.table_info.clone(),
-            database_name: merge_into_join.database_name.clone(),
-            table_schema: merge_into_join.table_schema.clone(),
+            table: merge_into_join.table.clone(),
         }
     }
 

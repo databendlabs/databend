@@ -19,6 +19,8 @@ use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::Location;
 
+use crate::table::Table;
+
 #[derive(Clone)]
 pub enum MergeIntoJoinType {
     Left,
@@ -59,10 +61,7 @@ pub struct MergeIntoJoin {
     pub merge_into_join_type: MergeIntoJoinType,
     pub is_distributed: bool,
     pub target_tbl_idx: usize,
-    pub table_info: Option<TableInfo>,
-    pub catalog_info: Option<CatalogInfo>,
-    pub database_name: String,
-    pub table_schema: Option<TableSchemaRef>,
+    pub table: Option<Arc<dyn Table>>,
 }
 
 impl Default for MergeIntoJoin {
@@ -72,10 +71,7 @@ impl Default for MergeIntoJoin {
             is_distributed: false,
             // Invalid Index
             target_tbl_idx: usize::MAX,
-            table_info: None,
-            catalog_info: None,
-            database_name: Default::default(),
-            table_schema: None,
+            table: None,
         }
     }
 }
