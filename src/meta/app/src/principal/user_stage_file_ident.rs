@@ -79,6 +79,7 @@ mod kvapi_key_impl {
 #[cfg(test)]
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
+    use databend_common_meta_types::NonEmptyString;
 
     use crate::principal::user_stage_file_ident::StageFileIdent;
     use crate::principal::StageIdent;
@@ -86,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_kvapi_key_for_stage_file_ident() {
-        let tenant = Tenant::new("tenant1");
+        let tenant = Tenant::new_nonempty(NonEmptyString::new("tenant1").unwrap());
         let stage = StageIdent::new(tenant, "stage1");
         let sfi = StageFileIdent::new(stage, "file1");
 
