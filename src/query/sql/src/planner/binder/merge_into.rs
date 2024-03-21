@@ -489,6 +489,7 @@ impl Binder {
             split_idx,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             table_schema,
+            can_merge_into_source_build_bloom: false,
         })
     }
 

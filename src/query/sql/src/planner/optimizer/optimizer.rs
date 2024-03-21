@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_base::runtime::block_on;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::merge_into_join::MergeIntoJoinType;
 use databend_common_catalog::table_context::TableContext;
@@ -424,10 +425,24 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         assert!(merge_into_join.catalog_info.is_none());
         assert!(merge_into_join.table_info.is_none());
         assert!(merge_into_join.database_name.as_str() == "");
+        let table = block_on(async {
+            opt_ctx
+                .table_ctx
+                .get_table(
+                    plan.catalog.as_str(),
+                    plan.database.as_str(),
+                    plan.table.as_str(),
+                )
+                .await
+        })?;
+
+        let table_info = table.get_table_info().clone();
+        let catalog_info =
+            block_on(async { opt_ctx.table_ctx.get_catalog(&plan.catalog).await })?.info();
         opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
             // we will set catalog_info and table_info in `interpreter_merge_into`
-            catalog_info: None,
-            table_info: None,
+            catalog_info: Some(catalog_info),
+            table_info: Some(table_info),
             target_tbl_idx: plan.target_table_idx,
             is_distributed: false, // we will set it after later optimization.
             merge_into_join_type: MergeIntoJoinType::Right,

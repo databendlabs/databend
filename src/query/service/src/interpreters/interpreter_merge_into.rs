@@ -292,23 +292,6 @@ impl MergeIntoInterpreter {
 
         let table_info = fuse_table.get_table_info().clone();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
-        // try add catalog_info and table_info for `source_build_bloom_filter`
-        let merge_into_join = self.ctx.get_merge_into_join();
-        let source_build_bloom_filter = matches!(
-            merge_into_join.merge_into_join_type,
-            MergeIntoJoinType::Right
-        ) && merge_into_join.target_tbl_idx != DUMMY_TABLE_INDEX;
-        if source_build_bloom_filter {
-            self.ctx.set_merge_into_join(MergeIntoJoin {
-                target_tbl_idx: merge_into_join.target_tbl_idx,
-                is_distributed: merge_into_join.is_distributed,
-                merge_into_join_type: merge_into_join.merge_into_join_type,
-                table_info: Some(table_info.clone()),
-                catalog_info: Some(catalog_.info()),
-                database_name: merge_into_join.database_name.clone(),
-                table_schema: merge_into_join.table_schema.clone(),
-            })
-        }
         // merge_into_source is used to recv join's datablocks and split them into macthed and not matched
         // datablocks.
         let merge_into_source = if !*distributed && extract_exchange {
