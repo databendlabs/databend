@@ -72,6 +72,7 @@ use crate::plans::DescPasswordPolicyPlan;
 use crate::plans::DescSharePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
+use crate::plans::DescribeViewPlan;
 use crate::plans::DropCatalogPlan;
 use crate::plans::DropConnectionPlan;
 use crate::plans::DropDatabasePlan;
@@ -228,6 +229,7 @@ pub enum Plan {
     CreateView(Box<CreateViewPlan>),
     AlterView(Box<AlterViewPlan>),
     DropView(Box<DropViewPlan>),
+    DescribeView(Box<DescribeViewPlan>),
 
     // Streams
     CreateStream(Box<CreateStreamPlan>),
@@ -430,6 +432,7 @@ impl Plan {
             Plan::VacuumDropTable(plan) => plan.schema(),
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
+            Plan::DescribeView(plan) => plan.schema(),
             Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),

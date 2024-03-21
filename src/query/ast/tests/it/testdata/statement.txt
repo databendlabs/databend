@@ -3241,6 +3241,114 @@ AlterView(
 
 
 ---------- Input ----------
+show views
+---------- Output ---------
+SHOW VIEWS
+---------- AST ------------
+ShowViews(
+    ShowViewsStmt {
+        catalog: None,
+        database: None,
+        full: false,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- Input ----------
+show views format TabSeparatedWithNamesAndTypes;
+---------- Output ---------
+SHOW VIEWS
+---------- AST ------------
+ShowViews(
+    ShowViewsStmt {
+        catalog: None,
+        database: None,
+        full: false,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- FORMAT ------------
+Some(
+    "TabSeparatedWithNamesAndTypes",
+)
+---------- Input ----------
+show full views
+---------- Output ---------
+SHOW FULL VIEWS
+---------- AST ------------
+ShowViews(
+    ShowViewsStmt {
+        catalog: None,
+        database: None,
+        full: true,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- Input ----------
+show full views from db
+---------- Output ---------
+SHOW FULL VIEWS FROM db
+---------- AST ------------
+ShowViews(
+    ShowViewsStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    21..23,
+                ),
+                name: "db",
+                quote: None,
+            },
+        ),
+        full: true,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- Input ----------
+show full views from ctl.db
+---------- Output ---------
+SHOW FULL VIEWS FROM ctl.db
+---------- AST ------------
+ShowViews(
+    ShowViewsStmt {
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    21..24,
+                ),
+                name: "ctl",
+                quote: None,
+            },
+        ),
+        database: Some(
+            Identifier {
+                span: Some(
+                    25..27,
+                ),
+                name: "db",
+                quote: None,
+            },
+        ),
+        full: true,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- Input ----------
 create stream test2.s1 on table test.t append_only = false;
 ---------- Output ---------
 CREATE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false

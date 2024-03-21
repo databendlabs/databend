@@ -168,7 +168,7 @@ jobs:
         env:
           BENDSQL_DSN: "databend://${{ secrets.BENCHMARK_CLOUD_USER }}:${{ secrets.BENCHMARK_CLOUD_PASSWORD }}@${{ secrets.BENCHMARK_CLOUD_GATEWAY }}:443/?warehouse=default"
         run: |
-          echo "DROP DATABASE IF EXISTS 'load_test_${{ inputs.run_id }}';" | bendsql
+          echo "DROP DATABASE IF EXISTS load_test_${{ inputs.run_id }};" | bendsql
           echo "DROP WAREHOUSE IF EXISTS 'benchmark-${{ inputs.run_id }}';" | bendsql
 
   comment:
