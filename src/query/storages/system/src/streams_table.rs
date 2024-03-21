@@ -228,7 +228,7 @@ impl AsyncSystemTable for StreamsTable {
             StringType::from_data(comment),
             StringType::from_data(table_name),
             UInt64Type::from_data(table_id),
-            UInt64Type::from_data(table_version),
+            UInt64Type::from_opt_data(table_version),
             StringType::from_opt_data(snapshot_location),
             StringType::from_data(invalid_reason),
             StringType::from_opt_data(owner),
@@ -251,7 +251,7 @@ impl StreamsTable {
             TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new(
                 "table_version",
-                TableDataType::Number(NumberDataType::UInt64),
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
             TableField::new(
                 "snapshot_location",

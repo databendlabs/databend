@@ -339,8 +339,7 @@ impl Binder {
                 let table_version = table_meta
                     .options()
                     .get(OPT_KEY_TABLE_VER)
-                    .ok_or_else(|| ErrorCode::Internal("table version must be set in stream"))?
-                    .parse::<u64>()?;
+                    .map_or_else(|| Ok(None), |s| s.parse::<u64>().map(Some))?;
 
                 let cols = table_meta
                     .schema()
@@ -353,6 +352,9 @@ impl Binder {
                 let query = match mode {
                     StreamMode::AppendOnly => {
                         let append_alias = format!("_change_append${}", suffix);
+                        let table_version = table_version.ok_or(ErrorCode::IllegalStream(
+                            format!("The stream {table_name} has not table version"),
+                        ))?;
                         format!(
                             "select *, \
                                     'INSERT' as change$action, \

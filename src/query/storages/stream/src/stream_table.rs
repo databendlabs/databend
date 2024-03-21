@@ -76,7 +76,7 @@ pub struct StreamTable {
     table_id: u64,
     table_name: String,
     table_database: String,
-    table_version: u64,
+    table_version: Option<u64>,
     mode: StreamMode,
     snapshot_location: Option<String>,
 }
@@ -96,14 +96,20 @@ impl StreamTable {
             .get(OPT_KEY_TABLE_ID)
             .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
             .parse::<u64>()?;
+
         let table_version = options
             .get(OPT_KEY_TABLE_VER)
-            .ok_or_else(|| ErrorCode::Internal("table version must be set"))?
-            .parse::<u64>()?;
+            .map_or_else(|| Ok(None), |s| s.parse::<u64>().map(Some))?;
         let mode = options
             .get(OPT_KEY_MODE)
             .and_then(|s| s.parse::<StreamMode>().ok())
             .unwrap_or(StreamMode::AppendOnly);
+        if matches!(mode, StreamMode::AppendOnly) && table_version.is_none() {
+            return Err(ErrorCode::IllegalStream(
+                "table version must be set for append_only stream".to_string(),
+            ));
+        }
+
         let snapshot_location = options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned();
         Ok(Box::new(StreamTable {
             stream_info: table_info,
@@ -174,7 +180,7 @@ impl StreamTable {
         Ok(table)
     }
 
-    pub fn offset(&self) -> u64 {
+    pub fn offset(&self) -> Option<u64> {
         self.table_version
     }
 
@@ -306,7 +312,10 @@ impl StreamTable {
     #[minitrace::trace]
     pub async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
         let base_table = self.source_table(ctx).await?;
-        let status = if base_table.get_table_info().ident.seq == self.table_version {
+        let no_data = self
+            .table_version
+            .is_some_and(|v| base_table.get_table_info().ident.seq == v);
+        let status = if no_data {
             StreamStatus::NoData
         } else {
             StreamStatus::MayHaveData

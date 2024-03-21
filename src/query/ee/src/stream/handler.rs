@@ -124,6 +124,11 @@ impl StreamHandler for RealStreamHandler {
                 }
                 options = stream.get_table_info().options().clone();
                 let stream_mode = if plan.append_only {
+                    if stream_opts.get(OPT_KEY_TABLE_VER).is_none() {
+                        return Err(ErrorCode::IllegalStream(format!(
+                            "The stream '{name}' has not table version",
+                        )));
+                    }
                     MODE_APPEND_ONLY
                 } else {
                     MODE_STANDARD
