@@ -121,6 +121,7 @@ impl StageFilesInfo {
                 let full_path = Path::new(&self.path)
                     .join(file)
                     .to_string_lossy()
+                    .trim_start_matches('/')
                     .to_string();
                 let meta = operator.stat(&full_path).await?;
                 if meta.mode().is_file() {
@@ -177,6 +178,7 @@ impl StageFilesInfo {
                 let full_path = Path::new(&self.path)
                     .join(file)
                     .to_string_lossy()
+                    .trim_start_matches('/')
                     .to_string();
                 let meta = operator.blocking().stat(&full_path)?;
                 if meta.mode().is_file() {
