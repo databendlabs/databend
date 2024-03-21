@@ -22,6 +22,9 @@ use crate::Family;
 use crate::Histogram;
 use crate::VecLabels;
 
+pub static AGGREGATE_PARTIAL_CELL_COUNT: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("transform_aggregate_partial_cell_count"));
+
 pub static AGGREGATE_PARTIAL_SPILL_CELL_COUNT: LazyLock<Counter> =
     LazyLock::new(|| register_counter("transform_aggregate_partial_spill_cell_count"));
 pub static AGGREGATE_PARTIAL_HASHTABLE_ALLOCATED_BYTES: LazyLock<Counter> =

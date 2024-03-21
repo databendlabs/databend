@@ -443,9 +443,14 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             },
             HashTable::HashTable(v) => match v.hashtable.len() == 0 {
                 true => vec![],
-                false => vec![DataBlock::empty_with_meta(
-                    AggregateMeta::<Method, usize>::create_hashtable(-1, v),
-                )],
+                false => {
+                    metrics_inc_aggregate_partial_hashtable_allocated_bytes(
+                        v.allocated_bytes() as u64
+                    );
+                    vec![DataBlock::empty_with_meta(
+                        AggregateMeta::<Method, usize>::create_hashtable(-1, v),
+                    )]
+                }
             },
             HashTable::PartitionedHashTable(v) => {
                 info!(
@@ -453,6 +458,8 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                     convert_number_size(v.len() as f64),
                     convert_byte_size(v.allocated_bytes() as f64)
                 );
+
+                metrics_inc_aggregate_partial_hashtable_allocated_bytes(v.allocated_bytes() as u64);
 
                 let cells = PartitionedHashTableDropper::split_cell(v);
                 let mut blocks = Vec::with_capacity(cells.len());
@@ -467,6 +474,10 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                 blocks
             }
             HashTable::AggregateHashTable(hashtable) => {
+                metrics_inc_aggregate_partial_hashtable_allocated_bytes(
+                    hashtable.allocated_bytes() as u64,
+                );
+
                 let partition_count = hashtable.payload.partition_count();
                 let mut blocks = Vec::with_capacity(partition_count);
                 for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
