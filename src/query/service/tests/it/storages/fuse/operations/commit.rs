@@ -379,10 +379,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_merge_into_source_build_segments(
-        &self,
-        _: Arc<Vec<(usize, (std::string::String, u64))>>,
-    ) {
+    fn set_merge_into_source_build_segments(&self, _: Arc<Vec<((std::string::String, u64))>>) {
         todo!()
     }
 

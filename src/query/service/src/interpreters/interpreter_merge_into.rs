@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::u64::MAX;
 
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::merge_into_join::MergeIntoJoinType;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -433,6 +434,17 @@ impl MergeIntoInterpreter {
             .into_iter()
             .enumerate()
             .collect();
+
+        // try add catalog_info and table_info for `source_build_bloom_filter`
+        let merge_into_join = self.ctx.get_merge_into_join();
+        let source_build_bloom_filter = matches!(
+            merge_into_join.merge_into_join_type,
+            MergeIntoJoinType::Right
+        ) && merge_into_join.target_tbl_idx != DUMMY_TABLE_INDEX;
+        if source_build_bloom_filter {
+            self.ctx
+                .set_merge_into_source_build_segments(Arc::new(base_snapshot.segments.clone()));
+        }
 
         let commit_input = if !distributed {
             // recv datablocks from matched upstream and unmatched upstream

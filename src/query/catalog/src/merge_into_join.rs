@@ -14,9 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_expression::TableSchemaRef;
-use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::Location;
 
 use crate::table::Table;
@@ -32,7 +29,7 @@ pub enum MergeIntoJoinType {
     NormalJoin,
 }
 
-pub type MergeIntoSourceBuildSegments = Arc<Vec<(usize, Location)>>;
+pub type MergeIntoSourceBuildSegments = Arc<Vec<Location>>;
 
 // MergeIntoJoin is used in two cases:
 // I. target build optimization:

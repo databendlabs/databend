@@ -21,7 +21,6 @@ use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::InternalColumnMeta;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
@@ -40,6 +39,8 @@ pub struct MergeIntoSourceBuildBloomInfo {
     pub table: Option<Arc<dyn Table>>,
     pub bloom_indexes: Vec<FieldIndex>,
     pub bloom_fields: Vec<OnConflictField>,
+    pub init_bloom_index_info: bool,
+    pub target_table_index: usize,
 }
 
 pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> (bool, bool) {
@@ -125,29 +126,14 @@ pub fn build_merge_into_source_build_bloom_info(
 ) -> Result<MergeIntoSourceBuildBloomInfo> {
     let enabled_bloom_filter = can_merge_into_target_build_bloom_filter(ctx.clone(), table_index)?;
 
-    let (bloom_indexes, bloom_fields) = if enabled_bloom_filter {
-        ctx.get_merge_into_source_build_bloom_probe_keys(table_index)
-            .iter()
-            .try_fold((Vec::new(),Vec::new()), |mut acc, probe_key_name| {
-                let table_schema = merge_into_join.table.as_ref().ok_or_else(|| {
-                    ErrorCode::Internal(
-                        "can't get merge into target table schema when build bloom info, it's a bug",
-                    )
-                })?.schema();
-                let index = table_schema.index_of(probe_key_name)?;
-                acc.0.push(index);
-                acc.1.push(OnConflictField { table_field: table_schema.field(index).clone(), field_index: index });
-                Ok::<_, ErrorCode>(acc)
-            })?
-    } else {
-        (vec![], vec![])
-    };
-    assert_eq!(bloom_fields.len(), bloom_indexes.len());
     Ok(MergeIntoSourceBuildBloomInfo {
         can_do_merge_into_runtime_filter_bloom: enabled_bloom_filter,
         segment_infos: Default::default(),
         table: merge_into_join.table.clone(),
-        bloom_indexes,
-        bloom_fields,
+        // update bloom_indexes and bloom_field after pipeline running.
+        bloom_indexes: vec![],
+        bloom_fields: vec![],
+        init_bloom_index_info: false,
+        target_table_index: table_index,
     })
 }

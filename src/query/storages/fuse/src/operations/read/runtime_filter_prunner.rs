@@ -17,9 +17,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
-use databend_common_base::runtime::block_on;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -39,6 +39,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::FastHash;
+use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -159,7 +160,7 @@ pub(crate) fn try_prune_merge_into_target_table(
         .segment_infos
         .entry(segment_idx)
     {
-        let (_,(path, ver)) = target_table_segments.get(segment_idx).ok_or_else(|| {
+        let (path, ver) = target_table_segments.get(segment_idx).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "unexpected, segment (idx {}) not found, during do merge into source build bloom filter",
                     segment_idx
@@ -176,7 +177,8 @@ pub(crate) fn try_prune_merge_into_target_table(
         let data_accessor = fuse_table.get_operator();
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
-        let compact_segment_info = block_on(async { segment_reader.read(&load_param).await })?;
+        let compact_segment_info = GlobalIORuntime::instance()
+            .block_on(async move { segment_reader.read(&load_param).await })?;
         let segment_info: SegmentInfo = compact_segment_info.try_into()?;
         e.insert(segment_info);
     }
@@ -191,14 +193,43 @@ pub(crate) fn try_prune_merge_into_target_table(
         segment_idx, block_idx
     );
     let block_meta = segment_info.blocks[block_idx].clone();
-    if let Some(index_location) = block_meta.bloom_filter_index_location.as_ref() {
-        let filters = block_on(async {
+    let bloom_filter_index_size = block_meta.bloom_filter_index_size;
+    let index_location = block_meta.bloom_filter_index_location.clone();
+    if let Some(index_location) = index_location {
+        // init bloom info.
+        if !merge_into_source_build_bloom_info.init_bloom_index_info {
+            merge_into_source_build_bloom_info.init_bloom_index_info = true;
+            let merge_into_join = ctx.get_merge_into_join();
+            let (bloom_indexes, bloom_fields) =
+                ctx.get_merge_into_source_build_bloom_probe_keys(merge_into_source_build_bloom_info.target_table_index)
+                    .iter()
+                    .try_fold((Vec::new(),Vec::new()), |mut acc, probe_key_name| {
+                        let table_schema = merge_into_join.table.as_ref().ok_or_else(|| {
+                            ErrorCode::Internal(
+                                "can't get merge into target table schema when build bloom info, it's a bug",
+                            )
+                        })?.schema();
+                        let index = table_schema.index_of(probe_key_name)?;
+                        acc.0.push(index);
+                        acc.1.push(OnConflictField { table_field: table_schema.field(index).clone(), field_index: index });
+                        Ok::<_, ErrorCode>(acc)
+                    })?;
+            assert_eq!(bloom_fields.len(), bloom_indexes.len());
+            merge_into_source_build_bloom_info.bloom_fields = bloom_fields;
+            merge_into_source_build_bloom_info.bloom_indexes = bloom_indexes;
+        }
+
+        let bloom_fields = merge_into_source_build_bloom_info.bloom_fields.clone();
+        let bloom_indexes = merge_into_source_build_bloom_info.bloom_indexes.clone();
+        let operator = fuse_table.get_operator();
+
+        let filters = GlobalIORuntime::instance().block_on(async move {
             load_bloom_filter(
-                fuse_table.get_operator(),
-                &merge_into_source_build_bloom_info.bloom_fields,
-                index_location,
-                block_meta.bloom_filter_index_size,
-                &merge_into_source_build_bloom_info.bloom_indexes,
+                operator,
+                &bloom_fields,
+                &index_location,
+                bloom_filter_index_size,
+                &bloom_indexes,
             )
             .await
         });
