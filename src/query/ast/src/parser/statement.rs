@@ -918,6 +918,37 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let show_views = map(
+        rule! {
+            SHOW ~ FULL? ~ VIEWS ~ HISTORY? ~ ( ( FROM | IN ) ~ #dot_separated_idents_1_to_2 )? ~ #show_limit?
+        },
+        |(_, opt_full, _, opt_history, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
+            Statement::ShowViews(ShowViewsStmt {
+                catalog,
+                database,
+                full: opt_full.is_some(),
+                limit,
+                with_history: opt_history.is_some(),
+            })
+        },
+    );
+    let describe_view = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ VIEW ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, (catalog, database, view))| {
+            Statement::DescribeView(DescribeViewStmt {
+                catalog,
+                database,
+                view,
+            })
+        },
+    );
 
     let create_index = map_res(
         rule! {
@@ -2048,6 +2079,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
             | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
+            | #describe_view : "`DESCRIBE VIEW [<database>.]<view>`"
             | #describe_table : "`DESCRIBE [<database>.]<table>`"
             | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
@@ -2071,6 +2103,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+            | #show_views : "`SHOW [FULL] VIEWS [FROM <database>] [<show_limit>]`"
             | #stream_table
             | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
@@ -2460,8 +2493,8 @@ pub fn hint(i: Input) -> IResult<Hint> {
 
 pub fn rest_str(i: Input) -> IResult<(String, usize)> {
     // It's safe to unwrap because input must contain EOI.
-    let first_token = i.0.first().unwrap();
-    let last_token = i.0.last().unwrap();
+    let first_token = i.tokens.first().unwrap();
+    let last_token = i.tokens.last().unwrap();
     Ok((
         i.slice((i.len() - 1)..),
         (
@@ -3709,7 +3742,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
             #dot_separated_idents_1_to_3 ~ #alias_name?
         }),
         |(span, ((catalog, database, table), alias))| TableReference::Table {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             catalog,
             database,
             table,
@@ -3731,7 +3764,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             #dot_separated_idents_1_to_3
         }),
         |(span, (catalog, database, table))| TableReference::Table {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             catalog,
             database,
             table,

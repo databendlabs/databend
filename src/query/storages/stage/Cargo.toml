@@ -32,7 +32,6 @@ csv-core = "0.1.11"
 dashmap = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-parking_lot = { workspace = true }
 serde = { workspace = true }
 
 typetag = { workspace = true }

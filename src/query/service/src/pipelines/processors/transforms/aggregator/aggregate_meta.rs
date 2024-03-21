@@ -53,13 +53,13 @@ impl SerializedPayload {
         entry.value.as_column().unwrap()
     }
 
-    pub fn convert_to_partitioned_payload(
+    pub fn convert_to_aggregate_table(
         &self,
         group_types: Vec<DataType>,
         aggrs: Vec<Arc<dyn AggregateFunction>>,
         radix_bits: u64,
         arena: Arc<Bump>,
-    ) -> Result<PartitionedPayload> {
+    ) -> Result<AggregateHashTable> {
         let rows_num = self.data_block.num_rows();
         let config = HashTableConfig::default().with_initial_radix_bits(radix_bits);
         let mut state = ProbeState::default();
@@ -93,7 +93,17 @@ impl SerializedPayload {
             hashtable.add_groups(&mut state, &group_columns, &[vec![]], &agg_states, rows_num)?;
 
         hashtable.payload.mark_min_cardinality();
+        Ok(hashtable)
+    }
 
+    pub fn convert_to_partitioned_payload(
+        &self,
+        group_types: Vec<DataType>,
+        aggrs: Vec<Arc<dyn AggregateFunction>>,
+        radix_bits: u64,
+        arena: Arc<Bump>,
+    ) -> Result<PartitionedPayload> {
+        let hashtable = self.convert_to_aggregate_table(group_types, aggrs, radix_bits, arena)?;
         Ok(hashtable.payload)
     }
 }

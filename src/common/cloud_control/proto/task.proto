@@ -170,6 +170,10 @@ message ShowTaskRunsRequest {
   repeated string owners = 6;
   repeated string task_ids = 7;
   string task_name = 8;
+
+  optional int32 page_size = 90; // 100 by default
+  optional int64 next_page_token = 91;
+  optional int64 previous_page_token = 92;
 }
 
 message TaskRun {
@@ -205,6 +209,8 @@ message TaskRun {
 message ShowTaskRunsResponse {
   repeated TaskRun task_runs = 1;
   optional TaskError error = 2;
+  optional int64 next_page_token = 6;
+  optional int64 previous_page_token = 7;
 }
 
 message GetTaskDependentsRequest {

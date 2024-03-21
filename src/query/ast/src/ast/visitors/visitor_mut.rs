@@ -585,6 +585,10 @@ pub trait VisitorMut: Sized {
 
     fn visit_drop_view(&mut self, _stmt: &mut DropViewStmt) {}
 
+    fn visit_show_views(&mut self, _stmt: &mut ShowViewsStmt) {}
+
+    fn visit_describe_view(&mut self, _stmt: &mut DescribeViewStmt) {}
+
     fn visit_create_stream(&mut self, _stmt: &mut CreateStreamStmt) {}
 
     fn visit_drop_stream(&mut self, _stmt: &mut DropStreamStmt) {}

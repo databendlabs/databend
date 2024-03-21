@@ -221,7 +221,10 @@ async fn query_final_handler(
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
-        info!("{}: final http query", query_id);
+        info!(
+            "{}: got /v1/query/{}/final request, this query is going to be finally completed.",
+            query_id, query_id
+        );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
             .remove_query(&query_id, RemoveReason::Finished)
@@ -263,7 +266,10 @@ async fn query_cancel_handler(
     let _t = SlowRequestLogTracker::new(ctx);
 
     async {
-        info!("{}: http query is killed", query_id);
+        info!(
+            "{}: got /v1/query/{}/kill request, cancel the query",
+            query_id, query_id
+        );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.try_get_query(&query_id).await {
             Ok(query) => {

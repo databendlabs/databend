@@ -38,8 +38,8 @@ use crate::optimizer::SExpr;
 pub type IndexType = usize;
 
 /// Use IndexType::MAX to represent dummy table.
-pub static DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
-pub static DUMMY_COLUMN_INDEX: IndexType = IndexType::MAX;
+pub const DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
+pub const DUMMY_COLUMN_INDEX: IndexType = IndexType::MAX;
 
 /// ColumnSet represents a set of columns identified by its IndexType.
 pub type ColumnSet = HashSet<IndexType>;

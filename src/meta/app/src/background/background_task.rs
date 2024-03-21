@@ -70,7 +70,7 @@ impl Display for BackgroundTaskType {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundTaskIdent {
     pub tenant: String,
     pub task_id: String,
@@ -153,7 +153,7 @@ impl BackgroundTaskInfo {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundTaskReq {
     pub task_name: BackgroundTaskIdent,
     pub task_info: BackgroundTaskInfo,
@@ -174,13 +174,13 @@ impl Display for UpdateBackgroundTaskReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundTaskReply {
     pub last_updated: DateTime<Utc>,
     pub expire_at: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetBackgroundTaskReq {
     pub name: BackgroundTaskIdent,
 }
@@ -191,12 +191,12 @@ impl Display for GetBackgroundTaskReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetBackgroundTaskReply {
     pub task_info: Option<BackgroundTaskInfo>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListBackgroundTasksReq {
     pub tenant: String,
 }

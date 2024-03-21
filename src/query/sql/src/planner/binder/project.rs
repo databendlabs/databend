@@ -484,7 +484,7 @@ impl Binder {
             let expr = Expr::FunctionCall {
                 span,
                 func: FunctionCall {
-                    name: Identifier::from_name("array_apply"),
+                    name: Identifier::from_name(span, "array_apply"),
                     args: vec![input_array],
                     lambda: lambda.cloned(),
                     distinct: false,

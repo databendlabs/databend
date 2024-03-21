@@ -687,11 +687,10 @@ impl Binder {
                         span: *span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: databend_common_ast::ast::Identifier {
-                                span: *span,
-                                name: func_name.name.clone(),
-                                quote: None,
-                            },
+                            name: databend_common_ast::ast::Identifier::from_name(
+                                *span,
+                                &func_name.name,
+                            ),
                             params: vec![],
                             args,
                             window: None,

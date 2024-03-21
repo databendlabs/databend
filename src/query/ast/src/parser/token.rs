@@ -640,6 +640,8 @@ pub enum TokenKind {
     INTERSECT,
     #[token("IDENTIFIED", ignore(ascii_case))]
     IDENTIFIED,
+    #[token("IDENTIFIER", ignore(ascii_case))]
+    IDENTIFIER,
     #[token("IF", ignore(ascii_case))]
     IF,
     #[token("IN", ignore(ascii_case))]
@@ -1109,6 +1111,8 @@ pub enum TokenKind {
     VERBOSE,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
+    #[token("VIEWS", ignore(ascii_case))]
+    VIEWS,
     #[token("VIRTUAL", ignore(ascii_case))]
     VIRTUAL,
     #[token("WHEN", ignore(ascii_case))]
@@ -1365,6 +1369,7 @@ impl TokenKind {
             | TokenKind::ROLLUP
             // | TokenKind::IFNULL
             | TokenKind::IN
+            | TokenKind::IDENTIFIER
             // | TokenKind::INITIALLY
             // | TokenKind::INOUT
             | TokenKind::INT
@@ -1511,6 +1516,7 @@ impl TokenKind {
             | TokenKind::FULL
             // | TokenKind::ILIKE
             | TokenKind::IN
+            | TokenKind::IDENTIFIER
             // | TokenKind::INITIALLY
             | TokenKind::INNER
             | TokenKind::IS

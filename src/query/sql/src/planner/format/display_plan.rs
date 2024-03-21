@@ -98,6 +98,7 @@ impl Plan {
             Plan::CreateView(_) => Ok("CreateView".to_string()),
             Plan::AlterView(_) => Ok("AlterView".to_string()),
             Plan::DropView(_) => Ok("DropView".to_string()),
+            Plan::DescribeView(_) => Ok("DescribeView".to_string()),
 
             // Streams
             Plan::CreateStream(_) => Ok("CreateStream".to_string()),
