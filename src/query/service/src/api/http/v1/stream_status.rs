@@ -50,7 +50,7 @@ async fn check_stream_status(
         .get_table_meta_by_id(stream.source_table_id())
         .await?;
     Ok(StreamStatusResponse {
-        has_data: !stream.offset().is_some_and(|v| base_table_ident.seq == v),
+        has_data: base_table_ident.seq != stream.offset(),
         params: params.0,
     })
 }

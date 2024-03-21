@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -31,6 +32,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateStreamPlan;
 use databend_common_sql::plans::DropStreamPlan;
 use databend_common_sql::plans::StreamNavigation;
+use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -61,7 +63,7 @@ impl StreamHandler for RealStreamHandler {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(&plan.catalog).await?;
 
-        let table = catalog
+        let mut table = catalog
             .get_table(tenant.as_str(), &plan.table_database, &plan.table_name)
             .await?;
         let table_info = table.get_table_info();
@@ -72,7 +74,7 @@ impl StreamHandler for RealStreamHandler {
             )));
         }
 
-        let table_version = table_info.ident.seq;
+        let mut table_version = table_info.ident.seq;
         let table_id = table_info.ident.table_id;
         let schema = table_info.schema().clone();
         if !table.change_tracking_enabled() {
@@ -95,10 +97,12 @@ impl StreamHandler for RealStreamHandler {
             catalog
                 .upsert_table_option(tenant.as_str(), &plan.table_database, req)
                 .await?;
+            // refreash table.
+            table = table.refresh(ctx.as_ref()).await?;
+            table_version = table.get_table_info().ident.seq;
         }
 
-        let mut options = BTreeMap::new();
-        match &plan.navigation {
+        let (version, snapshot_location) = match &plan.navigation {
             Some(StreamNavigation::AtStream { database, name }) => {
                 let stream = catalog.get_table(tenant.as_str(), database, name).await?;
                 let stream = StreamTable::try_from_table(stream.as_ref())?;
@@ -123,40 +127,53 @@ impl StreamHandler for RealStreamHandler {
                     )));
                 }
 
-                if let Some(version) = stream_opts.get(OPT_KEY_TABLE_VER) {
-                    options.insert(OPT_KEY_TABLE_VER.to_string(), version.to_string());
-                } else if plan.append_only {
-                    return Err(ErrorCode::IllegalStream(format!(
-                        "The stream '{name}' has not table version",
-                    )));
-                }
-                if let Some(snapshot) = stream_opts.get(OPT_KEY_SNAPSHOT_LOCATION) {
-                    options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot.to_string());
-                }
+                let version = stream_opts
+                    .get(OPT_KEY_TABLE_VER)
+                    .ok_or_else(|| ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?
+                    .parse::<u64>()?;
+                (version, stream_opts.get(OPT_KEY_SNAPSHOT_LOCATION).cloned())
             }
             Some(StreamNavigation::AtPoint(point)) => {
-                if plan.append_only {
-                    return Err(ErrorCode::IllegalStream(
-                        "The stream navigation at point is not supported in append only mode"
-                            .to_string(),
-                    ));
-                }
-
                 let fuse_table = FuseTable::try_from_table(table.as_ref())?;
                 let source = fuse_table.navigate_to(point).await?;
                 if let Some(snapshot_loc) = source.snapshot_loc().await? {
-                    options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
+                    let (snapshot, _) =
+                        SnapshotsIO::read_snapshot(snapshot_loc.clone(), fuse_table.get_operator())
+                            .await?;
+                    let Some(version) = snapshot.table_version else {
+                        return Err(ErrorCode::IllegalStream(
+                            "The stream navigation at point has not table version".to_string(),
+                        ));
+                    };
+
+                    // The table version is the version of the table when the snapshot was created.
+                    // We need make sure the version greater than the table version,
+                    // and less equal than the table version after the snapshot commit.
+                    (version + 1, Some(snapshot_loc))
+                } else {
+                    unreachable!()
                 }
             }
             None => {
-                options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
                 let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-                if let Some(snapshot_loc) = fuse_table.snapshot_loc().await? {
-                    options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
-                }
+                (table_version, fuse_table.snapshot_loc().await?)
+            }
+        };
+
+        if let Some(value) = table
+            .get_table_info()
+            .options()
+            .get(OPT_KEY_CHANGE_TRACKING_BEGIN_VER)
+        {
+            let begin_version = value.parse::<u64>()?;
+            if begin_version > version {
+                return Err(ErrorCode::IllegalStream(format!(
+                    "Change tracking has been missing for the time range requested on table '{}.{}'",
+                    plan.table_database, plan.table_name
+                )));
             }
         }
-
+        let mut options = BTreeMap::new();
         let stream_mode = if plan.append_only {
             MODE_APPEND_ONLY
         } else {
@@ -169,6 +186,10 @@ impl StreamHandler for RealStreamHandler {
             plan.table_database.clone(),
         );
         options.insert(OPT_KEY_TABLE_ID.to_string(), table_id.to_string());
+        options.insert(OPT_KEY_TABLE_VER.to_string(), version.to_string());
+        if let Some(snapshot_loc) = snapshot_location {
+            options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
+        }
 
         let req = CreateTableReq {
             create_option: plan.create_option,
