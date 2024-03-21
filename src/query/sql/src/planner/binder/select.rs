@@ -964,6 +964,7 @@ impl<'a> SelectRewriter<'a> {
             a.eq_ignore_ascii_case(b)
         }
     }
+
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
             Expr::FunctionCall {
@@ -971,14 +972,6 @@ impl<'a> SelectRewriter<'a> {
                 ..
             } => Ok((name, args)),
             _ => Err(ErrorCode::SyntaxException("Aggregate function is required")),
-        }
-    }
-
-    fn ident_from_string(s: &str) -> Identifier {
-        Identifier {
-            name: s.to_string(),
-            quote: None,
-            span: None,
         }
     }
 
@@ -1117,7 +1110,7 @@ impl<'a> SelectRewriter<'a> {
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
             let mut exclude_columns: Vec<_> = aggregate_columns
                 .iter()
-                .map(|c| Identifier::from_name(c.column.name()))
+                .map(|c| Identifier::from_name(stmt.span, c.column.name()))
                 .collect();
             exclude_columns.push(pivot.value_column.clone());
             star.exclude(exclude_columns);
@@ -1137,7 +1130,7 @@ impl<'a> SelectRewriter<'a> {
             new_select_list.push(Self::target_func_from_name_args(
                 new_aggregate_name.clone(),
                 args,
-                Some(Self::ident_from_string(&alias)),
+                Some(Identifier::from_name(stmt.span, &alias)),
             ));
         }
 
@@ -1164,14 +1157,14 @@ impl<'a> SelectRewriter<'a> {
             star.exclude(unpivot.names.clone());
         };
         new_select_list.push(Self::target_func_from_name_args(
-            Self::ident_from_string("unnest"),
+            Identifier::from_name(stmt.span, "unnest"),
             vec![Self::expr_literal_array_from_vec_ident(
                 unpivot.names.clone(),
             )],
             Some(unpivot.column_name.clone()),
         ));
         new_select_list.push(Self::target_func_from_name_args(
-            Self::ident_from_string("unnest"),
+            Identifier::from_name(stmt.span, "unnest"),
             vec![Self::expr_column_ref_array_from_vec_ident(
                 unpivot.names.clone(),
             )],

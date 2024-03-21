@@ -100,17 +100,15 @@ impl DistinctToGroupBy {
                                 span: None,
                                 func: FunctionCall {
                                     distinct: false,
-                                    name: Identifier {
-                                        name: "count".to_string(),
-                                        quote: None,
-                                        span: *span,
-                                    },
+                                    name: Identifier::from_name(*span, "count"),
                                     args: vec![Expr::ColumnRef {
                                         span: None,
                                         column: ColumnRef {
                                             database: None,
                                             table: None,
-                                            column: ColumnID::Name(Identifier::from_name("_1")),
+                                            column: ColumnID::Name(Identifier::from_name(
+                                                None, "_1",
+                                            )),
                                         },
                                     }],
                                     params: vec![],
@@ -125,8 +123,8 @@ impl DistinctToGroupBy {
                             lateral: false,
                             subquery: Box::new(subquery),
                             alias: Some(TableAlias {
-                                name: Identifier::from_name(sub_query_name),
-                                columns: vec![Identifier::from_name("_1")],
+                                name: Identifier::from_name(None, sub_query_name),
+                                columns: vec![Identifier::from_name(None, "_1")],
                             }),
                         }],
                         selection: None,

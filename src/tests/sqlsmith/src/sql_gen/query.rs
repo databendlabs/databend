@@ -102,7 +102,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             let table_type = infer_schema_type(&ty).unwrap();
             let field = TableField::new(&col_name, table_type);
             fields.push(field);
-            let alias = Identifier::from_name(col_name);
+            let alias = Identifier::from_name(None, col_name);
             let target = SelectTarget::AliasedExpr {
                 expr: Box::new(expr),
                 alias: Some(alias),
@@ -325,7 +325,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let window_name = format!("w_{}", name);
                 let spec = self.gen_window_spec();
                 let window_def = WindowDefinition {
-                    name: Identifier::from_name(window_name),
+                    name: Identifier::from_name(None, window_name),
                     spec,
                 };
                 res.push(window_def);
@@ -461,7 +461,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             self.cte_tables[len - i - 1].clone()
         };
         let schema = table.schema.clone();
-        let table_name = Identifier::from_name(table.name.clone());
+        let table_name = Identifier::from_name(None, table.name.clone());
 
         self.bound_table(table);
 
@@ -514,7 +514,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 TableReference::TableFunction {
                     span: None,
                     lateral: false,
-                    name: Identifier::from_name(name),
+                    name: Identifier::from_name(None, name),
                     params: vec![Expr::Literal {
                         span: None,
                         lit: Literal::UInt64(self.rng.gen_range(0..=10)),
@@ -536,7 +536,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                                 span: None,
                                 func: FunctionCall {
                                     distinct: false,
-                                    name: Identifier::from_name("to_timestamp".to_string()),
+                                    name: Identifier::from_name(None, "to_timestamp".to_string()),
                                     args: vec![arg],
                                     params: vec![],
                                     window: None,
@@ -553,7 +553,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                                 span: None,
                                 func: FunctionCall {
                                     distinct: false,
-                                    name: Identifier::from_name("to_date".to_string()),
+                                    name: Identifier::from_name(None, "to_date".to_string()),
                                     args: vec![arg],
                                     params: vec![],
                                     window: None,
@@ -583,7 +583,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 TableReference::TableFunction {
                     span: None,
                     lateral: false,
-                    name: Identifier::from_name(name),
+                    name: Identifier::from_name(None, name),
                     params: if self.rng.gen_bool(0.5) {
                         vec![param1, param2]
                     } else {
@@ -642,7 +642,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     let mut idents = Vec::with_capacity(num);
                     for _ in 0..num {
                         let idx = self.rng.gen_range(0..names.len());
-                        idents.push(Identifier::from_name(names[idx].clone()));
+                        idents.push(Identifier::from_name(None, names[idx].clone()));
                     }
                     JoinCondition::Using(idents)
                 }
@@ -706,11 +706,11 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let table_name = format!("t{}", name);
         let mut columns = Vec::with_capacity(schema.num_fields());
         for field in schema.fields() {
-            let column = Identifier::from_name(field.name.clone());
+            let column = Identifier::from_name(None, field.name.clone());
             columns.push(column);
         }
         let alias = TableAlias {
-            name: Identifier::from_name(table_name.clone()),
+            name: Identifier::from_name(None, table_name.clone()),
             columns,
         };
         let table = Table::new(table_name, schema);
