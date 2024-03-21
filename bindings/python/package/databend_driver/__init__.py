@@ -13,4 +13,5 @@
 # limitations under the License.
 
 # flake8: noqa
+
 from ._databend_driver import *

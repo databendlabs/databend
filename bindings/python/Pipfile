@@ -4,12 +4,12 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+databend-driver = {path = ".", editable = true}
 
 [dev-packages]
 maturin = "*"
 behave = "*"
-black = "*"
-flake8 = "*"
+ruff = "*"
 
 [requires]
 python_version = "3.11"

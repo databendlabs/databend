@@ -40,7 +40,7 @@ jobs:
         run: pipenv install --dev
       - name: Check format
         working-directory: bindings/python
-        run: pipenv run black --check .
+        run: pipenv run ruff format --check .
       - name: Setup develop
         working-directory: bindings/python
         run: pipenv run maturin develop
