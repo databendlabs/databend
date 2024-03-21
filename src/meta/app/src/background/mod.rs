@@ -14,6 +14,7 @@
 
 mod background_job;
 mod background_task;
+pub mod task_creator;
 
 pub use background_job::BackgroundJobId;
 pub use background_job::BackgroundJobIdent;
