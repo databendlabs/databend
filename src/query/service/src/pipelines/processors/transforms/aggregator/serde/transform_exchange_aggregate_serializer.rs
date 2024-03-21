@@ -192,8 +192,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         &self.params,
                         SerializePayload::<Method, usize>::HashTablePayload(payload),
                     );
-                    let mut stream_blocks =
-                        stream.into_iter().map(|x| x).collect::<Result<Vec<_>>>()?;
+                    let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
 
                     if stream_blocks.is_empty() {
                         serialized_blocks.push(FlightSerialized::DataBlock(DataBlock::empty()));
@@ -223,8 +222,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         &self.params,
                         SerializePayload::<Method, usize>::AggregatePayload(p),
                     );
-                    let mut stream_blocks =
-                        stream.into_iter().map(|x| x).collect::<Result<Vec<_>>>()?;
+                    let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
 
                     if stream_blocks.is_empty() {
                         serialized_blocks.push(FlightSerialized::DataBlock(DataBlock::empty()));
