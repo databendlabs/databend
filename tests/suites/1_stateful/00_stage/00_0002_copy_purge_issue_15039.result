@@ -1,0 +1,22 @@
+>>>> drop table if exists ii
+>>>> create table ii(a int, b int)
+>>>> drop stage if exists s_ii
+>>>> create stage s_ii url='fs:///tmp/00_0002_issue_15039/';
+>>>> copy into ii from @s_ii file_format = (type = CSV) purge = true
+i0.csv	2	0	NULL	NULL
+<<<<
+>>>> list @s_ii
+<<<<
+>>>> select * from ii
+1	1
+2	2
+>>>> copy into ii from @s_ii file_format = (type = CSV) files = ('i0.csv') purge = true
+<<<<
+>>>>
+i0.csv
+<<<<
+>>>> select * from ii
+1	1
+2	2
+>>>> drop table if exists ii
+>>>> drop stage if exists s_ii
