@@ -21,7 +21,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::sync::mpsc::Sender;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::MemStat;
@@ -37,6 +36,8 @@ use log::debug;
 use log::info;
 use log::trace;
 use minitrace::prelude::*;
+use parking_lot::Condvar;
+use parking_lot::Mutex;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
@@ -161,7 +162,8 @@ struct ExecutingGraph {
     points: AtomicU64,
     query_id: Arc<String>,
     should_finish: AtomicBool,
-    sender: Option<Sender<Result<(), ErrorCode>>>,
+    finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+    finished_error: Mutex<Option<ErrorCode>>,
 }
 
 type StateLockGuard = ExecutingGraph;
@@ -171,7 +173,7 @@ impl ExecutingGraph {
         mut pipeline: Pipeline,
         init_epoch: u32,
         query_id: Arc<String>,
-        sender: Option<Sender<Result<(), ErrorCode>>>,
+        finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
         Self::init_graph(&mut pipeline, &mut graph);
@@ -181,7 +183,8 @@ impl ExecutingGraph {
             points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
             query_id,
             should_finish: AtomicBool::new(false),
-            sender,
+            finish_condvar_notify,
+            finished_error: Mutex::new(None),
         })
     }
 
@@ -189,7 +192,7 @@ impl ExecutingGraph {
         mut pipelines: Vec<Pipeline>,
         init_epoch: u32,
         query_id: Arc<String>,
-        sender: Option<Sender<Result<(), ErrorCode>>>,
+        finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
 
@@ -203,7 +206,8 @@ impl ExecutingGraph {
             points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
             query_id,
             should_finish: AtomicBool::new(false),
-            sender,
+            finish_condvar_notify,
+            finished_error: Mutex::new(None),
         })
     }
 
@@ -664,9 +668,10 @@ impl RunningGraph {
         pipeline: Pipeline,
         init_epoch: u32,
         query_id: Arc<String>,
-        sender: Option<Sender<Result<(), ErrorCode>>>,
+        finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<Arc<RunningGraph>> {
-        let graph_state = ExecutingGraph::create(pipeline, init_epoch, query_id, sender)?;
+        let graph_state =
+            ExecutingGraph::create(pipeline, init_epoch, query_id, finish_condvar_notify)?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
     }
@@ -675,9 +680,10 @@ impl RunningGraph {
         pipelines: Vec<Pipeline>,
         init_epoch: u32,
         query_id: Arc<String>,
-        sender: Option<Sender<Result<(), ErrorCode>>>,
+        finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<Arc<RunningGraph>> {
-        let graph_state = ExecutingGraph::from_pipelines(pipelines, init_epoch, query_id, sender)?;
+        let graph_state =
+            ExecutingGraph::from_pipelines(pipelines, init_epoch, query_id, finish_condvar_notify)?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
     }
@@ -757,19 +763,22 @@ impl RunningGraph {
 
     /// Flag the graph should finish and no more tasks should be scheduled.
     pub fn should_finish(&self, cause: Result<(), ErrorCode>) -> Result<()> {
-        // TODO: I will handle _cause
         if self.0.should_finish.load(Ordering::SeqCst) {
             return Ok(());
         }
         self.0.should_finish.store(true, Ordering::SeqCst);
-        if let Some(sender) = &self.0.sender {
-            return match sender.blocking_send(cause) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(ErrorCode::Internal(format!(
-                    "Failed to send finish signal, cause: {:?}",
-                    e
-                ))),
-            };
+
+        let mut finished_error = self.0.finished_error.lock();
+        if finished_error.is_none() {
+            *finished_error = cause.err();
+            drop(finished_error);
+        }
+
+        if let Some(notify) = self.0.finish_condvar_notify.clone() {
+            let (lock, cvar) = &*notify;
+            let mut started = lock.lock();
+            *started = true;
+            cvar.notify_one();
         }
         Ok(())
     }
@@ -786,6 +795,11 @@ impl RunningGraph {
 
     pub fn get_query_id(&self) -> Arc<String> {
         self.0.query_id.clone()
+    }
+
+    pub fn get_error(&self) -> Option<ErrorCode> {
+        let finished_error = self.0.finished_error.lock();
+        finished_error.clone()
     }
 
     pub fn format_graph_nodes(&self) -> String {
