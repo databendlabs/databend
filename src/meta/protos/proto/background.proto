@@ -67,11 +67,11 @@ message BackgroundTaskInfo {
     optional VacuumStats vacuum_stats = 8;
     optional ManualTriggerParams manual_trigger = 9;
     // Audit
-    optional BackgroundJobIdent creator = 90;
+    optional BackgroundTaskCreator creator = 90;
     string created_at = 91;
 }
 
-message BackgroundJobIdent {
+message BackgroundTaskCreator {
     uint64 ver = 100;
     uint64 min_reader_ver = 101;
 

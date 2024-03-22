@@ -149,6 +149,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             unit,
         } => visitor.visit_date_sub(*span, unit, interval, date),
         Expr::DateTrunc { span, unit, date } => visitor.visit_date_trunc(*span, unit, date),
+        Expr::Hole { .. } => {}
     }
 }
 

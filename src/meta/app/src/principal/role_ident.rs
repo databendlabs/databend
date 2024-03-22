@@ -59,11 +59,11 @@ mod kvapi_key_impl {
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-            let tenant = p.next_str()?;
+            let tenant = p.next_nonempty()?;
             let role_name = p.next_str()?;
             p.done()?;
 
-            Ok(RoleIdent::new(Tenant::new(tenant), role_name))
+            Ok(RoleIdent::new(Tenant::new_nonempty(tenant), role_name))
         }
     }
 
@@ -90,13 +90,13 @@ mod tests {
 
     #[test]
     fn test_role_ident_tenant_prefix() {
-        let r = RoleIdent::new(Tenant::new("tenant"), "role");
+        let r = RoleIdent::new(Tenant::new_literal("tenant"), "role");
         assert_eq!("__fd_roles/tenant/", r.tenant_prefix());
     }
 
     #[test]
     fn test_role_ident_key() {
-        let r = RoleIdent::new(Tenant::new("tenant"), "role");
+        let r = RoleIdent::new(Tenant::new_literal("tenant"), "role");
         assert_eq!("__fd_roles/tenant/role", r.to_string_key());
         assert_eq!(Ok(r), RoleIdent::from_str_key("__fd_roles/tenant/role"));
     }

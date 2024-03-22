@@ -42,13 +42,14 @@ mod kvapi_impl {
 #[cfg(test)]
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
+    use databend_common_meta_types::NonEmptyString;
 
     use crate::principal::user_stage_ident::StageIdent;
     use crate::tenant::Tenant;
 
     #[test]
     fn test_kvapi_key_for_stage_ident() {
-        let tenant = Tenant::new("test");
+        let tenant = Tenant::new_nonempty(NonEmptyString::new("test").unwrap());
         let stage = StageIdent::new(tenant, "stage");
 
         let key = stage.to_string_key();

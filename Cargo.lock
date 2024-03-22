@@ -4154,6 +4154,7 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "chrono",
+ "chrono-tz",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-building",

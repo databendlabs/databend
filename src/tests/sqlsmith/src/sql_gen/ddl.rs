@@ -71,14 +71,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 if_exists: true,
                 catalog: None,
                 database: None,
-                table: Identifier::from_name(table_name),
+                table: Identifier::from_name(None, table_name),
                 all: false,
             };
             let create_table = CreateTableStmt {
                 create_option: CreateOption::CreateIfNotExists,
                 catalog: None,
                 database: None,
-                table: Identifier::from_name(table_name),
+                table: Identifier::from_name(None, table_name),
                 source: Some(source),
                 engine: Some(Engine::Fuse),
                 uri_location: None,
@@ -168,7 +168,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
     pub(crate) fn gen_new_column(&mut self) -> ColumnDefinition {
         let name = self.gen_random_name();
-        let new_column_name = Identifier::from_name(format!("cc{}", name));
+        let new_column_name = Identifier::from_name(None, format!("cc{}", name));
         let data_type = self.gen_data_type_name(None);
         ColumnDefinition {
             name: new_column_name,
@@ -193,7 +193,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 None
             };
             let column_def = ColumnDefinition {
-                name: Identifier::from_name(name),
+                name: Identifier::from_name(None, name),
                 data_type,
                 expr: default_expr,
                 comment: None,

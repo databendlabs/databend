@@ -105,6 +105,7 @@ ShowDropTables(
                                     ),
                                     name: "name",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -161,6 +162,7 @@ DescribeTable(
             quote: Some(
                 '"',
             ),
+            is_hole: false,
         },
     },
 )
@@ -183,6 +185,7 @@ DescribeTable(
             quote: Some(
                 '"',
             ),
+            is_hole: false,
         },
     },
 )
@@ -219,6 +222,7 @@ ShowTables(
                 ),
                 name: "db",
                 quote: None,
+                is_hole: false,
             },
         ),
         full: true,
@@ -242,6 +246,7 @@ ShowTables(
                 ),
                 name: "ctl",
                 quote: None,
+                is_hole: false,
             },
         ),
         database: Some(
@@ -251,6 +256,7 @@ ShowTables(
                 ),
                 name: "db",
                 quote: None,
+                is_hole: false,
             },
         ),
         full: true,
@@ -275,6 +281,7 @@ ShowColumns(
                 ),
                 name: "db",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -283,6 +290,7 @@ ShowColumns(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         full: true,
         limit: None,
@@ -304,6 +312,7 @@ ShowColumns(
                 ),
                 name: "ctl",
                 quote: None,
+                is_hole: false,
             },
         ),
         database: Some(
@@ -313,6 +322,7 @@ ShowColumns(
                 ),
                 name: "db",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -321,6 +331,7 @@ ShowColumns(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         full: false,
         limit: None,
@@ -343,6 +354,7 @@ ShowColumns(
                 ),
                 name: "db",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -351,6 +363,7 @@ ShowColumns(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         full: true,
         limit: Some(
@@ -412,6 +425,7 @@ ShowProcessList {
                                         ),
                                         name: "database",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -450,6 +464,7 @@ ShowCreateTable(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -458,6 +473,7 @@ ShowCreateTable(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -478,6 +494,7 @@ ShowCreateTable(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -486,6 +503,7 @@ ShowCreateTable(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -532,6 +550,7 @@ Explain {
                                             ),
                                             name: "a",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -552,6 +571,7 @@ Explain {
                                 ),
                                 name: "b",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
                             travel_point: None,
@@ -613,6 +633,7 @@ Explain {
                                             ),
                                             name: "a",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -633,6 +654,7 @@ Explain {
                                 ),
                                 name: "t1",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
                             travel_point: None,
@@ -713,6 +735,7 @@ Explain {
                                 ),
                                 name: "t",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
                             travel_point: None,
@@ -741,6 +764,7 @@ Explain {
                                             ),
                                             name: "a",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -785,6 +809,7 @@ DescribeTable(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -805,6 +830,7 @@ DescribeTable(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -829,6 +855,7 @@ CreateIndex(
             ),
             name: "idx1",
             quote: None,
+            is_hole: false,
         },
         query: Query {
             span: Some(
@@ -856,6 +883,7 @@ CreateIndex(
                                         ),
                                         name: "SUM",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     args: [
                                         ColumnRef {
@@ -872,6 +900,7 @@ CreateIndex(
                                                         ),
                                                         name: "a",
                                                         quote: None,
+                                                        is_hole: false,
                                                     },
                                                 ),
                                             },
@@ -899,6 +928,7 @@ CreateIndex(
                                             ),
                                             name: "b",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -919,6 +949,7 @@ CreateIndex(
                                 ),
                                 name: "t1",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
                             travel_point: None,
@@ -947,6 +978,7 @@ CreateIndex(
                                             ),
                                             name: "b",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -978,6 +1010,7 @@ CreateIndex(
                                                 ),
                                                 name: "b",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -1015,6 +1048,7 @@ CreateIndex(
             ),
             name: "idx1",
             quote: None,
+            is_hole: false,
         },
         query: Query {
             span: Some(
@@ -1042,6 +1076,7 @@ CreateIndex(
                                         ),
                                         name: "SUM",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                     args: [
                                         ColumnRef {
@@ -1058,6 +1093,7 @@ CreateIndex(
                                                         ),
                                                         name: "a",
                                                         quote: None,
+                                                        is_hole: false,
                                                     },
                                                 ),
                                             },
@@ -1085,6 +1121,7 @@ CreateIndex(
                                             ),
                                             name: "b",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -1105,6 +1142,7 @@ CreateIndex(
                                 ),
                                 name: "t1",
                                 quote: None,
+                                is_hole: false,
                             },
                             alias: None,
                             travel_point: None,
@@ -1133,6 +1171,7 @@ CreateIndex(
                                             ),
                                             name: "b",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -1164,6 +1203,7 @@ CreateIndex(
                                                 ),
                                                 name: "b",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -1200,6 +1240,7 @@ CreateInvertedIndex(
             ),
             name: "idx2",
             quote: None,
+            is_hole: false,
         },
         catalog: None,
         database: None,
@@ -1209,6 +1250,7 @@ CreateInvertedIndex(
             ),
             name: "t1",
             quote: None,
+            is_hole: false,
         },
         columns: [
             Identifier {
@@ -1217,6 +1259,7 @@ CreateInvertedIndex(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
             Identifier {
                 span: Some(
@@ -1224,6 +1267,7 @@ CreateInvertedIndex(
                 ),
                 name: "b",
                 quote: None,
+                is_hole: false,
             },
         ],
         sync_creation: true,
@@ -1247,6 +1291,7 @@ CreateTable(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -1258,6 +1303,7 @@ CreateTable(
                             ),
                             name: "c",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Decimal {
                             precision: 38,
@@ -1295,6 +1341,7 @@ CreateTable(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -1306,6 +1353,7 @@ CreateTable(
                             ),
                             name: "c",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Decimal {
                             precision: 38,
@@ -1343,6 +1391,7 @@ CreateTable(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -1354,6 +1403,7 @@ CreateTable(
                             ),
                             name: "c",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Decimal {
                             precision: 38,
@@ -1391,6 +1441,7 @@ CreateTable(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -1402,6 +1453,7 @@ CreateTable(
                             ),
                             name: "c",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: UInt32,
                         expr: None,
@@ -1436,6 +1488,7 @@ CreateTable(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -1444,6 +1497,7 @@ CreateTable(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -1455,6 +1509,7 @@ CreateTable(
                             ),
                             name: "c",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: NotNull(
                             Int32,
@@ -1480,6 +1535,7 @@ CreateTable(
                             ),
                             name: "b",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: String,
                         expr: None,
@@ -1514,6 +1570,7 @@ CreateTable(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -1522,6 +1579,7 @@ CreateTable(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -1533,6 +1591,7 @@ CreateTable(
                             ),
                             name: "c",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: NotNull(
                             Int32,
@@ -1558,6 +1617,7 @@ CreateTable(
                             ),
                             name: "b",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: String,
                         expr: None,
@@ -1608,6 +1668,7 @@ CreateTable(
                                     ),
                                     name: "t",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -1650,6 +1711,7 @@ CreateTable(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -1658,6 +1720,7 @@ CreateTable(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -1669,6 +1732,7 @@ CreateTable(
                             ),
                             name: "c",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Tuple {
                             fields_name: Some(
@@ -1692,6 +1756,7 @@ CreateTable(
                             ),
                             name: "d",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Tuple {
                             fields_name: None,
@@ -1732,6 +1797,7 @@ CreateTable(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -1740,6 +1806,7 @@ CreateTable(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -1751,6 +1818,7 @@ CreateTable(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: String,
                         expr: None,
@@ -1763,6 +1831,7 @@ CreateTable(
                             ),
                             name: "b",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: String,
                         expr: None,
@@ -1775,6 +1844,7 @@ CreateTable(
                             ),
                             name: "c",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: String,
                         expr: Some(
@@ -1791,6 +1861,7 @@ CreateTable(
                                             ),
                                             name: "concat",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                         args: [
                                             ColumnRef {
@@ -1807,6 +1878,7 @@ CreateTable(
                                                             ),
                                                             name: "a",
                                                             quote: None,
+                                                            is_hole: false,
                                                         },
                                                     ),
                                                 },
@@ -1833,6 +1905,7 @@ CreateTable(
                                                             ),
                                                             name: "b",
                                                             quote: None,
+                                                            is_hole: false,
                                                         },
                                                     ),
                                                 },
@@ -1876,6 +1949,7 @@ CreateTable(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -1884,6 +1958,7 @@ CreateTable(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -1895,6 +1970,7 @@ CreateTable(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Int32,
                         expr: None,
@@ -1907,6 +1983,7 @@ CreateTable(
                             ),
                             name: "b",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Int32,
                         expr: None,
@@ -1919,6 +1996,7 @@ CreateTable(
                             ),
                             name: "c",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Int32,
                         expr: Some(
@@ -1942,6 +2020,7 @@ CreateTable(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -1960,6 +2039,7 @@ CreateTable(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -1998,6 +2078,7 @@ CreateTable(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -2006,6 +2087,7 @@ CreateTable(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Like {
@@ -2017,6 +2099,7 @@ CreateTable(
                         ),
                         name: "c",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
                 table: Identifier {
@@ -2025,6 +2108,7 @@ CreateTable(
                     ),
                     name: "d",
                     quote: None,
+                    is_hole: false,
                 },
             },
         ),
@@ -2054,6 +2138,7 @@ CreateTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Like {
@@ -2065,6 +2150,7 @@ CreateTable(
                     ),
                     name: "t2",
                     quote: None,
+                    is_hole: false,
                 },
             },
         ),
@@ -2096,6 +2182,7 @@ CreateTable(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -2104,6 +2191,7 @@ CreateTable(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -2115,6 +2203,7 @@ CreateTable(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Int32,
                         expr: None,
@@ -2166,6 +2255,7 @@ CreateTable(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -2174,6 +2264,7 @@ CreateTable(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -2185,6 +2276,7 @@ CreateTable(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Int32,
                         expr: None,
@@ -2233,6 +2325,7 @@ TruncateTable(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -2255,6 +2348,7 @@ TruncateTable(
                 quote: Some(
                     '"',
                 ),
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -2263,6 +2357,7 @@ TruncateTable(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -2284,6 +2379,7 @@ DropTable(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
         all: false,
     },
@@ -2306,6 +2402,7 @@ DropTable(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -2316,6 +2413,7 @@ DropTable(
             quote: Some(
                 '"',
             ),
+            is_hole: false,
         },
         all: false,
     },
@@ -2336,6 +2434,7 @@ UseDatabase {
         quote: Some(
             '"',
         ),
+        is_hole: false,
     },
 }
 
@@ -2374,6 +2473,7 @@ CreateDatabase(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         },
         engine: None,
@@ -2399,6 +2499,7 @@ CreateDatabase(
                     ),
                     name: "ctl",
                     quote: None,
+                    is_hole: false,
                 },
             ),
             database: Identifier {
@@ -2407,6 +2508,7 @@ CreateDatabase(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
         },
         engine: Some(
@@ -2434,6 +2536,7 @@ CreateDatabase(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
         },
         engine: Some(
@@ -2461,6 +2564,7 @@ CreateDatabase(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
         },
         engine: None,
@@ -2491,6 +2595,7 @@ CreateDatabase(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         },
         engine: None,
@@ -2515,6 +2620,7 @@ DropDatabase(
                 ),
                 name: "ctl",
                 quote: None,
+                is_hole: false,
             },
         ),
         database: Identifier {
@@ -2523,6 +2629,7 @@ DropDatabase(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -2543,6 +2650,7 @@ DropDatabase(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -2564,6 +2672,7 @@ CreateTable(
             ),
             name: "c",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -2575,6 +2684,7 @@ CreateTable(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Nullable(
                             Timestamp,
@@ -2589,6 +2699,7 @@ CreateTable(
                             ),
                             name: "b",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Timestamp,
                         expr: None,
@@ -2623,6 +2734,7 @@ CreateView(
             ),
             name: "v",
             quote: None,
+            is_hole: false,
         },
         columns: [],
         query: Query {
@@ -2658,6 +2770,7 @@ CreateView(
                                                 ),
                                                 name: "number",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -2678,6 +2791,7 @@ CreateView(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -2694,6 +2808,7 @@ CreateView(
                                 ),
                                 name: "numbers",
                                 quote: None,
+                                is_hole: false,
                             },
                             params: [
                                 Literal {
@@ -2740,6 +2855,7 @@ AlterView(
             ),
             name: "v",
             quote: None,
+            is_hole: false,
         },
         columns: [],
         query: Query {
@@ -2775,6 +2891,7 @@ AlterView(
                                                 ),
                                                 name: "number",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -2795,6 +2912,7 @@ AlterView(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -2811,6 +2929,7 @@ AlterView(
                                 ),
                                 name: "numbers",
                                 quote: None,
+                                is_hole: false,
                             },
                             params: [
                                 Literal {
@@ -2858,6 +2977,7 @@ DropView(
             ),
             name: "v",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -2879,6 +2999,7 @@ CreateView(
             ),
             name: "v1",
             quote: None,
+            is_hole: false,
         },
         columns: [
             Identifier {
@@ -2887,6 +3008,7 @@ CreateView(
                 ),
                 name: "c1",
                 quote: None,
+                is_hole: false,
             },
         ],
         query: Query {
@@ -2922,6 +3044,7 @@ CreateView(
                                                 ),
                                                 name: "number",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -2942,6 +3065,7 @@ CreateView(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -2958,6 +3082,7 @@ CreateView(
                                 ),
                                 name: "numbers",
                                 quote: None,
+                                is_hole: false,
                             },
                             params: [
                                 Literal {
@@ -3005,6 +3130,7 @@ CreateView(
             ),
             name: "v1",
             quote: None,
+            is_hole: false,
         },
         columns: [
             Identifier {
@@ -3013,6 +3139,7 @@ CreateView(
                 ),
                 name: "c1",
                 quote: None,
+                is_hole: false,
             },
         ],
         query: Query {
@@ -3048,6 +3175,7 @@ CreateView(
                                                 ),
                                                 name: "number",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -3068,6 +3196,7 @@ CreateView(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -3084,6 +3213,7 @@ CreateView(
                                 ),
                                 name: "numbers",
                                 quote: None,
+                                is_hole: false,
                             },
                             params: [
                                 Literal {
@@ -3130,6 +3260,7 @@ AlterView(
             ),
             name: "v1",
             quote: None,
+            is_hole: false,
         },
         columns: [
             Identifier {
@@ -3138,6 +3269,7 @@ AlterView(
                 ),
                 name: "c2",
                 quote: None,
+                is_hole: false,
             },
         ],
         query: Query {
@@ -3173,6 +3305,7 @@ AlterView(
                                                 ),
                                                 name: "number",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -3193,6 +3326,7 @@ AlterView(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -3209,6 +3343,7 @@ AlterView(
                                 ),
                                 name: "numbers",
                                 quote: None,
+                                is_hole: false,
                             },
                             params: [
                                 Literal {
@@ -3307,6 +3442,7 @@ ShowViews(
                 ),
                 name: "db",
                 quote: None,
+                is_hole: false,
             },
         ),
         full: true,
@@ -3330,6 +3466,7 @@ ShowViews(
                 ),
                 name: "ctl",
                 quote: None,
+                is_hole: false,
             },
         ),
         database: Some(
@@ -3339,6 +3476,7 @@ ShowViews(
                 ),
                 name: "db",
                 quote: None,
+                is_hole: false,
             },
         ),
         full: true,
@@ -3364,6 +3502,7 @@ CreateStream(
                 ),
                 name: "test2",
                 quote: None,
+                is_hole: false,
             },
         ),
         stream: Identifier {
@@ -3372,6 +3511,7 @@ CreateStream(
             ),
             name: "s1",
             quote: None,
+            is_hole: false,
         },
         table_database: Some(
             Identifier {
@@ -3380,6 +3520,7 @@ CreateStream(
                 ),
                 name: "test",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -3388,6 +3529,7 @@ CreateStream(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         stream_point: None,
         append_only: false,
@@ -3412,6 +3554,7 @@ CreateStream(
                 ),
                 name: "test2",
                 quote: None,
+                is_hole: false,
             },
         ),
         stream: Identifier {
@@ -3420,6 +3563,7 @@ CreateStream(
             ),
             name: "s2",
             quote: None,
+            is_hole: false,
         },
         table_database: Some(
             Identifier {
@@ -3428,6 +3572,7 @@ CreateStream(
                 ),
                 name: "test",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -3436,6 +3581,7 @@ CreateStream(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         stream_point: Some(
             AtStream {
@@ -3446,6 +3592,7 @@ CreateStream(
                         ),
                         name: "test1",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
                 name: Identifier {
@@ -3454,6 +3601,7 @@ CreateStream(
                     ),
                     name: "s1",
                     quote: None,
+                    is_hole: false,
                 },
             },
         ),
@@ -3481,6 +3629,7 @@ CreateStream(
                 ),
                 name: "test2",
                 quote: None,
+                is_hole: false,
             },
         ),
         stream: Identifier {
@@ -3489,6 +3638,7 @@ CreateStream(
             ),
             name: "s1",
             quote: None,
+            is_hole: false,
         },
         table_database: Some(
             Identifier {
@@ -3497,6 +3647,7 @@ CreateStream(
                 ),
                 name: "test",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -3505,6 +3656,7 @@ CreateStream(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         stream_point: None,
         append_only: false,
@@ -3527,6 +3679,7 @@ ShowStreams(
                 ),
                 name: "default",
                 quote: None,
+                is_hole: false,
             },
         ),
         database: Some(
@@ -3536,6 +3689,7 @@ ShowStreams(
                 ),
                 name: "test2",
                 quote: None,
+                is_hole: false,
             },
         ),
         full: true,
@@ -3563,6 +3717,7 @@ DescribeStream(
                 ),
                 name: "test2",
                 quote: None,
+                is_hole: false,
             },
         ),
         stream: Identifier {
@@ -3571,6 +3726,7 @@ DescribeStream(
             ),
             name: "s2",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -3592,6 +3748,7 @@ DropStream(
                 ),
                 name: "test2",
                 quote: None,
+                is_hole: false,
             },
         ),
         stream: Identifier {
@@ -3600,6 +3757,7 @@ DropStream(
             ),
             name: "s2",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -3621,6 +3779,7 @@ RenameTable(
                 ),
                 name: "d",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -3629,6 +3788,7 @@ RenameTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         new_catalog: None,
         new_database: Some(
@@ -3638,6 +3798,7 @@ RenameTable(
                 ),
                 name: "e",
                 quote: None,
+                is_hole: false,
             },
         ),
         new_table: Identifier {
@@ -3646,6 +3807,7 @@ RenameTable(
             ),
             name: "s",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -3666,6 +3828,7 @@ TruncateTable(
             ),
             name: "test",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -3686,6 +3849,7 @@ TruncateTable(
                 ),
                 name: "test_db",
                 quote: None,
+                is_hole: false,
             },
         ),
         table: Identifier {
@@ -3694,6 +3858,7 @@ TruncateTable(
             ),
             name: "test",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -3715,6 +3880,7 @@ DropTable(
             ),
             name: "table1",
             quote: None,
+            is_hole: false,
         },
         all: false,
     },
@@ -3737,6 +3903,7 @@ DropTable(
             ),
             name: "table1",
             quote: None,
+            is_hole: false,
         },
         all: false,
     },
@@ -3759,6 +3926,7 @@ CreateTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -3770,6 +3938,7 @@ CreateTable(
                             ),
                             name: "c1",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Nullable(
                             Int32,
@@ -3784,6 +3953,7 @@ CreateTable(
                             ),
                             name: "c2",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Nullable(
                             Int64,
@@ -3798,6 +3968,7 @@ CreateTable(
                             ),
                             name: "c3",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Nullable(
                             String,
@@ -3834,6 +4005,7 @@ CreateTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -3845,6 +4017,7 @@ CreateTable(
                             ),
                             name: "c1",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: NotNull(
                             Int32,
@@ -3859,6 +4032,7 @@ CreateTable(
                             ),
                             name: "c2",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: NotNull(
                             Int64,
@@ -3873,6 +4047,7 @@ CreateTable(
                             ),
                             name: "c3",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: NotNull(
                             String,
@@ -3909,6 +4084,7 @@ CreateTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -3920,6 +4096,7 @@ CreateTable(
                             ),
                             name: "c1",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Binary,
                         expr: None,
@@ -3932,6 +4109,7 @@ CreateTable(
                             ),
                             name: "c2",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Binary,
                         expr: None,
@@ -3966,6 +4144,7 @@ CreateTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -3977,6 +4156,7 @@ CreateTable(
                             ),
                             name: "c1",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Int32,
                         expr: Some(
@@ -4022,6 +4202,7 @@ CreateTable(
             ),
             name: "abc",
             quote: None,
+            is_hole: false,
         },
         source: None,
         engine: None,
@@ -4066,6 +4247,7 @@ CreateTable(
                                     ),
                                     name: "xyz",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -4292,6 +4474,7 @@ DropDatabase(
             ),
             name: "db1",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -4331,6 +4514,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -4360,6 +4544,7 @@ Query(
                             ),
                             name: "t",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -4393,6 +4578,7 @@ Query(
                                             ),
                                             name: "a",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -4430,6 +4616,7 @@ Query(
                                                 ),
                                                 name: "b",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -4457,6 +4644,7 @@ Query(
                                             ),
                                             name: "a",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -4481,6 +4669,7 @@ Query(
                                             ),
                                             name: "a",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -4508,6 +4697,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -4577,6 +4767,7 @@ Query(
                             ),
                             name: "t4",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -4643,6 +4834,7 @@ Query(
                                 ),
                                 name: "aa",
                                 quote: None,
+                                is_hole: false,
                             },
                         ),
                         table: Identifier {
@@ -4651,6 +4843,7 @@ Query(
                             ),
                             name: "bb",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -4717,6 +4910,7 @@ Query(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -4736,6 +4930,7 @@ Query(
                             ),
                             name: "b",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -4755,6 +4950,7 @@ Query(
                             ),
                             name: "c",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -4821,6 +5017,7 @@ Query(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -4840,6 +5037,7 @@ Query(
                             ),
                             name: "b",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -4859,6 +5057,7 @@ Query(
                             ),
                             name: "c",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -4890,6 +5089,7 @@ Query(
                                 quote: Some(
                                     '"',
                                 ),
+                                is_hole: false,
                             },
                         ),
                         table: Some(
@@ -4901,6 +5101,7 @@ Query(
                                 quote: Some(
                                     '"',
                                 ),
+                                is_hole: false,
                             },
                         ),
                         column: Name(
@@ -4912,6 +5113,7 @@ Query(
                                 quote: Some(
                                     '"',
                                 ),
+                                is_hole: false,
                             },
                         ),
                     },
@@ -4983,6 +5185,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -4992,6 +5195,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5009,6 +5213,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5018,6 +5223,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5036,6 +5242,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5055,6 +5262,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5136,6 +5344,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5145,6 +5354,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5162,6 +5372,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5171,6 +5382,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5189,6 +5401,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5208,6 +5421,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5289,6 +5503,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5298,6 +5513,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5315,6 +5531,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5324,6 +5541,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5342,6 +5560,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5361,6 +5580,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5442,6 +5662,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5451,6 +5672,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5468,6 +5690,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5477,6 +5700,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5495,6 +5719,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5514,6 +5739,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5595,6 +5821,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5604,6 +5831,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5621,6 +5849,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5630,6 +5859,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5648,6 +5878,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5667,6 +5898,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5748,6 +5980,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5757,6 +5990,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5774,6 +6008,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5783,6 +6018,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5801,6 +6037,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5820,6 +6057,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5901,6 +6139,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5910,6 +6149,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5927,6 +6167,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -5936,6 +6177,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -5954,6 +6196,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -5973,6 +6216,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6054,6 +6298,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -6063,6 +6308,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -6080,6 +6326,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -6089,6 +6336,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -6107,6 +6355,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6126,6 +6375,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6207,6 +6457,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -6216,6 +6467,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -6233,6 +6485,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -6242,6 +6495,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -6260,6 +6514,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6279,6 +6534,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6360,6 +6616,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -6369,6 +6626,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -6386,6 +6644,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -6395,6 +6654,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -6413,6 +6673,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6432,6 +6693,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6513,6 +6775,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -6522,6 +6785,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -6539,6 +6803,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                             column: Name(
@@ -6548,6 +6813,7 @@ Query(
                                                     ),
                                                     name: "a",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                             ),
                                         },
@@ -6566,6 +6832,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6585,6 +6852,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6655,6 +6923,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ],
                             ),
@@ -6670,6 +6939,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6689,6 +6959,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6759,6 +7030,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ],
                             ),
@@ -6774,6 +7046,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6793,6 +7066,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6863,6 +7137,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ],
                             ),
@@ -6878,6 +7153,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6897,6 +7173,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -6967,6 +7244,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ],
                             ),
@@ -6982,6 +7260,7 @@ Query(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -7001,6 +7280,7 @@ Query(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -7069,6 +7349,7 @@ Query(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -7096,6 +7377,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                                 column: Name(
@@ -7105,6 +7387,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -7143,6 +7426,7 @@ Query(
                                                                 ),
                                                                 name: "b",
                                                                 quote: None,
+                                                                is_hole: false,
                                                             },
                                                         ),
                                                         column: Name(
@@ -7152,6 +7436,7 @@ Query(
                                                                 ),
                                                                 name: "a",
                                                                 quote: None,
+                                                                is_hole: false,
                                                             },
                                                         ),
                                                     },
@@ -7172,6 +7457,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                                 alias: None,
                                                 travel_point: None,
@@ -7252,6 +7538,7 @@ Query(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -7279,6 +7566,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                                 column: Name(
@@ -7288,6 +7576,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -7326,6 +7615,7 @@ Query(
                                                                 ),
                                                                 name: "b",
                                                                 quote: None,
+                                                                is_hole: false,
                                                             },
                                                         ),
                                                         column: Name(
@@ -7335,6 +7625,7 @@ Query(
                                                                 ),
                                                                 name: "a",
                                                                 quote: None,
+                                                                is_hole: false,
                                                             },
                                                         ),
                                                     },
@@ -7355,6 +7646,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                                 alias: None,
                                                 travel_point: None,
@@ -7435,6 +7727,7 @@ Query(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -7462,6 +7755,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                                 column: Name(
@@ -7471,6 +7765,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -7509,6 +7804,7 @@ Query(
                                                                 ),
                                                                 name: "b",
                                                                 quote: None,
+                                                                is_hole: false,
                                                             },
                                                         ),
                                                         column: Name(
@@ -7518,6 +7814,7 @@ Query(
                                                                 ),
                                                                 name: "a",
                                                                 quote: None,
+                                                                is_hole: false,
                                                             },
                                                         ),
                                                     },
@@ -7538,6 +7835,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                                 alias: None,
                                                 travel_point: None,
@@ -7618,6 +7916,7 @@ Query(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -7645,6 +7944,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                                 column: Name(
@@ -7654,6 +7954,7 @@ Query(
                                         ),
                                         name: "a",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -7690,6 +7991,7 @@ Query(
                                                                 ),
                                                                 name: "b",
                                                                 quote: None,
+                                                                is_hole: false,
                                                             },
                                                         ),
                                                         column: Name(
@@ -7699,6 +8001,7 @@ Query(
                                                                 ),
                                                                 name: "a",
                                                                 quote: None,
+                                                                is_hole: false,
                                                             },
                                                         ),
                                                     },
@@ -7719,6 +8022,7 @@ Query(
                                                     ),
                                                     name: "b",
                                                     quote: None,
+                                                    is_hole: false,
                                                 },
                                                 alias: None,
                                                 travel_point: None,
@@ -7799,6 +8103,7 @@ Query(
                             ),
                             name: "numbers",
                             quote: None,
+                            is_hole: false,
                         },
                         params: [
                             Literal {
@@ -7908,6 +8213,7 @@ Query(
                             ),
                             name: "read_parquet",
                             quote: None,
+                            is_hole: false,
                         },
                         params: [
                             Literal {
@@ -7943,6 +8249,7 @@ Query(
                                     ),
                                     name: "prune_page",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 Literal {
                                     span: Some(
@@ -7960,6 +8267,7 @@ Query(
                                     ),
                                     name: "refresh_meta_cache",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 Literal {
                                     span: Some(
@@ -8212,6 +8520,7 @@ Insert(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         columns: [
             Identifier {
@@ -8220,6 +8529,7 @@ Insert(
                 ),
                 name: "c1",
                 quote: None,
+                is_hole: false,
             },
             Identifier {
                 span: Some(
@@ -8227,6 +8537,7 @@ Insert(
                 ),
                 name: "c2",
                 quote: None,
+                is_hole: false,
             },
         ],
         source: Values {
@@ -8290,6 +8601,7 @@ Insert(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         columns: [
             Identifier {
@@ -8298,6 +8610,7 @@ Insert(
                 ),
                 name: "c1",
                 quote: None,
+                is_hole: false,
             },
             Identifier {
                 span: Some(
@@ -8305,6 +8618,7 @@ Insert(
                 ),
                 name: "c2",
                 quote: None,
+                is_hole: false,
             },
         ],
         source: Values {
@@ -8350,6 +8664,7 @@ Insert(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         columns: [],
         source: Select {
@@ -8390,6 +8705,7 @@ Insert(
                                     ),
                                     name: "t2",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -8456,6 +8772,7 @@ Query(
                                             ),
                                             name: "parse_json",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                         args: [
                                             Literal {
@@ -8479,6 +8796,7 @@ Query(
                                         ),
                                         name: "k1",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 },
                             },
@@ -8845,6 +9163,7 @@ OptimizeTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         action: Compact {
             target: Segment,
@@ -8871,6 +9190,7 @@ OptimizeTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         action: Compact {
             target: Block,
@@ -8897,6 +9217,7 @@ OptimizeTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         action: Purge {
             before: Some(
@@ -8927,6 +9248,7 @@ OptimizeTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         action: Purge {
             before: Some(
@@ -8976,6 +9298,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -8999,6 +9322,7 @@ AlterTable(
                                 ),
                                 name: "c1",
                                 quote: None,
+                                is_hole: false,
                             },
                         ),
                     },
@@ -9029,6 +9353,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9061,6 +9386,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9090,6 +9416,7 @@ AlterTable(
                                     ),
                                     name: "c1",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -9132,6 +9459,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9147,6 +9475,7 @@ AlterTable(
                     ),
                     name: "c",
                     quote: None,
+                    is_hole: false,
                 },
                 data_type: Nullable(
                     Int32,
@@ -9180,6 +9509,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9195,6 +9525,7 @@ AlterTable(
                     ),
                     name: "c",
                     quote: None,
+                    is_hole: false,
                 },
                 data_type: Nullable(
                     Int32,
@@ -9228,6 +9559,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9243,6 +9575,7 @@ AlterTable(
                     ),
                     name: "a",
                     quote: None,
+                    is_hole: false,
                 },
                 data_type: Float32,
                 expr: Some(
@@ -9289,6 +9622,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9304,6 +9638,7 @@ AlterTable(
                     ),
                     name: "b",
                     quote: None,
+                    is_hole: false,
                 },
                 data_type: String,
                 expr: Some(
@@ -9327,6 +9662,7 @@ AlterTable(
                     ),
                     name: "a",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -9354,6 +9690,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9368,6 +9705,7 @@ AlterTable(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
             new_column: Identifier {
                 span: Some(
@@ -9375,6 +9713,7 @@ AlterTable(
                 ),
                 name: "b",
                 quote: None,
+                is_hole: false,
             },
         },
     },
@@ -9401,6 +9740,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9415,6 +9755,7 @@ AlterTable(
                 ),
                 name: "b",
                 quote: None,
+                is_hole: false,
             },
         },
     },
@@ -9441,6 +9782,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9455,6 +9797,7 @@ AlterTable(
                 ),
                 name: "b",
                 quote: None,
+                is_hole: false,
             },
         },
     },
@@ -9481,6 +9824,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9496,6 +9840,7 @@ AlterTable(
                     ),
                     name: "b",
                     quote: None,
+                    is_hole: false,
                 },
                 "mask",
             ),
@@ -9524,6 +9869,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9539,6 +9885,7 @@ AlterTable(
                     ),
                     name: "b",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -9566,6 +9913,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9583,6 +9931,7 @@ AlterTable(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Int32,
                         expr: Some(
@@ -9606,6 +9955,7 @@ AlterTable(
                             ),
                             name: "b",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Float32,
                         expr: None,
@@ -9638,6 +9988,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9655,6 +10006,7 @@ AlterTable(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Nullable(
                             Int32,
@@ -9680,6 +10032,7 @@ AlterTable(
                             ),
                             name: "b",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: NotNull(
                             Float32,
@@ -9716,6 +10069,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9733,6 +10087,7 @@ AlterTable(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Int32,
                         expr: None,
@@ -9765,6 +10120,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9782,6 +10138,7 @@ AlterTable(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Int32,
                         expr: None,
@@ -9814,6 +10171,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9829,6 +10187,7 @@ AlterTable(
                     ),
                     name: "a",
                     quote: None,
+                    is_hole: false,
                 },
             ),
         },
@@ -9856,6 +10215,7 @@ AlterTable(
                 ),
                 name: "t",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -9888,6 +10248,7 @@ AlterDatabase(
                 ),
                 name: "ctl",
                 quote: None,
+                is_hole: false,
             },
         ),
         database: Identifier {
@@ -9896,6 +10257,7 @@ AlterDatabase(
             ),
             name: "c",
             quote: None,
+            is_hole: false,
         },
         action: RenameDatabase {
             new_db: Identifier {
@@ -9904,6 +10266,7 @@ AlterDatabase(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         },
     },
@@ -9925,6 +10288,7 @@ AlterDatabase(
             ),
             name: "c",
             quote: None,
+            is_hole: false,
         },
         action: RenameDatabase {
             new_db: Identifier {
@@ -9933,6 +10297,7 @@ AlterDatabase(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         },
     },
@@ -9954,6 +10319,7 @@ AlterDatabase(
                 ),
                 name: "ctl",
                 quote: None,
+                is_hole: false,
             },
         ),
         database: Identifier {
@@ -9962,6 +10328,7 @@ AlterDatabase(
             ),
             name: "c",
             quote: None,
+            is_hole: false,
         },
         action: RenameDatabase {
             new_db: Identifier {
@@ -9970,6 +10337,7 @@ AlterDatabase(
                 ),
                 name: "a",
                 quote: None,
+                is_hole: false,
             },
         },
     },
@@ -9991,6 +10359,7 @@ VacuumTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         option: VacuumTableOption {
             dry_run: None,
@@ -10014,6 +10383,7 @@ VacuumTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         option: VacuumTableOption {
             dry_run: Some(
@@ -10039,6 +10409,7 @@ VacuumTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         option: VacuumTableOption {
             dry_run: Some(
@@ -10119,6 +10490,7 @@ VacuumDropTable(
                 ),
                 name: "db",
                 quote: None,
+                is_hole: false,
             },
         ),
         option: VacuumDropTableOption {
@@ -10144,6 +10516,7 @@ VacuumDropTable(
                 ),
                 name: "db",
                 quote: None,
+                is_hole: false,
             },
         ),
         option: VacuumDropTableOption {
@@ -10172,6 +10545,7 @@ CreateTable(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         source: Some(
             Columns(
@@ -10183,6 +10557,7 @@ CreateTable(
                             ),
                             name: "a",
                             quote: None,
+                            is_hole: false,
                         },
                         data_type: Int32,
                         expr: None,
@@ -10938,6 +11313,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -10988,6 +11364,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11053,6 +11430,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11118,6 +11496,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11187,6 +11566,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11256,6 +11636,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11312,6 +11693,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11363,6 +11745,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11414,6 +11797,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11466,6 +11850,7 @@ CopyIntoLocation(
                     ),
                     name: "mytable",
                     quote: None,
+                    is_hole: false,
                 },
             },
         ),
@@ -11513,6 +11898,7 @@ CopyIntoLocation(
                     ),
                     name: "mytable",
                     quote: None,
+                    is_hole: false,
                 },
             },
         ),
@@ -11553,6 +11939,7 @@ CopyIntoLocation(
                     ),
                     name: "mytable",
                     quote: None,
+                    is_hole: false,
                 },
             },
         ),
@@ -11618,6 +12005,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11673,6 +12061,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11728,6 +12117,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11783,6 +12173,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11848,6 +12239,7 @@ CopyIntoTable(
                 ),
                 name: "mytable",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -11915,6 +12307,7 @@ CopyIntoTable(
                 ),
                 name: "books",
                 quote: None,
+                is_hole: false,
             },
         },
         dst_columns: None,
@@ -12017,6 +12410,7 @@ ShowSettings {
                                         ),
                                         name: "name",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -12090,6 +12484,7 @@ ShowFunctions {
                                         ),
                                         name: "name",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -12163,6 +12558,7 @@ ShowEngines {
                                         ),
                                         name: "engine",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -12236,6 +12632,7 @@ ShowMetrics {
                                         ),
                                         name: "metric",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -12309,6 +12706,7 @@ ShowTableFunctions {
                                         ),
                                         name: "name",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -12382,6 +12780,7 @@ ShowIndexes {
                                         ),
                                         name: "name",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -12610,6 +13009,7 @@ CreateShareEndpoint(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         url: UriLocation {
             protocol: "http",
@@ -12627,6 +13027,7 @@ CreateShareEndpoint(
             ),
             name: "x",
             quote: None,
+            is_hole: false,
         },
         args: {
             "jwks_key_file": "https://eks.public/keys",
@@ -12653,6 +13054,7 @@ CreateShareEndpoint(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         url: UriLocation {
             protocol: "http",
@@ -12670,6 +13072,7 @@ CreateShareEndpoint(
             ),
             name: "x",
             quote: None,
+            is_hole: false,
         },
         args: {
             "jwks_key_file": "https://eks.public/keys",
@@ -12696,6 +13099,7 @@ CreateShare(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         comment: Some(
             "share comment",
@@ -12718,6 +13122,7 @@ CreateShare(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         comment: None,
     },
@@ -12738,6 +13143,7 @@ DropShare(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -12757,6 +13163,7 @@ DropShare(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -12775,6 +13182,7 @@ GrantShareObject(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
         object: Database(
             "db1",
@@ -12797,6 +13205,7 @@ GrantShareObject(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
         object: Table(
             "db1",
@@ -13017,6 +13426,7 @@ RevokeShareObject(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
         object: Database(
             "db1",
@@ -13039,6 +13449,7 @@ RevokeShareObject(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
         object: Table(
             "db1",
@@ -13062,6 +13473,7 @@ AlterShareTenants(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
         if_exists: false,
         tenants: [
@@ -13071,6 +13483,7 @@ AlterShareTenants(
                 ),
                 name: "b",
                 quote: None,
+                is_hole: false,
             },
             Identifier {
                 span: Some(
@@ -13078,6 +13491,7 @@ AlterShareTenants(
                 ),
                 name: "c",
                 quote: None,
+                is_hole: false,
             },
         ],
         is_add: true,
@@ -13098,6 +13512,7 @@ AlterShareTenants(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
         if_exists: true,
         tenants: [
@@ -13107,6 +13522,7 @@ AlterShareTenants(
                 ),
                 name: "b",
                 quote: None,
+                is_hole: false,
             },
             Identifier {
                 span: Some(
@@ -13114,6 +13530,7 @@ AlterShareTenants(
                 ),
                 name: "c",
                 quote: None,
+                is_hole: false,
             },
         ],
         is_add: true,
@@ -13134,6 +13551,7 @@ AlterShareTenants(
             ),
             name: "a",
             quote: None,
+            is_hole: false,
         },
         if_exists: true,
         tenants: [
@@ -13143,6 +13561,7 @@ AlterShareTenants(
                 ),
                 name: "b",
                 quote: None,
+                is_hole: false,
             },
             Identifier {
                 span: Some(
@@ -13150,6 +13569,7 @@ AlterShareTenants(
                 ),
                 name: "c",
                 quote: None,
+                is_hole: false,
             },
         ],
         is_add: false,
@@ -13170,6 +13590,7 @@ DescShare(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -13188,6 +13609,7 @@ DescShare(
             ),
             name: "b",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -13264,6 +13686,7 @@ Update(
                     ),
                     name: "db1",
                     quote: None,
+                    is_hole: false,
                 },
             ),
             table: Identifier {
@@ -13272,6 +13695,7 @@ Update(
                 ),
                 name: "tb1",
                 quote: None,
+                is_hole: false,
             },
             alias: None,
             travel_point: None,
@@ -13287,6 +13711,7 @@ Update(
                     ),
                     name: "a",
                     quote: None,
+                    is_hole: false,
                 },
                 expr: BinaryOp {
                     span: Some(
@@ -13307,6 +13732,7 @@ Update(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -13328,6 +13754,7 @@ Update(
                     ),
                     name: "b",
                     quote: None,
+                    is_hole: false,
                 },
                 expr: Literal {
                     span: Some(
@@ -13359,6 +13786,7 @@ Update(
                                 ),
                                 name: "c",
                                 quote: None,
+                                is_hole: false,
                             },
                         ),
                     },
@@ -13390,6 +13818,7 @@ SetVariable {
         ),
         name: "max_threads",
         quote: None,
+        is_hole: false,
     },
     value: Literal {
         span: Some(
@@ -13415,6 +13844,7 @@ SetVariable {
         ),
         name: "max_threads",
         quote: None,
+        is_hole: false,
     },
     value: BinaryOp {
         span: Some(
@@ -13455,6 +13885,7 @@ UnSetVariable(
                 ),
                 name: "max_threads",
                 quote: None,
+                is_hole: false,
             },
         },
     },
@@ -13476,6 +13907,7 @@ UnSetVariable(
                     ),
                     name: "max_threads",
                     quote: None,
+                    is_hole: false,
                 },
                 Identifier {
                     span: Some(
@@ -13483,6 +13915,7 @@ UnSetVariable(
                     ),
                     name: "sql_dialect",
                     quote: None,
+                    is_hole: false,
                 },
             ],
         },
@@ -13597,6 +14030,7 @@ Query(
                                         ),
                                         name: "t",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                                 column: Name(
@@ -13606,6 +14040,7 @@ Query(
                                         ),
                                         name: "c1",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -13642,6 +14077,7 @@ Query(
                                     ),
                                     name: "t",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 columns: [],
                             },
@@ -13698,6 +14134,7 @@ Query(
                                         ),
                                         name: "table0",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                                 column: Name(
@@ -13707,6 +14144,7 @@ Query(
                                         ),
                                         name: "c1",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -13727,6 +14165,7 @@ Query(
                                         ),
                                         name: "table1",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                                 column: Name(
@@ -13736,6 +14175,7 @@ Query(
                                         ),
                                         name: "c2",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -13779,6 +14219,7 @@ Query(
                                             ),
                                             name: "table0",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                         columns: [],
                                     },
@@ -13796,6 +14237,7 @@ Query(
                                     ),
                                     name: "table1",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 alias: None,
                                 travel_point: None,
@@ -13855,6 +14297,7 @@ Query(
                                         ),
                                         name: "c1",
                                         quote: None,
+                                        is_hole: false,
                                     },
                                 ),
                             },
@@ -13897,6 +14340,7 @@ Query(
                                     ),
                                     name: "t",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 columns: [],
                             },
@@ -14020,6 +14464,7 @@ Query(
                             ),
                             name: "t",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -14047,6 +14492,7 @@ Query(
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14067,6 +14513,7 @@ Query(
                                                 ),
                                                 name: "b",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14087,6 +14534,7 @@ Query(
                                                 ),
                                                 name: "c",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14107,6 +14555,7 @@ Query(
                                                 ),
                                                 name: "d",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14171,6 +14620,7 @@ Query(
                             ),
                             name: "t",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -14198,6 +14648,7 @@ Query(
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14218,6 +14669,7 @@ Query(
                                                 ),
                                                 name: "b",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14238,6 +14690,7 @@ Query(
                                                 ),
                                                 name: "c",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14256,6 +14709,7 @@ Query(
                                                 ),
                                                 name: "d",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14320,6 +14774,7 @@ Query(
                             ),
                             name: "t",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -14347,6 +14802,7 @@ Query(
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14365,6 +14821,7 @@ Query(
                                                 ),
                                                 name: "b",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14385,6 +14842,7 @@ Query(
                                                 ),
                                                 name: "c",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14405,6 +14863,7 @@ Query(
                                                 ),
                                                 name: "d",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14423,6 +14882,7 @@ Query(
                                                 ),
                                                 name: "e",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14487,6 +14947,7 @@ Query(
                             ),
                             name: "t",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -14514,6 +14975,7 @@ Query(
                                                 ),
                                                 name: "a",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14532,6 +14994,7 @@ Query(
                                                 ),
                                                 name: "b",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14553,6 +15016,7 @@ Query(
                                                 ),
                                                 name: "d",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14571,6 +15035,7 @@ Query(
                                                 ),
                                                 name: "e",
                                                 quote: None,
+                                                is_hole: false,
                                             },
                                         ),
                                     },
@@ -14635,6 +15100,7 @@ Query(
                             ),
                             name: "t",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -14661,6 +15127,7 @@ Query(
                                             ),
                                             name: "a",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -14679,6 +15146,7 @@ Query(
                                             ),
                                             name: "b",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -14697,6 +15165,7 @@ Query(
                                             ),
                                             name: "c",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -14760,6 +15229,7 @@ Query(
                             ),
                             name: "t",
                             quote: None,
+                            is_hole: false,
                         },
                         alias: None,
                         travel_point: None,
@@ -14786,6 +15256,7 @@ Query(
                                             ),
                                             name: "a",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -14804,6 +15275,7 @@ Query(
                                             ),
                                             name: "b",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -14822,6 +15294,7 @@ Query(
                                             ),
                                             name: "c",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -14881,6 +15354,7 @@ CreateDatamaskPolicy(
                                     ),
                                     name: "current_role",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 args: [],
                                 params: [],
@@ -14916,6 +15390,7 @@ CreateDatamaskPolicy(
                                     ),
                                     name: "VAL",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -14979,6 +15454,7 @@ CreateDatamaskPolicy(
                                     ),
                                     name: "current_role",
                                     quote: None,
+                                    is_hole: false,
                                 },
                                 args: [],
                                 params: [],
@@ -15014,6 +15490,7 @@ CreateDatamaskPolicy(
                                     ),
                                     name: "VAL",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -15079,6 +15556,7 @@ CreateVirtualColumn(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         virtual_columns: [
             MapAccess {
@@ -15103,6 +15581,7 @@ CreateVirtualColumn(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -15151,6 +15630,7 @@ CreateVirtualColumn(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -15198,6 +15678,7 @@ CreateVirtualColumn(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         virtual_columns: [
             MapAccess {
@@ -15222,6 +15703,7 @@ CreateVirtualColumn(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -15270,6 +15752,7 @@ CreateVirtualColumn(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -15317,6 +15800,7 @@ AlterVirtualColumn(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
         virtual_columns: [
             MapAccess {
@@ -15341,6 +15825,7 @@ AlterVirtualColumn(
                                     ),
                                     name: "a",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -15389,6 +15874,7 @@ AlterVirtualColumn(
                                     ),
                                     name: "b",
                                     quote: None,
+                                    is_hole: false,
                                 },
                             ),
                         },
@@ -15436,6 +15922,7 @@ DropVirtualColumn(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -15456,6 +15943,7 @@ RefreshVirtualColumn(
             ),
             name: "t",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -16282,6 +16770,7 @@ CreateConnection(
             ),
             name: "my_conn",
             quote: None,
+            is_hole: false,
         },
         storage_type: "s3",
         storage_params: {},
@@ -16303,6 +16792,7 @@ CreateConnection(
             ),
             name: "my_conn",
             quote: None,
+            is_hole: false,
         },
         storage_type: "s3",
         storage_params: {
@@ -16326,6 +16816,7 @@ CreateConnection(
             ),
             name: "my_conn",
             quote: None,
+            is_hole: false,
         },
         storage_type: "s3",
         storage_params: {
@@ -16350,6 +16841,7 @@ DropConnection(
             ),
             name: "my_conn",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -16368,6 +16860,7 @@ DescribeConnection(
             ),
             name: "my_conn",
             quote: None,
+            is_hole: false,
         },
     },
 )
@@ -16422,6 +16915,7 @@ CreatePipe(
                     ),
                     name: "MyTable1",
                     quote: None,
+                    is_hole: false,
                 },
             },
             dst_columns: None,
@@ -16471,6 +16965,7 @@ CreatePipe(
                         ),
                         name: "db1",
                         quote: None,
+                        is_hole: false,
                     },
                 ),
                 table: Identifier {
@@ -16479,6 +16974,7 @@ CreatePipe(
                     ),
                     name: "MyTable1",
                     quote: None,
+                    is_hole: false,
                 },
             },
             dst_columns: None,
@@ -17003,6 +17499,7 @@ CreateUDF(
             ),
             name: "isnotempty",
             quote: None,
+            is_hole: false,
         },
         description: None,
         definition: LambdaUDF {
@@ -17013,6 +17510,7 @@ CreateUDF(
                     ),
                     name: "p",
                     quote: None,
+                    is_hole: false,
                 },
             ],
             definition: UnaryOp {
@@ -17032,6 +17530,7 @@ CreateUDF(
                             ),
                             name: "is_null",
                             quote: None,
+                            is_hole: false,
                         },
                         args: [
                             ColumnRef {
@@ -17048,6 +17547,7 @@ CreateUDF(
                                             ),
                                             name: "p",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -17078,6 +17578,7 @@ CreateUDF(
             ),
             name: "isnotempty_test_replace",
             quote: None,
+            is_hole: false,
         },
         description: Some(
             "This is a description",
@@ -17090,6 +17591,7 @@ CreateUDF(
                     ),
                     name: "p",
                     quote: None,
+                    is_hole: false,
                 },
             ],
             definition: UnaryOp {
@@ -17109,6 +17611,7 @@ CreateUDF(
                             ),
                             name: "is_null",
                             quote: None,
+                            is_hole: false,
                         },
                         args: [
                             ColumnRef {
@@ -17125,6 +17628,7 @@ CreateUDF(
                                             ),
                                             name: "p",
                                             quote: None,
+                                            is_hole: false,
                                         },
                                     ),
                                 },
@@ -17155,6 +17659,7 @@ CreateUDF(
             ),
             name: "binary_reverse",
             quote: None,
+            is_hole: false,
         },
         description: None,
         definition: UDFServer {
@@ -17188,6 +17693,7 @@ CreateUDF(
             ),
             name: "binary_reverse",
             quote: None,
+            is_hole: false,
         },
         description: None,
         definition: UDFServer {
@@ -17232,6 +17738,7 @@ CreateUDF(
             ),
             name: "addone",
             quote: None,
+            is_hole: false,
         },
         description: None,
         definition: UDFScript {
@@ -17265,6 +17772,7 @@ DropUDF {
         ),
         name: "binary_reverse",
         quote: None,
+        is_hole: false,
     },
 }
 
@@ -17282,6 +17790,7 @@ DropUDF {
         ),
         name: "isnotempty",
         quote: None,
+        is_hole: false,
     },
 }
 
