@@ -121,7 +121,7 @@ pub fn runtime_filter_pruner(
     if can_do_merge_into_target_build_bloom_filter
         && ctx
             .get_merge_into_source_build_siphashkeys_with_id(id)
-            .is_some_and(|hash_keys| hash_keys.0.len() > 0)
+            .is_some_and(|hash_keys| !hash_keys.0.is_empty())
     {
         let pruned = try_prune_merge_into_target_table(
             ctx.clone(),
