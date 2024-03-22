@@ -21,7 +21,7 @@ use chrono::Utc;
 
 use crate::schema::CreateOption;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatamaskNameIdent {
     pub tenant: String,
     pub name: String,
@@ -33,7 +33,7 @@ impl Display for DatamaskNameIdent {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatamaskId {
     pub id: u64,
 }
@@ -68,7 +68,7 @@ impl From<CreateDatamaskReq> for DatamaskMeta {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatamaskReq {
     pub create_option: CreateOption,
     pub name: DatamaskNameIdent,
@@ -84,7 +84,7 @@ pub struct CreateDatamaskReply {
     pub id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropDatamaskReq {
     pub if_exists: bool,
     pub name: DatamaskNameIdent,
@@ -93,7 +93,7 @@ pub struct DropDatamaskReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropDatamaskReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetDatamaskReq {
     pub name: DatamaskNameIdent,
 }
@@ -103,7 +103,7 @@ pub struct GetDatamaskReply {
     pub policy: DatamaskMeta,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct MaskpolicyTableIdListKey {
     pub tenant: String,
     pub name: String,

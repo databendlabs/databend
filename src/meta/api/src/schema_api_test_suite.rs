@@ -5507,7 +5507,7 @@ impl SchemaApiTestSuite {
             assert_eq!(table_info.name, tb1.to_string());
             assert_eq!(table_info.ident.table_id, share_table_id);
             assert_eq!(table_info.tenant, tenant2.to_string());
-            assert_eq!(table_info.db_type, DatabaseType::ShareDB(share_name));
+            assert_eq!(table_info.db_type, DatabaseType::ShareDB(share_name.into()));
         }
 
         info!("--- get tables from share db");
