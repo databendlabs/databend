@@ -92,10 +92,6 @@ impl FuseTable {
                         .await;
                 }
 
-                // lazy mode use multiple threads to read segments separately,
-                // as the inverted indexes and segments are not one-to-one correspondence,
-                // this will cause the inverted index filter repeat run multiple times,
-                // so when there is a inverted index, we do not use lazy mode to read segments.
                 if (!dry_run && snapshot.segments.len() > nodes_num) || is_lazy {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {

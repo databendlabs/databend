@@ -78,6 +78,29 @@ impl InvertedIndexReader {
         })
     }
 
+    // The Index file treats the indexed data as Document,
+    // each Document has a doc id. The tantivy searcher
+    // returns the matched doc ids with the query keyword.
+    // Since an Index corresponds to multiple Blocks,
+    // and the Blocks are added to the Index in the
+    // same order as they are in the Segment.
+    // We can convert the docIds to the corresponding Block
+    // and the row id in the Block in the order it was added.
+    // As shown in the following figure:
+    //
+    // ┌────┬───┬────┬─────┬───┬────┬───┬───┬────┬───┬────┐
+    // │Doc0│...│DocM│DocM1│...│DocN│...│...│DocX│...│DocY│
+    // └────┴───┴────┴─────┴───┴────┴───┴───┴────┴───┴────┘
+    //   |        |      \         \           \        \
+    //   |        |       \         \           \        \
+    // ┌────┬───┬────┐     ┌────┬───┬────┐     ┌────┬───┬────┐
+    // │Row0│...│RowN│ ... │Roc0│...│RowN│ ... │Row0│...│RowN│
+    // └────┴───┴────┘     └────┴───┴────┘     └────┴───┴────┘
+    //  \  Block1              BlockM   /       \  BlockN   /
+    //   \          ___________________/         \         /
+    //    \        /                              \       /
+    //     Segment1                               SegmentN
+    //
     #[allow(clippy::type_complexity)]
     pub fn do_filter(&self, query: &str) -> Result<BTreeMap<String, Option<Vec<(usize, F32)>>>> {
         let tokenizer_manager = TokenizerManager::new();

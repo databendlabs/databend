@@ -174,6 +174,8 @@ impl FuseTable {
                     .as_ref()
                     .map(|p| p.inverted_index.is_some())
                     .unwrap_or_default();
+                // First create an inverted index pruner, so that it can be
+                // shared among partitions to avoid duplicate index initialize.
                 let inverted_index_pruner = if is_inverted {
                     let dal = dal.clone();
                     let push_downs = push_downs.clone();

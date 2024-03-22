@@ -25,6 +25,34 @@ use opendal::Operator;
 use crate::io::read::load_inverted_index_info;
 use crate::io::read::InvertedIndexReader;
 
+// IndexInfo records the location of a set of Index files,
+// and one Index file corresponds to multiple SegmentInfo files.
+// Through the inverted index in the Index file,
+// we can prune the Segments and the Blocks.
+// The relationship is shown in the following figure:
+//
+// ┌────────┐
+// │Snapshot│
+// └────────┘
+//   |   |      ┌──────┬──────┬──────┬───┬──────┐
+//   |   |      │Block1│Block2│Block3│...│BlockN│
+//   |   |      └──────┴──────┴──────┴───┴──────┘
+//   |   |      \          _________/
+//   |   |       \        /
+//   |   |       ┌────────┬────────┬────────┬───┬────────┐
+//   |   +-------│Segment1│Segment2│Segment3│...│SegmentN│
+//   |           └────────┴────────┴────────┴───┴────────┘
+//   |           \         ________________/
+//   |            \       /
+//   |            ┌──────┬──────┬──────┬───┬──────┐
+//   |            │Index1│Index2│Index3│...│IndexN│
+//   |            └──────┴──────┴──────┴───┴──────┘
+//   |            \           ___________________/
+//   |             \         /
+//   |             ┌─────────┐
+//   +-------------│IndexInfo│
+//                 └─────────┘
+//
 pub struct InvertedIndexPruner {
     segment_map: BTreeMap<String, Option<Vec<(usize, F32)>>>,
 }
