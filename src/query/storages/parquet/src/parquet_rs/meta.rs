@@ -97,53 +97,6 @@ fn check_parquet_schema(
     Ok(())
 }
 
-#[async_backtrace::framed]
-pub async fn read_metas_in_parallel_for_copy(
-    op: &Operator,
-    file_infos: &[(String, u64)],
-    num_threads: usize,
-    max_memory_usage: u64,
-) -> Result<Vec<Arc<FullParquetMeta>>> {
-    if file_infos.is_empty() {
-        return Ok(vec![]);
-    }
-    let num_files = file_infos.len();
-
-    let mut tasks = Vec::with_capacity(num_threads);
-    // Equally distribute the tasks
-    for i in 0..num_threads {
-        let begin = num_files * i / num_threads;
-        let end = num_files * (i + 1) / num_threads;
-        if begin == end {
-            continue;
-        }
-
-        let file_infos = file_infos[begin..end].to_vec();
-        let op = op.clone();
-
-        tasks.push(read_parquet_metas_batch_for_copy(
-            file_infos,
-            op,
-            max_memory_usage,
-        ));
-    }
-
-    let metas = execute_futures_in_parallel(
-        tasks,
-        num_threads,
-        num_threads * 2,
-        "read-parquet-metas-worker".to_owned(),
-    )
-    .await?
-    .into_iter()
-    .collect::<Result<Vec<_>>>()?
-    .into_iter()
-    .flatten()
-    .collect::<Vec<_>>();
-
-    Ok(metas)
-}
-
 /// Load parquet meta and check if the schema is matched.
 #[async_backtrace::framed]
 async fn load_and_check_parquet_meta(
@@ -189,32 +142,6 @@ pub async fn read_parquet_metas_batch(
         }));
     }
 
-    check_memory_usage(max_memory_usage)?;
-    Ok(metas)
-}
-
-pub async fn read_parquet_metas_batch_for_copy(
-    file_infos: Vec<(String, u64)>,
-    op: Operator,
-    max_memory_usage: u64,
-) -> Result<Vec<Arc<FullParquetMeta>>> {
-    let mut metas = Vec::with_capacity(file_infos.len());
-    for (location, size) in file_infos {
-        let meta = Arc::new(
-            databend_common_storage::parquet_rs::read_metadata_async(&location, &op, Some(size))
-                .await?,
-        );
-        if unlikely(meta.file_metadata().num_rows() == 0) {
-            // Don't collect empty files
-            continue;
-        }
-        metas.push(Arc::new(FullParquetMeta {
-            location,
-            size,
-            meta,
-            row_group_level_stats: None,
-        }));
-    }
     check_memory_usage(max_memory_usage)?;
     Ok(metas)
 }

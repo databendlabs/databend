@@ -273,8 +273,6 @@ pub async fn clickhouse_handler_get(
             .map_err(|err| err.display_with_sql(&sql))
             .map_err(BadRequest)?;
         let format = get_format_with_default(extras.format, default_format)?;
-
-        context.attach_query_str(plan.kind(), extras.statement.to_mask_sql());
         let interpreter = InterpreterFactory::get(context.clone(), &plan)
             .await
             .map_err(|err| err.display_with_sql(&sql))
@@ -357,7 +355,6 @@ pub async fn clickhouse_handler_post(
             .map_err(|err| err.display_with_sql(&sql))
             .map_err(BadRequest)?;
         let schema = plan.schema();
-        ctx.attach_query_str(plan.kind(), extras.statement.to_mask_sql());
         let mut handle = None;
         if let Plan::Insert(insert) = &mut plan {
             if let InsertInputSource::StreamingWithFormat(format, start, input_context_ref) =

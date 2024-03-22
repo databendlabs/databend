@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod select_builder;
+mod binder;
