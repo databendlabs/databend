@@ -156,16 +156,8 @@ impl InvertedIndexWriter {
             sort_by_field: None,
             ..Default::default()
         };
-        let tokenizer_manager = TokenizerManager::new();
-        tokenizer_manager.register(
-            "jieba",
-            TextAnalyzer::builder(JiebaTokenizer {})
-                .filter(RemoveLongFilter::limit(40))
-                .filter(LowerCaser)
-                .filter(StopWordFilter::new(Language::English).unwrap())
-                .filter(Stemmer::new(Language::English))
-                .build(),
-        );
+
+        let tokenizer_manager = create_tokenizer_manager();
 
         let index_builder = IndexBuilder::new()
             .settings(index_settings)
@@ -407,4 +399,76 @@ impl InvertedIndexWriter {
         let len = writer.write(&buf)?;
         Ok(len)
     }
+}
+
+// Create tokenizer can handle both Chinese and English
+pub(crate) fn create_tokenizer_manager() -> TokenizerManager {
+    let tokenizer_manager = TokenizerManager::new();
+    tokenizer_manager.register(
+        "jieba",
+        TextAnalyzer::builder(JiebaTokenizer {})
+            .filter(RemoveLongFilter::limit(40))
+            .filter(LowerCaser)
+            // Punctuation tokens to remove copied from lucene
+            // https://github.com/apache/lucene/blob/main/lucene/analysis/smartcn/src/resources/org/apache/lucene/analysis/cn/smart/stopwords.txt
+            .filter(StopWordFilter::remove(vec![
+                ",".to_string(),
+                ".".to_string(),
+                "`".to_string(),
+                "-".to_string(),
+                "_".to_string(),
+                "=".to_string(),
+                "?".to_string(),
+                "'".to_string(),
+                "|".to_string(),
+                "\"".to_string(),
+                "(".to_string(),
+                ")".to_string(),
+                "{".to_string(),
+                "}".to_string(),
+                "[".to_string(),
+                "]".to_string(),
+                "<".to_string(),
+                ">".to_string(),
+                "*".to_string(),
+                "#".to_string(),
+                "&".to_string(),
+                "^".to_string(),
+                "$".to_string(),
+                "@".to_string(),
+                "!".to_string(),
+                "~".to_string(),
+                ":".to_string(),
+                ";".to_string(),
+                "+".to_string(),
+                "/".to_string(),
+                "\\".to_string(),
+                "《".to_string(),
+                "》".to_string(),
+                "—".to_string(),
+                "－".to_string(),
+                "，".to_string(),
+                "。".to_string(),
+                "、".to_string(),
+                "：".to_string(),
+                "；".to_string(),
+                "！".to_string(),
+                "·".to_string(),
+                "？".to_string(),
+                "“".to_string(),
+                "”".to_string(),
+                "）".to_string(),
+                "（".to_string(),
+                "【".to_string(),
+                "】".to_string(),
+                "［".to_string(),
+                "］".to_string(),
+                "●".to_string(),
+                "　".to_string(),
+            ]))
+            .filter(StopWordFilter::new(Language::English).unwrap())
+            .filter(Stemmer::new(Language::English))
+            .build(),
+    );
+    tokenizer_manager
 }

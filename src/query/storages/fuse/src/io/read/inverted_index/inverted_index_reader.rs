@@ -31,17 +31,10 @@ use opendal::Operator;
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
 use tantivy::schema::Field;
-use tantivy::tokenizer::Language;
-use tantivy::tokenizer::LowerCaser;
-use tantivy::tokenizer::RemoveLongFilter;
-use tantivy::tokenizer::Stemmer;
-use tantivy::tokenizer::StopWordFilter;
-use tantivy::tokenizer::TextAnalyzer;
-use tantivy::tokenizer::TokenizerManager;
 use tantivy::Index;
-use tantivy_jieba::JiebaTokenizer;
 
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_filter;
+use crate::io::write::create_tokenizer_manager;
 
 #[derive(Clone)]
 pub struct InvertedIndexReader {
@@ -103,17 +96,7 @@ impl InvertedIndexReader {
     //
     #[allow(clippy::type_complexity)]
     pub fn do_filter(&self, query: &str) -> Result<BTreeMap<String, Option<Vec<(usize, F32)>>>> {
-        let tokenizer_manager = TokenizerManager::new();
-        tokenizer_manager.register(
-            "jieba",
-            TextAnalyzer::builder(JiebaTokenizer {})
-                .filter(RemoveLongFilter::limit(40))
-                .filter(LowerCaser)
-                .filter(StopWordFilter::new(Language::English).unwrap())
-                .filter(Stemmer::new(Language::English))
-                .build(),
-        );
-
+        let tokenizer_manager = create_tokenizer_manager();
         let mut segment_map = BTreeMap::new();
         for directory in &self.directories {
             let index_segments = directory.index_segments().clone();
