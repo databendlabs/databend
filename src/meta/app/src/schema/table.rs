@@ -33,7 +33,6 @@ use maplit::hashmap;
 
 use super::CreateOption;
 use crate::schema::database::DatabaseNameIdent;
-use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
 use crate::storage::StorageParams;
@@ -153,11 +152,30 @@ impl Display for TableIdListKey {
     }
 }
 
+// serde is required by [`TableInfo`]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub enum DatabaseType {
     #[default]
     NormalDB,
-    ShareDB(ShareNameIdent),
+    ShareDB(database_type::ShareNameIdent),
+}
+
+mod database_type {
+    /// Same as  [`crate::share::ShareNameIdent`] but with serde support for being used as a value.
+    /// while [`crate::share::ShareNameIdent`] can only be used as key.
+    #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+    pub struct ShareNameIdent {
+        pub tenant: String,
+        pub share_name: String,
+    }
+    impl From<crate::share::ShareNameIdent> for ShareNameIdent {
+        fn from(value: crate::share::ShareNameIdent) -> Self {
+            Self {
+                tenant: value.tenant,
+                share_name: value.share_name,
+            }
+        }
+    }
 }
 
 impl Display for DatabaseType {

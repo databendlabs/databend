@@ -22,7 +22,7 @@ use databend_common_meta_types::MetaId;
 
 use super::CreateOption;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct VirtualColumnNameIdent {
     pub tenant: String,
     pub table_id: u64,
@@ -56,7 +56,7 @@ pub struct VirtualColumnMeta {
     pub updated_on: Option<DateTime<Utc>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateVirtualColumnReq {
     pub create_option: CreateOption,
     pub name_ident: VirtualColumnNameIdent,
@@ -76,7 +76,7 @@ impl Display for CreateVirtualColumnReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateVirtualColumnReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateVirtualColumnReq {
     pub if_exists: bool,
     pub name_ident: VirtualColumnNameIdent,
@@ -96,7 +96,7 @@ impl Display for UpdateVirtualColumnReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UpdateVirtualColumnReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropVirtualColumnReq {
     pub if_exists: bool,
     pub name_ident: VirtualColumnNameIdent,

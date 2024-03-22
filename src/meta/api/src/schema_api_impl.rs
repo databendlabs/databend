@@ -2206,7 +2206,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let db_type = db_meta
             .from_share
             .map_or(DatabaseType::NormalDB, |share_ident| {
-                DatabaseType::ShareDB(share_ident)
+                DatabaseType::ShareDB(share_ident.into())
             });
 
         let tb_info = TableInfo {
@@ -2332,7 +2332,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             .from_share
                             .clone()
                             .map_or(DatabaseType::NormalDB, |share_ident| {
-                                DatabaseType::ShareDB(share_ident)
+                                DatabaseType::ShareDB(share_ident.into())
                             });
 
                         let tb_info = TableInfo {

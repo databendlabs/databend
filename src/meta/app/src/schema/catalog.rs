@@ -186,7 +186,7 @@ impl Display for CatalogNameIdent {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CatalogIdToName {
     pub catalog_id: u64,
 }
