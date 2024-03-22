@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn test_connection_ident() {
-        let tenant = Tenant::new("test".to_string());
+        let tenant = Tenant::new_literal("test");
         let ident = ConnectionIdent::new(tenant, "test1");
 
         let key = ident.to_string_key();

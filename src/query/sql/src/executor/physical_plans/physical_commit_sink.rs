@@ -22,6 +22,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::executor::physical_plans::common::MutationKind;
 use crate::executor::PhysicalPlan;
 
+// serde is required by `PhysicalPlan`
 /// The commit sink is used to commit the data to the table.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CommitSink {

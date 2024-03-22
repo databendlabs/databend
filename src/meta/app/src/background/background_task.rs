@@ -20,6 +20,7 @@ use std::time::Duration;
 use chrono::DateTime;
 use chrono::Utc;
 
+use crate::background::task_creator::BackgroundTaskCreator;
 use crate::background::BackgroundJobIdent;
 use crate::background::ManualTriggerParams;
 use crate::schema::TableStatistics;
@@ -109,6 +110,7 @@ impl Display for VacuumStats {
     }
 }
 
+// Serde is required by `ListBackgroundTasksResponse.task_infos`
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundTaskInfo {
     pub last_updated: Option<DateTime<Utc>>,
@@ -119,13 +121,13 @@ pub struct BackgroundTaskInfo {
     pub vacuum_stats: Option<VacuumStats>,
 
     pub manual_trigger: Option<ManualTriggerParams>,
-    pub creator: Option<BackgroundJobIdent>,
+    pub creator: Option<BackgroundTaskCreator>,
     pub created_at: DateTime<Utc>,
 }
 
 impl BackgroundTaskInfo {
     pub fn new_compaction_task(
-        creator: BackgroundJobIdent,
+        job_ident: BackgroundJobIdent,
         db_id: u64,
         tb_id: u64,
         tb_stats: TableStatistics,
@@ -147,7 +149,7 @@ impl BackgroundTaskInfo {
             }),
             vacuum_stats: None,
             manual_trigger,
-            creator: Some(creator),
+            creator: Some(job_ident.into()),
             created_at: now,
         }
     }

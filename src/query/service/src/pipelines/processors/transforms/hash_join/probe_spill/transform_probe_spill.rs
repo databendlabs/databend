@@ -122,7 +122,7 @@ impl ProbeSpillHandler {
     }
 
     // Read spilled file
-    pub async fn read_spilled_file(&self, file: &str) -> Result<(DataBlock, u64)> {
+    pub async fn read_spilled_file(&self, file: &str) -> Result<DataBlock> {
         self.spill_state().spiller.read_spilled_file(file).await
     }
 
@@ -148,6 +148,11 @@ impl ProbeSpillHandler {
             .spiller
             .spill_input(data_block, hashes, left_related_join, spilled_partitions)
             .await
+    }
+
+    // Print spill info
+    pub fn format_spill_info(&self) -> String {
+        self.spill_state().spiller.format_spill_info()
     }
 
     // Check if spiller buffer is empty
@@ -256,10 +261,13 @@ impl TransformHashJoinProbe {
         self.spill_handler.set_spill_done();
         // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
         let spilled_partition_set = &self.spill_handler.spilled_partitions();
-        info!(
-            "probe processor-{:?}: spill finished with spilled partitions {:?}",
-            processor_id, spilled_partition_set
-        );
+        if self.join_probe_state.join_type() != JoinType::Cross {
+            info!(
+                "Processor: {}, spill info: {}",
+                processor_id,
+                self.spill_handler.format_spill_info()
+            );
+        }
         if self.join_probe_state.hash_join_state.need_final_scan() {
             // Assign build spilled partitions to `self.join_probe_state.spill_partitions`
             let mut spill_partitions = self.join_probe_state.spill_partitions.write();
@@ -332,6 +340,7 @@ impl TransformHashJoinProbe {
             JoinType::Left | JoinType::LeftSingle | JoinType::Full
         );
         let mut unmatched_data_blocks = vec![];
+        debug_assert!(self.input_data.len() == 1);
         for data in self.input_data.drain(..) {
             if self.join_probe_state.join_type() == JoinType::Cross {
                 if data.columns().is_empty() {
@@ -400,7 +409,7 @@ impl TransformHashJoinProbe {
             let next_restore_file = self.spill_handler.next_restore_file();
             let spilled_files = self.spill_handler.spilled_files();
             if !spilled_files.is_empty() {
-                let (spilled_data, _) = self
+                let spilled_data = self
                     .spill_handler
                     .read_spilled_file(&spilled_files[next_restore_file])
                     .await?;
