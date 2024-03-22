@@ -30,8 +30,9 @@ use crate::schema::DatabaseMeta;
 use crate::schema::TableInfo;
 use crate::schema::TableMeta;
 
+// serde is required by `DatabaseType`
 /// A share that is created by `tenant` and is named with `share_name`.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareNameIdent {
     pub tenant: String,
     pub share_name: String,
@@ -57,7 +58,7 @@ impl Display for ShareConsumer {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareEndpointIdent {
     pub tenant: String,
     pub endpoint: String,
@@ -74,7 +75,7 @@ pub struct ShowSharesReq {
     pub tenant: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShareAccountReply {
     pub share_name: ShareNameIdent,
     pub database_name: Option<String>,
@@ -86,13 +87,13 @@ pub struct ShareAccountReply {
     pub comment: Option<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowSharesReply {
     // sharing to other accounts(outbound shares)
     pub outbound_accounts: Vec<ShareAccountReply>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateShareReq {
     pub if_not_exists: bool,
     pub share_name: ShareNameIdent,
@@ -107,7 +108,7 @@ pub struct CreateShareReply {
     pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropShareReq {
     pub share_name: ShareNameIdent,
     pub if_exists: bool,
@@ -119,7 +120,7 @@ pub struct DropShareReply {
     pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AddShareAccountsReq {
     pub share_name: ShareNameIdent,
     pub if_exists: bool,
@@ -133,7 +134,7 @@ pub struct AddShareAccountsReply {
     pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoveShareAccountsReq {
     pub share_name: ShareNameIdent,
     pub if_exists: bool,
@@ -146,7 +147,7 @@ pub struct RemoveShareAccountsReply {
     pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowShareOfReq {
     pub share_name: ShareNameIdent,
 }
@@ -187,7 +188,7 @@ pub enum ShareGrantObjectSeqAndId {
 pub type TableInfoMap = BTreeMap<String, TableInfo>;
 pub type ShareTableInfoMap = (String, Option<TableInfoMap>);
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReq {
     pub share_name: ShareNameIdent,
     pub object: ShareGrantObjectName,
@@ -202,7 +203,7 @@ pub struct GrantShareObjectReply {
     pub share_table_info: ShareTableInfoMap,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectReq {
     pub share_name: ShareNameIdent,
     pub object: ShareGrantObjectName,

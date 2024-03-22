@@ -917,7 +917,7 @@ pub async fn list_tables_from_share_db(
         &ids,
         tenant_dbname,
         None,
-        DatabaseType::ShareDB(share),
+        DatabaseType::ShareDB(share.into()),
     )
     .await
 }
@@ -1112,7 +1112,7 @@ pub async fn remove_table_from_share(
                     .filter(|table_info| table_ids.contains(&table_info.ident.table_id))
                     .map(|table_info| {
                         let mut table_info = table_info.as_ref().clone();
-                        table_info.db_type = DatabaseType::ShareDB(share_name.to_owned());
+                        table_info.db_type = DatabaseType::ShareDB(share_name.clone().into());
                         (table_info.name.clone(), table_info)
                     })
                     .collect::<Vec<_>>(),
@@ -1170,7 +1170,7 @@ pub async fn get_share_table_info(
                     .filter(|table_info| table_ids.contains(&table_info.ident.table_id))
                     .map(|table_info| {
                         let mut table_info = table_info.as_ref().clone();
-                        table_info.db_type = DatabaseType::ShareDB(share_name.to_owned());
+                        table_info.db_type = DatabaseType::ShareDB(share_name.clone().into());
                         (table_info.name.clone(), table_info)
                     })
                     .collect::<Vec<_>>(),
