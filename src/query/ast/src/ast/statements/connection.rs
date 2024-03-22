@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_base::base::mask_string;
 use databend_common_meta_app::schema::CreateOption;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
@@ -41,13 +40,20 @@ pub struct DropConnectionStmt {
     pub name: Identifier,
 }
 
+impl Display for DropConnectionStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "DROP CONNECTION ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write!(f, "{} ", self.name)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DescribeConnectionStmt {
     pub name: Identifier,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub struct ShowConnectionsStmt {}
 
 impl Display for CreateConnectionStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
@@ -60,29 +66,22 @@ impl Display for CreateConnectionStmt {
             write!(f, "IF NOT EXISTS ")?;
         }
         write!(f, "{} ", self.name)?;
-        write!(f, "STORAGE_TYPE = {} ", self.storage_type)?;
+        write!(f, "STORAGE_TYPE = '{}'", self.storage_type)?;
         for (k, v) in &self.storage_params {
-            write!(f, "{} = {}", k, mask_string(v, 3))?;
+            write!(f, " {k} = '{v}'")?;
         }
         Ok(())
     }
 }
 
-impl Display for DropConnectionStmt {
+impl Display for DescribeConnectionStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE CONNECTION ")?;
-        if self.if_exists {
-            write!(f, "IF NOT EXISTS ")?;
-        }
-        write!(f, "{} ", self.name)
+        write!(f, "DESCRIBE CONNECTION {} ", self.name)
     }
 }
 
-impl Display for DescribeConnectionStmt {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE CONNECTION {} ", self.name)
-    }
-}
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct ShowConnectionsStmt {}
 
 impl Display for ShowConnectionsStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {

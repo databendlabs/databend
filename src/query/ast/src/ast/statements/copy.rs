@@ -24,6 +24,7 @@ use std::str::FromStr;
 use databend_common_base::base::mask_string;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::principal::CopyOptions;
+use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use derive_visitor::Drive;
@@ -32,7 +33,8 @@ use itertools::Itertools;
 use url::Url;
 
 use crate::ast::write_comma_separated_map;
-use crate::ast::write_comma_separated_quoted_list;
+use crate::ast::write_comma_separated_string_list;
+use crate::ast::write_comma_separated_string_map;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -53,8 +55,7 @@ pub struct CopyIntoTableStmt {
 
     pub hints: Option<Hint>,
 
-    #[drive(skip)]
-    pub file_format: BTreeMap<String, String>,
+    pub file_format: FileFormatOptions,
 
     // files to load
     #[drive(skip)]
@@ -147,7 +148,7 @@ impl Display for CopyIntoTableStmt {
 
         if let Some(files) = &self.files {
             write!(f, " FILES = (")?;
-            write_comma_separated_quoted_list(f, files)?;
+            write_comma_separated_string_list(f, files)?;
             write!(f, " )")?;
         }
 
@@ -156,9 +157,7 @@ impl Display for CopyIntoTableStmt {
         }
 
         if !self.file_format.is_empty() {
-            write!(f, " FILE_FORMAT = (")?;
-            write_comma_separated_map(f, &self.file_format)?;
-            write!(f, ")")?;
+            write!(f, " FILE_FORMAT = ({})", self.file_format)?;
         }
 
         if !self.validation_mode.is_empty() {
@@ -193,7 +192,7 @@ pub struct CopyIntoLocationStmt {
     pub src: CopyIntoLocationSource,
     pub dst: FileLocation,
     #[drive(skip)]
-    pub file_format: BTreeMap<String, String>,
+    pub file_format: FileFormatOptions,
     #[drive(skip)]
     pub single: bool,
     #[drive(skip)]
@@ -212,9 +211,7 @@ impl Display for CopyIntoLocationStmt {
         write!(f, " FROM {}", self.src)?;
 
         if !self.file_format.is_empty() {
-            write!(f, " FILE_FORMAT = (")?;
-            write_comma_separated_map(f, &self.file_format)?;
-            write!(f, ")")?;
+            write!(f, " FILE_FORMAT = ({})", self.file_format)?;
         }
         write!(f, " SINGLE = {}", self.single)?;
         write!(f, " MAX_FILE_SIZE = {}", self.max_file_size)?;
@@ -246,7 +243,7 @@ pub enum CopyIntoTableSource {
 impl Display for CopyIntoTableSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            CopyIntoTableSource::Location(v) => v.fmt(f),
+            CopyIntoTableSource::Location(location) => write!(f, "{location}"),
             CopyIntoTableSource::Query(query) => {
                 write!(f, "({query})")
             }
@@ -335,7 +332,7 @@ impl Display for Connection {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if !self.conns.is_empty() {
             write!(f, " CONNECTION = ( ")?;
-            write_comma_separated_map(f, &self.conns)?;
+            write_comma_separated_string_map(f, &self.conns)?;
             write!(f, " )")?;
         }
         Ok(())
@@ -433,10 +430,10 @@ impl UriLocation {
 impl Display for UriLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}://{}{}'", self.protocol, self.name, self.path)?;
+        write!(f, "{}", self.connection)?;
         if !self.part_prefix.is_empty() {
             write!(f, " LOCATION_PREFIX = '{}'", self.part_prefix)?;
         }
-        write!(f, "{}", self.connection.mask())?;
         Ok(())
     }
 }
@@ -464,7 +461,7 @@ impl Display for FileLocation {
                 write!(f, "{}", loc)
             }
             FileLocation::Stage(loc) => {
-                write!(f, "@{}", loc)
+                write!(f, "'@{}'", loc)
             }
         }
     }
@@ -473,7 +470,7 @@ impl Display for FileLocation {
 pub enum CopyIntoTableOption {
     Files(Vec<String>),
     Pattern(String),
-    FileFormat(BTreeMap<String, String>),
+    FileFormat(FileFormatOptions),
     ValidationMode(String),
     SizeLimit(usize),
     MaxFiles(usize),
@@ -486,8 +483,65 @@ pub enum CopyIntoTableOption {
 }
 
 pub enum CopyIntoLocationOption {
-    FileFormat(BTreeMap<String, String>),
+    FileFormat(FileFormatOptions),
     MaxFileSize(usize),
     Single(bool),
     DetailedOutput(bool),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default, Drive, DriveMut)]
+pub struct FileFormatOptions {
+    #[drive(skip)]
+    pub options: BTreeMap<String, FileFormatValue>,
+}
+
+impl FileFormatOptions {
+    pub fn is_empty(&self) -> bool {
+        self.options.is_empty()
+    }
+
+    pub fn to_meta_ast(&self) -> FileFormatOptionsAst {
+        let options = self
+            .options
+            .iter()
+            .map(|(k, v)| (k.clone(), v.to_string()))
+            .collect();
+        FileFormatOptionsAst { options }
+    }
+}
+
+impl Display for FileFormatOptions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write_comma_separated_map(f, &self.options)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FileFormatValue {
+    Keyword(String),
+    Bool(bool),
+    U64(u64),
+    String(String),
+    StringList(Vec<String>),
+}
+
+impl Display for FileFormatValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FileFormatValue::Keyword(v) => write!(f, "{v}"),
+            FileFormatValue::Bool(v) => write!(f, "{v}"),
+            FileFormatValue::U64(v) => write!(f, "{v}"),
+            FileFormatValue::String(v) => write!(f, "'{v}'"),
+            FileFormatValue::StringList(v) => {
+                write!(f, "(")?;
+                for (i, s) in v.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "'{s}'")?;
+                }
+                write!(f, ")")
+            }
+        }
+    }
 }

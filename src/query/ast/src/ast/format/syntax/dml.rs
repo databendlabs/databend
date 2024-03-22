@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use pretty::RcDoc;
 
 use super::expr::pretty_expr;
@@ -28,6 +26,7 @@ use crate::ast::CopyIntoLocationStmt;
 use crate::ast::CopyIntoTableSource;
 use crate::ast::CopyIntoTableStmt;
 use crate::ast::DeleteStmt;
+use crate::ast::FileFormatOptions;
 use crate::ast::InsertSource;
 use crate::ast::InsertStmt;
 use crate::ast::UpdateExpr;
@@ -95,7 +94,7 @@ fn pretty_source(source: InsertSource) -> RcDoc<'static> {
             RcDoc::line()
                 .append(RcDoc::text("FILE_FORMAT_SETTINGS = "))
                 .append(parenthesized(
-                    interweave_comma(settings.iter().map(|(k, v)| {
+                    interweave_comma(settings.options.iter().map(|(k, v)| {
                         RcDoc::text(k.to_string())
                             .append(RcDoc::space())
                             .append(RcDoc::text("="))
@@ -282,12 +281,12 @@ pub(crate) fn pretty_copy_into_location(copy_stmt: CopyIntoLocationStmt) -> RcDo
         )
 }
 
-fn pretty_file_format(file_format: &BTreeMap<String, String>) -> RcDoc<'static> {
+fn pretty_file_format(file_format: &FileFormatOptions) -> RcDoc<'static> {
     if !file_format.is_empty() {
         RcDoc::line()
             .append(RcDoc::text("FILE_FORMAT = "))
             .append(parenthesized(
-                interweave_comma(file_format.iter().map(|(k, v)| {
+                interweave_comma(file_format.options.iter().map(|(k, v)| {
                     RcDoc::text(k.to_string())
                         .append(RcDoc::space())
                         .append(RcDoc::text("="))

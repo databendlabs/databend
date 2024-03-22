@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use databend_common_meta_app::principal::AuthType;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -111,13 +110,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ #task_warehouse_option
-            ~ (SCHEDULE ~ "=" ~ #task_schedule_option)?
-            ~ (AFTER ~ #comma_separated_list0(literal_string))?
-            ~ (WHEN ~ #expr )?
-            ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
+            ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
+            ~ ( AFTER ~ #comma_separated_list0(literal_string) )?
+            ~ ( WHEN ~ #expr )?
+            ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
             ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
-            ~ (#set_table_option)?
+            ~ #set_table_option?
             ~ AS ~ #task_sql_block
         },
         |(
@@ -143,13 +142,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 warehouse_opts,
                 schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
                 suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
-                comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                comments: comment_opt.map(|(_, _, comment)| comment),
                 after: match after_tasks {
                     Some((_, tasks)) => tasks,
                     None => Vec::new(),
                 },
                 error_integration: error_integration.map(|(_, _, name)| name.to_string()),
-                when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
+                when_condition: when_conditions.map(|(_, cond)| cond),
                 sql,
                 session_parameters: session_opts,
             })
@@ -1655,8 +1654,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CREATE ~ ( OR ~ ^REPLACE )? ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #format_options
         },
-        |(_, opt_or_replace, _, _, opt_if_not_exists, name, options)| {
-            let file_format_options = FileFormatOptionsAst { options };
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, file_format_options)| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             Ok(Statement::CreateFileFormat {
@@ -1945,11 +1943,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let create_notification = map(
         rule! {
-            CREATE ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ NOTIFICATION ~ INTEGRATION
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ TYPE ~ "=" ~ #ident
             ~ ENABLED ~ "=" ~ #literal_bool
-            ~ (#notification_webhook_clause)?
+            ~ #notification_webhook_clause?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
         },
         |(
@@ -1973,7 +1972,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 notification_type: notification_type.to_string(),
                 enabled,
                 webhook_opts: webhook,
-                comments: comment.map(|v| v.2).unwrap_or_default(),
+                comments: comment.map(|(_, _, comments)| comments),
             })
         },
     );
@@ -3362,10 +3361,7 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
         rule! {
              MODIFY ~ WHEN ~ #expr
         },
-        |(_, _, expr)| {
-            let when = expr.to_string();
-            AlterTaskOptions::ModifyWhen(when)
-        },
+        |(_, _, expr)| AlterTaskOptions::ModifyWhen(expr),
     );
     let add_after = map(
         rule! {
@@ -3383,11 +3379,11 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
     let set = map(
         rule! {
              SET
-             ~ ( WAREHOUSE  ~ "=" ~  #literal_string )?
-             ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
-             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
-             ~ ( COMMENT ~ "=" ~ #literal_string )?
-             ~ ( ERROR_INTEGRATION  ~ "=" ~ #literal_string )?
+             ~ ( WAREHOUSE  ~ ^"=" ~ ^#literal_string )?
+             ~ ( SCHEDULE ~ ^"=" ~ ^#task_schedule_option )?
+             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ ^"=" ~ ^#literal_u64 )?
+             ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+             ~ ( ERROR_INTEGRATION  ~ ^"=" ~ ^#literal_string )?
              ~ #set_table_option?
         },
         |(
@@ -3459,7 +3455,7 @@ pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
 pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
     alt((map(
         rule! {
-            (WAREHOUSE  ~ "=" ~  #literal_string)?
+            (WAREHOUSE  ~ "=" ~ #literal_string)?
         },
         |warehouse_opt| {
             let warehouse = match warehouse_opt {
@@ -3558,19 +3554,17 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
 }
 
 pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
-    map(
+    let option = map(
         rule! {
-           ( #ident ~ "=" ~ #option_to_string ) ~ ("," ~ #ident ~ "=" ~ #option_to_string )*
+           #ident ~ "=" ~ #option_to_string
         },
-        |(key, _, value, opts)| {
-            let mut options = BTreeMap::from_iter(
-                opts.iter()
-                    .map(|(_, k, _, v)| (k.name.to_lowercase(), v.clone())),
-            );
-            options.insert(key.name.to_lowercase(), value);
-            options
-        },
-    )(i)
+        |(k, _, v)| (k, v),
+    );
+    map(comma_separated_list1(option), |opts| {
+        opts.into_iter()
+            .map(|(k, v)| (k.name.to_lowercase(), v.clone()))
+            .collect()
+    })(i)
 }
 
 fn option_to_string(i: Input) -> IResult<String> {
@@ -3984,9 +3978,9 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
             VERBOSE | LOGICAL | OPTIMIZED
         },
         |opt| match &opt.kind {
-            VERBOSE => ExplainOption::Verbose(true),
-            LOGICAL => ExplainOption::Logical(true),
-            OPTIMIZED => ExplainOption::Optimized(true),
+            VERBOSE => ExplainOption::Verbose,
+            LOGICAL => ExplainOption::Logical,
+            OPTIMIZED => ExplainOption::Optimized,
             _ => unreachable!(),
         },
     )(i)

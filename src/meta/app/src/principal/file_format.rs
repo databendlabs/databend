@@ -50,12 +50,6 @@ pub struct FileFormatOptionsAst {
     pub options: BTreeMap<String, String>,
 }
 
-impl Display for FileFormatOptionsAst {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.options)
-    }
-}
-
 impl FileFormatOptionsAst {
     pub fn new(options: BTreeMap<String, String>) -> Self {
         FileFormatOptionsAst { options }

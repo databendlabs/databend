@@ -658,6 +658,7 @@ $$;"#,
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        stmt.assert_idempotent_parser();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
