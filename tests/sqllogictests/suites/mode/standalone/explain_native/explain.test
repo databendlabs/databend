@@ -198,10 +198,10 @@ COPY
 INTO t1
 FROM 's3://mybucket/data.csv'
 FILE_FORMAT = (
-    field_delimiter = ",",
-    record_delimiter = "\n",
-    skip_header = "1",
-    type = "CSV"
+    field_delimiter = ',',
+    record_delimiter = '\n',
+    skip_header = 1,
+    type = CSV
 )
 SIZE_LIMIT = 10
 PURGE = false
@@ -215,10 +215,10 @@ COPY
 INTO Uri(UriLocation { protocol: "s3", name: "mybucket", path: "/data.csv", part_prefix: "", connection: Connection { visited_keys: {}, conns: {} } })
 FROM t1
 FILE_FORMAT = (
-    field_delimiter = ",",
-    record_delimiter = "\n",
-    skip_header = "1",
-    type = "CSV"
+    field_delimiter = ',',
+    record_delimiter = '\n',
+    skip_header = 1,
+    type = CSV
 )
 SINGLE = false
 
