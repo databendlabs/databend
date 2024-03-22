@@ -23,6 +23,7 @@ use std::str::FromStr;
 
 use databend_common_base::base::mask_string;
 use databend_common_exception::ErrorCode;
+use databend_common_io::escape_string_with_quote;
 use databend_common_meta_app::principal::CopyOptions;
 use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::OnErrorMode;
@@ -531,14 +532,16 @@ impl Display for FileFormatValue {
             FileFormatValue::Keyword(v) => write!(f, "{v}"),
             FileFormatValue::Bool(v) => write!(f, "{v}"),
             FileFormatValue::U64(v) => write!(f, "{v}"),
-            FileFormatValue::String(v) => write!(f, "'{v}'"),
+            FileFormatValue::String(v) => {
+                write!(f, "'{}'", escape_string_with_quote(v, Some('\'')))
+            }
             FileFormatValue::StringList(v) => {
                 write!(f, "(")?;
                 for (i, s) in v.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "'{s}'")?;
+                    write!(f, "'{}'", escape_string_with_quote(s, Some('\'')))?;
                 }
                 write!(f, ")")
             }
