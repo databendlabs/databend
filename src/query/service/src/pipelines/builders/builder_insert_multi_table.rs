@@ -22,8 +22,6 @@ use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::PhysicalInsertMultiTable;
 use databend_common_sql::gen_mutation_stream_operator;
-use databend_common_storages_fuse::operations::Dispatcher;
-use databend_common_storages_fuse::operations::PrintSink;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 
@@ -35,13 +33,13 @@ impl PipelineBuilder {
         plan: &PhysicalInsertMultiTable,
     ) -> Result<()> {
         let PhysicalInsertMultiTable {
-            plan_id,
+            plan_id: _,
             input,
             select_column_bindings,
             filters,
-            keep_remain,
+            keep_remain: _,
         } = plan;
-        let filters = filters
+        let filters_ = filters
             .iter()
             .map(|v| v.as_expr(&BUILTIN_FUNCTIONS))
             .collect::<Vec<_>>();
@@ -54,17 +52,6 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
             false,
         )?;
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(Dispatcher::create(
-                input,
-                output,
-                filters.clone(),
-                *keep_remain,
-                self.ctx.clone(),
-            )))
-        })?;
-        self.main_pipeline
-            .add_sink(|input| Ok(ProcessorPtr::create(PrintSink::create(input))))?;
         Ok(())
     }
 }

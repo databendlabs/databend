@@ -15,12 +15,10 @@
 use databend_common_ast::ast::InsertMultiTableStmt;
 use databend_common_ast::ast::InsertSource;
 use databend_common_ast::ast::IntoClause;
-use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::bind_context;
 use crate::binder::ScalarBinder;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
@@ -128,13 +126,13 @@ impl Binder {
                 catalog,
                 database,
                 table,
-                target_columns,
-                source_columns,
+                target_columns: _,
+                source_columns: _,
             } = into_clause;
             let (catalog_name, database_name, table_name) =
                 self.normalize_object_identifier_triple(catalog, database, table);
 
-            let target_table = self
+            let _target_table = self
                 .ctx
                 .get_table(&catalog_name, &database_name, &table_name)
                 .await?;
