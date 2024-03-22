@@ -242,10 +242,7 @@ impl Binder {
             Arc::new(table_expr),
         );
         let predicate_columns = if let RelOperator::Filter(filter) = filter_expr.plan.as_ref() {
-            let used_columns = filter.used_columns()?;
-            // assert that filter only contains `marker` column
-            debug_assert_eq!(used_columns.len(), 1);
-            used_columns
+            filter.used_columns()?
         } else {
             return Err(ErrorCode::from_string(
                 "subquery data type in delete/update statement should be boolean".to_string(),
