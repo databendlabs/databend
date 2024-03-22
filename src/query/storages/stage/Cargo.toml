@@ -24,7 +24,6 @@ databend-common-pipeline-sources = { path = "../../pipeline/sources" }
 databend-common-pipeline-transforms = { path = "../../pipeline/transforms" }
 databend-common-settings = { path = "../../settings" }
 databend-common-storage = { path = "../../../common/storage" }
-databend-common-storages-parquet = { path = "../parquet" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
