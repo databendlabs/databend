@@ -166,8 +166,8 @@ impl FromToProto for BackgroundJobStatus {
     }
 }
 
-impl FromToProto for mt::background::BackgroundJobIdent {
-    type PB = pb::BackgroundJobIdent;
+impl FromToProto for mt::background::task_creator::BackgroundTaskCreator {
+    type PB = pb::BackgroundTaskCreator;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
@@ -180,7 +180,7 @@ impl FromToProto for mt::background::BackgroundJobIdent {
         })
     }
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let p = pb::BackgroundJobIdent {
+        let p = pb::BackgroundTaskCreator {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             tenant: self.tenant.clone(),
