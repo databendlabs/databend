@@ -18379,6 +18379,34 @@ CreateUDF(
 
 
 ---------- Input ----------
+CREATE STAGE s file_format=(record_delimiter='\n' escape='\\');
+---------- Output ---------
+CREATE STAGE s FILE_FORMAT = (escape = '\\', record_delimiter = '\n')
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        create_option: Create,
+        stage_name: "s",
+        location: None,
+        file_format_options: FileFormatOptions {
+            options: {
+                "escape": String(
+                    "\\",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+            },
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
 create or replace function addone(int)
 returns int
 language python

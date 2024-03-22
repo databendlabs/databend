@@ -505,7 +505,7 @@ impl FileFormatOptions {
         let options = self
             .options
             .iter()
-            .map(|(k, v)| (k.clone(), v.to_string()))
+            .map(|(k, v)| (k.clone(), v.to_meta_value()))
             .collect();
         FileFormatOptionsAst { options }
     }
@@ -524,6 +524,18 @@ pub enum FileFormatValue {
     U64(u64),
     String(String),
     StringList(Vec<String>),
+}
+
+impl FileFormatValue {
+    pub fn to_meta_value(&self) -> String {
+        match self {
+            FileFormatValue::Keyword(v) => v.clone(),
+            FileFormatValue::Bool(v) => v.to_string(),
+            FileFormatValue::U64(v) => v.to_string(),
+            FileFormatValue::String(v) => v.clone(),
+            FileFormatValue::StringList(v) => serde_json::to_string(v).unwrap(),
+        }
+    }
 }
 
 impl Display for FileFormatValue {
