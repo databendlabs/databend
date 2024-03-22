@@ -220,8 +220,7 @@ impl Interpreter for ShowGrantsInterpreter {
             for (i, table_name) in tables_name.iter().enumerate() {
                 if let Some(table_name) = table_name {
                     if let Some(db_name) = &dbs_name[i] {
-                        object_name
-                            .push(format!("{}.{}.{}", catalog_name, dbs_name[i], table_name));
+                        object_name.push(format!("{}.{}.{}", catalog_name, db_name, table_name));
                         object_id.push(Some(table_ids[i]));
                         privileges.push(privileges_strs[i].to_string());
                         grant_list.push(format!(

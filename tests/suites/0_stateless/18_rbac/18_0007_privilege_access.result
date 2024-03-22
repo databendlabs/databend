@@ -1,3 +1,12 @@
+>>>> drop database if exists db01;
+>>>> create database db01;
+>>>> drop database if exists dbnotexists;
+>>>> GRANT SELECT ON db01.tbnotexists TO 'test-user'
+Error: APIError: ResponseError with 1025: Unknown table 'tbnotexists'
+<<<<
+>>>> GRANT SELECT ON dbnotexists.* TO 'test-user'
+Error: APIError: ResponseError with 1003: Unknown database 'dbnotexists'
+<<<<
 information_schema
 system
 test -- insert
@@ -27,8 +36,8 @@ true
 true
 true
 true
-GRANT SELECT ON 'default'.'default'.* TO 'a'@'%'
-GRANT SELECT ON 'default'.'grant_db'.'t' TO 'a'@'%'
+SELECT default  USER a GRANT SELECT ON 'default'.'default'.* TO 'a'@'%'
+SELECT default.grant_db.t  USER a GRANT SELECT ON 'default'.'grant_db'.'t' TO 'a'@'%'
 default
 grant_db
 information_schema
@@ -54,30 +63,30 @@ Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
 a b/data_UUID_0000_00000000.parquet	1	0	NULL	NULL
 === check db/table_id ===
-GRANT Read ON STAGE s3 TO 'b'@'%'
-GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
-GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
-GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
-GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
-GRANT SELECT,INSERT ON 'default'.'c'.'t' TO 'b'@'%'
-GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
+Read s3  USER b GRANT Read ON STAGE s3 TO 'b'@'%'
+CREATE system  USER b GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
+SELECT default  USER b GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
+SELECT,INSERT,DELETE default.default.t  USER b GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
+SELECT default.default.t1  USER b GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
+SELECT,INSERT default.c.t  USER b GRANT SELECT,INSERT ON 'default'.'c'.'t' TO 'b'@'%'
+OWNERSHIP default.default.t2  USER b GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
-GRANT Read ON STAGE s3 TO 'b'@'%'
-GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
-GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
-GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
-GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
-GRANT SELECT,INSERT ON 'default'.'c'.'t1' TO 'b'@'%'
-GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
+Read s3  USER b GRANT Read ON STAGE s3 TO 'b'@'%'
+CREATE system  USER b GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
+SELECT default  USER b GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
+SELECT,INSERT,DELETE default.default.t  USER b GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
+SELECT default.default.t1  USER b GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
+SELECT,INSERT default.c.t1  USER b GRANT SELECT,INSERT ON 'default'.'c'.'t1' TO 'b'@'%'
+OWNERSHIP default.default.t2  USER b GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
 2
-GRANT Read ON STAGE s3 TO 'b'@'%'
-GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
-GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
-GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
-GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
-GRANT SELECT,INSERT ON 'default'.'d'.'t1' TO 'b'@'%'
-GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
+Read s3  USER b GRANT Read ON STAGE s3 TO 'b'@'%'
+CREATE system  USER b GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
+SELECT default  USER b GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
+SELECT,INSERT,DELETE default.default.t  USER b GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
+SELECT default.default.t1  USER b GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
+SELECT,INSERT default.d.t1  USER b GRANT SELECT,INSERT ON 'default'.'d'.'t1' TO 'b'@'%'
+OWNERSHIP default.default.t2  USER b GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
 2
 3
