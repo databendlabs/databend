@@ -3859,17 +3859,17 @@ pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
 pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
     map(
         rule! {
-             ( PASSWORD_MIN_LENGTH ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_HISTORY ~ Eq ~ ^#literal_u64 ) ?
+             ( PASSWORD_MIN_LENGTH ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_HISTORY ~ Eq ~ ^#literal_u64 )?
              ~ ( COMMENT ~ Eq ~ ^#literal_string)?
         },
         |(
@@ -3907,18 +3907,18 @@ pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
 pub fn password_unset_options(i: Input) -> IResult<PasswordUnSetOptions> {
     map(
         rule! {
-             PASSWORD_MIN_LENGTH ?
-             ~ PASSWORD_MAX_LENGTH ?
-             ~ PASSWORD_MIN_UPPER_CASE_CHARS ?
-             ~ PASSWORD_MIN_LOWER_CASE_CHARS ?
-             ~ PASSWORD_MIN_NUMERIC_CHARS ?
-             ~ PASSWORD_MIN_SPECIAL_CHARS ?
-             ~ PASSWORD_MIN_AGE_DAYS ?
-             ~ PASSWORD_MAX_AGE_DAYS ?
-             ~ PASSWORD_MAX_RETRIES ?
-             ~ PASSWORD_LOCKOUT_TIME_MINS ?
-             ~ PASSWORD_HISTORY ?
-             ~ COMMENT ?
+             PASSWORD_MIN_LENGTH?
+             ~ PASSWORD_MAX_LENGTH?
+             ~ PASSWORD_MIN_UPPER_CASE_CHARS?
+             ~ PASSWORD_MIN_LOWER_CASE_CHARS?
+             ~ PASSWORD_MIN_NUMERIC_CHARS?
+             ~ PASSWORD_MIN_SPECIAL_CHARS?
+             ~ PASSWORD_MIN_AGE_DAYS?
+             ~ PASSWORD_MAX_AGE_DAYS?
+             ~ PASSWORD_MAX_RETRIES?
+             ~ PASSWORD_LOCKOUT_TIME_MINS?
+             ~ PASSWORD_HISTORY?
+             ~ COMMENT?
         },
         |(
             opt_min_length,
