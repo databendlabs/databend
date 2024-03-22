@@ -34,11 +34,12 @@ use tantivy::schema::Field;
 use tantivy::tokenizer::Language;
 use tantivy::tokenizer::LowerCaser;
 use tantivy::tokenizer::RemoveLongFilter;
-use tantivy::tokenizer::SimpleTokenizer;
 use tantivy::tokenizer::Stemmer;
+use tantivy::tokenizer::StopWordFilter;
 use tantivy::tokenizer::TextAnalyzer;
 use tantivy::tokenizer::TokenizerManager;
 use tantivy::Index;
+use tantivy_jieba::JiebaTokenizer;
 
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_filter;
 
@@ -81,10 +82,11 @@ impl InvertedIndexReader {
     pub fn do_filter(&self, query: &str) -> Result<BTreeMap<String, Option<Vec<(usize, F32)>>>> {
         let tokenizer_manager = TokenizerManager::new();
         tokenizer_manager.register(
-            "en",
-            TextAnalyzer::builder(SimpleTokenizer::default())
+            "jieba",
+            TextAnalyzer::builder(JiebaTokenizer {})
                 .filter(RemoveLongFilter::limit(40))
                 .filter(LowerCaser)
+                .filter(StopWordFilter::new(Language::English).unwrap())
                 .filter(Stemmer::new(Language::English))
                 .build(),
         );

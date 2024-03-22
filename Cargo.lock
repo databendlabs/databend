@@ -1708,6 +1708,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cedarwood"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d910bedd62c24733263d0bed247460853c9d22e8956bd4cd964302095e04e90"
+dependencies = [
+ "smallvec",
+]
+
+[[package]]
 name = "census"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3880,6 +3889,7 @@ dependencies = [
  "sys-info",
  "tantivy",
  "tantivy-common",
+ "tantivy-jieba",
  "typetag",
  "uuid",
  "xorf",
@@ -8192,6 +8202,21 @@ checksum = "90003f2fd9c52f212c21d8520f1128da0080bad6fff16b68fe6e7f2f0c3780c2"
 dependencies = [
  "glob",
  "lazy_static",
+]
+
+[[package]]
+name = "jieba-rs"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93f0c1347cd3ac8d7c6e3a2dc33ac496d365cf09fc0831aa61111e1a6738983e"
+dependencies = [
+ "cedarwood",
+ "fxhash",
+ "hashbrown 0.14.3",
+ "lazy_static",
+ "phf",
+ "phf_codegen",
+ "regex",
 ]
 
 [[package]]
@@ -13256,6 +13281,17 @@ dependencies = [
  "byteorder",
  "regex-syntax 0.6.29",
  "utf8-ranges",
+]
+
+[[package]]
+name = "tantivy-jieba"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44022293c12a8f878e03439b2f11806d3d394130fe33d4e7781cba91abbac0a4"
+dependencies = [
+ "jieba-rs",
+ "lazy_static",
+ "tantivy-tokenizer-api",
 ]
 
 [[package]]

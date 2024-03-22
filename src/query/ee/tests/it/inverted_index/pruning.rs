@@ -339,10 +339,46 @@ async fn test_block_pruner() -> Result<()> {
             "People who don't understand something fully are dangerous".to_string(),
         ]),
     ]);
+    let block12 = DataBlock::new_from_columns(vec![
+        UInt64Type::from_data(vec![61, 62, 63, 64, 65]),
+        StringType::from_data(vec![
+            "山重水复疑无路，柳暗花明又一村".to_string(),
+            "两岸猿声啼不住，轻舟已过万重山".to_string(),
+            "一寸光阴一寸金，寸金难买寸光阴".to_string(),
+            "人生得意须尽欢，莫使金樽空对月".to_string(),
+            "天生我材必有用，千金散尽还复来".to_string(),
+        ]),
+        StringType::from_data(vec![
+            "遇到困难一种办法不行时，可以用另一种办法去解决，通过探索去发现答案".to_string(),
+            "猿猴的啼声还回荡在耳边时，轻快的小船已驶过连绵不绝的万重山峦".to_string(),
+            "一寸光阴和一寸长的黄金一样昂贵，而一寸长的黄金却难以买到一寸光阴。比喻时间十分宝贵"
+                .to_string(),
+            "人活在世上就要尽情的享受欢乐，不要使自己的酒杯只对着月亮".to_string(),
+            "上天造就了我的才干就必然是有用处的，千两黄金花完了也能够再次获得".to_string(),
+        ]),
+    ]);
+    let block13 = DataBlock::new_from_columns(vec![
+        UInt64Type::from_data(vec![66, 67, 68, 69, 70]),
+        StringType::from_data(vec![
+            "光阴似箭，岁月如梭".to_string(),
+            "塞翁失马，焉知非福".to_string(),
+            "绳锯木断，水滴石穿".to_string(),
+            "机不可失，时不再来".to_string(),
+            "一箭双雕，一举两得".to_string(),
+        ]),
+        StringType::from_data(vec![
+            "光阴的流逝就像是射出去的箭一样，岁月如同纺织机上梭的速度一样。比喻时间流逝得非常快"
+                .to_string(),
+            "一时虽然受到损失，也许反而因此能得到好处，坏事在一定条件下可变为好事".to_string(),
+            "用绳子也能把木头锯断，水珠滴落，天长日久也可以把石头滴穿".to_string(),
+            "时机难得，必需抓紧，不可错过".to_string(),
+            "一支箭射中两只雕，比喻做一件事而达到两个目的".to_string(),
+        ]),
+    ]);
 
     let blocks = vec![
         block0, block1, block2, block3, block4, block5, block6, block7, block8, block9, block10,
-        block11,
+        block11, block12, block13,
     ];
 
     fixture
@@ -445,12 +481,30 @@ async fn test_block_pruner() -> Result<()> {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_schema: index_schema.clone(),
+            query_columns: vec!["idiom".to_string()],
+            query_text: "光阴".to_string(),
+        }),
+        ..Default::default()
+    };
+    let e6 = PushDownInfo {
+        inverted_index: Some(InvertedIndexInfo {
+            index_name: index_name.clone(),
+            index_schema: index_schema.clone(),
+            query_columns: vec!["idiom".to_string()],
+            query_text: "人生".to_string(),
+        }),
+        ..Default::default()
+    };
+    let e7 = PushDownInfo {
+        inverted_index: Some(InvertedIndexInfo {
+            index_name: index_name.clone(),
+            index_schema: index_schema.clone(),
             query_columns: vec!["meaning".to_string()],
             query_text: "people".to_string(),
         }),
         ..Default::default()
     };
-    let e6 = PushDownInfo {
+    let e8 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
             index_schema: index_schema.clone(),
@@ -459,13 +513,35 @@ async fn test_block_pruner() -> Result<()> {
         }),
         ..Default::default()
     };
+    let e9 = PushDownInfo {
+        inverted_index: Some(InvertedIndexInfo {
+            index_name: index_name.clone(),
+            index_schema: index_schema.clone(),
+            query_columns: vec!["meaning".to_string()],
+            query_text: "黄金".to_string(),
+        }),
+        ..Default::default()
+    };
+    let e10 = PushDownInfo {
+        inverted_index: Some(InvertedIndexInfo {
+            index_name: index_name.clone(),
+            index_schema: index_schema.clone(),
+            query_columns: vec!["meaning".to_string()],
+            query_text: "时间".to_string(),
+        }),
+        ..Default::default()
+    };
     let extras = vec![
         (Some(e1), 0, 0),
         (Some(e2), 2, 2),
         (Some(e3), 2, 3),
-        (Some(e4), 10, 20),
-        (Some(e5), 5, 7),
-        (Some(e6), 4, 4),
+        (Some(e4), 0, 0),
+        (Some(e5), 2, 2),
+        (Some(e6), 1, 1),
+        (Some(e7), 5, 7),
+        (Some(e8), 4, 4),
+        (Some(e9), 1, 2),
+        (Some(e10), 2, 2),
     ];
     for (extra, expected_blocks, expected_rows) in extras {
         let block_metas = apply_block_pruning(
