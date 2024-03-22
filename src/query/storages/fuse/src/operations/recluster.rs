@@ -248,7 +248,7 @@ impl FuseTable {
             None,
             vec![],
             BloomIndexColumns::None,
-            &None,
+            None,
             max_concurrency,
         )
         .await?;

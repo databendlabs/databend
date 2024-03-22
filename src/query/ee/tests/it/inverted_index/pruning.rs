@@ -35,6 +35,7 @@ use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::pruning::FusePruner;
+use databend_common_storages_fuse::pruning::InvertedIndexPruner;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_inverted_index::get_inverted_index_handler;
 use databend_enterprise_query::test_kits::context::EESetup;
@@ -59,20 +60,23 @@ async fn apply_block_pruning(
     schema: TableSchemaRef,
     push_down: &Option<PushDownInfo>,
     ctx: Arc<QueryContext>,
-    op: Operator,
+    dal: Operator,
     bloom_index_cols: BloomIndexColumns,
 ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
     let index_info_locations = &table_snapshot.index_info_locations;
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
+
+    let inverted_index_pruner =
+        InvertedIndexPruner::try_create(dal.clone(), push_down, index_info_locations).await?;
     FusePruner::create(
         &ctx,
-        op,
+        dal,
         schema,
         push_down,
         bloom_index_cols,
-        index_info_locations,
+        inverted_index_pruner,
     )
     .await?
     .read_pruning(segment_locs)

@@ -251,7 +251,7 @@ impl FuseTable {
             self.schema_with_stream(),
             &push_down,
             self.bloom_index_cols(),
-            &None,
+            None,
         )
         .await?;
 

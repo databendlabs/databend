@@ -250,7 +250,7 @@ impl StreamTable {
             cluster_key_meta,
             cluster_keys,
             bloom_index_cols,
-            &None,
+            None,
         )
         .await?;
 

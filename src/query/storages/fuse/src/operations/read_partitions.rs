@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -50,6 +49,7 @@ use crate::fuse_part::FusePartInfo;
 use crate::io::SegmentsIO;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
+use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
@@ -68,10 +68,6 @@ impl FuseTable {
         let is_lazy = push_downs
             .as_ref()
             .map(|p| p.lazy_materialization)
-            .unwrap_or_default();
-        let is_inverted = push_downs
-            .as_ref()
-            .map(|p| p.inverted_index.is_some())
             .unwrap_or_default();
         match snapshot {
             Some(snapshot) => {
@@ -100,7 +96,7 @@ impl FuseTable {
                 // as the inverted indexes and segments are not one-to-one correspondence,
                 // this will cause the inverted index filter repeat run multiple times,
                 // so when there is a inverted index, we do not use lazy mode to read segments.
-                if !is_inverted && ((!dry_run && snapshot.segments.len() > nodes_num) || is_lazy) {
+                if (!dry_run && snapshot.segments.len() > nodes_num) || is_lazy {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
@@ -113,6 +109,7 @@ impl FuseTable {
                             snapshot.summary.compressed_byte_size as usize,
                             snapshot.segments.len(),
                             snapshot.segments.len(),
+                            snapshot.index_info_locations.clone(),
                         ),
                         Partitions::create(PartitionsShuffleKind::Mod, segments, true),
                     ));
@@ -124,6 +121,13 @@ impl FuseTable {
                 let segments_location =
                     create_segment_location_vector(snapshot.segments.clone(), snapshot_loc);
 
+                let inverted_index_pruner = InvertedIndexPruner::try_create(
+                    self.operator.clone(),
+                    &push_downs,
+                    &snapshot.index_info_locations,
+                )
+                .await?;
+
                 self.prune_snapshot_blocks(
                     ctx.clone(),
                     self.operator.clone(),
@@ -131,7 +135,7 @@ impl FuseTable {
                     table_schema,
                     segments_location,
                     summary,
-                    &snapshot.index_info_locations,
+                    inverted_index_pruner,
                 )
                 .await
             }
@@ -167,7 +171,7 @@ impl FuseTable {
                 table_schema.clone(),
                 &push_downs,
                 self.bloom_index_cols(),
-                &None,
+                None,
             )
             .await?
         } else {
@@ -180,7 +184,7 @@ impl FuseTable {
                 self.cluster_key_meta.clone(),
                 cluster_keys,
                 self.bloom_index_cols(),
-                &None,
+                None,
             )
             .await?
         };
@@ -216,7 +220,7 @@ impl FuseTable {
         table_schema: TableSchemaRef,
         segments_location: Vec<SegmentLocation>,
         summary: usize,
-        index_info_locations: &Option<BTreeMap<String, Location>>,
+        inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         info!(
@@ -257,7 +261,7 @@ impl FuseTable {
                 table_schema.clone(),
                 &push_downs,
                 self.bloom_index_cols(),
-                index_info_locations,
+                inverted_index_pruner,
             )
             .await?
         } else {
@@ -271,7 +275,7 @@ impl FuseTable {
                 self.cluster_key_meta.clone(),
                 cluster_keys,
                 self.bloom_index_cols(),
-                index_info_locations,
+                inverted_index_pruner,
             )
             .await?
         };

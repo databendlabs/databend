@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Semaphore;
@@ -41,7 +40,6 @@ use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::warn;
 use opendal::Operator;
@@ -81,7 +79,7 @@ impl PruningContext {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
-        index_info_locations: &Option<BTreeMap<String, Location>>,
+        inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
         max_concurrency: usize,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
@@ -150,9 +148,6 @@ impl PruningContext {
         let internal_column_pruner =
             InternalColumnPruner::try_create(func_ctx, filter_expr.as_ref());
 
-        let inverted_index_pruner =
-            InvertedIndexPruner::try_create(dal.clone(), push_down, index_info_locations).await?;
-
         // Constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
@@ -198,7 +193,7 @@ impl FusePruner {
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         bloom_index_cols: BloomIndexColumns,
-        index_info_locations: &Option<BTreeMap<String, Location>>,
+        inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     ) -> Result<Self> {
         Self::create_with_pages(
             ctx,
@@ -208,7 +203,7 @@ impl FusePruner {
             None,
             vec![],
             bloom_index_cols,
-            index_info_locations,
+            inverted_index_pruner,
         )
         .await
     }
@@ -222,7 +217,7 @@ impl FusePruner {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
-        index_info_locations: &Option<BTreeMap<String, Location>>,
+        inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     ) -> Result<Self> {
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -245,7 +240,7 @@ impl FusePruner {
             cluster_key_meta,
             cluster_keys,
             bloom_index_cols,
-            index_info_locations,
+            inverted_index_pruner,
             max_concurrency,
         )
         .await?;
