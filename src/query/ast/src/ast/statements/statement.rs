@@ -367,16 +367,6 @@ impl Statement {
             _ => format!("{}", self),
         }
     }
-
-    pub fn assert_idempotent_parser(&self) {
-        dbg!(&self);
-        let sql = self.to_string();
-        let tokens = crate::parser::tokenize_sql(&sql).unwrap();
-        let (parsed, _) =
-            crate::parser::parse_sql(&tokens, crate::parser::Dialect::PostgreSQL).unwrap();
-        let reparsed = parsed.to_string();
-        assert_eq!(sql, reparsed);
-    }
 }
 
 impl Display for Statement {

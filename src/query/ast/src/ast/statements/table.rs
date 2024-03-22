@@ -25,6 +25,7 @@ use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
+use crate::ast::write_space_separated_string_map;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -187,7 +188,11 @@ impl Display for CreateTableStmt {
         }
 
         // Format table options
-        write_comma_separated_string_map(f, &self.table_options)?;
+        if !self.table_options.is_empty() {
+            write!(f, " ")?;
+            write_space_separated_string_map(f, &self.table_options)?;
+        }
+
         if let Some(as_query) = &self.as_query {
             write!(f, " AS {as_query}")?;
         }

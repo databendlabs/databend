@@ -2574,6 +2574,91 @@ CreateDatabase(
 
 
 ---------- Input ----------
+CREATE TABLE `t3`(a int not null, b int not null, c int not null) bloom_index_columns='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native';
+---------- Output ---------
+CREATE TABLE `t3` (a Int32 NOT NULL, b Int32 NOT NULL, c Int32 NOT NULL) bloom_index_columns = 'a,b,c' compression = 'zstd' storage_format = 'native'
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..17,
+            ),
+            name: "t3",
+            quote: Some(
+                '`',
+            ),
+            is_hole: false,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                18..19,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: NotNull(
+                            Int32,
+                        ),
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                34..35,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: NotNull(
+                            Int32,
+                        ),
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                50..51,
+                            ),
+                            name: "c",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: NotNull(
+                            Int32,
+                        ),
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {
+            "bloom_index_columns": "a,b,c",
+            "compression": "zstd",
+            "storage_format": "native",
+        },
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
 create or replace database a;
 ---------- Output ---------
 CREATE OR REPLACE DATABASE a
@@ -10560,7 +10645,7 @@ VacuumDropTable(
 ---------- Input ----------
 CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
 ---------- Output ---------
-CREATE TABLE t (a Int32 COMMENT 'col comment')comment = 'table comment'
+CREATE TABLE t (a Int32 COMMENT 'col comment') comment = 'table comment'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
