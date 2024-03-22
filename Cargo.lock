@@ -2738,7 +2738,6 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "regex",
- "serde_json",
  "strsim 0.10.0",
  "strum 0.24.1",
  "strum_macros 0.24.3",
