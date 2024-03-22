@@ -159,8 +159,9 @@ impl BuildSpillHandler {
         }
         if build_state.join_type() != JoinType::Cross {
             info!(
-                "build processor-{:?}: spill finished with spilled partitions {:?}",
-                processor_id, spilled_partition_set
+                "Processor: {}, spill info: {}",
+                processor_id,
+                self.spill_state().spiller.format_spill_info()
             );
         }
         if !spilled_partition_set.is_empty() {
