@@ -59,7 +59,7 @@ impl FromToProto for mt::background::BackgroundTaskInfo {
                 .manual_trigger
                 .and_then(|t| ManualTriggerParams::from_pb(t).ok()),
             creator: match p.creator {
-                Some(c) => Some(mt::background::BackgroundJobIdent::from_pb(c)?),
+                Some(c) => Some(mt::background::task_creator::BackgroundTaskCreator::from_pb(c)?),
                 None => None,
             },
             created_at: DateTime::<Utc>::from_pb(p.created_at)?,

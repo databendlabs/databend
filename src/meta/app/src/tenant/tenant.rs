@@ -31,6 +31,14 @@ impl Tenant {
         }
     }
 
+    pub fn new_literal(tenant: &str) -> Self {
+        debug_assert!(!tenant.is_empty());
+        Self {
+            tenant: tenant.to_string(),
+        }
+    }
+
+    /// Create from a non-empty literal string, for testing purpose only.
     pub fn new_nonempty(tenant: NonEmptyString) -> Self {
         Self {
             tenant: tenant.as_str().to_string(),

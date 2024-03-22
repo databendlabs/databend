@@ -182,8 +182,8 @@ impl BackgroundJobStatus {
     }
 }
 
-// Ident
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+// Serde is required by `BackgroundTaskInfo.creator`
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackgroundJobIdent {
     // The user this job belongs to
     pub tenant: String,

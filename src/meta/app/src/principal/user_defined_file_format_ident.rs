@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn test_file_format_ident() {
-        let tenant = Tenant::new("test".to_string());
+        let tenant = Tenant::new_literal("test");
         let ident = UserDefinedFileFormatIdent::new(tenant, "test1");
 
         let key = ident.to_string_key();
