@@ -76,6 +76,9 @@ impl RuntimeFilterInfo {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.inlist.is_empty() && self.bloom.is_empty() && self.min_max.is_empty()
+        self.inlist.is_empty()
+            && self.bloom.is_empty()
+            && self.min_max.is_empty()
+            && self.siphashes.0.len() == 0
     }
 }

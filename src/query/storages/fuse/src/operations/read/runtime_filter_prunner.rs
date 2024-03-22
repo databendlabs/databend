@@ -115,8 +115,14 @@ pub fn runtime_filter_pruner(
         return Ok(true);
     }
 
-    // if we can't pruned this block, we can try get siphashkeys if this is a merge into source build
-    if can_do_merge_into_target_build_bloom_filter {
+    // if we can't pruned this block, we can try get siphashkeys if this is a merge into source build.
+    // for every probe key expr, if it's a ColumnRef, we can get the build column hash keys,but if not,
+    // we can't. so even if we enable this bloom filter, we probally can't do bloom filter in fact.
+    if can_do_merge_into_target_build_bloom_filter
+        && ctx
+            .get_merge_into_source_build_siphashkeys_with_id(id)
+            .is_some_and(|hash_keys| hash_keys.0.len() > 0)
+    {
         let pruned = try_prune_merge_into_target_table(
             ctx.clone(),
             part,
