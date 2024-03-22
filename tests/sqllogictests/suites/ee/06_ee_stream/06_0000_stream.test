@@ -430,11 +430,34 @@ select a, `B`, c, change$action, change$is_update from s6 order by a, `B`
 1 1 1 DELETE 0
 2 2 2 DELETE 0
 
+######################
+# end of issue 14506 #
+######################
+
+###############
+# issue 15058 #
+###############
+
+statement ok
+alter table t6 set options(change_tracking = false)
+
+statement ok
+insert into t6 values(5, 5, 5)
+
+statement error 2733
+select * from s6
+
+statement ok
+alter table t6 set options(change_tracking = true)
+
+statement error 2733
+select * from s6
+
 statement ok
 drop stream s6
 
 ######################
-# end of issue 14506 #
+# end of issue 15058 #
 ######################
 
 statement ok
