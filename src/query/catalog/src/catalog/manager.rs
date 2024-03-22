@@ -98,11 +98,12 @@ impl CatalogManager {
                 ErrorCode::BadArguments(format!("unknown catalog type: {:?}", CatalogType::Hive))
             })?;
             let ctl = creator.try_create(&CatalogInfo {
-                id: CatalogId { catalog_id: 0 },
+                id: CatalogId { catalog_id: 0 }.into(),
                 name_ident: CatalogNameIdent {
                     tenant: tenant.to_string(),
                     catalog_name: name.clone(),
-                },
+                }
+                .into(),
                 meta: CatalogMeta {
                     catalog_option: CatalogOption::Hive(HiveCatalogOption {
                         address: hive_ctl_cfg.metastore_address.clone(),

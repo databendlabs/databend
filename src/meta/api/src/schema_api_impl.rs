@@ -3952,8 +3952,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             get_catalog_or_err(self, name_key, "get_catalog").await?;
 
         let catalog = CatalogInfo {
-            id: CatalogId { catalog_id },
-            name_ident: name_key.clone(),
+            id: CatalogId { catalog_id }.into(),
+            name_ident: name_key.clone().into(),
             meta: catalog_meta,
         };
 
@@ -4073,11 +4073,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let catalog_info = CatalogInfo {
                     id: CatalogId {
                         catalog_id: catalog_ids[i],
-                    },
+                    }
+                    .into(),
                     name_ident: CatalogNameIdent {
                         tenant: name_key.tenant.clone(),
                         catalog_name: tenant_catalog_names[i].catalog_name.clone(),
-                    },
+                    }
+                    .into(),
                     meta: catalog_meta,
                 };
                 catalog_infos.push(Arc::new(catalog_info));
