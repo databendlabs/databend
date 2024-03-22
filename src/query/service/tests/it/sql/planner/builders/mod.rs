@@ -12,5 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod select_builder;
 mod binder;
+mod select_builder;
