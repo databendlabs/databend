@@ -17,7 +17,7 @@ async fn test_query_kind() -> Result<()> {
     let ctx = http_session.create_query_context().await?;
     let mut planner = Planner::new(ctx.clone());
     let sql = format!(
-        "COPY INTO {}.{} from 's3://xx/xx/xx/' pattern='.*' FILE_FORMAT = (TYPE = 'parquet') PURGE=true FORCE=true max_files=10000;",
+        "COPY INTO {}.{} from  @~/ pattern='.*' FILE_FORMAT = (TYPE = 'csv') PURGE=true FORCE=true max_files=10000;",
         fixture.default_db_name(),
         fixture.default_table_name()
     );
