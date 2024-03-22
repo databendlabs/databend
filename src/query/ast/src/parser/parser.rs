@@ -61,7 +61,7 @@ pub fn parse_sql(tokens: &[Token], dialect: Dialect) -> Result<(Statement, Optio
     //     match reparsed {
     //         Ok(reparsed) => {
     //             let reparsed_sql = reparsed.stmt.to_string();
-    //             assert_eq!(reparse_sql, reparsed_sql);
+    //             assert_eq!(reparse_sql, reparsed_sql, "AST:\n{:#?}", stmt.stmt);
     //         }
     //         Err(e) => {
     //             let original_sql = tokens[0].source.to_string();

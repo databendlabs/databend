@@ -224,6 +224,12 @@ impl Display for SelectStmt {
             write!(f, " HAVING {having}")?;
         }
 
+        // WINDOW clause
+        if let Some(windows) = &self.window_list {
+            write!(f, " WINDOW ")?;
+            write_comma_separated_list(f, windows)?;
+        }
+
         Ok(())
     }
 }

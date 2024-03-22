@@ -631,7 +631,7 @@ impl Display for Statement {
             }
             Statement::CreateStage(stmt) => write!(f, "{stmt}")?,
             Statement::RemoveStage { location, pattern } => {
-                write!(f, "REMOVE STAGE @{location}")?;
+                write!(f, "REMOVE @{location}")?;
                 if !pattern.is_empty() {
                     write!(f, " PATTERN = '{pattern}'")?;
                 }

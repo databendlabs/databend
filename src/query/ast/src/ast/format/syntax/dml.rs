@@ -99,7 +99,7 @@ fn pretty_source(source: InsertSource) -> RcDoc<'static> {
                             .append(RcDoc::space())
                             .append(RcDoc::text("="))
                             .append(RcDoc::space())
-                            .append(RcDoc::text(format!("{:?}", v)))
+                            .append(RcDoc::text(format!("{}", v)))
                     }))
                     .group(),
                 ))
@@ -215,7 +215,7 @@ pub(crate) fn pretty_copy_into_table(copy_stmt: CopyIntoTableStmt) -> RcDoc<'sta
         .append(if let Some(pattern) = &copy_stmt.pattern {
             RcDoc::line()
                 .append(RcDoc::text("PATTERN = "))
-                .append(RcDoc::text(format!("{:?}", pattern)))
+                .append(RcDoc::text(format!("'{}'", pattern)))
         } else {
             RcDoc::nil()
         })
@@ -291,7 +291,7 @@ fn pretty_file_format(file_format: &FileFormatOptions) -> RcDoc<'static> {
                         .append(RcDoc::space())
                         .append(RcDoc::text("="))
                         .append(RcDoc::space())
-                        .append(RcDoc::text(format!("{:?}", v)))
+                        .append(RcDoc::text(format!("{}", v)))
                 }))
                 .group(),
             ))

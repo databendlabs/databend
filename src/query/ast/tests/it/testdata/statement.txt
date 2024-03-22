@@ -17768,6 +17768,311 @@ Query(
 
 
 ---------- Input ----------
+REMOVE @t;
+---------- Output ---------
+REMOVE @t
+---------- AST ------------
+RemoveStage {
+    location: "t",
+    pattern: "",
+}
+
+
+---------- Input ----------
+SELECT sum(d) OVER (w) FROM e;
+---------- Output ---------
+SELECT sum(d) OVER ( w ) FROM e
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..29,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..29,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                7..22,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        7..10,
+                                    ),
+                                    name: "sum",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            11..12,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        11..12,
+                                                    ),
+                                                    name: "d",
+                                                    quote: None,
+                                                    is_hole: false,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                                params: [],
+                                window: Some(
+                                    WindowSpec(
+                                        WindowSpec {
+                                            existing_window_name: Some(
+                                                Identifier {
+                                                    span: Some(
+                                                        20..21,
+                                                    ),
+                                                    name: "w",
+                                                    quote: None,
+                                                    is_hole: false,
+                                                },
+                                            ),
+                                            partition_by: [],
+                                            order_by: [],
+                                            window_frame: None,
+                                        },
+                                    ),
+                                ),
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            28..29,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                28..29,
+                            ),
+                            name: "e",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        travel_point: None,
+                        since_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);
+---------- Output ---------
+SELECT sum(d) OVER w FROM e WINDOW w AS ( PARTITION BY f ORDER BY g )
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..67,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..67,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                7..20,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        7..10,
+                                    ),
+                                    name: "sum",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            11..12,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        11..12,
+                                                    ),
+                                                    name: "d",
+                                                    quote: None,
+                                                    is_hole: false,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                                params: [],
+                                window: Some(
+                                    WindowReference(
+                                        WindowRef {
+                                            window_name: Identifier {
+                                                span: Some(
+                                                    19..20,
+                                                ),
+                                                name: "w",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
+                                        },
+                                    ),
+                                ),
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            26..27,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                26..27,
+                            ),
+                            name: "e",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        travel_point: None,
+                        since_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: Some(
+                    [
+                        WindowDefinition {
+                            name: Identifier {
+                                span: Some(
+                                    35..36,
+                                ),
+                                name: "w",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            spec: WindowSpec {
+                                existing_window_name: None,
+                                partition_by: [
+                                    ColumnRef {
+                                        span: Some(
+                                            54..55,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        54..55,
+                                                    ),
+                                                    name: "f",
+                                                    quote: None,
+                                                    is_hole: false,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                                order_by: [
+                                    OrderByExpr {
+                                        expr: ColumnRef {
+                                            span: Some(
+                                                65..66,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            65..66,
+                                                        ),
+                                                        name: "g",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                        asc: None,
+                                        nulls_first: None,
+                                    },
+                                ],
+                                window_frame: None,
+                            },
+                        },
+                    ],
+                ),
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';
 ---------- Output ---------
 GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner'
