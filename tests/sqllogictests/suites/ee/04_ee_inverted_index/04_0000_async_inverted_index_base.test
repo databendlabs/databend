@@ -54,18 +54,18 @@ SELECT id, score(), content FROM t WHERE match(content, 'the')
 query IFT
 SELECT id, score(), content FROM t WHERE match(content, 'fly')
 ----
-5 2.423698 Time flies like an arrow; fruit flies like a banana
+5 2.4594712 Time flies like an arrow; fruit flies like a banana
 
 query IFT
 SELECT id, score(), content FROM t WHERE match(content, 'word')
 ----
-2 1.6043305 A picture is worth a thousand words
-4 1.6642681 Actions speak louder than words
+2 1.5948367 A picture is worth a thousand words
+4 1.6550698 Actions speak louder than words
 
 query IFT
 SELECT id, score(), content FROM t WHERE match(content, '"early bird"')
 ----
-3 4.5284004 The early bird catches the worm
+3 4.503372 The early bird catches the worm
 
 statement ok
 INSERT INTO t VALUES 
@@ -99,30 +99,43 @@ REFRESH INVERTED INDEX idx1 ON t
 query IFT
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
-21 1.223856 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
-24 1.223856 中国的传统节日蕴含着丰富的文化内涵，是传承和弘扬中华文化的重要途径。
-28 1.3211375 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
-12 1.43522 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
-15 1.499983 中国的茶文化源远流长，品茶已经成为一种生活方式。
+21 1.1967509 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
+24 1.1967509 中国的传统节日蕴含着丰富的文化内涵，是传承和弘扬中华文化的重要途径。
+28 1.3336442 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
+12 1.4319203 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
+15 1.5059 中国的茶文化源远流长，品茶已经成为一种生活方式。
 
 query IFT
 SELECT id, score(), content FROM t WHERE match(content, '北京') ORDER BY score()
 ----
-30 1.6945413 张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。
-12 2.2798471 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
+30 1.6925579 张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。
+12 2.2746058 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
 
 query IFT
 SELECT id, score(), content FROM t WHERE match(content, '北京大学') ORDER BY score()
 ----
-30 5.8970838 张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。
+30 5.8901815 张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。
 
 query IFT
 SELECT id, score(), content FROM t WHERE match(content, '文化博大精深') ORDER BY score()
 ----
-28 9.326057 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
+28 9.414343 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
+
+query IFT
+SELECT id, score(), content FROM t WHERE match(content, '文化 博大精深') ORDER BY score()
+----
+21 1.3759997 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
+15 1.731453 中国的茶文化源远流长，品茶已经成为一种生活方式。
+24 1.9572948 中国的传统节日蕴含着丰富的文化内涵，是传承和弘扬中华文化的重要途径。
+28 9.414344 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
 query IFT
 SELECT id, score(), content FROM t WHERE match(content, '化博') ORDER BY score()
+----
+
+
+query IFT
+SELECT id, score(), content FROM t WHERE match(content, '。') ORDER BY score()
 ----
 
 
