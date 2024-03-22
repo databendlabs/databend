@@ -14,7 +14,7 @@
 
 //! Schema types
 
-mod catalog;
+pub mod catalog;
 mod create_option;
 mod database;
 mod index;
