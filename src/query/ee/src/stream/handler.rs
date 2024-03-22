@@ -40,6 +40,7 @@ use databend_enterprise_stream_handler::StreamHandlerWrapper;
 use databend_storages_common_table_meta::table::MODE_APPEND_ONLY;
 use databend_storages_common_table_meta::table::MODE_STANDARD;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -79,10 +80,16 @@ impl StreamHandler for RealStreamHandler {
             let req = UpsertTableOptionReq {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
-                options: HashMap::from([(
-                    OPT_KEY_CHANGE_TRACKING.to_string(),
-                    Some("true".to_string()),
-                )]),
+                options: HashMap::from([
+                    (
+                        OPT_KEY_CHANGE_TRACKING.to_string(),
+                        Some("true".to_string()),
+                    ),
+                    (
+                        OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(),
+                        Some(table_version.to_string()),
+                    ),
+                ]),
             };
 
             catalog
