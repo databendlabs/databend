@@ -73,11 +73,57 @@ pub struct IcebergCatalogOption {
     pub storage_params: Box<StorageParams>,
 }
 
+/// Same as `CatalogNameIdent`, but with `serde` support,
+/// and can be used a s part of a value.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CatalogName {
+    pub tenant: String,
+    pub catalog_name: String,
+}
+
+impl From<CatalogNameIdent> for CatalogName {
+    fn from(ident: CatalogNameIdent) -> Self {
+        CatalogName {
+            tenant: ident.tenant,
+            catalog_name: ident.catalog_name,
+        }
+    }
+}
+
+impl Display for CatalogName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}'/'{}'", self.tenant, self.catalog_name)
+    }
+}
+
+// serde is required by `DataSourcePlan.catalog_info`
+// serde is required by `CommitSink.catalog_info`
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CatalogInfo {
-    pub id: CatalogId,
-    pub name_ident: CatalogNameIdent,
+    pub id: catalog_info::CatalogId,
+    pub name_ident: CatalogName,
     pub meta: CatalogMeta,
+}
+
+/// Private types for `CatalogInfo`.
+mod catalog_info {
+
+    /// Same as [`crate::schema::CatalogId`], except with serde support, and can be used in a value,
+    /// while CatalogId is only used for Key.
+    ///
+    /// This type is sealed in a private mod so that it is pub for use but can not be created directly.
+    #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+    pub struct CatalogId {
+        pub catalog_id: u64,
+    }
+
+    impl From<crate::schema::CatalogId> for CatalogId {
+        fn from(value: crate::schema::CatalogId) -> Self {
+            Self {
+                catalog_id: value.catalog_id,
+            }
+        }
+    }
 }
 
 impl CatalogInfo {
@@ -94,8 +140,8 @@ impl CatalogInfo {
     /// Create a new default catalog info.
     pub fn new_default() -> CatalogInfo {
         Self {
-            id: CatalogId { catalog_id: 0 },
-            name_ident: CatalogNameIdent {
+            id: CatalogId { catalog_id: 0 }.into(),
+            name_ident: CatalogName {
                 // tenant for default catalog is not used.
                 tenant: "".to_string(),
                 catalog_name: "default".to_string(),
@@ -114,13 +160,16 @@ pub struct CatalogMeta {
     pub created_on: DateTime<Utc>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+/// The name of a catalog,
+/// which is used as a key and does not support other codec method such as serde.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CatalogNameIdent {
     pub tenant: String,
     pub catalog_name: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+// serde is required by `CatalogInfo.id`
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CatalogId {
     pub catalog_id: u64,
 }
@@ -137,7 +186,7 @@ impl Display for CatalogNameIdent {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CatalogIdToName {
     pub catalog_id: u64,
 }
@@ -148,7 +197,7 @@ impl Display for CatalogIdToName {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateCatalogReq {
     pub if_not_exists: bool,
     pub name_ident: CatalogNameIdent,
@@ -198,7 +247,7 @@ impl Display for DropCatalogReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropCatalogReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetCatalogReq {
     pub inner: CatalogNameIdent,
 }
