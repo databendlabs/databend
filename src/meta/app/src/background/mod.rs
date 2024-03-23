@@ -14,10 +14,10 @@
 
 mod background_job;
 mod background_task;
+pub mod job_ident;
 pub mod task_creator;
 
 pub use background_job::BackgroundJobId;
-pub use background_job::BackgroundJobIdent;
 pub use background_job::BackgroundJobInfo;
 pub use background_job::BackgroundJobParams;
 pub use background_job::BackgroundJobState;
@@ -46,3 +46,4 @@ pub use background_task::ListBackgroundTasksReq;
 pub use background_task::UpdateBackgroundTaskReply;
 pub use background_task::UpdateBackgroundTaskReq;
 pub use background_task::VacuumStats;
+pub use job_ident::BackgroundJobIdent;

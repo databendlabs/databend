@@ -35,7 +35,9 @@ use databend_common_meta_app::background::ManualTriggerParams;
 use databend_common_meta_app::background::UpdateBackgroundJobParamsReq;
 use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
 use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_background_service::background_service::BackgroundServiceHandlerWrapper;
 use databend_enterprise_background_service::BackgroundServiceHandler;
@@ -68,7 +70,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
     #[async_backtrace::framed]
     async fn execute_scheduled_job(
         &self,
-        tenant: String,
+        tenant: Tenant,
         user: UserIdentity,
         name: String,
     ) -> Result<()> {
@@ -77,10 +79,12 @@ impl BackgroundServiceHandler for RealBackgroundService {
         // the consistency level is final consistency, which means that
         // when many execute scheduled job requests are sent to the meta store,
         // only one of them will be executed and the others will be ignored.
-        let name = BackgroundJobIdent { tenant, name };
+        let job_ident = BackgroundJobIdent::new(tenant, name);
         let info = self
             .meta_api
-            .get_background_job(GetBackgroundJobReq { name: name.clone() })
+            .get_background_job(GetBackgroundJobReq {
+                name: job_ident.clone(),
+            })
             .await?;
         let mut params = info.info.job_params.clone().unwrap_or_default();
         let id = Uuid::new_v4().to_string();
@@ -88,17 +92,17 @@ impl BackgroundServiceHandler for RealBackgroundService {
         params.manual_trigger_params = Some(ManualTriggerParams::new(id, trigger));
         self.meta_api
             .update_background_job_params(UpdateBackgroundJobParamsReq {
-                job_name: name.clone(),
+                job_name: job_ident.clone(),
                 params,
             })
             .await?;
         if self.conf.background.enable {
-            return if let Some(job) = self.scheduler.get_scheduled_job(name.name.as_str()) {
+            return if let Some(job) = self.scheduler.get_scheduled_job(job_ident.name()) {
                 JobScheduler::check_and_run_job(job, true).await
             } else {
                 Err(ErrorCode::UnknownBackgroundJob(format!(
                     "background job {} not found",
-                    name
+                    job_ident.name()
                 )))
             };
         } else {
@@ -166,11 +170,14 @@ impl RealBackgroundService {
         params: BackgroundJobParams,
         creator: UserIdentity,
     ) -> Result<BackgroundJobIdent> {
+        let non_empty = NonEmptyString::new(&conf.query.tenant_id).map_err(|_e| {
+            ErrorCode::TenantIsEmpty("conf.query.tenant is empty when create_compactor_job")
+        })?;
+        let tenant = Tenant::new_nonempty(non_empty);
+
         let name = RealBackgroundService::get_compactor_job_name(conf.query.tenant_id.to_string());
-        let id = BackgroundJobIdent {
-            tenant: conf.query.tenant_id.to_string(),
-            name,
-        };
+        let id = BackgroundJobIdent::new(tenant, name);
+
         let info = BackgroundJobInfo::new_compactor_job(params, creator);
         meta.create_background_job(CreateBackgroundJobReq {
             if_not_exists: true,
@@ -197,7 +204,7 @@ impl RealBackgroundService {
         Self::update_compaction_job_params(meta.clone(), &id, conf).await?;
         Self::suspend_job(meta.clone(), &id, false).await?;
 
-        let job = CompactionJob::create(conf, id.name, finish_tx).await;
+        let job = CompactionJob::create(conf, id.name(), finish_tx).await?;
         Ok(job)
     }
 
