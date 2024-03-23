@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Debug;
+
+use databend_storages_common_table_meta::meta::Location;
 
 use crate::plan::PruningStatistics;
 
@@ -29,6 +32,8 @@ pub struct PartStatistics {
     pub partitions_total: usize,
     /// Is the statistics exact.
     pub is_exact: bool,
+    /// inverted index locations
+    pub index_info_locations: Option<BTreeMap<String, Location>>,
     /// Pruning stats.
     pub pruning_stats: PruningStatistics,
 }
@@ -40,6 +45,7 @@ impl PartStatistics {
         read_bytes: usize,
         partitions_scanned: usize,
         partitions_total: usize,
+        index_info_locations: Option<BTreeMap<String, Location>>,
     ) -> Self {
         PartStatistics {
             snapshot,
@@ -48,6 +54,7 @@ impl PartStatistics {
             partitions_scanned,
             partitions_total,
             is_exact: false,
+            index_info_locations,
             pruning_stats: Default::default(),
         }
     }
@@ -65,6 +72,7 @@ impl PartStatistics {
             partitions_total,
             is_exact: true,
             snapshot: None,
+            index_info_locations: Default::default(),
             pruning_stats: Default::default(),
         }
     }

@@ -57,8 +57,8 @@ use tantivy::schema::TextOptions;
 use tantivy::tokenizer::Language;
 use tantivy::tokenizer::LowerCaser;
 use tantivy::tokenizer::RemoveLongFilter;
-use tantivy::tokenizer::SimpleTokenizer;
 use tantivy::tokenizer::Stemmer;
+use tantivy::tokenizer::StopWordFilter;
 use tantivy::tokenizer::TextAnalyzer;
 use tantivy::tokenizer::TokenizerManager;
 use tantivy::Directory;
@@ -69,6 +69,7 @@ use tantivy::SegmentComponent;
 use tantivy::SegmentId;
 use tantivy::SingleSegmentIndexWriter;
 use tantivy_common::BinarySerializable;
+use tantivy_jieba::JiebaTokenizer;
 
 use crate::io::write_data;
 use crate::io::TableMetaLocationGenerator;
@@ -133,7 +134,7 @@ pub struct InvertedIndexWriter {
 impl InvertedIndexWriter {
     pub fn try_create(schema: DataSchema) -> Result<InvertedIndexWriter> {
         let text_field_indexing = TextFieldIndexing::default()
-            .set_tokenizer("en")
+            .set_tokenizer("jieba")
             .set_index_option(IndexRecordOption::WithFreqsAndPositions);
         let text_options = TextOptions::default().set_indexing_options(text_field_indexing);
 
@@ -155,15 +156,8 @@ impl InvertedIndexWriter {
             sort_by_field: None,
             ..Default::default()
         };
-        let tokenizer_manager = TokenizerManager::new();
-        tokenizer_manager.register(
-            "en",
-            TextAnalyzer::builder(SimpleTokenizer::default())
-                .filter(RemoveLongFilter::limit(40))
-                .filter(LowerCaser)
-                .filter(Stemmer::new(Language::English))
-                .build(),
-        );
+
+        let tokenizer_manager = create_tokenizer_manager();
 
         let index_builder = IndexBuilder::new()
             .settings(index_settings)
@@ -405,4 +399,76 @@ impl InvertedIndexWriter {
         let len = writer.write(&buf)?;
         Ok(len)
     }
+}
+
+// Create tokenizer can handle both Chinese and English
+pub(crate) fn create_tokenizer_manager() -> TokenizerManager {
+    let tokenizer_manager = TokenizerManager::new();
+    tokenizer_manager.register(
+        "jieba",
+        TextAnalyzer::builder(JiebaTokenizer {})
+            .filter(RemoveLongFilter::limit(40))
+            .filter(LowerCaser)
+            // Punctuation tokens to remove copied from lucene
+            // https://github.com/apache/lucene/blob/main/lucene/analysis/smartcn/src/resources/org/apache/lucene/analysis/cn/smart/stopwords.txt
+            .filter(StopWordFilter::remove(vec![
+                ",".to_string(),
+                ".".to_string(),
+                "`".to_string(),
+                "-".to_string(),
+                "_".to_string(),
+                "=".to_string(),
+                "?".to_string(),
+                "'".to_string(),
+                "|".to_string(),
+                "\"".to_string(),
+                "(".to_string(),
+                ")".to_string(),
+                "{".to_string(),
+                "}".to_string(),
+                "[".to_string(),
+                "]".to_string(),
+                "<".to_string(),
+                ">".to_string(),
+                "*".to_string(),
+                "#".to_string(),
+                "&".to_string(),
+                "^".to_string(),
+                "$".to_string(),
+                "@".to_string(),
+                "!".to_string(),
+                "~".to_string(),
+                ":".to_string(),
+                ";".to_string(),
+                "+".to_string(),
+                "/".to_string(),
+                "\\".to_string(),
+                "《".to_string(),
+                "》".to_string(),
+                "—".to_string(),
+                "－".to_string(),
+                "，".to_string(),
+                "。".to_string(),
+                "、".to_string(),
+                "：".to_string(),
+                "；".to_string(),
+                "！".to_string(),
+                "·".to_string(),
+                "？".to_string(),
+                "“".to_string(),
+                "”".to_string(),
+                "）".to_string(),
+                "（".to_string(),
+                "【".to_string(),
+                "】".to_string(),
+                "［".to_string(),
+                "］".to_string(),
+                "●".to_string(),
+                "　".to_string(),
+            ]))
+            .filter(StopWordFilter::new(Language::English).unwrap())
+            .filter(Stemmer::new(Language::English))
+            .build(),
+    );
+    tokenizer_manager
 }
