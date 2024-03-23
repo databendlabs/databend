@@ -767,7 +767,7 @@ impl RunningGraph {
             return Ok(());
         }
         self.0.should_finish.store(true, Ordering::SeqCst);
-
+        self.interrupt_running_nodes();
         let mut finished_error = self.0.finished_error.lock();
         if finished_error.is_none() {
             *finished_error = cause.err();
