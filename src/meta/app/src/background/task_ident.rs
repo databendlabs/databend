@@ -14,62 +14,49 @@
 
 use crate::tenant_key::TIdent;
 
-/// Defines the meta-service key for background job.
-pub type BackgroundJobIdent = TIdent<Resource>;
+/// Defines the meta-service key for background task.
+pub type BackgroundTaskIdent = TIdent<Resource>;
 
 pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::background::BackgroundJobId;
+    use crate::background::BackgroundTaskInfo;
     use crate::tenant_key::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
-        const PREFIX: &'static str = "__fd_background_job";
-        type ValueType = BackgroundJobId;
+        const PREFIX: &'static str = "__fd_background_task_by_name";
+        type ValueType = BackgroundTaskInfo;
     }
 
-    impl kvapi::Value for BackgroundJobId {
+    impl kvapi::Value for BackgroundTaskInfo {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
+            []
         }
     }
 
     // impl From<ExistError<Resource>> for ErrorCode {
-    //     fn from(err: ExistError<Resource>) -> Self {
-    //         ErrorCode::ConnectionAlreadyExists(err.to_string())
-    //     }
-    // }
-    //
     // impl From<UnknownError<Resource>> for ErrorCode {
-    //     fn from(err: UnknownError<Resource>) -> Self {
-    //         // Special case: use customized message to keep backward compatibility.
-    //         // TODO: consider using the default message in the future(`err.to_string()`)
-    //         ErrorCode::UnknownConnection(format!("Connection '{}' does not exist.", err.name()))
-    //             .add_message_back(err.ctx())
-    //     }
-    // }
 }
 
 #[cfg(test)]
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use super::BackgroundJobIdent;
+    use super::BackgroundTaskIdent;
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_job_ident() {
+    fn test_task_ident() {
         let tenant = Tenant::new_literal("test");
-        let ident = BackgroundJobIdent::new(tenant, "test1");
+        let ident = BackgroundTaskIdent::new(tenant, "test1");
 
         let key = ident.to_string_key();
-        assert_eq!(key, "__fd_background_job/test/test1");
+        assert_eq!(key, "__fd_background_task_by_name/test/test1");
 
-        assert_eq!(ident, BackgroundJobIdent::from_str_key(&key).unwrap());
+        assert_eq!(ident, BackgroundTaskIdent::from_str_key(&key).unwrap());
     }
 }
