@@ -866,15 +866,16 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let count_all_with_window = map(
         rule! {
-        COUNT ~ "(" ~ "*" ~ ")" ~ (OVER ~ #window_spec_ident)?
+            COUNT ~ "(" ~ "*" ~ ")" ~ ( OVER ~ #window_spec_ident )?
         },
         |(_, _, _, _, window)| ExprElement::CountAll {
             window: window.map(|w| w.1),
         },
     );
+
     let tuple = map(
         rule! {
-            "(" ~ #comma_separated_list0_ignore_trailing(subexpr(0)) ~ ","? ~ ^")"
+            "(" ~ #comma_separated_list1_ignore_trailing(subexpr(0)) ~ ","? ~ ^")"
         },
         |(_, mut exprs, opt_trail, _)| {
             if exprs.len() == 1 && opt_trail.is_none() {
@@ -882,6 +883,20 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             } else {
                 ExprElement::Tuple { exprs }
             }
+        },
+    );
+    let subquery = map(
+        rule! {
+            (ANY | SOME | ALL)? ~ "(" ~ #query ~ ^")"
+        },
+        |(modifier, _, subquery, _)| {
+            let modifier = modifier.map(|m| match m.kind {
+                TokenKind::ALL => SubqueryModifier::All,
+                TokenKind::ANY => SubqueryModifier::Any,
+                TokenKind::SOME => SubqueryModifier::Some,
+                _ => unreachable!(),
+            });
+            ExprElement::Subquery { modifier, subquery }
         },
     );
 
@@ -976,27 +991,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
     let exists = map(
-        rule! { NOT? ~ EXISTS ~ "(" ~ ^#query ~ ^")" },
+        rule! {
+            NOT? ~ EXISTS ~ "(" ~ ^#query ~ ^")"
+        },
         |(opt_not, _, _, subquery, _)| ExprElement::Exists {
             subquery,
             not: opt_not.is_some(),
-        },
-    );
-    let subquery = map(
-        rule! {
-            (ANY | SOME | ALL)? ~
-            "("
-            ~ #query
-            ~ ^")"
-        },
-        |(modifier, _, subquery, _)| {
-            let modifier = modifier.map(|m| match m.kind {
-                TokenKind::ALL => SubqueryModifier::All,
-                TokenKind::ANY => SubqueryModifier::Any,
-                TokenKind::SOME => SubqueryModifier::Some,
-                _ => unreachable!(),
-            });
-            ExprElement::Subquery { modifier, subquery }
         },
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
@@ -1203,8 +1203,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #function_call_with_params : "`function(...)(...)`"
             | #function_call : "`function(...)`"
             | #case : "`CASE ... END`"
-            | #subquery : "`(SELECT ...)`"
             | #tuple : "`(<expr> [, ...])`"
+            | #subquery : "`(SELECT ...)`"
             | #column_ref : "<column>"
             | #dot_access : "<dot_access>"
             | #map_access : "[<key>] | .<key> | :<key>"

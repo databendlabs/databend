@@ -8584,6 +8584,219 @@ Query(
 
 
 ---------- Input ----------
+select * FROM t where ((a));
+---------- Output ---------
+SELECT * FROM t WHERE a
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..27,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..27,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        travel_point: None,
+                        since_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: Some(
+                    ColumnRef {
+                        span: Some(
+                            24..25,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        24..25,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                            ),
+                        },
+                    },
+                ),
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * FROM t where ((select 1) > 1);
+---------- Output ---------
+SELECT * FROM t WHERE ((SELECT 1) > 1)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..38,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..38,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        travel_point: None,
+                        since_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: Some(
+                            34..35,
+                        ),
+                        op: Gt,
+                        left: Subquery {
+                            span: Some(
+                                23..33,
+                            ),
+                            modifier: None,
+                            subquery: Query {
+                                span: Some(
+                                    24..32,
+                                ),
+                                with: None,
+                                body: Select(
+                                    SelectStmt {
+                                        span: Some(
+                                            24..32,
+                                        ),
+                                        hints: None,
+                                        distinct: false,
+                                        select_list: [
+                                            AliasedExpr {
+                                                expr: Literal {
+                                                    span: Some(
+                                                        31..32,
+                                                    ),
+                                                    lit: UInt64(
+                                                        1,
+                                                    ),
+                                                },
+                                                alias: None,
+                                            },
+                                        ],
+                                        from: [],
+                                        selection: None,
+                                        group_by: None,
+                                        having: None,
+                                        window_list: None,
+                                        qualify: None,
+                                    },
+                                ),
+                                order_by: [],
+                                limit: [],
+                                offset: None,
+                                ignore_result: false,
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                36..37,
+                            ),
+                            lit: UInt64(
+                                1,
+                            ),
+                        },
+                    },
+                ),
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
 INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)

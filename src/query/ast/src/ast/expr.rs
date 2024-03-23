@@ -463,7 +463,7 @@ impl Display for Expr {
             Expr::CountAll { window, .. } => {
                 write!(f, "COUNT(*)")?;
                 if let Some(window) = window {
-                    write!(f, " OVER ({window})")?;
+                    write!(f, " OVER {window}")?;
                 }
             }
             Expr::Tuple { exprs, .. } => {
