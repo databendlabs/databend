@@ -395,6 +395,14 @@ impl<'a> Binder {
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
 
+        // rewrite udf for interpreter udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
+
+        // rewrite udf for server udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
+
         // disable variant check to allow copy invalid JSON into tables
         let disable_variant_check = plan
             .stage_table_info
