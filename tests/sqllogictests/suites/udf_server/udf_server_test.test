@@ -465,16 +465,10 @@ set enable_experimental_merge_into = 0;
 
 ### enable udf for copy into table
 statement ok
-create table json_source(a variant);
+create table test_source(a VARCHAR);
 
 statement ok
-create stage if not exists json_stage FILE_FORMAT = (TYPE = NDJson,COMPRESSION = None);
-
-statement ok
-insert into json_source values({'field1':'haha'}),({'field1':'haha2'});
-
-statement ok
-copy into @json_stage from (select * from json_source);
+insert into test_source values('haha'),('haha2');
 
 statement ok
 CREATE TABLE _tmp_table (field1 int);
@@ -483,10 +477,10 @@ statement ok
 CREATE FUNCTION url_len (VARCHAR) RETURNS VARCHAR LANGUAGE python HANDLER = 'len' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-COPY INTO _tmp_table FROM (SELECT url_len($1:field1) as field1 FROM @json_stage) PATTERN='*.json';
+COPY INTO _tmp_table FROM (SELECT url_len(field1) as field1 FROM test_source);
 
 query T 
 select * from _tmp_table order by field1;
 ----
-2
-2
+4
+5
