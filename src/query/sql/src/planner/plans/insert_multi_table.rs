@@ -40,7 +40,7 @@ pub struct Into {
     pub table: String,
     // project subquery's output with VALUES ( source_col_name [ , ... ] ) (if exsits)
     pub projected_schema: Option<DataSchemaRef>,
-    //project with ( target_col_name [ , ... ] ) (if exsits) or use target table's schema
+    // project with ( target_col_name [ , ... ] ) (if exsits) or use target table's schema
     pub casted_schema: DataSchemaRef,
 }
 
