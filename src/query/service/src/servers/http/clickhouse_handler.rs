@@ -58,6 +58,7 @@ use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
 use crate::servers::http::middleware::sanitize_request_headers;
@@ -266,9 +267,8 @@ pub async fn clickhouse_handler_get(
             .map_err(BadRequest)?;
         let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
         let sql = params.query();
-        let mut planner = Planner::new(context.clone());
-        let (plan, extras) = planner
-            .plan_sql(&sql)
+        // Use interpreter_plan_sql, we can write the query log if an error occurs.
+        let (plan, extras) = interpreter_plan_sql(context.clone(), &sql)
             .await
             .map_err(|err| err.display_with_sql(&sql))
             .map_err(BadRequest)?;

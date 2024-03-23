@@ -45,3 +45,13 @@ select count(*) from tbl_01_0002 where a > 1
 statement ok
 drop table tbl_01_0002
 
+
+# https://github.com/datafuselabs/databend/issues/15065
+
+statement error 1025
+select * from table_not_exitst;
+
+query B
+select count(*) > 0 from system.query_log where log_type_name = 'Error'
+----
+1
