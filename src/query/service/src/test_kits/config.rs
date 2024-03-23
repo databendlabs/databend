@@ -44,6 +44,7 @@ impl ConfigBuilder {
         let tmp_dir = TempDir::new().expect("create tmp dir failed");
         let root = tmp_dir.path().to_str().unwrap().to_string();
         conf.storage.params = StorageParams::Fs(StorageFsConfig { root });
+        conf.storage.allow_insecure = true;
 
         ConfigBuilder { conf }
     }

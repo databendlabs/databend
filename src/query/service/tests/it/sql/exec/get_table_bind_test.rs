@@ -524,9 +524,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn attach_query_str(&self, _kind: QueryKind, _query: String) {
-        todo!()
-    }
+    fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
 
     fn get_query_str(&self) -> String {
         todo!()
@@ -875,6 +873,7 @@ async fn test_get_same_table_once() -> Result<()> {
 
     let mut planner = Planner::new(ctx.clone());
     let (_, _) = planner.plan_sql(query.as_str()).await?;
+
     assert_eq!(
         ctx.table_without_cache
             .load(std::sync::atomic::Ordering::SeqCst),

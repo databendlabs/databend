@@ -100,6 +100,7 @@ impl StageTable {
             partitions_scanned: files.len(),
             partitions_total: files.len(),
             is_exact: false,
+            index_info_locations: None,
             pruning_stats: Default::default(),
         };
 

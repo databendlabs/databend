@@ -79,11 +79,11 @@ impl JobScheduler {
         match info.job_params.as_ref().unwrap().job_type {
             BackgroundJobType::ONESHOT => {
                 self.one_shot_jobs
-                    .insert(job.get_name().name, Box::new(job) as BoxedJob);
+                    .insert(job.get_name().name().to_string(), Box::new(job) as BoxedJob);
             }
             BackgroundJobType::CRON | BackgroundJobType::INTERVAL => {
                 self.scheduled_jobs
-                    .insert(job.get_name().name, Box::new(job) as BoxedJob);
+                    .insert(job.get_name().name().to_string(), Box::new(job) as BoxedJob);
             }
         }
         Ok(())

@@ -26,7 +26,6 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
-use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
 use databend_query::test_kits::*;
 use poem::get;
@@ -69,8 +68,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
         .set_authed_user(user, None)
         .await?;
     let mut planner = Planner::new(query_ctx.clone());
-    let (plan, extras) = planner.plan_sql(sql).await?;
-    query_ctx.attach_query_str(plan.kind(), extras.statement.to_mask_sql());
+    let (plan, _) = planner.plan_sql(sql).await?;
     InterpreterFactory::get(query_ctx.clone(), &plan).await
 }
 

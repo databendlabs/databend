@@ -79,13 +79,13 @@ pub struct CreateDatabaseStmt {
 
 impl Display for CreateDatabaseStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CREATE")?;
+        write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
-            write!(f, " OR REPLACE")?;
+            write!(f, "OR REPLACE ")?;
         }
-        write!(f, " DATABASE")?;
+        write!(f, "DATABASE ")?;
         if let CreateOption::CreateIfNotExists = self.create_option {
-            write!(f, " IF NOT EXISTS ")?;
+            write!(f, "IF NOT EXISTS ")?;
         }
 
         write!(f, "{}", self.database)?;

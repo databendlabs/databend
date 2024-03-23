@@ -5552,7 +5552,7 @@ Query {
 ---------- Input ----------
 select sum(a) over w from customer window w as (partition by a order by b)
 ---------- Output ---------
-SELECT sum(a) OVER (WINDOW w) FROM customer
+SELECT sum(a) OVER w FROM customer WINDOW w AS ( PARTITION BY a ORDER BY b )
 ---------- AST ------------
 Query {
     span: Some(
@@ -5726,7 +5726,7 @@ Query {
 ---------- Input ----------
 select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a
 ---------- Output ---------
-SELECT a, sum(a) OVER (WINDOW w), sum(a) OVER (WINDOW w1), sum(a) OVER (WINDOW w2) FROM t1 ORDER BY a
+SELECT a, sum(a) OVER w, sum(a) OVER w1, sum(a) OVER w2 FROM t1 WINDOW w AS ( PARTITION BY a ), w2 AS ( w1 ROWS BETWEEN CURRENT ROW AND CURRENT ROW ), w1 AS ( w ORDER BY a ) ORDER BY a
 ---------- AST ------------
 Query {
     span: Some(

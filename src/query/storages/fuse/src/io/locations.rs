@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_storages_common_index::InvertedIndexDirectory;
 use databend_storages_common_table_meta::meta::IndexInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -169,8 +170,11 @@ impl TableMetaLocationGenerator {
 
     pub fn gen_inverted_index_location(&self, id: String) -> String {
         format!(
-            "{}/{}/{}.index",
-            &self.prefix, FUSE_TBL_INVERTED_INDEX_PREFIX, id
+            "{}/{}/{}_v{}.index",
+            &self.prefix,
+            FUSE_TBL_INVERTED_INDEX_PREFIX,
+            id,
+            InvertedIndexDirectory::VERSION,
         )
     }
 

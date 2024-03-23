@@ -19,7 +19,7 @@ c5 BIGINT 1 1
 c2 BIGINT 1 2
 c4 VARCHAR 1 3
 
-query error get diff schema
+query error
 copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet) pattern='.*[.]parquet'
 
 query 

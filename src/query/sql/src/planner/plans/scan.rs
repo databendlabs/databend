@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
@@ -99,6 +100,7 @@ pub struct Scan {
     pub change_type: Option<ChangeType>,
     // Whether to update stream columns.
     pub update_stream_columns: bool,
+    pub inverted_index: Option<InvertedIndexInfo>,
 
     pub statistics: Statistics,
 }
@@ -127,6 +129,7 @@ impl Scan {
             agg_index: self.agg_index.clone(),
             change_type: self.change_type.clone(),
             update_stream_columns: self.update_stream_columns,
+            inverted_index: self.inverted_index.clone(),
         }
     }
 

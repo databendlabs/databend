@@ -733,12 +733,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     "({})",
                     options
                         .iter()
-                        .flat_map(|opt| {
+                        .map(|opt| {
                             match opt {
-                                ExplainOption::Verbose(true) => Some("Verbose"),
-                                ExplainOption::Logical(true) => Some("Logical"),
-                                ExplainOption::Optimized(true) => Some("Optimized"),
-                                _ => None,
+                                ExplainOption::Verbose => "Verbose",
+                                ExplainOption::Logical => "Logical",
+                                ExplainOption::Optimized => "Optimized",
                             }
                         })
                         .join(", ")
@@ -816,8 +815,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             children.push(pattern_node);
         }
         if !copy.file_format.is_empty() {
-            let mut file_formats_children = Vec::with_capacity(copy.file_format.len());
-            for (k, v) in copy.file_format.iter() {
+            let mut file_formats_children = Vec::new();
+            for (k, v) in copy.file_format.options.iter() {
                 let file_format_name = format!("FileFormat {} = {:?}", k, v);
                 let file_format_format_ctx = AstFormatContext::new(file_format_name);
                 let file_format_node = FormatTreeNode::new(file_format_format_ctx);
@@ -899,9 +898,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         );
         children.push(from_node);
 
-        if !copy.file_format.is_empty() {
-            let mut file_formats_children = Vec::with_capacity(copy.file_format.len());
-            for (k, v) in copy.file_format.iter() {
+        if !copy.file_format.options.is_empty() {
+            let mut file_formats_children = Vec::with_capacity(copy.file_format.options.len());
+            for (k, v) in copy.file_format.options.iter() {
                 let file_format_name = format!("FileFormat {} = {:?}", k, v);
                 let file_format_format_ctx = AstFormatContext::new(file_format_name);
                 let file_format_node = FormatTreeNode::new(file_format_format_ctx);
@@ -1095,8 +1094,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 self.children.push(streaming_node);
             }
             InsertSource::StreamingV2 { settings, .. } => {
-                let mut file_formats_children = Vec::with_capacity(settings.len());
-                for (k, v) in settings.iter() {
+                let mut file_formats_children = Vec::new();
+                for (k, v) in settings.options.iter() {
                     let file_format_name = format!("FileFormat {} = {:?}", k, v);
                     let file_format_format_ctx = AstFormatContext::new(file_format_name);
                     let file_format_node = FormatTreeNode::new(file_format_format_ctx);
@@ -2480,8 +2479,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             children.push(FormatTreeNode::new(location_format_ctx));
         }
         if !stmt.file_format_options.is_empty() {
-            let mut file_formats_children = Vec::with_capacity(stmt.file_format_options.len());
-            for (k, v) in stmt.file_format_options.iter() {
+            let mut file_formats_children = Vec::new();
+            for (k, v) in stmt.file_format_options.options.iter() {
                 let file_format_name = format!("FileFormat {} = {:?}", k, v);
                 let file_format_format_ctx = AstFormatContext::new(file_format_name);
                 let file_format_node = FormatTreeNode::new(file_format_format_ctx);

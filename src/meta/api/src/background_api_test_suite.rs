@@ -34,6 +34,7 @@ use databend_common_meta_app::background::ManualTriggerParams;
 use databend_common_meta_app::background::UpdateBackgroundJobParamsReq;
 use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
 use databend_common_meta_app::background::UpdateBackgroundTaskReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::MetaError;
 use log::info;
@@ -199,17 +200,16 @@ impl BackgroundApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant = "tenant1";
+        let tenant_name = "tenant1";
         let job_name = "uuid1";
-        let job_ident = BackgroundJobIdent {
-            tenant: tenant.to_string(),
-            name: job_name.to_string(),
-        };
+
+        let tenant = Tenant::new_literal(tenant_name);
+        let job_ident = BackgroundJobIdent::new(tenant.clone(), job_name);
 
         info!("--- list background jobs when their is no tasks");
         {
             let req = ListBackgroundJobsReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
             };
 
             let res = mt.list_background_jobs(req).await;
@@ -334,14 +334,14 @@ impl BackgroundApiTestSuite {
         info!("--- list background jobs when their is 1 tasks");
         {
             let req = ListBackgroundJobsReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
             };
 
             let res = mt.list_background_jobs(req).await;
             assert!(res.is_ok());
             let resp = res.unwrap();
             assert_eq!(1, resp.len());
-            assert_eq!(job_ident.name, resp[0].1, "expect same ident name");
+            assert_eq!(job_ident.name(), resp[0].1, "expect same ident name");
             assert_eq!(
                 BackgroundJobState::FAILED,
                 resp[0].2.job_status.clone().unwrap().job_state,

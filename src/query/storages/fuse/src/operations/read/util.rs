@@ -113,6 +113,7 @@ pub(crate) fn add_data_block_meta(
             offsets,
             base_block_ids,
             inner: meta,
+            matched_rows: block_meta.matched_rows.clone(),
         };
         meta = Some(Box::new(internal_column_meta));
     }

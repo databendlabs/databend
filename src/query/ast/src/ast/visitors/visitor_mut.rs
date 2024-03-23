@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::Span;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::schema::CreateOption;
@@ -661,7 +660,7 @@ pub trait VisitorMut: Sized {
         &mut self,
         _create_option: &CreateOption,
         _name: &mut String,
-        _file_format_options: &mut FileFormatOptionsAst,
+        _file_format_options: &mut FileFormatOptions,
     ) {
     }
 

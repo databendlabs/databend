@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
@@ -334,16 +335,21 @@ impl SExpr {
         expr: &SExpr,
         table_index: IndexType,
         column_index: IndexType,
+        inverted_index: &Option<InvertedIndexInfo>,
     ) -> SExpr {
         fn add_internal_column_index_into_child(
             s_expr: &SExpr,
             column_index: IndexType,
             table_index: IndexType,
+            inverted_index: &Option<InvertedIndexInfo>,
         ) -> SExpr {
             let mut s_expr = s_expr.clone();
             s_expr.plan = if let RelOperator::Scan(mut p) = (*s_expr.plan).clone() {
                 if p.table_index == table_index {
                     p.columns.insert(column_index);
+                    if inverted_index.is_some() {
+                        p.inverted_index = inverted_index.clone();
+                    }
                 }
                 Arc::new(p.into())
             } else {
@@ -359,6 +365,7 @@ impl SExpr {
                         child,
                         column_index,
                         table_index,
+                        inverted_index,
                     )));
                 }
 
@@ -368,7 +375,7 @@ impl SExpr {
             }
         }
 
-        add_internal_column_index_into_child(expr, column_index, table_index)
+        add_internal_column_index_into_child(expr, column_index, table_index, inverted_index)
     }
 
     // The method will clear the applied rules of current SExpr and its children.
