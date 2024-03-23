@@ -359,9 +359,7 @@ impl InteractiveWorkerBase {
                 let entry = QueryEntry::create(&context)?;
                 let _guard = QueriesQueueManager::instance().acquire(entry).await?;
                 let mut planner = Planner::new(context.clone());
-                let (plan, extras) = planner.plan_sql(query).await?;
-
-                context.attach_query_str(plan.kind(), extras.statement.to_mask_sql());
+                let (plan, _) = planner.plan_sql(query).await?;
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
 
                 let has_result_set = plan.has_result_set();

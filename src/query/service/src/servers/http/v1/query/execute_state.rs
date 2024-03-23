@@ -310,11 +310,10 @@ impl ExecuteState {
         let entry = QueryEntry::create(&ctx)?;
         let queue_guard = QueriesQueueManager::instance().acquire(entry).await?;
 
-        let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone())
+        let (plan, _) = ExecuteState::plan_sql(&sql, ctx.clone())
             .await
             .map_err(|err| err.display_with_sql(&sql))?;
 
-        ctx.attach_query_str(plan.kind(), plan_extras.statement.to_mask_sql());
         {
             // set_var may change settings
             let mut guard = format_settings.write();
