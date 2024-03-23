@@ -29,7 +29,6 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_metrics::mysql::*;
-use databend_common_sql::Planner;
 use databend_common_users::CertifiedInfo;
 use databend_common_users::UserApiProvider;
 use futures_util::StreamExt;
@@ -45,6 +44,7 @@ use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 
+use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
@@ -358,8 +358,9 @@ impl InteractiveWorkerBase {
 
                 let entry = QueryEntry::create(&context)?;
                 let _guard = QueriesQueueManager::instance().acquire(entry).await?;
-                let mut planner = Planner::new(context.clone());
-                let (plan, _) = planner.plan_sql(query).await?;
+
+                // Use interpreter_plan_sql, we can write the query log if an error occurs.
+                let (plan, _) = interpreter_plan_sql(context.clone(), query).await?;
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
 
                 let has_result_set = plan.has_result_set();

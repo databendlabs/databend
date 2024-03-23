@@ -146,6 +146,7 @@ mod interpreter_virtual_column_refresh;
 pub use access::ManagementModeAccess;
 pub use common::InterpreterQueryLog;
 pub use hook::HookOperator;
+pub use interpreter::interpreter_plan_sql;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_cluster_key_alter::AlterTableClusterKeyInterpreter;
