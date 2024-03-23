@@ -366,8 +366,7 @@ impl Pipeline {
                     let output2 = OutputPort::create();
                     let processor = DuplicateProcessor::create(
                         input.clone(),
-                        output1.clone(),
-                        output2.clone(),
+                        vec![output1.clone(), output2.clone()],
                         force_finish_together,
                     );
                     items.push(PipeItem::create(
