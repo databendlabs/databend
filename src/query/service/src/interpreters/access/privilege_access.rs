@@ -747,7 +747,12 @@ impl AccessChecker for PrivilegeAccess {
             }
             // Others.
             Plan::Insert(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, vec![UserPrivilegeType::Insert], false).await?;
+                let target_table_privileges = if plan.is_overwrite {
+                    vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete]
+                } else {
+                    vec![UserPrivilegeType::Insert]
+                };
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, target_table_privileges, false).await?;
                 match &plan.source {
                     InsertInputSource::SelectPlan(plan) => {
                         self.check(ctx, plan).await?;
