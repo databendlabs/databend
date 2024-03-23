@@ -123,11 +123,13 @@ def array_index_of(array: List[int], item: int):
 def map_access(map: Dict[str, str], key: str) -> str:
     return map[key] if key in map else None
 
-
 @udf(input_types=["VARIANT", "VARCHAR"], result_type="VARIANT")
 def json_access(data: Any, key: str) -> Any:
     return data[key]
 
+@udf(input_types=["VARCHAR"], result_type="INT")
+def len(key: str) -> int:
+    return len(key)
 
 @udf(input_types=["ARRAY(VARIANT)"], result_type="VARIANT")
 def json_concat(list: List[Any]) -> Any:
@@ -321,4 +323,5 @@ if __name__ == "__main__":
     udf_server.add_function(return_all_non_nullable)
     udf_server.add_function(wait)
     udf_server.add_function(wait_concurrent)
+    udf_server.add_function(len)
     udf_server.serve()
