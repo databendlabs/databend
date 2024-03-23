@@ -29,6 +29,7 @@ use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sql::executor::cast_expr_to_non_null_boolean;
 use crate::sql::executor::physical_plans::Duplicate;
+use crate::sql::executor::physical_plans::Shuffle;
 pub struct InsertMultiTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: InsertMultiTable,
@@ -89,11 +90,18 @@ impl InsertMultiTableInterpreter {
         };
 
         let n_target = 0;
+        let rule = vec![];
 
         let duplicate = PhysicalPlan::Duplicate(Box::new(Duplicate {
             plan_id: 0,
             input: Box::new(select_plan),
             n: n_target,
+        }));
+
+        let shuffle = PhysicalPlan::Shuffle(Box::new(Shuffle {
+            plan_id: 0,
+            input: Box::new(duplicate),
+            rule,
         }));
         let filters: Result<Vec<RemoteExpr>> = whens
             .iter()

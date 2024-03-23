@@ -20,3 +20,10 @@ pub struct Duplicate {
     pub input: Box<PhysicalPlan>,
     pub n: usize,
 }
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Shuffle {
+    pub plan_id: u32,
+    pub input: Box<PhysicalPlan>,
+    pub rule: Vec<usize>,
+}

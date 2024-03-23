@@ -54,6 +54,7 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
+use crate::executor::physical_plans::Shuffle;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
@@ -125,6 +126,7 @@ pub enum PhysicalPlan {
 
     /// Multi table insert
     Duplicate(Box<Duplicate>),
+    Shuffle(Box<Shuffle>),
 }
 
 impl PhysicalPlan {

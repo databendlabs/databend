@@ -13,9 +13,9 @@
 // limitations under the License.
 
 mod common;
-mod duplicate;
+mod physical_schedule;
 pub use common::*;
-pub use duplicate::Duplicate;
+pub use physical_schedule::*;
 mod physical_aggregate_expand;
 pub use physical_aggregate_expand::AggregateExpand;
 mod physical_aggregate_final;
