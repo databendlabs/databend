@@ -229,6 +229,7 @@ impl QueriesPipelineExecutor {
                     Ok(None) => {}
                     Err(cause) => {
                         warn!("Execute task error: {:?}", cause);
+                        Err(cause)?;
                     }
                 }
             }
