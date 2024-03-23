@@ -4119,6 +4119,7 @@ dependencies = [
  "databend-common-pipeline-transforms",
  "databend-common-settings",
  "databend-common-storage",
+ "databend-common-storages-parquet",
  "log",
  "opendal",
  "serde",

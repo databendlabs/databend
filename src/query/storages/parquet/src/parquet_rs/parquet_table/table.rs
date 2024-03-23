@@ -140,7 +140,6 @@ impl ParquetRSTable {
             ctx.get_query_kind(),
             QueryKind::CopyIntoTable | QueryKind::CopyIntoLocation
         );
-
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;

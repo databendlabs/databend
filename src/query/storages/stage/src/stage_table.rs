@@ -34,6 +34,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
+use databend_common_storages_parquet::ParquetTableForCopy;
 use opendal::Operator;
 
 use crate::one_file_partition::OneFilePartition;
@@ -146,6 +147,9 @@ impl Table for StageTable {
         let settings = ctx.get_settings();
         let stage_table_info = &self.table_info;
         match stage_table_info.stage_info.file_format_params {
+            FileFormatParams::Parquet(_) => {
+                ParquetTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
+            }
             FileFormatParams::Csv(_) if settings.get_enable_new_copy_for_text_formats()? == 1 => {
                 self.read_partitions_simple(stage_table_info).await
             }
@@ -172,6 +176,9 @@ impl Table for StageTable {
                 return Err(ErrorCode::Internal(""));
             };
         match stage_table_info.stage_info.file_format_params {
+            FileFormatParams::Parquet(_) => {
+                ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
+            }
             FileFormatParams::Csv(_) if settings.get_enable_new_copy_for_text_formats()? == 1 => {
                 let compact_threshold = ctx.get_read_block_thresholds();
                 RowBasedReadPipelineBuilder {
