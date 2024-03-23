@@ -269,7 +269,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
                 )))
             })?;
             let val: BackgroundTaskInfo = deserialize_struct(&v.data)?;
-            res.push((v.seq, ident.task_id, val));
+            res.push((v.seq, ident.name().to_string(), val));
         }
         Ok(res)
     }
