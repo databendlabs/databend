@@ -328,7 +328,7 @@ Literal {
 ---------- Input ----------
 -1
 ---------- Output ---------
-(- 1)
+- 1
 ---------- AST ------------
 UnaryOp {
     span: Some(
@@ -729,7 +729,7 @@ MapAccess {
 ---------- Input ----------
 ((1 = 1) or 1)
 ---------- Output ---------
-((1 = 1) OR 1)
+1 = 1 OR 1
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -772,7 +772,7 @@ BinaryOp {
 ---------- Input ----------
 typeof(1 + 2)
 ---------- Output ---------
-typeof((1 + 2))
+typeof(1 + 2)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -822,7 +822,7 @@ FunctionCall {
 ---------- Input ----------
 - - + + - 1 + + - 2
 ---------- Output ---------
-((- (- (+ (+ (- 1))))) + (+ (- 2)))
+- - + + - 1 + + - 2
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -893,7 +893,7 @@ BinaryOp {
 ---------- Input ----------
 0XFF + 0xff + 0xa + x'ffff'
 ---------- Output ---------
-(((255 + 255) + 10) + 65535)
+255 + 255 + 10 + 65535
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -950,7 +950,7 @@ BinaryOp {
 ---------- Input ----------
 1 - -(- - -1)
 ---------- Output ---------
-(1 - (- (- (- (- 1)))))
+1 - - - - - 1
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -1003,7 +1003,7 @@ BinaryOp {
 ---------- Input ----------
 1 + a * c.d
 ---------- Output ---------
-(1 + (a * c.d))
+1 + a * c.d
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -1077,7 +1077,7 @@ BinaryOp {
 ---------- Input ----------
 number % 2
 ---------- Output ---------
-(number % 2)
+number % 2
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -2076,7 +2076,7 @@ MapAccess {
 ---------- Input ----------
 a rlike '^11'
 ---------- Output ---------
-(a RLIKE '^11')
+a RLIKE '^11'
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -2162,7 +2162,7 @@ InList {
 ---------- Input ----------
 G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)
 ---------- Output ---------
-(G.E.B IS NOT NULL AND col1 NOT BETWEEN col2 AND ((1 + col3) DIV sum(col4)))
+G.E.B IS NOT NULL AND col1 NOT BETWEEN col2 AND (1 + col3) DIV sum(col4)
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -2341,7 +2341,7 @@ BinaryOp {
 ---------- Input ----------
 sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END
 ---------- Output ---------
-(sum(CASE WHEN (n2.n_name = 'GERMANY') THEN ol_amount ELSE 0 END) / CASE WHEN (sum(ol_amount) = 0) THEN 1 ELSE sum(ol_amount) END)
+sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -2576,7 +2576,7 @@ AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
 AND l_shipmode IN ('AIR', 'AIR REG')
 AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- Output ---------
-((((((((p_partkey = l_partkey) AND (p_brand = 'Brand#12')) AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')) AND (l_quantity >= CAST(1 AS Int16))) AND (l_quantity <= CAST((1 + 10) AS Int16))) AND p_size BETWEEN CAST(1 AS Int16) AND CAST(5 AS Int16)) AND l_shipmode IN('AIR', 'AIR REG')) AND (l_shipinstruct = 'DELIVER IN PERSON'))
+p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= CAST(1 AS Int16) AND l_quantity <= CAST(1 + 10 AS Int16) AND p_size BETWEEN CAST(1 AS Int16) AND CAST(5 AS Int16) AND l_shipmode IN('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -4205,7 +4205,7 @@ FunctionCall {
 ---------- Input ----------
 ARRAY_APPLY([1,2,3], x -> x + 1)
 ---------- Output ---------
-ARRAY_APPLY([1, 2, 3], x -> (x + 1))
+ARRAY_APPLY([1, 2, 3], x -> x + 1)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -4310,7 +4310,7 @@ FunctionCall {
 ---------- Input ----------
 ARRAY_FILTER(col, y -> y % 2 = 0)
 ---------- Output ---------
-ARRAY_FILTER(col, y -> ((y % 2) = 0))
+ARRAY_FILTER(col, y -> y % 2 = 0)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -4491,7 +4491,7 @@ Tuple {
 ---------- Input ----------
 ARRAY_REDUCE([1,2,3], (acc,t) -> acc + t)
 ---------- Output ---------
-ARRAY_REDUCE([1, 2, 3], (acc, t) -> (acc + t))
+ARRAY_REDUCE([1, 2, 3], (acc, t) -> acc + t)
 ---------- AST ------------
 FunctionCall {
     span: Some(

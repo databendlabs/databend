@@ -24,12 +24,15 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
+use pratt::Affix;
+use pratt::Precedence;
 
 use super::ColumnRef;
 use super::OrderByExpr;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::parser::expr::ExprElement;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Expr {
@@ -316,251 +319,290 @@ impl Expr {
             "DATE_TRUNC",
         ]
     }
+
+    pub fn precedence(&self) -> Option<Precedence> {
+        match ExprElement::from(self.clone()).affix() {
+            Affix::Nilfix => None,
+            Affix::Infix(p, _) => Some(p),
+            Affix::Prefix(p) => Some(p),
+            Affix::Postfix(p) => Some(p),
+        }
+    }
 }
 
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Expr::ColumnRef { column, .. } => {
-                if f.alternate() {
-                    write!(f, "{column:#}")?;
-                } else {
-                    write!(f, "{column}")?;
-                }
-            }
-            Expr::IsNull { expr, not, .. } => {
-                write!(f, "{expr} IS")?;
-                if *not {
-                    write!(f, " NOT")?;
-                }
-                write!(f, " NULL")?;
-            }
-            Expr::IsDistinctFrom {
-                left, right, not, ..
-            } => {
-                write!(f, "{left} IS")?;
-                if *not {
-                    write!(f, " NOT")?;
-                }
-                write!(f, " DISTINCT FROM {right}")?;
+        fn write_expr(
+            expr: &Expr,
+            min_precedence: Precedence,
+            f: &mut Formatter<'_>,
+        ) -> std::fmt::Result {
+            let precedence = expr.precedence();
+            let need_parentheses = precedence.map(|p| p < min_precedence).unwrap_or(false);
+            let inner_precedence = precedence.unwrap_or(Precedence(0));
+
+            if need_parentheses {
+                write!(f, "(")?;
             }
 
-            Expr::InList {
-                expr, list, not, ..
-            } => {
-                write!(f, "{expr}")?;
-                if *not {
-                    write!(f, " NOT")?;
-                }
-                write!(f, " IN(")?;
-                write_comma_separated_list(f, list)?;
-                write!(f, ")")?;
-            }
-            Expr::InSubquery {
-                expr,
-                subquery,
-                not,
-                ..
-            } => {
-                write!(f, "{expr}")?;
-                if *not {
-                    write!(f, " NOT")?;
-                }
-                write!(f, " IN({subquery})")?;
-            }
-            Expr::Between {
-                expr,
-                low,
-                high,
-                not,
-                ..
-            } => {
-                write!(f, "{expr}")?;
-                if *not {
-                    write!(f, " NOT")?;
-                }
-                write!(f, " BETWEEN {low} AND {high}")?;
-            }
-            Expr::UnaryOp { op, expr, .. } => {
-                match op {
-                    // TODO (xieqijun) Maybe special attribute are provided to check whether the symbol is before or after.
-                    UnaryOperator::Factorial => {
-                        write!(f, "({expr} {op})")?;
-                    }
-                    _ => {
-                        write!(f, "({op} {expr})")?;
+            match expr {
+                Expr::ColumnRef { column, .. } => {
+                    if f.alternate() {
+                        write!(f, "{column:#}")?;
+                    } else {
+                        write!(f, "{column}")?;
                     }
                 }
-            }
-            Expr::BinaryOp {
-                op, left, right, ..
-            } => {
-                write!(f, "({left} {op} {right})")?;
-            }
-            Expr::JsonOp {
-                op, left, right, ..
-            } => {
-                write!(f, "({left} {op} {right})")?;
-            }
-            Expr::Cast {
-                expr,
-                target_type,
-                pg_style,
-                ..
-            } => {
-                if *pg_style {
-                    write!(f, "{expr}::{target_type}")?;
-                } else {
-                    write!(f, "CAST({expr} AS {target_type})")?;
+                Expr::IsNull { expr, not, .. } => {
+                    write_expr(expr, inner_precedence, f)?;
+                    write!(f, " IS")?;
+                    if *not {
+                        write!(f, " NOT")?;
+                    }
+                    write!(f, " NULL")?;
                 }
-            }
-            Expr::TryCast {
-                expr, target_type, ..
-            } => {
-                write!(f, "TRY_CAST({expr} AS {target_type})")?;
-            }
-            Expr::Extract {
-                kind: field, expr, ..
-            } => {
-                write!(f, "EXTRACT({field} FROM {expr})")?;
-            }
-            Expr::DatePart {
-                kind: field, expr, ..
-            } => {
-                write!(f, "DATE_PART({field}, {expr})")?;
-            }
-            Expr::Position {
-                substr_expr,
-                str_expr,
-                ..
-            } => {
-                write!(f, "POSITION({substr_expr} IN {str_expr})")?;
-            }
-            Expr::Substring {
-                expr,
-                substring_from,
-                substring_for,
-                ..
-            } => {
-                write!(f, "SUBSTRING({expr} FROM {substring_from}")?;
-                if let Some(substring_for) = substring_for {
-                    write!(f, " FOR {substring_for}")?;
+                Expr::IsDistinctFrom {
+                    left, right, not, ..
+                } => {
+                    write_expr(left, inner_precedence, f)?;
+                    write!(f, " IS")?;
+                    if *not {
+                        write!(f, " NOT")?;
+                    }
+                    write!(f, " DISTINCT FROM ")?;
+                    write_expr(right, inner_precedence, f)?;
                 }
-                write!(f, ")")?;
-            }
-            Expr::Trim {
-                expr, trim_where, ..
-            } => {
-                write!(f, "TRIM(")?;
-                if let Some((trim_where, trim_str)) = trim_where {
-                    write!(f, "{trim_where} {trim_str} FROM ")?;
+
+                Expr::InList {
+                    expr, list, not, ..
+                } => {
+                    write_expr(expr, inner_precedence, f)?;
+                    if *not {
+                        write!(f, " NOT")?;
+                    }
+                    write!(f, " IN(")?;
+                    write_comma_separated_list(f, list)?;
+                    write!(f, ")")?;
                 }
-                write!(f, "{expr})")?;
-            }
-            Expr::Literal { lit, .. } => {
-                write!(f, "{lit}")?;
-            }
-            Expr::CountAll { window, .. } => {
-                write!(f, "COUNT(*)")?;
-                if let Some(window) = window {
-                    write!(f, " OVER {window}")?;
+                Expr::InSubquery {
+                    expr,
+                    subquery,
+                    not,
+                    ..
+                } => {
+                    write_expr(expr, inner_precedence, f)?;
+                    if *not {
+                        write!(f, " NOT")?;
+                    }
+                    write!(f, " IN({subquery})")?;
                 }
-            }
-            Expr::Tuple { exprs, .. } => {
-                write!(f, "(")?;
-                write_comma_separated_list(f, exprs)?;
-                if exprs.len() == 1 {
-                    write!(f, ",")?;
+                Expr::Between {
+                    expr,
+                    low,
+                    high,
+                    not,
+                    ..
+                } => {
+                    write_expr(expr, inner_precedence, f)?;
+                    if *not {
+                        write!(f, " NOT")?;
+                    }
+                    write!(f, " BETWEEN {low} AND {high}")?;
                 }
-                write!(f, ")")?;
-            }
-            Expr::FunctionCall { func, .. } => {
-                write!(f, "{func}")?;
-            }
-            Expr::Case {
-                operand,
-                conditions,
-                results,
-                else_result,
-                ..
-            } => {
-                write!(f, "CASE")?;
-                if let Some(op) = operand {
+                Expr::UnaryOp { op, expr, .. } => {
+                    match op {
+                        // TODO (xieqijun) Maybe special attribute are provided to check whether the symbol is before or after.
+                        UnaryOperator::Factorial => {
+                            write_expr(expr, inner_precedence, f)?;
+                            write!(f, " {op}")?;
+                        }
+                        _ => {
+                            write!(f, "{op} ")?;
+                            write_expr(expr, inner_precedence, f)?;
+                        }
+                    }
+                }
+                Expr::BinaryOp {
+                    op, left, right, ..
+                } => {
+                    write_expr(left, inner_precedence, f)?;
                     write!(f, " {op} ")?;
+                    write_expr(right, inner_precedence, f)?;
                 }
-                for (cond, res) in conditions.iter().zip(results) {
-                    write!(f, " WHEN {cond} THEN {res}")?;
+                Expr::JsonOp {
+                    op, left, right, ..
+                } => {
+                    write_expr(left, inner_precedence, f)?;
+                    write!(f, " {op} ")?;
+                    write_expr(right, inner_precedence, f)?;
                 }
-                if let Some(el) = else_result {
-                    write!(f, " ELSE {el}")?;
+                Expr::Cast {
+                    expr,
+                    target_type,
+                    pg_style,
+                    ..
+                } => {
+                    if *pg_style {
+                        write_expr(expr, inner_precedence, f)?;
+                        write!(f, "::{target_type}")?;
+                    } else {
+                        write!(f, "CAST({expr} AS {target_type})")?;
+                    }
                 }
-                write!(f, " END")?;
-            }
-            Expr::Exists { not, subquery, .. } => {
-                if *not {
-                    write!(f, "NOT ")?;
+                Expr::TryCast {
+                    expr, target_type, ..
+                } => {
+                    write!(f, "TRY_CAST({expr} AS {target_type})")?;
                 }
-                write!(f, "EXISTS ({subquery})")?;
-            }
-            Expr::Subquery {
-                subquery, modifier, ..
-            } => {
-                if let Some(m) = modifier {
-                    write!(f, "{m} ")?;
+                Expr::Extract {
+                    kind: field, expr, ..
+                } => {
+                    write!(f, "EXTRACT({field} FROM {expr})")?;
                 }
-                write!(f, "({subquery})")?;
-            }
-            Expr::MapAccess { expr, accessor, .. } => {
-                write!(f, "{}", expr)?;
-                match accessor {
-                    MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
-                    MapAccessor::DotNumber { key } => write!(f, ".{key}")?,
-                    MapAccessor::Colon { key } => write!(f, ":{key}")?,
+                Expr::DatePart {
+                    kind: field, expr, ..
+                } => {
+                    write!(f, "DATE_PART({field}, {expr})")?;
                 }
-            }
-            Expr::Array { exprs, .. } => {
-                write!(f, "[")?;
-                write_comma_separated_list(f, exprs)?;
-                write!(f, "]")?;
-            }
-            Expr::Map { kvs, .. } => {
-                write!(f, "{{")?;
-                for (i, (k, v)) in kvs.iter().enumerate() {
-                    if i > 0 {
+                Expr::Position {
+                    substr_expr,
+                    str_expr,
+                    ..
+                } => {
+                    write!(f, "POSITION({substr_expr} IN {str_expr})")?;
+                }
+                Expr::Substring {
+                    expr,
+                    substring_from,
+                    substring_for,
+                    ..
+                } => {
+                    write!(f, "SUBSTRING({expr} FROM {substring_from}")?;
+                    if let Some(substring_for) = substring_for {
+                        write!(f, " FOR {substring_for}")?;
+                    }
+                    write!(f, ")")?;
+                }
+                Expr::Trim {
+                    expr, trim_where, ..
+                } => {
+                    write!(f, "TRIM(")?;
+                    if let Some((trim_where, trim_str)) = trim_where {
+                        write!(f, "{trim_where} {trim_str} FROM ")?;
+                    }
+                    write!(f, "{expr})")?;
+                }
+                Expr::Literal { lit, .. } => {
+                    write!(f, "{lit}")?;
+                }
+                Expr::CountAll { window, .. } => {
+                    write!(f, "COUNT(*)")?;
+                    if let Some(window) = window {
+                        write!(f, " OVER {window}")?;
+                    }
+                }
+                Expr::Tuple { exprs, .. } => {
+                    write!(f, "(")?;
+                    write_comma_separated_list(f, exprs)?;
+                    if exprs.len() == 1 {
                         write!(f, ",")?;
                     }
-                    write!(f, "{k}:{v}")?;
+                    write!(f, ")")?;
                 }
-                write!(f, "}}")?;
+                Expr::FunctionCall { func, .. } => {
+                    write!(f, "{func}")?;
+                }
+                Expr::Case {
+                    operand,
+                    conditions,
+                    results,
+                    else_result,
+                    ..
+                } => {
+                    write!(f, "CASE")?;
+                    if let Some(op) = operand {
+                        write!(f, " {op} ")?;
+                    }
+                    for (cond, res) in conditions.iter().zip(results) {
+                        write!(f, " WHEN {cond} THEN {res}")?;
+                    }
+                    if let Some(el) = else_result {
+                        write!(f, " ELSE {el}")?;
+                    }
+                    write!(f, " END")?;
+                }
+                Expr::Exists { not, subquery, .. } => {
+                    if *not {
+                        write!(f, "NOT ")?;
+                    }
+                    write!(f, "EXISTS ({subquery})")?;
+                }
+                Expr::Subquery {
+                    subquery, modifier, ..
+                } => {
+                    if let Some(m) = modifier {
+                        write!(f, "{m} ")?;
+                    }
+                    write!(f, "({subquery})")?;
+                }
+                Expr::MapAccess { expr, accessor, .. } => {
+                    write_expr(expr, inner_precedence, f)?;
+                    match accessor {
+                        MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
+                        MapAccessor::DotNumber { key } => write!(f, ".{key}")?,
+                        MapAccessor::Colon { key } => write!(f, ":{key}")?,
+                    }
+                }
+                Expr::Array { exprs, .. } => {
+                    write!(f, "[")?;
+                    write_comma_separated_list(f, exprs)?;
+                    write!(f, "]")?;
+                }
+                Expr::Map { kvs, .. } => {
+                    write!(f, "{{")?;
+                    for (i, (k, v)) in kvs.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ",")?;
+                        }
+                        write!(f, "{k}:{v}")?;
+                    }
+                    write!(f, "}}")?;
+                }
+                Expr::Interval { expr, unit, .. } => {
+                    write!(f, "INTERVAL {expr} {unit}")?;
+                }
+                Expr::DateAdd {
+                    unit,
+                    interval,
+                    date,
+                    ..
+                } => {
+                    write!(f, "DATE_ADD({unit}, {interval}, {date})")?;
+                }
+                Expr::DateSub {
+                    unit,
+                    interval,
+                    date,
+                    ..
+                } => {
+                    write!(f, "DATE_SUB({unit}, {interval}, {date})")?;
+                }
+                Expr::DateTrunc { unit, date, .. } => {
+                    write!(f, "DATE_TRUNC({unit}, {date})")?;
+                }
+                Expr::Hole { name, .. } => {
+                    write!(f, ":{name}")?;
+                }
             }
-            Expr::Interval { expr, unit, .. } => {
-                write!(f, "INTERVAL {expr} {unit}")?;
+
+            if need_parentheses {
+                write!(f, ")")?;
             }
-            Expr::DateAdd {
-                unit,
-                interval,
-                date,
-                ..
-            } => {
-                write!(f, "DATE_ADD({unit}, {interval}, {date})")?;
-            }
-            Expr::DateSub {
-                unit,
-                interval,
-                date,
-                ..
-            } => {
-                write!(f, "DATE_SUB({unit}, {interval}, {date})")?;
-            }
-            Expr::DateTrunc { unit, date, .. } => {
-                write!(f, "DATE_TRUNC({unit}, {date})")?;
-            }
-            Expr::Hole { name, .. } => {
-                write!(f, ":{name}")?;
-            }
+
+            Ok(())
         }
 
-        Ok(())
+        write_expr(self, Precedence(0), f)
     }
 }
 

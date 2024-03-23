@@ -54,23 +54,19 @@ pub fn values_with_placeholder(i: Input) -> IResult<Vec<Option<Expr>>> {
 
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
-        let higher_prec_expr_element =
-            |i| {
-                expr_element(i).and_then(|(rest, elem)| {
-                    match PrattParser::<std::iter::Once<_>>::query(&mut ExprParser, &elem).unwrap()
-                    {
-                        Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
-                            if prec <= Precedence(min_precedence) =>
-                        {
-                            Err(nom::Err::Error(Error::from_error_kind(
-                                i,
-                                ErrorKind::Other("expected more tokens for expression"),
-                            )))
-                        }
-                        _ => Ok((rest, elem)),
-                    }
-                })
-            };
+        let higher_prec_expr_element = |i| {
+            expr_element(i).and_then(|(rest, elem)| match elem.elem.affix() {
+                Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
+                    if prec <= Precedence(min_precedence) =>
+                {
+                    Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other("expected more tokens for expression"),
+                    )))
+                }
+                _ => Ok((rest, elem)),
+            })
+        };
 
         let (rest, mut expr_elements) = rule! { #higher_prec_expr_element+ }(i)?;
 
@@ -78,11 +74,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             // If it's following a prefix or infix element or it's the first element, ...
             if prev == -1
                 || matches!(
-                    PrattParser::<std::iter::Once<_>>::query(
-                        &mut ExprParser,
-                        &expr_elements[prev as usize]
-                    )
-                    .unwrap(),
+                    expr_elements[prev as usize].elem.affix(),
                     Affix::Prefix(_) | Affix::Infix(_, _)
                 )
             {
@@ -320,15 +312,9 @@ pub enum ExprElement {
     },
 }
 
-struct ExprParser;
-
-impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprParser {
-    type Error = &'static str;
-    type Input = WithSpan<'a, ExprElement>;
-    type Output = Expr;
-
-    fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
-        let affix = match &elem.elem {
+impl ExprElement {
+    pub fn affix(&self) -> Affix {
+        match &self {
             ExprElement::ChainFunctionCall { .. } => Affix::Postfix(Precedence(61)),
             ExprElement::DotAccess { .. } => Affix::Postfix(Precedence(60)),
             ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(60)),
@@ -397,8 +383,116 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             ExprElement::JsonOp { .. } => Affix::Infix(Precedence(40), Associativity::Left),
             ExprElement::PgCast { .. } => Affix::Postfix(Precedence(60)),
             _ => Affix::Nilfix,
-        };
-        Ok(affix)
+        }
+    }
+}
+
+impl From<Expr> for ExprElement {
+    fn from(expr: Expr) -> Self {
+        match expr {
+            Expr::ColumnRef { column, .. } => ExprElement::ColumnRef { column },
+            Expr::IsNull { not, .. } => ExprElement::IsNull { not },
+            Expr::IsDistinctFrom { not, .. } => ExprElement::IsDistinctFrom { not },
+            Expr::InList { list, not, .. } => ExprElement::InList { list, not },
+            Expr::InSubquery { subquery, not, .. } => ExprElement::InSubquery { subquery, not },
+            Expr::Between { low, high, not, .. } => ExprElement::Between { low, high, not },
+            Expr::BinaryOp { op, .. } => ExprElement::BinaryOp { op },
+            Expr::JsonOp { op, .. } => ExprElement::JsonOp { op },
+            Expr::UnaryOp { op, .. } => ExprElement::UnaryOp { op },
+            Expr::Cast {
+                expr, target_type, ..
+            } => ExprElement::Cast { expr, target_type },
+            Expr::TryCast {
+                expr, target_type, ..
+            } => ExprElement::TryCast { expr, target_type },
+            Expr::Extract { kind, expr, .. } => ExprElement::Extract { field: kind, expr },
+            Expr::DatePart { kind, expr, .. } => ExprElement::DatePart { field: kind, expr },
+            Expr::Position {
+                substr_expr,
+                str_expr,
+                ..
+            } => ExprElement::Position {
+                substr_expr,
+                str_expr,
+            },
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+                ..
+            } => ExprElement::SubString {
+                expr,
+                substring_from,
+                substring_for,
+            },
+            Expr::Trim {
+                expr, trim_where, ..
+            } => ExprElement::Trim { expr, trim_where },
+            Expr::Literal { lit, .. } => ExprElement::Literal { lit },
+            Expr::CountAll { window, .. } => ExprElement::CountAll { window },
+            Expr::Tuple { exprs, .. } => ExprElement::Tuple { exprs },
+            Expr::FunctionCall { func, .. } => ExprElement::FunctionCall { func },
+            Expr::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+                ..
+            } => ExprElement::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+            },
+            Expr::Exists { subquery, not, .. } => ExprElement::Exists {
+                subquery: *subquery,
+                not,
+            },
+            Expr::Subquery {
+                modifier, subquery, ..
+            } => ExprElement::Subquery {
+                modifier,
+                subquery: *subquery,
+            },
+            Expr::MapAccess { accessor, .. } => ExprElement::MapAccess { accessor },
+            Expr::Array { exprs, .. } => ExprElement::Array { exprs },
+            Expr::Map { kvs, .. } => ExprElement::Map { kvs },
+            Expr::Interval { expr, unit, .. } => ExprElement::Interval { expr: *expr, unit },
+            Expr::DateAdd {
+                unit,
+                interval,
+                date,
+                ..
+            } => ExprElement::DateAdd {
+                unit,
+                interval: *interval,
+                date: *date,
+            },
+            Expr::DateSub {
+                unit,
+                interval,
+                date,
+                ..
+            } => ExprElement::DateSub {
+                unit,
+                interval: *interval,
+                date: *date,
+            },
+            Expr::DateTrunc { unit, date, .. } => ExprElement::DateTrunc { unit, date: *date },
+            Expr::Hole { name, .. } => ExprElement::Hole { name },
+        }
+    }
+}
+
+struct ExprParser;
+
+impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprParser {
+    type Error = &'static str;
+    type Input = WithSpan<'a, ExprElement>;
+    type Output = Expr;
+
+    fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
+        Ok(elem.elem.affix())
     }
 
     fn primary(&mut self, elem: WithSpan<'a, ExprElement>) -> Result<Expr, &'static str> {
@@ -887,7 +981,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let subquery = map(
         rule! {
-            (ANY | SOME | ALL)? ~ "(" ~ #query ~ ^")"
+            ( ANY | SOME | ALL )? ~ "(" ~ #query ~ ^")"
         },
         |(modifier, _, subquery, _)| {
             let modifier = modifier.map(|m| match m.kind {

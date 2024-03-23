@@ -125,7 +125,7 @@ LetQuery {
 ---------- Input ----------
 profit := revenue - cost
 ---------- Output ---------
-profit := (revenue - cost)
+profit := revenue - cost
 ---------- AST ------------
 Assign {
     span: Some(
@@ -238,7 +238,7 @@ FOR i IN REVERSE 1 TO maximum_count DO
 END FOR label1
 ---------- Output ---------
 FOR i IN REVERSE 1 TO maximum_count DO
-    counter := (counter + 1);
+    counter := counter + 1;
 END FOR label1
 ---------- AST ------------
 ForLoop {
@@ -397,7 +397,7 @@ WHILE counter < maximum_count DO
     CONTINUE label1;
 END WHILE label1
 ---------- Output ---------
-WHILE (counter < maximum_count) DO
+WHILE counter < maximum_count DO
     CONTINUE label1;
 END WHILE label1
 ---------- AST ------------
@@ -487,7 +487,7 @@ END REPEAT label1
 ---------- Output ---------
 REPEAT
     BREAK;
-UNTIL (counter = maximum_count)
+UNTIL counter = maximum_count
 END REPEAT label1
 ---------- AST ------------
 RepeatLoop {
@@ -613,12 +613,12 @@ CASE
 END
 ---------- Output ---------
 CASE
-    WHEN (counter = 1) THEN
-        counter := (counter + 1);
-    WHEN (counter = 2) THEN
-        counter := (counter + 2);
+    WHEN counter = 1 THEN
+        counter := counter + 1;
+    WHEN counter = 2 THEN
+        counter := counter + 2;
     ELSE
-        counter := (counter + 3);
+        counter := counter + 3;
 END CASE
 ---------- AST ------------
 Case {
@@ -857,11 +857,11 @@ END CASE
 ---------- Output ---------
 CASE counter
     WHEN 1 THEN
-        counter := (counter + 1);
+        counter := counter + 1;
     WHEN 2 THEN
-        counter := (counter + 2);
+        counter := counter + 2;
     ELSE
-        counter := (counter + 3);
+        counter := counter + 3;
 END CASE
 ---------- AST ------------
 Case {
@@ -1067,12 +1067,12 @@ ELSE
     counter := counter + 3;
 END IF
 ---------- Output ---------
-IF (counter = 1) THEN
-    counter := (counter + 1);
-ELSEIF (counter = 2) THEN
-    counter := (counter + 2);
+IF counter = 1 THEN
+    counter := counter + 1;
+ELSEIF counter = 2 THEN
+    counter := counter + 2;
 ELSE
-    counter := (counter + 3);
+    counter := counter + 3;
 END IF
 ---------- AST ------------
 If {
@@ -1304,7 +1304,7 @@ LOOP
 END LOOP
 ---------- Output ---------
 LOOP
-    SELECT c1, c2 FROM t WHERE (c1 = 1);
+    SELECT c1, c2 FROM t WHERE c1 = 1;
 END LOOP
 ---------- AST ------------
 Loop {
@@ -1453,7 +1453,7 @@ Loop {
 ---------- Input ----------
 select :a + 1
 ---------- Output ---------
-SELECT (:a + 1)
+SELECT :a + 1
 ---------- AST ------------
 SQLStatement {
     span: Some(
@@ -1580,7 +1580,7 @@ SQLStatement {
 ---------- Input ----------
 select a.IDENTIFIER(:b).c + minus(:d)
 ---------- Output ---------
-SELECT (a.IDENTIFIER(:b).c + minus(:d))
+SELECT a.IDENTIFIER(:b).c + minus(:d)
 ---------- AST ------------
 SQLStatement {
     span: Some(

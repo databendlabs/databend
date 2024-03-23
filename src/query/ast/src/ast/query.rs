@@ -644,7 +644,7 @@ impl Display for TableReference {
                 )?;
 
                 if let Some(TimeTravelPoint::Snapshot(sid)) = travel_point {
-                    write!(f, " AT (SNAPSHOT => {sid})")?;
+                    write!(f, " AT (SNAPSHOT => '{sid}')")?;
                 }
 
                 if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {

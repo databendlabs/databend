@@ -216,6 +216,7 @@ fn test_statement() {
         r#"select '🦈'"#,
         r#"select * FROM t where ((a));"#,
         r#"select * FROM t where ((select 1) > 1);"#,
+        r#"select ((t1.a)>=(((((t2.b)<=(t3.c))) IS NOT NULL)::INTEGER));"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
         r#"insert into table t select * from t2;"#,

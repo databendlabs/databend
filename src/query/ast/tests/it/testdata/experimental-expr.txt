@@ -305,7 +305,7 @@ FunctionCall {
 ---------- Input ----------
 1 + {'k1': 4}.k1
 ---------- Output ---------
-(1 + {'k1':4}:k1)
+1 + {'k1':4}:k1
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -476,7 +476,7 @@ FunctionCall {
 ---------- Input ----------
 [ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]
 ---------- Output ---------
-array_map(array_filter([1, 2, 3], x -> ((x % 2) = 0)), x -> (x * 100))
+array_map(array_filter([1, 2, 3], x -> x % 2 = 0), x -> x * 100)
 ---------- AST ------------
 FunctionCall {
     span: Some(
