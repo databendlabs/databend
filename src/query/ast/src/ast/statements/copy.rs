@@ -431,7 +431,11 @@ impl UriLocation {
 impl Display for UriLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}://{}{}'", self.protocol, self.name, self.path)?;
-        write!(f, "{}", self.connection)?;
+        if f.alternate() {
+            write!(f, "{}", self.connection.mask())?;
+        } else {
+            write!(f, "{}", self.connection)?;
+        }
         if !self.part_prefix.is_empty() {
             write!(f, " LOCATION_PREFIX = '{}'", self.part_prefix)?;
         }
