@@ -189,7 +189,6 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                 Some(AggregateMeta::BucketSpilled(_)) => unreachable!(),
                 Some(AggregateMeta::Serialized(_)) => unreachable!(),
                 Some(AggregateMeta::Partitioned { .. }) => unreachable!(),
-                Some(AggregateMeta::AggregateHashTable(_)) => unreachable!(),
                 Some(AggregateMeta::Spilling(payload)) => {
                     serialized_blocks.push(FlightSerialized::Future(
                         match index == self.local_pos {

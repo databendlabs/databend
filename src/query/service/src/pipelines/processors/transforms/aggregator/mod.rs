@@ -23,6 +23,7 @@ mod transform_aggregate_partial;
 mod transform_group_by_final;
 mod transform_group_by_partial;
 mod transform_partition_bucket;
+mod new_transform_partition_bucket;
 mod transform_single_key;
 mod utils;
 
