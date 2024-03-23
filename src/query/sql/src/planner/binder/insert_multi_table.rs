@@ -12,11 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_ast::ast::InsertMultiTableStmt;
 use databend_common_ast::ast::IntoClause;
 use databend_common_ast::ast::TableReference;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataSchemaRef;
 
 use crate::binder::ScalarBinder;
 use crate::optimizer::optimize;
@@ -39,36 +44,42 @@ impl Binder {
             when_clauses,
             else_clause,
             source,
-            ..
+            overwrite,
+            is_first,
+            into_clauses,
         } = stmt;
 
-        let table_ref = TableReference::Subquery {
-            subquery: Box::new(source.clone()),
-            span: None,
-            lateral: false,
-            alias: None,
+        let (input_source, bind_context) = {
+            let table_ref = TableReference::Subquery {
+                subquery: Box::new(source.clone()),
+                span: None,
+                lateral: false,
+                alias: None,
+            };
+
+            let (s_expr, bind_context) = self.bind_single_table(bind_context, &table_ref).await?;
+            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
+                .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty());
+
+            if !self.check_sexpr_top(&s_expr)? {
+                return Err(ErrorCode::SemanticError(
+                    "insert source can't contain udf functions".to_string(),
+                ));
+            }
+            let select_plan = Plan::Query {
+                s_expr: Box::new(s_expr),
+                metadata: self.metadata.clone(),
+                bind_context: Box::new(bind_context.clone()),
+                rewrite_kind: None,
+                formatted_ast: None,
+                ignore_result: false,
+            };
+
+            let optimized_plan = optimize(opt_ctx, select_plan)?;
+            (optimized_plan, bind_context)
         };
 
-        let (s_expr, bind_context) = self.bind_single_table(bind_context, &table_ref).await?;
-        let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
-            .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty());
-
-        if !self.check_sexpr_top(&s_expr)? {
-            return Err(ErrorCode::SemanticError(
-                "insert source can't contain udf functions".to_string(),
-            ));
-        }
-        let select_plan = Plan::Query {
-            s_expr: Box::new(s_expr),
-            metadata: self.metadata.clone(),
-            bind_context: Box::new(bind_context.clone()),
-            rewrite_kind: None,
-            formatted_ast: None,
-            ignore_result: false,
-        };
-
-        let optimized_plan = optimize(opt_ctx, select_plan)?;
-
+        let source_schema = input_source.schema();
         let mut source_bind_context = bind_context.clone();
         let mut whens = vec![];
         for when_clause in when_clauses {
@@ -82,22 +93,36 @@ impl Binder {
                 self.ctes_map.clone(),
             );
             let (condition, _) = scalar_binder.bind(&when_clause.condition).await?;
-            let intos = self.bind_into_clauses(&when_clause.into_clauses).await?;
+            if !matches!(condition.data_type()?.remove_nullable(), DataType::Boolean) {
+                return Err(ErrorCode::IllegalDataType(
+                    "The condition in WHEN clause must be a boolean expression".to_string(),
+                ));
+            }
+            let intos = self
+                .bind_into_clauses(&when_clause.into_clauses, source_schema.clone())
+                .await?;
             whens.push(When { condition, intos });
         }
 
         let opt_else = match else_clause {
             Some(else_clause) => {
-                let intos = self.bind_into_clauses(&else_clause.into_clauses).await?;
+                let intos = self
+                    .bind_into_clauses(&else_clause.into_clauses, source_schema.clone())
+                    .await?;
                 Some(Else { intos })
             }
             None => None,
         };
 
         let plan = InsertMultiTable {
-            input_source: optimized_plan,
+            input_source,
             whens,
             opt_else,
+            overwrite: *overwrite,
+            is_first: *is_first,
+            intos: self
+                .bind_into_clauses(into_clauses, source_schema.clone())
+                .await?,
         };
         Ok(Plan::InsertMultiTable(Box::new(plan)))
     }
@@ -107,7 +132,7 @@ impl Binder {
     async fn bind_into_clauses(
         &mut self,
         into_clauses: &[IntoClause],
-        // source_schema: DataSchemaRef,
+        source_schema: DataSchemaRef,
     ) -> Result<Vec<Into>> {
         let mut intos = vec![];
         for into_clause in into_clauses {
@@ -115,42 +140,48 @@ impl Binder {
                 catalog,
                 database,
                 table,
-                target_columns: _,
-                source_columns: _,
+                target_columns,
+                source_columns,
             } = into_clause;
             let (catalog_name, database_name, table_name) =
                 self.normalize_object_identifier_triple(catalog, database, table);
 
-            let _target_table = self
+            let target_table = self
                 .ctx
                 .get_table(&catalog_name, &database_name, &table_name)
                 .await?;
 
-            // let target_schema = if target_columns.is_empty() {
-            //     target_table.schema()
-            // } else {
-            //     self.schema_project(&target_table.schema(), target_columns.as_ref())?
-            // };
+            let casted_schema = if target_columns.is_empty() {
+                target_table.schema()
+            } else {
+                self.schema_project(&target_table.schema(), target_columns.as_ref())?
+            };
 
-            // let source_schema = if source_columns.is_empty() {
-            //     source_schema
-            // } else {
-            //     self.schema_project(source_schema.clone().into(), source_columns.as_ref())?
-            // };
+            let projected_schema = if source_columns.is_empty() {
+                None
+            } else {
+                let source_schema = infer_table_schema(&source_schema)?;
+                Some(self.schema_project(&source_schema, source_columns.as_ref())?)
+            };
 
-            // if target_schema.fields().len() != source_schema.fields().len() {
-            //     return Err(ErrorCode::BadArguments(
-            //             "The number of columns in the target table and the source table must be the same"
-            //                 .to_string(),
-            //         ));
-            // }
+            if casted_schema.fields().len()
+                != projected_schema
+                    .as_ref()
+                    .map(|s| s.fields().len())
+                    .unwrap_or(source_schema.fields().len())
+            {
+                return Err(ErrorCode::BadArguments(
+                    "The number of columns in the target and the source must be the same"
+                        .to_string(),
+                ));
+            }
 
             intos.push(Into {
                 catalog: catalog_name,
                 database: database_name,
                 table: table_name,
-                // target_schema,
-                // source_schema,
+                projected_schema: projected_schema.map(|s| Arc::new(s.into())),
+                casted_schema: Arc::new(casted_schema.into()),
             });
         }
         Ok(intos)

@@ -92,7 +92,8 @@ impl Display for ElseClause {
 pub struct InsertMultiTableStmt {
     #[drive(skip)]
     pub overwrite: bool,
-    pub kind: InsertMultiTableKind,
+    #[drive(skip)]
+    pub is_first: bool,
     pub when_clauses: Vec<WhenClause>,
     pub else_clause: Option<ElseClause>,
     pub into_clauses: Vec<IntoClause>,
@@ -111,9 +112,9 @@ impl Display for InsertMultiTableStmt {
         if self.overwrite {
             write!(f, "OVERWRITE ")?;
         }
-        match &self.kind {
-            InsertMultiTableKind::First => write!(f, "FIRST ")?,
-            InsertMultiTableKind::All => write!(f, "ALL ")?,
+        match &self.is_first {
+            true => write!(f, "FIRST ")?,
+            false => write!(f, "ALL ")?,
         }
         for when in &self.when_clauses {
             write!(f, "{} ", when)?;

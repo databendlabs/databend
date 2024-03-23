@@ -64,6 +64,9 @@ impl InsertMultiTableInterpreter {
             input_source,
             whens,
             opt_else,
+            overwrite,
+            is_first,
+            intos,
         } = &self.plan;
 
         let (select_plan, select_column_bindings, _metadata) = match input_source {

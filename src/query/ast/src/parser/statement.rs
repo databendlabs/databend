@@ -2194,11 +2194,7 @@ pub fn conditional_multi_table_insert() -> impl FnMut(Input) -> IResult<Statemen
             |(_, overwrite, kind, when_clauses, opt_else, source)| {
                 Statement::InsertMultiTable(InsertMultiTableStmt {
                     overwrite: overwrite.is_some(),
-                    kind: if kind.kind == FIRST {
-                        InsertMultiTableKind::First
-                    } else {
-                        InsertMultiTableKind::All
-                    },
+                    is_first: matches!(kind.kind, FIRST),
                     when_clauses,
                     else_clause: opt_else,
                     into_clauses: vec![],
@@ -2218,7 +2214,7 @@ pub fn unconditional_multi_table_insert() -> impl FnMut(Input) -> IResult<Statem
             |(_, overwrite, _, into_clauses, source)| {
                 Statement::InsertMultiTable(InsertMultiTableStmt {
                     overwrite: overwrite.is_some(),
-                    kind: InsertMultiTableKind::All,
+                    is_first: false,
                     when_clauses: vec![],
                     else_clause: None,
                     into_clauses,

@@ -12,14 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::DataSchemaRef;
+
 use super::Plan;
 use crate::ScalarExpr;
 
 #[derive(Clone, Debug)]
 pub struct InsertMultiTable {
+    pub overwrite: bool,
+    pub is_first: bool,
     pub input_source: Plan,
     pub whens: Vec<When>,
     pub opt_else: Option<Else>,
+    pub intos: Vec<Into>,
 }
 
 #[derive(Clone, Debug)]
@@ -33,8 +38,10 @@ pub struct Into {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    // pub target_schema: TableSchemaRef,
-    // pub source_schema: TableSchemaRef,
+    // project subquery's output with VALUES ( source_col_name [ , ... ] ) (if exsits)
+    pub projected_schema: Option<DataSchemaRef>,
+    //project with ( target_col_name [ , ... ] ) (if exsits) or use target table's schema
+    pub casted_schema: DataSchemaRef,
 }
 
 #[derive(Clone, Debug)]
