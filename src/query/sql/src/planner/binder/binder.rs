@@ -827,15 +827,26 @@ impl<'a> Binder {
     pub(crate) fn check_allowed_scalar_expr_with_subquery(
         &self,
         scalar: &ScalarExpr,
+        is_copy_into_table: bool,
     ) -> Result<bool> {
-        let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::UDFCall(_)
-            )
+        let f = if is_copy_into_table {
+            |scalar: &ScalarExpr| {
+                matches!(
+                    scalar,
+                    ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
+                )
+            }
+        } else {
+            |scalar: &ScalarExpr| {
+                matches!(
+                    scalar,
+                    ScalarExpr::WindowFunction(_)
+                        | ScalarExpr::AggregateFunction(_)
+                        | ScalarExpr::UDFCall(_)
+                )
+            }
         };
+
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
         Ok(finder.scalars().is_empty())

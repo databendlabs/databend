@@ -462,3 +462,31 @@ DROP FUNCTION split_and_join;
 
 statement ok
 set enable_experimental_merge_into = 0;
+
+### enable udf for copy into table
+statement ok
+create table json_source(a variant);
+
+statement ok
+create stage if not exists json_stage FILE_FORMAT = (TYPE = NDJson,COMPRESSION = None);
+
+statement ok
+insert into json_source values({'field1':'haha'}),({'field1':'haha2'});
+
+statement ok
+copy into @json_stage from (select * from json_source);
+
+statement ok
+CREATE TABLE _tmp_table (field1 int);
+
+statement ok
+CREATE FUNCTION url_len (VARCHAR) RETURNS VARCHAR LANGUAGE python HANDLER = 'len' ADDRESS = 'http://0.0.0.0:8815';
+
+statement ok
+COPY INTO _tmp_table FROM (SELECT url_len($1:field1) as field1 FROM @json_stage) PATTERN='*.json';
+
+query T 
+select * from _tmp_table order by field1;
+----
+2
+2

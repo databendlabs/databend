@@ -127,7 +127,7 @@ impl Binder {
             .await?;
 
         if let Some(selection) = &selection {
-            if !self.check_allowed_scalar_expr_with_subquery(selection)? {
+            if !self.check_allowed_scalar_expr_with_subquery(selection, false)? {
                 return Err(ErrorCode::SemanticError(
                     "selection in update statement can't contain window|aggregate|udf functions"
                         .to_string(),
