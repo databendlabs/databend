@@ -14,37 +14,19 @@
 
 use std::sync::Arc;
 
-
-
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-
 use databend_common_expression::RemoteExpr;
-
-
-
 use databend_common_sql::executor::physical_plans::PhysicalInsertMultiTable;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
-
-use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertMultiTable;
 use databend_common_sql::plans::Plan;
 
-
-
-
-
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-
 use crate::pipelines::PipelineBuildResult;
-
-
-
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
-
 use crate::sql::executor::cast_expr_to_non_null_boolean;
 pub struct InsertMultiTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -83,12 +65,8 @@ impl InsertMultiTableInterpreter {
             whens,
             opt_else,
         } = &self.plan;
-        let InsertInputSource::SelectPlan(plan) = input_source else {
-            return Err(ErrorCode::Internal(
-                "InsertMultiTableInterpreter: InsertInputSource must be SelectPlan",
-            ));
-        };
-        let (select_plan, select_column_bindings, _metadata) = match plan.as_ref() {
+
+        let (select_plan, select_column_bindings, _metadata) = match input_source {
             Plan::Query {
                 s_expr,
                 metadata,

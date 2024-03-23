@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::InsertInputSource;
+use super::Plan;
 use crate::ScalarExpr;
 
 #[derive(Clone, Debug)]
 pub struct InsertMultiTable {
-    pub input_source: InsertInputSource,
+    pub input_source: Plan,
     pub whens: Vec<When>,
     pub opt_else: Option<Else>,
 }

@@ -12,19 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-
-
-
-
 use databend_common_sql::executor::physical_plans::PhysicalInsertMultiTable;
-
-
-
-
 
 use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {

@@ -749,17 +749,7 @@ impl AccessChecker for PrivilegeAccess {
                 for target in plan.whens.iter().flat_map(|when|when.intos.iter()).chain(plan.opt_else.as_ref().into_iter().flat_map(|e|e.intos.iter())){
                     self.validate_table_access(&target.catalog, &target.database, &target.table, vec![UserPrivilegeType::Insert], false).await?;
                 }
-                match &plan.input_source {
-                    InsertInputSource::SelectPlan(plan) => {
-                        self.check(ctx, plan).await?;
-                    }
-                    InsertInputSource::Stage(plan) => {
-                        self.check(ctx, plan).await?;
-                    }
-                    InsertInputSource::StreamingWithFormat(..)
-                    | InsertInputSource::StreamingWithFileFormat {..}
-                    | InsertInputSource::Values(_) => {}
-                }
+                self.check(ctx, &plan.input_source).await?;
             }
             Plan::Replace(plan) => {
                 //plan.delete_when is Expr no need to check privileges.

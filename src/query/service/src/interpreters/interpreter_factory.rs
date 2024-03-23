@@ -549,10 +549,9 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
-            Plan::InsertMultiTable(p) => Ok(InsertMultiTableInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?),
+            Plan::InsertMultiTable(p) => {
+                Ok(InsertMultiTableInterpreter::try_create(ctx, *p.clone())?)
+            }
         }
     }
 }

@@ -17,10 +17,10 @@ use std::fmt::Display;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use super::InsertSource;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
+use crate::ast::Query;
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct IntoClause {
     pub catalog: Option<Identifier>,
@@ -46,6 +46,7 @@ impl Display for IntoClause {
             write!(f, ")")?;
         }
         if !self.source_columns.is_empty() {
+            write!(f, " VALUES ")?;
             write!(f, " (")?;
             write_comma_separated_list(f, &self.source_columns)?;
             write!(f, ")")?;
@@ -65,7 +66,9 @@ impl Display for WhenClause {
         write!(f, "WHEN ")?;
         self.condition.fmt(f)?;
         write!(f, " THEN ")?;
-        write_comma_separated_list(f, &self.into_clauses)?;
+        for into_clause in &self.into_clauses {
+            write!(f, "{} ", into_clause)?;
+        }
         Ok(())
     }
 }
@@ -78,27 +81,49 @@ pub struct ElseClause {
 impl Display for ElseClause {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "ELSE ")?;
-        write_comma_separated_list(f, &self.into_clauses)
+        for into_clause in &self.into_clauses {
+            write!(f, "{} ", into_clause)?;
+        }
+        Ok(())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct InsertMultiTableStmt {
+    #[drive(skip)]
+    pub overwrite: bool,
+    pub kind: InsertMultiTableKind,
     pub when_clauses: Vec<WhenClause>,
     pub else_clause: Option<ElseClause>,
-    pub source: InsertSource,
+    pub into_clauses: Vec<IntoClause>,
+    pub source: Query,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum InsertMultiTableKind {
+    First,
+    All,
 }
 
 impl Display for InsertMultiTableStmt {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "INSERT INTO ")?;
-        self.source.fmt(f)?;
-        write!(f, " ")?;
-        write_comma_separated_list(f, &self.when_clauses)?;
-        if let Some(else_clause) = &self.else_clause {
-            write!(f, " ELSE ")?;
-            write_comma_separated_list(f, &else_clause.into_clauses)?;
+        write!(f, "INSERT ")?;
+        if self.overwrite {
+            write!(f, "OVERWRITE ")?;
         }
-        Ok(())
+        match &self.kind {
+            InsertMultiTableKind::First => write!(f, "FIRST ")?,
+            InsertMultiTableKind::All => write!(f, "ALL ")?,
+        }
+        for when in &self.when_clauses {
+            write!(f, "{} ", when)?;
+        }
+        if let Some(else_clause) = &self.else_clause {
+            write!(f, "{} ", else_clause)?;
+        }
+        for into_clause in &self.into_clauses {
+            write!(f, "{} ", into_clause)?;
+        }
+        write!(f, "{}", self.source)
     }
 }

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_ast::ast::InsertMultiTableStmt;
-use databend_common_ast::ast::InsertSource;
 use databend_common_ast::ast::IntoClause;
 use databend_common_ast::ast::TableReference;
 use databend_common_exception::ErrorCode;
@@ -23,7 +22,6 @@ use crate::binder::ScalarBinder;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
 use crate::plans::Else;
-use crate::plans::InsertInputSource;
 use crate::plans::InsertMultiTable;
 use crate::plans::Into;
 use crate::plans::Plan;
@@ -41,44 +39,35 @@ impl Binder {
             when_clauses,
             else_clause,
             source,
+            ..
         } = stmt;
 
-        let (input_source, bind_context) = match source {
-            InsertSource::Select { query } => {
-                let table_ref = TableReference::Subquery {
-                    subquery: query.clone(),
-                    span: None,
-                    lateral: false,
-                    alias: None,
-                };
-
-                let (s_expr, bind_context) =
-                    self.bind_single_table(bind_context, &table_ref).await?;
-                let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
-                    .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty());
-
-                if !self.check_sexpr_top(&s_expr)? {
-                    return Err(ErrorCode::SemanticError(
-                        "insert source can't contain udf functions".to_string(),
-                    ));
-                }
-                let select_plan = Plan::Query {
-                    s_expr: Box::new(s_expr),
-                    metadata: self.metadata.clone(),
-                    bind_context: Box::new(bind_context.clone()),
-                    rewrite_kind: None,
-                    formatted_ast: None,
-                    ignore_result: false,
-                };
-
-                let optimized_plan = optimize(opt_ctx, select_plan)?;
-                (
-                    InsertInputSource::SelectPlan(Box::new(optimized_plan)),
-                    bind_context,
-                )
-            }
-            _ => unreachable!(),
+        let table_ref = TableReference::Subquery {
+            subquery: Box::new(source.clone()),
+            span: None,
+            lateral: false,
+            alias: None,
         };
+
+        let (s_expr, bind_context) = self.bind_single_table(bind_context, &table_ref).await?;
+        let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
+            .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty());
+
+        if !self.check_sexpr_top(&s_expr)? {
+            return Err(ErrorCode::SemanticError(
+                "insert source can't contain udf functions".to_string(),
+            ));
+        }
+        let select_plan = Plan::Query {
+            s_expr: Box::new(s_expr),
+            metadata: self.metadata.clone(),
+            bind_context: Box::new(bind_context.clone()),
+            rewrite_kind: None,
+            formatted_ast: None,
+            ignore_result: false,
+        };
+
+        let optimized_plan = optimize(opt_ctx, select_plan)?;
 
         let mut source_bind_context = bind_context.clone();
         let mut whens = vec![];
@@ -106,7 +95,7 @@ impl Binder {
         };
 
         let plan = InsertMultiTable {
-            input_source,
+            input_source: optimized_plan,
             whens,
             opt_else,
         };

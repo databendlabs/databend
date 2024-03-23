@@ -28,7 +28,7 @@ use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::QueryContext;
 
-pub struct  TransformResortAddOn {
+pub struct TransformResortAddOn {
     expression_transform: CompoundBlockOperator,
     input_len: usize,
 }

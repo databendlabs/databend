@@ -76,20 +76,19 @@ impl Planner {
         let first_token = tokenizer
             .peek()
             .and_then(|token| Some(token.as_ref().ok()?.kind));
-        let mut is_insert_stmt = matches!(first_token, Some(TokenKind::INSERT));
+        let is_insert_stmt = {
+            let mut tokenizer = Tokenizer::new(sql);
+            tokenizer.next_chunk::<3>().is_ok_and(|first_three_tokens| {
+                matches!(first_token, Some(TokenKind::INSERT))
+                    && !first_three_tokens.iter().any(|token| {
+                        matches!(
+                            token.as_ref().map(|t| t.kind),
+                            Ok(TokenKind::ALL) | Ok(TokenKind::FIRST)
+                        )
+                    })
+            })
+        };
         let is_replace_stmt = matches!(first_token, Some(TokenKind::REPLACE));
-        if is_insert_stmt {
-            let mut temp_tokenizer = Tokenizer::new(sql);
-            let _ = temp_tokenizer.next().unwrap();
-            let second_token = temp_tokenizer.next();
-            is_insert_stmt = !matches!(
-                second_token,
-                Some(Ok(Token {
-                    kind: TokenKind::FIRST,
-                    ..
-                }))
-            );
-        }
         let is_insert_or_replace_stmt = is_insert_stmt || is_replace_stmt;
         let mut tokens: Vec<Token> = if is_insert_or_replace_stmt {
             (&mut tokenizer)
