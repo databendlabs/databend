@@ -28,6 +28,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sql::executor::cast_expr_to_non_null_boolean;
+use crate::sql::executor::physical_plans::Duplicate;
 pub struct InsertMultiTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: InsertMultiTable,
@@ -86,6 +87,14 @@ impl InsertMultiTableInterpreter {
             }
             _ => unreachable!(),
         };
+
+        let n_target = 0;
+
+        let duplicate = PhysicalPlan::Duplicate(Box::new(Duplicate {
+            plan_id: 0,
+            input: Box::new(select_plan),
+            n: n_target,
+        }));
         let filters: Result<Vec<RemoteExpr>> = whens
             .iter()
             .map(|v| {

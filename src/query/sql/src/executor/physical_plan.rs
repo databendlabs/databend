@@ -31,6 +31,7 @@ use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DeleteSource;
 use crate::executor::physical_plans::DistributedInsertSelect;
+use crate::executor::physical_plans::Duplicate;
 use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::ExchangeSink;
@@ -121,6 +122,9 @@ pub enum PhysicalPlan {
 
     /// Update
     UpdateSource(Box<UpdateSource>),
+
+    /// Multi table insert
+    Duplicate(Box<Duplicate>),
 }
 
 impl PhysicalPlan {
