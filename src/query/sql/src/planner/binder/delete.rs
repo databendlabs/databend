@@ -42,6 +42,7 @@ use crate::plans::SubqueryExpr;
 use crate::plans::VisitorWithParent;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::ColumnEntry;
 use crate::ScalarExpr;
 
 impl<'a> Binder {
@@ -248,6 +249,15 @@ impl Binder {
                 "subquery data type in delete/update statement should be boolean".to_string(),
             ));
         };
+
+        // add all table columns into outer columns
+        let metadata = self.metadata.read();
+        let columns = metadata.columns_by_table_index(scan.table_index);
+        for column in columns {
+            if let ColumnEntry::BaseTableColumn(column) = &column {
+                outer_columns.insert(column.column_index);
+            }
+        }
 
         Ok(SubqueryDesc {
             input_expr,
