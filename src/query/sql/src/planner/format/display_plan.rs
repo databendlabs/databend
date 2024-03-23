@@ -259,6 +259,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
             prewhere: None,
             agg_index: None,
             change_type: None,
+            inverted_index: None,
             statistics: Default::default(),
             update_stream_columns: false,
         });

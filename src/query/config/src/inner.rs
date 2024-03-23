@@ -544,6 +544,12 @@ pub struct CacheConfig {
     /// Max number of cached inverted index info objects. Set it to 0 to disable it.
     pub inverted_index_info_count: u64,
 
+    /// Max bytes of cached inverted index filters used. Set it to 0 to disable it.
+    pub inverted_index_filter_size: u64,
+
+    /// Max percentage of in memory inverted index filters cache relative to whole memory. By default it is 0 (disabled).
+    pub inverted_index_filter_memory_ratio: u64,
+
     pub data_cache_storage: CacheStorageTypeConfig,
 
     /// Max size of external cache population queue length
@@ -631,6 +637,8 @@ impl Default for CacheConfig {
             table_bloom_index_filter_count: 0,
             table_bloom_index_filter_size: 2147483648,
             inverted_index_info_count: 3000,
+            inverted_index_filter_size: 2147483648,
+            inverted_index_filter_memory_ratio: 0,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 0,

@@ -22,6 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_storages_fuse::io::read::load_inverted_index_info;
 use databend_common_storages_fuse::io::write_data;
 use databend_common_storages_fuse::io::InvertedIndexWriter;
 use databend_common_storages_fuse::io::MetaReaders;
@@ -80,7 +81,8 @@ impl Indexer {
             Some(locations) => locations.get(&index_name),
             None => None,
         };
-        let old_index_info = fuse_table.read_index_info(index_info_loc).await?;
+        let old_index_info =
+            load_inverted_index_info(fuse_table.get_operator(), index_info_loc).await?;
 
         let settings = ReadSettings::from_ctx(&ctx)?;
         let write_settings = fuse_table.get_write_settings();

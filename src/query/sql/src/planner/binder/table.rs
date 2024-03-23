@@ -1227,6 +1227,7 @@ impl Binder {
             in_grouping: false,
             view_info: None,
             srfs: Default::default(),
+            inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             allow_internal_columns: true,

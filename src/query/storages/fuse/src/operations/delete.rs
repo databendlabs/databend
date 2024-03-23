@@ -251,7 +251,9 @@ impl FuseTable {
             self.schema_with_stream(),
             &push_down,
             self.bloom_index_cols(),
-        )?;
+            None,
+        )
+        .await?;
 
         if let Some(inverse) = filters.map(|f| f.inverted_filter) {
             // now the `block_metas` refers to the blocks that need to be deleted completely or partially.
