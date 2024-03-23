@@ -446,7 +446,7 @@ impl<'a> Binder {
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     create_option: *create_option,
                     name: name.clone(),
-                    file_format_params: file_format_options.clone().try_into()?,
+                    file_format_params: file_format_options.to_meta_ast().try_into()?,
                 }))
             }
             Statement::DropFileFormat {

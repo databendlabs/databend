@@ -20,7 +20,7 @@ use databend_common_meta_app::schema::CatalogType;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::write_comma_separated_map;
+use crate::ast::write_comma_separated_string_map;
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
 
@@ -70,9 +70,9 @@ impl Display for CreateCatalogStmt {
             write!(f, " IF NOT EXISTS")?;
         }
         write!(f, " {}", self.catalog_name)?;
-        write!(f, " TYPE='{}'", self.catalog_type)?;
+        write!(f, " TYPE={}", self.catalog_type)?;
         write!(f, " CONNECTION = ( ")?;
-        write_comma_separated_map(f, &self.catalog_options)?;
+        write_comma_separated_string_map(f, &self.catalog_options)?;
         write!(f, " )")
     }
 }
