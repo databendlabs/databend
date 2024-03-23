@@ -3,6 +3,7 @@ DROP DATABASE IF EXISTS xx
 
 query A
 select * from xx.yy;
+----
 1025: error:
   --> SQL:3:15
   |
