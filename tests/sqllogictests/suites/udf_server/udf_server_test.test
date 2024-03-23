@@ -484,3 +484,6 @@ select * from _tmp_table order by field1;
 ----
 4
 5
+
+statement ok
+drop FUNCTION url_len;
