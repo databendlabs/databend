@@ -17,13 +17,14 @@ use std::sync::Arc;
 use databend_common_ast::ast::InsertMultiTableStmt;
 use databend_common_ast::ast::IntoClause;
 use databend_common_ast::ast::TableReference;
+use databend_common_catalog::plan::Projection;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataSchemaRef;
 
 use crate::binder::ScalarBinder;
+use crate::normalize_identifier;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
 use crate::plans::Else;
@@ -157,17 +158,23 @@ impl Binder {
                 self.schema_project(&target_table.schema(), target_columns.as_ref())?
             };
 
-            let projected_schema = if source_columns.is_empty() {
+            let projection = if source_columns.is_empty() {
                 None
             } else {
-                let source_schema = infer_table_schema(&source_schema)?;
-                Some(self.schema_project(&source_schema, source_columns.as_ref())?)
+                let mut indices = vec![];
+                for source_column in source_columns {
+                    let index = source_schema.index_of(
+                        &normalize_identifier(source_column, &self.name_resolution_ctx).name,
+                    )?;
+                    indices.push(index);
+                }
+                Some(Projection::Columns(indices))
             };
 
             if casted_schema.fields().len()
-                != projected_schema
+                != projection
                     .as_ref()
-                    .map(|s| s.fields().len())
+                    .map(|p| p.len())
                     .unwrap_or(source_schema.fields().len())
             {
                 return Err(ErrorCode::BadArguments(
@@ -180,7 +187,7 @@ impl Binder {
                 catalog: catalog_name,
                 database: database_name,
                 table: table_name,
-                projected_schema: projected_schema.map(|s| Arc::new(s.into())),
+                projection,
                 casted_schema: Arc::new(casted_schema.into()),
             });
         }
