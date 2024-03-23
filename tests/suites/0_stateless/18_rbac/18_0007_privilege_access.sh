@@ -63,15 +63,14 @@ echo "delete from t20_0012 where c=2" | $TEST_USER_CONNECT
 echo "select count(*) = 0 from t20_0012 where c=2" | $TEST_USER_CONNECT
 
 ## insert overwrite
-echo "grant insert, delete on default.t20_0012 to 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "select 'test -- insert overwrite'" | $TEST_USER_CONNECT
+echo "GRANT DELETE ON * TO role 'test-role1'" | $BENDSQL_CLIENT_CONNECT
 echo "insert overwrite t20_0012 values(2)" | $TEST_USER_CONNECT
 ## verify
 echo "select * from t20_0012 order by c" | $TEST_USER_CONNECT
 echo "insert overwrite t20_0012 values(3)" | $TEST_USER_CONNECT
 ## verify
 echo "select * from t20_0012 order by c" | $TEST_USER_CONNECT
-echo "revoke insert, delete on default.t20_0012 from 'test-user'" | $BENDSQL_CLIENT_CONNECT
 
 ## optimize table
 echo "select 'test -- optimize table'" | $TEST_USER_CONNECT
