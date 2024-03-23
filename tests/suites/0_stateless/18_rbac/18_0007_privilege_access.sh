@@ -37,6 +37,10 @@ echo "GRANT ROLE \`test-role2\` TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "insert into t20_0012 values(1),(2)" | $TEST_USER_CONNECT
 ## verify
 echo "select * from t20_0012 order by c" | $TEST_USER_CONNECT
+## insert overwrite, but no delete privilege
+echo "insert overwrite t20_0012 values(3),(4)" | $TEST_USER_CONNECT
+## verify
+echo "select * from t20_0012 order by c" | $TEST_USER_CONNECT
 
 ## update data
 echo "select 'test -- update'" | $TEST_USER_CONNECT
@@ -57,6 +61,16 @@ echo "GRANT DELETE ON * TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "delete from t20_0012 where c=2" | $TEST_USER_CONNECT
 ## verify
 echo "select count(*) = 0 from t20_0012 where c=2" | $TEST_USER_CONNECT
+
+
+## insert overwrite
+echo "select 'test -- insert overwrite'" | $TEST_USER_CONNECT
+echo "insert overwrite t20_0012 values(2)" | $TEST_USER_CONNECT
+## verify
+echo "select * from t20_0012 order by c" | $TEST_USER_CONNECT
+echo "insert overwrite t20_0012 values(3)" | $TEST_USER_CONNECT
+## verify
+echo "select * from t20_0012 order by c" | $TEST_USER_CONNECT
 
 ## optimize table
 echo "select 'test -- optimize table'" | $TEST_USER_CONNECT

@@ -747,7 +747,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             // Others.
             Plan::Insert(plan) => {
-                let target_table_privileges = if plan.is_overwrite {
+                let target_table_privileges = if plan.overwrite {
                     vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete]
                 } else {
                     vec![UserPrivilegeType::Insert]
