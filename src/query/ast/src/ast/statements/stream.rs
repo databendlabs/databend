@@ -41,7 +41,7 @@ impl Display for StreamPoint {
                 write_dot_separated_list(f, database.iter().chain(Some(name)))?;
                 write!(f, ")")
             }
-            StreamPoint::AtPoint(point) => write!(f, " AT{}", point),
+            StreamPoint::AtPoint(point) => write!(f, " AT {}", point),
         }
     }
 }

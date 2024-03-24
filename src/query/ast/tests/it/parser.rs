@@ -162,6 +162,8 @@ fn test_statement() {
         r#"show full views from ctl.db"#,
         r#"create stream test2.s1 on table test.t append_only = false;"#,
         r#"create stream if not exists test2.s2 on table test.t at (stream => test1.s1) comment = 'this is a stream';"#,
+        r#"create stream if not exists test2.s3 on table test.t at (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) append_only = false;"#,
+        r#"create stream if not exists test2.s3 on table test.t at (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') append_only = true;"#,
         r#"create or replace stream test2.s1 on table test.t append_only = false;"#,
         r#"show full streams from default.test2 like 's%';"#,
         r#"describe stream test2.s2;"#,

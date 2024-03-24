@@ -3693,6 +3693,136 @@ CreateStream(
 
 
 ---------- Input ----------
+create stream if not exists test2.s3 on table test.t at (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) append_only = false;
+---------- Output ---------
+CREATE STREAM IF NOT EXISTS test2.s3 ON TABLE test.t AT (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) APPEND_ONLY = false
+---------- AST ------------
+CreateStream(
+    CreateStreamStmt {
+        create_option: CreateIfNotExists,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    28..33,
+                ),
+                name: "test2",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        stream: Identifier {
+            span: Some(
+                34..36,
+            ),
+            name: "s3",
+            quote: None,
+            is_hole: false,
+        },
+        table_database: Some(
+            Identifier {
+                span: Some(
+                    46..50,
+                ),
+                name: "test",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                51..52,
+            ),
+            name: "t",
+            quote: None,
+            is_hole: false,
+        },
+        stream_point: Some(
+            AtPoint(
+                Timestamp(
+                    Cast {
+                        span: Some(
+                            98..109,
+                        ),
+                        expr: Literal {
+                            span: Some(
+                                70..98,
+                            ),
+                            lit: String(
+                                "2023-06-26 09:49:02.038483",
+                            ),
+                        },
+                        target_type: Timestamp,
+                        pg_style: true,
+                    },
+                ),
+            ),
+        ),
+        append_only: false,
+        comment: None,
+    },
+)
+
+
+---------- Input ----------
+create stream if not exists test2.s3 on table test.t at (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') append_only = true;
+---------- Output ---------
+CREATE STREAM IF NOT EXISTS test2.s3 ON TABLE test.t AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5')
+---------- AST ------------
+CreateStream(
+    CreateStreamStmt {
+        create_option: CreateIfNotExists,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    28..33,
+                ),
+                name: "test2",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        stream: Identifier {
+            span: Some(
+                34..36,
+            ),
+            name: "s3",
+            quote: None,
+            is_hole: false,
+        },
+        table_database: Some(
+            Identifier {
+                span: Some(
+                    46..50,
+                ),
+                name: "test",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                51..52,
+            ),
+            name: "t",
+            quote: None,
+            is_hole: false,
+        },
+        stream_point: Some(
+            AtPoint(
+                Snapshot(
+                    "9828b23f74664ff3806f44bbc1925ea5",
+                ),
+            ),
+        ),
+        append_only: true,
+        comment: None,
+    },
+)
+
+
+---------- Input ----------
 create or replace stream test2.s1 on table test.t append_only = false;
 ---------- Output ---------
 CREATE OR REPLACE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
