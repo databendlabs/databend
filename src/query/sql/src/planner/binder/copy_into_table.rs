@@ -368,7 +368,7 @@ impl<'a> Binder {
             .await?;
 
         for item in select_list.items.iter() {
-            if !self.check_allowed_scalar_expr_with_subquery(&item.scalar, true)? {
+            if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
                 // in fact, if there is a join, we will stop in `check_transform_query()`
                 return Err(ErrorCode::SemanticError(
                     "copy into table source can't contain window|aggregate|udf|join functions"
@@ -390,7 +390,7 @@ impl<'a> Binder {
             )));
         }
 
-        let s_expr =
+        let mut s_expr =
             self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;

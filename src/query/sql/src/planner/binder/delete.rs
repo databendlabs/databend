@@ -100,7 +100,7 @@ impl<'a> Binder {
             .await?;
 
         if let Some(selection) = &selection {
-            if !self.check_allowed_scalar_expr_with_subquery(selection, false)? {
+            if !self.check_allowed_scalar_expr_with_subquery(selection)? {
                 return Err(ErrorCode::SemanticError(
                     "selection in delete statement can't contain window|aggregate|udf functions"
                         .to_string(),
