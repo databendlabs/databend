@@ -67,7 +67,7 @@ query T
 explain select 1, number, number + 1, number -1 from numbers(10) group by number, abs(number), cast(number as int);
 ----
 EvalScalar
-├── output columns: [numbers.number (#0), 1 (#3), (number + 1) (#4), (number - 1) (#5)]
+├── output columns: [numbers.number (#0), 1 (#3), number + 1 (#4), (number - 1) (#5)]
 ├── expressions: [1, numbers.number (#0) + 1, numbers.number (#0) - 1]
 ├── estimated rows: 10.00
 └── AggregateFinal

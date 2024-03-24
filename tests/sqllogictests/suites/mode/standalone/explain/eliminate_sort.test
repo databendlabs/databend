@@ -78,11 +78,11 @@ query T
 explain select * from (select * from numbers(10) t order by t.number desc) order by t.number+1 desc
 ----
 Sort
-├── output columns: [t.number (#0), (t.number + 1) (#1)]
-├── sort keys: [(t.number + 1) DESC NULLS LAST]
+├── output columns: [t.number (#0), t.number + 1 (#1)]
+├── sort keys: [t.number + 1 DESC NULLS LAST]
 ├── estimated rows: 10.00
 └── EvalScalar
-    ├── output columns: [t.number (#0), (t.number + 1) (#1)]
+    ├── output columns: [t.number (#0), t.number + 1 (#1)]
     ├── expressions: [t.number (#0) + 1]
     ├── estimated rows: 10.00
     └── Sort
