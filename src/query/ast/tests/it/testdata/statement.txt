@@ -9701,6 +9701,28 @@ CreateRole {
 
 
 ---------- Input ----------
+create role `a"a`
+---------- Output ---------
+CREATE ROLE 'a"a'
+---------- AST ------------
+CreateRole {
+    if_not_exists: false,
+    role_name: "a\"a",
+}
+
+
+---------- Input ----------
+create role `a'a`
+---------- Output ---------
+CREATE ROLE 'a\'a'
+---------- AST ------------
+CreateRole {
+    if_not_exists: false,
+    role_name: "a'a",
+}
+
+
+---------- Input ----------
 drop role if exists test
 ---------- Output ---------
 DROP ROLE IF EXISTS 'test'

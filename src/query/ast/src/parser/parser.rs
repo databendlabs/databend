@@ -49,28 +49,26 @@ pub fn parse_sql(tokens: &[Token], dialect: Dialect) -> Result<(Statement, Optio
     #[cfg(debug_assertions)]
     {
         // Check that the statement can be displayed and reparsed without loss
-        let reparse_sql = stmt.stmt.to_string();
-        let reparse_tokens = crate::parser::tokenize_sql(&reparse_sql).unwrap();
-        let reparsed = run_parser(
-            &reparse_tokens,
-            Dialect::PostgreSQL,
-            ParseMode::Default,
-            false,
-            statement,
-        );
-        match reparsed {
-            Ok(reparsed) => {
-                let reparsed_sql = reparsed.stmt.to_string();
-                assert_eq!(reparse_sql, reparsed_sql, "AST:\n{:#?}", stmt.stmt);
-            }
-            Err(e) => {
-                let original_sql = tokens[0].source.to_string();
-                panic!(
-                    "Failed to reparse SQL:\n{}\nAST:\n{:#?}\n{}",
-                    original_sql, stmt.stmt, e
-                );
-            }
-        }
+        let res: Result<(), ErrorCode> = try {
+            let reparse_sql = stmt.stmt.to_string();
+            let reparse_tokens = crate::parser::tokenize_sql(&reparse_sql)?;
+            let reparsed = run_parser(
+                &reparse_tokens,
+                Dialect::PostgreSQL,
+                ParseMode::Default,
+                false,
+                statement,
+            )?;
+            let reparsed_sql = reparsed.stmt.to_string();
+            assert_eq!(reparse_sql, reparsed_sql, "AST:\n{:#?}", stmt.stmt);
+        };
+        res.unwrap_or_else(|e| {
+            let original_sql = tokens[0].source.to_string();
+            panic!(
+                "Failed to reparse SQL:\n{}\nAST:\n{:#?}\n{}",
+                original_sql, stmt.stmt, e
+            );
+        });
     }
 
     Ok((stmt.stmt, stmt.format))
