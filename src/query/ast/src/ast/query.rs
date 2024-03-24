@@ -652,7 +652,7 @@ impl Display for TableReference {
                 }
 
                 if let Some(TimeTravelPoint::Snapshot(sid)) = since_point {
-                    write!(f, " SINCE (SNAPSHOT => {sid})")?;
+                    write!(f, " SINCE (SNAPSHOT => '{sid}')")?;
                 }
 
                 if let Some(TimeTravelPoint::Timestamp(ts)) = since_point {

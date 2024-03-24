@@ -345,14 +345,14 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             RcDoc::nil()
         })
         .append(if let Some(TimeTravelPoint::Snapshot(sid)) = travel_point {
-            RcDoc::text(format!(" AT (SNAPSHOT => {sid})"))
+            RcDoc::text(format!(" AT (SNAPSHOT => '{sid}')"))
         } else if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {
             RcDoc::text(format!(" AT (TIMESTAMP => {ts})"))
         } else {
             RcDoc::nil()
         })
         .append(if let Some(TimeTravelPoint::Snapshot(sid)) = since_point {
-            RcDoc::text(format!(" SINCE (SNAPSHOT => {sid})"))
+            RcDoc::text(format!(" SINCE (SNAPSHOT => '{sid}')"))
         } else if let Some(TimeTravelPoint::Timestamp(ts)) = since_point {
             RcDoc::text(format!(" SINCE (TIMESTAMP => {ts})"))
         } else {
