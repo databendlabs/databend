@@ -1,13 +1,7 @@
 statement ok
 DROP DATABASE IF EXISTS xx
 
-query A
+statement error (?s)1003.*Unknown database `xx` in catalog 'default'
 select * from xx.yy;
-----
-1025: error:
-  --> SQL:3:15
-  |
-1 |
-2 |
-3 | select * from xx.yy;
+
   |               ^^ Unknown database `xx` in catalog 'default'
