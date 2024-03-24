@@ -469,7 +469,9 @@ impl<'a> InferFilterOptimizer<'a> {
             expr_index: &'a HashMap<ScalarExpr, usize>,
             // The equal ScalarExprs of each ScalarExpr.
             expr_equal_to: &'a Vec<Vec<ScalarExpr>>,
+            // The columns used by the predicate.
             column_set: HashSet<usize>,
+            // If the predicate can be replaced to generate a new predicate.
             can_replace: bool,
         }
 
@@ -504,11 +506,11 @@ impl<'a> InferFilterOptimizer<'a> {
                     | ScalarExpr::SubqueryExpr(_)
                     | ScalarExpr::UDFCall(_)
                     | ScalarExpr::UDFLambdaCall(_) => {
+                        // Can not replace `BoundColumnRef` or can not replace unsupported ScalarExpr.
                         self.can_replace = false;
                         Ok(())
                     }
                 }
-                // walk_expr_mut(self, expr)
             }
         }
 
