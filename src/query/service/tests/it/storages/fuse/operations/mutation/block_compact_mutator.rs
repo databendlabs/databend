@@ -237,7 +237,7 @@ async fn test_safety() -> Result<()> {
             eprintln!("no target select");
             continue;
         }
-        assert!(selections.partitions_type() != PartInfoType::SegmentLevel);
+        assert!(selections.partitions_type() != PartInfoType::LazyLevel);
 
         let mut actual_blocks_number = 0;
         let mut compact_segment_indices = HashSet::new();

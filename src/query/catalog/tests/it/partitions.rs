@@ -54,7 +54,7 @@ impl PartInfo for TestPartInfo {
     }
 
     fn part_type(&self) -> PartInfoType {
-        PartInfoType::SegmentLevel
+        PartInfoType::LazyLevel
     }
 }
 

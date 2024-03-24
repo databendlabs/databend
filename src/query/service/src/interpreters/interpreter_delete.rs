@@ -301,7 +301,7 @@ impl DeleteInterpreter {
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
-        let merge_meta = partitions.partitions_type() == PartInfoType::SegmentLevel;
+        let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::DeleteSource(Box::new(DeleteSource {
             parts: partitions,
             filters,

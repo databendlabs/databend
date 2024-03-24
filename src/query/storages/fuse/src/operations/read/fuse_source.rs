@@ -229,7 +229,7 @@ pub fn dispatch_partitions(
 ) -> Vec<VecDeque<PartInfoPtr>> {
     let mut results = Vec::with_capacity(max_streams);
     // Lazy part, we can dispatch them now.
-    if plan.parts.partitions_type() == PartInfoType::SegmentLevel {
+    if plan.parts.partitions_type() == PartInfoType::LazyLevel {
         return results;
     }
 

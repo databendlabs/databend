@@ -100,7 +100,9 @@ impl FuseBlockPartInfo {
     pub fn from_part(info: &PartInfoPtr) -> Result<&FuseBlockPartInfo> {
         info.as_any()
             .downcast_ref::<FuseBlockPartInfo>()
-            .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to FusePartInfo."))
+            .ok_or_else(|| {
+                ErrorCode::Internal("Cannot downcast from PartInfo to FuseBlockPartInfo.")
+            })
     }
 
     pub fn range(&self) -> Option<&Range<usize>> {
@@ -125,20 +127,20 @@ impl FuseBlockPartInfo {
 /// Lazy partition is a partition that only contains the partition location.
 /// The partition data will be loaded when the partition is used.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct FuseSegmentPartInfo {
+pub struct FuseLazyPartInfo {
     pub segment_index: usize,
     pub segment_location: Location,
 }
 
 #[typetag::serde(name = "fuse_lazy")]
-impl PartInfo for FuseSegmentPartInfo {
+impl PartInfo for FuseLazyPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
         info.as_any()
-            .downcast_ref::<FuseSegmentPartInfo>()
+            .downcast_ref::<FuseLazyPartInfo>()
             .is_some_and(|other| self == other)
     }
 
@@ -149,15 +151,23 @@ impl PartInfo for FuseSegmentPartInfo {
     }
 
     fn part_type(&self) -> PartInfoType {
-        PartInfoType::SegmentLevel
+        PartInfoType::LazyLevel
     }
 }
 
-impl FuseSegmentPartInfo {
+impl FuseLazyPartInfo {
     pub fn create(idx: usize, segment_location: Location) -> PartInfoPtr {
-        Arc::new(Box::new(FuseSegmentPartInfo {
+        Arc::new(Box::new(FuseLazyPartInfo {
             segment_index: idx,
             segment_location,
         }))
+    }
+
+    pub fn from_part(info: &PartInfoPtr) -> Result<&FuseLazyPartInfo> {
+        info.as_any()
+            .downcast_ref::<FuseLazyPartInfo>()
+            .ok_or_else(|| {
+                ErrorCode::Internal("Cannot downcast from PartInfo to FuseLazyPartInfo.")
+            })
     }
 }

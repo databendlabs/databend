@@ -33,11 +33,10 @@ pub enum PartInfoType {
     // Block level partition information.
     // Read the data from the block level.
     BlockLevel,
-    // Segment level partition information.
-    // Need to read the block location information from the segment.
-    // Then read the data from the block level.
-    // Formerly, we treat this as a lazy part.
-    SegmentLevel,
+    // In lazy level, we need:
+    // 1. read the block location information from the segment.
+    // 2. read the block data from the block level.
+    LazyLevel,
 }
 
 #[typetag::serde(tag = "type")]
@@ -52,7 +51,7 @@ pub trait PartInfo: Send + Sync {
 
     /// Get the partition type.
     /// Default is block level.
-    /// You must override this method if the partition is segment level.
+    /// If the partition is lazy level, it should be override.
     fn part_type(&self) -> PartInfoType {
         PartInfoType::BlockLevel
     }

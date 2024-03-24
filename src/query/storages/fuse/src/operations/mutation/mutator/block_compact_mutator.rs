@@ -40,7 +40,7 @@ use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::CompactBlockPartInfo;
 use crate::operations::mutation::CompactExtraInfo;
-use crate::operations::mutation::CompactSegmentPartInfo;
+use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactTaskInfo;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::mutation::MAX_BLOCK_COUNT;
@@ -194,7 +194,7 @@ impl BlockCompactMutator {
                 .into_iter()
                 .map(|v| {
                     v.as_any()
-                        .downcast_ref::<CompactSegmentPartInfo>()
+                        .downcast_ref::<CompactLazyPartInfo>()
                         .unwrap()
                         .clone()
                 })
@@ -222,7 +222,7 @@ impl BlockCompactMutator {
         column_ids: HashSet<ColumnId>,
         cluster_key_id: Option<u32>,
         thresholds: BlockThresholds,
-        mut lazy_parts: Vec<CompactSegmentPartInfo>,
+        mut lazy_parts: Vec<CompactLazyPartInfo>,
     ) -> Result<Vec<PartInfoPtr>> {
         let start = Instant::now();
 
@@ -300,7 +300,7 @@ impl BlockCompactMutator {
                 compact_segments.push(segment);
             }
 
-            let lazy_part = CompactSegmentPartInfo::create(segment_indices, compact_segments);
+            let lazy_part = CompactLazyPartInfo::create(segment_indices, compact_segments);
             parts.push(lazy_part);
         }
     }

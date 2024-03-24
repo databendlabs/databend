@@ -43,7 +43,7 @@ use databend_common_sql::plans::RelOperator;
 use databend_common_storages_fuse::operations::AggIndexSink;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::FuseBlockPartInfo;
-use databend_common_storages_fuse::FuseSegmentPartInfo;
+use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
 use databend_enterprise_aggregating_index::get_agg_index_handler;
@@ -76,7 +76,7 @@ impl RefreshIndexInterpreter {
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
 
         for part in &plan.parts.partitions {
-            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseSegmentPartInfo>() {
+            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
                 lazy_init_segments.push(SegmentLocation {
                     segment_idx: lazy_part_info.segment_index,
                     location: lazy_part_info.segment_location.clone(),

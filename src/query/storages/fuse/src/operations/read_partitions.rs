@@ -51,7 +51,7 @@ use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
 use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
-use crate::FuseSegmentPartInfo;
+use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -95,7 +95,7 @@ impl FuseTable {
                 if (!dry_run && snapshot.segments.len() > nodes_num) || is_lazy {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                        segments.push(FuseSegmentPartInfo::create(idx, segment_location.clone()))
+                        segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
                     }
 
                     return Ok((

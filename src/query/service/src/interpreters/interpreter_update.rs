@@ -296,7 +296,7 @@ impl UpdateInterpreter {
         is_distributed: bool,
         ctx: Arc<QueryContext>,
     ) -> Result<PhysicalPlan> {
-        let merge_meta = partitions.partitions_type() == PartInfoType::SegmentLevel;
+        let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
             parts: partitions,
             filters,

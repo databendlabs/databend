@@ -18,7 +18,7 @@ mod mutation_part;
 
 pub use compact_part::CompactBlockPartInfo;
 pub use compact_part::CompactExtraInfo;
-pub use compact_part::CompactSegmentPartInfo;
+pub use compact_part::CompactLazyPartInfo;
 pub use compact_part::CompactTaskInfo;
 pub use mutation_meta::ClusterStatsGenType;
 pub use mutation_meta::SerializeBlock;

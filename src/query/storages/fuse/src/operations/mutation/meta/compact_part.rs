@@ -18,8 +18,9 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
-use databend_common_catalog::plan::{PartInfo, PartInfoType};
+use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -32,20 +33,20 @@ use crate::operations::mutation::SegmentIndex;
 
 /// Compact segment part information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
-pub struct CompactSegmentPartInfo {
+pub struct CompactLazyPartInfo {
     pub segment_indices: Vec<SegmentIndex>,
     pub compact_segments: Vec<Arc<CompactSegmentInfo>>,
 }
 
 #[typetag::serde(name = "compact_lazy")]
-impl PartInfo for CompactSegmentPartInfo {
+impl PartInfo for CompactLazyPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
         info.as_any()
-            .downcast_ref::<CompactSegmentPartInfo>()
+            .downcast_ref::<CompactLazyPartInfo>()
             .is_some_and(|other| self == other)
     }
 
@@ -56,16 +57,16 @@ impl PartInfo for CompactSegmentPartInfo {
     }
 
     fn part_type(&self) -> PartInfoType {
-        PartInfoType::SegmentLevel
+        PartInfoType::LazyLevel
     }
 }
 
-impl CompactSegmentPartInfo {
+impl CompactLazyPartInfo {
     pub fn create(
         segment_indices: Vec<SegmentIndex>,
         compact_segments: Vec<Arc<CompactSegmentInfo>>,
     ) -> PartInfoPtr {
-        Arc::new(Box::new(CompactSegmentPartInfo {
+        Arc::new(Box::new(CompactLazyPartInfo {
             segment_indices,
             compact_segments,
         }))
@@ -103,7 +104,9 @@ impl CompactBlockPartInfo {
     pub fn from_part(info: &PartInfoPtr) -> Result<&CompactBlockPartInfo> {
         info.as_any()
             .downcast_ref::<CompactBlockPartInfo>()
-            .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to CompactPartInfo."))
+            .ok_or_else(|| {
+                ErrorCode::Internal("Cannot downcast from PartInfo to CompactBlockPartInfo.")
+            })
     }
 }
 

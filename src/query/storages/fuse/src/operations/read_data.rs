@@ -36,7 +36,7 @@ use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
 use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
-use crate::FuseSegmentPartInfo;
+use crate::FuseLazyPartInfo;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 
@@ -153,7 +153,7 @@ impl FuseTable {
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
 
         for part in &plan.parts.partitions {
-            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseSegmentPartInfo>() {
+            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
                 lazy_init_segments.push(SegmentLocation {
                     segment_idx: lazy_part_info.segment_index,
                     location: lazy_part_info.segment_location.clone(),

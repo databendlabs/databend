@@ -115,7 +115,7 @@ impl OptimizeTableInterpreter {
         is_distributed: bool,
         need_lock: bool,
     ) -> Result<PhysicalPlan> {
-        let merge_meta = parts.partitions_type() == PartInfoType::SegmentLevel;
+        let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),

@@ -34,7 +34,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::mutation::BlockCompactMutator;
-use crate::operations::mutation::CompactSegmentPartInfo;
+use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::SegmentCompactMutator;
 use crate::FuseTable;
@@ -120,7 +120,7 @@ impl FuseTable {
         column_ids: HashSet<ColumnId>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let is_lazy = parts.partitions_type() == PartInfoType::SegmentLevel;
+        let is_lazy = parts.partitions_type() == PartInfoType::LazyLevel;
         let thresholds = self.get_block_thresholds();
         let cluster_key_id = self.cluster_key_id();
         let mut max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -133,7 +133,7 @@ impl FuseTable {
                 .into_iter()
                 .map(|v| {
                     v.as_any()
-                        .downcast_ref::<CompactSegmentPartInfo>()
+                        .downcast_ref::<CompactLazyPartInfo>()
                         .unwrap()
                         .clone()
                 })
