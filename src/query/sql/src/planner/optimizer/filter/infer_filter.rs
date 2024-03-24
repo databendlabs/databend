@@ -26,15 +26,11 @@ use crate::optimizer::rule::constant::check_float_range;
 use crate::optimizer::rule::constant::check_int_range;
 use crate::optimizer::rule::constant::check_uint_range;
 use crate::optimizer::rule::constant::remove_trivial_type_cast;
-use crate::plans::walk_expr_mut;
-use crate::plans::BoundColumnRef;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
-use crate::plans::Visitor;
 use crate::plans::VisitorMut;
-use crate::ColumnBinding;
 use crate::ColumnSet;
 
 // The InferFilterOptimizer tries to infer new predicates from existing predicates, for example:
