@@ -292,9 +292,11 @@ impl StreamTable {
             pruning_stats,
         )?;
         if let Some(base_block_ids_scalar) = base_block_ids_scalar {
-            let wrapper = Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![
-                StreamTablePart::create(parts, base_block_ids_scalar),
-            ]);
+            let wrapper =
+                Partitions::create(PartitionsShuffleKind::Seq, vec![StreamTablePart::create(
+                    parts,
+                    base_block_ids_scalar,
+                )]);
             Ok((stats, wrapper))
         } else {
             Ok((stats, parts))
