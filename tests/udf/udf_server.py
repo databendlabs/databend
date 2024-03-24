@@ -127,7 +127,7 @@ def map_access(map: Dict[str, str], key: str) -> str:
 def json_access(data: Any, key: str) -> Any:
     return data[key]
 
-@udf(input_types=["VARCHAR"], result_type="INT")
+@udf(input_types=["VARCHAR"], result_type="BIGINT")
 def url_len(key: str) -> int:
     return len(key)
 

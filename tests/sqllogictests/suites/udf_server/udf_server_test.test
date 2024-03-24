@@ -483,7 +483,7 @@ statement ok
 CREATE TABLE _tmp_table (field1 int);
 
 statement ok
-CREATE FUNCTION url_len (VARCHAR) RETURNS VARCHAR LANGUAGE python HANDLER = 'url_len' ADDRESS = 'http://0.0.0.0:8815';
+CREATE FUNCTION url_len (VARCHAR) RETURNS BIGINT LANGUAGE python HANDLER = 'url_len' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
 COPY INTO _tmp_table FROM (SELECT url_len($1) as field1 FROM @udf_stage);
