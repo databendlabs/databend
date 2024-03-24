@@ -273,7 +273,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
@@ -287,6 +287,12 @@ impl DefaultSettings {
                 ("join_spilling_partition_bits", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4),
                     desc: "Set the number of partitions for join spilling. Default value is 4, it means 2^4 partitions.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("inlist_to_join_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024),
+                    desc: "Set the threshold for converting IN list to JOIN.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
@@ -406,7 +412,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("aggregate_spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
@@ -418,7 +424,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("sort_spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that a sorter can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
@@ -463,13 +469,13 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(10),
+                    value: UserSettingValue::UInt64(15),
                     desc: "Sets the seconds that the table lock will expire in.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("acquire_lock_timeout", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(15),
+                    value: UserSettingValue::UInt64(20),
                     desc: "Sets the maximum timeout in seconds for acquire a lock.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -487,7 +493,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_merge_into", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables the experimental feature for 'MERGE INTO'.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

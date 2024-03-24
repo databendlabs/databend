@@ -39,6 +39,7 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -479,9 +480,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn attach_query_str(&self, _kind: QueryKind, _query: String) {
-        todo!()
-    }
+    fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
 
     fn get_query_str(&self) -> String {
         todo!()
@@ -750,6 +749,14 @@ impl TableContext for CtxDelegation {
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         todo!()
     }
+
+    fn get_read_block_thresholds(&self) -> BlockThresholds {
+        todo!()
+    }
+
+    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -805,7 +812,7 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_table_names_by_ids(&self, table_id: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_table_names_by_ids(&self, table_id: &[MetaId]) -> Result<Vec<Option<String>>> {
         self.cat.mget_table_names_by_ids(table_id).await
     }
 
@@ -814,7 +821,7 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         self.cat.mget_database_names_by_ids(db_ids).await
     }
 

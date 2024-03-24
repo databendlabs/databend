@@ -30,7 +30,6 @@ use crate::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::optimizer::rule::rewrite::RuleEliminateSort;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
-use crate::optimizer::rule::rewrite::RuleNormalizeAggregate;
 use crate::optimizer::rule::rewrite::RulePushDownFilterProjectSet;
 use crate::optimizer::rule::rewrite::RulePushDownFilterScan;
 use crate::optimizer::rule::rewrite::RulePushDownFilterSort;
@@ -82,7 +81,6 @@ impl RuleFactory {
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
-            RuleID::NormalizeAggregate => Ok(Box::new(RuleNormalizeAggregate::new())),
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),

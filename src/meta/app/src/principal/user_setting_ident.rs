@@ -15,41 +15,21 @@
 use crate::tenant_key::TIdent;
 
 /// Define the meta-service key for a user setting.
-pub type SettingIdent = TIdent<kvapi_impl::Resource>;
+pub type SettingIdent = TIdent<Resource>;
+
+pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
-    use std::fmt::Display;
 
-    use databend_common_exception::ErrorCode;
     use databend_common_meta_kvapi::kvapi;
 
     use crate::principal::UserSetting;
-    use crate::tenant::Tenant;
     use crate::tenant_key::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_settings";
         type ValueType = UserSetting;
-        type UnknownError = ErrorCode;
-
-        fn error_unknown<D: Display>(
-            _tenant: &Tenant,
-            _name: &str,
-            _ctx: impl FnOnce() -> D,
-        ) -> Self::UnknownError {
-            todo!()
-        }
-
-        type ExistError = ErrorCode;
-
-        fn error_exist<D: Display>(
-            _tenant: &Tenant,
-            _name: &str,
-            _ctx: impl FnOnce() -> D,
-        ) -> Self::ExistError {
-            todo!()
-        }
     }
 
     impl kvapi::Value for UserSetting {
@@ -68,7 +48,7 @@ mod tests {
 
     #[test]
     fn test_setting_ident() {
-        let tenant = Tenant::new("tenant1");
+        let tenant = Tenant::new_literal("tenant1");
         let ident = SettingIdent::new(tenant.clone(), "test");
         assert_eq!("__fd_settings/tenant1/test", ident.to_string_key());
 

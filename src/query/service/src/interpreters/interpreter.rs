@@ -25,6 +25,9 @@ use databend_common_exception::Result;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::SourcePipeBuilder;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::PlanExtras;
+use databend_common_sql::Planner;
 use log::error;
 use log::info;
 
@@ -40,6 +43,7 @@ use crate::sessions::SessionManager;
 use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
+
 #[async_trait::async_trait]
 /// Interpreter is a trait for different PlanNode
 /// Each type of planNode has its own corresponding interpreter
@@ -212,4 +216,22 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
         error!("interpreter.finish.error: {:?}", error)
     }
+}
+
+/// There are two steps to execute a query:
+/// 1. Plan the SQL
+/// 2. Execute the plan -- interpreter
+///
+/// This function is used to plan the SQL. If an error occurs, we will log the query start and finished.
+pub async fn interpreter_plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<(Plan, PlanExtras)> {
+    let mut planner = Planner::new(ctx.clone());
+    let result = planner.plan_sql(sql).await;
+
+    if result.is_err() {
+        // Only log if there's an error
+        log_query_start(&ctx);
+        log_query_finished(&ctx, result.as_ref().err().cloned(), false);
+    }
+
+    result
 }

@@ -687,11 +687,10 @@ impl Binder {
                         span: *span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: databend_common_ast::ast::Identifier {
-                                span: *span,
-                                name: func_name.name.clone(),
-                                quote: None,
-                            },
+                            name: databend_common_ast::ast::Identifier::from_name(
+                                *span,
+                                &func_name.name,
+                            ),
                             params: vec![],
                             args,
                             window: None,
@@ -1228,6 +1227,7 @@ impl Binder {
             in_grouping: false,
             view_info: None,
             srfs: Default::default(),
+            inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             allow_internal_columns: true,

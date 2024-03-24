@@ -28,12 +28,12 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_functions::aggregates::StateAddr;
 use databend_common_functions::aggregates::StateAddrs;
 use databend_common_hashtable::HashtableEntryMutRefLike;
 use databend_common_hashtable::HashtableLike;
-use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -50,7 +50,6 @@ use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::sessions::QueryContext;
-
 #[allow(clippy::enum_variant_names)]
 enum HashTable<Method: HashMethodBounds> {
     MovedOut,
@@ -359,15 +358,6 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                 || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
             {
                 if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table) {
-                    // perf
-                    {
-                        metrics_inc_aggregate_partial_spill_count();
-                        metrics_inc_aggregate_partial_spill_cell_count(1);
-                        metrics_inc_aggregate_partial_hashtable_allocated_bytes(
-                            v.allocated_bytes() as u64,
-                        );
-                    }
-
                     let _dropper = v._dropper.clone();
                     let blocks = vec![DataBlock::empty_with_meta(
                         AggregateMeta::<Method, usize>::create_spilling(v),
@@ -390,20 +380,23 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage)
             {
                 if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
-                    // perf
-                    {
-                        metrics_inc_aggregate_partial_spill_count();
-                        metrics_inc_aggregate_partial_spill_cell_count(1);
-                        metrics_inc_aggregate_partial_hashtable_allocated_bytes(
-                            v.allocated_bytes() as u64,
-                        );
-                    }
-
                     let group_types = v.payload.group_types.clone();
                     let aggrs = v.payload.aggrs.clone();
-                    let config = v.config.clone();
+                    v.config.update_current_max_radix_bits();
+                    let config = v
+                        .config
+                        .clone()
+                        .with_initial_radix_bits(v.config.max_radix_bits);
+
+                    let mut state = PayloadFlushState::default();
+
+                    // repartition to max for normalization
+                    let partitioned_payload = v
+                        .payload
+                        .repartition(1 << config.max_radix_bits, &mut state);
+
                     let blocks = vec![DataBlock::empty_with_meta(
-                        AggregateMeta::<Method, usize>::create_agg_spilling(v.payload),
+                        AggregateMeta::<Method, usize>::create_agg_spilling(partitioned_payload),
                     )];
 
                     let arena = Arc::new(Bump::new());
@@ -431,9 +424,11 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             },
             HashTable::HashTable(v) => match v.hashtable.len() == 0 {
                 true => vec![],
-                false => vec![DataBlock::empty_with_meta(
-                    AggregateMeta::<Method, usize>::create_hashtable(-1, v),
-                )],
+                false => {
+                    vec![DataBlock::empty_with_meta(
+                        AggregateMeta::<Method, usize>::create_hashtable(-1, v),
+                    )]
+                }
             },
             HashTable::PartitionedHashTable(v) => {
                 info!(

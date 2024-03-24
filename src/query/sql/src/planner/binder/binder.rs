@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono_tz::Tz;
 use databend_common_ast::ast::format_statement;
@@ -34,6 +35,7 @@ use databend_common_expression::Expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
+use log::info;
 use log::warn;
 
 use super::Finder;
@@ -129,10 +131,12 @@ impl<'a> Binder {
     #[async_backtrace::framed]
     #[minitrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
+        let start = Instant::now();
         self.ctx.set_status_info("binding");
         let mut init_bind_context = BindContext::new();
         let plan = self.bind_statement(&mut init_bind_context, stmt).await?;
         self.bind_query_index(&mut init_bind_context, &plan).await?;
+        info!("bind stmt to plan, time used: {:?}", start.elapsed());
         Ok(plan)
     }
 
@@ -311,6 +315,8 @@ impl<'a> Binder {
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
             Statement::DropView(stmt) => self.bind_drop_view(stmt).await?,
+            Statement::ShowViews(stmt) => self.bind_show_views(bind_context, stmt).await?,
+            Statement::DescribeView(stmt) => self.bind_describe_view(stmt).await?,
 
             // Indexes
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
@@ -440,7 +446,7 @@ impl<'a> Binder {
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     create_option: *create_option,
                     name: name.clone(),
-                    file_format_params: file_format_options.clone().try_into()?,
+                    file_format_params: file_format_options.to_meta_ast().try_into()?,
                 }))
             }
             Statement::DropFileFormat {

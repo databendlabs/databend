@@ -40,6 +40,7 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -187,7 +188,7 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_name_by_id(table_id).await
     }
 
-    async fn mget_table_names_by_ids(&self, table_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_table_names_by_ids(&self, table_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         self.cat.mget_table_names_by_ids(table_ids).await
     }
 
@@ -195,7 +196,7 @@ impl Catalog for FakedCatalog {
         self.cat.get_db_name_by_id(db_id).await
     }
 
-    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         self.cat.mget_database_names_by_ids(db_ids).await
     }
 
@@ -521,9 +522,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn attach_query_str(&self, _kind: QueryKind, _query: String) {
-        todo!()
-    }
+    fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
 
     fn get_query_str(&self) -> String {
         todo!()
@@ -817,6 +816,14 @@ impl TableContext for CtxDelegation {
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         todo!()
     }
+
+    fn get_read_block_thresholds(&self) -> BlockThresholds {
+        todo!()
+    }
+
+    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
+        todo!()
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -845,6 +852,7 @@ async fn test_get_same_table_once() -> Result<()> {
 
     let mut planner = Planner::new(ctx.clone());
     let (_, _) = planner.plan_sql(query.as_str()).await?;
+
     assert_eq!(
         ctx.table_without_cache
             .load(std::sync::atomic::Ordering::SeqCst),

@@ -55,6 +55,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -151,10 +152,24 @@ impl StreamTable {
 
         if !table.change_tracking_enabled() {
             return Err(ErrorCode::IllegalStream(format!(
-                "Change tracking is not enabled for table '{}.{}'",
+                "Change tracking is not enabled on table '{}.{}'",
                 self.table_database, self.table_name
             )));
         }
+
+        if let Some(value) = table
+            .get_table_info()
+            .options()
+            .get(OPT_KEY_CHANGE_TRACKING_BEGIN_VER)
+        {
+            let begin_version = value.to_lowercase().parse::<u64>()?;
+            if begin_version > self.table_version {
+                return Err(ErrorCode::IllegalStream(format!(
+                    "Change tracking has been missing for the time range requested on table '{}.{}'",
+                    self.table_database, self.table_name
+                )));
+            }
+        };
 
         Ok(table)
     }
@@ -250,7 +265,9 @@ impl StreamTable {
             cluster_key_meta,
             cluster_keys,
             bloom_index_cols,
-        )?;
+            None,
+        )
+        .await?;
 
         let block_metas = pruner.stream_pruning(blocks).await?;
         let pruning_stats = pruner.pruning_stats();

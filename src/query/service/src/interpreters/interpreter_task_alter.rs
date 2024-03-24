@@ -132,7 +132,7 @@ impl AlterTaskInterpreter {
             }
             AlterTaskOptions::ModifyWhen(sql) => {
                 req.alter_task_type = AlterTaskType::ModifyWhen as i32;
-                req.when_condition = Some(sql);
+                req.when_condition = Some(sql.to_string());
             }
         }
         req

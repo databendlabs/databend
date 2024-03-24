@@ -56,6 +56,7 @@ use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::date_helper::TzFactory;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -121,6 +122,7 @@ pub struct QueryContext {
     version: String,
     mysql_version: String,
     clickhouse_version: String,
+    block_threshold: Arc<RwLock<BlockThresholds>>,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
@@ -148,6 +150,7 @@ impl QueryContext {
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
+            block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
         })
     }
 
@@ -752,7 +755,7 @@ impl TableContext for QueryContext {
                 let user_mgr = UserApiProvider::instance();
                 let tenant = self.get_tenant();
                 Ok(user_mgr
-                    .get_file_format(tenant.as_str(), name)
+                    .get_file_format(&tenant, name)
                     .await?
                     .file_format_params)
             }
@@ -1044,6 +1047,14 @@ impl TableContext for QueryContext {
 
     fn txn_mgr(&self) -> TxnManagerRef {
         self.shared.session.session_ctx.txn_mgr()
+    }
+
+    fn get_read_block_thresholds(&self) -> BlockThresholds {
+        *self.block_threshold.read()
+    }
+
+    fn set_read_block_thresholds(&self, thresholds: BlockThresholds) {
+        *self.block_threshold.write() = thresholds;
     }
 }
 

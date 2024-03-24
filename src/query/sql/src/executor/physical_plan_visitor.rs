@@ -21,6 +21,7 @@ use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
+use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CopyIntoTableSource;
 use crate::executor::physical_plans::CteScan;
@@ -81,6 +82,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::CommitSink(plan) => self.replace_commit_sink(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
             PhysicalPlan::CopyIntoTable(plan) => self.replace_copy_into_table(plan),
+            PhysicalPlan::CopyIntoLocation(plan) => self.replace_copy_into_location(plan),
             PhysicalPlan::ReplaceAsyncSourcer(plan) => self.replace_async_sourcer(plan),
             PhysicalPlan::ReplaceDeduplicate(plan) => self.replace_deduplicate(plan),
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
@@ -377,6 +379,17 @@ pub trait PhysicalPlanReplacer {
         }
     }
 
+    fn replace_copy_into_location(&mut self, plan: &CopyIntoLocation) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+
+        Ok(PhysicalPlan::CopyIntoLocation(Box::new(CopyIntoLocation {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            input_schema: plan.input_schema.clone(),
+            to_stage_info: plan.to_stage_info.clone(),
+        })))
+    }
+
     fn replace_insert_select(&mut self, plan: &DistributedInsertSelect) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
 
@@ -571,8 +584,13 @@ impl PhysicalPlan {
                     CopyIntoTableSource::Query(input) => {
                         Self::traverse(input, pre_visit, visit, post_visit);
                     }
-                    CopyIntoTableSource::Stage(_) => {}
+                    CopyIntoTableSource::Stage(input) => {
+                        Self::traverse(input, pre_visit, visit, post_visit);
+                    }
                 },
+                PhysicalPlan::CopyIntoLocation(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit)
+                }
                 PhysicalPlan::RangeJoin(plan) => {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);

@@ -27,9 +27,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_settings::Settings;
-use databend_common_sql::plans::Plan;
-use databend_common_sql::PlanExtras;
-use databend_common_sql::Planner;
 use databend_storages_common_txn::TxnManagerRef;
 use futures::StreamExt;
 use log::error;
@@ -39,6 +36,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use ExecuteState::*;
 
+use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
@@ -54,6 +52,7 @@ use crate::sessions::TableContext;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {
+    Starting,
     Running,
     Failed,
     Succeeded,
@@ -93,7 +92,8 @@ pub enum ExecuteState {
 impl ExecuteState {
     pub(crate) fn extract(&self) -> (ExecuteStateKind, Option<ErrorCode>) {
         match self {
-            Starting(_) | Running(_) => (ExecuteStateKind::Running, None),
+            Starting(_) => (ExecuteStateKind::Starting, None),
+            Running(_) => (ExecuteStateKind::Running, None),
             Stopped(v) => match &v.reason {
                 Ok(_) => (ExecuteStateKind::Succeeded, None),
                 Err(e) => (ExecuteStateKind::Failed, Some(e.clone())),
@@ -291,12 +291,6 @@ impl Executor {
 
 impl ExecuteState {
     #[async_backtrace::framed]
-    pub(crate) async fn plan_sql(sql: &str, ctx: Arc<QueryContext>) -> Result<(Plan, PlanExtras)> {
-        let mut planner = Planner::new(ctx.clone());
-        planner.plan_sql(sql).await
-    }
-
-    #[async_backtrace::framed]
     pub(crate) async fn try_start_query(
         executor: Arc<RwLock<Executor>>,
         sql: String,
@@ -308,11 +302,11 @@ impl ExecuteState {
         let entry = QueryEntry::create(&ctx)?;
         let queue_guard = QueriesQueueManager::instance().acquire(entry).await?;
 
-        let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone())
+        // Use interpreter_plan_sql, we can write the query log if an error occurs.
+        let (plan, _) = interpreter_plan_sql(ctx.clone(), &sql)
             .await
             .map_err(|err| err.display_with_sql(&sql))?;
 
-        ctx.attach_query_str(plan.kind(), plan_extras.statement.to_mask_sql());
         {
             // set_var may change settings
             let mut guard = format_settings.write();

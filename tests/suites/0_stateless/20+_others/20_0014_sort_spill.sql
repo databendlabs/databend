@@ -1,20 +1,27 @@
 SELECT '==TEST GLOBAL SORT==';
 set sort_spilling_bytes_threshold_per_proc = 8;
-drop table if exists t;
+DROP TABLE if EXISTS t;
+DROP TABLE IF EXISTS temp_files_count;
+
+CREATE TABLE temp_files_count(count INT, number INT);
 CREATE TABLE t (a INT,  b INT,  c BOOLEAN NULL);
 INSERT INTO t VALUES (1, 9, true), (2, 8, false), (3, 7, NULL);
-truncate table system.metrics;
+
+INSERT INTO temp_files_count SELECT COUNT() as count, 1 as number FROM system.temp_files;
 
 SELECT c FROM t ORDER BY c;
+
+INSERT INTO temp_files_count SELECT COUNT() as count, 2 as number FROM system.temp_files;
 
 SELECT '===================';
 
 -- Test if the spill is activated.
 set sort_spilling_bytes_threshold_per_proc = 0;
-select metric, labels, sum(value::float) from system.metrics where metric like '%spill%total' group by metric, labels order by metric desc;
+SELECT any_if(count, number = 2) - any_if(count, number = 1) FROM temp_files_count;
 set sort_spilling_bytes_threshold_per_proc = 8;
 
 SELECT '===================';
+INSERT INTO temp_files_count SELECT COUNT() as count, 3 as number FROM system.temp_files;
 
 SELECT c FROM t ORDER BY c;
 SELECT c FROM t ORDER BY c DESC;
@@ -37,10 +44,11 @@ SELECT x, y FROM xy ORDER BY y NULLS FIRST;
 SELECT x, y FROM xy ORDER BY y NULLS LAST;
 SELECT x, y FROM xy ORDER BY y DESC NULLS FIRST;
 
+INSERT INTO temp_files_count SELECT COUNT() as count, 4 as number FROM system.temp_files;
 SELECT '===================';
 
 set sort_spilling_bytes_threshold_per_proc = 0;
-select metric, labels, sum(value::float) from system.metrics where metric like '%spill%total' group by metric, labels order by metric desc;
+SELECT any_if(count, number = 4) - any_if(count, number = 3) FROM temp_files_count;
 set sort_spilling_bytes_threshold_per_proc = 8;
 
 SELECT '===================';
@@ -59,7 +67,7 @@ set max_threads = 16;
 -- Test spill in Top-N scenario.
 SELECT '==TEST TOP-N SORT==';
 
-truncate table system.metrics;
+INSERT INTO temp_files_count SELECT COUNT() as count, 5 as number FROM system.temp_files;
 
 SELECT '===================';
 
@@ -67,17 +75,22 @@ SELECT c FROM t ORDER BY c limit 1;
 
 SELECT '===================';
 
+INSERT INTO temp_files_count SELECT COUNT() as count, 6 as number FROM system.temp_files;
+
 set sort_spilling_bytes_threshold_per_proc = 0;
-select metric, labels, sum(value::float) from system.metrics where metric like '%spill%total' group by metric, labels order by metric desc;
+SELECT any_if(count, number = 6) - any_if(count, number = 5) FROM temp_files_count;
 set sort_spilling_bytes_threshold_per_proc = 60;
 
 SELECT '===================';
+
+INSERT INTO temp_files_count SELECT COUNT() as count, 7 as number FROM system.temp_files;
 
 SELECT x, y FROM xy ORDER BY x, y DESC NULLS FIRST LIMIT 3;
 SELECT x, y FROM xy ORDER BY x NULLS LAST, y DESC NULLS FIRST LIMIT 3;
 SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC NULLS LAST LIMIT 3;
 
 SELECT '===================';
+INSERT INTO temp_files_count SELECT COUNT() as count, 8 as number FROM system.temp_files;
 
 set sort_spilling_bytes_threshold_per_proc = 0;
-select metric, labels, sum(value::float) from system.metrics where metric like '%spill%total' group by metric, labels order by metric desc;
+SELECT any_if(count, number = 8) - any_if(count, number = 7) FROM temp_files_count;

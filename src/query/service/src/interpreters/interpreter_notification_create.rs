@@ -51,7 +51,7 @@ impl CreateNotificationInterpreter {
             if_not_exists: plan.if_not_exists,
             notification_type: tp as i32,
             enabled: plan.enabled,
-            comments: Some(plan.comments),
+            comments: plan.comments,
             webhook_url: plan
                 .webhook_opts
                 .as_ref()

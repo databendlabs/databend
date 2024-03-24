@@ -50,6 +50,9 @@ insert into source_optimization values(5,'b5','c5'),(6,'b6','c6');
 statement error 4001
 merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b = t2.b when matched then update * when not matched then insert *;
 
+statement ok
+set join_spilling_memory_ratio = 0;
+
 ### 2.2 make sure the plan is expected
 query T
 explain merge into target_build_optimization as t1 using source_optimization as t2 on t1.a = t2.a and t1.b = t2.b when matched then update set t1.a = t2.a,t1.b = t2.b,t1.c = t2.c when not matched then insert *;
@@ -57,7 +60,7 @@ explain merge into target_build_optimization as t1 using source_optimization as 
 MergeInto:
 target_table: default.default.target_build_optimization
 ├── distributed: false
-├── target_build_optimization: false
+├── target_build_optimization: true
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
 ├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
@@ -119,7 +122,7 @@ explain merge into target_build_optimization as t1 using source_optimization as 
 MergeInto:
 target_table: default.default.target_build_optimization
 ├── distributed: false
-├── target_build_optimization: false
+├── target_build_optimization: true
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = t2.a (#0),b = t2.b (#1),c = t2.c (#2)]
 ├── unmatched insert: [condition: None,insert into (a,b,c) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL),CAST(c (#2) AS String NULL))]
@@ -159,6 +162,9 @@ select * from target_build_optimization order by a,b,c;
 10 b10 c_10
 11 b11 c_11
 12 b12 c_12
+
+statement ok
+set join_spilling_memory_ratio = 60;
 
 ### test with conjunct
 #### we need to make sure the blocks count and layout, so we should truncate and insert again.

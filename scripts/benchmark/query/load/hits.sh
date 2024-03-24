@@ -121,7 +121,7 @@ cat <<SQL | bendsql
 SQL
 
 cat <<SQL | bendsql
-COPY INTO hits FROM 's3://repo.databend.rs/hits_p/' credentials=(access_key_id ='$REPO_ACCESS_KEY_ID' secret_access_key ='$REPO_SECRET_ACCESS_KEY') pattern ='.*[.]tsv' file_format=(type='TSV' field_delimiter='\\t' record_delimiter='\\n' skip_header=1);
+COPY INTO hits FROM 's3://repo.databend.rs/hits_p/' connection=(connection_name='repo') pattern ='.*[.]tsv' file_format=(type='TSV' field_delimiter='\\t' record_delimiter='\\n' skip_header=1);
 SQL
 
 cat <<SQL | bendsql

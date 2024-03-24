@@ -135,12 +135,11 @@ pub async fn streaming_load(
         .map_err(InternalServerError)?;
 
     let mut planner = Planner::new(context.clone());
-    let (mut plan, extras) = planner
+    let (mut plan, _) = planner
         .plan_sql(insert_sql)
         .await
         .map_err(|err| err.display_with_sql(insert_sql))
         .map_err(InternalServerError)?;
-    context.attach_query_str(plan.kind(), extras.statement.to_mask_sql());
 
     let schema = plan.schema();
     match &mut plan {

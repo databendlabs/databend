@@ -45,6 +45,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
@@ -308,6 +310,13 @@ impl Binder {
             VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
         s_expr = virtual_column_rewriter.rewrite(&s_expr).await?;
 
+        // check inverted index license
+        if !from_context.inverted_index_map.is_empty() {
+            let license_manager = get_license_manager();
+            license_manager
+                .manager
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+        }
         // add internal column binding into expr
         s_expr = from_context.add_internal_column_into_expr(s_expr);
 
@@ -964,6 +973,7 @@ impl<'a> SelectRewriter<'a> {
             a.eq_ignore_ascii_case(b)
         }
     }
+
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
             Expr::FunctionCall {
@@ -971,14 +981,6 @@ impl<'a> SelectRewriter<'a> {
                 ..
             } => Ok((name, args)),
             _ => Err(ErrorCode::SyntaxException("Aggregate function is required")),
-        }
-    }
-
-    fn ident_from_string(s: &str) -> Identifier {
-        Identifier {
-            name: s.to_string(),
-            quote: None,
-            span: None,
         }
     }
 
@@ -1117,7 +1119,7 @@ impl<'a> SelectRewriter<'a> {
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
             let mut exclude_columns: Vec<_> = aggregate_columns
                 .iter()
-                .map(|c| Identifier::from_name(c.column.name()))
+                .map(|c| Identifier::from_name(stmt.span, c.column.name()))
                 .collect();
             exclude_columns.push(pivot.value_column.clone());
             star.exclude(exclude_columns);
@@ -1137,7 +1139,7 @@ impl<'a> SelectRewriter<'a> {
             new_select_list.push(Self::target_func_from_name_args(
                 new_aggregate_name.clone(),
                 args,
-                Some(Self::ident_from_string(&alias)),
+                Some(Identifier::from_name(stmt.span, &alias)),
             ));
         }
 
@@ -1164,14 +1166,14 @@ impl<'a> SelectRewriter<'a> {
             star.exclude(unpivot.names.clone());
         };
         new_select_list.push(Self::target_func_from_name_args(
-            Self::ident_from_string("unnest"),
+            Identifier::from_name(stmt.span, "unnest"),
             vec![Self::expr_literal_array_from_vec_ident(
                 unpivot.names.clone(),
             )],
             Some(unpivot.column_name.clone()),
         ));
         new_select_list.push(Self::target_func_from_name_args(
-            Self::ident_from_string("unnest"),
+            Identifier::from_name(stmt.span, "unnest"),
             vec![Self::expr_column_ref_array_from_vec_ident(
                 unpivot.names.clone(),
             )],

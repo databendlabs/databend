@@ -126,6 +126,7 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
 use log::debug;
@@ -3605,7 +3606,7 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "db_table_gc_out_of_retention_time";
-        let tenant = Tenant::new(tenant_name);
+        let tenant = Tenant::new_nonempty(NonEmptyString::new(tenant_name).unwrap());
         let db1_name = "db1";
         let tb1_name = "tb1";
         let idx1_name = "idx1";
@@ -5506,7 +5507,7 @@ impl SchemaApiTestSuite {
             assert_eq!(table_info.name, tb1.to_string());
             assert_eq!(table_info.ident.table_id, share_table_id);
             assert_eq!(table_info.tenant, tenant2.to_string());
-            assert_eq!(table_info.db_type, DatabaseType::ShareDB(share_name));
+            assert_eq!(table_info.db_type, DatabaseType::ShareDB(share_name.into()));
         }
 
         info!("--- get tables from share db");
@@ -5914,7 +5915,7 @@ impl SchemaApiTestSuite {
     async fn index_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant_name = "tenant1";
-        let tenant = Tenant::new(tenant_name);
+        let tenant = Tenant::new_nonempty(NonEmptyString::new(tenant_name).unwrap());
 
         let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;

@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 
 use databend_common_expression::types::DataType;
+use databend_common_expression::DataSchema;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -68,6 +69,14 @@ pub struct PrewhereInfo {
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct InvertedIndexInfo {
+    pub index_name: String,
+    pub index_schema: DataSchema,
+    pub query_columns: Vec<String>,
+    pub query_text: String,
+}
+
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct PushDownInfo {
@@ -96,6 +105,7 @@ pub struct PushDownInfo {
     pub agg_index: Option<AggIndexInfo>,
     /// Identifies the type of data change we are looking for
     pub change_type: Option<ChangeType>,
+    pub inverted_index: Option<InvertedIndexInfo>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

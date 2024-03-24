@@ -198,10 +198,10 @@ COPY
 INTO t1
 FROM 's3://mybucket/data.csv'
 FILE_FORMAT = (
-    field_delimiter = ",",
-    record_delimiter = "\n",
-    skip_header = "1",
-    type = "CSV"
+    field_delimiter = ',',
+    record_delimiter = '\n',
+    skip_header = 1,
+    type = CSV
 )
 SIZE_LIMIT = 10
 PURGE = false
@@ -215,10 +215,10 @@ COPY
 INTO Uri(UriLocation { protocol: "s3", name: "mybucket", path: "/data.csv", part_prefix: "", connection: Connection { visited_keys: {}, conns: {} } })
 FROM t1
 FILE_FORMAT = (
-    field_delimiter = ",",
-    record_delimiter = "\n",
-    skip_header = "1",
-    type = "CSV"
+    field_delimiter = ',',
+    record_delimiter = '\n',
+    skip_header = 1,
+    type = CSV
 )
 SINGLE = false
 
@@ -455,10 +455,10 @@ CopyIntoTable (children 7)
 ├── FROM (children 1)
 │   └── Location 's3://mybucket/data.csv'
 ├── FileFormats (children 4)
-│   ├── FileFormat field_delimiter = ","
-│   ├── FileFormat record_delimiter = "\n"
-│   ├── FileFormat skip_header = "1"
-│   └── FileFormat type = "CSV"
+│   ├── FileFormat field_delimiter = String(",")
+│   ├── FileFormat record_delimiter = String("\n")
+│   ├── FileFormat skip_header = U64(1)
+│   └── FileFormat type = Keyword("CSV")
 ├── SizeLimit 10
 ├── MaxFiles 10
 ├── Purge false

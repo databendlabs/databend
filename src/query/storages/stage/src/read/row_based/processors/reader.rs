@@ -24,7 +24,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::PrefetchAsyncSource;
 use log::debug;
 use opendal::Operator;
 
@@ -34,12 +34,14 @@ use crate::read::row_based::batch::BytesBatch;
 struct FileState {
     file: OneFilePartition,
     offset: usize,
+    reader: opendal::Reader,
 }
 pub struct BytesReader {
     table_ctx: Arc<dyn TableContext>,
     op: Operator,
     read_batch_size: usize,
     file_state: Option<FileState>,
+    prefetch_num: usize,
 }
 
 impl BytesReader {
@@ -47,26 +49,22 @@ impl BytesReader {
         table_ctx: Arc<dyn TableContext>,
         op: Operator,
         read_batch_size: usize,
+        prefetch_num: usize,
     ) -> Result<Self> {
         Ok(Self {
             table_ctx,
             op,
             read_batch_size,
             file_state: None,
+            prefetch_num,
         })
     }
 
     pub async fn read_batch(&mut self) -> Result<DataBlock> {
         if let Some(state) = &mut self.file_state {
             let end = min(self.read_batch_size + state.offset, state.file.size);
-            let mut reader = self
-                .op
-                .reader_with(&state.file.path)
-                .range((state.offset as u64)..(end as u64))
-                .await?;
-
             let mut buffer = vec![0u8; end - state.offset];
-            let n = read_full(&mut reader, &mut buffer[0..]).await?;
+            let n = read_full(&mut state.reader, &mut buffer[..]).await?;
             if n == 0 {
                 return Err(ErrorCode::BadBytes(format!(
                     "Unexpected EOF {} expect {} bytes, read only {} bytes.",
@@ -103,10 +101,14 @@ impl BytesReader {
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for BytesReader {
+impl PrefetchAsyncSource for BytesReader {
     const NAME: &'static str = "BytesReader";
 
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
+
+    fn is_full(&self, prefetched: &[DataBlock]) -> bool {
+        prefetched.len() >= self.prefetch_num
+    }
 
     #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
@@ -116,7 +118,13 @@ impl AsyncSource for BytesReader {
                 None => return Ok(None),
             };
             let file = OneFilePartition::from_part(&part)?.clone();
-            self.file_state = Some(FileState { file, offset: 0 })
+
+            let reader = self.op.reader_with(&file.path).await?;
+            self.file_state = Some(FileState {
+                file,
+                reader,
+                offset: 0,
+            })
         }
         match self.read_batch().await {
             Ok(block) => Ok(Some(block)),

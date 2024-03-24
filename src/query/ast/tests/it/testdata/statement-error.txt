@@ -42,7 +42,7 @@ error:
   --> SQL:1:25
   |
 1 | create table a (c tuple())
-  | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `NULLABLE`, <Ident>, or <QuotedString>
+  | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `NULLABLE`, <Ident>, <QuotedString>, or `IDENTIFIER`
   | |               | |      
   | |               | while parsing type name
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
@@ -154,7 +154,7 @@ error:
   --> SQL:1:19
   |
 1 | show tables format
-  |                   ^ unexpected end of line, expecting <Ident> or <QuotedString>
+  |                   ^ unexpected end of line, expecting <Ident>, <QuotedString>, or `IDENTIFIER`
 
 
 ---------- Input ----------
@@ -238,7 +238,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE 'role1';
-  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `STREAMS`, `CATALOGS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PASSWORD`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `ENGINES`, `METRICS`, `SETTINGS`, `LOCKS`, `SCHEMAS`, `FIELDS`, `USERS`, `USER`, `FILE`, or `FULL`
+  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `STREAMS`, `CATALOGS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PASSWORD`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `ENGINES`, `METRICS`, `SETTINGS`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `USER`, `FILE`, or `FULL`
 
 
 ---------- Input ----------
@@ -283,7 +283,7 @@ error:
   --> SQL:1:17
   |
 1 | GRANT select ON UDF a TO 'test-grant';
-  |                 ^^^ unexpected `UDF`, expecting <QuotedString>, <Ident>, `FALSE`, `DATABASE`, `*`, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, or `TABLE`
+  |                 ^^^ unexpected `UDF`, expecting `IDENTIFIER`, <QuotedString>, <Ident>, `FALSE`, `DATABASE`, `*`, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, or `TABLE`
 
 
 ---------- Input ----------
@@ -414,7 +414,7 @@ error:
   --> SQL:1:41
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS ()
-  | ------                                  ^ unexpected `)`, expecting `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, `TIMESTAMP`, `INTERVAL`, or 28 more ...
+  | ------                                  ^ unexpected `)`, expecting `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, `TIMESTAMP`, `INTERVAL`, or 29 more ...
   | |                                        
   | while parsing `SELECT ...`
 
@@ -534,7 +534,7 @@ error:
   --> SQL:1:6
   |
 1 | with as t2(tt) as (select a from t) select t2.tt from t2
-  | ---- ^^ unexpected `as`, expecting <QuotedString>, <Ident>, or `RECURSIVE`
+  | ---- ^^ unexpected `as`, expecting <QuotedString>, <Ident>, `IDENTIFIER`, or `RECURSIVE`
   | |     
   | while parsing `SELECT ...`
 
@@ -830,11 +830,47 @@ error:
   --> SQL:1:65
   |
 1 | CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)
-  | ------                                   --       ----          ^ unexpected end of line, expecting `)`, `OVER`, `(`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, or 31 more ...
+  | ------                                   --       ----          ^ unexpected end of line, expecting `)`, `OVER`, `(`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, or 32 more ...
   | |                                        |        |  |          
   | |                                        |        |  while parsing `(<expr> [, ...])`
   | |                                        |        while parsing expression
   | |                                        while parsing AS (<parameter>, ...) -> <definition expr>
   | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`
+
+
+---------- Input ----------
+drop table :a
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | drop table :a
+  | ----       ^ unexpected `:`, expecting <Ident>, <QuotedString>, `IDENTIFIER`, or `IF`
+  | |           
+  | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
+
+
+---------- Input ----------
+drop table IDENTIFIER(a)
+---------- Output ---------
+error: 
+  --> SQL:1:23
+  |
+1 | drop table IDENTIFIER(a)
+  | ----                  ^ unexpected `a`, expecting `:`
+  | |                      
+  | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
+
+
+---------- Input ----------
+drop table IDENTIFIER(:a)
+---------- Output ---------
+error: 
+  --> SQL:1:23
+  |
+1 | drop table IDENTIFIER(:a)
+  | ----                  ^ variable is only available in SQL template
+  | |                      
+  | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 
 
