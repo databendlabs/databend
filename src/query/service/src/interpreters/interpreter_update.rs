@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::TableExt;
@@ -486,7 +487,7 @@ impl UpdateInterpreter {
         is_distributed: bool,
         ctx: Arc<QueryContext>,
     ) -> Result<PhysicalPlan> {
-        let merge_meta = partitions.is_lazy;
+        let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
             parts: partitions,
             filters,

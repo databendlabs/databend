@@ -46,7 +46,7 @@ use xorf::BinaryFuse16;
 use super::parquet_data_source::ParquetDataSource;
 use super::util::add_data_block_meta;
 use super::util::need_reserve_block_info;
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
@@ -261,7 +261,7 @@ impl Processor for DeserializeDataTransform {
                 ParquetDataSource::Normal((data, virtual_data)) => {
                     let start = Instant::now();
                     let columns_chunks = data.columns_chunks()?;
-                    let part = FusePartInfo::from_part(&part)?;
+                    let part = FuseBlockPartInfo::from_part(&part)?;
 
                     let mut data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
                         &part.location,
