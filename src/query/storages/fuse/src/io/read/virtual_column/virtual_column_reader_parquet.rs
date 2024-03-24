@@ -42,7 +42,7 @@ use crate::io::read::utils::build_columns_meta;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::io::UncompressedBuffer;
-use crate::FusePartInfo;
+use crate::FuseBlockPartInfo;
 use crate::MergeIOReadResult;
 
 pub struct VirtualMergeIOReadResult {
@@ -87,7 +87,7 @@ impl VirtualColumnReader {
         let (ranges, ignore_column_ids) = self.read_columns_meta(&schema, &columns_meta);
 
         if !ranges.is_empty() {
-            let part = FusePartInfo::create(
+            let part = FuseBlockPartInfo::create(
                 loc.to_string(),
                 row_group.num_rows() as u64,
                 columns_meta,
@@ -129,7 +129,7 @@ impl VirtualColumnReader {
         let (ranges, ignore_column_ids) = self.read_columns_meta(&schema, &columns_meta);
 
         if !ranges.is_empty() {
-            let part = FusePartInfo::create(
+            let part = FuseBlockPartInfo::create(
                 loc.to_string(),
                 row_group.num_rows() as u64,
                 columns_meta,
@@ -202,7 +202,7 @@ impl VirtualColumnReader {
         let mut virtual_values = HashMap::new();
         if let Some(virtual_data) = virtual_data {
             let columns_chunks = virtual_data.data.columns_chunks()?;
-            let part = FusePartInfo::from_part(&virtual_data.part)?;
+            let part = FuseBlockPartInfo::from_part(&virtual_data.part)?;
             let schema = virtual_data.schema;
 
             let table_schema = TableSchema::try_from(&schema).unwrap();

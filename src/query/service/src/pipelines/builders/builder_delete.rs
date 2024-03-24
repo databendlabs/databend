@@ -26,7 +26,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
-use databend_common_storages_fuse::FuseLazyPartInfo;
+use databend_common_storages_fuse::FuseSegmentPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
 use log::info;
@@ -63,7 +63,7 @@ impl PipelineBuilder {
             let mut segment_locations = Vec::with_capacity(delete.parts.partitions.len());
             for part in &delete.parts.partitions {
                 // Safe to downcast because we know the the partition is lazy
-                let part: &FuseLazyPartInfo = part.as_any().downcast_ref().unwrap();
+                let part: &FuseSegmentPartInfo = part.as_any().downcast_ref().unwrap();
                 segment_locations.push(SegmentLocation {
                     segment_idx: part.segment_index,
                     location: part.segment_location.clone(),

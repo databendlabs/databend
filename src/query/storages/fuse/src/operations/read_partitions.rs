@@ -45,13 +45,13 @@ use sha2::Digest;
 use sha2::Sha256;
 
 use super::collect_incremental_blocks;
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::SegmentsIO;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
 use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
-use crate::FuseLazyPartInfo;
+use crate::FuseSegmentPartInfo;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -95,7 +95,7 @@ impl FuseTable {
                 if (!dry_run && snapshot.segments.len() > nodes_num) || is_lazy {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                        segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
+                        segments.push(FuseSegmentPartInfo::create(idx, segment_location.clone()))
                     }
 
                     return Ok((
@@ -552,7 +552,7 @@ impl FuseTable {
                 .unwrap_or((default.clone(), default.clone()))
         });
 
-        FusePartInfo::create(
+        FuseBlockPartInfo::create(
             location,
             rows_count,
             columns_meta,
@@ -600,7 +600,7 @@ impl FuseTable {
         // TODO
         // row_count should be a hint value of  LIMIT,
         // not the count the rows in this partition
-        FusePartInfo::create(
+        FuseBlockPartInfo::create(
             location,
             rows_count,
             columns_meta,

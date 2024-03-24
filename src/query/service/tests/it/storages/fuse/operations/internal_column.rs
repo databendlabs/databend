@@ -27,7 +27,7 @@ use databend_common_expression::SNAPSHOT_NAME_COL_NAME;
 use databend_common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::FusePartInfo;
+use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::test_kits::*;
@@ -44,7 +44,7 @@ fn expected_data_block(
 ) -> Result<Vec<DataBlock>> {
     let mut data_blocks = Vec::with_capacity(parts.partitions.len());
     for part in &parts.partitions {
-        let fuse_part = FusePartInfo::from_part(part)?;
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
         let num_rows = fuse_part.nums_rows;
         let block_meta = fuse_part.block_meta_index.as_ref().unwrap();
         let mut columns = Vec::with_capacity(internal_columns.len());
@@ -130,7 +130,7 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
     }
 
     for part in &parts.partitions {
-        let fuse_part = FusePartInfo::from_part(part)?;
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
         let block_meta = fuse_part.block_meta_index.as_ref().unwrap();
         assert_eq!(
             block_meta.snapshot_location.clone().unwrap(),

@@ -55,7 +55,7 @@ use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
-use crate::FuseLazyPartInfo;
+use crate::FuseSegmentPartInfo;
 use crate::FuseTable;
 use crate::SegmentLocation;
 
@@ -201,7 +201,7 @@ impl FuseTable {
         let partitions = if is_lazy {
             let mut segments = Vec::with_capacity(snapshot.segments.len());
             for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
+                segments.push(FuseSegmentPartInfo::create(idx, segment_location.clone()));
             }
             Partitions::create(PartitionsShuffleKind::Mod, segments)
         } else {

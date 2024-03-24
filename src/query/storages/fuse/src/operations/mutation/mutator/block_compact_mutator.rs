@@ -38,9 +38,9 @@ use crate::io::SegmentsIO;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
+use crate::operations::mutation::CompactBlockPartInfo;
 use crate::operations::mutation::CompactExtraInfo;
-use crate::operations::mutation::CompactLazyPartInfo;
-use crate::operations::mutation::CompactPartInfo;
+use crate::operations::mutation::CompactSegmentPartInfo;
 use crate::operations::mutation::CompactTaskInfo;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::mutation::MAX_BLOCK_COUNT;
@@ -194,7 +194,7 @@ impl BlockCompactMutator {
                 .into_iter()
                 .map(|v| {
                     v.as_any()
-                        .downcast_ref::<CompactLazyPartInfo>()
+                        .downcast_ref::<CompactSegmentPartInfo>()
                         .unwrap()
                         .clone()
                 })
@@ -222,7 +222,7 @@ impl BlockCompactMutator {
         column_ids: HashSet<ColumnId>,
         cluster_key_id: Option<u32>,
         thresholds: BlockThresholds,
-        mut lazy_parts: Vec<CompactLazyPartInfo>,
+        mut lazy_parts: Vec<CompactSegmentPartInfo>,
     ) -> Result<Vec<PartInfoPtr>> {
         let start = Instant::now();
 
@@ -300,7 +300,7 @@ impl BlockCompactMutator {
                 compact_segments.push(segment);
             }
 
-            let lazy_part = CompactLazyPartInfo::create(segment_indices, compact_segments);
+            let lazy_part = CompactSegmentPartInfo::create(segment_indices, compact_segments);
             parts.push(lazy_part);
         }
     }
@@ -572,7 +572,7 @@ impl CompactTaskBuilder {
         let segment_idx = removed_segment_indexes.pop().unwrap();
         let mut partitions: Vec<PartInfoPtr> = Vec::with_capacity(tasks.len() + 1);
         for (block_idx, blocks) in tasks.into_iter() {
-            partitions.push(Arc::new(Box::new(CompactPartInfo::CompactTaskInfo(
+            partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactTaskInfo(
                 CompactTaskInfo::create(blocks, BlockMetaIndex {
                     segment_idx,
                     block_idx,
@@ -580,7 +580,7 @@ impl CompactTaskBuilder {
             ))));
         }
 
-        partitions.push(Arc::new(Box::new(CompactPartInfo::CompactExtraInfo(
+        partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactExtraInfo(
             CompactExtraInfo::create(
                 segment_idx,
                 unchanged_blocks,

@@ -22,8 +22,8 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
+use databend_common_storages_fuse::operations::CompactBlockPartInfo;
 use databend_common_storages_fuse::operations::CompactOptions;
-use databend_common_storages_fuse::operations::CompactPartInfo;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_query::interpreters::OptimizeTableInterpreter;
 use databend_query::pipelines::executor::ExecutorSettings;
@@ -243,9 +243,9 @@ async fn test_safety() -> Result<()> {
         let mut compact_segment_indices = HashSet::new();
         let mut actual_block_ids = HashSet::new();
         for part in selections.partitions.into_iter() {
-            let part = CompactPartInfo::from_part(&part)?;
+            let part = CompactBlockPartInfo::from_part(&part)?;
             match part {
-                CompactPartInfo::CompactExtraInfo(extra) => {
+                CompactBlockPartInfo::CompactExtraInfo(extra) => {
                     compact_segment_indices.insert(extra.segment_index);
                     compact_segment_indices.extend(extra.removed_segment_indexes.iter());
                     actual_blocks_number += extra.unchanged_blocks.len();
@@ -253,7 +253,7 @@ async fn test_safety() -> Result<()> {
                         actual_block_ids.insert(b.1.location.clone());
                     }
                 }
-                CompactPartInfo::CompactTaskInfo(task) => {
+                CompactBlockPartInfo::CompactTaskInfo(task) => {
                     compact_segment_indices.insert(task.index.segment_idx);
                     actual_blocks_number += task.blocks.len();
                     for b in &task.blocks {

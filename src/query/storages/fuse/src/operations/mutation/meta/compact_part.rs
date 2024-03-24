@@ -30,21 +30,22 @@ use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 
+/// Compact segment part information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
-pub struct CompactLazyPartInfo {
+pub struct CompactSegmentPartInfo {
     pub segment_indices: Vec<SegmentIndex>,
     pub compact_segments: Vec<Arc<CompactSegmentInfo>>,
 }
 
 #[typetag::serde(name = "compact_lazy")]
-impl PartInfo for CompactLazyPartInfo {
+impl PartInfo for CompactSegmentPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
         info.as_any()
-            .downcast_ref::<CompactLazyPartInfo>()
+            .downcast_ref::<CompactSegmentPartInfo>()
             .is_some_and(|other| self == other)
     }
 
@@ -55,33 +56,34 @@ impl PartInfo for CompactLazyPartInfo {
     }
 }
 
-impl CompactLazyPartInfo {
+impl CompactSegmentPartInfo {
     pub fn create(
         segment_indices: Vec<SegmentIndex>,
         compact_segments: Vec<Arc<CompactSegmentInfo>>,
     ) -> PartInfoPtr {
-        Arc::new(Box::new(CompactLazyPartInfo {
+        Arc::new(Box::new(CompactSegmentPartInfo {
             segment_indices,
             compact_segments,
         }))
     }
 }
 
+/// Compact block part information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
-pub enum CompactPartInfo {
+pub enum CompactBlockPartInfo {
     CompactExtraInfo(CompactExtraInfo),
     CompactTaskInfo(CompactTaskInfo),
 }
 
 #[typetag::serde(name = "compact_part_info")]
-impl PartInfo for CompactPartInfo {
+impl PartInfo for CompactBlockPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
         info.as_any()
-            .downcast_ref::<CompactPartInfo>()
+            .downcast_ref::<CompactBlockPartInfo>()
             .is_some_and(|other| self == other)
     }
 
@@ -93,10 +95,10 @@ impl PartInfo for CompactPartInfo {
     }
 }
 
-impl CompactPartInfo {
-    pub fn from_part(info: &PartInfoPtr) -> Result<&CompactPartInfo> {
+impl CompactBlockPartInfo {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&CompactBlockPartInfo> {
         info.as_any()
-            .downcast_ref::<CompactPartInfo>()
+            .downcast_ref::<CompactBlockPartInfo>()
             .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to CompactPartInfo."))
     }
 }

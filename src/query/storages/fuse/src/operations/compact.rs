@@ -34,7 +34,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::mutation::BlockCompactMutator;
-use crate::operations::mutation::CompactLazyPartInfo;
+use crate::operations::mutation::CompactSegmentPartInfo;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::SegmentCompactMutator;
 use crate::FuseTable;
@@ -133,7 +133,7 @@ impl FuseTable {
                 .into_iter()
                 .map(|v| {
                     v.as_any()
-                        .downcast_ref::<CompactLazyPartInfo>()
+                        .downcast_ref::<CompactSegmentPartInfo>()
                         .unwrap()
                         .clone()
                 })

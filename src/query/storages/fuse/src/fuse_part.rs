@@ -37,7 +37,7 @@ use databend_storages_common_table_meta::meta::Location;
 
 /// Fuse table partition information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
-pub struct FusePartInfo {
+pub struct FuseBlockPartInfo {
     pub location: String,
 
     pub create_on: Option<DateTime<Utc>>,
@@ -51,14 +51,14 @@ pub struct FusePartInfo {
 }
 
 #[typetag::serde(name = "fuse")]
-impl PartInfo for FusePartInfo {
+impl PartInfo for FuseBlockPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
         info.as_any()
-            .downcast_ref::<FusePartInfo>()
+            .downcast_ref::<FuseBlockPartInfo>()
             .is_some_and(|other| self == other)
     }
 
@@ -73,7 +73,7 @@ impl PartInfo for FusePartInfo {
     }
 }
 
-impl FusePartInfo {
+impl FuseBlockPartInfo {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         location: String,
@@ -85,7 +85,7 @@ impl FusePartInfo {
         block_meta_index: Option<BlockMetaIndex>,
         create_on: Option<DateTime<Utc>>,
     ) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(FusePartInfo {
+        Arc::new(Box::new(FuseBlockPartInfo {
             location,
             create_on,
             columns_meta,
@@ -97,9 +97,9 @@ impl FusePartInfo {
         }))
     }
 
-    pub fn from_part(info: &PartInfoPtr) -> Result<&FusePartInfo> {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&FuseBlockPartInfo> {
         info.as_any()
-            .downcast_ref::<FusePartInfo>()
+            .downcast_ref::<FuseBlockPartInfo>()
             .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to FusePartInfo."))
     }
 
@@ -125,20 +125,20 @@ impl FusePartInfo {
 /// Lazy partition is a partition that only contains the partition location.
 /// The partition data will be loaded when the partition is used.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct FuseLazyPartInfo {
+pub struct FuseSegmentPartInfo {
     pub segment_index: usize,
     pub segment_location: Location,
 }
 
 #[typetag::serde(name = "fuse_lazy")]
-impl PartInfo for FuseLazyPartInfo {
+impl PartInfo for FuseSegmentPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
         info.as_any()
-            .downcast_ref::<FuseLazyPartInfo>()
+            .downcast_ref::<FuseSegmentPartInfo>()
             .is_some_and(|other| self == other)
     }
 
@@ -153,9 +153,9 @@ impl PartInfo for FuseLazyPartInfo {
     }
 }
 
-impl FuseLazyPartInfo {
+impl FuseSegmentPartInfo {
     pub fn create(idx: usize, segment_location: Location) -> PartInfoPtr {
-        Arc::new(Box::new(FuseLazyPartInfo {
+        Arc::new(Box::new(FuseSegmentPartInfo {
             segment_index: idx,
             segment_location,
         }))

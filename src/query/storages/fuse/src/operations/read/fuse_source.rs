@@ -28,7 +28,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use log::info;
 
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
@@ -270,7 +270,7 @@ pub fn adjust_threads_and_request(
         static MIN_ROWS_READ_PER_THREAD: u64 = 16 * 1024;
         if is_native {
             plan.parts.partitions.iter().for_each(|part| {
-                if let Some(part) = part.as_any().downcast_ref::<FusePartInfo>() {
+                if let Some(part) = part.as_any().downcast_ref::<FuseBlockPartInfo>() {
                     let to_read_rows = part
                         .columns_meta
                         .values()
