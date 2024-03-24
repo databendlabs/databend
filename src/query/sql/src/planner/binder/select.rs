@@ -1054,7 +1054,7 @@ impl<'a> SelectRewriter<'a> {
     // For Expr::Literal, expr.to_string() is quoted, sometimes we need the raw string.
     fn raw_string_from_literal_expr(expr: &Expr) -> Option<String> {
         match expr {
-            Expr::Literal { value: lit, .. } => match lit {
+            Expr::Literal { value, .. } => match value {
                 Literal::String(v) => Some(v.clone()),
                 _ => Some(expr.to_string()),
             },

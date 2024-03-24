@@ -1195,8 +1195,8 @@ impl<'a> TypeChecker<'a> {
     // just support integer
     #[inline]
     fn resolve_rows_offset(&self, expr: &Expr) -> Result<Scalar> {
-        if let Expr::Literal { value: lit, .. } = expr {
-            let box (value, _) = self.resolve_literal_scalar(lit)?;
+        if let Expr::Literal { value, .. } = expr {
+            let box (value, _) = self.resolve_literal_scalar(value)?;
             match value {
                 Scalar::Number(NumberScalar::UInt8(v)) => {
                     return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
@@ -4299,7 +4299,7 @@ fn check_prefix(like_str: &str) -> bool {
 // Note: the method mainly checks if list contains NULL literal, because `contain` can't handle NULL.
 fn satisfy_contain_func(expr: &Expr) -> bool {
     match expr {
-        Expr::Literal { value: lit, .. } => !matches!(lit, Literal::Null),
+        Expr::Literal { value, .. } => !matches!(value, Literal::Null),
         Expr::Tuple { exprs, .. } => {
             // For each expr in `exprs`, check if it satisfies the conditions
             exprs.iter().all(satisfy_contain_func)

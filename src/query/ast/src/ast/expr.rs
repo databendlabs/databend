@@ -492,8 +492,8 @@ impl Display for Expr {
                     }
                     write!(f, "{expr})")?;
                 }
-                Expr::Literal { value: lit, .. } => {
-                    write!(f, "{lit}")?;
+                Expr::Literal { value, .. } => {
+                    write!(f, "{value}")?;
                 }
                 Expr::CountAll { window, .. } => {
                     write!(f, "COUNT(*)")?;

@@ -119,7 +119,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                         accessor: MapAccessor::DotNumber { .. },
                     } => {
                         *elem = ExprElement::Literal {
-                            lit: literal(span)?.1,
+                            value: literal(span)?.1,
                         };
                     }
                     _ => {}
@@ -231,7 +231,7 @@ pub enum ExprElement {
     },
     /// A literal value, such as string, number, date or NULL
     Literal {
-        lit: Literal,
+        value: Literal,
     },
     /// `Count(*)` expression
     CountAll {
@@ -436,7 +436,7 @@ impl From<Expr> for ExprElement {
             Expr::Trim {
                 expr, trim_where, ..
             } => ExprElement::Trim { expr, trim_where },
-            Expr::Literal { value: lit, .. } => ExprElement::Literal { lit },
+            Expr::Literal { value, .. } => ExprElement::Literal { value },
             Expr::CountAll { window, .. } => ExprElement::CountAll { window },
             Expr::Tuple { exprs, .. } => ExprElement::Tuple { exprs },
             Expr::FunctionCall { func, .. } => ExprElement::FunctionCall { func },
@@ -553,9 +553,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 expr,
                 trim_where,
             },
-            ExprElement::Literal { lit } => Expr::Literal {
+            ExprElement::Literal { value } => Expr::Literal {
                 span: transform_span(elem.span.tokens),
-                value: lit,
+                value,
             },
             ExprElement::CountAll { window } => Expr::CountAll {
                 span: transform_span(elem.span.tokens),
@@ -1168,7 +1168,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     // Floating point literal with leading dot will be parsed as a period map access,
     // and then will be converted back to a floating point literal if the map access
     // is not following a primary element nor a postfix element.
-    let literal = map(literal, |lit| ExprElement::Literal { lit });
+    let literal = map(literal, |value| ExprElement::Literal { value });
     let array = map(
         // Array that contains a single literal item will be parsed as a bracket map access,
         // and then will be converted back to an array if the map access is not following

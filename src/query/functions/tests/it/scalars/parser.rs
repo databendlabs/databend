@@ -96,9 +96,9 @@ macro_rules! transform_interval_add_sub {
 
 pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
     match ast {
-        AExpr::Literal { span, value: lit } => RawExpr::Constant {
+        AExpr::Literal { span, value } => RawExpr::Constant {
             span,
-            scalar: transform_literal(lit),
+            scalar: transform_literal(value),
         },
         AExpr::ColumnRef {
             span,
