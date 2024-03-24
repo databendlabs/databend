@@ -53,13 +53,15 @@ use crate::api::FragmentData;
 pub struct ExchangeSerializeMeta {
     pub block_number: isize,
     pub packet: Vec<DataPacket>,
+    pub max_partition_count: usize,
 }
 
 impl ExchangeSerializeMeta {
-    pub fn create(block_number: isize, packet: Vec<DataPacket>) -> BlockMetaInfoPtr {
+    pub fn create(block_number: isize, packet: Vec<DataPacket>, max_partition_count: usize,) -> BlockMetaInfoPtr {
         Box::new(ExchangeSerializeMeta {
             packet,
             block_number,
+            max_partition_count,
         })
     }
 }
@@ -133,7 +135,7 @@ impl Transform for TransformExchangeSerializer {
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, data_block.num_rows());
-        serialize_block(0, data_block, &self.ipc_fields, &self.options)
+        serialize_block(0, data_block, &self.ipc_fields, &self.options, 0)
     }
 }
 
@@ -191,7 +193,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterExchangeSeriali
 
             new_blocks.push(match self.local_pos == index {
                 true => block,
-                false => serialize_block(0, block, &self.ipc_fields, &self.options)?,
+                false => serialize_block(0, block, &self.ipc_fields, &self.options,0)?,
             });
         }
 
@@ -206,11 +208,13 @@ pub fn serialize_block(
     data_block: DataBlock,
     ipc_field: &[IpcField],
     options: &WriteOptions,
+    max_partition_count: usize,
 ) -> Result<DataBlock> {
     if data_block.is_empty() && data_block.get_meta().is_none() {
         return Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
             block_num,
             vec![],
+            max_partition_count,
         )));
     }
 
@@ -235,6 +239,6 @@ pub fn serialize_block(
 
     packet.push(DataPacket::FragmentData(FragmentData::create(meta, values)));
     Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
-        block_num, packet,
+        block_num, packet,max_partition_count,
     )))
 }

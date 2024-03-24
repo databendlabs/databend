@@ -200,7 +200,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                             c.replace_meta(meta);
                         }
 
-                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options)?;
+                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options, 0)?;
                         serialized_blocks.push(FlightSerialized::DataBlock(c));
                     }
                 }
@@ -215,6 +215,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                     }
 
                     let bucket = p.bucket;
+                    let max_partition_count = p.max_partition_count;
                     let stream = SerializeAggregateStream::create(
                         &self.method,
                         &self.params,
@@ -230,7 +231,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                             c.replace_meta(meta);
                         }
 
-                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options)?;
+                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options, max_partition_count)?;
                         serialized_blocks.push(FlightSerialized::DataBlock(c));
                     }
                 }
@@ -356,7 +357,7 @@ fn agg_spilling_aggregate_payload<Method: HashMethodBounds>(
 
             let ipc_fields = exchange_defines::spilled_ipc_fields();
             let write_options = exchange_defines::spilled_write_options();
-            return serialize_block(-1, data_block, ipc_fields, write_options);
+            return serialize_block(-1, data_block, ipc_fields, write_options,partition_count);
         }
 
         Ok(DataBlock::empty())
@@ -476,7 +477,7 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
 
             let ipc_fields = exchange_defines::spilled_ipc_fields();
             let write_options = exchange_defines::spilled_write_options();
-            return serialize_block(-1, data_block, ipc_fields, write_options);
+            return serialize_block(-1, data_block, ipc_fields, write_options,0);
         }
 
         Ok(DataBlock::empty())

@@ -107,7 +107,7 @@ impl AggregateHashTable {
         Self {
             entries,
             count: 0,
-            direct_append: true,
+            direct_append: !need_init_entry,
             current_radix_bits: config.initial_radix_bits,
             payload: PartitionedPayload::new(
                 group_types,
