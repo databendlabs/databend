@@ -3,5 +3,3 @@ DROP DATABASE IF EXISTS xx
 
 statement error (?s)1003.*Unknown database `xx` in catalog 'default'
 select * from xx.yy;
-
-  |               ^^ Unknown database `xx` in catalog 'default'
