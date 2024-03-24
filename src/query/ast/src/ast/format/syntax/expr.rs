@@ -233,7 +233,7 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
             })
             .append(pretty_expr(*expr))
             .append(RcDoc::text(")")),
-        Expr::Literal { lit, .. } => RcDoc::text(lit.to_string()),
+        Expr::Literal { value: lit, .. } => RcDoc::text(lit.to_string()),
         Expr::CountAll { window, .. } => {
             RcDoc::text("COUNT(*)").append(if let Some(window) = window {
                 RcDoc::text(" OVER (")

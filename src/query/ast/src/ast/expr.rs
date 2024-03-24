@@ -169,7 +169,7 @@ pub enum Expr {
     Literal {
         #[drive(skip)]
         span: Span,
-        lit: Literal,
+        value: Literal,
     },
     /// `COUNT(*)` expression
     CountAll {
@@ -492,7 +492,7 @@ impl Display for Expr {
                     }
                     write!(f, "{expr})")?;
                 }
-                Expr::Literal { lit, .. } => {
+                Expr::Literal { value: lit, .. } => {
                     write!(f, "{lit}")?;
                 }
                 Expr::CountAll { window, .. } => {

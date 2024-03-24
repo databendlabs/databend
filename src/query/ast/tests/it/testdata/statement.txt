@@ -9271,6 +9271,106 @@ Query(
 
 
 ---------- Input ----------
+SELECT avg((number > 314)::UInt32);
+---------- Output ---------
+SELECT avg(number > 314::UInt32)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..34,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..34,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                7..34,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        7..10,
+                                    ),
+                                    name: "avg",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                                args: [
+                                    Cast {
+                                        span: Some(
+                                            25..33,
+                                        ),
+                                        expr: BinaryOp {
+                                            span: Some(
+                                                19..20,
+                                            ),
+                                            op: Gt,
+                                            left: ColumnRef {
+                                                span: Some(
+                                                    12..18,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                12..18,
+                                                            ),
+                                                            name: "number",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            right: Literal {
+                                                span: Some(
+                                                    21..24,
+                                                ),
+                                                lit: UInt64(
+                                                    314,
+                                                ),
+                                            },
+                                        },
+                                        target_type: UInt32,
+                                        pg_style: true,
+                                    },
+                                ],
+                                params: [],
+                                window: None,
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 CREATE STAGE ~
 ---------- Output ---------
 CREATE STAGE ~

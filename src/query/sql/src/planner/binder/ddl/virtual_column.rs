@@ -209,8 +209,8 @@ impl Binder {
                 expr = &**inner_expr;
                 let path = match accessor {
                     MapAccessor::Bracket {
-                        key: box Expr::Literal { lit, .. },
-                    } => lit.clone(),
+                        key: box Expr::Literal { value, .. },
+                    } => value.clone(),
                     MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                     MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                     _ => {

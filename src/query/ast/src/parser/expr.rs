@@ -400,7 +400,15 @@ impl From<Expr> for ExprElement {
             Expr::JsonOp { op, .. } => ExprElement::JsonOp { op },
             Expr::UnaryOp { op, .. } => ExprElement::UnaryOp { op },
             Expr::Cast {
-                expr, target_type, ..
+                target_type,
+                pg_style: true,
+                ..
+            } => ExprElement::PgCast { target_type },
+            Expr::Cast {
+                expr,
+                target_type,
+                pg_style: false,
+                ..
             } => ExprElement::Cast { expr, target_type },
             Expr::TryCast {
                 expr, target_type, ..
@@ -428,7 +436,7 @@ impl From<Expr> for ExprElement {
             Expr::Trim {
                 expr, trim_where, ..
             } => ExprElement::Trim { expr, trim_where },
-            Expr::Literal { lit, .. } => ExprElement::Literal { lit },
+            Expr::Literal { value: lit, .. } => ExprElement::Literal { lit },
             Expr::CountAll { window, .. } => ExprElement::CountAll { window },
             Expr::Tuple { exprs, .. } => ExprElement::Tuple { exprs },
             Expr::FunctionCall { func, .. } => ExprElement::FunctionCall { func },
@@ -547,7 +555,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             },
             ExprElement::Literal { lit } => Expr::Literal {
                 span: transform_span(elem.span.tokens),
-                lit,
+                value: lit,
             },
             ExprElement::CountAll { window } => Expr::CountAll {
                 span: transform_span(elem.span.tokens),
@@ -1222,7 +1230,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, (span, date))| ExprElement::Cast {
             expr: Box::new(Expr::Literal {
                 span: transform_span(span.tokens),
-                lit: Literal::String(date),
+                value: Literal::String(date),
             }),
             target_type: TypeName::Date,
         },
@@ -1235,7 +1243,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, (span, date))| ExprElement::Cast {
             expr: Box::new(Expr::Literal {
                 span: transform_span(span.tokens),
-                lit: Literal::String(date),
+                value: Literal::String(date),
             }),
             target_type: TypeName::Timestamp,
         },
