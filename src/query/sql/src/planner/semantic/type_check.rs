@@ -1700,8 +1700,6 @@ impl<'a> TypeChecker<'a> {
         let mut arg_types = vec![];
         for arg in args.iter() {
             let box (argument, arg_type) = self.resolve(arg).await?;
-            dbg!(&argument);
-            dbg!(&arg_type);
             arguments.push(argument);
             arg_types.push(arg_type);
         }

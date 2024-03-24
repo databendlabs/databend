@@ -198,7 +198,7 @@ Query {
             span: Some(
                 93..94,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -273,7 +273,7 @@ Query {
                                         span: Some(
                                             7..14,
                                         ),
-                                        lit: String(
+                                        value: String(
                                             "abc",
                                         ),
                                     },
@@ -352,7 +352,7 @@ Query {
                                         span: Some(
                                             48..49,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             3,
                                         ),
                                     },
@@ -863,7 +863,7 @@ Query {
             span: Some(
                 56..57,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -1011,7 +1011,7 @@ Query {
             span: Some(
                 56..57,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -1021,7 +1021,7 @@ Query {
             span: Some(
                 65..66,
             ),
-            lit: UInt64(
+            value: UInt64(
                 3,
             ),
         },
@@ -1473,7 +1473,7 @@ Query {
                         span: Some(
                             69..70,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -1707,7 +1707,7 @@ Query {
                         span: Some(
                             82..83,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -1932,7 +1932,7 @@ Query {
                         span: Some(
                             63..64,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -2241,7 +2241,7 @@ Query {
                                             span: Some(
                                                 118..119,
                                             ),
-                                            lit: UInt64(
+                                            value: UInt64(
                                                 1,
                                             ),
                                         },
@@ -2464,7 +2464,7 @@ Query {
                         span: Some(
                             176..177,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -2807,7 +2807,7 @@ Query {
                                         span: Some(
                                             23..24,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -2815,7 +2815,7 @@ Query {
                                         span: Some(
                                             25..26,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -2825,7 +2825,7 @@ Query {
                                         span: Some(
                                             29..30,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             2,
                                         ),
                                     },
@@ -2833,7 +2833,7 @@ Query {
                                         span: Some(
                                             31..35,
                                         ),
-                                        lit: Null,
+                                        value: Null,
                                     },
                                 ],
                                 [
@@ -2841,13 +2841,13 @@ Query {
                                         span: Some(
                                             38..42,
                                         ),
-                                        lit: Null,
+                                        value: Null,
                                     },
                                     Literal {
                                         span: Some(
                                             43..44,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             5,
                                         ),
                                     },
@@ -3327,7 +3327,7 @@ Query {
                                                             span: Some(
                                                                 308..317,
                                                             ),
-                                                            lit: String(
+                                                            value: String(
                                                                 "%:1%:2%",
                                                             ),
                                                         },
@@ -3543,7 +3543,7 @@ Query {
             span: Some(
                 469..471,
             ),
-            lit: UInt64(
+            value: UInt64(
                 10,
             ),
         },
@@ -5256,7 +5256,7 @@ Query {
                                     span: Some(
                                         60..65,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "JAN",
                                     ),
                                 },
@@ -5264,7 +5264,7 @@ Query {
                                     span: Some(
                                         67..72,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "FEB",
                                     ),
                                 },
@@ -5272,7 +5272,7 @@ Query {
                                     span: Some(
                                         74..79,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "MAR",
                                     ),
                                 },
@@ -5280,7 +5280,7 @@ Query {
                                     span: Some(
                                         81..86,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "APR",
                                     ),
                                 },
@@ -5518,7 +5518,7 @@ Query {
                             span: Some(
                                 20..21,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -5526,7 +5526,7 @@ Query {
                             span: Some(
                                 23..24,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 2,
                             ),
                         },
@@ -6330,7 +6330,7 @@ Query {
                                         span: Some(
                                             22..23,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -6338,7 +6338,7 @@ Query {
                                         span: Some(
                                             24..25,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -6348,7 +6348,7 @@ Query {
                                         span: Some(
                                             28..29,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             2,
                                         ),
                                     },
@@ -6356,7 +6356,7 @@ Query {
                                         span: Some(
                                             30..34,
                                         ),
-                                        lit: Null,
+                                        value: Null,
                                     },
                                 ],
                                 [
@@ -6364,13 +6364,13 @@ Query {
                                         span: Some(
                                             37..41,
                                         ),
-                                        lit: Null,
+                                        value: Null,
                                     },
                                     Literal {
                                         span: Some(
                                             42..43,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             5,
                                         ),
                                     },
@@ -6448,7 +6448,7 @@ Query {
                     span: Some(
                         7..8,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         1,
                     ),
                 },
@@ -6456,7 +6456,7 @@ Query {
                     span: Some(
                         9..12,
                     ),
-                    lit: String(
+                    value: String(
                         "a",
                     ),
                 },
@@ -6466,7 +6466,7 @@ Query {
                     span: Some(
                         15..16,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         2,
                     ),
                 },
@@ -6474,7 +6474,7 @@ Query {
                     span: Some(
                         17..20,
                     ),
-                    lit: String(
+                    value: String(
                         "b",
                     ),
                 },
@@ -6484,13 +6484,13 @@ Query {
                     span: Some(
                         23..27,
                     ),
-                    lit: Null,
+                    value: Null,
                 },
                 Literal {
                     span: Some(
                         28..31,
                     ),
-                    lit: String(
+                    value: String(
                         "c",
                     ),
                 },
@@ -6527,7 +6527,7 @@ Query {
             span: Some(
                 53..54,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -6578,7 +6578,7 @@ Query {
                                 span: Some(
                                     47..51,
                                 ),
-                                lit: Boolean(
+                                value: Boolean(
                                     true,
                                 ),
                             },
@@ -6626,7 +6626,7 @@ Query {
                                                     span: Some(
                                                         41..42,
                                                     ),
-                                                    lit: UInt64(
+                                                    value: UInt64(
                                                         1,
                                                     ),
                                                 },
@@ -6673,7 +6673,7 @@ Query {
                                             span: Some(
                                                 68..69,
                                             ),
-                                            lit: UInt64(
+                                            value: UInt64(
                                                 2,
                                             ),
                                         },

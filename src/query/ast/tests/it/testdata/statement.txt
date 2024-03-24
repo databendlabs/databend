@@ -114,7 +114,7 @@ ShowDropTables(
                         span: Some(
                             28..31,
                         ),
-                        lit: String(
+                        value: String(
                             "t",
                         ),
                     },
@@ -434,7 +434,7 @@ ShowProcessList {
                             span: Some(
                                 32..41,
                             ),
-                            lit: String(
+                            value: String(
                                 "default",
                             ),
                         },
@@ -767,7 +767,7 @@ Explain {
                                 span: Some(
                                     63..64,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -981,7 +981,7 @@ CreateIndex(
                                 span: Some(
                                     68..69,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     3,
                                 ),
                             },
@@ -1174,7 +1174,7 @@ CreateIndex(
                                 span: Some(
                                     79..80,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     3,
                                 ),
                             },
@@ -1514,7 +1514,7 @@ CreateTable(
                                     span: Some(
                                         59..60,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -1596,7 +1596,7 @@ CreateTable(
                                     span: Some(
                                         50..51,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -1881,7 +1881,7 @@ CreateTable(
                                                 span: Some(
                                                     75..78,
                                                 ),
-                                                lit: String(
+                                                value: String(
                                                     " ",
                                                 ),
                                             },
@@ -2858,7 +2858,7 @@ CreateView(
                                     span: Some(
                                         33..34,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -2894,7 +2894,7 @@ CreateView(
                                     span: Some(
                                         53..57,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -2979,7 +2979,7 @@ AlterView(
                                     span: Some(
                                         32..33,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -3015,7 +3015,7 @@ AlterView(
                                     span: Some(
                                         52..56,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -3132,7 +3132,7 @@ CreateView(
                                     span: Some(
                                         38..39,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -3168,7 +3168,7 @@ CreateView(
                                     span: Some(
                                         58..62,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -3263,7 +3263,7 @@ CreateView(
                                     span: Some(
                                         49..50,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -3299,7 +3299,7 @@ CreateView(
                                     span: Some(
                                         69..73,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -3393,7 +3393,7 @@ AlterView(
                                     span: Some(
                                         37..38,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -3429,7 +3429,7 @@ AlterView(
                                     span: Some(
                                         57..61,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -4244,7 +4244,7 @@ CreateTable(
                                     span: Some(
                                         30..31,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -4348,7 +4348,7 @@ CreateTable(
                         span: Some(
                             45..47,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             10,
                         ),
                     },
@@ -4666,7 +4666,7 @@ Query(
                                 span: Some(
                                     45..46,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -4704,7 +4704,7 @@ Query(
                                     span: Some(
                                         55..56,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -4785,7 +4785,7 @@ Query(
                             span: Some(
                                 83..84,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -8163,7 +8163,7 @@ Query(
                             span: Some(
                                 7..8,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -8189,7 +8189,7 @@ Query(
                                 span: Some(
                                     22..23,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -8213,7 +8213,7 @@ Query(
                                 span: Some(
                                     33..34,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -8221,7 +8221,7 @@ Query(
                                 span: Some(
                                     37..38,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -8230,7 +8230,7 @@ Query(
                             span: Some(
                                 43..44,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -8299,7 +8299,7 @@ Query(
                                 span: Some(
                                     27..31,
                                 ),
-                                lit: String(
+                                value: String(
                                     "p1",
                                 ),
                             },
@@ -8307,7 +8307,7 @@ Query(
                                 span: Some(
                                     33..37,
                                 ),
-                                lit: String(
+                                value: String(
                                     "p2",
                                 ),
                             },
@@ -8315,7 +8315,7 @@ Query(
                                 span: Some(
                                     39..43,
                                 ),
-                                lit: String(
+                                value: String(
                                     "p3",
                                 ),
                             },
@@ -8334,7 +8334,7 @@ Query(
                                     span: Some(
                                         59..63,
                                     ),
-                                    lit: Boolean(
+                                    value: Boolean(
                                         true,
                                     ),
                                 },
@@ -8352,7 +8352,7 @@ Query(
                                     span: Some(
                                         87..91,
                                     ),
-                                    lit: Boolean(
+                                    value: Boolean(
                                         true,
                                     ),
                                 },
@@ -8466,7 +8466,7 @@ Query(
                             span: Some(
                                 7..28,
                             ),
-                            lit: String(
+                            value: String(
                                 "stringwith'quote'",
                             ),
                         },
@@ -8513,7 +8513,7 @@ Query(
                             span: Some(
                                 7..31,
                             ),
-                            lit: String(
+                            value: String(
                                 "stringwith\"doublequote",
                             ),
                         },
@@ -8560,7 +8560,7 @@ Query(
                             span: Some(
                                 7..13,
                             ),
-                            lit: String(
+                            value: String(
                                 "🦈",
                             ),
                         },
@@ -8751,7 +8751,7 @@ Query(
                                                     span: Some(
                                                         31..32,
                                                     ),
-                                                    lit: UInt64(
+                                                    value: UInt64(
                                                         1,
                                                     ),
                                                 },
@@ -8776,7 +8776,7 @@ Query(
                             span: Some(
                                 36..37,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -8799,7 +8799,7 @@ Query(
 ---------- Input ----------
 select ((t1.a)>=(((((t2.b)<=(t3.c))) IS NOT NULL)::INTEGER));
 ---------- Output ---------
-SELECT t1.a >= t2.b <= t3.c IS NOT NULL::Int32
+SELECT t1.a >= (t2.b <= t3.c IS NOT NULL)::Int32
 ---------- AST ------------
 Query(
     Query {
@@ -8987,7 +8987,7 @@ Insert(
                         span: Some(
                             31..32,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -8995,7 +8995,7 @@ Insert(
                         span: Some(
                             34..35,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -9005,7 +9005,7 @@ Insert(
                         span: Some(
                             39..40,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             3,
                         ),
                     },
@@ -9013,7 +9013,7 @@ Insert(
                         span: Some(
                             42..43,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             4,
                         ),
                     },
@@ -9068,7 +9068,7 @@ Insert(
                         span: Some(
                             31..32,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -9076,7 +9076,7 @@ Insert(
                         span: Some(
                             34..35,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -9219,7 +9219,7 @@ Query(
                                                 span: Some(
                                                     18..37,
                                                 ),
-                                                lit: String(
+                                                value: String(
                                                     "{\"k1\": [0, 1, 2]}",
                                                 ),
                                             },
@@ -9245,7 +9245,7 @@ Query(
                                     span: Some(
                                         42..43,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         0,
                                     ),
                                 },
@@ -9273,7 +9273,7 @@ Query(
 ---------- Input ----------
 SELECT avg((number > 314)::UInt32);
 ---------- Output ---------
-SELECT avg(number > 314::UInt32)
+SELECT avg((number > 314)::UInt32)
 ---------- AST ------------
 Query(
     Query {
@@ -9337,7 +9337,7 @@ Query(
                                                 span: Some(
                                                     21..24,
                                                 ),
-                                                lit: UInt64(
+                                                value: UInt64(
                                                     314,
                                                 ),
                                             },
@@ -9835,7 +9835,7 @@ OptimizeTable(
                             span: Some(
                                 44..72,
                             ),
-                            lit: String(
+                            value: String(
                                 "2023-06-26 09:49:02.038483",
                             ),
                         },
@@ -9999,7 +9999,7 @@ AlterTable(
                         span: Some(
                             41..42,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             0,
                         ),
                     },
@@ -10158,7 +10158,7 @@ AlterTable(
                             span: Some(
                                 41..44,
                             ),
-                            lit: Decimal256 {
+                            value: Decimal256 {
                                 value: 11,
                                 precision: 76,
                                 scale: 1,
@@ -10221,7 +10221,7 @@ AlterTable(
                             span: Some(
                                 42..45,
                             ),
-                            lit: String(
+                            value: String(
                                 "b",
                             ),
                         },
@@ -10514,7 +10514,7 @@ AlterTable(
                                     span: Some(
                                         42..43,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -10591,7 +10591,7 @@ AlterTable(
                                     span: Some(
                                         47..48,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -13124,7 +13124,7 @@ ShowSettings {
                             span: Some(
                                 25..43,
                             ),
-                            lit: String(
+                            value: String(
                                 "max_memory_usage",
                             ),
                         },
@@ -13198,7 +13198,7 @@ ShowFunctions {
                             span: Some(
                                 26..42,
                             ),
-                            lit: String(
+                            value: String(
                                 "to_day_of_year",
                             ),
                         },
@@ -13272,7 +13272,7 @@ ShowEngines {
                             span: Some(
                                 26..34,
                             ),
-                            lit: String(
+                            value: String(
                                 "MEMORY",
                             ),
                         },
@@ -13346,7 +13346,7 @@ ShowMetrics {
                             span: Some(
                                 26..51,
                             ),
-                            lit: String(
+                            value: String(
                                 "session_connect_numbers",
                             ),
                         },
@@ -13420,7 +13420,7 @@ ShowTableFunctions {
                             span: Some(
                                 32..47,
                             ),
-                            lit: String(
+                            value: String(
                                 "fuse_snapshot",
                             ),
                         },
@@ -13494,7 +13494,7 @@ ShowIndexes {
                             span: Some(
                                 24..34,
                             ),
-                            lit: String(
+                            value: String(
                                 "test_idx",
                             ),
                         },
@@ -14446,7 +14446,7 @@ Update(
                         span: Some(
                             27..28,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -14465,7 +14465,7 @@ Update(
                     span: Some(
                         34..35,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         2,
                     ),
                 },
@@ -14500,7 +14500,7 @@ Update(
                     span: Some(
                         46..47,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         3,
                     ),
                 },
@@ -14529,7 +14529,7 @@ SetVariable {
         span: Some(
             18..20,
         ),
-        lit: UInt64(
+        value: UInt64(
             10,
         ),
     },
@@ -14560,7 +14560,7 @@ SetVariable {
             span: Some(
                 18..20,
             ),
-            lit: UInt64(
+            value: UInt64(
                 10,
             ),
         },
@@ -14568,7 +14568,7 @@ SetVariable {
             span: Some(
                 21..22,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -16088,7 +16088,7 @@ CreateDatamaskPolicy(
                                 span: Some(
                                     96..105,
                                 ),
-                                lit: String(
+                                value: String(
                                     "ANALYST",
                                 ),
                             },
@@ -16122,7 +16122,7 @@ CreateDatamaskPolicy(
                         span: Some(
                             121..132,
                         ),
-                        lit: String(
+                        value: String(
                             "*********",
                         ),
                     },
@@ -16188,7 +16188,7 @@ CreateDatamaskPolicy(
                                 span: Some(
                                     107..116,
                                 ),
-                                lit: String(
+                                value: String(
                                     "ANALYST",
                                 ),
                             },
@@ -16222,7 +16222,7 @@ CreateDatamaskPolicy(
                         span: Some(
                             132..143,
                         ),
-                        lit: String(
+                        value: String(
                             "*********",
                         ),
                     },
@@ -16312,7 +16312,7 @@ CreateVirtualColumn(
                             span: Some(
                                 25..29,
                             ),
-                            lit: String(
+                            value: String(
                                 "k1",
                             ),
                         },
@@ -16323,7 +16323,7 @@ CreateVirtualColumn(
                         span: Some(
                             31..35,
                         ),
-                        lit: String(
+                        value: String(
                             "k2",
                         ),
                     },
@@ -16361,7 +16361,7 @@ CreateVirtualColumn(
                             span: Some(
                                 40..41,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 0,
                             ),
                         },
@@ -16372,7 +16372,7 @@ CreateVirtualColumn(
                         span: Some(
                             43..44,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -16434,7 +16434,7 @@ CreateVirtualColumn(
                             span: Some(
                                 36..40,
                             ),
-                            lit: String(
+                            value: String(
                                 "k1",
                             ),
                         },
@@ -16445,7 +16445,7 @@ CreateVirtualColumn(
                         span: Some(
                             42..46,
                         ),
-                        lit: String(
+                        value: String(
                             "k2",
                         ),
                     },
@@ -16483,7 +16483,7 @@ CreateVirtualColumn(
                             span: Some(
                                 51..52,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 0,
                             ),
                         },
@@ -16494,7 +16494,7 @@ CreateVirtualColumn(
                         span: Some(
                             54..55,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -16556,7 +16556,7 @@ AlterVirtualColumn(
                             span: Some(
                                 24..28,
                             ),
-                            lit: String(
+                            value: String(
                                 "k1",
                             ),
                         },
@@ -16567,7 +16567,7 @@ AlterVirtualColumn(
                         span: Some(
                             30..34,
                         ),
-                        lit: String(
+                        value: String(
                             "k2",
                         ),
                     },
@@ -16605,7 +16605,7 @@ AlterVirtualColumn(
                             span: Some(
                                 39..40,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 0,
                             ),
                         },
@@ -16616,7 +16616,7 @@ AlterVirtualColumn(
                         span: Some(
                             42..43,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -17001,7 +17001,7 @@ CreateTask(
                                 span: Some(
                                     98..109,
                                 ),
-                                lit: String(
+                                value: String(
                                     "task_name",
                                 ),
                             },
@@ -17015,7 +17015,7 @@ CreateTask(
                     span: Some(
                         114..126,
                     ),
-                    lit: String(
+                    value: String(
                         "VALIDATION",
                     ),
                 },
@@ -17497,7 +17497,7 @@ AlterTask(
                                 span: Some(
                                     67..78,
                                 ),
-                                lit: String(
+                                value: String(
                                     "task_name",
                                 ),
                             },
@@ -17511,7 +17511,7 @@ AlterTask(
                     span: Some(
                         83..95,
                     ),
-                    lit: String(
+                    value: String(
                         "VALIDATION",
                     ),
                 },
@@ -18094,7 +18094,7 @@ Query(
                             span: Some(
                                 63..68,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 34343,
                             ),
                         },
@@ -18142,7 +18142,7 @@ Query(
                             span: Some(
                                 52..57,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 34343,
                             ),
                         },
@@ -18190,7 +18190,7 @@ Query(
                             span: Some(
                                 18..23,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 34343,
                             ),
                         },

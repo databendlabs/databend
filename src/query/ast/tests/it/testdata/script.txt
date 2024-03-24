@@ -26,7 +26,7 @@ LetVar {
             span: Some(
                 27..32,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 1000,
                 precision: 76,
                 scale: 1,
@@ -97,7 +97,7 @@ LetQuery {
                                     span: Some(
                                         42..45,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         100,
                                     ),
                                 },
@@ -258,7 +258,7 @@ ForLoop {
         span: Some(
             17..18,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -322,7 +322,7 @@ ForLoop {
                     span: Some(
                         64..65,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         1,
                     ),
                 },
@@ -655,7 +655,7 @@ Case {
                 span: Some(
                     24..25,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -688,7 +688,7 @@ Case {
                 span: Some(
                     82..83,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     2,
                 ),
             },
@@ -736,7 +736,7 @@ Case {
                         span: Some(
                             60..61,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -784,7 +784,7 @@ Case {
                         span: Some(
                             118..119,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -834,7 +834,7 @@ Case {
                         span: Some(
                             159..160,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             3,
                         ),
                     },
@@ -894,7 +894,7 @@ Case {
             span: Some(
                 22..23,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -902,7 +902,7 @@ Case {
             span: Some(
                 70..71,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -949,7 +949,7 @@ Case {
                         span: Some(
                             58..59,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -997,7 +997,7 @@ Case {
                         span: Some(
                             106..107,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -1047,7 +1047,7 @@ Case {
                         span: Some(
                             147..148,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             3,
                         ),
                     },
@@ -1108,7 +1108,7 @@ If {
                 span: Some(
                     13..14,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -1141,7 +1141,7 @@ If {
                 span: Some(
                     65..66,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     2,
                 ),
             },
@@ -1189,7 +1189,7 @@ If {
                         span: Some(
                             45..46,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -1237,7 +1237,7 @@ If {
                         span: Some(
                             97..98,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -1287,7 +1287,7 @@ If {
                         span: Some(
                             130..131,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             3,
                         ),
                     },
@@ -1426,7 +1426,7 @@ Loop {
                                         span: Some(
                                             41..42,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -1489,7 +1489,7 @@ SQLStatement {
                                     span: Some(
                                         12..13,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
