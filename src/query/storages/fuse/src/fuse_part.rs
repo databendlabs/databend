@@ -24,6 +24,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -65,6 +66,10 @@ impl PartInfo for FusePartInfo {
         let mut s = DefaultHasher::new();
         self.location.hash(&mut s);
         s.finish()
+    }
+
+    fn part_type(&self) -> PartInfoType {
+        PartInfoType::BlockLevel
     }
 }
 
@@ -141,6 +146,10 @@ impl PartInfo for FuseLazyPartInfo {
         let mut s = DefaultHasher::new();
         self.segment_location.0.hash(&mut s);
         s.finish()
+    }
+
+    fn part_type(&self) -> PartInfoType {
+        PartInfoType::SegmentLevel
     }
 }
 

@@ -27,6 +27,18 @@ use sha2::Digest;
 
 use crate::table_context::TableContext;
 
+/// Partition information.
+pub enum PartInfoType {
+    // Block level partition information.
+    // Read the data from the block level.
+    BlockLevel,
+    // Segment level partition information.
+    // Need to read the block location information from the segment.
+    // Then read the data from the block level.
+    // Formerly, we treat this as a lazy part.
+    SegmentLevel,
+}
+
 #[typetag::serde(tag = "type")]
 pub trait PartInfo: Send + Sync {
     fn as_any(&self) -> &dyn Any;
@@ -36,6 +48,12 @@ pub trait PartInfo: Send + Sync {
 
     /// Used for partition distributed.
     fn hash(&self) -> u64;
+
+    /// Get the partition type.
+    /// Default is block level.
+    fn part_type(&self) -> PartInfoType {
+        PartInfoType::BlockLevel
+    }
 }
 
 impl Debug for Box<dyn PartInfo> {
@@ -76,6 +94,7 @@ pub enum PartitionsShuffleKind {
     // Bind the Partition to executor by broadcast
     Broadcast,
 }
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct Partitions {
     pub kind: PartitionsShuffleKind,
@@ -184,6 +203,16 @@ impl Partitions {
         let buf = serde_json::to_vec(&self.partitions)?;
         let sha = sha2::Sha256::digest(buf);
         Ok(format!("{:x}", sha))
+    }
+
+    /// Get the partition type.
+    pub fn partitions_type(&self) -> PartInfoType {
+        // If the self.partitions is empty, it means that the partition is block level.
+        if self.partitions.is_empty() {
+            return PartInfoType::BlockLevel;
+        }
+
+        self.partitions[0].part_type()
     }
 }
 
