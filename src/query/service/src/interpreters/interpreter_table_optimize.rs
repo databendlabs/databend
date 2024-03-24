@@ -17,6 +17,7 @@ use std::time::SystemTime;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::CompactTarget;
 use databend_common_catalog::table::Table;
@@ -114,7 +115,7 @@ impl OptimizeTableInterpreter {
         is_distributed: bool,
         need_lock: bool,
     ) -> Result<PhysicalPlan> {
-        let merge_meta = parts.is_lazy;
+        let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),

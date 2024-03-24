@@ -168,7 +168,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         Ok((
             PartStatistics::default(),
             // Make the table in distributed.
-            Partitions::create_nolazy(PartitionsShuffleKind::Broadcast, vec![Arc::new(Box::new(
+            Partitions::create(PartitionsShuffleKind::Broadcast, vec![Arc::new(Box::new(
                 SystemTablePart,
             ))]),
         ))
