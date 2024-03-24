@@ -18,7 +18,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
-use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::{PartInfo, PartInfoType};
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -53,6 +53,10 @@ impl PartInfo for CompactSegmentPartInfo {
         let mut s = DefaultHasher::new();
         self.segment_indices.hash(&mut s);
         s.finish()
+    }
+
+    fn part_type(&self) -> PartInfoType {
+        PartInfoType::SegmentLevel
     }
 }
 

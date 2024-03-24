@@ -52,6 +52,7 @@ pub trait PartInfo: Send + Sync {
 
     /// Get the partition type.
     /// Default is block level.
+    /// You must override this method if the partition is segment level.
     fn part_type(&self) -> PartInfoType {
         PartInfoType::BlockLevel
     }
