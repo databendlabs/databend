@@ -253,11 +253,11 @@ query T
 EXPLAIN SELECT avg(a + 1) from t1
 ----
 EvalScalar
-├── output columns: [(sum((a + 1)) / if((count((a + 1)) = 0), 1, count((a + 1)))) (#5)]
-├── expressions: [sum((a + 1)) (#3) / CAST(if(CAST(count((a + 1)) (#4) = 0 AS Boolean NULL), 1, count((a + 1)) (#4)) AS UInt64 NULL)]
+├── output columns: [sum(a + 1) / if(count(a + 1) = 0, 1, count(a + 1)) (#5)]
+├── expressions: [sum(a + 1) (#3) / CAST(if(CAST(count(a + 1) (#4) = 0 AS Boolean NULL), 1, count(a + 1) (#4)) AS UInt64 NULL)]
 ├── estimated rows: 1.00
 └── AggregateFinal
-    ├── output columns: [sum((a + 1)) (#3), count((a + 1)) (#4)]
+    ├── output columns: [sum(a + 1) (#3), count(a + 1) (#4)]
     ├── group by: []
     ├── aggregate functions: [sum(sum_arg_0), count()]
     ├── estimated rows: 1.00
@@ -277,7 +277,7 @@ EvalScalar
                 ├── partitions total: 0
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [], limit: NONE]
-                ├── aggregating index: [SELECT (a + 1) FROM test_index_db.t1]
+                ├── aggregating index: [SELECT a + 1 FROM test_index_db.t1]
                 ├── rewritten query: [selection: [index_col_0 (#0)]]
                 └── estimated rows: 0.00
 
@@ -718,11 +718,11 @@ query T
 EXPLAIN SELECT avg(a + 1) from t1
 ----
 EvalScalar
-├── output columns: [(sum((a + 1)) / if((count((a + 1)) = 0), 1, count((a + 1)))) (#5)]
-├── expressions: [sum((a + 1)) (#3) / CAST(if(CAST(count((a + 1)) (#4) = 0 AS Boolean NULL), 1, count((a + 1)) (#4)) AS UInt64 NULL)]
+├── output columns: [sum(a + 1) / if(count(a + 1) = 0, 1, count(a + 1)) (#5)]
+├── expressions: [sum(a + 1) (#3) / CAST(if(CAST(count(a + 1) (#4) = 0 AS Boolean NULL), 1, count(a + 1) (#4)) AS UInt64 NULL)]
 ├── estimated rows: 1.00
 └── AggregateFinal
-    ├── output columns: [sum((a + 1)) (#3), count((a + 1)) (#4)]
+    ├── output columns: [sum(a + 1) (#3), count(a + 1) (#4)]
     ├── group by: []
     ├── aggregate functions: [sum(sum_arg_0), count()]
     ├── estimated rows: 1.00
@@ -743,7 +743,7 @@ EvalScalar
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
                 ├── push downs: [filters: [], limit: NONE]
-                ├── aggregating index: [SELECT (a + 1) FROM test_index_db.t1]
+                ├── aggregating index: [SELECT a + 1 FROM test_index_db.t1]
                 ├── rewritten query: [selection: [index_col_0 (#0)]]
                 └── estimated rows: 4.00
 
@@ -769,7 +769,7 @@ Sort
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
-        ├── aggregating index: [SELECT (a + 1) FROM test_index_db.t1]
+        ├── aggregating index: [SELECT a + 1 FROM test_index_db.t1]
         ├── rewritten query: [selection: [index_col_0 (#0)]]
         └── estimated rows: 0.00
 

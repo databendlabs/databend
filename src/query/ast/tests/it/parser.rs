@@ -238,6 +238,7 @@ fn test_statement() {
         r#"create role 'test'"#,
         r#"create role `a"a`"#,
         r#"create role `a'a`"#,
+        r#"create user `a'a` identified by '123'"#,
         r#"drop role if exists test"#,
         r#"drop role if exists 'test'"#,
         r#"OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;"#,

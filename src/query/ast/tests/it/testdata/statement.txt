@@ -9723,6 +9723,29 @@ CreateRole {
 
 
 ---------- Input ----------
+create user `a'a` identified by '123'
+---------- Output ---------
+CREATE USER 'a%27a'@'%' IDENTIFIED BY '123'
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        create_option: Create,
+        user: UserIdentity {
+            username: "a'a",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "123",
+            ),
+        },
+        user_options: [],
+    },
+)
+
+
+---------- Input ----------
 drop role if exists test
 ---------- Output ---------
 DROP ROLE IF EXISTS 'test'

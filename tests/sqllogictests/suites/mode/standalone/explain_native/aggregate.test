@@ -190,7 +190,7 @@ query T
 explain select a, avg(b) from explain_agg_t1 group by a having a > 1 and max(b) > 10;
 ----
 EvalScalar
-├── output columns: [explain_agg_t1.a (#0), (sum(b) / if((count(b) = 0), 1, count(b))) (#4)]
+├── output columns: [explain_agg_t1.a (#0), sum(b) / if(count(b) = 0, 1, count(b)) (#4)]
 ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
 ├── estimated rows: 0.00
 └── Filter
@@ -220,7 +220,7 @@ query T
 explain select a, avg(b) from explain_agg_t1 group by a having a > 1 and max(b) > 10;
 ----
 EvalScalar
-├── output columns: [explain_agg_t1.a (#0), (sum(b) / if((count(b) = 0), 1, count(b))) (#4)]
+├── output columns: [explain_agg_t1.a (#0), sum(b) / if(count(b) = 0, 1, count(b)) (#4)]
 ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
 ├── estimated rows: 0.00
 └── Filter
