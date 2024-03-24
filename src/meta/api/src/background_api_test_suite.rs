@@ -109,17 +109,16 @@ impl BackgroundApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant = "tenant1";
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_literal(tenant_name);
+
         let task_id = "uuid1";
-        let task_name = BackgroundTaskIdent {
-            tenant: tenant.to_string(),
-            task_id: task_id.to_string(),
-        };
+        let task_ident = BackgroundTaskIdent::new(tenant, task_id);
 
         info!("--- list background tasks when their is no tasks");
         {
             let req = ListBackgroundTasksReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
             };
 
             let res = mt.list_background_tasks(req).await;
@@ -134,7 +133,7 @@ impl BackgroundApiTestSuite {
         let expire_at = create_on + chrono::Duration::seconds(5);
         {
             let req = UpdateBackgroundTaskReq {
-                task_name: task_name.clone(),
+                task_name: task_ident.clone(),
                 task_info: new_background_task(BackgroundTaskState::STARTED, create_on),
                 expire_at: expire_at.timestamp() as u64,
             };
@@ -143,7 +142,7 @@ impl BackgroundApiTestSuite {
             info!("update log res: {:?}", res);
             let res = mt
                 .get_background_task(GetBackgroundTaskReq {
-                    name: task_name.clone(),
+                    name: task_ident.clone(),
                 })
                 .await;
             info!("get log res: {:?}", res);
@@ -156,7 +155,7 @@ impl BackgroundApiTestSuite {
         }
         {
             let req = UpdateBackgroundTaskReq {
-                task_name: task_name.clone(),
+                task_name: task_ident.clone(),
                 task_info: new_background_task(BackgroundTaskState::DONE, create_on),
                 expire_at: expire_at.timestamp() as u64,
             };
@@ -165,7 +164,7 @@ impl BackgroundApiTestSuite {
             info!("update log res: {:?}", res);
             let res = mt
                 .get_background_task(GetBackgroundTaskReq {
-                    name: task_name.clone(),
+                    name: task_ident.clone(),
                 })
                 .await;
             info!("get log res: {:?}", res);
@@ -178,7 +177,7 @@ impl BackgroundApiTestSuite {
         }
         {
             let req = ListBackgroundTasksReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
             };
 
             let res = mt.list_background_tasks(req).await;
