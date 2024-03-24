@@ -38,7 +38,7 @@ use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
 use crate::io::UncompressedBuffer;
-use crate::FusePartInfo;
+use crate::FuseBlockPartInfo;
 use crate::FuseTable;
 use crate::MergeIOReadResult;
 
@@ -233,7 +233,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
             }
         } else {
             for part in parts.iter() {
-                let part = FusePartInfo::from_part(part)?;
+                let part = FuseBlockPartInfo::from_part(part)?;
                 let chunk = reader
                     .read_columns_data_by_merge_io(
                         &settings,
@@ -263,7 +263,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
         uncompressed_buffer: Arc<UncompressedBuffer>,
     ) -> Result<DataBlock> {
         let columns_chunks = chunk.columns_chunks()?;
-        let part = FusePartInfo::from_part(part)?;
+        let part = FuseBlockPartInfo::from_part(part)?;
         reader.deserialize_parquet_chunks_with_buffer(
             &part.location,
             part.nums_rows,
