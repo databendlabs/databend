@@ -291,7 +291,7 @@ query T
 EXPLAIN SELECT avg(a) from t1
 ----
 EvalScalar
-├── output columns: [(sum(a) / if((count(a) = 0), 1, count(a))) (#4)]
+├── output columns: [sum(a) / if(count(a) = 0, 1, count(a)) (#4)]
 ├── expressions: [sum(a) (#2) / CAST(if(CAST(count(a) (#3) = 0 AS Boolean NULL), 1, count(a) (#3)) AS UInt64 NULL)]
 ├── estimated rows: 1.00
 └── AggregateFinal
