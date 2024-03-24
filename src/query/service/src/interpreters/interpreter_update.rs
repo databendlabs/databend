@@ -158,13 +158,13 @@ impl Interpreter for UpdateInterpreter {
 
 impl UpdateInterpreter {
     fn generate_operators(&self, table: &FuseTable) -> Result<Vec<BlockOperator>> {
-        let col_indices: Vec<usize> = {
-            let mut col_indices = HashSet::new();
-            for subquery_desc in &self.plan.subquery_desc {
-                col_indices.extend(subquery_desc.outer_columns.iter());
-            }
-            col_indices.into_iter().collect()
-        };
+        let mut col_indices: Vec<usize> = self.plan.subquery_desc[0]
+            .outer_columns
+            .clone()
+            .into_iter()
+            .collect();
+        col_indices.sort();
+        debug_assert!(!col_indices.is_empty());
 
         let update_list = self.plan.generate_update_list(
             self.ctx.clone(),
@@ -186,25 +186,7 @@ impl UpdateInterpreter {
         let mut offset_map = BTreeMap::new();
         let mut pos = 0;
 
-        let (_projection, input_schema) = if col_indices.is_empty() {
-            let mut fields = schema.remove_virtual_computed_fields().fields().to_vec();
-
-            all_column_indices.iter().for_each(|&index| {
-                offset_map.insert(index, pos);
-                pos += 1;
-            });
-
-            // add `_predicate` column into input schema
-            fields.push(TableField::new(
-                PREDICATE_COLUMN_NAME,
-                TableDataType::Boolean,
-            ));
-            pos += 1;
-
-            let schema = TableSchema::new(fields);
-
-            (Projection::Columns(all_column_indices), Arc::new(schema))
-        } else {
+        let (_projection, input_schema) = {
             col_indices.iter().for_each(|&index| {
                 offset_map.insert(index, pos);
                 pos += 1;
