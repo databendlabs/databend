@@ -417,7 +417,7 @@ query T
 explain select event_name, user_id, max(user_id), avg(id) from t where user_id > 1 group by event_name, user_id
 ----
 EvalScalar
-├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), (sum(id) / if((count(id) = 0), 1, count(id))) (#6)]
+├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), sum(id) / if(count(id) = 0, 1, count(id)) (#6)]
 ├── expressions: [sum(id) (#4) / CAST(if(CAST(count(id) (#5) = 0 AS Boolean NULL), 1, count(id) (#5)) AS UInt64 NULL)]
 ├── estimated rows: 7.11
 └── AggregateFinal
@@ -459,7 +459,7 @@ query T
 explain select event_name, user_id, max(user_id), avg(id) from t where user_id > 1 group by event_name, user_id order by event_name, user_id desc
 ----
 EvalScalar
-├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), (sum(id) / if((count(id) = 0), 1, count(id))) (#6)]
+├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), sum(id) / if(count(id) = 0, 1, count(id)) (#6)]
 ├── expressions: [sum(id) (#4) / CAST(if(CAST(count(id) (#5) = 0 AS Boolean NULL), 1, count(id) (#5)) AS UInt64 NULL)]
 ├── estimated rows: 7.11
 └── Sort
