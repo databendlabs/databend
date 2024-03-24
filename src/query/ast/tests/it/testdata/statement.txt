@@ -13038,7 +13038,7 @@ CopyIntoTable(
 ---------- Input ----------
 CALL system$test(a)
 ---------- Output ---------
-CALL system$test(a)
+CALL system$test('a')
 ---------- AST ------------
 Call(
     CallStmt {
@@ -13053,7 +13053,7 @@ Call(
 ---------- Input ----------
 CALL system$test('a')
 ---------- Output ---------
-CALL system$test(a)
+CALL system$test('a')
 ---------- AST ------------
 Call(
     CallStmt {

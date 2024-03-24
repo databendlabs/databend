@@ -1143,7 +1143,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let show_virtual_columns = map(
         rule! {
-            SHOW ~ VIRTUAL ~ COLUMNS ~ (( FROM | IN ) ~ #ident)? ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)? ~ #show_limit?
+            SHOW ~ VIRTUAL ~ COLUMNS ~ ( ( FROM | IN ) ~ #ident )? ~ ( ( FROM | IN ) ~ ^#dot_separated_idents_1_to_2 )? ~ #show_limit?
         },
         |(_, _, _, opt_table, opt_db, limit)| {
             let table = opt_table.map(|(_, table)| table);
