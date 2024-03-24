@@ -321,10 +321,10 @@ impl CompactionJob {
         self.update_job_status(status.clone().unwrap()).await?;
 
         info!(job = "compaction", background = true, id=id.clone(), database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats :? =(&stats); "start compact");
-        let task_name = BackgroundTaskIdent {
-            tenant: self.creator.tenant_name().to_string(),
-            task_id: status.unwrap().last_task_id.unwrap(),
-        };
+        let task_ident = BackgroundTaskIdent::new(
+            self.creator.tenant().clone(),
+            status.unwrap().last_task_id.unwrap(),
+        );
         let mut info = BackgroundTaskInfo::new_compaction_task(
             self.creator.clone(),
             db_id,
@@ -338,7 +338,7 @@ impl CompactionJob {
         );
         self.meta_api
             .update_background_task(UpdateBackgroundTaskReq {
-                task_name: task_name.clone(),
+                task_name: task_ident.clone(),
                 task_info: info.clone(),
                 expire_at: Utc::now().timestamp() as u64 + EXPIRE_SEC,
             })
@@ -365,7 +365,7 @@ impl CompactionJob {
                 info!(job = "compaction", background = true, id=id.clone(), database = database.clone(), table = table.clone(), table_stats :? =(&new_stats); "finish compact");
                 self.meta_api
                     .update_background_task(UpdateBackgroundTaskReq {
-                        task_name,
+                        task_name: task_ident,
                         task_info: info.clone(),
                         expire_at: Utc::now().timestamp() as u64 + EXPIRE_SEC,
                     })
@@ -376,7 +376,7 @@ impl CompactionJob {
                 Self::set_task_status(&mut info, BackgroundTaskState::FAILED);
                 self.meta_api
                     .update_background_task(UpdateBackgroundTaskReq {
-                        task_name,
+                        task_name: task_ident,
                         task_info: info.clone(),
                         expire_at: Utc::now().timestamp() as u64 + EXPIRE_SEC,
                     })

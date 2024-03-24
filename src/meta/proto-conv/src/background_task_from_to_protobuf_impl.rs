@@ -155,27 +155,3 @@ impl FromToProto for mt::background::VacuumStats {
         Ok(p)
     }
 }
-
-impl FromToProto for mt::background::BackgroundTaskIdent {
-    type PB = pb::BackgroundTaskIdent;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
-    where Self: Sized {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(Self {
-            tenant: p.tenant.to_string(),
-            task_id: p.task_id,
-        })
-    }
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let p = pb::BackgroundTaskIdent {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            tenant: self.tenant.clone(),
-            task_id: self.task_id.clone(),
-        };
-        Ok(p)
-    }
-}
