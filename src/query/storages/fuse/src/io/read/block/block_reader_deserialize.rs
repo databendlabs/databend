@@ -30,7 +30,7 @@ use super::BlockReader;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::ReadSettings;
 use crate::io::UncompressedBuffer;
-use crate::FusePartInfo;
+use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
 use crate::MergeIOReadResult;
 
@@ -57,7 +57,7 @@ impl BlockReader {
         chunks: HashMap<ColumnId, DataItem>,
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
-        let part = FusePartInfo::from_part(&part)?;
+        let part = FuseBlockPartInfo::from_part(&part)?;
 
         self.deserialize_chunks(
             &part.location,
