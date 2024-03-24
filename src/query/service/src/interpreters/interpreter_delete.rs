@@ -275,7 +275,7 @@ impl DeleteInterpreter {
                 input,
                 output,
                 SubqueryMutation::Delete,
-                subquery_desc.compare_op.clone(),
+                subquery_desc.compare_op,
             )?
             .into_processor()
         })?;
