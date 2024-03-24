@@ -329,6 +329,7 @@ impl UpdateInterpreter {
                 input,
                 output,
                 SubqueryMutation::Update(operators.clone()),
+                subquery_desc.compare_op.clone(),
             )?
             .into_processor()
         })?;

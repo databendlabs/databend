@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::ComparisonOp;
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
@@ -24,6 +25,8 @@ pub struct SubqueryDesc {
     pub outer_columns: ColumnSet,
     pub predicate_columns: ColumnSet,
     pub index: IndexType,
+    // Comparison operator for Any/All, such as t1.a = Any (...), `compare_op` is `=`.
+    pub compare_op: Option<ComparisonOp>,
 }
 
 #[derive(Clone, Debug)]

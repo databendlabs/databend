@@ -17,7 +17,6 @@ mod matched_mutator;
 mod merge_into_split_mutator;
 mod split_by_expr_mutator;
 mod update_by_expr_mutator;
-mod utils;
 pub use delete_by_expr_mutator::DeleteByExprMutator;
 pub use matched_mutator::MatchedAggregator;
 pub use merge_into_split_mutator::MergeIntoSplitMutator;

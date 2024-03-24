@@ -264,6 +264,7 @@ impl Binder {
             outer_columns,
             predicate_columns,
             index: row_id_index.unwrap(),
+            compare_op: subquery_expr.compare_op,
         })
     }
 

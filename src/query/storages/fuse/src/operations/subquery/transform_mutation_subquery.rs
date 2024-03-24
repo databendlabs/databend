@@ -17,8 +17,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::eval_function;
-use databend_common_expression::types::AnyType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
@@ -26,7 +24,6 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -34,29 +31,21 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::plans::ComparisonOp;
 
-fn get_not(
-    filter: Value<BooleanType>,
-    func_ctx: &FunctionContext,
-    rows: usize,
-) -> Result<(Value<AnyType>, DataType)> {
-    eval_function(
-        None,
-        "not",
-        [(filter.upcast(), DataType::Boolean)],
-        func_ctx,
-        rows,
-        &BUILTIN_FUNCTIONS,
-    )
-}
+use crate::operations::get_not;
 
 struct SplitMutator {
     pub func_ctx: FunctionContext,
+    pub compare_op: Option<ComparisonOp>,
 }
 
 impl SplitMutator {
-    pub fn try_create(func_ctx: FunctionContext) -> Result<Self> {
-        Ok(Self { func_ctx })
+    pub fn try_create(func_ctx: FunctionContext, compare_op: Option<ComparisonOp>) -> Result<Self> {
+        Ok(Self {
+            func_ctx,
+            compare_op,
+        })
     }
 
     fn get_filter(
@@ -78,11 +67,15 @@ impl SplitMutator {
     }
 
     pub fn split_not_matched_block(&self, block: DataBlock) -> Result<DataBlock> {
-        let (_predicate, predicate_not) = self.get_filter(&block)?;
+        let (predicate, predicate_not) = self.get_filter(&block)?;
 
-        let not_matched_block = block.filter_boolean_value(&predicate_not)?;
+        let not_matched_block = if let Some(ComparisonOp::NotEqual) = &self.compare_op {
+            block.filter_boolean_value(&predicate)?
+        } else {
+            block.filter_boolean_value(&predicate_not)?
+        };
+
         let num_columns = not_matched_block.num_columns();
-
         let not_matched_block = DataBlock::new(
             not_matched_block.columns()[..num_columns - 1].to_vec(),
             not_matched_block.num_rows(),
@@ -111,8 +104,9 @@ impl TransformMutationSubquery {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         mutation: SubqueryMutation,
+        compare_op: Option<ComparisonOp>,
     ) -> Result<Self> {
-        let split_mutator = SplitMutator::try_create(func_ctx)?;
+        let split_mutator = SplitMutator::try_create(func_ctx, compare_op.clone())?;
 
         Ok(TransformMutationSubquery {
             input,
@@ -193,6 +187,19 @@ impl Processor for TransformMutationSubquery {
                         return Err(ErrorCode::from_string(
                             "subquery filter type MUST be Column::Nullable(Boolean".to_string(),
                         ));
+                    };
+
+                    let value = if let Some(ComparisonOp::NotEqual) = &self.split_mutator.compare_op
+                    {
+                        let predicate: Value<BooleanType> = value.try_downcast().unwrap();
+                        let (value, _) = get_not(
+                            predicate,
+                            &self.split_mutator.func_ctx,
+                            data_block.num_rows(),
+                        )?;
+                        value
+                    } else {
+                        value
                     };
                     // convert Nullable(Boolean) to Boolean
                     let predicate_entry = BlockEntry::new(DataType::Boolean, value);
