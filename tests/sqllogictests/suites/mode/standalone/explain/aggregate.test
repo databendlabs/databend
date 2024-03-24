@@ -236,15 +236,15 @@ query T
 explain select avg(b) from explain_agg_t1 group by a order by avg(b);
 ----
 EvalScalar
-├── output columns: [(sum(b) / if((count(b) = 0), 1, count(b))) (#4)]
+├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4)]
 ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
 ├── estimated rows: 0.00
 └── Sort
-    ├── output columns: [sum(b) (#2), count(b) (#3), (sum(b) / if((count(b) = 0), 1, count(b))) (#5)]
-    ├── sort keys: [(sum(b) / if((count(b) = 0), 1, count(b))) ASC NULLS LAST]
+    ├── output columns: [sum(b) (#2), count(b) (#3), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
+    ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
     ├── estimated rows: 0.00
     └── EvalScalar
-        ├── output columns: [sum(b) (#2), count(b) (#3), (sum(b) / if((count(b) = 0), 1, count(b))) (#5)]
+        ├── output columns: [sum(b) (#2), count(b) (#3), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
         ├── expressions: [sum(b) (#2) / CAST(if(CAST(count(b) (#3) = 0 AS Boolean NULL), 1, count(b) (#3)) AS UInt64 NULL)]
         ├── estimated rows: 0.00
         └── AggregateFinal
