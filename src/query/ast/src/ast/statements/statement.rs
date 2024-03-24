@@ -496,12 +496,11 @@ impl Display for Statement {
                 is_default,
                 role_name,
             } => {
-                write!(f, "SET ROLE ")?;
+                write!(f, "SET ")?;
                 if *is_default {
-                    write!(f, "DEFAULT")?;
-                } else {
-                    write!(f, "'{role_name}'")?;
+                    write!(f, "DEFAULT ")?;
                 }
+                write!(f, "ROLE '{role_name}'")?;
             }
             Statement::SetSecondaryRoles { option } => {
                 write!(f, "SET SECONDARY ROLES ")?;

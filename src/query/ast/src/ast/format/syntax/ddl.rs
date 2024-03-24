@@ -221,7 +221,7 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
             } else {
                 RcDoc::nil()
             }),
-        AlterTableAction::RevertTo { point } => match point {
+        AlterTableAction::FlashbackTo { point } => match point {
             TimeTravelPoint::Snapshot(sid) => RcDoc::text(format!(" AT (SNAPSHOT => {sid})")),
             TimeTravelPoint::Timestamp(ts) => RcDoc::text(format!(" AT (TIMESTAMP => {ts})")),
         },

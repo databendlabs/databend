@@ -382,7 +382,7 @@ pub enum AlterTableAction {
         #[drive(skip)]
         limit: Option<u64>,
     },
-    RevertTo {
+    FlashbackTo {
         point: TimeTravelPoint,
     },
     SetOptions {
@@ -441,8 +441,8 @@ impl Display for AlterTableAction {
                     write!(f, " LIMIT {limit}")?;
                 }
             }
-            AlterTableAction::RevertTo { point } => {
-                write!(f, "REVERT TO {}", point)?;
+            AlterTableAction::FlashbackTo { point } => {
+                write!(f, "FLASHBACK TO {}", point)?;
             }
         };
         Ok(())

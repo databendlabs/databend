@@ -3121,7 +3121,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         rule! {
             FLASHBACK ~ TO ~ #travel_point
         },
-        |(_, _, point)| AlterTableAction::RevertTo { point },
+        |(_, _, point)| AlterTableAction::FlashbackTo { point },
     );
 
     let set_table_options = map(
