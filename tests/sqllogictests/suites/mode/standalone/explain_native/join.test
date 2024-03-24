@@ -75,8 +75,8 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10.00
+    ├── push downs: [filters: [t1.number (#1) = t1.number (#1) + 1], limit: NONE]
+    └── estimated rows: 2.00
 
 query T
 explain select t.number from t, t1 where t.number > 1 and 1 < t1.number

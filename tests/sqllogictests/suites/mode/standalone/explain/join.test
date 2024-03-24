@@ -67,16 +67,20 @@ HashJoin
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
-└── TableScan(Probe)
-    ├── table: default.default.t1
-    ├── output columns: [number (#1)]
-    ├── read rows: 10
-    ├── read bytes: 60
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10.00
+└── Filter(Probe)
+    ├── output columns: [t1.number (#1)]
+    ├── filters: [t1.number (#1) = t1.number (#1) + 1]
+    ├── estimated rows: 2.00
+    └── TableScan
+        ├── table: default.default.t1
+        ├── output columns: [number (#1)]
+        ├── read rows: 10
+        ├── read bytes: 60
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [t1.number (#1) = t1.number (#1) + 1], limit: NONE]
+        └── estimated rows: 10.00
 
 query T
 explain select t.number from t, t1 where t.number > 1 and 1 < t1.number
@@ -829,15 +833,19 @@ EvalScalar
     ├── probe keys: [replace(t1.ext (#1), '33', '44')]
     ├── filters: []
     ├── estimated rows: 0.00
-    ├── TableScan(Build)
-    │   ├── table: default.default.t2
-    │   ├── output columns: [wms_id (#4)]
-    │   ├── read rows: 0
-    │   ├── read bytes: 0
-    │   ├── partitions total: 0
-    │   ├── partitions scanned: 0
-    │   ├── push downs: [filters: [], limit: NONE]
-    │   └── estimated rows: 0.00
+    ├── Filter(Build)
+    │   ├── output columns: [t2.wms_id (#4)]
+    │   ├── filters: [is_true(substr(t2.wms_id (#4), 1) = 'R006')]
+    │   ├── estimated rows: 0.00
+    │   └── TableScan
+    │       ├── table: default.default.t2
+    │       ├── output columns: [wms_id (#4)]
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       ├── push downs: [filters: [is_true(substr(t2.wms_id (#4), 1) = 'R006')], limit: NONE]
+    │       └── estimated rows: 0.00
     └── Filter(Probe)
         ├── output columns: [t1.ext (#1)]
         ├── filters: [is_true(substr(replace(t1.ext (#1), '33', '44'), 1) = 'R006')]
@@ -866,15 +874,19 @@ EvalScalar
     ├── probe keys: [replace(t1.ext (#1), '33', '44')]
     ├── filters: []
     ├── estimated rows: 0.00
-    ├── TableScan(Build)
-    │   ├── table: default.default.t2
-    │   ├── output columns: [wms_id (#4)]
-    │   ├── read rows: 0
-    │   ├── read bytes: 0
-    │   ├── partitions total: 0
-    │   ├── partitions scanned: 0
-    │   ├── push downs: [filters: [], limit: NONE]
-    │   └── estimated rows: 0.00
+    ├── Filter(Build)
+    │   ├── output columns: [t2.wms_id (#4)]
+    │   ├── filters: [is_true(t2.wms_id (#4) = 'R006')]
+    │   ├── estimated rows: 0.00
+    │   └── TableScan
+    │       ├── table: default.default.t2
+    │       ├── output columns: [wms_id (#4)]
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       ├── push downs: [filters: [is_true(t2.wms_id (#4) = 'R006')], limit: NONE]
+    │       └── estimated rows: 0.00
     └── Filter(Probe)
         ├── output columns: [t1.ext (#1)]
         ├── filters: [is_true(replace(t1.ext (#1), '33', '44') = 'R006')]
