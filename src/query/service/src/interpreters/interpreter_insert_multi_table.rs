@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
-use databend_common_sql::executor::physical_plans::PhysicalInsertMultiTable;
+use databend_common_sql::executor::physical_plans::ShuffleStrategy;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::InsertMultiTable;
@@ -28,6 +28,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sql::executor::cast_expr_to_non_null_boolean;
+use crate::sql::executor::physical_plans::ChunkFilter;
 use crate::sql::executor::physical_plans::Duplicate;
 use crate::sql::executor::physical_plans::Shuffle;
 pub struct InsertMultiTableInterpreter {
@@ -90,7 +91,8 @@ impl InsertMultiTableInterpreter {
         };
 
         let n_target = 0;
-        let rule = vec![];
+        let shuffle_strategy = ShuffleStrategy::MatrixTranspose(n_target);
+        let predicates = vec![];
 
         let duplicate = PhysicalPlan::Duplicate(Box::new(Duplicate {
             plan_id: 0,
@@ -101,7 +103,13 @@ impl InsertMultiTableInterpreter {
         let shuffle = PhysicalPlan::Shuffle(Box::new(Shuffle {
             plan_id: 0,
             input: Box::new(duplicate),
-            rule,
+            strategy: shuffle_strategy,
+        }));
+
+        let chunk_filter = PhysicalPlan::ChunkFilter(Box::new(ChunkFilter {
+            plan_id: 0,
+            input: Box::new(shuffle),
+            predicates,
         }));
         let filters: Result<Vec<RemoteExpr>> = whens
             .iter()
@@ -112,14 +120,6 @@ impl InsertMultiTableInterpreter {
                 Ok(expr.as_remote_expr())
             })
             .collect();
-        Ok(PhysicalPlan::InsertMultiTable(Box::new(
-            PhysicalInsertMultiTable {
-                plan_id: 0,
-                input: Box::new(select_plan),
-                select_column_bindings,
-                filters: filters?,
-                keep_remain: opt_else.is_some(),
-            },
-        )))
+        todo!()
     }
 }

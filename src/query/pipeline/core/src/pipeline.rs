@@ -78,6 +78,8 @@ pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 pub type FinishedCallback =
     Box<dyn FnOnce(&Result<Vec<Arc<Profile>>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
+pub type DynTransformBuilder = Box<dyn Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>>;
+
 impl Pipeline {
     pub fn create() -> Pipeline {
         Pipeline {
@@ -237,6 +239,23 @@ impl Pipeline {
         Ok(())
     }
 
+    pub fn add_transform_by_chunk(&mut self, f: Vec<DynTransformBuilder>) -> Result<()> {
+        let mut transform_builder = TransformPipeBuilder::create();
+        let chunk_size = self.output_len() / f.len();
+        for f in f {
+            for _index in 0..chunk_size {
+                let input_port = InputPort::create();
+                let output_port = OutputPort::create();
+
+                let processor = f(input_port.clone(), output_port.clone())?;
+                transform_builder.add_transform(input_port, output_port, processor);
+            }
+        }
+
+        self.add_pipe(transform_builder.finalize());
+        Ok(())
+    }
+
     pub fn add_transform_with_specified_len<F>(
         &mut self,
         f: F,
@@ -356,28 +375,27 @@ impl Pipeline {
     /// Duplicate a pipe input to two outputs.
     ///
     /// If `force_finish_together` enabled, once one output is finished, the other output will be finished too.
-    pub fn duplicate(&mut self, force_finish_together: bool) -> Result<()> {
+    pub fn duplicate(&mut self, force_finish_together: bool, n: usize) -> Result<()> {
         match self.pipes.last() {
             Some(pipe) if pipe.output_length > 0 => {
                 let mut items = Vec::with_capacity(pipe.output_length);
                 for _ in 0..pipe.output_length {
                     let input = InputPort::create();
-                    let output1 = OutputPort::create();
-                    let output2 = OutputPort::create();
+                    let outputs = (0..n).map(|_| OutputPort::create()).collect::<Vec<_>>();
                     let processor = DuplicateProcessor::create(
                         input.clone(),
-                        vec![output1.clone(), output2.clone()],
+                        outputs.clone(),
                         force_finish_together,
                     );
                     items.push(PipeItem::create(
                         ProcessorPtr::create(Box::new(processor)),
                         vec![input],
-                        vec![output1, output2],
+                        outputs,
                     ));
                 }
                 self.add_pipe(Pipe::create(
                     pipe.output_length,
-                    pipe.output_length * 2,
+                    pipe.output_length * n,
                     items,
                 ));
                 Ok(())

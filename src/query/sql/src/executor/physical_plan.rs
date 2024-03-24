@@ -24,6 +24,13 @@ use itertools::Itertools;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::ChunkAppendData;
+use crate::executor::physical_plans::ChunkCastSchema;
+use crate::executor::physical_plans::ChunkCommitInsert;
+use crate::executor::physical_plans::ChunkFillAndReorder;
+use crate::executor::physical_plans::ChunkFilter;
+use crate::executor::physical_plans::ChunkMerge;
+use crate::executor::physical_plans::ChunkProject;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
@@ -44,7 +51,6 @@ use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::MergeIntoSource;
-use crate::executor::physical_plans::PhysicalInsertMultiTable;
 use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -88,7 +94,6 @@ pub enum PhysicalPlan {
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
-    InsertMultiTable(Box<PhysicalInsertMultiTable>),
 
     /// Synthesized by fragmented
     ExchangeSource(ExchangeSource),
@@ -127,6 +132,13 @@ pub enum PhysicalPlan {
     /// Multi table insert
     Duplicate(Box<Duplicate>),
     Shuffle(Box<Shuffle>),
+    ChunkFilter(Box<ChunkFilter>),
+    ChunkProject(Box<ChunkProject>),
+    ChunkCastSchema(Box<ChunkCastSchema>),
+    ChunkFillAndReorder(Box<ChunkFillAndReorder>),
+    ChunkAppendData(Box<ChunkAppendData>),
+    ChunkMerge(Box<ChunkMerge>),
+    ChunkCommitInsert(Box<ChunkCommitInsert>),
 }
 
 impl PhysicalPlan {
@@ -311,7 +323,47 @@ impl PhysicalPlan {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
-            PhysicalPlan::InsertMultiTable(plan) => {
+            PhysicalPlan::Duplicate(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::Shuffle(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkFilter(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkProject(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkCastSchema(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkFillAndReorder(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkAppendData(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkMerge(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::ChunkCommitInsert(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
@@ -359,7 +411,15 @@ impl PhysicalPlan {
             PhysicalPlan::ReclusterSource(v) => v.plan_id,
             PhysicalPlan::ReclusterSink(v) => v.plan_id,
             PhysicalPlan::UpdateSource(v) => v.plan_id,
-            PhysicalPlan::InsertMultiTable(v) => v.plan_id,
+            PhysicalPlan::Duplicate(v) => v.plan_id,
+            PhysicalPlan::Shuffle(v) => v.plan_id,
+            PhysicalPlan::ChunkFilter(v) => v.plan_id,
+            PhysicalPlan::ChunkProject(v) => v.plan_id,
+            PhysicalPlan::ChunkCastSchema(v) => v.plan_id,
+            PhysicalPlan::ChunkFillAndReorder(v) => v.plan_id,
+            PhysicalPlan::ChunkAppendData(v) => v.plan_id,
+            PhysicalPlan::ChunkMerge(v) => v.plan_id,
+            PhysicalPlan::ChunkCommitInsert(v) => v.plan_id,
         }
     }
 
@@ -398,11 +458,19 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
-            | PhysicalPlan::InsertMultiTable(_)
             | PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::ReclusterSink(_)
             | PhysicalPlan::UpdateSource(_) => Ok(DataSchemaRef::default()),
+            PhysicalPlan::Duplicate(_) => todo!(),
+            PhysicalPlan::Shuffle(_) => todo!(),
+            PhysicalPlan::ChunkFilter(_) => todo!(),
+            PhysicalPlan::ChunkProject(_) => todo!(),
+            PhysicalPlan::ChunkCastSchema(_) => todo!(),
+            PhysicalPlan::ChunkFillAndReorder(_) => todo!(),
+            PhysicalPlan::ChunkAppendData(_) => todo!(),
+            PhysicalPlan::ChunkMerge(_) => todo!(),
+            PhysicalPlan::ChunkCommitInsert(_) => todo!(),
         }
     }
 
@@ -445,7 +513,15 @@ impl PhysicalPlan {
             PhysicalPlan::ReclusterSink(_) => "ReclusterSink".to_string(),
             PhysicalPlan::UpdateSource(_) => "UpdateSource".to_string(),
             PhysicalPlan::Udf(_) => "Udf".to_string(),
-            PhysicalPlan::InsertMultiTable(_) => "InsertMultiTable".to_string(),
+            PhysicalPlan::Duplicate(_) => "Duplicate".to_string(),
+            PhysicalPlan::Shuffle(_) => "Shuffle".to_string(),
+            PhysicalPlan::ChunkFilter(_) => "ChunkFilter".to_string(),
+            PhysicalPlan::ChunkProject(_) => "ChunkProject".to_string(),
+            PhysicalPlan::ChunkCastSchema(_) => "ChunkCastSchema".to_string(),
+            PhysicalPlan::ChunkFillAndReorder(_) => "ChunkFillAndReorder".to_string(),
+            PhysicalPlan::ChunkAppendData(_) => "ChunkAppendData".to_string(),
+            PhysicalPlan::ChunkMerge(_) => "ChunkMerge".to_string(),
+            PhysicalPlan::ChunkCommitInsert(_) => "ChunkCommitInsert".to_string(),
         }
     }
 
@@ -504,7 +580,17 @@ impl PhysicalPlan {
             ),
             PhysicalPlan::ReclusterSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Udf(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::InsertMultiTable(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::Duplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::Shuffle(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkFilter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkProject(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkCastSchema(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkFillAndReorder(plan) => {
+                Box::new(std::iter::once(plan.input.as_ref()))
+            }
+            PhysicalPlan::ChunkAppendData(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkMerge(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkCommitInsert(plan) => Box::new(std::iter::once(plan.input.as_ref())),
         }
     }
 
@@ -521,7 +607,6 @@ impl PhysicalPlan {
             PhysicalPlan::Exchange(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::ExchangeSink(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::DistributedInsertSelect(plan) => plan.input.try_find_single_data_source(),
-            PhysicalPlan::InsertMultiTable(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),
@@ -548,7 +633,16 @@ impl PhysicalPlan {
             | PhysicalPlan::CteScan(_)
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::ReclusterSink(_)
-            | PhysicalPlan::UpdateSource(_) => None,
+            | PhysicalPlan::UpdateSource(_)
+            | PhysicalPlan::Duplicate(_)
+            | PhysicalPlan::Shuffle(_)
+            | PhysicalPlan::ChunkFilter(_)
+            | PhysicalPlan::ChunkProject(_)
+            | PhysicalPlan::ChunkCastSchema(_)
+            | PhysicalPlan::ChunkFillAndReorder(_)
+            | PhysicalPlan::ChunkAppendData(_)
+            | PhysicalPlan::ChunkMerge(_)
+            | PhysicalPlan::ChunkCommitInsert(_) => None,
         }
     }
 

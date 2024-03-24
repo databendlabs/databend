@@ -18,7 +18,6 @@ use std::fmt::Formatter;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
-use super::physical_plans::PhysicalInsertMultiTable;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -92,9 +91,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
-            PhysicalPlan::InsertMultiTable(insert_multi_table) => {
-                write!(f, "{}", insert_multi_table)?
-            }
             PhysicalPlan::CompactSource(compact) => write!(f, "{}", compact)?,
             PhysicalPlan::DeleteSource(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::CommitSink(commit) => write!(f, "{}", commit)?,
@@ -117,6 +113,15 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::UpdateSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::Udf(udf) => write!(f, "{}", udf)?,
+            PhysicalPlan::Duplicate(_) => "Duplicate".fmt(f)?,
+            PhysicalPlan::Shuffle(_) => "Shuffle".fmt(f)?,
+            PhysicalPlan::ChunkFilter(_) => "ChunkFilter".fmt(f)?,
+            PhysicalPlan::ChunkProject(_) => "ChunkProject".fmt(f)?,
+            PhysicalPlan::ChunkCastSchema(_) => "ChunkCastSchema".fmt(f)?,
+            PhysicalPlan::ChunkFillAndReorder(_) => "ChunkFillAndReorder".fmt(f)?,
+            PhysicalPlan::ChunkAppendData(_) => "ChunkAppendData".fmt(f)?,
+            PhysicalPlan::ChunkMerge(_) => "ChunkMerge".fmt(f)?,
+            PhysicalPlan::ChunkCommitInsert(_) => "ChunkCommitInsert".fmt(f)?,
         }
 
         for node in self.node.children() {
@@ -412,12 +417,6 @@ impl Display for UnionAll {
 impl Display for DistributedInsertSelect {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DistributedInsertSelect")
-    }
-}
-
-impl Display for PhysicalInsertMultiTable {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "InsertMultiTable")
     }
 }
 

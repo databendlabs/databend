@@ -18,6 +18,13 @@ use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::ChunkAppendData;
+use crate::executor::physical_plans::ChunkCastSchema;
+use crate::executor::physical_plans::ChunkCommitInsert;
+use crate::executor::physical_plans::ChunkFillAndReorder;
+use crate::executor::physical_plans::ChunkFilter;
+use crate::executor::physical_plans::ChunkMerge;
+use crate::executor::physical_plans::ChunkProject;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
@@ -26,6 +33,7 @@ use crate::executor::physical_plans::CopyIntoTableSource;
 use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DeleteSource;
 use crate::executor::physical_plans::DistributedInsertSelect;
+use crate::executor::physical_plans::Duplicate;
 use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::ExchangeSink;
@@ -38,7 +46,6 @@ use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::MergeIntoSource;
-use crate::executor::physical_plans::PhysicalInsertMultiTable;
 use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::QuerySource;
@@ -49,6 +56,7 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
+use crate::executor::physical_plans::Shuffle;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
@@ -77,7 +85,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ExchangeSink(plan) => self.replace_exchange_sink(plan),
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
-            PhysicalPlan::InsertMultiTable(plan) => self.replace_insert_multi_table(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::CompactSource(plan) => self.replace_compact_source(plan),
             PhysicalPlan::DeleteSource(plan) => self.replace_delete_source(plan),
@@ -99,6 +106,15 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
             PhysicalPlan::UpdateSource(plan) => self.replace_update_source(plan),
             PhysicalPlan::Udf(plan) => self.replace_udf(plan),
+            PhysicalPlan::Duplicate(plan) => self.replace_duplicate(plan),
+            PhysicalPlan::Shuffle(plan) => self.replace_shuffle(plan),
+            PhysicalPlan::ChunkFilter(plan) => self.replace_chunk_filter(plan),
+            PhysicalPlan::ChunkProject(plan) => self.replace_chunk_project(plan),
+            PhysicalPlan::ChunkCastSchema(plan) => self.replace_chunk_cast_schema(plan),
+            PhysicalPlan::ChunkFillAndReorder(plan) => self.replace_chunk_fill_and_reorder(plan),
+            PhysicalPlan::ChunkAppendData(plan) => self.replace_chunk_append_data(plan),
+            PhysicalPlan::ChunkMerge(plan) => self.replace_chunk_merge(plan),
+            PhysicalPlan::ChunkCommitInsert(plan) => self.replace_chunk_commit_insert(plan),
         }
     }
 
@@ -399,19 +415,6 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
-    fn replace_insert_multi_table(
-        &mut self,
-        plan: &PhysicalInsertMultiTable,
-    ) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::InsertMultiTable(Box::new(
-            PhysicalInsertMultiTable {
-                input: Box::new(input),
-                ..plan.clone()
-            },
-        )))
-    }
-
     fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
     }
@@ -513,6 +516,88 @@ pub trait PhysicalPlanReplacer {
             stat_info: plan.stat_info.clone(),
             script_udf: plan.script_udf,
         }))
+    }
+
+    fn replace_duplicate(&mut self, plan: &Duplicate) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Duplicate(Box::new(Duplicate {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_shuffle(&mut self, plan: &Shuffle) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Shuffle(Box::new(Shuffle {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_chunk_filter(&mut self, plan: &ChunkFilter) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ChunkFilter(Box::new(ChunkFilter {
+            input: Box::new(input),
+            predicates: plan.predicates.clone(),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_chunk_project(&mut self, plan: &ChunkProject) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ChunkProject(Box::new(ChunkProject {
+            input: Box::new(input),
+            projections: plan.projections.clone(),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_chunk_cast_schema(&mut self, plan: &ChunkCastSchema) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ChunkCastSchema(Box::new(ChunkCastSchema {
+            input: Box::new(input),
+            cast_schemas: plan.cast_schemas.clone(),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_chunk_fill_and_reorder(
+        &mut self,
+        plan: &ChunkFillAndReorder,
+    ) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ChunkFillAndReorder(Box::new(
+            ChunkFillAndReorder {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
+    }
+
+    fn replace_chunk_append_data(&mut self, plan: &ChunkAppendData) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ChunkAppendData(Box::new(ChunkAppendData {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_chunk_merge(&mut self, plan: &ChunkMerge) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ChunkMerge(Box::new(ChunkMerge {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_chunk_commit_insert(&mut self, plan: &ChunkCommitInsert) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ChunkCommitInsert(Box::new(
+            ChunkCommitInsert {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
     }
 }
 
@@ -626,7 +711,31 @@ impl PhysicalPlan {
                 PhysicalPlan::Udf(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::InsertMultiTable(plan) => {
+                PhysicalPlan::Duplicate(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::Shuffle(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::ChunkFilter(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::ChunkProject(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::ChunkCastSchema(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::ChunkFillAndReorder(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::ChunkAppendData(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::ChunkMerge(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::ChunkCommitInsert(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
             }

@@ -13,9 +13,9 @@
 // limitations under the License.
 
 mod common;
-mod physical_schedule;
+mod physical_multi_table_insert;
 pub use common::*;
-pub use physical_schedule::*;
+pub use physical_multi_table_insert::*;
 mod physical_aggregate_expand;
 pub use physical_aggregate_expand::AggregateExpand;
 mod physical_aggregate_final;
@@ -92,5 +92,3 @@ pub use physical_window::*;
 mod physical_udf;
 pub use physical_udf::Udf;
 pub use physical_udf::UdfFunctionDesc;
-mod physical_insert_multi_table;
-pub use physical_insert_multi_table::PhysicalInsertMultiTable;

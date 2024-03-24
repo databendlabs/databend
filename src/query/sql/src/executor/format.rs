@@ -42,7 +42,6 @@ use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
-use crate::executor::physical_plans::PhysicalInsertMultiTable;
 use crate::executor::physical_plans::Project;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -206,9 +205,6 @@ fn to_format_tree(
         PhysicalPlan::DistributedInsertSelect(plan) => {
             distributed_insert_to_format_tree(plan.as_ref(), metadata, profs)
         }
-        PhysicalPlan::InsertMultiTable(plan) => {
-            insert_multi_table_to_format_tree(plan.as_ref(), metadata, profs)
-        }
         PhysicalPlan::DeleteSource(_) => Ok(FormatTreeNode::new("DeleteSource".to_string())),
         PhysicalPlan::ReclusterSource(_) => Ok(FormatTreeNode::new("ReclusterSource".to_string())),
         PhysicalPlan::ReclusterSink(plan) => recluster_sink_to_format_tree(plan, metadata, profs),
@@ -239,6 +235,17 @@ fn to_format_tree(
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
         PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan, metadata),
+        PhysicalPlan::Duplicate(_) => Ok(FormatTreeNode::new("Duplicate".to_string())),
+        PhysicalPlan::Shuffle(_) => Ok(FormatTreeNode::new("Shuffle".to_string())),
+        PhysicalPlan::ChunkFilter(_) => Ok(FormatTreeNode::new("ChunkFilter".to_string())),
+        PhysicalPlan::ChunkProject(_) => Ok(FormatTreeNode::new("ChunkProject".to_string())),
+        PhysicalPlan::ChunkCastSchema(_) => Ok(FormatTreeNode::new("ChunkCastSchema".to_string())),
+        PhysicalPlan::ChunkFillAndReorder(_) => {
+            Ok(FormatTreeNode::new("ChunkFillAndReorder".to_string()))
+        }
+        PhysicalPlan::ChunkAppendData(_) => Ok(FormatTreeNode::new("ChunkAppendData".to_string())),
+        PhysicalPlan::ChunkMerge(_) => Ok(FormatTreeNode::new("ChunkMerge".to_string())),
+        PhysicalPlan::ChunkCommitInsert(_) => Ok(FormatTreeNode::new("ChunkCommitInsert".to_string())),
     }
 }
 
@@ -1072,19 +1079,6 @@ fn distributed_insert_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "DistributedInsertSelect".to_string(),
-        children,
-    ))
-}
-
-fn insert_multi_table_to_format_tree(
-    plan: &PhysicalInsertMultiTable,
-    metadata: &Metadata,
-    profs: &HashMap<u32, PlanProfile>,
-) -> Result<FormatTreeNode<String>> {
-    let children = vec![to_format_tree(&plan.input, metadata, profs)?];
-
-    Ok(FormatTreeNode::with_children(
-        "InsertMultiTable".to_string(),
         children,
     ))
 }
