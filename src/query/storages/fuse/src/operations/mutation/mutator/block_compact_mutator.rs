@@ -199,7 +199,7 @@ impl BlockCompactMutator {
                         .clone()
                 })
                 .collect::<Vec<_>>();
-            Partitions::create_nolazy(
+            Partitions::create(
                 PartitionsShuffleKind::Mod,
                 BlockCompactMutator::build_compact_tasks(
                     self.ctx.clone(),
@@ -211,7 +211,7 @@ impl BlockCompactMutator {
                 .await?,
             )
         } else {
-            Partitions::create(PartitionsShuffleKind::Mod, parts, true)
+            Partitions::create(PartitionsShuffleKind::Mod, parts)
         };
         Ok(partitions)
     }

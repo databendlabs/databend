@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -53,7 +54,8 @@ impl PipelineBuilder {
             return self.main_pipeline.add_source(EmptySource::create, 1);
         }
 
-        if delete.parts.is_lazy {
+        let is_lazy = delete.parts.partitions_type() == PartInfoType::SegmentLevel;
+        if is_lazy {
             let ctx = self.ctx.clone();
             let projection = Projection::Columns(delete.col_indices.clone());
             let filters = delete.filters.clone();
@@ -104,6 +106,7 @@ impl PipelineBuilder {
             delete.query_row_id_col,
             &mut self.main_pipeline,
         )?;
+
         if table.change_tracking_enabled() {
             let stream_ctx = StreamContext::try_create(
                 self.ctx.get_function_context()?,
@@ -120,6 +123,7 @@ impl PipelineBuilder {
                     )
                 })?;
         }
+
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds(), None)?;
         self.main_pipeline.add_transform(|input, output| {
@@ -133,8 +137,9 @@ impl PipelineBuilder {
             )?;
             proc.into_processor()
         })?;
+
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
-        if delete.parts.is_lazy {
+        if is_lazy {
             table.chain_mutation_aggregator(
                 &ctx,
                 &mut self.main_pipeline,

@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
@@ -236,7 +237,7 @@ async fn test_safety() -> Result<()> {
             eprintln!("no target select");
             continue;
         }
-        assert!(!selections.is_lazy);
+        assert!(selections.partitions_type() != PartInfoType::SegmentLevel);
 
         let mut actual_blocks_number = 0;
         let mut compact_segment_indices = HashSet::new();

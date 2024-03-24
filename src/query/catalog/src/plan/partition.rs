@@ -28,6 +28,7 @@ use sha2::Digest;
 use crate::table_context::TableContext;
 
 /// Partition information.
+#[derive(PartialEq)]
 pub enum PartInfoType {
     // Block level partition information.
     // Read the data from the block level.
@@ -99,28 +100,11 @@ pub enum PartitionsShuffleKind {
 pub struct Partitions {
     pub kind: PartitionsShuffleKind,
     pub partitions: Vec<PartInfoPtr>,
-    pub is_lazy: bool,
 }
 
 impl Partitions {
-    pub fn create(
-        kind: PartitionsShuffleKind,
-        partitions: Vec<PartInfoPtr>,
-        is_lazy: bool,
-    ) -> Self {
-        Partitions {
-            kind,
-            partitions,
-            is_lazy,
-        }
-    }
-
-    pub fn create_nolazy(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
-        Partitions {
-            kind,
-            partitions,
-            is_lazy: false,
-        }
+    pub fn create(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
+        Partitions { kind, partitions }
     }
 
     pub fn len(&self) -> usize {
@@ -159,11 +143,7 @@ impl Partitions {
                 for executor in executors_sorted.iter() {
                     executor_part.insert(
                         executor.clone(),
-                        Partitions::create(
-                            PartitionsShuffleKind::Seq,
-                            self.partitions.clone(),
-                            self.is_lazy,
-                        ),
+                        Partitions::create(PartitionsShuffleKind::Seq, self.partitions.clone()),
                     );
                 }
 
@@ -192,7 +172,7 @@ impl Partitions {
 
             executor_part.insert(
                 executor,
-                Partitions::create(PartitionsShuffleKind::Seq, parts, self.is_lazy),
+                Partitions::create(PartitionsShuffleKind::Seq, parts),
             );
         }
 
@@ -221,7 +201,6 @@ impl Default for Partitions {
         Self {
             kind: PartitionsShuffleKind::Seq,
             partitions: vec![],
-            is_lazy: false,
         }
     }
 }

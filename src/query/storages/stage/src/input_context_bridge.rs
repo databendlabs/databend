@@ -68,7 +68,7 @@ impl StageTable {
             .collect::<Vec<_>>();
         Ok((
             PartStatistics::default(),
-            Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions),
+            Partitions::create(PartitionsShuffleKind::Seq, partitions),
         ))
     }
 

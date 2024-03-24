@@ -285,7 +285,7 @@ async fn prune_metas_in_parallel(
     if files.is_empty() {
         return Ok((
             PartStatistics::default_exact(),
-            Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]),
+            Partitions::create(PartitionsShuffleKind::Mod, vec![]),
         ));
     }
 
@@ -455,5 +455,5 @@ fn create_partitions(mut parts: Vec<ParquetRSRowGroupPart>, topk: &Option<TopK>)
         .map(|p| Arc::new(Box::new(ParquetPart::ParquetRSRowGroup(p)) as Box<dyn PartInfo>))
         .collect();
 
-    Partitions::create_nolazy(PartitionsShuffleKind::Mod, parts)
+    Partitions::create(PartitionsShuffleKind::Mod, parts)
 }
