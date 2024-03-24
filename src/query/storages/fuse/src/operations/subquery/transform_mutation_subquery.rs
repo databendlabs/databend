@@ -106,7 +106,7 @@ impl TransformMutationSubquery {
         mutation: SubqueryMutation,
         compare_op: Option<ComparisonOp>,
     ) -> Result<Self> {
-        let split_mutator = SplitMutator::try_create(func_ctx, compare_op.clone())?;
+        let split_mutator = SplitMutator::try_create(func_ctx, compare_op)?;
 
         Ok(TransformMutationSubquery {
             input,
