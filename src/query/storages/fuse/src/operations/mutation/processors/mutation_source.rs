@@ -198,6 +198,7 @@ impl Processor for MutationSource {
                             offsets: None,
                             base_block_ids: None,
                             inner: None,
+                            matched_rows: block_meta.matched_rows.clone(),
                         };
                         let internal_col = InternalColumn {
                             column_name: ROW_ID_COL_NAME.to_string(),

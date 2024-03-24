@@ -26,6 +26,7 @@ use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::tokio::time::Instant;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::BackgroundApi;
 use databend_common_meta_app::background::BackgroundJobIdent;
@@ -42,7 +43,10 @@ use databend_common_meta_app::background::UpdateBackgroundJobParamsReq;
 use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
 use databend_common_meta_app::background::UpdateBackgroundTaskReq;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
@@ -142,21 +146,25 @@ pub fn should_continue_compaction(old: &TableStatistics, new: &TableStatistics) 
 impl CompactionJob {
     pub async fn create(
         config: &InnerConfig,
-        name: String,
+        name: impl ToString,
         finish_tx: Arc<Mutex<Sender<u64>>>,
-    ) -> Self {
-        let tenant = config.query.tenant_id.clone();
-        let creator = BackgroundJobIdent {
-            tenant: tenant.to_string(),
-            name,
-        };
+    ) -> Result<Self> {
+        let non_empty = NonEmptyString::new(&config.query.tenant_id).map_err(|_e| {
+            ErrorCode::TenantIsEmpty("config.query.tenant_id is empty when CompactionJob::create()")
+        })?;
+        let tenant = Tenant::new_nonempty(non_empty);
+
+        let creator = BackgroundJobIdent::new(tenant, name);
+
         let meta_api = UserApiProvider::instance().get_meta_store_client();
-        Self {
+        let j = Self {
             conf: config.clone(),
             meta_api,
             creator,
             finish_tx,
-        }
+        };
+
+        Ok(j)
     }
     async fn do_compaction_job(&mut self) -> Result<()> {
         let session = create_session(&self.conf).await?;
@@ -313,10 +321,10 @@ impl CompactionJob {
         self.update_job_status(status.clone().unwrap()).await?;
 
         info!(job = "compaction", background = true, id=id.clone(), database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats :? =(&stats); "start compact");
-        let task_name = BackgroundTaskIdent {
-            tenant: self.creator.tenant.clone(),
-            task_id: status.unwrap().last_task_id.unwrap(),
-        };
+        let task_ident = BackgroundTaskIdent::new(
+            self.creator.tenant().clone(),
+            status.unwrap().last_task_id.unwrap(),
+        );
         let mut info = BackgroundTaskInfo::new_compaction_task(
             self.creator.clone(),
             db_id,
@@ -330,7 +338,7 @@ impl CompactionJob {
         );
         self.meta_api
             .update_background_task(UpdateBackgroundTaskReq {
-                task_name: task_name.clone(),
+                task_name: task_ident.clone(),
                 task_info: info.clone(),
                 expire_at: Utc::now().timestamp() as u64 + EXPIRE_SEC,
             })
@@ -357,7 +365,7 @@ impl CompactionJob {
                 info!(job = "compaction", background = true, id=id.clone(), database = database.clone(), table = table.clone(), table_stats :? =(&new_stats); "finish compact");
                 self.meta_api
                     .update_background_task(UpdateBackgroundTaskReq {
-                        task_name,
+                        task_name: task_ident,
                         task_info: info.clone(),
                         expire_at: Utc::now().timestamp() as u64 + EXPIRE_SEC,
                     })
@@ -368,7 +376,7 @@ impl CompactionJob {
                 Self::set_task_status(&mut info, BackgroundTaskState::FAILED);
                 self.meta_api
                     .update_background_task(UpdateBackgroundTaskReq {
-                        task_name,
+                        task_name: task_ident,
                         task_info: info.clone(),
                         expire_at: Utc::now().timestamp() as u64 + EXPIRE_SEC,
                     })

@@ -15,6 +15,7 @@
 use std::fmt;
 
 use crate::background::BackgroundJobIdent;
+use crate::KeyWithTenant;
 
 /// Same as [`BackgroundJobIdent`] but provide serde support for use in a record value.
 /// [`BackgroundJobIdent`] is a kvapi::Key that does not need to be `serde`
@@ -26,6 +27,15 @@ pub struct BackgroundTaskCreator {
     pub name: String,
 }
 
+impl BackgroundTaskCreator {
+    pub fn new(tenant: impl ToString, name: impl ToString) -> Self {
+        Self {
+            tenant: tenant.to_string(),
+            name: name.to_string(),
+        }
+    }
+}
+
 impl fmt::Display for BackgroundTaskCreator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.tenant, self.name)
@@ -34,9 +44,6 @@ impl fmt::Display for BackgroundTaskCreator {
 
 impl From<BackgroundJobIdent> for BackgroundTaskCreator {
     fn from(ident: BackgroundJobIdent) -> Self {
-        Self {
-            tenant: ident.tenant,
-            name: ident.name,
-        }
+        Self::new(ident.tenant_name(), ident.name())
     }
 }

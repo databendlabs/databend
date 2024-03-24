@@ -17,6 +17,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
+use databend_common_storages_fuse::io::read::load_inverted_index_info;
 use databend_common_storages_fuse::io::read::InvertedIndexReader;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
@@ -94,35 +95,53 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let index_info_locations = new_snapshot.index_info_locations.clone().unwrap();
     let index_info_loc = index_info_locations.get(&index_name);
     assert!(index_info_loc.is_some());
-    let index_info = new_fuse_table.read_index_info(index_info_loc).await?;
+    let index_info =
+        load_inverted_index_info(new_fuse_table.get_operator(), index_info_loc).await?;
     assert!(index_info.is_some());
     let index_info = index_info.unwrap();
     assert_eq!(index_info.indexes.len(), 1);
 
-    let index_locs: Vec<_> = index_info.indexes.keys().cloned().collect();
-    let index_loc = &index_locs[0];
-
     let schema = DataSchema::from(table_schema);
-    let index_reader = InvertedIndexReader::create(dal.clone(), schema);
+    let query_columns = vec!["title".to_string(), "content".to_string()];
+    let index_reader =
+        InvertedIndexReader::try_create(dal.clone(), &schema, &query_columns, &index_info.indexes)
+            .await?;
 
-    let num = 5;
     let query = "rust";
-    let docs = index_reader.do_read(index_loc.clone(), query, num)?;
-    assert_eq!(docs.len(), 2);
-    assert_eq!(docs[0].1.doc_id, 0);
-    assert_eq!(docs[1].1.doc_id, 1);
+    let segment_map = index_reader.do_filter(query)?;
+    assert_eq!(segment_map.len(), 1);
+    let segment_row_id_scores: Vec<_> = segment_map.into_values().collect();
+    assert_eq!(segment_row_id_scores.len(), 1);
+    let row_id_scores = &segment_row_id_scores[0];
+    assert!(row_id_scores.is_some());
+    let row_id_scores = row_id_scores.as_ref().unwrap();
+    assert_eq!(row_id_scores.len(), 2);
+    assert_eq!(row_id_scores[0].0, 0);
+    assert_eq!(row_id_scores[1].0, 1);
 
     let query = "java";
-    let docs = index_reader.do_read(index_loc.clone(), query, num)?;
-    assert_eq!(docs.len(), 1);
-    assert_eq!(docs[0].1.doc_id, 2);
+    let segment_map = index_reader.do_filter(query)?;
+    assert_eq!(segment_map.len(), 1);
+    let segment_row_id_scores: Vec<_> = segment_map.into_values().collect();
+    assert_eq!(segment_row_id_scores.len(), 1);
+    let row_id_scores = &segment_row_id_scores[0];
+    assert!(row_id_scores.is_some());
+    let row_id_scores = row_id_scores.as_ref().unwrap();
+    assert_eq!(row_id_scores.len(), 1);
+    assert_eq!(row_id_scores[0].0, 2);
 
     let query = "data";
-    let docs = index_reader.do_read(index_loc.clone(), query, num)?;
-    assert_eq!(docs.len(), 3);
-    assert_eq!(docs[0].1.doc_id, 4);
-    assert_eq!(docs[1].1.doc_id, 1);
-    assert_eq!(docs[2].1.doc_id, 5);
+    let segment_map = index_reader.do_filter(query)?;
+    assert_eq!(segment_map.len(), 1);
+    let segment_row_id_scores: Vec<_> = segment_map.into_values().collect();
+    assert_eq!(segment_row_id_scores.len(), 1);
+    let row_id_scores = &segment_row_id_scores[0];
+    assert!(row_id_scores.is_some());
+    let row_id_scores = row_id_scores.as_ref().unwrap();
+    assert_eq!(row_id_scores.len(), 3);
+    assert_eq!(row_id_scores[0].0, 1);
+    assert_eq!(row_id_scores[1].0, 4);
+    assert_eq!(row_id_scores[2].0, 5);
 
     Ok(())
 }

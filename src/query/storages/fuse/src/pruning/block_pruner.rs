@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::ops::Range;
 use std::pin::Pin;
@@ -22,6 +23,7 @@ use databend_common_base::base::tokio::sync::OwnedSemaphorePermit;
 use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::F32;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::BlockMetaIndex;
@@ -47,13 +49,90 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        if let Some(bloom_pruner) = &self.pruning_ctx.bloom_pruner {
-            self.block_pruning(bloom_pruner, segment_location, block_metas)
+        // Apply internal column pruning.
+        let block_meta_indexes = self.internal_column_pruning(&block_metas);
+
+        // Apply inverted index pruning.
+        let (block_meta_indexes, matched_rows_map) = self
+            .inverted_index_pruning(&segment_location, &block_metas, block_meta_indexes)
+            .await?;
+
+        // Apply block pruning.
+        match &self.pruning_ctx.bloom_pruner {
+            // async pruning with bloom index.
+            Some(bloom_pruner) => {
+                self.block_pruning(
+                    bloom_pruner,
+                    segment_location,
+                    block_metas,
+                    block_meta_indexes,
+                    matched_rows_map,
+                )
                 .await
-        } else {
-            // if no available filter pruners, just prune the blocks by
-            // using zone map index, and do not spawn async tasks
-            self.block_pruning_sync(segment_location, block_metas)
+            }
+            // sync pruning without a bloom index.
+            None => self.block_pruning_sync(
+                segment_location,
+                block_metas,
+                block_meta_indexes,
+                matched_rows_map,
+            ),
+        }
+    }
+
+    /// Apply internal column pruning.
+    fn internal_column_pruning(
+        &self,
+        block_metas: &[Arc<BlockMeta>],
+    ) -> Vec<(usize, Arc<BlockMeta>)> {
+        match &self.pruning_ctx.internal_column_pruner {
+            Some(pruner) => block_metas
+                .iter()
+                .enumerate()
+                .filter(|(_, block_meta)| {
+                    pruner.should_keep(BLOCK_NAME_COL_NAME, &block_meta.location.0)
+                })
+                .map(|(index, block_meta)| (index, block_meta.clone()))
+                .collect(),
+            None => block_metas
+                .iter()
+                .enumerate()
+                .map(|(index, block_meta)| (index, block_meta.clone()))
+                .collect(),
+        }
+    }
+
+    /// Apply inverted index pruning.
+    async fn inverted_index_pruning(
+        &self,
+        segment_location: &SegmentLocation,
+        block_metas: &[Arc<BlockMeta>],
+        block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
+    ) -> Result<(
+        Vec<(usize, Arc<BlockMeta>)>,
+        Option<BTreeMap<usize, Vec<(usize, F32)>>>,
+    )> {
+        match &self.pruning_ctx.inverted_index_pruner {
+            Some(inverted_index_pruner) => {
+                // Get the row count of each block.
+                let row_counts: Vec<usize> = block_metas
+                    .iter()
+                    .scan(0, |state, meta| {
+                        *state += meta.row_count as usize;
+                        Some(*state)
+                    })
+                    .collect();
+                let block_matched_rows_map = inverted_index_pruner
+                    .should_keep_block(&segment_location.location.0, row_counts)?;
+
+                let filtered_block_meta_indexes = block_meta_indexes
+                    .into_iter()
+                    .filter(|(idx, _)| block_matched_rows_map.contains_key(idx))
+                    .collect();
+
+                Ok((filtered_block_meta_indexes, Some(block_matched_rows_map)))
+            }
+            None => Ok((block_meta_indexes, None)),
         }
     }
 
@@ -64,6 +143,8 @@ impl BlockPruner {
         bloom_pruner: &Arc<dyn BloomPruner + Send + Sync>,
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
+        block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
+        matched_rows_map: Option<BTreeMap<usize, Vec<(usize, F32)>>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
@@ -72,20 +153,7 @@ impl BlockPruner {
         let range_pruner = self.pruning_ctx.range_pruner.clone();
         let page_pruner = self.pruning_ctx.page_pruner.clone();
 
-        let blocks = if let Some(internal_column_pruner) = &self.pruning_ctx.internal_column_pruner
-        {
-            block_metas
-                .iter()
-                .enumerate()
-                .filter(|(_, block)| {
-                    internal_column_pruner.should_keep(BLOCK_NAME_COL_NAME, &block.location.0)
-                })
-                .collect::<Vec<_>>()
-        } else {
-            block_metas.iter().enumerate().collect()
-        };
-
-        let mut blocks = blocks.into_iter();
+        let mut block_meta_indexes = block_meta_indexes.into_iter();
         let pruning_tasks = std::iter::from_fn(|| {
             // check limit speculatively
             if limit_pruner.exceeded() {
@@ -98,7 +166,7 @@ impl BlockPruner {
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
 
             let pruning_stats = pruning_stats.clone();
-            blocks.next().map(|(block_idx, block_meta)| {
+            block_meta_indexes.next().map(|(block_idx, block_meta)| {
                 // Perf.
                 {
                     metrics_inc_blocks_range_pruning_before(1);
@@ -193,6 +261,12 @@ impl BlockPruner {
 
                 debug_assert_eq!(block_location, block.location.0);
 
+                let matched_rows = if let Some(ref matched_rows_map) = matched_rows_map {
+                    matched_rows_map.get(&block_idx)
+                } else {
+                    None
+                };
+
                 result.push((
                     BlockMetaIndex {
                         segment_idx: segment_location.segment_idx,
@@ -203,6 +277,7 @@ impl BlockPruner {
                         block_location: block_location.clone(),
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
+                        matched_rows: matched_rows.cloned(),
                     },
                     block,
                 ))
@@ -221,6 +296,8 @@ impl BlockPruner {
         &self,
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
+        block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
+        matched_rows_map: Option<BTreeMap<usize, Vec<(usize, F32)>>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
@@ -229,21 +306,9 @@ impl BlockPruner {
 
         let start = Instant::now();
 
-        let blocks = if let Some(internal_column_pruner) = &self.pruning_ctx.internal_column_pruner
-        {
-            block_metas
-                .iter()
-                .enumerate()
-                .filter(|(_, block)| {
-                    internal_column_pruner.should_keep(BLOCK_NAME_COL_NAME, &block.location.0)
-                })
-                .collect::<Vec<_>>()
-        } else {
-            block_metas.iter().enumerate().collect::<Vec<_>>()
-        };
-        let mut result = Vec::with_capacity(blocks.len());
+        let mut result = Vec::with_capacity(block_meta_indexes.len());
         let block_num = block_metas.len();
-        for (block_idx, block_meta) in blocks {
+        for (block_idx, block_meta) in block_meta_indexes {
             // Perf.
             {
                 metrics_inc_blocks_range_pruning_before(1);
@@ -270,6 +335,11 @@ impl BlockPruner {
 
                 let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
                 if keep {
+                    let matched_rows = if let Some(ref matched_rows_map) = matched_rows_map {
+                        matched_rows_map.get(&block_idx)
+                    } else {
+                        None
+                    };
                     result.push((
                         BlockMetaIndex {
                             segment_idx: segment_location.segment_idx,
@@ -280,6 +350,7 @@ impl BlockPruner {
                             block_location: block_meta.as_ref().location.0.clone(),
                             segment_location: segment_location.location.0.clone(),
                             snapshot_location: segment_location.snapshot_loc.clone(),
+                            matched_rows: matched_rows.cloned(),
                         },
                         block_meta.clone(),
                     ))

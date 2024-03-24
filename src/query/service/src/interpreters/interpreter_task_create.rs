@@ -58,7 +58,7 @@ impl CreateTaskInterpreter {
             tenant_id: plan.tenant,
             query_text: "".to_string(),
             owner,
-            comment: Some(plan.comment),
+            comment: plan.comment,
             schedule_options: plan.schedule_opts.map(make_schedule_options),
             warehouse_options: Some(make_warehouse_options(plan.warehouse_opts)),
             error_integration: plan.error_integration,

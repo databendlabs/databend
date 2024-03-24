@@ -50,10 +50,8 @@ impl Display for CreateUserStmt {
         write!(f, " {} IDENTIFIED", self.user)?;
         write!(f, " {}", self.auth_option)?;
         if !self.user_options.is_empty() {
-            write!(f, " WITH")?;
-            for user_option in &self.user_options {
-                write!(f, " {user_option}")?;
-            }
+            write!(f, " WITH ")?;
+            write_comma_separated_list(f, &self.user_options)?;
         }
 
         Ok(())
@@ -103,10 +101,8 @@ impl Display for AlterUserStmt {
             write!(f, " IDENTIFIED {}", auth_option)?;
         }
         if !self.user_options.is_empty() {
-            write!(f, " WITH")?;
-            for with_option in &self.user_options {
-                write!(f, " {with_option}")?;
-            }
+            write!(f, " WITH ")?;
+            write_comma_separated_list(f, &self.user_options)?;
         }
 
         Ok(())

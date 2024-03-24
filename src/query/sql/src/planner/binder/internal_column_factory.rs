@@ -21,6 +21,8 @@ use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
 use databend_common_expression::BASE_ROW_ID_COL_NAME;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_expression::SEARCH_MATCHED_COL_NAME;
+use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::SNAPSHOT_NAME_COL_NAME;
 
@@ -63,6 +65,16 @@ impl InternalColumnFactory {
         internal_columns.insert(
             BASE_BLOCK_IDS_COL_NAME.to_string(),
             InternalColumn::new(BASE_BLOCK_IDS_COL_NAME, InternalColumnType::BaseBlockIds),
+        );
+
+        internal_columns.insert(
+            SEARCH_MATCHED_COL_NAME.to_string(),
+            InternalColumn::new(SEARCH_MATCHED_COL_NAME, InternalColumnType::SearchMatched),
+        );
+
+        internal_columns.insert(
+            SEARCH_SCORE_COL_NAME.to_string(),
+            InternalColumn::new(SEARCH_SCORE_COL_NAME, InternalColumnType::SearchScore),
         );
 
         InternalColumnFactory { internal_columns }

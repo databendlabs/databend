@@ -144,6 +144,7 @@ fn test_statement() {
         r#"create database ctl.t engine = Default;"#,
         r#"create database t engine = Default;"#,
         r#"create database t FROM SHARE a.s;"#,
+        r#"CREATE TABLE `t3`(a int not null, b int not null, c int not null) bloom_index_columns='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native';"#,
         r#"create or replace database a;"#,
         r#"drop database ctl.t;"#,
         r#"drop database if exists t;"#,
@@ -634,6 +635,9 @@ fn test_statement() {
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
+        "REMOVE @t;",
+        "SELECT sum(d) OVER (w) FROM e;",
+        "SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);",
         "GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';",
         "GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';",
@@ -642,6 +646,7 @@ fn test_statement() {
         "CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';",
         "CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
         "CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
+        r#"CREATE STAGE s file_format=(record_delimiter='\n' escape='\\');"#,
         r#"create or replace function addone(int)
 returns int
 language python
