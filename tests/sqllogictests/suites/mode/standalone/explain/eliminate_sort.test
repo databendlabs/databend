@@ -82,7 +82,7 @@ Sort
 ├── sort keys: [number + 1 DESC NULLS LAST]
 ├── estimated rows: 10.00
 └── EvalScalar
-+   ├── output columns: [t.number (#0), number + 1 (#1)]
+    ├── output columns: [t.number (#0), number + 1 (#1)]
     ├── expressions: [t.number (#0) + 1]
     ├── estimated rows: 10.00
     └── Sort
