@@ -11360,7 +11360,7 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO 'test-user';
 ---------- Output ---------
-GRANT ROLE test TO USER 'test-user'@'%'
+GRANT ROLE 'test' TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11380,7 +11380,7 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO USER 'test-user';
 ---------- Output ---------
-GRANT ROLE test TO USER 'test-user'@'%'
+GRANT ROLE 'test' TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11400,7 +11400,7 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO ROLE `test-user`;
 ---------- Output ---------
-GRANT ROLE test TO ROLE 'test-user'
+GRANT ROLE 'test' TO ROLE 'test-user'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11777,7 +11777,7 @@ DropRole {
 ---------- Input ----------
 GRANT ROLE test TO ROLE 'test-user';
 ---------- Output ---------
-GRANT ROLE test TO ROLE 'test-user'
+GRANT ROLE 'test' TO ROLE 'test-user'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11794,7 +11794,7 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO ROLE `test-user`;
 ---------- Output ---------
-GRANT ROLE test TO ROLE 'test-user'
+GRANT ROLE 'test' TO ROLE 'test-user'
 ---------- AST ------------
 Grant(
     GrantStmt {
