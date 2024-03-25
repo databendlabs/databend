@@ -42,8 +42,8 @@ use databend_common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
@@ -1671,7 +1671,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
 
     fn try_into(self) -> Result<InnerQueryConfig> {
         Ok(InnerQueryConfig {
-            tenant_id: NonEmptyString::new(self.tenant_id)
+            tenant_id: Tenant::new_or_error_code(self.tenant_id, "")
                 .map_err(|_e| ErrorCode::InvalidConfig("tenant-id can not be empty"))?,
             cluster_id: self.cluster_id,
             node_id: "".to_string(),
@@ -1752,7 +1752,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
 impl From<InnerQueryConfig> for QueryConfig {
     fn from(inner: InnerQueryConfig) -> Self {
         Self {
-            tenant_id: inner.tenant_id.to_string(),
+            tenant_id: inner.tenant_id.name().to_string(),
             cluster_id: inner.cluster_id,
             num_cpus: inner.num_cpus,
             mysql_handler_host: inner.mysql_handler_host,

@@ -14,8 +14,9 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
+use minitrace::func_name;
 use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;
@@ -31,13 +32,7 @@ pub struct SettingsItem {
 }
 
 async fn list_settings_impl(tenant: &str) -> Result<Vec<SettingsItem>> {
-    if tenant.is_empty() {
-        return Err(ErrorCode::TenantIsEmpty(
-            "Tenant can not empty(while list settings)",
-        ));
-    }
-
-    let settings = Settings::create(NonEmptyString::new(tenant)?);
+    let settings = Settings::create(Tenant::new_or_error_code(tenant, func_name!())?);
     settings.load_changes().await?;
 
     Ok(settings
@@ -66,7 +61,7 @@ async fn set_setting_impl(tenant: &str, key: &str, value: String) -> Result<Vec<
         ));
     }
 
-    let settings = Settings::create(NonEmptyString::new(tenant)?);
+    let settings = Settings::create(Tenant::new_or_error_code(tenant, func_name!())?);
     settings.set_global_setting(key.to_string(), value).await?;
 
     Ok(settings
@@ -95,7 +90,7 @@ async fn unset_setting_impl(tenant: &str, key: &str) -> Result<Vec<SettingsItem>
         ));
     }
 
-    let settings = Settings::create(NonEmptyString::new(tenant)?);
+    let settings = Settings::create(Tenant::new_or_error_code(tenant, func_name!())?);
     settings.try_drop_global_setting(key).await?;
 
     Ok(settings

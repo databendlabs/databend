@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+
+use databend_common_exception::ErrorCode;
 use databend_common_meta_types::NonEmptyString;
 
 /// Tenant is not stored directly in meta-store.
 ///
 /// It is just a type for use on the client side.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, derive_more::Display)]
-#[display(fmt = "Tenant{{{tenant}}}")]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Tenant {
     // TODO: consider using NonEmptyString?
     pub tenant: String,
@@ -29,6 +31,17 @@ impl Tenant {
         Self {
             tenant: tenant.to_string(),
         }
+    }
+
+    pub fn new_or_error_code(tenant: impl ToString, ctx: impl Display) -> Result<Self, ErrorCode> {
+        let non_empty = NonEmptyString::new(tenant.to_string())
+            .map_err(|_e| ErrorCode::TenantIsEmpty(format!("Tenant is empty when {}", ctx)))?;
+
+        let t = Self {
+            tenant: non_empty.as_str().to_string(),
+        };
+
+        Ok(t)
     }
 
     pub fn new_literal(tenant: &str) -> Self {
@@ -47,6 +60,14 @@ impl Tenant {
 
     pub fn name(&self) -> &str {
         &self.tenant
+    }
+
+    pub fn to_nonempty(&self) -> NonEmptyString {
+        NonEmptyString::new(self.tenant.clone()).unwrap()
+    }
+
+    pub fn display(&self) -> impl Display {
+        format!("Tenant{}", self.tenant)
     }
 }
 

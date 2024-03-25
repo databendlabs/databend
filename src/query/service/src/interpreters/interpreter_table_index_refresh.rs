@@ -131,7 +131,7 @@ impl Interpreter for RefreshTableIndexInterpreter {
 
         if let Some(share_table_info) = res.share_table_info {
             save_share_table_info(
-                self.ctx.get_tenant().as_str(),
+                self.ctx.get_tenant().name(),
                 self.ctx.get_data_operator()?.operator(),
                 share_table_info,
             )

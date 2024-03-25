@@ -27,7 +27,7 @@ use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::PresignAction;
@@ -93,7 +93,7 @@ impl PrivilegeAccess {
                     .ctx
                     .get_catalog(catalog_name)
                     .await?
-                    .get_database(tenant.as_str(), db_name)
+                    .get_database(tenant.name(), db_name)
                     .await?
                     .get_db_info()
                     .ident
@@ -109,13 +109,13 @@ impl PrivilegeAccess {
                 }
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
                 let db_id = catalog
-                    .get_database(tenant.as_str(), db_name)
+                    .get_database(tenant.name(), db_name)
                     .await?
                     .get_db_info()
                     .ident
                     .db_id;
                 let table = catalog
-                    .get_table(tenant.as_str(), db_name, table_name)
+                    .get_table(tenant.name(), db_name, table_name)
                     .await?;
                 let table_id = table.get_id();
                 OwnershipObject::Table {
@@ -166,7 +166,7 @@ impl PrivilegeAccess {
             Err(_err) => {
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
                 match self
-                    .convert_to_id(tenant.as_str(), &catalog, db_name, None)
+                    .convert_to_id(tenant.name(), &catalog, db_name, None)
                     .await
                 {
                     Ok(obj) => {
@@ -259,7 +259,7 @@ impl PrivilegeAccess {
                     Ok(_) => return Ok(()),
                     Err(_err) => {
                         match self
-                            .convert_to_id(tenant.as_str(), &catalog, db_name, Some(table_name))
+                            .convert_to_id(tenant.name(), &catalog, db_name, Some(table_name))
                             .await
                         {
                             Ok(obj) => {
@@ -515,7 +515,7 @@ impl AccessChecker for PrivilegeAccess {
                             return Ok(());
                         }
                         let catalog = self.ctx.get_catalog(catalog).await?;
-                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), &catalog, database, None).await? {
+                        let (db_id, table_id) = match self.convert_to_id(tenant.name(), &catalog, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -535,7 +535,7 @@ impl AccessChecker for PrivilegeAccess {
                             return Ok(());
                         }
                         let catalog = self.ctx.get_catalog(&catalog_name).await?;
-                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), &catalog, database, None).await? {
+                        let (db_id, table_id) = match self.convert_to_id(tenant.name(), &catalog, database, None).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -555,7 +555,7 @@ impl AccessChecker for PrivilegeAccess {
                             return Ok(());
                         }
                         let catalog = self.ctx.get_catalog(catalog_name).await?;
-                        let (db_id, table_id) = match self.convert_to_id(tenant.as_str(), &catalog, database, Some(table)).await? {
+                        let (db_id, table_id) = match self.convert_to_id(tenant.name(), &catalog, database, Some(table)).await? {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
@@ -640,7 +640,7 @@ impl AccessChecker for PrivilegeAccess {
                 let catalog = self.ctx.get_catalog(&catalog_name).await?;
                 // Use db is special. Should not check the privilege.
                 // Just need to check user grant objects contain the db that be used.
-                let (db_id, _) = match self.convert_to_id(tenant.as_str(), &catalog, &plan.database, None).await? {
+                let (db_id, _) = match self.convert_to_id(tenant.name(), &catalog, &plan.database, None).await? {
                     ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                     ObjectId::Database(db_id) => { (db_id, None) }
                 };
@@ -1037,7 +1037,7 @@ impl AccessChecker for PrivilegeAccess {
 
 // TODO(liyz): replace it with verify_access
 async fn has_priv(
-    tenant: &NonEmptyString,
+    tenant: &Tenant,
     db_name: &str,
     table_name: Option<&str>,
     db_id: u64,
@@ -1047,6 +1047,7 @@ async fn has_priv(
     if db_name.to_lowercase() == "information_schema" {
         return Ok(true);
     }
+
     Ok(RoleCacheManager::instance()
         .find_related_roles(tenant, &grant_set.roles())
         .await?

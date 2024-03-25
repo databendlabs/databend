@@ -41,6 +41,7 @@ use databend_common_meta_app::app_error::StreamVersionMismatched;
 use databend_common_meta_app::app_error::TableAlreadyExists;
 use databend_common_meta_app::app_error::TableLockExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
+use databend_common_meta_app::app_error::TenantIsEmpty;
 use databend_common_meta_app::app_error::UndropDbHasNoHistory;
 use databend_common_meta_app::app_error::UndropDbWithNoDropTime;
 use databend_common_meta_app::app_error::UndropTableAlreadyExists;
@@ -180,6 +181,8 @@ use databend_common_meta_app::share::ShareGrantObject;
 use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareTableInfoMap;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
@@ -193,6 +196,7 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::MetaNetworkError;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
@@ -933,7 +937,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         return Err(KVAppError::AppError(AppError::IndexAlreadyExists(
                             IndexAlreadyExists::new(
                                 &tenant_index.index_name,
-                                format!("create index with tenant: {}", tenant_index.tenant),
+                                format!(
+                                    "create index with tenant: {}",
+                                    tenant_index.tenant.display()
+                                ),
                             ),
                         )));
                     }
@@ -3891,8 +3898,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 } else {
                     Err(KVAppError::AppError(AppError::CatalogAlreadyExists(
                         CatalogAlreadyExists::new(
-                            &name_key.catalog_name,
-                            format!("create catalog: tenant: {}", name_key.tenant),
+                            name_key.name(),
+                            format!("create catalog: tenant: {}", name_key.tenant_name()),
                         ),
                     )))
                 };
@@ -3971,8 +3978,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?.await;
 
-            let res =
-                get_catalog_or_err(self, name_key, format!("drop_catalog: {}", &name_key)).await;
+            let res = get_catalog_or_err(
+                self,
+                name_key,
+                format!("drop_catalog: {}", name_key.display()),
+            )
+            .await;
 
             let (_, catalog_id, catalog_meta_seq, _) = match res {
                 Ok(x) => x,
@@ -4040,11 +4051,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Vec<Arc<CatalogInfo>>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let name_key = CatalogNameIdent {
-            tenant: req.tenant,
-            // Using a empty catalog to to list all
-            catalog_name: "".to_string(),
-        };
+        let tenant = Tenant::new_nonempty(
+            NonEmptyString::new(req.tenant)
+                .map_err(|_e| AppError::from(TenantIsEmpty::new("SchemaApi::list_catalogs")))?,
+        );
+        let name_key = CatalogNameIdent::new(tenant, "");
 
         // Pairs of catalog-name and catalog_id with seq
         let (tenant_catalog_names, catalog_ids) = list_u64_value(self, &name_key).await?;
@@ -4075,10 +4086,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         catalog_id: catalog_ids[i],
                     }
                     .into(),
-                    name_ident: CatalogNameIdent {
-                        tenant: name_key.tenant.clone(),
-                        catalog_name: tenant_catalog_names[i].catalog_name.clone(),
-                    }
+                    name_ident: CatalogNameIdent::new(
+                        name_key.tenant().clone(),
+                        tenant_catalog_names[i].name(),
+                    )
                     .into(),
                     meta: catalog_meta,
                 };
@@ -5493,8 +5504,8 @@ pub fn catalog_has_to_exist(
 
         Err(KVAppError::AppError(AppError::UnknownCatalog(
             UnknownCatalog::new(
-                &catalog_name_ident.catalog_name,
-                format!("{}: {}", msg, catalog_name_ident),
+                catalog_name_ident.name(),
+                format!("{}: {}", msg, catalog_name_ident.display()),
             ),
         )))
     } else {

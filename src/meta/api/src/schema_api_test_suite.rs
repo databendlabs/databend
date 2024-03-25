@@ -1419,16 +1419,17 @@ impl SchemaApiTestSuite {
 
     #[minitrace::trace]
     async fn catalog_create_get_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let tenant = "tenant1";
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_literal(tenant_name);
+
         let catalog_name = "catalog1";
+
+        let ident = CatalogNameIdent::new(tenant.clone(), catalog_name);
 
         info!("--- create catalog1");
         let req = CreateCatalogReq {
             if_not_exists: false,
-            name_ident: CatalogNameIdent {
-                tenant: tenant.to_string(),
-                catalog_name: catalog_name.to_string(),
-            },
+            name_ident: ident.clone(),
             meta: CatalogMeta {
                 catalog_option: CatalogOption::Iceberg(IcebergCatalogOption {
                     storage_params: Box::new(StorageParams::S3(StorageS3Config {
@@ -1443,9 +1444,7 @@ impl SchemaApiTestSuite {
         let res = mt.create_catalog(req).await?;
         info!("create catalog res: {:?}", res);
 
-        let got = mt
-            .get_catalog(GetCatalogReq::new(tenant, catalog_name))
-            .await?;
+        let got = mt.get_catalog(GetCatalogReq::new(ident.clone())).await?;
         assert_eq!(got.id.catalog_id, res.catalog_id);
         assert_eq!(got.name_ident.tenant, "tenant1");
         assert_eq!(got.name_ident.catalog_name, "catalog1");
@@ -1458,10 +1457,7 @@ impl SchemaApiTestSuite {
         let _ = mt
             .drop_catalog(DropCatalogReq {
                 if_exists: false,
-                name_ident: CatalogNameIdent {
-                    tenant: tenant.to_string(),
-                    catalog_name: catalog_name.to_string(),
-                },
+                name_ident: ident.clone(),
             })
             .await?;
 

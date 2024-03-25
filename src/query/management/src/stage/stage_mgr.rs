@@ -35,7 +35,6 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::With;
@@ -53,13 +52,10 @@ pub struct StageMgr {
 }
 
 impl StageMgr {
-    pub fn create(
-        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-        tenant: &NonEmptyString,
-    ) -> Self {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &Tenant) -> Self {
         StageMgr {
             kv_api,
-            tenant: Tenant::new_nonempty(tenant.clone()),
+            tenant: tenant.clone(),
         }
     }
 

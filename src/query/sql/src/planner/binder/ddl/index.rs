@@ -116,7 +116,7 @@ impl Binder {
                 {
                     let indexes = self
                         .resolve_table_indexes(
-                            self.ctx.get_tenant().as_str(),
+                            self.ctx.get_tenant().name(),
                             catalog.as_str(),
                             table.get_id(),
                         )
@@ -265,7 +265,7 @@ impl Binder {
 
         let tenant_name = self.ctx.get_tenant();
 
-        let non_empty = NonEmptyString::new(tenant_name.to_string()).map_err(|_| {
+        let non_empty = NonEmptyString::new(tenant_name.name().to_string()).map_err(|_| {
             ErrorCode::TenantIsEmpty(
                 "Tenant is empty(when Binder::build_refresh_index()".to_string(),
             )
