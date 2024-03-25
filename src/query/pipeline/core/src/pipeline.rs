@@ -372,6 +372,37 @@ impl Pipeline {
         }
     }
 
+    pub fn chunk_merge(&mut self, chunk_num: usize) -> Result<()> {
+        match self.pipes.last() {
+            None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
+            Some(pipe) if pipe.output_length == 0 => {
+                Err(ErrorCode::Internal("Cannot resize empty pipe."))
+            }
+            Some(pipe) => {
+                let input_len = pipe.output_length;
+                if input_len % chunk_num != 0 {
+                    return Err(ErrorCode::Internal(
+                        "Cannot chunk merge pipe with invalid chunk number.",
+                    ));
+                }
+                let chunk_size = input_len / chunk_num;
+                let mut pipe_items = Vec::new();
+                for _ in 0..chunk_num {
+                    let processor = ResizeProcessor::create(chunk_size, 1);
+                    let inputs_port = processor.get_inputs().to_vec();
+                    let outputs_port = processor.get_outputs().to_vec();
+                    pipe_items.push(PipeItem::create(
+                        ProcessorPtr::create(Box::new(processor)),
+                        inputs_port,
+                        outputs_port,
+                    ));
+                }
+                self.add_pipe(Pipe::create(input_len, chunk_num, pipe_items));
+                Ok(())
+            }
+        }
+    }
+
     /// Duplicate a pipe input to two outputs.
     ///
     /// If `force_finish_together` enabled, once one output is finished, the other output will be finished too.

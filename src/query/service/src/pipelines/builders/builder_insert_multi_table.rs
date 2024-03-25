@@ -16,6 +16,7 @@ use std::collections::HashSet;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::block_thresholds;
 use databend_common_expression::filter::build_select_expr;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
@@ -77,19 +78,76 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub(crate) fn build_chunk_fill_and_reorder(&mut self, plan: &ChunkFillAndReorder) -> Result<()> {
+    pub(crate) fn build_chunk_fill_and_reorder(
+        &mut self,
+        plan: &ChunkFillAndReorder,
+    ) -> Result<()> {
         Ok(())
     }
 
     pub(crate) fn build_chunk_merge(&mut self, plan: &ChunkMerge) -> Result<()> {
+        self.build_pipeline(&plan.input)?;
+        self.main_pipeline.chunk_merge(plan.chunk_num)?;
         Ok(())
     }
 
     pub(crate) fn build_chunk_append_data(&mut self, plan: &ChunkAppendData) -> Result<()> {
+        self.build_pipeline(&plan.input)?;
+        let mut compact_builders: Vec<DynTransformBuilder> =
+            Vec::with_capacity(plan.append_datas.len());
+        let mut serialize_block_builders: Vec<DynTransformBuilder> =
+            Vec::with_capacity(plan.append_datas.len());
+        for append_data in plan.append_datas.iter() {
+            let table = self.ctx.build_table_by_table_info(
+                &append_data.target_catalog_info,
+                &append_data.target_table_info,
+                None,
+            )?;
+            let block_thresholds = table.get_block_thresholds();
+            compact_builders.push(Box::new(
+                self.block_compact_transform_builder(block_thresholds)?,
+            ));
+            serialize_block_builders.push(Box::new(self.serialize_block_transform_builder(table)?));
+        }
+        self.main_pipeline
+            .add_transform_by_chunk(compact_builders)?;
+        self.main_pipeline
+            .add_transform_by_chunk(serialize_block_builders)?;
         Ok(())
     }
 
     pub(crate) fn build_chunk_commit_insert(&mut self, plan: &ChunkCommitInsert) -> Result<()> {
+        let ChunkCommitInsert {
+            plan_id: _,
+            input,
+            update_stream_meta,
+            overwrite,
+            deduplicated_label,
+            targets,
+        } = plan;
+        self.build_pipeline(&input)?;
+        let mut serialize_segment_builders: Vec<DynTransformBuilder> =
+            Vec::with_capacity(targets.len());
+        let mut mutation_aggregator_builders: Vec<DynTransformBuilder> =
+            Vec::with_capacity(targets.len());
+        for target in targets {
+            let table = self.ctx.build_table_by_table_info(
+                &target.target_catalog_info,
+                &target.target_table_info,
+                None,
+            )?;
+            let block_thresholds = table.get_block_thresholds();
+            serialize_segment_builders.push(Box::new(
+                self.serialize_segment_transform_builder(table.clone(), block_thresholds)?,
+            ));
+            mutation_aggregator_builders
+                .push(Box::new(self.mutation_aggregator_transform_builder(table)?));
+        }
+        self.main_pipeline
+            .add_transform_by_chunk(serialize_segment_builders)?;
+        self.main_pipeline
+            .add_transform_by_chunk(mutation_aggregator_builders)?;
+        self.main_pipeline.try_resize(1)?;
         Ok(())
     }
 }

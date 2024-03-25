@@ -36,13 +36,13 @@ pub struct Shuffle {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum ShuffleStrategy {
-    MatrixTranspose(usize),
+    Transpose(usize),
 }
 
 impl ShuffleStrategy {
     pub fn shuffle(&self, total: usize) -> Vec<usize> {
         match self {
-            ShuffleStrategy::MatrixTranspose(n) => {
+            ShuffleStrategy::Transpose(n) => {
                 let mut result = Vec::with_capacity(total);
                 for i in 0..*n {
                     for j in 0..total / n {
@@ -100,6 +100,11 @@ pub struct FillAndReorder {
 pub struct ChunkAppendData {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
+    pub append_datas: Vec<SerializableTable>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct SerializableTable {
     pub target_catalog_info: CatalogInfo,
     pub target_table_info: TableInfo,
 }
@@ -118,4 +123,5 @@ pub struct ChunkCommitInsert {
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub overwrite: bool,
     pub deduplicated_label: Option<String>,
+    pub targets: Vec<SerializableTable>,
 }

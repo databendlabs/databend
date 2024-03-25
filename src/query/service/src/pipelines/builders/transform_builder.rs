@@ -20,17 +20,27 @@ use databend_common_exception::Result;
 use databend_common_expression::filter::build_select_expr;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::DynTransformBuilder;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::BlockCompactor;
+use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_common_sql::executor::physical_plans::Filter;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::TableMutationAggregator;
+use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::operations::TransformSerializeSegment;
+use databend_common_storages_fuse::FuseTable;
 
 use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::PipelineBuilder;
+use crate::sql::executor::physical_plans::MutationKind;
 impl PipelineBuilder {
     pub(crate) fn filter_transform_builder(
         &self,
@@ -71,5 +81,71 @@ impl PipelineBuilder {
         &self,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         Ok(|input, output| Ok(TransformDummy::create(input, output)))
+    }
+
+    pub(crate) fn block_compact_transform_builder(
+        &self,
+        block_thresholds: BlockThresholds,
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+        Ok(move |transform_input_port, transform_output_port| {
+            Ok(ProcessorPtr::create(TransformCompact::try_create(
+                transform_input_port,
+                transform_output_port,
+                BlockCompactor::new(block_thresholds),
+            )?))
+        })
+    }
+
+    pub(crate) fn serialize_block_transform_builder(
+        &self,
+        table: Arc<dyn Table>,
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+        let ctx = self.ctx.clone();
+        Ok(move |input, output| {
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            let proc = TransformSerializeBlock::try_create(
+                ctx.clone(),
+                input,
+                output,
+                fuse_table,
+                Default::default(),
+                MutationKind::Insert,
+            )?;
+            proc.into_processor()
+        })
+    }
+
+    pub(crate) fn serialize_segment_transform_builder(
+        &self,
+        table: Arc<dyn Table>,
+        block_thresholds: BlockThresholds,
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+        let ctx = self.ctx.clone();
+        Ok(move |input, output| {
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            let proc = TransformSerializeSegment::new(
+                ctx.clone(),
+                input,
+                output,
+                fuse_table,
+                block_thresholds,
+            );
+            proc.into_processor()
+        })
+    }
+
+    pub(crate) fn mutation_aggregator_transform_builder(
+        &self,
+        table: Arc<dyn Table>,
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+        let ctx = self.ctx.clone();
+        Ok(move |input, output| {
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            let aggregator =
+                TableMutationAggregator::new(fuse_table, ctx.clone(), vec![], MutationKind::Insert);
+            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+                input, output, aggregator,
+            )))
+        })
     }
 }
