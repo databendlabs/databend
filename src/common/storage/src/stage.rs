@@ -107,6 +107,7 @@ impl StageFilesInfo {
     pub async fn list(
         &self,
         operator: &Operator,
+        thread_num: usize,
         first_only: bool,
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
@@ -117,7 +118,7 @@ impl StageFilesInfo {
         let max_files = max_files.unwrap_or(usize::MAX);
         if let Some(files) = &self.files {
             let file_infos = self
-                .stat_concurrent(operator, first_only, max_files, files)
+                .stat_concurrent(operator, thread_num, first_only, max_files, files)
                 .await?;
             let mut res = Vec::with_capacity(file_infos.len());
 
@@ -144,7 +145,8 @@ impl StageFilesInfo {
 
     #[async_backtrace::framed]
     pub async fn first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
-        let mut files = self.list(operator, true, None).await?;
+        // We only fetch first file.
+        let mut files = self.list(operator, 1, true, None).await?;
         files
             .pop()
             .ok_or_else(|| ErrorCode::BadArguments("no file found"))
@@ -246,6 +248,7 @@ impl StageFilesInfo {
     pub async fn stat_concurrent(
         &self,
         operator: &Operator,
+        thread_num: usize,
         first_only: bool,
         max_files: usize,
         files: &[String],
@@ -277,8 +280,13 @@ impl StageFilesInfo {
             }
         });
 
-        // We don't have access to ctx in current context, use 100 as a safe default value.
-        execute_futures_in_parallel(tasks, 100, 100 * 2, "batch-stat-file-worker".to_owned()).await
+        execute_futures_in_parallel(
+            tasks,
+            thread_num * 5,
+            thread_num * 10,
+            "batch-stat-file-worker".to_owned(),
+        )
+        .await
     }
 }
 
