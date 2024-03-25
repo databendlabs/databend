@@ -222,7 +222,7 @@ impl Display for AttachTableStmt {
                 .chain(Some(&self.table)),
         )?;
 
-        write!(f, " FROM {}", self.uri_location)?;
+        write!(f, " {}", self.uri_location)?;
 
         if self.read_only {
             write!(f, " READ_ONLY")?;

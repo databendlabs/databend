@@ -642,17 +642,18 @@ fn test_statement() {
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
-        "REMOVE @t;",
-        "SELECT sum(d) OVER (w) FROM e;",
-        "SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);",
-        "GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';",
-        "GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';",
-        "GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';",
-        "GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';",
-        "CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));",
-        "CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';",
-        "CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
-        "CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
+        r#"REMOVE @t;"#,
+        r#"SELECT sum(d) OVER (w) FROM e;"#,
+        r#"SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);"#,
+        r#"GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';"#,
+        r#"GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';"#,
+        r#"GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';"#,
+        r#"GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';"#,
+        r#"attach table t 's3://a' connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')"#,
+        r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));"#,
+        r#"CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';"#,
+        r#"CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE STAGE s file_format=(record_delimiter='\n' escape='\\');"#,
         r#"create or replace function addone(int)
 returns int
@@ -663,8 +664,8 @@ $$
 def addone_py(i):
   return i+1
 $$;"#,
-        "DROP FUNCTION binary_reverse;",
-        "DROP FUNCTION isnotempty;",
+        r#"DROP FUNCTION binary_reverse;"#,
+        r#"DROP FUNCTION isnotempty;"#,
     ];
 
     for case in cases {

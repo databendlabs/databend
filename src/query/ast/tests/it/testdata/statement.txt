@@ -18657,6 +18657,42 @@ Grant(
 
 
 ---------- Input ----------
+attach table t 's3://a' connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')
+---------- Output ---------
+ATTACH TABLE t 's3://a/' CONNECTION = ( access_key_id = 'x', endpoint_url = 'http://127.0.0.1:9900', secret_access_key = 'y' )
+---------- AST ------------
+AttachTable(
+    AttachTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+            is_hole: false,
+        },
+        uri_location: UriLocation {
+            protocol: "s3",
+            name: "a",
+            path: "/",
+            part_prefix: "",
+            connection: Connection {
+                visited_keys: {},
+                conns: {
+                    "access_key_id": "x",
+                    "endpoint_url": "http://127.0.0.1:9900",
+                    "secret_access_key": "y",
+                },
+            },
+        },
+        read_only: false,
+    },
+)
+
+
+---------- Input ----------
 CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));
 ---------- Output ---------
 CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> NOT is_null(p)
