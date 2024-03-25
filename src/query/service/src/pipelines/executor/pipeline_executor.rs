@@ -199,15 +199,7 @@ impl PipelineExecutor {
                     }
                     Some(cause) => {
                         let guard = query_wrapper.on_finished_callback.lock().take();
-                        if cause.code() == ErrorCode::ABORTED_QUERY {
-                            if let Some(on_finished_callback) = guard {
-                                catch_unwind(move || {
-                                    on_finished_callback(&Ok(query_wrapper
-                                        .graph
-                                        .get_proc_profiles()))
-                                })??;
-                            }
-                        } else if let Some(on_finished_callback) = guard {
+                        if let Some(on_finished_callback) = guard {
                             catch_unwind(move || on_finished_callback(&Err(cause)))??;
                         }
                     }
