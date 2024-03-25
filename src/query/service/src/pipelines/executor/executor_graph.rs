@@ -753,11 +753,6 @@ impl RunningGraph {
 
     /// Checks if all nodes in the graph are finished.
     pub fn is_all_nodes_finished(&self) -> bool {
-        info!(
-            "Finished: {:?}/{:?}",
-            self.0.finished_nodes.load(Ordering::SeqCst),
-            self.0.graph.node_count()
-        );
         self.0.finished_nodes.load(Ordering::SeqCst) >= self.0.graph.node_count()
     }
 
