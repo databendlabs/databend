@@ -52,8 +52,8 @@ DROP TABLE IF EXISTS t1
 statement ok
 CREATE TABLE t1 (g1 geometry, g2 geometry)
 
-statement error 1801
-SELECT to_string(st_makeline(TO_GEOMETRY('POINT(1.0 2.0)', 4326), TO_GEOMETRY('POINT(3.5 4.5)', 32633))) FROM t1
+statement ok
+SELECT to_string(st_makeline(TO_GEOMETRY('POINT(33.0 44.2)', 32633), TO_GEOMETRY('POINT(224.5 41.5)', 32633))) FROM t1
 
 statement ok
 INSERT INTO t1 VALUES(TO_GEOMETRY('POINT(1.0 2.0)', 32633), TO_GEOMETRY('POINT(3.5 4.5)', 32633)),
