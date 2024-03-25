@@ -117,34 +117,6 @@ impl QueriesPipelineExecutor {
         }
     }
 
-    /// Used to abort the query when the execution time exceeds the maximum execution time limit
-    // fn start_time_limit_daemon(self: &Arc<Self>) -> Result<()> {
-    //     if !self.settings.max_execute_time_in_seconds.is_zero() {
-    //         // NOTE(wake ref): When runtime scheduling is blocked, holding executor strong ref may cause the executor can not stop.
-    //         let this = Arc::downgrade(self);
-    //         let max_execute_time_in_seconds = self.settings.max_execute_time_in_seconds;
-    //         let finished_notify = self.finished_notify.clone();
-    //         self.async_runtime.spawn(GLOBAL_TASK, async move {
-    //             let finished_future = Box::pin(finished_notify.notified());
-    //             let max_execute_future = Box::pin(time::sleep(max_execute_time_in_seconds));
-    //
-    //             // This waits for either of two futures to complete:
-    //             // 1. The 'finished_future', which gets triggered when an external event signals that the task is finished.
-    //             // 2. The 'max_execute_future', which gets triggered when the maximum execution time as set in 'max_execute_time_in_seconds' elapses.
-    //             // When either future completes, the executor is finished.
-    //             if let Either::Left(_) = select(max_execute_future, finished_future).await {
-    //                 if let Some(executor) = this.upgrade() {
-    //                     executor.finish(Some(ErrorCode::AbortedQuery(
-    //                         "Aborted query, because the execution time exceeds the maximum execution time limit",
-    //                     )));
-    //                 }
-    //             }
-    //         });
-    //     }
-    //
-    //     Ok(())
-    // }
-
     fn execute_threads(self: &Arc<Self>, threads: usize) -> Vec<ThreadJoinHandle<Result<()>>> {
         let mut thread_join_handles = Vec::with_capacity(threads);
 
@@ -223,7 +195,7 @@ impl QueriesPipelineExecutor {
                             );
                         }
                         if graph.is_should_finish() {
-                            // TODO: temp usage, will remove after change executor to a global service
+                            // TODO: temporary finish method, will remove after change executor to a global service
                             self.finish(None);
                         }
                         if graph.is_all_nodes_finished() {
