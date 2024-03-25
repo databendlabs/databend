@@ -119,15 +119,17 @@ impl TryFrom<DataBlock> for MutationLogs {
 pub struct CommitMeta {
     pub conflict_resolve_context: ConflictResolveContext,
     pub abort_operation: AbortOperation,
+    pub table_id: u64,
 }
 
 impl CommitMeta {
-    pub fn empty() -> Self {
+    pub fn empty(table_id: u64) -> Self {
         CommitMeta {
             conflict_resolve_context: ConflictResolveContext::ModifiedSegmentExistsInLatest(
                 SnapshotChanges::default(),
             ),
             abort_operation: AbortOperation::default(),
+            table_id,
         }
     }
 }
@@ -183,6 +185,7 @@ fn merge_commit_meta(
     r: CommitMeta,
     default_cluster_key_id: Option<u32>,
 ) -> CommitMeta {
+    assert_eq!(l.table_id, r.table_id, "table id mismatch");
     CommitMeta {
         conflict_resolve_context: merge_conflict_resolve_context(
             l.conflict_resolve_context,
@@ -209,6 +212,7 @@ fn merge_commit_meta(
                 .chain(r.abort_operation.bloom_filter_indexes)
                 .collect(),
         },
+        table_id: l.table_id,
     }
 }
 
@@ -216,10 +220,12 @@ impl CommitMeta {
     pub fn new(
         conflict_resolve_context: ConflictResolveContext,
         abort_operation: AbortOperation,
+        table_id: u64,
     ) -> Self {
         CommitMeta {
             conflict_resolve_context,
             abort_operation,
+            table_id,
         }
     }
 }
@@ -284,9 +290,15 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
 
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
         let to_merged = std::mem::take(&mut self.to_merged);
-        let merged = to_merged.into_iter().fold(CommitMeta::empty(), |acc, x| {
-            merge_commit_meta(acc, x, self.default_cluster_key_id)
-        });
+        if to_merged.is_empty() {
+            return Ok(vec![]);
+        }
+        let table_id = to_merged[0].table_id.clone();
+        let merged = to_merged
+            .into_iter()
+            .fold(CommitMeta::empty(table_id), |acc, x| {
+                merge_commit_meta(acc, x, self.default_cluster_key_id)
+            });
         Ok(vec![merged.into()])
     }
 }
