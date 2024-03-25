@@ -16,6 +16,7 @@ use std::path::Path;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
@@ -117,7 +118,7 @@ impl StageFilesInfo {
         if let Some(files) = &self.files {
             let file_infos = self
                 .stat_concurrent(operator, first_only, max_files, files)
-                .await;
+                .await?;
             let mut res = Vec::with_capacity(file_infos.len());
 
             for file_info in file_infos {
@@ -241,38 +242,43 @@ impl StageFilesInfo {
     }
 
     /// Stat files concurrently.
+    #[async_backtrace::framed]
     pub async fn stat_concurrent(
         &self,
         operator: &Operator,
         first_only: bool,
         max_files: usize,
         files: &Vec<String>,
-    ) -> Vec<Result<(String, Metadata)>> {
-        let mut futures = Vec::with_capacity(files.len());
-        let mut limit = 0;
-        for file in files {
+    ) -> Result<Vec<Result<(String, Metadata)>>> {
+        if first_only {
+            let Some(file) = files.first() else {
+                return Ok(vec![]);
+            };
+            let full_path = Path::new(&self.path)
+                .join(file)
+                .to_string_lossy()
+                .trim_start_matches('/')
+                .to_string();
+            let meta = operator.stat(&full_path).await;
+            return Ok(vec![meta.map(|m| (full_path, m)).map_err(Into::into)]);
+        }
+
+        // This clone is required to make sure we are not referring `file: &String` in the closure
+        let tasks = files.clone().into_iter().take(max_files).map(|file| {
             let full_path = Path::new(&self.path)
                 .join(file)
                 .to_string_lossy()
                 .trim_start_matches('/')
                 .to_string();
             let operator = operator.clone();
-            let fut = async move {
+            async move {
                 let meta = operator.stat(&full_path).await?;
                 Ok((full_path, meta))
-            };
-            futures.push(fut);
-
-            if first_only {
-                break;
             }
+        });
 
-            limit += 1;
-            if limit >= max_files {
-                break;
-            }
-        }
-        futures::future::join_all(futures).await
+        // We don't have access to ctx in current context, use 100 as a safe default value.
+        execute_futures_in_parallel(tasks, 100, 100 * 2, "batch-stat-file-worker".to_owned()).await
     }
 }
 
