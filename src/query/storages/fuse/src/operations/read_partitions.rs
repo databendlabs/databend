@@ -45,7 +45,7 @@ use sha2::Digest;
 use sha2::Sha256;
 
 use super::collect_incremental_blocks;
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::SegmentsIO;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
@@ -107,7 +107,7 @@ impl FuseTable {
                             snapshot.segments.len(),
                             snapshot.index_info_locations.clone(),
                         ),
-                        Partitions::create(PartitionsShuffleKind::Mod, segments, true),
+                        Partitions::create(PartitionsShuffleKind::Mod, segments),
                     ));
                 }
 
@@ -430,7 +430,7 @@ impl FuseTable {
         limit: usize,
     ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
-        let mut partitions = Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]);
+        let mut partitions = Partitions::create(PartitionsShuffleKind::Mod, vec![]);
 
         if limit == 0 {
             return (statistics, partitions);
@@ -552,7 +552,7 @@ impl FuseTable {
                 .unwrap_or((default.clone(), default.clone()))
         });
 
-        FusePartInfo::create(
+        FuseBlockPartInfo::create(
             location,
             rows_count,
             columns_meta,
@@ -600,7 +600,7 @@ impl FuseTable {
         // TODO
         // row_count should be a hint value of  LIMIT,
         // not the count the rows in this partition
-        FusePartInfo::create(
+        FuseBlockPartInfo::create(
             location,
             rows_count,
             columns_meta,

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table_context::TableContext;
@@ -27,7 +28,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use log::info;
 
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
@@ -228,7 +229,7 @@ pub fn dispatch_partitions(
 ) -> Vec<VecDeque<PartInfoPtr>> {
     let mut results = Vec::with_capacity(max_streams);
     // Lazy part, we can dispatch them now.
-    if plan.parts.is_lazy {
+    if plan.parts.partitions_type() == PartInfoType::LazyLevel {
         return results;
     }
 
@@ -260,7 +261,7 @@ pub fn adjust_threads_and_request(
     mut max_io_requests: usize,
     plan: &DataSourcePlan,
 ) -> (usize, usize) {
-    if !plan.parts.is_lazy {
+    if plan.parts.partitions_type() == PartInfoType::BlockLevel {
         let mut block_nums = plan.parts.partitions.len();
 
         // If the read bytes of a partition is small enough, less than 16k rows
@@ -269,7 +270,7 @@ pub fn adjust_threads_and_request(
         static MIN_ROWS_READ_PER_THREAD: u64 = 16 * 1024;
         if is_native {
             plan.parts.partitions.iter().for_each(|part| {
-                if let Some(part) = part.as_any().downcast_ref::<FusePartInfo>() {
+                if let Some(part) = part.as_any().downcast_ref::<FuseBlockPartInfo>() {
                     let to_read_rows = part
                         .columns_meta
                         .values()

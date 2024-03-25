@@ -27,6 +27,18 @@ use sha2::Digest;
 
 use crate::table_context::TableContext;
 
+/// Partition information.
+#[derive(PartialEq)]
+pub enum PartInfoType {
+    // Block level partition information.
+    // Read the data from the block level.
+    BlockLevel,
+    // In lazy level, we need:
+    // 1. read the block location information from the segment.
+    // 2. read the block data from the block level.
+    LazyLevel,
+}
+
 #[typetag::serde(tag = "type")]
 pub trait PartInfo: Send + Sync {
     fn as_any(&self) -> &dyn Any;
@@ -36,6 +48,13 @@ pub trait PartInfo: Send + Sync {
 
     /// Used for partition distributed.
     fn hash(&self) -> u64;
+
+    /// Get the partition type.
+    /// Default is block level.
+    /// If the partition is lazy level, it should be override.
+    fn part_type(&self) -> PartInfoType {
+        PartInfoType::BlockLevel
+    }
 }
 
 impl Debug for Box<dyn PartInfo> {
@@ -76,32 +95,16 @@ pub enum PartitionsShuffleKind {
     // Bind the Partition to executor by broadcast
     Broadcast,
 }
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct Partitions {
     pub kind: PartitionsShuffleKind,
     pub partitions: Vec<PartInfoPtr>,
-    pub is_lazy: bool,
 }
 
 impl Partitions {
-    pub fn create(
-        kind: PartitionsShuffleKind,
-        partitions: Vec<PartInfoPtr>,
-        is_lazy: bool,
-    ) -> Self {
-        Partitions {
-            kind,
-            partitions,
-            is_lazy,
-        }
-    }
-
-    pub fn create_nolazy(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
-        Partitions {
-            kind,
-            partitions,
-            is_lazy: false,
-        }
+    pub fn create(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
+        Partitions { kind, partitions }
     }
 
     pub fn len(&self) -> usize {
@@ -140,11 +143,7 @@ impl Partitions {
                 for executor in executors_sorted.iter() {
                     executor_part.insert(
                         executor.clone(),
-                        Partitions::create(
-                            PartitionsShuffleKind::Seq,
-                            self.partitions.clone(),
-                            self.is_lazy,
-                        ),
+                        Partitions::create(PartitionsShuffleKind::Seq, self.partitions.clone()),
                     );
                 }
 
@@ -173,7 +172,7 @@ impl Partitions {
 
             executor_part.insert(
                 executor,
-                Partitions::create(PartitionsShuffleKind::Seq, parts, self.is_lazy),
+                Partitions::create(PartitionsShuffleKind::Seq, parts),
             );
         }
 
@@ -185,6 +184,16 @@ impl Partitions {
         let sha = sha2::Sha256::digest(buf);
         Ok(format!("{:x}", sha))
     }
+
+    /// Get the partition type.
+    pub fn partitions_type(&self) -> PartInfoType {
+        // If the self.partitions is empty, it means that the partition is block level.
+        if self.partitions.is_empty() {
+            return PartInfoType::BlockLevel;
+        }
+
+        self.partitions[0].part_type()
+    }
 }
 
 impl Default for Partitions {
@@ -192,7 +201,6 @@ impl Default for Partitions {
         Self {
             kind: PartitionsShuffleKind::Seq,
             partitions: vec![],
-            is_lazy: false,
         }
     }
 }
