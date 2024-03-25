@@ -34,6 +34,8 @@ criterion = "0.4"
 ctor = "0.1.26"
 ethnum = { workspace = true }
 geo = { workspace = true }
+geos = { version = "8.3" , features = ["static", "geo", "geo-types"]}
+geo-types = "0.7.13"
 geohash = "0.13.0"
 geozero = { workspace = true }
 h3o = "0.4.0"

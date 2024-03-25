@@ -1,3 +1,48 @@
+ast            : st_makeline(
+                            to_geometry('SRID=4326;POINT(1.0 2.0)'),
+                            to_geometry('SRID=4326;POINT(3.5 4.5)'))
+raw expr       : st_makeline(to_geometry('SRID=4326;POINT(1.0 2.0)'), to_geometry('SRID=4326;POINT(3.5 4.5)'))
+checked expr   : st_makeline<Geometry, Geometry>(st_geometryfromwkt<String>("SRID=4326;POINT(1.0 2.0)"), st_geometryfromwkt<String>("SRID=4326;POINT(3.5 4.5)"))
+optimized expr : "SRID=4326;LINESTRING(1 2,3.5 4.5)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'SRID=4326;LINESTRING(1 2,3.5 4.5)'
+
+
+ast            : st_makeline(
+                            to_geometry('SRID=3857;POINT(1.0 2.0)'),
+                            to_geometry('SRID=3857;LINESTRING(1.0 2.0, 10.1 5.5)'))
+raw expr       : st_makeline(to_geometry('SRID=3857;POINT(1.0 2.0)'), to_geometry('SRID=3857;LINESTRING(1.0 2.0, 10.1 5.5)'))
+checked expr   : st_makeline<Geometry, Geometry>(st_geometryfromwkt<String>("SRID=3857;POINT(1.0 2.0)"), st_geometryfromwkt<String>("SRID=3857;LINESTRING(1.0 2.0, 10.1 5.5)"))
+optimized expr : "SRID=3857;LINESTRING(1 2,1 2,10.1 5.5)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'SRID=3857;LINESTRING(1 2,1 2,10.1 5.5)'
+
+
+ast            : st_makeline(
+                            to_geometry('LINESTRING(1.0 2.0, 10.1 5.5)'),
+                            to_geometry('MULTIPOINT(3.5 4.5, 6.1 7.9)'))
+raw expr       : st_makeline(to_geometry('LINESTRING(1.0 2.0, 10.1 5.5)'), to_geometry('MULTIPOINT(3.5 4.5, 6.1 7.9)'))
+checked expr   : st_makeline<Geometry, Geometry>(st_geometryfromwkt<String>("LINESTRING(1.0 2.0, 10.1 5.5)"), st_geometryfromwkt<String>("MULTIPOINT(3.5 4.5, 6.1 7.9)"))
+optimized expr : "LINESTRING(1 2,10.1 5.5,3.5 4.5,6.1 7.9)"
+output type    : Geometry
+output domain  : Undefined
+output         : 'LINESTRING(1 2,10.1 5.5,3.5 4.5,6.1 7.9)'
+
+
+error: 
+  --> SQL:1:13
+  |
+1 | st_makeline(to_geometry(a), to_geometry(b))
+  |             ^^^^^^^^^^^^^^ no overload satisfies `st_geometryfromwkt(Binary)`
+
+has tried possible overloads:
+  st_geometryfromwkt(String) :: Geometry            : unable to unify `Binary` with `String`
+  st_geometryfromwkt(String NULL) :: Geometry NULL  : unable to unify `Binary` with `String`
+
+
+
 ast            : st_makegeompoint(7.0, 8.0)
 raw expr       : st_makegeompoint(7.0, 8.0)
 checked expr   : st_makegeompoint<Float64, Float64>(to_float64<Decimal(2, 1)>(7.0_d128(2,1)), to_float64<Decimal(2, 1)>(8.0_d128(2,1)))
