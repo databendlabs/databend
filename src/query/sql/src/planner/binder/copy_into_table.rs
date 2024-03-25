@@ -73,6 +73,7 @@ use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
+use crate::UdfRewriter;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
@@ -367,10 +368,10 @@ impl<'a> Binder {
             .await?;
 
         for item in select_list.items.iter() {
-            if !self.check_allowed_scalar_expr_with_subquery(&item.scalar)? {
+            if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
                 // in fact, if there is a join, we will stop in `check_transform_query()`
                 return Err(ErrorCode::SemanticError(
-                    "copy into table source can't contain window|aggregate|udf|join functions"
+                    "copy into table source can't contain window|aggregate|join functions"
                         .to_string(),
                 ));
             };
@@ -389,11 +390,19 @@ impl<'a> Binder {
             )));
         }
 
-        let s_expr =
+        let mut s_expr =
             self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
+
+        // rewrite udf for interpreter udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
+
+        // rewrite udf for server udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
 
         // disable variant check to allow copy invalid JSON into tables
         let disable_variant_check = plan
