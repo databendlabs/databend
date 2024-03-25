@@ -222,6 +222,10 @@ impl QueriesPipelineExecutor {
                                 self,
                             );
                         }
+                        if graph.is_should_finish() {
+                            // TODO: temp usage, will remove after change executor to a global service
+                            self.finish(None);
+                        }
                         if graph.is_all_nodes_finished() {
                             graph.should_finish(Ok(()))?;
                         }
