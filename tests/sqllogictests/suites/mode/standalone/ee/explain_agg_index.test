@@ -548,7 +548,7 @@ Sort
                     ├── partitions total: 0
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [is_true(onebrc.station_name (#0) = 'Beijing')], limit: NONE]
-                    ├── aggregating index: [SELECT station_name, COUNT(), COUNT(measurement), MAX(measurement), MIN(measurement), SUM(measurement) FROM test_index_db.onebrc WHERE (station_name = 'Beijing') GROUP BY station_name]
+                    ├── aggregating index: [SELECT station_name, COUNT(), COUNT(measurement), MAX(measurement), MIN(measurement), SUM(measurement) FROM test_index_db.onebrc WHERE station_name = 'Beijing' GROUP BY station_name]
                     ├── rewritten query: [selection: [index_col_0 (#0), index_col_4 (#4), index_col_5 (#5), index_col_2 (#2), index_col_3 (#3)]]
                     └── estimated rows: 0.00
 
