@@ -14,12 +14,12 @@
 
 use std::io::Write;
 
-use goldenfile::Mint;
-
-use databend_common_expression::FromData;
-use databend_common_expression::types::{BinaryType, Float64Type};
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
+use databend_common_expression::FromData;
+use goldenfile::Mint;
 
 use crate::scalars::run_ast;
 
@@ -35,18 +35,36 @@ fn test_geometry() {
 }
 
 fn test_st_makeline(file: &mut impl Write) {
-    run_ast(file, "st_makeline(
-                            to_geometry('POINT(1.0 2.0)'),
-                            to_geometry('POINT(3.5 4.5)'))", &[]);
-    run_ast(file, "st_makeline(
-                            to_geometry('POINT(1.0 2.0)'),
-                            to_geometry('LINESTRING(1.0 2.0, 10.1 5.5)'))", &[]);
-    run_ast(file, "st_makeline(
+    run_ast(
+        file,
+        "st_makeline(
+                            to_geometry('SRID=4326;POINT(1.0 2.0)'),
+                            to_geometry('SRID=4326;POINT(3.5 4.5)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_makeline(
+                            to_geometry('SRID=3857;POINT(1.0 2.0)'),
+                            to_geometry('SRID=3857;LINESTRING(1.0 2.0, 10.1 5.5)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_makeline(
                             to_geometry('LINESTRING(1.0 2.0, 10.1 5.5)'),
-                            to_geometry('MULTIPOINT(3.5 4.5, 6.1 7.9)'))", &[]);
-    run_ast(file, "st_makeline(a, b)", &[
-        ("a", BinaryType::from_data(vec!["LINESTRING(1.0 2.0, 10.1 5.5)".as_bytes()])),
-        ("b", BinaryType::from_data(vec!["MULTIPOINT(3.5 4.5, 6.1 7.9)".as_bytes()])),
+                            to_geometry('MULTIPOINT(3.5 4.5, 6.1 7.9)'))",
+        &[],
+    );
+    run_ast(file, "st_makeline(to_geometry(a), to_geometry(b))", &[
+        (
+            "a",
+            BinaryType::from_data(vec!["LINESTRING(1.0 2.0, 10.1 5.5)".as_bytes()]),
+        ),
+        (
+            "b",
+            BinaryType::from_data(vec!["MULTIPOINT(3.5 4.5, 6.1 7.9)".as_bytes()]),
+        ),
     ]);
 }
 

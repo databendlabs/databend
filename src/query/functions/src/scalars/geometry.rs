@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_expression::types::geometry::GeometryType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberType;
@@ -22,15 +23,14 @@ use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_io::parse_to_ewkb;
-use geo::Coord;
-use geo::Geometry;
-use geo::LineString;
 use geo::MultiPoint;
 use geo::Point;
-use geozero::error::GeozeroError;
+use geos::geo_types;
+use geos::geo_types::Coord;
+use geos::geo_types::LineString;
+use geos::Geom;
+use geos::Geometry;
 use geozero::wkb::Ewkb;
-use geozero::wkb::FromWkb;
-use geozero::wkb::WkbDialect;
 use geozero::CoordDimensions;
 use geozero::ToWkb;
 use geozero::ToWkt;
@@ -61,7 +61,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            let geom = Geometry::from(Point::new(longitude.0, latitude.0));
+            let geom = geo::Geometry::from(Point::new(longitude.0, latitude.0));
             match geom.to_ewkb(CoordDimensions::xy(), None) {
                 Ok(data) => {
                     builder.put_slice(data.as_slice())
@@ -85,31 +85,46 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-
-                let geometries: Vec<Geometry> = match binary_to_geometry(&vec![left_exp, right_exp])
-                {
-                    Ok(g) => g,
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        return builder.put_str("");
-                    }
-                };
+                let srid: Option<i32>;
+                let params = &vec![left_exp, right_exp];
+                let geos: Vec<Geometry> =
+                    match binary_to_geos(params)
+                    {
+                        Ok(geos) => {
+                                match get_shared_srid(&geos){
+                                    Ok(s) => {
+                                        srid = s;
+                                        geos
+                                    },
+                                    Err(e) => {
+                                        ctx.set_error(builder.len(), ErrorCode::GeometryError(e).to_string());
+                                        builder.put_str("");
+                                        return;
+                                    }
+                            }
+                        },
+                        Err(e) => {
+                            ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
+                            return builder.put_str("");
+                        }
+                    };
 
                 let mut coords: Vec<Coord> = vec![];
-                for geometry in geometries.into_iter() {
-                    match geometry {
-                        Geometry::Point(_) => {
-                            let point: Point = match geometry.try_into() {
+                for geometry in geos.into_iter() {
+                    let g : geo_types::Geometry = (&geometry).try_into().unwrap();
+                    match g {
+                        geo_types::Geometry::Point(_) => {
+                            let point: Point = match g.try_into() {
                                 Ok(point) => point,
                                 Err(e) => {
-                                    ctx.set_error(builder.len(), e.to_string());
+                                    ctx.set_error(builder.len(), ErrorCode::GeometryError(e.to_string()).to_string());
                                     return builder.put_str("");
                                 }
                             };
                             coords.push(point.into());
-                        }
-                        Geometry::LineString(_) => {
-                            let line: LineString = match geometry.try_into() {
+                        },
+                        geo_types::Geometry::LineString(_)=> {
+                            let line: LineString = match g.try_into() {
                                 Ok(line) => line,
                                 Err(e) => {
                                     ctx.set_error(builder.len(), e.to_string());
@@ -117,9 +132,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
                             };
                             coords.append(&mut line.into_inner());
-                        }
-                        Geometry::MultiPoint(_) => {
-                            let multi_point: MultiPoint = match geometry.try_into() {
+                        },
+                        geo_types::Geometry::MultiPoint(_)=> {
+                            let multi_point: MultiPoint = match g.try_into() {
                                 Ok(multi_point) => multi_point,
                                 Err(e) => {
                                     ctx.set_error(builder.len(), e.to_string());
@@ -129,18 +144,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                             for point in multi_point.into_iter() {
                                 coords.push(point.into());
                             }
-                        }
+                        },
                         _ => {
                             ctx.set_error(
                                 builder.len(),
-                                "Geometry expression must be a Point, MultiPoint, or LineString.",
+                                ErrorCode::GeometryError("Geometry expression must be a Point, MultiPoint, or LineString.").to_string(),
                             );
                             return builder.put_str("");
                         }
                     }
                 }
-                let geom = Geometry::from(LineString::new(coords));
-                match geom.to_ewkb(CoordDimensions::xy(), None) {
+                let geom = geo::Geometry::from(LineString::new(coords));
+                match geom.to_ewkb(CoordDimensions::xy(), srid) {
                     Ok(data) => builder.put_slice(data.as_slice()),
                     Err(e) => ctx.set_error(builder.len(), e.to_string()),
                 }
@@ -326,14 +341,50 @@ pub fn register(registry: &mut FunctionRegistry) {
 //
 //     Ok(srid)
 // }
-#[inline(always)]
-fn binary_to_geometry(binaries: &Vec<&[u8]>) -> Result<Vec<Geometry>, GeozeroError> {
-    let mut geometries: Vec<Geometry> = Vec::with_capacity(binaries.len());
-    for binary in binaries.into_iter() {
-        match Geometry::from_wkb(&mut std::io::Cursor::new(binary), WkbDialect::Ewkb) {
-            Ok(data) => geometries.push(data),
-            Err(e) => return Err(e),
+
+#[inline]
+fn binary_to_geos<'a>(binaries: &'a Vec<&'a [u8]>) -> Result<Vec<Geometry<'a>>, String> {
+    let mut geos: Vec<Geometry> = Vec::with_capacity(binaries.len());
+    let mut srid: Option<i32> = None;
+    for (index, binary) in binaries.iter().enumerate() {
+        match Geometry::new_from_wkb(binary) {
+            Ok(data) => {
+                if index == 0 {
+                    srid = data.get_srid().map_or_else(|_| None, |v| Some(v as i32));
+                } else {
+                    let t_srid = data.get_srid().map_or_else(|_| None, |v| Some(v as i32));
+                    if !srid.eq(&t_srid) {
+                        return Err("Srid does not match!".to_string());
+                    }
+                }
+                geos.push(data)
+            }
+            Err(e) => return Err(e.to_string()),
         };
     }
-    Ok(geometries)
+    Ok(geos)
+}
+
+#[inline]
+fn get_shared_srid(geometries: &Vec<Geometry>) -> Result<Option<i32>, String> {
+    let mut srid: Option<i32> = None;
+    let mut error_srid: String = String::new();
+    let check_srid = geometries.windows(2).all(|w| {
+        let v1 = w[0].get_srid().map_or_else(|_| None, |v| Some(v as i32));
+        let v2 = w[1].get_srid().map_or_else(|_| None, |v| Some(v as i32));
+        match v1.eq(&v2) {
+            true => {
+                srid = v1;
+                true
+            }
+            false => {
+                error_srid = "Srid does not match!".to_string();
+                false
+            }
+        }
+    });
+    match check_srid {
+        true => Ok(srid),
+        false => Err(error_srid.clone()),
+    }
 }
