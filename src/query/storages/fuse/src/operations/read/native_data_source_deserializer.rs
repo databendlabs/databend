@@ -67,7 +67,7 @@ use xorf::BinaryFuse16;
 use super::native_data_source::NativeDataSource;
 use super::util::add_data_block_meta;
 use super::util::need_reserve_block_info;
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
@@ -542,7 +542,7 @@ impl NativeDeserializeDataTransform {
                 // Default value satisfies the filter, update the value of top-k column.
                 if let Some((_, sorter, index)) = self.top_k.as_mut() {
                     if !self.read_state.array_iters.contains_key(index) {
-                        let part = FusePartInfo::from_part(&self.parts[0])?;
+                        let part = FuseBlockPartInfo::from_part(&self.parts[0])?;
                         let num_rows = part.nums_rows;
 
                         let data_type = self.src_schema.field(*index).data_type().clone();
@@ -566,7 +566,7 @@ impl NativeDeserializeDataTransform {
     }
 
     /// Build a block whose columns are all default values.
-    fn build_default_block(&self, fuse_part: &FusePartInfo) -> Result<DataBlock> {
+    fn build_default_block(&self, fuse_part: &FuseBlockPartInfo) -> Result<DataBlock> {
         let mut data_block = self
             .block_reader
             .build_default_values_block(fuse_part.nums_rows)?;
@@ -602,7 +602,7 @@ impl NativeDeserializeDataTransform {
 
         if let NativeDataSource::Normal(chunks) = self.chunks.front_mut().unwrap() {
             let part = self.parts.front().unwrap();
-            let part = FusePartInfo::from_part(part)?;
+            let part = FuseBlockPartInfo::from_part(part)?;
 
             if let Some(range) = part.range() {
                 self.read_state.offset = part.page_size() * range.start;
@@ -957,7 +957,7 @@ impl NativeDeserializeDataTransform {
         if self.read_state.array_iters.is_empty() {
             // All columns are default values, not need to read.
             let part = self.parts.front().unwrap();
-            let fuse_part = FusePartInfo::from_part(part)?;
+            let fuse_part = FuseBlockPartInfo::from_part(part)?;
             let block = self.build_default_block(fuse_part)?;
             self.add_output_block(block);
 
@@ -981,7 +981,7 @@ impl NativeDeserializeDataTransform {
         // Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
         // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
         let mut block = block.resort(&self.src_schema, &self.output_schema)?;
-        let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
+        let fuse_part = FuseBlockPartInfo::from_part(&self.parts[0])?;
         let offsets = if self.block_reader.query_internal_columns() {
             let offset = self.read_state.offset;
             let offsets = if let Some(count) = self.read_state.filtered_count {
@@ -1089,7 +1089,7 @@ impl Processor for NativeDeserializeDataTransform {
                 if chunks.is_empty() {
                     // This means it's an empty projection
                     let part = self.parts.front().unwrap();
-                    let fuse_part = FusePartInfo::from_part(part)?;
+                    let fuse_part = FuseBlockPartInfo::from_part(part)?;
                     let mut data_block = DataBlock::new(vec![], fuse_part.nums_rows);
                     data_block = add_data_block_meta(
                         data_block,

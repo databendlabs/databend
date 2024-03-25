@@ -60,7 +60,7 @@ impl SyncSystemTable for OneTable {
     ) -> Result<(PartStatistics, Partitions)> {
         Ok((
             PartStatistics::new_exact(1, 1, 1, 1),
-            Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
+            Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
                 SystemTablePart,
             ))]),
         ))

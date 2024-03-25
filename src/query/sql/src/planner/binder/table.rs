@@ -250,6 +250,13 @@ impl Binder {
                     }
                     parent = bind_context.parent.as_mut();
                 }
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
+                    return Err(ErrorCode::UnknownDatabase(format!(
+                        "Unknown database `{}` in catalog '{catalog}'",
+                        database
+                    ))
+                    .set_span(*span));
+                }
                 if e.code() == ErrorCode::UNKNOWN_TABLE {
                     return Err(ErrorCode::UnknownTable(format!(
                         "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"

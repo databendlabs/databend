@@ -320,7 +320,7 @@ impl IcebergTable {
                 total_files,
                 None,
             ),
-            Partitions::create_nolazy(PartitionsShuffleKind::Mod, parts),
+            Partitions::create(PartitionsShuffleKind::Mod, parts),
         ))
     }
 }

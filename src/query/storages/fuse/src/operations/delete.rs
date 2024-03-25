@@ -203,7 +203,7 @@ impl FuseTable {
             for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                 segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
             }
-            Partitions::create(PartitionsShuffleKind::Mod, segments, true)
+            Partitions::create(PartitionsShuffleKind::Mod, segments)
         } else {
             let projection = Projection::Columns(col_indices.clone());
             let prune_ctx = MutationBlockPruningContext {
@@ -312,7 +312,7 @@ impl FuseTable {
             PruningStatistics::default(),
         )?;
 
-        let mut parts = Partitions::create_nolazy(
+        let mut parts = Partitions::create(
             PartitionsShuffleKind::Mod,
             block_metas
                 .into_iter()
