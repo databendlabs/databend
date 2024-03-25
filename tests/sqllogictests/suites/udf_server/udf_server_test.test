@@ -468,6 +468,9 @@ statement ok
 drop stage if exists udf_stage;
 
 statement ok
+remove @udf_stage;
+
+statement ok
 create stage udf_stage FILE_FORMAT = (TYPE = CSV);
 
 statement ok
