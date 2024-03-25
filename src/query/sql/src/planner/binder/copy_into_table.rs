@@ -371,7 +371,7 @@ impl<'a> Binder {
             if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
                 // in fact, if there is a join, we will stop in `check_transform_query()`
                 return Err(ErrorCode::SemanticError(
-                    "copy into table source can't contain window|aggregate|udf|join functions"
+                    "copy into table source can't contain window|aggregate|join functions"
                         .to_string(),
                 ));
             };
