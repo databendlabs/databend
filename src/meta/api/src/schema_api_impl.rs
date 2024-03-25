@@ -3278,6 +3278,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let index = TableIndex {
                 name: req.name.clone(),
                 column_ids: req.column_ids.clone(),
+                sync_creation: req.sync_creation,
             };
             indexes.insert(req.name.clone(), index);
 

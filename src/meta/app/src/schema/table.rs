@@ -274,6 +274,9 @@ pub struct TableMeta {
 pub struct TableIndex {
     pub name: String,
     pub column_ids: Vec<u32>,
+    // if true, index will create after data written to databend,
+    // no need execute refresh index manually.
+    pub sync_creation: bool,
 }
 
 impl TableMeta {
@@ -741,6 +744,7 @@ pub struct CreateTableIndexReq {
     pub table_id: u64,
     pub name: String,
     pub column_ids: Vec<u32>,
+    pub sync_creation: bool,
 }
 
 impl Display for CreateTableIndexReq {

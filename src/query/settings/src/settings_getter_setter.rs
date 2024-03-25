@@ -600,6 +600,14 @@ impl Settings {
         )
     }
 
+    pub fn get_enable_refresh_inverted_index_after_write(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_refresh_inverted_index_after_write")? != 0)
+    }
+
+    pub fn set_enable_refresh_inverted_index_after_write(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_refresh_inverted_index_after_write", u64::from(val))
+    }
+
     pub fn get_disable_variant_check(&self) -> Result<bool> {
         Ok(self.try_get_u64("disable_variant_check")? != 0)
     }

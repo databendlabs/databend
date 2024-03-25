@@ -490,6 +490,8 @@ impl Binder {
             database,
             table,
             index_name,
+            segment_locs: None,
+            need_lock: true,
         };
         Ok(Plan::RefreshTableIndex(Box::new(plan)))
     }
