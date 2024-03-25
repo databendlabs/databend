@@ -33,9 +33,9 @@ use databend_common_sql::IndexType;
 use log::debug;
 
 use super::parquet_data_source::ParquetDataSource;
-use crate::fuse_part::FuseBlockPartInfo;
 use super::util::build_merge_into_source_build_bloom_info;
 use super::util::MergeIntoSourceBuildBloomInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
