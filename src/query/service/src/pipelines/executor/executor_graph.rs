@@ -33,7 +33,6 @@ use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::Pipeline;
 use log::debug;
-use log::info;
 use log::trace;
 use minitrace::prelude::*;
 use parking_lot::Condvar;
