@@ -115,28 +115,20 @@ impl StageFilesInfo {
 
         let max_files = max_files.unwrap_or(usize::MAX);
         if let Some(files) = &self.files {
-            let mut res = Vec::new();
-            let mut limit: usize = 0;
-            for file in files {
-                let full_path = Path::new(&self.path)
-                    .join(file)
-                    .to_string_lossy()
-                    .trim_start_matches('/')
-                    .to_string();
-                let meta = operator.stat(&full_path).await?;
-                if meta.mode().is_file() {
-                    res.push(StageFileInfo::new(full_path, &meta))
-                } else {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "{full_path} is not a file"
-                    )));
-                }
-                if first_only {
-                    return Ok(res);
-                }
-                limit += 1;
-                if limit == max_files {
-                    return Ok(res);
+            let file_infos = self
+                .stat_concurrent(operator, first_only, max_files, files)
+                .await;
+            let mut res = Vec::with_capacity(file_infos.len());
+
+            for file_info in file_infos {
+                match file_info {
+                    Ok((path, meta)) if meta.is_dir() => {
+                        return Err(ErrorCode::BadArguments(format!("{path} is not a file")));
+                    }
+                    Ok((path, meta)) => res.push(StageFileInfo::new(path, &meta)),
+                    Err(e) => {
+                        return Err(e);
+                    }
                 }
             }
             Ok(res)
@@ -246,6 +238,41 @@ impl StageFilesInfo {
             }
         }
         Ok(files)
+    }
+
+    /// Stat files concurrently.
+    pub async fn stat_concurrent(
+        &self,
+        operator: &Operator,
+        first_only: bool,
+        max_files: usize,
+        files: &Vec<String>,
+    ) -> Vec<Result<(String, Metadata)>> {
+        let mut futures = Vec::new();
+        let mut limit = 0;
+        for file in files {
+            let full_path = Path::new(&self.path)
+                .join(file)
+                .to_string_lossy()
+                .trim_start_matches('/')
+                .to_string();
+            let operator = operator.clone();
+            let fut = async move {
+                let meta = operator.stat(&full_path).await?;
+                Ok((full_path, meta))
+            };
+            futures.push(fut);
+
+            if first_only {
+                break;
+            }
+
+            limit += 1;
+            if limit >= max_files {
+                break;
+            }
+        }
+        futures::future::join_all(futures).await
     }
 }
 
