@@ -465,12 +465,6 @@ set enable_experimental_merge_into = 0;
 
 ### enable udf for copy into table
 statement ok
-create table test_source(a VARCHAR);
-
-statement ok
-insert into test_source values('haha'),('haha2');
-
-statement ok
 create stage udf_stage FILE_FORMAT = (TYPE = CSV);
 
 statement ok
@@ -478,9 +472,6 @@ copy into @udf_stage from (select 'aaaa');
 
 statement ok
 copy into @udf_stage from (select 'bbbbb');
-
-statement ok
-CREATE TABLE _tmp_table (field1 int);
 
 statement ok
 CREATE FUNCTION url_len (VARCHAR) RETURNS BIGINT LANGUAGE python HANDLER = 'url_len' ADDRESS = 'http://0.0.0.0:8815';
