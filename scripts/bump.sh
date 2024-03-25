@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -e
+
 VERSION=$1
 
 if [ -z "$VERSION" ]; then
@@ -33,6 +35,11 @@ else
   sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/g" bindings/nodejs/npm/*/package.json
 fi
 
+git status
+git checkout main
+git fetch upstream
+git rebase upstream/main
+git checkout -b "bump-$VERSION"
 git status
 git add Cargo.toml bindings/nodejs/package.json bindings/nodejs/npm/*/package.json
 git commit -m "chore: bump version to $VERSION"
