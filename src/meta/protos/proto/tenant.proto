@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod quota;
-#[allow(clippy::module_inception)]
-mod tenant;
-mod tenant_quota_ident;
-mod tenant_serde;
+syntax = "proto3";
 
-pub use quota::TenantQuota;
-pub use tenant::Tenant;
-pub use tenant_quota_ident::TenantQuotaIdent;
-pub use tenant_serde::TenantSerde;
+package databend_proto;
+
+// `[T]enant[Ident]` is a common meta-service key structure in form of `<PREFIX>/<TENANT>/<NAME>`.
+message TIdent {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // The user this record belongs to.
+  // It must not be empty.
+  string tenant = 1;
+
+  // Resource name
+  string name = 2;
+}

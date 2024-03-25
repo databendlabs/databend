@@ -21,14 +21,15 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::plans::CreateStagePlan;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 use log::info;
+use minitrace::func_name;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -73,9 +74,7 @@ impl Interpreter for CreateUserStageInterpreter {
             ));
         }
 
-        let tenant = NonEmptyString::new(plan.tenant.clone()).map_err(|_e| {
-            ErrorCode::TenantIsEmpty("tenant is empty when CreateUserStateInterpreter")
-        })?;
+        let tenant = Tenant::new_or_error_code(&plan.tenant, func_name!())?;
 
         let quota_api = user_mgr.tenant_quota_api(&tenant);
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
@@ -87,9 +86,7 @@ impl Interpreter for CreateUserStageInterpreter {
             )));
         };
 
-        let tenant = NonEmptyString::new(plan.tenant.clone()).map_err(|_e| {
-            ErrorCode::TenantIsEmpty("tenant is empty when CreateUserStateInterpreter")
-        })?;
+        let tenant = Tenant::new_or_error_code(&plan.tenant, "CreateUserStageInterpreter")?;
 
         let old_stage = match plan.create_option {
             CreateOption::CreateOrReplace => user_mgr
@@ -99,9 +96,7 @@ impl Interpreter for CreateUserStageInterpreter {
             _ => None,
         };
 
-        let tenant = NonEmptyString::new(plan.tenant.clone()).map_err(|_e| {
-            ErrorCode::TenantIsEmpty("tenant is empty when CreateUserStateInterpreter")
-        })?;
+        let tenant = Tenant::new_or_error_code(&plan.tenant, "CreateUserStageInterpreter")?;
 
         let mut user_stage = user_stage;
         user_stage.creator = Some(self.ctx.get_current_user()?.identity());

@@ -37,8 +37,6 @@ use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::NonEmptyStr;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
@@ -56,17 +54,17 @@ static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
-    tenant: NonEmptyString,
+    tenant: Tenant,
 }
 
 impl RoleMgr {
     pub fn create(
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
-        tenant: NonEmptyStr,
+        tenant: &Tenant,
     ) -> Self {
         RoleMgr {
             kv_api,
-            tenant: tenant.into(),
+            tenant: tenant.clone(),
         }
     }
 
@@ -106,7 +104,7 @@ impl RoleMgr {
 
     /// Build meta-service for a role grantee, which is a tenant's database, table, stage, udf, etc.
     fn ownership_object_key(&self, object: &OwnershipObject) -> String {
-        let grantee = TenantOwnershipObject::new(Tenant::new(self.tenant.as_str()), object.clone());
+        let grantee = TenantOwnershipObject::new(self.tenant.clone(), object.clone());
         grantee.to_string_key()
     }
 
@@ -117,20 +115,17 @@ impl RoleMgr {
         let dummy = OwnershipObject::UDF {
             name: "dummy".to_string(),
         };
-        let grantee = TenantOwnershipObject::new(Tenant::new_nonempty(self.tenant.clone()), dummy);
+        let grantee = TenantOwnershipObject::new(self.tenant.clone(), dummy);
         grantee.tenant_prefix()
     }
 
     fn role_key(&self, role: &str) -> String {
-        let r = RoleIdent::new(Tenant::new_nonempty(self.tenant.clone()), role.to_string());
+        let r = RoleIdent::new(self.tenant.clone(), role.to_string());
         r.to_string_key()
     }
 
     fn role_prefix(&self) -> String {
-        let r = RoleIdent::new(
-            Tenant::new_nonempty(self.tenant.clone()),
-            "dummy".to_string(),
-        );
+        let r = RoleIdent::new(self.tenant.clone(), "dummy".to_string());
         r.tenant_prefix()
     }
 }

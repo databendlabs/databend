@@ -87,7 +87,7 @@ impl ModifyTableColumnInterpreter {
         let policy = handler
             .get_data_mask(
                 meta_api,
-                self.ctx.get_tenant().to_string(),
+                self.ctx.get_tenant().name().to_string(),
                 mask_name.clone(),
             )
             .await?;
@@ -121,7 +121,7 @@ impl ModifyTableColumnInterpreter {
                 None
             };
         let req = SetTableColumnMaskPolicyReq {
-            tenant: self.ctx.get_tenant().to_string(),
+            tenant: self.ctx.get_tenant().name().to_string(),
             seq: MatchSeq::Exact(table_version),
             table_id,
             column,
@@ -132,7 +132,7 @@ impl ModifyTableColumnInterpreter {
 
         if let Some(share_table_info) = res.share_table_info {
             save_share_table_info(
-                self.ctx.get_tenant().as_str(),
+                self.ctx.get_tenant().name(),
                 self.ctx.get_data_operator()?.operator(),
                 share_table_info,
             )
@@ -166,7 +166,7 @@ impl ModifyTableColumnInterpreter {
 
         if let Some(prev_column_mask_name) = prev_column_mask_name {
             let req = SetTableColumnMaskPolicyReq {
-                tenant: self.ctx.get_tenant().to_string(),
+                tenant: self.ctx.get_tenant().name().to_string(),
                 seq: MatchSeq::Exact(table_version),
                 table_id,
                 column,
@@ -177,7 +177,7 @@ impl ModifyTableColumnInterpreter {
 
             if let Some(share_table_info) = res.share_table_info {
                 save_share_table_info(
-                    self.ctx.get_tenant().as_str(),
+                    self.ctx.get_tenant().name(),
                     self.ctx.get_data_operator()?.operator(),
                     share_table_info,
                 )
@@ -363,7 +363,7 @@ impl ModifyTableColumnInterpreter {
 
             if let Some(share_table_info) = res.share_table_info {
                 save_share_table_info(
-                    self.ctx.get_tenant().as_str(),
+                    self.ctx.get_tenant().name(),
                     self.ctx.get_data_operator()?.operator(),
                     share_table_info,
                 )
@@ -504,7 +504,7 @@ impl ModifyTableColumnInterpreter {
 
         if let Some(share_table_info) = res.share_table_info {
             save_share_table_info(
-                self.ctx.get_tenant().as_str(),
+                self.ctx.get_tenant().name(),
                 self.ctx.get_data_operator()?.operator(),
                 share_table_info,
             )
@@ -535,7 +535,7 @@ impl Interpreter for ModifyTableColumnInterpreter {
             .ctx
             .get_catalog(catalog_name)
             .await?
-            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .get_table(self.ctx.get_tenant().name(), db_name, tbl_name)
             .await
             .ok();
 

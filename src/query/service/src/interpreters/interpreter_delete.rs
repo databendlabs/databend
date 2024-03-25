@@ -113,7 +113,7 @@ impl Interpreter for DeleteInterpreter {
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
         let tbl = catalog
-            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .get_table(self.ctx.get_tenant().name(), db_name, tbl_name)
             .await?;
 
         // Add table lock.

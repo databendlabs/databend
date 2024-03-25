@@ -92,6 +92,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::*;
 use faststr::FastStr;
 use hive_metastore::Partition;
@@ -285,7 +286,7 @@ impl Catalog for HiveCatalog {
     // Get all the databases.
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let db_names = self
             .client
             .get_all_databases()

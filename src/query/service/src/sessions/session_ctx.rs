@@ -23,7 +23,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_storages_common_txn::TxnManager;
 use databend_storages_common_txn::TxnManagerRef;
@@ -151,20 +151,25 @@ impl SessionContext {
         *lock = role
     }
 
-    pub fn get_current_tenant(&self) -> NonEmptyString {
+    pub fn get_current_tenant(&self) -> Tenant {
         let conf = GlobalConfig::instance();
 
         if conf.query.internal_enable_sandbox_tenant {
             let sandbox_tenant = self.settings.get_sandbox_tenant().unwrap_or_default();
             if !sandbox_tenant.is_empty() {
-                return NonEmptyString::new(sandbox_tenant).unwrap();
+                return Tenant::new_or_error_code(sandbox_tenant, "create from sandbox_tenant")
+                    .unwrap();
             }
         }
 
         if conf.query.management_mode || self.typ == SessionType::Local {
             let lock = self.current_tenant.read();
             if !lock.is_empty() {
-                return NonEmptyString::new(lock.clone()).unwrap();
+                return Tenant::new_or_error_code(
+                    lock.clone(),
+                    "create from SessionContext.current_tenant",
+                )
+                .unwrap();
             }
         }
 

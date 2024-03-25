@@ -93,6 +93,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use log::info;
 
@@ -184,13 +185,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while list databases)",
-            ));
-        }
-
+    async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let mut dbs = self.immutable_catalog.list_databases(tenant).await?;
         let mut other = self.mutable_catalog.list_databases(tenant).await?;
         dbs.append(&mut other);

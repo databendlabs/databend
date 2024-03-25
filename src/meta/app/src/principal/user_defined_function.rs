@@ -20,16 +20,18 @@ use chrono::Utc;
 use databend_common_expression::types::DataType;
 use databend_common_meta_kvapi::kvapi::Key;
 
+use crate::tenant::Tenant;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UdfName {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub name: String,
 }
 
 impl UdfName {
-    pub fn new(tenant: impl ToString, name: impl ToString) -> Self {
+    pub fn new(tenant: &Tenant, name: impl ToString) -> Self {
         Self {
-            tenant: tenant.to_string(),
+            tenant: tenant.clone(),
             name: name.to_string(),
         }
     }
@@ -219,12 +221,12 @@ mod kv_api_impl {
 
         /// It belongs to a tenant
         fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
+            Some(self.tenant.to_string_key())
         }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
+                .push_str(self.tenant.name())
                 .push_str(&self.name)
                 .done()
         }
@@ -232,9 +234,11 @@ mod kv_api_impl {
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let tenant = p.next_str()?;
+            let tenant = p.next_nonempty()?;
             let name = p.next_str()?;
             p.done()?;
+
+            let tenant = Tenant::new_nonempty(tenant);
 
             Ok(UdfName { tenant, name })
         }
