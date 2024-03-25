@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::block_thresholds;
@@ -23,6 +26,7 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::DynTransformBuilder;
+use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_sql::executor::physical_plans::ChunkAppendData;
 use databend_common_sql::executor::physical_plans::ChunkCastSchema;
 use databend_common_sql::executor::physical_plans::ChunkCommitInsert;
@@ -33,6 +37,7 @@ use databend_common_sql::executor::physical_plans::ChunkProject;
 use databend_common_sql::executor::physical_plans::Duplicate;
 use databend_common_sql::executor::physical_plans::Filter;
 use databend_common_sql::executor::physical_plans::Shuffle;
+use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 
 use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::PipelineBuilder;
@@ -130,6 +135,7 @@ impl PipelineBuilder {
             Vec::with_capacity(targets.len());
         let mut mutation_aggregator_builders: Vec<DynTransformBuilder> =
             Vec::with_capacity(targets.len());
+        let mut tables = HashMap::new();
         for target in targets {
             let table = self.ctx.build_table_by_table_info(
                 &target.target_catalog_info,
@@ -140,14 +146,31 @@ impl PipelineBuilder {
             serialize_segment_builders.push(Box::new(
                 self.serialize_segment_transform_builder(table.clone(), block_thresholds)?,
             ));
-            mutation_aggregator_builders
-                .push(Box::new(self.mutation_aggregator_transform_builder(table)?));
+            mutation_aggregator_builders.push(Box::new(
+                self.mutation_aggregator_transform_builder(table.clone())?,
+            ));
+            tables.insert(table.get_id(), table);
         }
         self.main_pipeline
             .add_transform_by_chunk(serialize_segment_builders)?;
         self.main_pipeline
             .add_transform_by_chunk(mutation_aggregator_builders)?;
         self.main_pipeline.try_resize(1)?;
+        let catalog = CatalogManager::instance().build_catalog(&targets[0].target_catalog_info)?;
+        self.main_pipeline.add_sink(|input| {
+            Ok(ProcessorPtr::create(AsyncSinker::create(
+                input,
+                self.ctx.clone(),
+                CommitMultiTableInsert::create(
+                    tables.clone(),
+                    self.ctx.clone(),
+                    *overwrite,
+                    update_stream_meta.clone(),
+                    deduplicated_label.clone(),
+                    catalog.clone(),
+                ),
+            )))
+        })?;
         Ok(())
     }
 }

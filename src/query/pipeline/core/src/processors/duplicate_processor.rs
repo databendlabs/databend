@@ -56,10 +56,11 @@ impl Processor for DuplicateProcessor {
     }
 
     fn event(&mut self) -> Result<Event> {
-        let one_finished = self.outputs.iter().any(|x| x.is_finished());
         let all_finished = self.outputs.iter().all(|x| x.is_finished());
 
-        if all_finished || (self.force_finish_together && one_finished) {
+        if all_finished
+            || (self.force_finish_together && self.outputs.iter().any(|x| x.is_finished()))
+        {
             self.input.finish();
             self.outputs.iter_mut().for_each(|x| x.finish());
             return Ok(Event::Finished);
@@ -73,7 +74,7 @@ impl Processor for DuplicateProcessor {
         if self
             .outputs
             .iter()
-            .any(|x| !x.is_finished() && x.can_push())
+            .any(|x| !x.is_finished() && !x.can_push())
         {
             return Ok(Event::NeedConsume);
         }
@@ -81,7 +82,7 @@ impl Processor for DuplicateProcessor {
         self.input.set_need_data();
         if self.input.has_data() {
             let block = self.input.pull_data().unwrap();
-            for output in self.outputs.iter_mut() {
+            for output in self.outputs.iter() {
                 if !output.is_finished() {
                     output.push_data(block.clone());
                 }

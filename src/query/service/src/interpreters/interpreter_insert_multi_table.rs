@@ -15,8 +15,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_arrow::arrow::chunk::Chunk;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
+use databend_common_sql::executor::physical_plans::ChunkAppendData;
+use databend_common_sql::executor::physical_plans::ChunkCommitInsert;
+use databend_common_sql::executor::physical_plans::ChunkMerge;
+use databend_common_sql::executor::physical_plans::SerializableTable;
 use databend_common_sql::executor::physical_plans::ShuffleStrategy;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
@@ -141,6 +147,16 @@ impl InsertMultiTableInterpreter {
             }
         }
 
+        let mut serialable_tables = vec![];
+        let catalog_info = self.ctx.get_catalog(CATALOG_DEFAULT).await?.info();
+        for (table, _, _, _) in &branches {
+            let table_info = table.get_table_info();
+            serialable_tables.push(SerializableTable {
+                target_catalog_info: catalog_info.clone(),
+                target_table_info: table_info.clone(),
+            });
+        }
+
         // let predicates = vec![];
 
         root = PhysicalPlan::Duplicate(Box::new(Duplicate {
@@ -154,6 +170,27 @@ impl InsertMultiTableInterpreter {
             plan_id: 0,
             input: Box::new(root),
             strategy: shuffle_strategy,
+        }));
+
+        root = PhysicalPlan::ChunkAppendData(Box::new(ChunkAppendData {
+            plan_id: 0,
+            input: Box::new(root),
+            append_datas: serialable_tables.clone(),
+        }));
+
+        root = PhysicalPlan::ChunkMerge(Box::new(ChunkMerge {
+            plan_id: 0,
+            input: Box::new(root),
+            chunk_num: branches.len(),
+        }));
+
+        root = PhysicalPlan::ChunkCommitInsert(Box::new(ChunkCommitInsert {
+            plan_id: 0,
+            input: Box::new(root),
+            update_stream_meta: vec![],
+            overwrite: *overwrite,
+            deduplicated_label: None,
+            targets: serialable_tables.clone(),
         }));
 
         // let chunk_filter = PhysicalPlan::ChunkFilter(Box::new(ChunkFilter {
@@ -170,6 +207,6 @@ impl InsertMultiTableInterpreter {
         //         Ok(expr.as_remote_expr())
         //     })
         //     .collect();
-        todo!()
+        Ok(root)
     }
 }

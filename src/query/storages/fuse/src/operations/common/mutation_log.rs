@@ -180,7 +180,7 @@ fn merge_conflict_resolve_context(
     }
 }
 
-fn merge_commit_meta(
+pub fn merge_commit_meta(
     l: CommitMeta,
     r: CommitMeta,
     default_cluster_key_id: Option<u32>,

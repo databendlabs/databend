@@ -416,7 +416,6 @@ impl BindContext {
             ((None, _), (None, None)) | ((None, _), (None, Some(_)))
                 if column == column_binding.column_name =>
             {
-                println!("column_binding.visibility: {:?}", column_binding.visibility);
                 column_binding.visibility != Visibility::UnqualifiedWildcardInVisible
             }
 
@@ -424,7 +423,6 @@ impl BindContext {
             ((None, _), (Some(table), Some(table_name)))
                 if table == table_name && column == column_binding.column_name =>
             {
-                println!("2");
                 true
             }
 
@@ -432,7 +430,6 @@ impl BindContext {
             ((Some(db), Some(db_name)), (Some(table), Some(table_name)))
                 if db == db_name && table == table_name && column == column_binding.column_name =>
             {
-                println!("3");
                 true
             }
             _ => false,

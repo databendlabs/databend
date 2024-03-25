@@ -104,3 +104,8 @@ INSERT FIRST
   ELSE
     INTO t2
 SELECT * from s;
+
+INSERT ALL
+    INTO t1
+    INTO t2
+SELECT * from s;
