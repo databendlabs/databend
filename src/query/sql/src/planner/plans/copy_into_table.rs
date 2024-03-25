@@ -121,6 +121,7 @@ impl CopyIntoTablePlan {
             Some(max_files)
         };
 
+        let thread_num = ctx.get_settings().get_max_threads()? as usize;
         let operator = init_stage_operator(&stage_table_info.stage_info)?;
         let all_source_file_infos = if operator.info().native_capability().blocking {
             if self.force {
@@ -135,12 +136,12 @@ impl CopyIntoTablePlan {
         } else if self.force {
             stage_table_info
                 .files_info
-                .list(&operator, false, max_files)
+                .list(&operator, thread_num, false, max_files)
                 .await
         } else {
             stage_table_info
                 .files_info
-                .list(&operator, false, None)
+                .list(&operator, thread_num, false, None)
                 .await
         }?;
 

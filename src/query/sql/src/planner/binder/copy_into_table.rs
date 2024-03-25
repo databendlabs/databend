@@ -288,6 +288,8 @@ impl<'a> Binder {
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let catalog_info = catalog.info();
 
+        let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
+
         let (stage_info, files_info) = self.bind_attachment(attachment).await?;
 
         // list the files to be copied in binding phase
@@ -297,7 +299,7 @@ impl<'a> Binder {
         // currently, they do NOT enforce the deduplication detection rules,
         // as the vanilla Copy-Into does.
         // thus, we do not care about the "duplicated_files_detected", just set it to empty vector.
-        let files_to_copy = list_stage_files(&stage_info, &files_info, None).await?;
+        let files_to_copy = list_stage_files(&stage_info, &files_info, thread_num, None).await?;
         let duplicated_files_detected = vec![];
 
         let stage_schema = infer_table_schema(&data_schema)?;
