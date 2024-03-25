@@ -3,6 +3,9 @@ statement ok
 set enable_experimental_merge_into = 1;
 
 statement ok
+drop table if exists merge_target_0;
+
+statement ok
 create table merge_target_0(a int,b string) cluster by(a,b);
 
 statement ok
