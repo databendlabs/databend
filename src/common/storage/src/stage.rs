@@ -248,7 +248,7 @@ impl StageFilesInfo {
         max_files: usize,
         files: &Vec<String>,
     ) -> Vec<Result<(String, Metadata)>> {
-        let mut futures = Vec::new();
+        let mut futures = Vec::with_capacity(files.len());
         let mut limit = 0;
         for file in files {
             let full_path = Path::new(&self.path)
