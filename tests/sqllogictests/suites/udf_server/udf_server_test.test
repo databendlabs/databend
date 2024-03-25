@@ -468,9 +468,6 @@ statement ok
 drop stage if exists udf_stage;
 
 statement ok
-remove @udf_stage;
-
-statement ok
 create stage udf_stage FILE_FORMAT = (TYPE = CSV);
 
 statement ok
@@ -493,6 +490,10 @@ select * from _tmp_table order by field1;
 ----
 4
 5
+
+
+statement ok
+remove @udf_stage;
 
 statement ok
 drop FUNCTION url_len;
