@@ -248,7 +248,7 @@ impl StageFilesInfo {
         operator: &Operator,
         first_only: bool,
         max_files: usize,
-        files: &Vec<String>,
+        files: &[String],
     ) -> Result<Vec<Result<(String, Metadata)>>> {
         if first_only {
             let Some(file) = files.first() else {
@@ -264,7 +264,7 @@ impl StageFilesInfo {
         }
 
         // This clone is required to make sure we are not referring `file: &String` in the closure
-        let tasks = files.clone().into_iter().take(max_files).map(|file| {
+        let tasks = files.iter().take(max_files).cloned().map(|file| {
             let full_path = Path::new(&self.path)
                 .join(file)
                 .to_string_lossy()
