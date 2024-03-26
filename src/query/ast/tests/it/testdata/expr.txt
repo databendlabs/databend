@@ -33,7 +33,7 @@ Literal {
     span: Some(
         0..16,
     ),
-    lit: String(
+    value: String(
         "I'm who I'm.",
     ),
 }
@@ -48,7 +48,7 @@ Literal {
     span: Some(
         0..24,
     ),
-    lit: String(
+    value: String(
         "Ǿ \n \t S ª",
     ),
 }
@@ -78,7 +78,7 @@ FunctionCall {
                 span: Some(
                     5..9,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     208,
                 ),
             },
@@ -86,7 +86,7 @@ FunctionCall {
                 span: Some(
                     11..15,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     191,
                 ),
             },
@@ -94,7 +94,7 @@ FunctionCall {
                 span: Some(
                     17..21,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     209,
                 ),
             },
@@ -120,7 +120,7 @@ Array {
             span: Some(
                 1..3,
             ),
-            lit: UInt64(
+            value: UInt64(
                 42,
             ),
         },
@@ -128,7 +128,7 @@ Array {
             span: Some(
                 5..8,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 35,
                 precision: 76,
                 scale: 1,
@@ -138,7 +138,7 @@ Array {
             span: Some(
                 10..12,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 4,
                 precision: 76,
                 scale: 0,
@@ -148,7 +148,7 @@ Array {
             span: Some(
                 14..18,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 1,
                 precision: 76,
                 scale: 3,
@@ -158,7 +158,7 @@ Array {
             span: Some(
                 20..23,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 500,
                 precision: 76,
                 scale: 0,
@@ -168,7 +168,7 @@ Array {
             span: Some(
                 25..33,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 1925,
                 precision: 76,
                 scale: 6,
@@ -178,7 +178,7 @@ Array {
             span: Some(
                 35..41,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 3800000,
                 precision: 76,
                 scale: 0,
@@ -188,7 +188,7 @@ Array {
             span: Some(
                 43..49,
             ),
-            lit: Decimal256 {
+            value: Decimal256 {
                 value: 1,
                 precision: 76,
                 scale: 1,
@@ -198,7 +198,7 @@ Array {
             span: Some(
                 51..56,
             ),
-            lit: UInt64(
+            value: UInt64(
                 4095,
             ),
         },
@@ -206,7 +206,7 @@ Array {
             span: Some(
                 58..69,
             ),
-            lit: UInt64(
+            value: UInt64(
                 3740122863,
             ),
         },
@@ -223,7 +223,7 @@ Literal {
     span: Some(
         0..30,
     ),
-    lit: Decimal256 {
+    value: Decimal256 {
         value: 123456789012345678901234567890,
         precision: 76,
         scale: 0,
@@ -240,7 +240,7 @@ Literal {
     span: Some(
         0..10,
     ),
-    lit: String(
+    value: String(
         "ab123c",
     ),
 }
@@ -255,7 +255,7 @@ Literal {
     span: Some(
         0..33,
     ),
-    lit: Decimal256 {
+    value: Decimal256 {
         value: 94522879687365475552814062743484560,
         precision: 76,
         scale: 0,
@@ -272,7 +272,7 @@ Literal {
     span: Some(
         0..17,
     ),
-    lit: Float64(
+    value: Float64(
         inf,
     ),
 }
@@ -287,7 +287,7 @@ Literal {
     span: Some(
         0..11,
     ),
-    lit: UInt64(
+    value: UInt64(
         100100000,
     ),
 }
@@ -302,7 +302,7 @@ Literal {
     span: Some(
         0..10,
     ),
-    lit: UInt64(
+    value: UInt64(
         11220000,
     ),
 }
@@ -317,7 +317,7 @@ Literal {
     span: Some(
         0..2,
     ),
-    lit: Decimal256 {
+    value: Decimal256 {
         value: 1,
         precision: 76,
         scale: 1,
@@ -328,7 +328,7 @@ Literal {
 ---------- Input ----------
 -1
 ---------- Output ---------
-(- 1)
+- 1
 ---------- AST ------------
 UnaryOp {
     span: Some(
@@ -339,7 +339,7 @@ UnaryOp {
         span: Some(
             1..2,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -355,7 +355,7 @@ Literal {
     span: Some(
         1..2,
     ),
-    lit: UInt64(
+    value: UInt64(
         1,
     ),
 }
@@ -375,7 +375,7 @@ Tuple {
             span: Some(
                 1..2,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -397,7 +397,7 @@ Tuple {
             span: Some(
                 1..2,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -405,7 +405,7 @@ Tuple {
             span: Some(
                 3..4,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -427,7 +427,7 @@ Tuple {
             span: Some(
                 1..2,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -435,7 +435,7 @@ Tuple {
             span: Some(
                 3..4,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -457,7 +457,7 @@ Array {
             span: Some(
                 1..2,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -479,7 +479,7 @@ Array {
             span: Some(
                 1..2,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -506,7 +506,7 @@ Array {
                     span: Some(
                         2..3,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         1,
                     ),
                 },
@@ -535,7 +535,7 @@ Array {
                     span: Some(
                         2..3,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         1,
                     ),
                 },
@@ -550,7 +550,7 @@ Array {
                     span: Some(
                         6..7,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         2,
                     ),
                 },
@@ -596,7 +596,7 @@ MapAccess {
                                         span: Some(
                                             3..4,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -604,7 +604,7 @@ MapAccess {
                                         span: Some(
                                             5..6,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             2,
                                         ),
                                     },
@@ -612,7 +612,7 @@ MapAccess {
                                         span: Some(
                                             7..8,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             3,
                                         ),
                                     },
@@ -627,7 +627,7 @@ MapAccess {
                                         span: Some(
                                             11..12,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             4,
                                         ),
                                     },
@@ -635,7 +635,7 @@ MapAccess {
                                         span: Some(
                                             13..14,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             5,
                                         ),
                                     },
@@ -643,7 +643,7 @@ MapAccess {
                                         span: Some(
                                             15..16,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             6,
                                         ),
                                     },
@@ -665,7 +665,7 @@ MapAccess {
                                         span: Some(
                                             21..22,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             7,
                                         ),
                                     },
@@ -673,7 +673,7 @@ MapAccess {
                                         span: Some(
                                             23..24,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             8,
                                         ),
                                     },
@@ -681,7 +681,7 @@ MapAccess {
                                         span: Some(
                                             25..26,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             9,
                                         ),
                                     },
@@ -696,7 +696,7 @@ MapAccess {
                     span: Some(
                         30..31,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         0,
                     ),
                 },
@@ -707,7 +707,7 @@ MapAccess {
                 span: Some(
                     33..34,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -718,7 +718,7 @@ MapAccess {
             span: Some(
                 36..37,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -729,7 +729,7 @@ MapAccess {
 ---------- Input ----------
 ((1 = 1) or 1)
 ---------- Output ---------
-((1 = 1) OR 1)
+1 = 1 OR 1
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -745,7 +745,7 @@ BinaryOp {
             span: Some(
                 2..3,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -753,7 +753,7 @@ BinaryOp {
             span: Some(
                 6..7,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -762,7 +762,7 @@ BinaryOp {
         span: Some(
             12..13,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -772,7 +772,7 @@ BinaryOp {
 ---------- Input ----------
 typeof(1 + 2)
 ---------- Output ---------
-typeof((1 + 2))
+typeof(1 + 2)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -798,7 +798,7 @@ FunctionCall {
                     span: Some(
                         7..8,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         1,
                     ),
                 },
@@ -806,7 +806,7 @@ FunctionCall {
                     span: Some(
                         11..12,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         2,
                     ),
                 },
@@ -822,7 +822,7 @@ FunctionCall {
 ---------- Input ----------
 - - + + - 1 + + - 2
 ---------- Output ---------
-((- (- (+ (+ (- 1))))) + (+ (- 2)))
+- - + + - 1 + + - 2
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -858,7 +858,7 @@ BinaryOp {
                             span: Some(
                                 10..11,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -881,7 +881,7 @@ BinaryOp {
                 span: Some(
                     18..19,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     2,
                 ),
             },
@@ -893,7 +893,7 @@ BinaryOp {
 ---------- Input ----------
 0XFF + 0xff + 0xa + x'ffff'
 ---------- Output ---------
-(((255 + 255) + 10) + 65535)
+255 + 255 + 10 + 65535
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -914,7 +914,7 @@ BinaryOp {
                 span: Some(
                     0..4,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     255,
                 ),
             },
@@ -922,7 +922,7 @@ BinaryOp {
                 span: Some(
                     7..11,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     255,
                 ),
             },
@@ -931,7 +931,7 @@ BinaryOp {
             span: Some(
                 14..17,
             ),
-            lit: UInt64(
+            value: UInt64(
                 10,
             ),
         },
@@ -940,7 +940,7 @@ BinaryOp {
         span: Some(
             20..27,
         ),
-        lit: UInt64(
+        value: UInt64(
             65535,
         ),
     },
@@ -950,7 +950,7 @@ BinaryOp {
 ---------- Input ----------
 1 - -(- - -1)
 ---------- Output ---------
-(1 - (- (- (- (- 1)))))
+1 - - - - - 1
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -961,7 +961,7 @@ BinaryOp {
         span: Some(
             0..1,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -989,7 +989,7 @@ BinaryOp {
                         span: Some(
                             11..12,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -1003,7 +1003,7 @@ BinaryOp {
 ---------- Input ----------
 1 + a * c.d
 ---------- Output ---------
-(1 + (a * c.d))
+1 + a * c.d
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -1014,7 +1014,7 @@ BinaryOp {
         span: Some(
             0..1,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -1077,7 +1077,7 @@ BinaryOp {
 ---------- Input ----------
 number % 2
 ---------- Output ---------
-(number % 2)
+number % 2
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -1107,7 +1107,7 @@ BinaryOp {
         span: Some(
             9..10,
         ),
-        lit: UInt64(
+        value: UInt64(
             2,
         ),
     },
@@ -1290,7 +1290,7 @@ MapAccess {
                 span: Some(
                     1..5,
                 ),
-                lit: Null,
+                value: Null,
             },
         ],
     },
@@ -1332,7 +1332,7 @@ Between {
         span: Some(
             17..18,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -1340,7 +1340,7 @@ Between {
         span: Some(
             23..24,
         ),
-        lit: UInt64(
+        value: UInt64(
             2,
         ),
     },
@@ -1635,7 +1635,7 @@ Trim {
         span: Some(
             24..29,
         ),
-        lit: String(
+        value: String(
             "def",
         ),
     },
@@ -1646,7 +1646,7 @@ Trim {
                 span: Some(
                     13..18,
                 ),
-                lit: String(
+                value: String(
                     "abc",
                 ),
             },
@@ -1732,7 +1732,7 @@ Position {
         span: Some(
             9..12,
         ),
-        lit: String(
+        value: String(
             "a",
         ),
     },
@@ -1974,7 +1974,7 @@ MapAccess {
                     span: Some(
                         5..6,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         0,
                     ),
                 },
@@ -2041,7 +2041,7 @@ MapAccess {
                 span: Some(
                     4..5,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     4,
                 ),
             },
@@ -2076,7 +2076,7 @@ MapAccess {
 ---------- Input ----------
 a rlike '^11'
 ---------- Output ---------
-(a RLIKE '^11')
+a RLIKE '^11'
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -2106,7 +2106,7 @@ BinaryOp {
         span: Some(
             8..13,
         ),
-        lit: String(
+        value: String(
             "^11",
         ),
     },
@@ -2130,7 +2130,7 @@ InList {
             span: Some(
                 0..8,
             ),
-            lit: String(
+            value: String(
                 "中文",
             ),
         },
@@ -2142,7 +2142,7 @@ InList {
             span: Some(
                 23..26,
             ),
-            lit: String(
+            value: String(
                 "a",
             ),
         },
@@ -2150,7 +2150,7 @@ InList {
             span: Some(
                 28..31,
             ),
-            lit: String(
+            value: String(
                 "b",
             ),
         },
@@ -2162,7 +2162,7 @@ InList {
 ---------- Input ----------
 G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)
 ---------- Output ---------
-(G.E.B IS NOT NULL AND col1 NOT BETWEEN col2 AND ((1 + col3) DIV sum(col4)))
+G.E.B IS NOT NULL AND col1 NOT BETWEEN col2 AND (1 + col3) DIV sum(col4)
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -2268,7 +2268,7 @@ BinaryOp {
                     span: Some(
                         49..50,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         1,
                     ),
                 },
@@ -2341,7 +2341,7 @@ BinaryOp {
 ---------- Input ----------
 sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END
 ---------- Output ---------
-(sum(CASE WHEN (n2.n_name = 'GERMANY') THEN ol_amount ELSE 0 END) / CASE WHEN (sum(ol_amount) = 0) THEN 1 ELSE sum(ol_amount) END)
+sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -2406,7 +2406,7 @@ BinaryOp {
                                 span: Some(
                                     26..35,
                                 ),
-                                lit: String(
+                                value: String(
                                     "GERMANY",
                                 ),
                             },
@@ -2438,7 +2438,7 @@ BinaryOp {
                             span: Some(
                                 56..57,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 0,
                             ),
                         },
@@ -2505,7 +2505,7 @@ BinaryOp {
                     span: Some(
                         92..93,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         0,
                     ),
                 },
@@ -2516,7 +2516,7 @@ BinaryOp {
                 span: Some(
                     99..100,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -2576,7 +2576,7 @@ AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
 AND l_shipmode IN ('AIR', 'AIR REG')
 AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- Output ---------
-((((((((p_partkey = l_partkey) AND (p_brand = 'Brand#12')) AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')) AND (l_quantity >= CAST(1 AS Int16))) AND (l_quantity <= CAST((1 + 10) AS Int16))) AND p_size BETWEEN CAST(1 AS Int16) AND CAST(5 AS Int16)) AND l_shipmode IN('AIR', 'AIR REG')) AND (l_shipinstruct = 'DELIVER IN PERSON'))
+p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= CAST(1 AS Int16) AND l_quantity <= CAST(1 + 10 AS Int16) AND p_size BETWEEN CAST(1 AS Int16) AND CAST(5 AS Int16) AND l_shipmode IN('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -2685,7 +2685,7 @@ BinaryOp {
                                     span: Some(
                                         36..46,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "Brand#12",
                                     ),
                                 },
@@ -2719,7 +2719,7 @@ BinaryOp {
                                     span: Some(
                                         67..76,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "SM CASE",
                                     ),
                                 },
@@ -2727,7 +2727,7 @@ BinaryOp {
                                     span: Some(
                                         78..86,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "SM BOX",
                                     ),
                                 },
@@ -2735,7 +2735,7 @@ BinaryOp {
                                     span: Some(
                                         88..97,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "SM PACK",
                                     ),
                                 },
@@ -2743,7 +2743,7 @@ BinaryOp {
                                     span: Some(
                                         99..107,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "SM PKG",
                                     ),
                                 },
@@ -2783,7 +2783,7 @@ BinaryOp {
                                 span: Some(
                                     133..134,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -2829,7 +2829,7 @@ BinaryOp {
                                 span: Some(
                                     172..173,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -2837,7 +2837,7 @@ BinaryOp {
                                 span: Some(
                                     176..178,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     10,
                                 ),
                             },
@@ -2878,7 +2878,7 @@ BinaryOp {
                         span: Some(
                             217..218,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -2893,7 +2893,7 @@ BinaryOp {
                         span: Some(
                             242..243,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             5,
                         ),
                     },
@@ -2931,7 +2931,7 @@ BinaryOp {
                     span: Some(
                         276..281,
                     ),
-                    lit: String(
+                    value: String(
                         "AIR",
                     ),
                 },
@@ -2939,7 +2939,7 @@ BinaryOp {
                     span: Some(
                         283..292,
                     ),
-                    lit: String(
+                    value: String(
                         "AIR REG",
                     ),
                 },
@@ -2975,7 +2975,7 @@ BinaryOp {
             span: Some(
                 315..334,
             ),
-            lit: String(
+            value: String(
                 "DELIVER IN PERSON",
             ),
         },
@@ -3007,7 +3007,7 @@ FunctionCall {
                 span: Some(
                     7..8,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -3015,7 +3015,7 @@ FunctionCall {
                 span: Some(
                     10..11,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -3117,7 +3117,7 @@ FunctionCall {
                 span: Some(
                     9..10,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -3125,7 +3125,7 @@ FunctionCall {
                 span: Some(
                     12..13,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     2,
                 ),
             },
@@ -3133,7 +3133,7 @@ FunctionCall {
                 span: Some(
                     15..16,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     3,
                 ),
             },
@@ -3254,7 +3254,7 @@ FunctionCall {
                 span: Some(
                     7..8,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -3262,7 +3262,7 @@ FunctionCall {
                 span: Some(
                     10..11,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -3353,7 +3353,7 @@ IsDistinctFrom {
         span: Some(
             0..1,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -3361,7 +3361,7 @@ IsDistinctFrom {
         span: Some(
             19..20,
         ),
-        lit: UInt64(
+        value: UInt64(
             2,
         ),
     },
@@ -3433,7 +3433,7 @@ IsDistinctFrom {
         span: Some(
             0..1,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -3441,7 +3441,7 @@ IsDistinctFrom {
         span: Some(
             23..27,
         ),
-        lit: Null,
+        value: Null,
     },
     not: true,
 }
@@ -3465,7 +3465,7 @@ Map {
                 span: Some(
                     6..7,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     1,
                 ),
             },
@@ -3478,7 +3478,7 @@ Map {
                 span: Some(
                     13..14,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     2,
                 ),
             },
@@ -3891,7 +3891,7 @@ FunctionCall {
                                         span: Some(
                                             74..75,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             2,
                                         ),
                                     },
@@ -3972,7 +3972,7 @@ FunctionCall {
                                             span: Some(
                                                 56..59,
                                             ),
-                                            lit: String(
+                                            value: String(
                                                 "7",
                                             ),
                                         },
@@ -4185,7 +4185,7 @@ FunctionCall {
                                         span: Some(
                                             38..39,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             3,
                                         ),
                                     },
@@ -4205,7 +4205,7 @@ FunctionCall {
 ---------- Input ----------
 ARRAY_APPLY([1,2,3], x -> x + 1)
 ---------- Output ---------
-ARRAY_APPLY([1, 2, 3], x -> (x + 1))
+ARRAY_APPLY([1, 2, 3], x -> x + 1)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -4231,7 +4231,7 @@ FunctionCall {
                         span: Some(
                             13..14,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -4239,7 +4239,7 @@ FunctionCall {
                         span: Some(
                             15..16,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -4247,7 +4247,7 @@ FunctionCall {
                         span: Some(
                             17..18,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             3,
                         ),
                     },
@@ -4296,7 +4296,7 @@ FunctionCall {
                         span: Some(
                             30..31,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -4310,7 +4310,7 @@ FunctionCall {
 ---------- Input ----------
 ARRAY_FILTER(col, y -> y % 2 = 0)
 ---------- Output ---------
-ARRAY_FILTER(col, y -> ((y % 2) = 0))
+ARRAY_FILTER(col, y -> y % 2 = 0)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -4394,7 +4394,7 @@ FunctionCall {
                             span: Some(
                                 27..28,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 2,
                             ),
                         },
@@ -4403,7 +4403,7 @@ FunctionCall {
                         span: Some(
                             31..32,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             0,
                         ),
                     },
@@ -4491,7 +4491,7 @@ Tuple {
 ---------- Input ----------
 ARRAY_REDUCE([1,2,3], (acc,t) -> acc + t)
 ---------- Output ---------
-ARRAY_REDUCE([1, 2, 3], (acc, t) -> (acc + t))
+ARRAY_REDUCE([1, 2, 3], (acc, t) -> acc + t)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -4517,7 +4517,7 @@ FunctionCall {
                         span: Some(
                             14..15,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -4525,7 +4525,7 @@ FunctionCall {
                         span: Some(
                             16..17,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -4533,7 +4533,7 @@ FunctionCall {
                         span: Some(
                             18..19,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             3,
                         ),
                     },

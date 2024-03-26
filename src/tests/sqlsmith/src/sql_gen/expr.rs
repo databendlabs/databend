@@ -114,7 +114,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         match ty {
             DataType::Null => Expr::Literal {
                 span: None,
-                lit: self.gen_literal(&DataType::Null),
+                value: self.gen_literal(&DataType::Null),
             },
             DataType::EmptyArray => Expr::Array {
                 span: None,
@@ -126,24 +126,24 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             },
             DataType::Boolean => Expr::Literal {
                 span: None,
-                lit: self.gen_literal(&DataType::Boolean),
+                value: self.gen_literal(&DataType::Boolean),
             },
             DataType::String => Expr::Literal {
                 span: None,
-                lit: self.gen_literal(&DataType::String),
+                value: self.gen_literal(&DataType::String),
             },
             DataType::Number(_) => Expr::Literal {
                 span: None,
-                lit: self.gen_literal(ty),
+                value: self.gen_literal(ty),
             },
             DataType::Decimal(_) => Expr::Literal {
                 span: None,
-                lit: self.gen_literal(ty),
+                value: self.gen_literal(ty),
             },
             DataType::Date => {
                 let arg = Expr::Literal {
                     span: None,
-                    lit: Literal::UInt64(self.rng.gen_range(0..=1000000)),
+                    value: Literal::UInt64(self.rng.gen_range(0..=1000000)),
                 };
                 Expr::FunctionCall {
                     span: None,
@@ -160,7 +160,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             DataType::Timestamp => {
                 let arg = Expr::Literal {
                     span: None,
-                    lit: Literal::UInt64(self.rng.gen_range(0..=10000000000000)),
+                    value: Literal::UInt64(self.rng.gen_range(0..=10000000000000)),
                 };
                 Expr::FunctionCall {
                     span: None,
@@ -178,7 +178,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 if self.rng.gen_bool(0.5) {
                     Expr::Literal {
                         span: None,
-                        lit: Literal::Null,
+                        value: Literal::Null,
                     }
                 } else {
                     self.gen_scalar_value(inner_ty)
@@ -217,7 +217,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             DataType::Bitmap => {
                 let arg = Expr::Literal {
                     span: None,
-                    lit: Literal::UInt64(self.rng.gen_range(0..=1024)),
+                    value: Literal::UInt64(self.rng.gen_range(0..=1024)),
                 };
                 Expr::FunctionCall {
                     span: None,
@@ -235,7 +235,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let val = jsonb::rand_value();
                 let arg = Expr::Literal {
                     span: None,
-                    lit: Literal::String(format!("{}", val)),
+                    value: Literal::String(format!("{}", val)),
                 };
                 Expr::FunctionCall {
                     span: None,
@@ -252,7 +252,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             DataType::Binary => {
                 let arg = Expr::Literal {
                     span: None,
-                    lit: self.gen_literal(&DataType::String),
+                    value: self.gen_literal(&DataType::String),
                 };
                 Expr::FunctionCall {
                     span: None,
@@ -271,7 +271,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let y: f64 = self.rng.gen_range(-1.7e10..=1.7e10);
                 let arg = Expr::Literal {
                     span: None,
-                    lit: Literal::String(format!("POINT({} {})", x, y)),
+                    value: Literal::String(format!("POINT({} {})", x, y)),
                 };
                 Expr::FunctionCall {
                     span: None,
@@ -287,7 +287,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             }
             _ => Expr::Literal {
                 span: None,
-                lit: Literal::Null,
+                value: Literal::Null,
             },
         }
     }
@@ -627,7 +627,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         let y: f64 = self.rng.gen_range(-1.7e10..=1.7e10);
                         let arg0 = Expr::Literal {
                             span: None,
-                            lit: Literal::String(format!("POINT({} {})", x, y)),
+                            value: Literal::String(format!("POINT({} {})", x, y)),
                         };
                         let args = if self.rng.gen_bool(0.5) {
                             let arg1_ty = DataType::Number(NumberDataType::Int32);

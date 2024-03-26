@@ -418,7 +418,7 @@ impl<'a> Binder {
                     name: Identifier::from_name(None, "disable_variant_check"),
                     expr: Expr::Literal {
                         span: None,
-                        lit: Literal::UInt64(1),
+                        value: Literal::UInt64(1),
                     },
                 }],
             };

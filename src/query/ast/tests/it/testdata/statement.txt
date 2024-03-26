@@ -79,7 +79,7 @@ ShowDropTables(
 ---------- Input ----------
 show drop tables where name='t'
 ---------- Output ---------
-SHOW DROP TABLE WHERE (name = 't')
+SHOW DROP TABLE WHERE name = 't'
 ---------- AST ------------
 ShowDropTables(
     ShowDropTablesStmt {
@@ -114,7 +114,7 @@ ShowDropTables(
                         span: Some(
                             28..31,
                         ),
-                        lit: String(
+                        value: String(
                             "t",
                         ),
                     },
@@ -399,7 +399,7 @@ ShowProcessList {
 ---------- Input ----------
 show processlist where database='default' limit 2;
 ---------- Output ---------
-SHOW PROCESSLIST WHERE (database = 'default') LIMIT 2
+SHOW PROCESSLIST WHERE database = 'default' LIMIT 2
 ---------- AST ------------
 ShowProcessList {
     show_options: Some(
@@ -434,7 +434,7 @@ ShowProcessList {
                             span: Some(
                                 32..41,
                             ),
-                            lit: String(
+                            value: String(
                                 "default",
                             ),
                         },
@@ -682,7 +682,7 @@ Explain {
 ---------- Input ----------
 explain(verbose, logical, optimized) select * from t where a = 1
 ---------- Output ---------
-EXPLAIN(VERBOSE, LOGICAL, OPTIMIZED) SELECT * FROM t WHERE (a = 1)
+EXPLAIN(VERBOSE, LOGICAL, OPTIMIZED) SELECT * FROM t WHERE a = 1
 ---------- AST ------------
 Explain {
     kind: Plan,
@@ -767,7 +767,7 @@ Explain {
                                 span: Some(
                                     63..64,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -837,7 +837,7 @@ Some(
 ---------- Input ----------
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
 ---------- Output ---------
-CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
+CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
 ---------- AST ------------
 CreateIndex(
     CreateIndexStmt {
@@ -981,7 +981,7 @@ CreateIndex(
                                 span: Some(
                                     68..69,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     3,
                                 ),
                             },
@@ -1030,7 +1030,7 @@ CreateIndex(
 ---------- Input ----------
 CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
 ---------- Output ---------
-CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
+CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
 ---------- AST ------------
 CreateIndex(
     CreateIndexStmt {
@@ -1174,7 +1174,7 @@ CreateIndex(
                                 span: Some(
                                     79..80,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     3,
                                 ),
                             },
@@ -1514,7 +1514,7 @@ CreateTable(
                                     span: Some(
                                         59..60,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -1596,7 +1596,7 @@ CreateTable(
                                     span: Some(
                                         50..51,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -1881,7 +1881,7 @@ CreateTable(
                                                 span: Some(
                                                     75..78,
                                                 ),
-                                                lit: String(
+                                                value: String(
                                                     " ",
                                                 ),
                                             },
@@ -1930,7 +1930,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (a int, b int, c int generated always as (a + b) virtual );
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32, b Int32, c Int32 AS ((a + b)) VIRTUAL)
+CREATE TABLE IF NOT EXISTS a.b (a Int32, b Int32, c Int32 AS (a + b) VIRTUAL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2800,7 +2800,7 @@ CreateTable(
 ---------- Input ----------
 create view v as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-CREATE VIEW v AS SELECT (number % 3) AS a FROM numbers(1000)
+CREATE VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
@@ -2858,7 +2858,7 @@ CreateView(
                                     span: Some(
                                         33..34,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -2894,7 +2894,7 @@ CreateView(
                                     span: Some(
                                         53..57,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -2922,7 +2922,7 @@ CreateView(
 ---------- Input ----------
 alter view v as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-ALTER VIEW v AS SELECT (number % 3) AS a FROM numbers(1000)
+ALTER VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 AlterView(
     AlterViewStmt {
@@ -2979,7 +2979,7 @@ AlterView(
                                     span: Some(
                                         32..33,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -3015,7 +3015,7 @@ AlterView(
                                     span: Some(
                                         52..56,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -3065,7 +3065,7 @@ DropView(
 ---------- Input ----------
 create view v1(c1) as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-CREATE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
+CREATE VIEW v1 (c1) AS SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
@@ -3132,7 +3132,7 @@ CreateView(
                                     span: Some(
                                         38..39,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -3168,7 +3168,7 @@ CreateView(
                                     span: Some(
                                         58..62,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -3196,7 +3196,7 @@ CreateView(
 ---------- Input ----------
 create or replace view v1(c1) as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-CREATE OR REPLACE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
+CREATE OR REPLACE VIEW v1 (c1) AS SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
@@ -3263,7 +3263,7 @@ CreateView(
                                     span: Some(
                                         49..50,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -3299,7 +3299,7 @@ CreateView(
                                     span: Some(
                                         69..73,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -3327,7 +3327,7 @@ CreateView(
 ---------- Input ----------
 alter view v1(c2) as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-ALTER VIEW v1 (c2) AS SELECT (number % 3) AS a FROM numbers(1000)
+ALTER VIEW v1 (c2) AS SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 AlterView(
     AlterViewStmt {
@@ -3393,7 +3393,7 @@ AlterView(
                                     span: Some(
                                         37..38,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -3429,7 +3429,7 @@ AlterView(
                                     span: Some(
                                         57..61,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -4244,7 +4244,7 @@ CreateTable(
                                     span: Some(
                                         30..31,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -4348,7 +4348,7 @@ CreateTable(
                         span: Some(
                             45..47,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             10,
                         ),
                     },
@@ -4562,7 +4562,7 @@ DropDatabase(
 ---------- Input ----------
 select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;
 ---------- Output ---------
-SELECT DISTINCT a, COUNT(*) FROM t WHERE ((a = 1) AND ((b - 1) < a)) GROUP BY a HAVING (a = 1)
+SELECT DISTINCT a, COUNT(*) FROM t WHERE a = 1 AND b - 1 < a GROUP BY a HAVING a = 1
 ---------- AST ------------
 Query(
     Query {
@@ -4666,7 +4666,7 @@ Query(
                                 span: Some(
                                     45..46,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -4704,7 +4704,7 @@ Query(
                                     span: Some(
                                         55..56,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -4785,7 +4785,7 @@ Query(
                             span: Some(
                                 83..84,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -5211,7 +5211,7 @@ Query(
 ---------- Input ----------
 select * from a join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a INNER JOIN b ON (a.a = b.a)
+SELECT * FROM a INNER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -5370,7 +5370,7 @@ Query(
 ---------- Input ----------
 select * from a left outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT OUTER JOIN b ON (a.a = b.a)
+SELECT * FROM a LEFT OUTER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -5529,7 +5529,7 @@ Query(
 ---------- Input ----------
 select * from a right outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT OUTER JOIN b ON (a.a = b.a)
+SELECT * FROM a RIGHT OUTER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -5688,7 +5688,7 @@ Query(
 ---------- Input ----------
 select * from a left semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT SEMI JOIN b ON (a.a = b.a)
+SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -5847,7 +5847,7 @@ Query(
 ---------- Input ----------
 select * from a semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT SEMI JOIN b ON (a.a = b.a)
+SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6006,7 +6006,7 @@ Query(
 ---------- Input ----------
 select * from a left anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT ANTI JOIN b ON (a.a = b.a)
+SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6165,7 +6165,7 @@ Query(
 ---------- Input ----------
 select * from a anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT ANTI JOIN b ON (a.a = b.a)
+SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6324,7 +6324,7 @@ Query(
 ---------- Input ----------
 select * from a right semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT SEMI JOIN b ON (a.a = b.a)
+SELECT * FROM a RIGHT SEMI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6483,7 +6483,7 @@ Query(
 ---------- Input ----------
 select * from a right anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT ANTI JOIN b ON (a.a = b.a)
+SELECT * FROM a RIGHT ANTI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6642,7 +6642,7 @@ Query(
 ---------- Input ----------
 select * from a full outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a FULL OUTER JOIN b ON (a.a = b.a)
+SELECT * FROM a FULL OUTER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6801,7 +6801,7 @@ Query(
 ---------- Input ----------
 select * from a inner join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a INNER JOIN b ON (a.a = b.a)
+SELECT * FROM a INNER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -7388,7 +7388,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = any (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE (a.a = ANY (SELECT b.a FROM b))
+SELECT * FROM a WHERE a.a = ANY (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -7577,7 +7577,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = all (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE (a.a = ALL (SELECT b.a FROM b))
+SELECT * FROM a WHERE a.a = ALL (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -7766,7 +7766,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = some (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE (a.a = SOME (SELECT b.a FROM b))
+SELECT * FROM a WHERE a.a = SOME (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -7955,7 +7955,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a > (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE (a.a > (SELECT b.a FROM b))
+SELECT * FROM a WHERE a.a > (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -8142,7 +8142,7 @@ Query(
 ---------- Input ----------
 select 1 from numbers(1) where ((1 = 1) or 1)
 ---------- Output ---------
-SELECT 1 FROM numbers(1) WHERE ((1 = 1) OR 1)
+SELECT 1 FROM numbers(1) WHERE 1 = 1 OR 1
 ---------- AST ------------
 Query(
     Query {
@@ -8163,7 +8163,7 @@ Query(
                             span: Some(
                                 7..8,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -8189,7 +8189,7 @@ Query(
                                 span: Some(
                                     22..23,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -8213,7 +8213,7 @@ Query(
                                 span: Some(
                                     33..34,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -8221,7 +8221,7 @@ Query(
                                 span: Some(
                                     37..38,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -8230,7 +8230,7 @@ Query(
                             span: Some(
                                 43..44,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -8299,7 +8299,7 @@ Query(
                                 span: Some(
                                     27..31,
                                 ),
-                                lit: String(
+                                value: String(
                                     "p1",
                                 ),
                             },
@@ -8307,7 +8307,7 @@ Query(
                                 span: Some(
                                     33..37,
                                 ),
-                                lit: String(
+                                value: String(
                                     "p2",
                                 ),
                             },
@@ -8315,7 +8315,7 @@ Query(
                                 span: Some(
                                     39..43,
                                 ),
-                                lit: String(
+                                value: String(
                                     "p3",
                                 ),
                             },
@@ -8334,7 +8334,7 @@ Query(
                                     span: Some(
                                         59..63,
                                     ),
-                                    lit: Boolean(
+                                    value: Boolean(
                                         true,
                                     ),
                                 },
@@ -8352,7 +8352,7 @@ Query(
                                     span: Some(
                                         87..91,
                                     ),
-                                    lit: Boolean(
+                                    value: Boolean(
                                         true,
                                     ),
                                 },
@@ -8466,7 +8466,7 @@ Query(
                             span: Some(
                                 7..28,
                             ),
-                            lit: String(
+                            value: String(
                                 "stringwith'quote'",
                             ),
                         },
@@ -8513,7 +8513,7 @@ Query(
                             span: Some(
                                 7..31,
                             ),
-                            lit: String(
+                            value: String(
                                 "stringwith\"doublequote",
                             ),
                         },
@@ -8560,9 +8560,370 @@ Query(
                             span: Some(
                                 7..13,
                             ),
-                            lit: String(
+                            value: String(
                                 "🦈",
                             ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * FROM t where ((a));
+---------- Output ---------
+SELECT * FROM t WHERE a
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..27,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..27,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        travel_point: None,
+                        since_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: Some(
+                    ColumnRef {
+                        span: Some(
+                            24..25,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        24..25,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                            ),
+                        },
+                    },
+                ),
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * FROM t where ((select 1) > 1);
+---------- Output ---------
+SELECT * FROM t WHERE (SELECT 1) > 1
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..38,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..38,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        travel_point: None,
+                        since_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: Some(
+                            34..35,
+                        ),
+                        op: Gt,
+                        left: Subquery {
+                            span: Some(
+                                23..33,
+                            ),
+                            modifier: None,
+                            subquery: Query {
+                                span: Some(
+                                    24..32,
+                                ),
+                                with: None,
+                                body: Select(
+                                    SelectStmt {
+                                        span: Some(
+                                            24..32,
+                                        ),
+                                        hints: None,
+                                        distinct: false,
+                                        select_list: [
+                                            AliasedExpr {
+                                                expr: Literal {
+                                                    span: Some(
+                                                        31..32,
+                                                    ),
+                                                    value: UInt64(
+                                                        1,
+                                                    ),
+                                                },
+                                                alias: None,
+                                            },
+                                        ],
+                                        from: [],
+                                        selection: None,
+                                        group_by: None,
+                                        having: None,
+                                        window_list: None,
+                                        qualify: None,
+                                    },
+                                ),
+                                order_by: [],
+                                limit: [],
+                                offset: None,
+                                ignore_result: false,
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                36..37,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                    },
+                ),
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select ((t1.a)>=(((((t2.b)<=(t3.c))) IS NOT NULL)::INTEGER));
+---------- Output ---------
+SELECT t1.a >= (t2.b <= t3.c IS NOT NULL)::Int32
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..60,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..60,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: BinaryOp {
+                            span: Some(
+                                14..16,
+                            ),
+                            op: Gte,
+                            left: ColumnRef {
+                                span: Some(
+                                    9..11,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            span: Some(
+                                                9..11,
+                                            ),
+                                            name: "t1",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                    ),
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                12..13,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                    ),
+                                },
+                            },
+                            right: Cast {
+                                span: Some(
+                                    49..58,
+                                ),
+                                expr: IsNull {
+                                    span: Some(
+                                        37..48,
+                                    ),
+                                    expr: BinaryOp {
+                                        span: Some(
+                                            26..28,
+                                        ),
+                                        op: Lte,
+                                        left: ColumnRef {
+                                            span: Some(
+                                                21..23,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            21..23,
+                                                        ),
+                                                        name: "t2",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            24..25,
+                                                        ),
+                                                        name: "b",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                        right: ColumnRef {
+                                            span: Some(
+                                                29..31,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            29..31,
+                                                        ),
+                                                        name: "t3",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            32..33,
+                                                        ),
+                                                        name: "c",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    },
+                                    not: true,
+                                },
+                                target_type: Int32,
+                                pg_style: true,
+                            },
                         },
                         alias: None,
                     },
@@ -8626,7 +8987,7 @@ Insert(
                         span: Some(
                             31..32,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -8634,7 +8995,7 @@ Insert(
                         span: Some(
                             34..35,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -8644,7 +9005,7 @@ Insert(
                         span: Some(
                             39..40,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             3,
                         ),
                     },
@@ -8652,7 +9013,7 @@ Insert(
                         span: Some(
                             42..43,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             4,
                         ),
                     },
@@ -8707,7 +9068,7 @@ Insert(
                         span: Some(
                             31..32,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -8715,7 +9076,7 @@ Insert(
                         span: Some(
                             34..35,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -8858,7 +9219,7 @@ Query(
                                                 span: Some(
                                                     18..37,
                                                 ),
-                                                lit: String(
+                                                value: String(
                                                     "{\"k1\": [0, 1, 2]}",
                                                 ),
                                             },
@@ -8884,10 +9245,110 @@ Query(
                                     span: Some(
                                         42..43,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         0,
                                     ),
                                 },
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT avg((number > 314)::UInt32);
+---------- Output ---------
+SELECT avg((number > 314)::UInt32)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..34,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..34,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                7..34,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        7..10,
+                                    ),
+                                    name: "avg",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                                args: [
+                                    Cast {
+                                        span: Some(
+                                            25..33,
+                                        ),
+                                        expr: BinaryOp {
+                                            span: Some(
+                                                19..20,
+                                            ),
+                                            op: Gt,
+                                            left: ColumnRef {
+                                                span: Some(
+                                                    12..18,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                12..18,
+                                                            ),
+                                                            name: "number",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            right: Literal {
+                                                span: Some(
+                                                    21..24,
+                                                ),
+                                                value: UInt64(
+                                                    314,
+                                                ),
+                                            },
+                                        },
+                                        target_type: UInt32,
+                                        pg_style: true,
+                                    },
+                                ],
+                                params: [],
+                                window: None,
+                                lambda: None,
                             },
                         },
                         alias: None,
@@ -9240,6 +9701,51 @@ CreateRole {
 
 
 ---------- Input ----------
+create role `a"a`
+---------- Output ---------
+CREATE ROLE 'a"a'
+---------- AST ------------
+CreateRole {
+    if_not_exists: false,
+    role_name: "a\"a",
+}
+
+
+---------- Input ----------
+create role `a'a`
+---------- Output ---------
+CREATE ROLE 'a\'a'
+---------- AST ------------
+CreateRole {
+    if_not_exists: false,
+    role_name: "a'a",
+}
+
+
+---------- Input ----------
+create user `a'a` identified by '123'
+---------- Output ---------
+CREATE USER 'a%27a'@'%' IDENTIFIED BY '123'
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        create_option: Create,
+        user: UserIdentity {
+            username: "a'a",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "123",
+            ),
+        },
+        user_options: [],
+    },
+)
+
+
+---------- Input ----------
 drop role if exists test
 ---------- Output ---------
 DROP ROLE IF EXISTS 'test'
@@ -9374,7 +9880,7 @@ OptimizeTable(
                             span: Some(
                                 44..72,
                             ),
-                            lit: String(
+                            value: String(
                                 "2023-06-26 09:49:02.038483",
                             ),
                         },
@@ -9482,7 +9988,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
 ---------- Output ---------
-ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0) LIMIT 10
+ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -9538,7 +10044,7 @@ AlterTable(
                         span: Some(
                             41..42,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             0,
                         ),
                     },
@@ -9697,7 +10203,7 @@ AlterTable(
                             span: Some(
                                 41..44,
                             ),
-                            lit: Decimal256 {
+                            value: Decimal256 {
                                 value: 11,
                                 precision: 76,
                                 scale: 1,
@@ -9760,7 +10266,7 @@ AlterTable(
                             span: Some(
                                 42..45,
                             ),
-                            lit: String(
+                            value: String(
                                 "b",
                             ),
                         },
@@ -10053,7 +10559,7 @@ AlterTable(
                                     span: Some(
                                         42..43,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -10130,7 +10636,7 @@ AlterTable(
                                     span: Some(
                                         47..48,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -10899,7 +11405,7 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO 'test-user';
 ---------- Output ---------
-GRANT ROLE test TO USER 'test-user'@'%'
+GRANT ROLE 'test' TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -10919,7 +11425,7 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO USER 'test-user';
 ---------- Output ---------
-GRANT ROLE test TO USER 'test-user'@'%'
+GRANT ROLE 'test' TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -10939,7 +11445,7 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO ROLE `test-user`;
 ---------- Output ---------
-GRANT ROLE test TO ROLE 'test-user'
+GRANT ROLE 'test' TO ROLE 'test-user'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11316,7 +11822,7 @@ DropRole {
 ---------- Input ----------
 GRANT ROLE test TO ROLE 'test-user';
 ---------- Output ---------
-GRANT ROLE test TO ROLE 'test-user'
+GRANT ROLE 'test' TO ROLE 'test-user'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11333,7 +11839,7 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO ROLE `test-user`;
 ---------- Output ---------
-GRANT ROLE test TO ROLE 'test-user'
+GRANT ROLE 'test' TO ROLE 'test-user'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12577,7 +13083,7 @@ CopyIntoTable(
 ---------- Input ----------
 CALL system$test(a)
 ---------- Output ---------
-CALL system$test(a)
+CALL system$test('a')
 ---------- AST ------------
 Call(
     CallStmt {
@@ -12592,7 +13098,7 @@ Call(
 ---------- Input ----------
 CALL system$test('a')
 ---------- Output ---------
-CALL system$test(a)
+CALL system$test('a')
 ---------- AST ------------
 Call(
     CallStmt {
@@ -12628,7 +13134,7 @@ ShowSettings {
 ---------- Input ----------
 show settings where name='max_memory_usage' limit 1
 ---------- Output ---------
-SHOW SETTINGS WHERE (name = 'max_memory_usage') LIMIT 1
+SHOW SETTINGS WHERE name = 'max_memory_usage' LIMIT 1
 ---------- AST ------------
 ShowSettings {
     show_options: Some(
@@ -12663,7 +13169,7 @@ ShowSettings {
                             span: Some(
                                 25..43,
                             ),
-                            lit: String(
+                            value: String(
                                 "max_memory_usage",
                             ),
                         },
@@ -12702,7 +13208,7 @@ ShowFunctions {
 ---------- Input ----------
 show functions where name='to_day_of_year' limit 1
 ---------- Output ---------
-SHOW FUNCTIONS WHERE (name = 'to_day_of_year') LIMIT 1
+SHOW FUNCTIONS WHERE name = 'to_day_of_year' LIMIT 1
 ---------- AST ------------
 ShowFunctions {
     show_options: Some(
@@ -12737,7 +13243,7 @@ ShowFunctions {
                             span: Some(
                                 26..42,
                             ),
-                            lit: String(
+                            value: String(
                                 "to_day_of_year",
                             ),
                         },
@@ -12776,7 +13282,7 @@ ShowEngines {
 ---------- Input ----------
 show engines where engine='MEMORY' limit 1
 ---------- Output ---------
-SHOW ENGINES WHERE (engine = 'MEMORY') LIMIT 1
+SHOW ENGINES WHERE engine = 'MEMORY' LIMIT 1
 ---------- AST ------------
 ShowEngines {
     show_options: Some(
@@ -12811,7 +13317,7 @@ ShowEngines {
                             span: Some(
                                 26..34,
                             ),
-                            lit: String(
+                            value: String(
                                 "MEMORY",
                             ),
                         },
@@ -12850,7 +13356,7 @@ ShowMetrics {
 ---------- Input ----------
 show metrics where metric='session_connect_numbers' limit 1
 ---------- Output ---------
-SHOW METRICS WHERE (metric = 'session_connect_numbers') LIMIT 1
+SHOW METRICS WHERE metric = 'session_connect_numbers' LIMIT 1
 ---------- AST ------------
 ShowMetrics {
     show_options: Some(
@@ -12885,7 +13391,7 @@ ShowMetrics {
                             span: Some(
                                 26..51,
                             ),
-                            lit: String(
+                            value: String(
                                 "session_connect_numbers",
                             ),
                         },
@@ -12924,7 +13430,7 @@ ShowTableFunctions {
 ---------- Input ----------
 show table_functions where name='fuse_snapshot' limit 1
 ---------- Output ---------
-SHOW TABLE_FUNCTIONS WHERE (name = 'fuse_snapshot') LIMIT 1
+SHOW TABLE_FUNCTIONS WHERE name = 'fuse_snapshot' LIMIT 1
 ---------- AST ------------
 ShowTableFunctions {
     show_options: Some(
@@ -12959,7 +13465,7 @@ ShowTableFunctions {
                             span: Some(
                                 32..47,
                             ),
-                            lit: String(
+                            value: String(
                                 "fuse_snapshot",
                             ),
                         },
@@ -12998,7 +13504,7 @@ ShowIndexes {
 ---------- Input ----------
 show indexes where name='test_idx' limit 1
 ---------- Output ---------
-SHOW INDEXES WHERE (name = 'test_idx') LIMIT 1
+SHOW INDEXES WHERE name = 'test_idx' LIMIT 1
 ---------- AST ------------
 ShowIndexes {
     show_options: Some(
@@ -13033,7 +13539,7 @@ ShowIndexes {
                             span: Some(
                                 24..34,
                             ),
-                            lit: String(
+                            value: String(
                                 "test_idx",
                             ),
                         },
@@ -13913,7 +14419,7 @@ ShowGrantsOfShare(
 ---------- Input ----------
 UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;
 ---------- Output ---------
-UPDATE db1.tb1 SET a = (a + 1), b = 2 WHERE (c > 3)
+UPDATE db1.tb1 SET a = a + 1, b = 2 WHERE c > 3
 ---------- AST ------------
 Update(
     UpdateStmt {
@@ -13985,7 +14491,7 @@ Update(
                         span: Some(
                             27..28,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -14004,7 +14510,7 @@ Update(
                     span: Some(
                         34..35,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         2,
                     ),
                 },
@@ -14039,7 +14545,7 @@ Update(
                     span: Some(
                         46..47,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         3,
                     ),
                 },
@@ -14068,7 +14574,7 @@ SetVariable {
         span: Some(
             18..20,
         ),
-        lit: UInt64(
+        value: UInt64(
             10,
         ),
     },
@@ -14078,7 +14584,7 @@ SetVariable {
 ---------- Input ----------
 SET max_threads = 10*2;
 ---------- Output ---------
-SET max_threads = (10 * 2)
+SET max_threads = 10 * 2
 ---------- AST ------------
 SetVariable {
     is_global: false,
@@ -14099,7 +14605,7 @@ SetVariable {
             span: Some(
                 18..20,
             ),
-            lit: UInt64(
+            value: UInt64(
                 10,
             ),
         },
@@ -14107,7 +14613,7 @@ SetVariable {
             span: Some(
                 21..22,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -15627,7 +16133,7 @@ CreateDatamaskPolicy(
                                 span: Some(
                                     96..105,
                                 ),
-                                lit: String(
+                                value: String(
                                     "ANALYST",
                                 ),
                             },
@@ -15661,7 +16167,7 @@ CreateDatamaskPolicy(
                         span: Some(
                             121..132,
                         ),
-                        lit: String(
+                        value: String(
                             "*********",
                         ),
                     },
@@ -15727,7 +16233,7 @@ CreateDatamaskPolicy(
                                 span: Some(
                                     107..116,
                                 ),
-                                lit: String(
+                                value: String(
                                     "ANALYST",
                                 ),
                             },
@@ -15761,7 +16267,7 @@ CreateDatamaskPolicy(
                         span: Some(
                             132..143,
                         ),
-                        lit: String(
+                        value: String(
                             "*********",
                         ),
                     },
@@ -15851,7 +16357,7 @@ CreateVirtualColumn(
                             span: Some(
                                 25..29,
                             ),
-                            lit: String(
+                            value: String(
                                 "k1",
                             ),
                         },
@@ -15862,7 +16368,7 @@ CreateVirtualColumn(
                         span: Some(
                             31..35,
                         ),
-                        lit: String(
+                        value: String(
                             "k2",
                         ),
                     },
@@ -15900,7 +16406,7 @@ CreateVirtualColumn(
                             span: Some(
                                 40..41,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 0,
                             ),
                         },
@@ -15911,7 +16417,7 @@ CreateVirtualColumn(
                         span: Some(
                             43..44,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -15973,7 +16479,7 @@ CreateVirtualColumn(
                             span: Some(
                                 36..40,
                             ),
-                            lit: String(
+                            value: String(
                                 "k1",
                             ),
                         },
@@ -15984,7 +16490,7 @@ CreateVirtualColumn(
                         span: Some(
                             42..46,
                         ),
-                        lit: String(
+                        value: String(
                             "k2",
                         ),
                     },
@@ -16022,7 +16528,7 @@ CreateVirtualColumn(
                             span: Some(
                                 51..52,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 0,
                             ),
                         },
@@ -16033,7 +16539,7 @@ CreateVirtualColumn(
                         span: Some(
                             54..55,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -16095,7 +16601,7 @@ AlterVirtualColumn(
                             span: Some(
                                 24..28,
                             ),
-                            lit: String(
+                            value: String(
                                 "k1",
                             ),
                         },
@@ -16106,7 +16612,7 @@ AlterVirtualColumn(
                         span: Some(
                             30..34,
                         ),
-                        lit: String(
+                        value: String(
                             "k2",
                         ),
                     },
@@ -16144,7 +16650,7 @@ AlterVirtualColumn(
                             span: Some(
                                 39..40,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 0,
                             ),
                         },
@@ -16155,7 +16661,7 @@ AlterVirtualColumn(
                         span: Some(
                             42..43,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -16497,7 +17003,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1  AFTER 'task2', 'task3' WHEN (SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION') AS VACUUM TABLE t 
+CREATE TASK IF NOT EXISTS MyTask1  AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION' AS VACUUM TABLE t 
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -16540,7 +17046,7 @@ CreateTask(
                                 span: Some(
                                     98..109,
                                 ),
-                                lit: String(
+                                value: String(
                                     "task_name",
                                 ),
                             },
@@ -16554,7 +17060,7 @@ CreateTask(
                     span: Some(
                         114..126,
                     ),
-                    lit: String(
+                    value: String(
                         "VALIDATION",
                     ),
                 },
@@ -16610,9 +17116,9 @@ CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los A
 CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS BEGIN
 BEGIN;
 INSERT INTO t VALUES ('a;');
-DELETE FROM t WHERE (c = ';');
+DELETE FROM t WHERE c = ';';
 VACUUM TABLE t ;
-MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;
+MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;
 COMMIT;
 END;
 ---------- AST ------------
@@ -16637,9 +17143,9 @@ CreateTask(
             [
                 "BEGIN",
                 "INSERT INTO t VALUES ('a;')",
-                "DELETE FROM t WHERE (c = ';')",
+                "DELETE FROM t WHERE c = ';'",
                 "VACUUM TABLE t ",
-                "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *",
+                "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *",
                 "COMMIT",
             ],
         ),
@@ -16660,7 +17166,7 @@ CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECO
         END
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND AS BEGIN
-MERGE INTO t USING s ON (t.c = s.c) WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *;
+MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *;
 END;
 ---------- AST ------------
 CreateTask(
@@ -16685,7 +17191,7 @@ CreateTask(
         when_condition: None,
         sql: ScriptBlock(
             [
-                "MERGE INTO t USING s ON (t.c = s.c) WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *",
+                "MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *",
             ],
         ),
     },
@@ -16704,7 +17210,7 @@ CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECO
         END
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND AS BEGIN
-MERGE INTO t USING s ON (t.c = s.c) WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, "str");
+MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, "str");
 END;
 ---------- AST ------------
 CreateTask(
@@ -16729,7 +17235,7 @@ CreateTask(
         when_condition: None,
         sql: ScriptBlock(
             [
-                "MERGE INTO t USING s ON (t.c = s.c) WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, \"str\")",
+                "MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, \"str\")",
             ],
         ),
     },
@@ -16976,9 +17482,9 @@ ALTER TASK MyTask2 MODIFY AS
 ALTER TASK MyTask2 MODIFY AS BEGIN
 BEGIN;
 INSERT INTO t VALUES ('a;');
-DELETE FROM t WHERE (c = ';');
+DELETE FROM t WHERE c = ';';
 VACUUM TABLE t ;
-MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;
+MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;
 COMMIT;
 END;
 ---------- AST ------------
@@ -16991,9 +17497,9 @@ AlterTask(
                 [
                     "BEGIN",
                     "INSERT INTO t VALUES ('a;')",
-                    "DELETE FROM t WHERE (c = ';')",
+                    "DELETE FROM t WHERE c = ';'",
                     "VACUUM TABLE t ",
-                    "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *",
+                    "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *",
                     "COMMIT",
                 ],
             ),
@@ -17005,7 +17511,7 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION'
 ---------- Output ---------
-ALTER TASK MyTask1 MODIFY WHEN (SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')
+ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -17036,7 +17542,7 @@ AlterTask(
                                 span: Some(
                                     67..78,
                                 ),
-                                lit: String(
+                                value: String(
                                     "task_name",
                                 ),
                             },
@@ -17050,7 +17556,7 @@ AlterTask(
                     span: Some(
                         83..95,
                     ),
-                    lit: String(
+                    value: String(
                         "VALIDATION",
                     ),
                 },
@@ -17633,7 +18139,7 @@ Query(
                             span: Some(
                                 63..68,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 34343,
                             ),
                         },
@@ -17681,7 +18187,7 @@ Query(
                             span: Some(
                                 52..57,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 34343,
                             ),
                         },
@@ -17729,7 +18235,7 @@ Query(
                             span: Some(
                                 18..23,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 34343,
                             ),
                         },
@@ -18151,9 +18657,45 @@ Grant(
 
 
 ---------- Input ----------
+attach table t 's3://a' connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')
+---------- Output ---------
+ATTACH TABLE t 's3://a/' CONNECTION = ( access_key_id = 'x', endpoint_url = 'http://127.0.0.1:9900', secret_access_key = 'y' )
+---------- AST ------------
+AttachTable(
+    AttachTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+            is_hole: false,
+        },
+        uri_location: UriLocation {
+            protocol: "s3",
+            name: "a",
+            path: "/",
+            part_prefix: "",
+            connection: Connection {
+                visited_keys: {},
+                conns: {
+                    "access_key_id": "x",
+                    "endpoint_url": "http://127.0.0.1:9900",
+                    "secret_access_key": "y",
+                },
+            },
+        },
+        read_only: false,
+    },
+)
+
+
+---------- Input ----------
 CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));
 ---------- Output ---------
-CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> (NOT is_null(p))
+CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> NOT is_null(p)
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -18232,7 +18774,7 @@ CreateUDF(
 ---------- Input ----------
 CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION isnotempty_test_replace AS (p) -> (NOT is_null(p)) DESC = 'This is a description'
+CREATE OR REPLACE FUNCTION isnotempty_test_replace AS (p) -> NOT is_null(p) DESC = 'This is a description'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
