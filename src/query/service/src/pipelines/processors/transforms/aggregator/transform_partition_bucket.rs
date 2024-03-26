@@ -34,10 +34,11 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::DataOperator;
-use crate::pipelines::processors::transforms::aggregator::new_transform_partition_bucket::NewTransformPartitionBucket;
+
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
+use crate::pipelines::processors::transforms::aggregator::new_transform_partition_bucket::NewTransformPartitionBucket;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::PartitionedHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillReader;
@@ -444,10 +445,8 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
 ) -> Result<()> {
     if params.enable_experimental_aggregate_hashtable {
         let input_nums = pipeline.output_len();
-        let transform = NewTransformPartitionBucket::<Method, V>::create(
-            input_nums,
-            params.clone(),
-        )?;
+        let transform =
+            NewTransformPartitionBucket::<Method, V>::create(input_nums, params.clone())?;
 
         let output = transform.get_output();
         let inputs_port = transform.get_inputs();

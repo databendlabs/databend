@@ -23,7 +23,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 
 pub trait ExchangeSorting: Send + Sync + 'static {
-    fn block_number(&self, data_block: &DataBlock) -> Result<(isize,usize)>;
+    fn block_number(&self, data_block: &DataBlock) -> Result<(isize, usize)>;
 }
 
 // N input one output
@@ -123,15 +123,14 @@ impl Processor for TransformExchangeSorting {
             let mut min_partition = usize::MAX;
             for (index, buffer) in self.buffer.iter().enumerate() {
                 if let Some((block_number, partition_count, _)) = buffer {
+                    // sort by partition asc, bucket asc
                     if *partition_count < min_partition {
                         min_index = index;
                         min_bucket = *block_number;
                         min_partition = *partition_count;
-                    } else if *partition_count == min_partition {
-                        if *block_number < min_bucket {
-                            min_index = index;
-                            min_bucket = *block_number;
-                        }
+                    } else if *partition_count == min_partition && *block_number < min_bucket {
+                        min_index = index;
+                        min_bucket = *block_number;
                     }
                 }
             }

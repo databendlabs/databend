@@ -134,6 +134,6 @@ impl ExchangeSorting for SinkExchangeSorting {
                 ))
             })?;
 
-        Ok((shuffle_meta.block_number, 0))
+        Ok((shuffle_meta.block_number, shuffle_meta.max_partition_count))
     }
 }

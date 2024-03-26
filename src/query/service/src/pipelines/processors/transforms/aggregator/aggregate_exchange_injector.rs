@@ -69,7 +69,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
 {
     fn block_number(&self, data_block: &DataBlock) -> Result<(isize, usize)> {
         match data_block.get_meta() {
-            None => Ok((-1,0)),
+            None => Ok((-1, 0)),
             Some(block_meta_info) => {
                 match AggregateMeta::<Method, V>::downcast_ref_from(block_meta_info) {
                     None => Err(ErrorCode::Internal(format!(
@@ -81,10 +81,10 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                         AggregateMeta::Serialized(v) => Ok((v.bucket, v.max_partition_count)),
                         AggregateMeta::HashTable(v) => Ok((v.bucket, 0)),
                         AggregateMeta::AggregatePayload(v) => Ok((v.bucket, v.max_partition_count)),
-                        AggregateMeta::AggregateSpilling(_)
-                        | AggregateMeta::Spilled(_)
-                        | AggregateMeta::Spilling(_)
-                        | AggregateMeta::BucketSpilled(_) => Ok((-1, 0)),
+                        AggregateMeta::AggregateSpilling(v) => Ok((-1, v.partition_count())),
+                        AggregateMeta::Spilled(v) => Ok((-1, v[0].max_partition_count)),
+                        AggregateMeta::BucketSpilled(v) => Ok((-1, v.max_partition_count)),
+                        AggregateMeta::Spilling(_) => Ok((-1, 0)),
                     },
                 }
             }

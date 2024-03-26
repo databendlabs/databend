@@ -454,7 +454,7 @@ impl ShuffleExchangeSorting {
 }
 
 impl ExchangeSorting for ShuffleExchangeSorting {
-    fn block_number(&self, data_block: &DataBlock) -> Result<(isize,usize)> {
+    fn block_number(&self, data_block: &DataBlock) -> Result<(isize, usize)> {
         let block_meta = data_block.get_meta();
         let shuffle_meta = block_meta
             .and_then(ExchangeShuffleMeta::downcast_ref_from)

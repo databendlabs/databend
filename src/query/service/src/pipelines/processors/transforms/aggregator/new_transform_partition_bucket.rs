@@ -36,6 +36,7 @@ use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
+static MAX_PARTITION_COUNT: usize = 128;
 
 struct InputPortState {
     port: Arc<InputPort>,
@@ -103,41 +104,85 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
     fn initialize_all_inputs(&mut self) -> Result<bool> {
         self.initialized_all_inputs = true;
-        for index in 0..self.inputs.len() {
-            if self.inputs[index].port.is_finished() {
-                continue;
+        // in a cluster where partitions are only 8 and 128,
+        // we need to pull all data where the partition equals 8 until the partition changes to 128 or there is no data available.
+        if self.params.in_cluster {
+            for index in 0..self.inputs.len() {
+                if self.inputs[index].port.is_finished() {
+                    continue;
+                }
+
+                // We pull all the data that are not the max_partition_count and all spill data
+                if self.inputs[index].max_partition_count == MAX_PARTITION_COUNT
+                    && self.inputs[index].bucket > SINGLE_LEVEL_BUCKET_NUM
+                {
+                    continue;
+                }
+
+                if !self.inputs[index].port.has_data() {
+                    self.inputs[index].port.set_need_data();
+                    self.initialized_all_inputs = false;
+                    continue;
+                }
+
+                let data_block = self.inputs[index].port.pull_data().unwrap()?;
+
+                (
+                    self.inputs[index].bucket,
+                    self.inputs[index].max_partition_count,
+                ) = self.add_bucket(data_block)?;
+
+                // we need pull all spill data in init, and data less than max partition
+                if self.inputs[index].bucket <= SINGLE_LEVEL_BUCKET_NUM
+                    || self.inputs[index].max_partition_count < MAX_PARTITION_COUNT
+                {
+                    self.inputs[index].port.set_need_data();
+                    self.initialized_all_inputs = false;
+                }
             }
+        } else {
+            // in singleton, the partition is 8, 32, 128.
+            // We pull the first data to ensure the max partition,
+            // and then pull all data that is less than the max partition
+            for index in 0..self.inputs.len() {
+                if self.inputs[index].port.is_finished() {
+                    continue;
+                }
 
-            // We pull all the data that are not the max_partition_count
-            if self.inputs[index].max_partition_count > 0
-                && self.inputs[index].bucket > SINGLE_LEVEL_BUCKET_NUM
-                && self.inputs[index].max_partition_count == self.max_partition_count
-            {
-                continue;
-            }
+                // We pull all the data that are not the max_partition_count
+                if self.inputs[index].max_partition_count > 0
+                    && self.inputs[index].bucket > SINGLE_LEVEL_BUCKET_NUM
+                    && self.inputs[index].max_partition_count == self.max_partition_count
+                {
+                    continue;
+                }
 
-            if !self.inputs[index].port.has_data() {
-                self.inputs[index].port.set_need_data();
-                self.initialized_all_inputs = false;
-                continue;
-            }
+                if !self.inputs[index].port.has_data() {
+                    self.inputs[index].port.set_need_data();
+                    self.initialized_all_inputs = false;
+                    continue;
+                }
 
-            let data_block = self.inputs[index].port.pull_data().unwrap()?;
-            (
-                self.inputs[index].bucket,
-                self.inputs[index].max_partition_count,
-            ) = self.add_bucket(data_block)?;
+                let data_block = self.inputs[index].port.pull_data().unwrap()?;
 
-            // use for spill data, we need pull all spill data in init
-            if self.inputs[index].bucket <= SINGLE_LEVEL_BUCKET_NUM {
-                self.inputs[index].port.set_need_data();
-                self.initialized_all_inputs = false;
-            }
+                let before_max_partition_count = self.max_partition_count;
+                (
+                    self.inputs[index].bucket,
+                    self.inputs[index].max_partition_count,
+                ) = self.add_bucket(data_block)?;
 
-            // check whether should get all data
-            for i in 0..self.inputs.len() {
-                if self.inputs[i].max_partition_count < self.max_partition_count {
-                    self.inputs[i].port.set_need_data();
+                // we need pull all spill data in init, and data less than max partition
+                if self.inputs[index].bucket <= SINGLE_LEVEL_BUCKET_NUM
+                    || self.inputs[index].max_partition_count < self.max_partition_count
+                {
+                    self.inputs[index].port.set_need_data();
+                    self.initialized_all_inputs = false;
+                }
+
+                // handle the case where the last input changes the max partition
+                if index == self.inputs.len() - 1
+                    && before_max_partition_count != self.max_partition_count
+                {
                     self.initialized_all_inputs = false;
                 }
             }
@@ -165,19 +210,20 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         if let Some(AggregateMeta::BucketSpilled(payload)) =
                             AggregateMeta::<Method, V>::downcast_from(meta)
                         {
+                            let bucket = payload.bucket;
                             let partition_count = payload.max_partition_count;
                             self.max_partition_count =
                                 self.max_partition_count.max(partition_count);
-                            match self.buckets_blocks.entry(payload.bucket) {
+
+                            let data_block = DataBlock::empty_with_meta(
+                                AggregateMeta::<Method, V>::create_bucket_spilled(payload),
+                            );
+                            match self.buckets_blocks.entry(bucket) {
                                 Entry::Vacant(v) => {
-                                    v.insert(vec![DataBlock::empty_with_meta(
-                                        AggregateMeta::<Method, V>::create_bucket_spilled(payload),
-                                    )]);
+                                    v.insert(vec![data_block]);
                                 }
                                 Entry::Occupied(mut v) => {
-                                    v.get_mut().push(DataBlock::empty_with_meta(
-                                        AggregateMeta::<Method, V>::create_bucket_spilled(payload),
-                                    ));
+                                    v.get_mut().push(data_block);
                                 }
                             };
 
@@ -196,20 +242,19 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                                 self.max_partition_count.max(partition_count);
 
                             for bucket_payload in buckets_payload {
-                                match self.buckets_blocks.entry(bucket_payload.bucket) {
+                                let bucket = bucket_payload.bucket;
+                                let data_block = DataBlock::empty_with_meta(AggregateMeta::<
+                                    Method,
+                                    V,
+                                >::create_bucket_spilled(
+                                    bucket_payload
+                                ));
+                                match self.buckets_blocks.entry(bucket) {
                                     Entry::Vacant(v) => {
-                                        v.insert(vec![DataBlock::empty_with_meta(
-                                            AggregateMeta::<Method, V>::create_bucket_spilled(
-                                                bucket_payload,
-                                            ),
-                                        )]);
+                                        v.insert(vec![data_block]);
                                     }
                                     Entry::Occupied(mut v) => {
-                                        v.get_mut().push(DataBlock::empty_with_meta(
-                                            AggregateMeta::<Method, V>::create_bucket_spilled(
-                                                bucket_payload,
-                                            ),
-                                        ));
+                                        v.get_mut().push(data_block);
                                     }
                                 };
                             }
@@ -227,6 +272,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                     AggregateMeta::AggregatePayload(payload) => {
                         self.max_partition_count =
                             self.max_partition_count.max(payload.max_partition_count);
+
                         (payload.bucket, payload.max_partition_count)
                     }
                 };

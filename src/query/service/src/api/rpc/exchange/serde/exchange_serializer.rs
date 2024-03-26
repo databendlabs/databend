@@ -57,7 +57,11 @@ pub struct ExchangeSerializeMeta {
 }
 
 impl ExchangeSerializeMeta {
-    pub fn create(block_number: isize, packet: Vec<DataPacket>, max_partition_count: usize,) -> BlockMetaInfoPtr {
+    pub fn create(
+        block_number: isize,
+        packet: Vec<DataPacket>,
+        max_partition_count: usize,
+    ) -> BlockMetaInfoPtr {
         Box::new(ExchangeSerializeMeta {
             packet,
             block_number,
@@ -193,7 +197,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterExchangeSeriali
 
             new_blocks.push(match self.local_pos == index {
                 true => block,
-                false => serialize_block(0, block, &self.ipc_fields, &self.options,0)?,
+                false => serialize_block(0, block, &self.ipc_fields, &self.options, 0)?,
             });
         }
 
@@ -239,6 +243,8 @@ pub fn serialize_block(
 
     packet.push(DataPacket::FragmentData(FragmentData::create(meta, values)));
     Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
-        block_num, packet,max_partition_count,
+        block_num,
+        packet,
+        max_partition_count,
     )))
 }
