@@ -140,7 +140,7 @@ impl StreamHandler for RealStreamHandler {
                     let (snapshot, _) =
                         SnapshotsIO::read_snapshot(snapshot_loc.clone(), fuse_table.get_operator())
                             .await?;
-                    let Some(version) = snapshot.table_version else {
+                    let Some(version) = snapshot.prev_table_seq else {
                         return Err(ErrorCode::IllegalStream(
                             "The stream navigation at point has not table version".to_string(),
                         ));

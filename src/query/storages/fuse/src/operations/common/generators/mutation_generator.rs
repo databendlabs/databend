@@ -58,14 +58,14 @@ impl SnapshotGenerator for MutationGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
-        table_version: Option<u64>,
+        prev_table_seq: Option<u64>,
     ) -> Result<TableSnapshot> {
         let default_cluster_key_id = cluster_key_meta.clone().map(|v| v.0);
 
         let previous = previous.unwrap_or_else(|| {
             Arc::new(TableSnapshot::new_empty_snapshot(
                 schema.clone(),
-                table_version,
+                prev_table_seq,
             ))
         });
         match &self.conflict_resolve_ctx {
@@ -94,7 +94,7 @@ impl SnapshotGenerator for MutationGenerator {
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
                     let new_snapshot = TableSnapshot::new(
                         Uuid::new_v4(),
-                        table_version,
+                        prev_table_seq,
                         &previous.timestamp,
                         Some((previous.snapshot_id, previous.format_version)),
                         schema,

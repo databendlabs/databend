@@ -117,7 +117,7 @@ impl SnapshotGenerator for AppendGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
-        table_version: Option<u64>,
+        prev_table_seq: Option<u64>,
     ) -> Result<TableSnapshot> {
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
         if is_column_type_modified(&schema, expected_schema) {
@@ -214,7 +214,7 @@ impl SnapshotGenerator for AppendGenerator {
 
         Ok(TableSnapshot::new(
             Uuid::new_v4(),
-            table_version,
+            prev_table_seq,
             &prev_timestamp,
             prev_snapshot_id,
             schema,

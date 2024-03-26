@@ -66,8 +66,8 @@ pub struct TableSnapshot {
     //  for backward compatibility, `Option` is used
     pub timestamp: Option<DateTime<Utc>>,
 
-    // The table version before snapshot commit.
-    pub table_version: Option<u64>,
+    // The table seq before snapshot commit.
+    pub prev_table_seq: Option<u64>,
 
     /// previous snapshot
     pub prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
@@ -95,7 +95,7 @@ pub struct TableSnapshot {
 impl TableSnapshot {
     pub fn new(
         snapshot_id: SnapshotId,
-        table_version: Option<u64>,
+        prev_table_seq: Option<u64>,
         prev_timestamp: &Option<DateTime<Utc>>,
         prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
         schema: TableSchema,
@@ -117,7 +117,7 @@ impl TableSnapshot {
             format_version: TableSnapshot::VERSION,
             snapshot_id,
             timestamp,
-            table_version,
+            prev_table_seq,
             prev_snapshot_id,
             schema,
             summary,
@@ -128,10 +128,10 @@ impl TableSnapshot {
         }
     }
 
-    pub fn new_empty_snapshot(schema: TableSchema, table_version: Option<u64>) -> Self {
+    pub fn new_empty_snapshot(schema: TableSchema, prev_table_seq: Option<u64>) -> Self {
         Self::new(
             Uuid::new_v4(),
-            table_version,
+            prev_table_seq,
             &None,
             None,
             schema,
@@ -143,13 +143,13 @@ impl TableSnapshot {
         )
     }
 
-    pub fn from_previous(previous: &TableSnapshot, table_version: Option<u64>) -> Self {
+    pub fn from_previous(previous: &TableSnapshot, prev_table_seq: Option<u64>) -> Self {
         let id = Uuid::new_v4();
         let clone = previous.clone();
         // the timestamp of the new snapshot will be adjusted by the `new` method
         Self::new(
             id,
-            table_version,
+            prev_table_seq,
             &clone.timestamp,
             Some((clone.snapshot_id, clone.format_version)),
             clone.schema,
@@ -230,7 +230,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             format_version: s.format_version,
             snapshot_id: s.snapshot_id,
             timestamp: s.timestamp,
-            table_version: None,
+            prev_table_seq: None,
             prev_snapshot_id: s.prev_snapshot_id,
             schema: s.schema,
             summary: s.summary,
@@ -253,7 +253,7 @@ where T: Into<v3::TableSnapshot>
             format_version: s.format_version,
             snapshot_id: s.snapshot_id,
             timestamp: s.timestamp,
-            table_version: None,
+            prev_table_seq: None,
             prev_snapshot_id: s.prev_snapshot_id,
             schema: s.schema.into(),
             summary: s.summary.into(),

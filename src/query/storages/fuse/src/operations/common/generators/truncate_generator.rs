@@ -59,7 +59,7 @@ impl SnapshotGenerator for TruncateGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
-        table_version: Option<u64>,
+        prev_table_seq: Option<u64>,
     ) -> Result<TableSnapshot> {
         let (prev_timestamp, prev_snapshot_id) = if let Some(prev_snapshot) = previous {
             (
@@ -72,7 +72,7 @@ impl SnapshotGenerator for TruncateGenerator {
 
         let new_snapshot = TableSnapshot::new(
             Uuid::new_v4(),
-            table_version,
+            prev_table_seq,
             &prev_timestamp,
             prev_snapshot_id,
             schema,

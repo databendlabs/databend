@@ -42,6 +42,6 @@ pub trait SnapshotGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
-        table_version: Option<u64>,
+        prev_table_seq: Option<u64>,
     ) -> Result<TableSnapshot>;
 }
