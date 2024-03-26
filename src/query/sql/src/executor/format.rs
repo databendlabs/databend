@@ -245,7 +245,9 @@ fn to_format_tree(
         }
         PhysicalPlan::ChunkAppendData(_) => Ok(FormatTreeNode::new("ChunkAppendData".to_string())),
         PhysicalPlan::ChunkMerge(_) => Ok(FormatTreeNode::new("ChunkMerge".to_string())),
-        PhysicalPlan::ChunkCommitInsert(_) => Ok(FormatTreeNode::new("ChunkCommitInsert".to_string())),
+        PhysicalPlan::ChunkCommitInsert(_) => {
+            Ok(FormatTreeNode::new("ChunkCommitInsert".to_string()))
+        }
     }
 }
 

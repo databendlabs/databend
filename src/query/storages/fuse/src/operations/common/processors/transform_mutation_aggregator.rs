@@ -293,7 +293,7 @@ impl TableMutationAggregator {
         let meta = CommitMeta::new(
             conflict_resolve_context,
             std::mem::take(&mut self.abort_operation),
-            self.table_id
+            self.table_id,
         );
         Ok(meta)
     }
