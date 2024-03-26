@@ -86,6 +86,7 @@ impl AsyncSink for CommitMultiTableInsert {
                 table.schema().as_ref().clone(),
                 fuse_table.cluster_key_meta.clone(),
                 previous,
+                Some(fuse_table.table_info.ident.seq),
             )?;
 
             // write snapshot
