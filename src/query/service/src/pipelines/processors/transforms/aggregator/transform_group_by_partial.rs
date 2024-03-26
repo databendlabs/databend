@@ -34,7 +34,6 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
-use databend_common_sql::IndexType;
 use log::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::GroupByHashTableDropper;
@@ -105,7 +104,6 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
 pub struct TransformPartialGroupBy<Method: HashMethodBounds> {
     method: Method,
     hash_table: HashTable<Method>,
-    group_columns: Vec<IndexType>,
     probe_state: ProbeState,
     settings: GroupBySettings,
     params: Arc<AggregatorParams>,
@@ -141,9 +139,8 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
             TransformPartialGroupBy::<Method> {
                 method,
                 hash_table,
-                params,
                 probe_state: ProbeState::default(),
-                group_columns: params.group_columns.clone(),
+                params,
                 settings: GroupBySettings::try_from(ctx)?,
             },
         ))
@@ -156,6 +153,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         let block = block.convert_to_full();
         let group_columns = self
+            .params
             .group_columns
             .iter()
             .map(|&index| block.get_by_offset(index))
@@ -201,11 +199,10 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             #[allow(clippy::collapsible_if)]
             if Method::SUPPORT_PARTITIONED {
                 if !is_new_agg
-                    && matches!(&self.hash_table, HashTable::HashTable(cell)
+                    && (matches!(&self.hash_table, HashTable::HashTable(cell)
                         if cell.len() >= self.settings.convert_threshold ||
                             cell.allocated_bytes() >= self.settings.spilling_bytes_threshold_per_proc ||
-                            GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
-                    )
+                            GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage))
                 {
                     if let HashTable::HashTable(cell) = std::mem::take(&mut self.hash_table) {
                         self.hash_table = HashTable::PartitionedHashTable(
@@ -215,8 +212,9 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 }
 
                 if !is_new_agg
-                    && matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
-                    || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
+                    && (matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
+                        || GLOBAL_MEM_STAT.get_memory_usage() as usize
+                            >= self.settings.max_memory_usage)
                 {
                     if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table)
                     {
@@ -239,9 +237,9 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 }
             }
 
-            if !is_new_agg
-                && matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
-                    || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage)
+            if is_new_agg
+                && (matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
+                    || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage))
             {
                 if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
                     let group_types = v.payload.group_types.clone();

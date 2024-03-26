@@ -344,11 +344,10 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
         #[allow(clippy::collapsible_if)]
         if Method::SUPPORT_PARTITIONED {
             if !is_new_agg
-                && matches!(&self.hash_table, HashTable::HashTable(cell)
+                && (matches!(&self.hash_table, HashTable::HashTable(cell)
                     if cell.len() >= self.settings.convert_threshold ||
                         cell.allocated_bytes() >= self.settings.spilling_bytes_threshold_per_proc ||
-                        GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
-                )
+                        GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage))
             {
                 if let HashTable::HashTable(cell) = std::mem::take(&mut self.hash_table) {
                     self.hash_table = HashTable::PartitionedHashTable(
@@ -358,8 +357,9 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             }
 
             if !is_new_agg
-                && matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
-                || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
+                && (matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
+                    || GLOBAL_MEM_STAT.get_memory_usage() as usize
+                        >= self.settings.max_memory_usage)
             {
                 if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table) {
                     let _dropper = v._dropper.clone();
@@ -382,8 +382,8 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
         }
 
         if is_new_agg
-            && matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
-            || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage)
+            && (matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
+            || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage))
         {
             if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
                 let group_types = v.payload.group_types.clone();
