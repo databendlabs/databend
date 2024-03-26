@@ -25,10 +25,8 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
+use databend_common_io::prelude::FormatSettings;
 use databend_common_settings::Settings;
-use databend_common_sql::plans::Plan;
-use databend_common_sql::PlanExtras;
-use databend_common_sql::Planner;
 use databend_storages_common_txn::TxnManagerRef;
 use futures::StreamExt;
 use log::error;
@@ -38,17 +36,23 @@ use serde::Deserialize;
 use serde::Serialize;
 use ExecuteState::*;
 
+use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
+use crate::servers::http::v1::http_query_handlers::QueryResponseField;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelSender;
+use crate::sessions::AcquireQueueGuard;
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
+use crate::sessions::QueryEntry;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {
+    Starting,
     Running,
     Failed,
     Succeeded,
@@ -88,7 +92,8 @@ pub enum ExecuteState {
 impl ExecuteState {
     pub(crate) fn extract(&self) -> (ExecuteStateKind, Option<ErrorCode>) {
         match self {
-            Starting(_) | Running(_) => (ExecuteStateKind::Running, None),
+            Starting(_) => (ExecuteStateKind::Starting, None),
+            Running(_) => (ExecuteStateKind::Running, None),
             Stopped(v) => match &v.reason {
                 Ok(_) => (ExecuteStateKind::Succeeded, None),
                 Err(e) => (ExecuteStateKind::Failed, Some(e.clone())),
@@ -106,9 +111,13 @@ pub struct ExecuteRunning {
     session: Arc<Session>,
     // mainly used to get progress for now
     ctx: Arc<QueryContext>,
+    schema: Vec<QueryResponseField>,
+    #[allow(dead_code)]
+    queue_guard: AcquireQueueGuard,
 }
 
 pub struct ExecuteStopped {
+    pub schema: Vec<QueryResponseField>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
     pub reason: Result<()>,
@@ -147,6 +156,13 @@ impl ExecutorSessionState {
 }
 
 impl Executor {
+    pub fn get_schema(&self) -> Vec<QueryResponseField> {
+        match &self.state {
+            Starting(_) => Default::default(),
+            Running(r) => r.schema.clone(),
+            Stopped(f) => f.schema.clone(),
+        }
+    }
     pub fn get_progress(&self) -> Progresses {
         match &self.state {
             Starting(_) => Default::default(),
@@ -230,6 +246,7 @@ impl Executor {
                 }
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),
+                    schema: vec![],
                     reason,
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
                     query_duration_ms: s.ctx.get_query_duration_ms(),
@@ -254,6 +271,7 @@ impl Executor {
 
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
+                    schema: r.schema.clone(),
                     reason,
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
                     query_duration_ms: r.ctx.get_query_duration_ms(),
@@ -273,25 +291,33 @@ impl Executor {
 
 impl ExecuteState {
     #[async_backtrace::framed]
-    pub(crate) async fn plan_sql(sql: &str, ctx: Arc<QueryContext>) -> Result<(Plan, PlanExtras)> {
-        let mut planner = Planner::new(ctx.clone());
-        planner.plan_sql(sql).await
-    }
-
-    #[async_backtrace::framed]
     pub(crate) async fn try_start_query(
         executor: Arc<RwLock<Executor>>,
-        plan: Plan,
-        extras: PlanExtras,
+        sql: String,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
         block_sender: SizedChannelSender<DataBlock>,
+        format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>>,
     ) -> Result<()> {
-        ctx.attach_query_str(plan.kind(), extras.statement.to_mask_sql());
+        let entry = QueryEntry::create(&ctx)?;
+        let queue_guard = QueriesQueueManager::instance().acquire(entry).await?;
+
+        // Use interpreter_plan_sql, we can write the query log if an error occurs.
+        let (plan, _) = interpreter_plan_sql(ctx.clone(), &sql)
+            .await
+            .map_err(|err| err.display_with_sql(&sql))?;
+
+        {
+            // set_var may change settings
+            let mut guard = format_settings.write();
+            *guard = Some(ctx.get_format_settings()?);
+        }
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let running_state = ExecuteRunning {
             session,
             ctx: ctx.clone(),
+            queue_guard,
+            schema: QueryResponseField::from_schema(plan.schema()),
         };
         info!("{}: http query change state to Running", &ctx.get_id());
         Executor::start_to_running(&executor, Running(running_state)).await;

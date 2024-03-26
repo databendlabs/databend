@@ -21,6 +21,8 @@ pub use v2::MetaHLL;
 pub use v2::Statistics;
 pub use v2::TableSnapshotStatistics;
 pub use v4::CompactSegmentInfo;
+pub use v4::IndexInfo;
+pub use v4::IndexSegmentInfo;
 pub use v4::SegmentInfo;
 pub use v4::TableSnapshot;
 pub use v4::TableSnapshotLite;

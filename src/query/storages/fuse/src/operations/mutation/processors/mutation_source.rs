@@ -28,7 +28,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
@@ -43,7 +42,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::evaluator::BlockOperator;
 
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::operations::common::BlockMetaIndex;
@@ -185,7 +184,7 @@ impl Processor for MutationSource {
                 )?;
                 let num_rows = data_block.num_rows();
 
-                let fuse_part = FusePartInfo::from_part(&part)?;
+                let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                 if let Some(filter) = self.filter.as_ref() {
                     if self.query_row_id_col {
                         // Add internal column to data block
@@ -198,6 +197,8 @@ impl Processor for MutationSource {
                             snapshot_location: None,
                             offsets: None,
                             base_block_ids: None,
+                            inner: None,
+                            matched_rows: block_meta.matched_rows.clone(),
                         };
                         let internal_col = InternalColumn {
                             column_name: ROW_ID_COL_NAME.to_string(),
@@ -257,12 +258,7 @@ impl Processor for MutationSource {
                                     );
                                 } else {
                                     if self.block_reader.update_stream_columns {
-                                        let row_num = BlockEntry::new(
-                                            DataType::Nullable(Box::new(DataType::Number(
-                                                NumberDataType::UInt64,
-                                            ))),
-                                            build_origin_block_row_num(num_rows),
-                                        );
+                                        let row_num = build_origin_block_row_num(num_rows);
                                         data_block.add_column(row_num);
                                     }
 
@@ -323,7 +319,7 @@ impl Processor for MutationSource {
                 mut data_block,
                 filter,
             } => {
-                let path = FusePartInfo::from_part(&part)?.location.clone();
+                let path = FuseBlockPartInfo::from_part(&part)?.location.clone();
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let chunks = merged_io_read_result.columns_chunks()?;
                     let remain_block = remain_reader.deserialize_chunks_with_part_info(
@@ -392,7 +388,6 @@ impl Processor for MutationSource {
                         self.index = BlockMetaIndex {
                             segment_idx: part.index.segment_idx,
                             block_idx: part.index.block_idx,
-                            inner: None,
                         };
                         if matches!(self.action, MutationAction::Deletion) {
                             self.stats_type =
@@ -400,7 +395,7 @@ impl Processor for MutationSource {
                         }
 
                         let inner_part = part.inner_part.clone();
-                        let fuse_part = FusePartInfo::from_part(&inner_part)?;
+                        let fuse_part = FuseBlockPartInfo::from_part(&inner_part)?;
 
                         if part.whole_block_mutation
                             && matches!(self.action, MutationAction::Deletion)
@@ -439,7 +434,7 @@ impl Processor for MutationSource {
                 filter,
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let fuse_part = FusePartInfo::from_part(&part)?;
+                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
 
                     let settings = ReadSettings::from_ctx(&self.ctx)?;
                     let read_res = remain_reader

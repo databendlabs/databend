@@ -52,7 +52,7 @@ async fn test_network_policy() -> Result<()> {
         update_on: None,
     };
     user_mgr
-        .add_network_policy(tenant_name, network_policy, &CreateOption::None)
+        .add_network_policy(&tenant, network_policy, &CreateOption::Create)
         .await?;
 
     // add user
@@ -66,7 +66,7 @@ async fn test_network_policy() -> Result<()> {
     option = option.with_network_policy(Some(policy_name.clone()));
     user_info.update_auth_option(None, Some(option));
     user_mgr
-        .add_user(&tenant, user_info, &CreateOption::None)
+        .add_user(&tenant, user_info, &CreateOption::Create)
         .await?;
 
     let user = UserIdentity::new(username, hostname);
@@ -97,7 +97,7 @@ async fn test_network_policy() -> Result<()> {
     let new_blocked_ip_list = vec!["127.0.0.10".to_string()];
     user_mgr
         .update_network_policy(
-            tenant_name,
+            &tenant,
             policy_name.as_ref(),
             Some(new_allowed_ip_list),
             Some(new_blocked_ip_list),

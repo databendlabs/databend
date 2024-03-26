@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -34,7 +35,6 @@ use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_metrics::storage::*;
 use databend_common_storage::init_stage_operator;
-use databend_common_storage::StageFileInfo;
 use log::info;
 
 use crate::plans::Plan;
@@ -109,7 +109,7 @@ pub struct CopyIntoTablePlan {
 }
 
 impl CopyIntoTablePlan {
-    pub async fn collect_files(&self, ctx: &dyn TableContext) -> Result<Vec<StageFileInfo>> {
+    pub async fn collect_files(&mut self, ctx: &dyn TableContext) -> Result<()> {
         ctx.set_status_info("begin to list files");
         let start = Instant::now();
 
@@ -121,6 +121,7 @@ impl CopyIntoTablePlan {
             Some(max_files)
         };
 
+        let thread_num = ctx.get_settings().get_max_threads()? as usize;
         let operator = init_stage_operator(&stage_table_info.stage_info)?;
         let all_source_file_infos = if operator.info().native_capability().blocking {
             if self.force {
@@ -135,12 +136,12 @@ impl CopyIntoTablePlan {
         } else if self.force {
             stage_table_info
                 .files_info
-                .list(&operator, false, max_files)
+                .list(&operator, thread_num, false, max_files)
                 .await
         } else {
             stage_table_info
                 .files_info
-                .list(&operator, false, None)
+                .list(&operator, thread_num, false, None)
                 .await
         }?;
 
@@ -150,9 +151,13 @@ impl CopyIntoTablePlan {
         let cost_get_all_files = end_get_all_source.duration_since(start).as_millis();
         metrics_inc_copy_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
 
-        ctx.set_status_info(&format!("end list files: got {} files", num_all_files));
+        ctx.set_status_info(&format!(
+            "end list files: got {} files, time used {:?}",
+            num_all_files,
+            start.elapsed()
+        ));
 
-        let need_copy_file_infos = if self.force {
+        let (need_copy_file_infos, duplicated) = if self.force {
             if !self.stage_table_info.stage_info.copy_options.purge
                 && all_source_file_infos.len() > COPY_MAX_FILES_PER_COMMIT
             {
@@ -162,12 +167,16 @@ impl CopyIntoTablePlan {
                 "force mode, ignore file filtering. ({}.{})",
                 &self.database_name, &self.table_name
             );
-            all_source_file_infos
+            (all_source_file_infos, vec![])
         } else {
             // Status.
             ctx.set_status_info("begin filtering out copied files");
 
-            let files = ctx
+            let filter_start = Instant::now();
+            let FilteredCopyFiles {
+                files_to_copy,
+                duplicated_files,
+            } = ctx
                 .filter_out_copied_files(
                     self.catalog_info.catalog_name(),
                     &self.database_name,
@@ -177,8 +186,9 @@ impl CopyIntoTablePlan {
                 )
                 .await?;
             ctx.set_status_info(&format!(
-                "end filtering out copied files: {}",
-                num_all_files
+                "end filtering out copied files: {}, time used {:?}",
+                num_all_files,
+                filter_start.elapsed()
             ));
 
             let end_filter_out = Instant::now();
@@ -187,18 +197,25 @@ impl CopyIntoTablePlan {
                 .as_millis();
             metrics_inc_copy_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
 
-            files
+            (files_to_copy, duplicated_files)
         };
 
         info!(
-            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{}",
+            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{:?}",
             max_files,
             num_all_files,
             need_copy_file_infos.len(),
-            start.elapsed().as_secs()
+            start.elapsed()
         );
 
-        Ok(need_copy_file_infos)
+        if need_copy_file_infos.is_empty() {
+            self.no_file_to_copy = true;
+        }
+
+        self.stage_table_info.files_to_copy = Some(need_copy_file_infos);
+        self.stage_table_info.duplicated_files_detected = duplicated;
+
+        Ok(())
     }
 }
 

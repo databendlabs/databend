@@ -46,7 +46,7 @@ pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
         })
         .append(RcDoc::space().append(RcDoc::text("TABLE")))
         .append(match stmt.create_option {
-            CreateOption::None => RcDoc::nil(),
+            CreateOption::Create => RcDoc::nil(),
             CreateOption::CreateIfNotExists => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
             CreateOption::CreateOrReplace => RcDoc::nil(),
         })
@@ -221,7 +221,7 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
             } else {
                 RcDoc::nil()
             }),
-        AlterTableAction::RevertTo { point } => match point {
+        AlterTableAction::FlashbackTo { point } => match point {
             TimeTravelPoint::Snapshot(sid) => RcDoc::text(format!(" AT (SNAPSHOT => {sid})")),
             TimeTravelPoint::Timestamp(ts) => RcDoc::text(format!(" AT (TIMESTAMP => {ts})")),
         },
@@ -245,7 +245,7 @@ pub(crate) fn pretty_create_view(stmt: CreateViewStmt) -> RcDoc<'static> {
         })
         .append(RcDoc::space().append(RcDoc::text("VIEW")))
         .append(match stmt.create_option {
-            CreateOption::None => RcDoc::nil(),
+            CreateOption::Create => RcDoc::nil(),
             CreateOption::CreateIfNotExists => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
             CreateOption::CreateOrReplace => RcDoc::nil(),
         })
@@ -306,7 +306,7 @@ pub(crate) fn pretty_create_stream(stmt: CreateStreamStmt) -> RcDoc<'static> {
         })
         .append(RcDoc::space().append(RcDoc::text("STREAM")))
         .append(match stmt.create_option {
-            CreateOption::None => RcDoc::nil(),
+            CreateOption::Create => RcDoc::nil(),
             CreateOption::CreateIfNotExists => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
             CreateOption::CreateOrReplace => RcDoc::nil(),
         })

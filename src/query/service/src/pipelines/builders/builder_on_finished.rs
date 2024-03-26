@@ -21,10 +21,10 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::io::Files;
 use databend_common_storages_stage::StageTable;
 use log::error;
+use log::info;
 
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
@@ -32,12 +32,11 @@ use crate::sessions::QueryContext;
 impl PipelineBuilder {
     pub fn set_purge_files_on_finished(
         ctx: Arc<QueryContext>,
-        files: Vec<StageFileInfo>,
+        files: Vec<String>,
         copy_purge_option: bool,
         stage_info: StageInfo,
         main_pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let files: Vec<String> = files.iter().map(|v| v.path.clone()).collect();
         let is_active = {
             let txn_mgr = ctx.txn_mgr();
             let mut txn_mgr = txn_mgr.lock();
@@ -68,16 +67,7 @@ impl PipelineBuilder {
                         // 2. Try to purge copied files if purge option is true, if error will skip.
                         // If a file is already copied(status with AlreadyCopied) we will try to purge them.
                         if !is_active && copy_purge_option {
-                            let start = Instant::now();
                             Self::try_purge_files(ctx.clone(), &stage_info, &files).await;
-
-                            // Perf.
-                            {
-                                metrics_inc_copy_purge_files_counter(files.len() as u32);
-                                metrics_inc_copy_purge_files_cost_milliseconds(
-                                    start.elapsed().as_millis() as u32,
-                                );
-                            }
                         }
 
                         Ok(())
@@ -92,10 +82,34 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    pub async fn purge_files_immediately(
+        ctx: Arc<QueryContext>,
+        files: Vec<String>,
+        stage_info: StageInfo,
+    ) -> Result<()> {
+        {
+            // if we are in an ongoing transaction,
+            // we just add the files to the need_purge_files list and return
+            let txn_mgr = ctx.txn_mgr();
+            let mut txn_mgr = txn_mgr.lock();
+            let is_active = txn_mgr.is_active();
+            if is_active {
+                txn_mgr.add_need_purge_files(stage_info.clone(), files.clone());
+                return Ok(());
+            }
+        }
+
+        Self::try_purge_files(ctx.clone(), &stage_info, &files).await;
+
+        Ok(())
+    }
+
     #[async_backtrace::framed]
     pub async fn try_purge_files(ctx: Arc<QueryContext>, stage_info: &StageInfo, files: &[String]) {
+        let start = Instant::now();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let op = StageTable::get_op(stage_info);
+
         match op {
             Ok(op) => {
                 let file_op = Files::create(table_ctx, op);
@@ -106,6 +120,19 @@ impl PipelineBuilder {
             Err(e) => {
                 error!("Failed to get stage table op, error: {}", e);
             }
+        }
+
+        let elapsed = start.elapsed();
+        info!(
+            "purged files: number {}, time used {:?} ",
+            files.len(),
+            elapsed
+        );
+
+        // Perf.
+        {
+            metrics_inc_copy_purge_files_counter(files.len() as u32);
+            metrics_inc_copy_purge_files_cost_milliseconds(elapsed.as_millis() as u32);
         }
     }
 }

@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::block_id_from_location;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -56,6 +55,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -133,11 +133,10 @@ impl StreamTable {
         })
     }
 
-    pub async fn source_table(&self, catalog: Arc<dyn Catalog>) -> Result<Arc<dyn Table>> {
-        let table = catalog
-            .stream_source_table(
-                &self.stream_info.desc,
-                &self.stream_info.tenant,
+    pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
+        let table = ctx
+            .get_table(
+                self.stream_info.catalog(),
                 &self.table_database,
                 &self.table_name,
             )
@@ -153,10 +152,24 @@ impl StreamTable {
 
         if !table.change_tracking_enabled() {
             return Err(ErrorCode::IllegalStream(format!(
-                "Change tracking is not enabled for table '{}.{}'",
+                "Change tracking is not enabled on table '{}.{}'",
                 self.table_database, self.table_name
             )));
         }
+
+        if let Some(value) = table
+            .get_table_info()
+            .options()
+            .get(OPT_KEY_CHANGE_TRACKING_BEGIN_VER)
+        {
+            let begin_version = value.to_lowercase().parse::<u64>()?;
+            if begin_version > self.table_version {
+                return Err(ErrorCode::IllegalStream(format!(
+                    "Change tracking has been missing for the time range requested on table '{}.{}'",
+                    self.table_database, self.table_name
+                )));
+            }
+        };
 
         Ok(table)
     }
@@ -192,7 +205,7 @@ impl StreamTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
-        let table = self.source_table(ctx.get_default_catalog()?).await?;
+        let table = self.source_table(ctx.clone()).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
         let fuse_segment_io =
@@ -252,7 +265,9 @@ impl StreamTable {
             cluster_key_meta,
             cluster_keys,
             bloom_index_cols,
-        )?;
+            None,
+        )
+        .await?;
 
         let block_metas = pruner.stream_pruning(blocks).await?;
         let pruning_stats = pruner.pruning_stats();
@@ -277,9 +292,11 @@ impl StreamTable {
             pruning_stats,
         )?;
         if let Some(base_block_ids_scalar) = base_block_ids_scalar {
-            let wrapper = Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![
-                StreamTablePart::create(parts, base_block_ids_scalar),
-            ]);
+            let wrapper =
+                Partitions::create(PartitionsShuffleKind::Seq, vec![StreamTablePart::create(
+                    parts,
+                    base_block_ids_scalar,
+                )]);
             Ok((stats, wrapper))
         } else {
             Ok((stats, parts))
@@ -288,7 +305,7 @@ impl StreamTable {
 
     #[minitrace::trace]
     pub async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
-        let base_table = self.source_table(ctx.get_default_catalog()?).await?;
+        let base_table = self.source_table(ctx).await?;
         let status = if base_table.get_table_info().ident.seq == self.table_version {
             StreamStatus::NoData
         } else {
@@ -343,7 +360,7 @@ impl Table for StreamTable {
                     return Ok(StreamMode::AppendOnly);
                 }
 
-                let table = self.source_table(ctx.get_default_catalog()?).await?;
+                let table = self.source_table(ctx).await?;
                 let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
                 let latest_snapshot = fuse_table.read_table_snapshot().await?;
@@ -404,7 +421,7 @@ impl Table for StreamTable {
         ctx: Arc<dyn TableContext>,
         change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
-        let table = self.source_table(ctx.get_default_catalog()?).await?;
+        let table = self.source_table(ctx.clone()).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let change_type = change_type.unwrap_or(ChangeType::Append);
 
@@ -485,12 +502,8 @@ impl Table for StreamTable {
         &self,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Box<dyn ColumnStatisticsProvider>> {
-        let table = self.source_table(ctx.get_default_catalog()?).await?;
+        let table = self.source_table(ctx.clone()).await?;
         table.column_statistics_provider(ctx).await
-    }
-
-    async fn stream_source_table(&self, catalog: Arc<dyn Catalog>) -> Result<Arc<dyn Table>> {
-        self.source_table(catalog).await
     }
 }
 

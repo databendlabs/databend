@@ -237,7 +237,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 window_list,
                 qualify,
             } => SetExpr::Select(Box::new(SelectStmt {
-                span: transform_span(input.span.0),
+                span: transform_span(input.span.tokens),
                 hints,
                 distinct,
                 select_list,
@@ -249,7 +249,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 qualify,
             })),
             SetOperationElement::Values(values) => SetExpr::Values {
-                span: transform_span(input.span.0),
+                span: transform_span(input.span.tokens),
                 values,
             },
             _ => unreachable!(),
@@ -266,7 +266,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
         let set_expr = match input.elem {
             SetOperationElement::SetOperation { op, all, .. } => {
                 SetExpr::SetOperation(Box::new(SetOperation {
-                    span: transform_span(input.span.0),
+                    span: transform_span(input.span.tokens),
                     op,
                     all,
                     left: Box::new(lhs),
@@ -350,7 +350,7 @@ pub fn with(i: Input) -> IResult<With> {
             #table_alias_without_as ~ AS ~ MATERIALIZED? ~ "(" ~ #query ~ ")"
         }),
         |(span, (table_alias, _, materialized, _, query, _))| CTE {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             alias: table_alias,
             materialized: materialized.is_some(),
             query: Box::new(query),
@@ -362,7 +362,7 @@ pub fn with(i: Input) -> IResult<With> {
             WITH ~ RECURSIVE? ~ ^#comma_separated_list1(cte)
         }),
         |(span, (_, recursive, ctes))| With {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             recursive: recursive.is_some(),
             ctes,
         },
@@ -446,7 +446,7 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         |(t, _, s, _)| SelectTarget::StarColumns {
             qualified: vec![Indirection::Star(Some(t.span))],
             column_filter: Some(ColumnFilter::Lambda(Lambda {
-                params: vec![Identifier::from_name("_t")],
+                params: vec![Identifier::from_name(Some(t.span), "_t")],
                 expr: Box::new(Expr::BinaryOp {
                     span: Some(t.span),
                     op: BinaryOperator::Regexp,
@@ -455,12 +455,12 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
                         column: ColumnRef {
                             database: None,
                             table: None,
-                            column: ColumnID::Name(Identifier::from_name("_t")),
+                            column: ColumnID::Name(Identifier::from_name(Some(t.span), "_t")),
                         },
                     }),
                     right: Box::new(Expr::Literal {
                         span: Some(t.span),
-                        lit: Literal::String(s),
+                        value: Literal::String(s),
                     }),
                 }),
             })),
@@ -809,7 +809,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 pivot,
                 unpivot,
             } => TableReference::Table {
-                span: transform_span(input.span.0),
+                span: transform_span(input.span.tokens),
                 catalog,
                 database,
                 table,
@@ -840,7 +840,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                     })
                     .collect();
                 TableReference::TableFunction {
-                    span: transform_span(input.span.0),
+                    span: transform_span(input.span.tokens),
                     lateral,
                     name,
                     params: normal_params,
@@ -853,7 +853,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 subquery,
                 alias,
             } => TableReference::Subquery {
-                span: transform_span(input.span.0),
+                span: transform_span(input.span.tokens),
                 lateral,
                 subquery,
                 alias,
@@ -865,7 +865,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
             } => {
                 let options = SelectStageOptions::from(options);
                 TableReference::Location {
-                    span: transform_span(input.span.0),
+                    span: transform_span(input.span.tokens),
                     location,
                     options,
                     alias,
@@ -890,7 +890,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                     JoinCondition::None
                 };
                 TableReference::Join {
-                    span: transform_span(input.span.0),
+                    span: transform_span(input.span.tokens),
                     join: Join {
                         op,
                         condition,
@@ -1002,7 +1002,7 @@ pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameB
 pub fn window_spec(i: Input) -> IResult<WindowSpec> {
     map(
         rule! {
-            (#ident )?
+            #ident?
             ~ ( PARTITION ~ ^BY ~ ^#comma_separated_list1(subexpr(0)) )?
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
             ~ ( (ROWS | RANGE) ~ ^#window_frame_between )?
@@ -1032,24 +1032,27 @@ pub fn window_spec_ident(i: Input) -> IResult<Window> {
     alt((
         map(
             rule! {
-               ("(" ~ #window_spec ~ ")")
+               "(" ~ #window_spec ~ ")"
             },
             |(_, spec, _)| Window::WindowSpec(spec),
         ),
-        map(rule! {#ident}, |window_name| {
-            Window::WindowReference(WindowRef { window_name })
-        }),
+        map(
+            rule! {
+                #ident
+            },
+            |window_name| Window::WindowReference(WindowRef { window_name }),
+        ),
     ))(i)
 }
 
 pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
     map(
         rule! {
-            #ident ~ (AS ~ "(" ~ #window_spec ~ ")")
+            #ident ~ AS ~ "(" ~ #window_spec ~ ")"
         },
-        |(ident, window)| WindowDefinition {
+        |(ident, _, _, window, _)| WindowDefinition {
             name: ident,
-            spec: window.2,
+            spec: window,
         },
     )(i)
 }

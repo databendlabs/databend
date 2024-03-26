@@ -16,7 +16,7 @@ mod agg_index_sink;
 mod analyze;
 mod append;
 mod commit;
-pub mod common;
+mod common;
 mod compact;
 mod delete;
 mod gc;
@@ -33,7 +33,8 @@ mod replace_into;
 mod revert;
 mod truncate;
 mod update;
-pub mod util;
+mod util;
+
 pub use agg_index_sink::AggIndexSink;
 pub use common::*;
 pub use compact::CompactOptions;

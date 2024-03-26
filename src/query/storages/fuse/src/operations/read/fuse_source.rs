@@ -16,22 +16,19 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::plan::InternalColumnMeta;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoPtr;
-use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use log::info;
 
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
@@ -232,7 +229,7 @@ pub fn dispatch_partitions(
 ) -> Vec<VecDeque<PartInfoPtr>> {
     let mut results = Vec::with_capacity(max_streams);
     // Lazy part, we can dispatch them now.
-    if plan.parts.is_lazy {
+    if plan.parts.partitions_type() == PartInfoType::LazyLevel {
         return results;
     }
 
@@ -264,7 +261,7 @@ pub fn adjust_threads_and_request(
     mut max_io_requests: usize,
     plan: &DataSourcePlan,
 ) -> (usize, usize) {
-    if !plan.parts.is_lazy {
+    if plan.parts.partitions_type() == PartInfoType::BlockLevel {
         let mut block_nums = plan.parts.partitions.len();
 
         // If the read bytes of a partition is small enough, less than 16k rows
@@ -273,7 +270,7 @@ pub fn adjust_threads_and_request(
         static MIN_ROWS_READ_PER_THREAD: u64 = 16 * 1024;
         if is_native {
             plan.parts.partitions.iter().for_each(|part| {
-                if let Some(part) = part.as_any().downcast_ref::<FusePartInfo>() {
+                if let Some(part) = part.as_any().downcast_ref::<FuseBlockPartInfo>() {
                     let to_read_rows = part
                         .columns_meta
                         .values()
@@ -296,26 +293,4 @@ pub fn adjust_threads_and_request(
         max_io_requests = std::cmp::min(max_io_requests, block_nums);
     }
     (max_threads, max_io_requests)
-}
-
-pub(crate) fn fill_internal_column_meta(
-    data_block: DataBlock,
-    fuse_part: &FusePartInfo,
-    offsets: Option<Vec<usize>>,
-    base_block_ids: Option<Scalar>,
-) -> Result<DataBlock> {
-    // Fill `BlockMetaInfoPtr` if query internal columns
-    let block_meta = fuse_part.block_meta_index().unwrap();
-    let internal_column_meta = InternalColumnMeta {
-        segment_idx: block_meta.segment_idx,
-        block_id: block_meta.block_id,
-        block_location: block_meta.block_location.clone(),
-        segment_location: block_meta.segment_location.clone(),
-        snapshot_location: block_meta.snapshot_location.clone(),
-        offsets,
-        base_block_ids,
-    };
-
-    let meta: Option<BlockMetaInfoPtr> = Some(Box::new(internal_column_meta));
-    data_block.add_meta(meta)
 }

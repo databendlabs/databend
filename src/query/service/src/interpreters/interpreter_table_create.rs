@@ -117,7 +117,7 @@ impl Interpreter for CreateTableInterpreter {
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
 
-        let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
+        let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let engine = self.plan.engine;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;

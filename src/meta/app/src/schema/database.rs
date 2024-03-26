@@ -26,7 +26,8 @@ use super::CreateOption;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+// serde is required by
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseNameIdent {
     pub tenant: String,
     pub db_name: String,
@@ -47,7 +48,7 @@ impl DatabaseNameIdent {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseInfo {
     pub ident: DatabaseIdent,
     pub name_ident: DatabaseNameIdent,
@@ -60,9 +61,7 @@ pub struct DatabaseIdent {
     pub seq: u64,
 }
 
-#[derive(
-    serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord,
-)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
 pub struct DatabaseId {
     pub db_id: u64,
 }
@@ -85,7 +84,7 @@ impl Display for DatabaseId {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseIdToName {
     pub db_id: u64,
 }
@@ -102,7 +101,7 @@ impl DatabaseIdToName {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DbIdListKey {
     pub tenant: String,
     pub db_name: String,
@@ -114,7 +113,7 @@ impl Display for DbIdListKey {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseMeta {
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
@@ -204,7 +203,7 @@ impl Display for DbIdList {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabaseReq {
     pub create_option: CreateOption,
     pub name_ident: DatabaseNameIdent,
@@ -214,7 +213,7 @@ pub struct CreateDatabaseReq {
 impl Display for CreateDatabaseReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
-            CreateOption::None => write!(
+            CreateOption::Create => write!(
                 f,
                 "create_db:{}/{}={:?}",
                 self.name_ident.tenant, self.name_ident.db_name, self.meta
@@ -240,7 +239,7 @@ pub struct CreateDatabaseReply {
     pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameDatabaseReq {
     pub if_exists: bool,
     pub name_ident: DatabaseNameIdent,
@@ -260,7 +259,7 @@ impl Display for RenameDatabaseReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RenameDatabaseReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropDatabaseReq {
     pub if_exists: bool,
     pub name_ident: DatabaseNameIdent,
@@ -281,7 +280,7 @@ pub struct DropDatabaseReply {
     pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropDatabaseReq {
     pub name_ident: DatabaseNameIdent,
 }
@@ -308,7 +307,7 @@ impl UndropDatabaseReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UndropDatabaseReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetDatabaseReq {
     pub inner: DatabaseNameIdent,
 }

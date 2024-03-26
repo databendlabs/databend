@@ -38,7 +38,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::ROW_VERSION_COL_NAME;
-use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
+use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_meta_app::schema::DatabaseType;
@@ -85,6 +85,7 @@ use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
+use crate::operations::TruncateMode;
 use crate::table_functions::unwrap_tuple;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
@@ -470,7 +471,7 @@ impl Table for FuseTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        column_id >= SNAPSHOT_NAME_COLUMN_ID
+        column_id >= SEARCH_SCORE_COLUMN_ID
     }
 
     fn support_column_projection(&self) -> bool {
@@ -554,6 +555,7 @@ impl Table for FuseTable {
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
+        let prev_index_info_locations = prev.as_ref().and_then(|v| v.index_info_locations.clone());
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
         } else {
@@ -569,6 +571,7 @@ impl Table for FuseTable {
             segments,
             cluster_key_meta,
             prev_statistics_location,
+            prev_index_info_locations,
         );
 
         let mut table_info = self.table_info.clone();
@@ -604,6 +607,7 @@ impl Table for FuseTable {
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
+        let prev_index_info_locations = prev.as_ref().and_then(|v| v.index_info_locations.clone());
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
@@ -620,6 +624,7 @@ impl Table for FuseTable {
             segments,
             None,
             prev_statistics_location,
+            prev_index_info_locations,
         );
 
         let mut table_info = self.table_info.clone();
@@ -691,9 +696,8 @@ impl Table for FuseTable {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        let purge = false;
-        self.do_truncate(ctx, purge).await
+    async fn truncate(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+        self.do_truncate(ctx, pipeline, TruncateMode::Normal).await
     }
 
     #[minitrace::trace]

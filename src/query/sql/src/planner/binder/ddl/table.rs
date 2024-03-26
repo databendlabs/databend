@@ -707,7 +707,7 @@ impl Binder {
         // keep a copy of table data uri_location, will be used in "show create table"
         options.insert(
             OPT_KEY_TABLE_ATTACHED_DATA_URI.to_string(),
-            stmt.uri_location.to_string(),
+            format!("{:#}", stmt.uri_location),
         );
 
         let mut uri = stmt.uri_location.clone();
@@ -727,7 +727,7 @@ impl Binder {
         };
 
         Ok(Plan::CreateTable(Box::new(CreateTablePlan {
-            create_option: CreateOption::None,
+            create_option: CreateOption::Create,
             tenant: self.ctx.get_tenant().to_string(),
             catalog,
             database,
@@ -991,7 +991,7 @@ impl Binder {
                     limit: limit.map(|v| v as usize),
                 })))
             }
-            AlterTableAction::RevertTo { point } => {
+            AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point).await?;
                 Ok(Plan::RevertTable(Box::new(RevertTablePlan {
                     tenant: tenant.to_string(),

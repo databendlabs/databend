@@ -55,7 +55,7 @@ impl Interpreter for ShowConnectionsInterpreter {
 
         let user_mgr = UserApiProvider::instance();
         let tenant = self.ctx.get_tenant();
-        let mut formats = user_mgr.get_connections(tenant.as_str()).await?;
+        let mut formats = user_mgr.get_connections(&tenant).await?;
 
         formats.sort_by(|a, b| a.name.cmp(&b.name));
 

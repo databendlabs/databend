@@ -18,16 +18,23 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::future::TimingFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
+use databend_common_meta_sled_store::openraft;
+use databend_common_meta_sled_store::openraft::network::snapshot_transport;
 use databend_common_meta_types::protobuf::raft_service_server::RaftService;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::GrpcHelper;
+use databend_common_meta_types::InstallSnapshotError;
 use databend_common_meta_types::InstallSnapshotRequest;
+use databend_common_meta_types::InstallSnapshotResponse;
+use databend_common_meta_types::RaftError;
 use databend_common_meta_types::SnapshotMeta;
+use databend_common_meta_types::TypeConfig;
 use databend_common_meta_types::Vote;
 use databend_common_metrics::count::Count;
 use minitrace::full_name;
@@ -44,11 +51,16 @@ use crate::metrics::raft_metrics;
 
 pub struct RaftServiceImpl {
     pub meta_node: Arc<MetaNode>,
+
+    snapshot: Mutex<Option<snapshot_transport::Streaming<TypeConfig>>>,
 }
 
 impl RaftServiceImpl {
     pub fn create(meta_node: Arc<MetaNode>) -> Self {
-        Self { meta_node }
+        Self {
+            meta_node,
+            snapshot: Mutex::new(None),
+        }
     }
 
     fn incr_meta_metrics_recv_bytes_from_peer(&self, request: &Request<RaftRequest>) {
@@ -69,11 +81,9 @@ impl RaftServiceImpl {
         let _g = snapshot_recv_inflight(&addr).counter_guard();
 
         let is_req = GrpcHelper::parse_req(request)?;
-        let raft = &self.meta_node.raft;
 
-        #[allow(deprecated)]
-        let resp = raft
-            .install_snapshot(is_req)
+        let resp = self
+            .receive_chunked_snapshot(is_req)
             .timed(observe_snapshot_recv_spent(&addr))
             .await
             .map_err(GrpcHelper::internal_err);
@@ -112,11 +122,8 @@ impl RaftServiceImpl {
             done: chunk.done,
         };
 
-        let raft = &self.meta_node.raft;
-
-        #[allow(deprecated)]
-        let resp = raft
-            .install_snapshot(install_snapshot_req)
+        let resp = self
+            .receive_chunked_snapshot(install_snapshot_req)
             .timed(observe_snapshot_recv_spent(&addr))
             .await
             .map_err(GrpcHelper::internal_err);
@@ -126,6 +133,33 @@ impl RaftServiceImpl {
         match resp {
             Ok(resp) => GrpcHelper::ok_response(resp),
             Err(e) => Err(e),
+        }
+    }
+
+    /// Receive a chunk based snapshot from the leader.
+    async fn receive_chunked_snapshot(
+        &self,
+        req: InstallSnapshotRequest,
+    ) -> Result<InstallSnapshotResponse, RaftError<InstallSnapshotError>> {
+        let raft = &self.meta_node.raft;
+
+        let req_vote = req.vote;
+        let my_vote = raft.with_raft_state(|state| *state.vote_ref()).await?;
+        let resp = InstallSnapshotResponse { vote: my_vote };
+
+        let finished_snapshot = {
+            use openraft::network::snapshot_transport::Chunked;
+            use openraft::network::snapshot_transport::SnapshotTransport;
+
+            let mut streaming = self.snapshot.lock().await;
+            Chunked::receive_snapshot(&mut *streaming, raft, req).await?
+        };
+
+        if let Some(snapshot) = finished_snapshot {
+            let resp = raft.install_full_snapshot(req_vote, snapshot).await?;
+            Ok(resp.into())
+        } else {
+            Ok(resp)
         }
     }
 }

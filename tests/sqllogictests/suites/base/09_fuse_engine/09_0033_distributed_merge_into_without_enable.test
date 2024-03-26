@@ -51,6 +51,9 @@ statement ok
 insert into distributed_source_test values(6,'h',true),(7,'i',true),(8,'j',false),(9,'k',true),(10,'l',false);
 
 statement ok
+drop stage if exists distributed_source_parquet;
+
+statement ok
 create stage distributed_source_parquet file_format = (type = parquet);
 
 statement ok

@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono_tz::Tz;
 use databend_common_ast::ast::format_statement;
@@ -34,9 +35,11 @@ use databend_common_expression::Expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
+use log::info;
 use log::warn;
 
 use super::Finder;
+use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
@@ -128,10 +131,12 @@ impl<'a> Binder {
     #[async_backtrace::framed]
     #[minitrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
+        let start = Instant::now();
         self.ctx.set_status_info("binding");
         let mut init_bind_context = BindContext::new();
         let plan = self.bind_statement(&mut init_bind_context, stmt).await?;
         self.bind_query_index(&mut init_bind_context, &plan).await?;
+        info!("bind stmt to plan, time used: {:?}", start.elapsed());
         Ok(plan)
     }
 
@@ -310,11 +315,16 @@ impl<'a> Binder {
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
             Statement::DropView(stmt) => self.bind_drop_view(stmt).await?,
+            Statement::ShowViews(stmt) => self.bind_show_views(bind_context, stmt).await?,
+            Statement::DescribeView(stmt) => self.bind_describe_view(stmt).await?,
 
             // Indexes
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
             Statement::DropIndex(stmt) => self.bind_drop_index(stmt).await?,
             Statement::RefreshIndex(stmt) => self.bind_refresh_index(bind_context, stmt).await?,
+            Statement::CreateInvertedIndex(stmt) => self.bind_create_inverted_index(bind_context, stmt).await?,
+            Statement::DropInvertedIndex(stmt) => self.bind_drop_inverted_index(bind_context, stmt).await?,
+            Statement::RefreshInvertedIndex(stmt) => self.bind_refresh_inverted_index(bind_context, stmt).await?,
 
             // Virtual Columns
             Statement::CreateVirtualColumn(stmt) => self.bind_create_virtual_column(stmt).await?,
@@ -337,10 +347,16 @@ impl<'a> Binder {
             Statement::CreateRole {
                 if_not_exists,
                 role_name,
-            } => Plan::CreateRole(Box::new(CreateRolePlan {
+            } => {
+                if illegal_ident_name(role_name) {
+                    return Err(ErrorCode::IllegalRole(
+                        format!("Illegal Role Name: Illegal role name [{}], not support username contain ' or \"", role_name),
+                    ));
+                }
+                Plan::CreateRole(Box::new(CreateRolePlan {
                 if_not_exists: *if_not_exists,
                 role_name: role_name.to_string(),
-            })),
+            }))},
             Statement::DropRole {
                 if_exists,
                 role_name,
@@ -433,7 +449,7 @@ impl<'a> Binder {
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     create_option: *create_option,
                     name: name.clone(),
-                    file_format_params: file_format_options.clone().try_into()?,
+                    file_format_params: file_format_options.to_meta_ast().try_into()?,
                 }))
             }
             Statement::DropFileFormat {
@@ -811,6 +827,21 @@ impl<'a> Binder {
         }
     }
 
+    pub(crate) fn check_allowed_scalar_expr_with_subquery_for_copy_table(
+        &self,
+        scalar: &ScalarExpr,
+    ) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
+    }
+
     pub(crate) fn check_allowed_scalar_expr_with_subquery(
         &self,
         scalar: &ScalarExpr,
@@ -823,6 +854,7 @@ impl<'a> Binder {
                     | ScalarExpr::UDFCall(_)
             )
         };
+
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
         Ok(finder.scalars().is_empty())

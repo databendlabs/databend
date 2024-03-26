@@ -147,7 +147,7 @@ select array_stddev_samp(col1) from t
 query FFF
 select array_stddev_pop(col1), array_stddev(col1), array_std(col1) from t
 ----
-0.82915619758885 0.82915619758885 0.82915619758885
+0.82915619758885 0.9574271077563381 0.82915619758885
 
 query F
 select array_median(col1) from t

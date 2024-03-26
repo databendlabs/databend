@@ -541,6 +541,15 @@ pub struct CacheConfig {
     // One bloom index filter per column of data block being indexed will be generated if necessary.
     pub table_bloom_index_filter_size: u64,
 
+    /// Max number of cached inverted index info objects. Set it to 0 to disable it.
+    pub inverted_index_info_count: u64,
+
+    /// Max bytes of cached inverted index filters used. Set it to 0 to disable it.
+    pub inverted_index_filter_size: u64,
+
+    /// Max percentage of in memory inverted index filters cache relative to whole memory. By default it is 0 (disabled).
+    pub inverted_index_filter_memory_ratio: u64,
+
     pub data_cache_storage: CacheStorageTypeConfig,
 
     /// Max size of external cache population queue length
@@ -566,6 +575,14 @@ pub struct CacheConfig {
     /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
     pub table_data_deserialized_data_bytes: u64,
+
+    /// Max percentage of in memory table column object cache relative to whole memory. By default it is 0 (disabled)
+    ///
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
+    ///
+    /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
+    /// and the access pattern will benefit from caching, consider enabled this cache.
+    pub table_data_deserialized_memory_ratio: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -619,11 +636,15 @@ impl Default for CacheConfig {
             table_bloom_index_meta_count: 3000,
             table_bloom_index_filter_count: 0,
             table_bloom_index_filter_size: 2147483648,
+            inverted_index_info_count: 3000,
+            inverted_index_filter_size: 2147483648,
+            inverted_index_filter_memory_ratio: 0,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 0,
             disk_cache_config: Default::default(),
             table_data_deserialized_data_bytes: 0,
+            table_data_deserialized_memory_ratio: 0,
         }
     }
 }

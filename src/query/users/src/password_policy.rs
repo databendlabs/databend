@@ -19,7 +19,7 @@ use chrono::Utc;
 use databend_common_ast::ast::AuthOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_management::PasswordPolicyApi;
+use databend_common_meta_api::crud::CrudError;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordPolicy;
 use databend_common_meta_app::principal::UserIdentity;
@@ -65,16 +65,15 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_password_policy(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         password_policy: PasswordPolicy,
         create_option: &CreateOption,
     ) -> Result<()> {
         check_password_policy(&password_policy)?;
 
-        let client = self.get_password_policy_api_client(tenant)?;
-        client
-            .add_password_policy(password_policy, create_option)
-            .await
+        let client = self.password_policy_api(tenant);
+        client.add(password_policy, create_option).await?;
+        Ok(())
     }
 
     // Update password policy.
@@ -82,7 +81,7 @@ impl UserApiProvider {
     #[allow(clippy::too_many_arguments)]
     pub async fn update_password_policy(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         name: &str,
         min_length: Option<u64>,
         max_length: Option<u64>,
@@ -98,16 +97,23 @@ impl UserApiProvider {
         comment: Option<String>,
         if_exists: bool,
     ) -> Result<Option<u64>> {
-        let client = self.get_password_policy_api_client(tenant)?;
-        let seq_password_policy = match client.get_password_policy(name, MatchSeq::GE(0)).await {
+        let client = self.password_policy_api(tenant);
+        let seq_password_policy = match client.get(name, MatchSeq::GE(0)).await {
             Ok(seq_password_policy) => seq_password_policy,
-            Err(e) => {
-                if if_exists && e.code() == ErrorCode::UNKNOWN_PASSWORD_POLICY {
-                    return Ok(None);
-                } else {
-                    return Err(e.add_message_back(" (while alter password policy)"));
+            Err(e) => match e {
+                CrudError::ApiError(meta_err) => {
+                    return Err(ErrorCode::from(meta_err)
+                        .add_message_back(" (while alter password policy)"));
                 }
-            }
+                CrudError::Business(unknown) => {
+                    if if_exists {
+                        return Ok(None);
+                    } else {
+                        return Err(ErrorCode::from(unknown)
+                            .add_message_back(" (while alter password policy)"));
+                    }
+                }
+            },
         };
 
         let seq = seq_password_policy.seq;
@@ -152,12 +158,9 @@ impl UserApiProvider {
 
         password_policy.update_on = Some(Utc::now());
 
-        match client
-            .update_password_policy(password_policy, MatchSeq::Exact(seq))
-            .await
-        {
+        match client.update(password_policy, MatchSeq::Exact(seq)).await {
             Ok(res) => Ok(Some(res)),
-            Err(e) => Err(e.add_message_back(" (while alter password policy).")),
+            Err(e) => Err(ErrorCode::from(e).add_message_back(" (while alter password policy).")),
         }
     }
 
@@ -181,22 +184,34 @@ impl UserApiProvider {
             }
         }
 
-        let client = self.get_password_policy_api_client(tenant.as_str())?;
-        match client.drop_password_policy(name, MatchSeq::GE(1)).await {
+        let client = self.password_policy_api(tenant);
+        match client.remove(name, MatchSeq::GE(1)).await {
             Ok(res) => Ok(res),
-            Err(e) => {
-                if if_exists && e.code() == ErrorCode::UNKNOWN_PASSWORD_POLICY {
-                    Ok(())
-                } else {
-                    Err(e.add_message_back(" (while drop password policy)"))
+            Err(e) => match e {
+                CrudError::ApiError(meta_err) => {
+                    return Err(
+                        ErrorCode::from(meta_err).add_message_back(" (while drop password policy)")
+                    );
                 }
-            }
+                CrudError::Business(unknown) => {
+                    if if_exists {
+                        return Ok(());
+                    } else {
+                        return Err(ErrorCode::from(unknown)
+                            .add_message_back(" (while drop password policy)"));
+                    }
+                }
+            },
         }
     }
 
     // Check whether a password policy is exist.
     #[async_backtrace::framed]
-    pub async fn exists_password_policy(&self, tenant: &str, name: &str) -> Result<bool> {
+    pub async fn exists_password_policy(
+        &self,
+        tenant: &NonEmptyString,
+        name: &str,
+    ) -> Result<bool> {
         match self.get_password_policy(tenant, name).await {
             Ok(_) => Ok(true),
             Err(e) => {
@@ -211,23 +226,27 @@ impl UserApiProvider {
 
     // Get a password_policy by tenant.
     #[async_backtrace::framed]
-    pub async fn get_password_policy(&self, tenant: &str, name: &str) -> Result<PasswordPolicy> {
-        let client = self.get_password_policy_api_client(tenant)?;
-        let password_policy = client
-            .get_password_policy(name, MatchSeq::GE(0))
-            .await?
-            .data;
+    pub async fn get_password_policy(
+        &self,
+        tenant: &NonEmptyString,
+        name: &str,
+    ) -> Result<PasswordPolicy> {
+        let client = self.password_policy_api(tenant);
+        let password_policy = client.get(name, MatchSeq::GE(0)).await?.data;
         Ok(password_policy)
     }
 
     // Get all password policies by tenant.
     #[async_backtrace::framed]
-    pub async fn get_password_policies(&self, tenant: &str) -> Result<Vec<PasswordPolicy>> {
-        let client = self.get_password_policy_api_client(tenant)?;
-        let password_policies = client
-            .get_password_policies()
-            .await
-            .map_err(|e| e.add_message_back(" (while get password policies)."))?;
+    pub async fn get_password_policies(
+        &self,
+        tenant: &NonEmptyString,
+    ) -> Result<Vec<PasswordPolicy>> {
+        let client = self.password_policy_api(tenant);
+        let password_policies = client.list().await.map_err(|e| {
+            let e = ErrorCode::from(e);
+            e.add_message_back(" (while get password policies).")
+        })?;
         Ok(password_policies)
     }
 
@@ -239,7 +258,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn verify_password(
         &self,
-        tenant: &str,
+        tenant: &NonEmptyString,
         user_option: &UserOption,
         auth_option: &AuthOption,
         user_info: Option<&UserInfo>,
@@ -379,7 +398,7 @@ impl UserApiProvider {
         }
 
         if let Some(name) = user_info.option.password_policy() {
-            if let Ok(password_policy) = self.get_password_policy(tenant.as_str(), name).await {
+            if let Ok(password_policy) = self.get_password_policy(tenant, name).await {
                 // Check the number of login password fails
                 if !user_info.password_fails.is_empty() && password_policy.max_retries > 0 {
                     let check_time = now

@@ -33,7 +33,6 @@ use maplit::hashmap;
 
 use super::CreateOption;
 use crate::schema::database::DatabaseNameIdent;
-use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
 use crate::storage::StorageParams;
@@ -66,7 +65,7 @@ impl Display for TableIdent {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableNameIdent {
     pub tenant: String,
     pub db_name: String,
@@ -112,7 +111,7 @@ impl Display for TableNameIdent {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct DBIdTableName {
     pub db_id: u64,
     pub table_name: String,
@@ -124,7 +123,7 @@ impl Display for DBIdTableName {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableId {
     pub table_id: u64,
 }
@@ -141,7 +140,7 @@ impl Display for TableId {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableIdListKey {
     pub db_id: u64,
     pub table_name: String,
@@ -153,11 +152,30 @@ impl Display for TableIdListKey {
     }
 }
 
+// serde is required by [`TableInfo`]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub enum DatabaseType {
     #[default]
     NormalDB,
-    ShareDB(ShareNameIdent),
+    ShareDB(database_type::ShareNameIdent),
+}
+
+mod database_type {
+    /// Same as  [`crate::share::ShareNameIdent`] but with serde support for being used as a value.
+    /// while [`crate::share::ShareNameIdent`] can only be used as key.
+    #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+    pub struct ShareNameIdent {
+        pub tenant: String,
+        pub share_name: String,
+    }
+    impl From<crate::share::ShareNameIdent> for ShareNameIdent {
+        fn from(value: crate::share::ShareNameIdent) -> Self {
+            Self {
+                tenant: value.tenant,
+                share_name: value.share_name,
+            }
+        }
+    }
 }
 
 impl Display for DatabaseType {
@@ -249,6 +267,13 @@ pub struct TableMeta {
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
     pub column_mask_policy: Option<BTreeMap<String, String>>,
+    pub indexes: BTreeMap<String, TableIndex>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TableIndex {
+    pub name: String,
+    pub column_ids: Vec<u32>,
 }
 
 impl TableMeta {
@@ -363,6 +388,7 @@ impl Default for TableMeta {
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
+            indexes: BTreeMap::new(),
         }
     }
 }
@@ -385,12 +411,13 @@ impl Display for TableMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Engine: {}={:?}, Schema: {:?}, Options: {:?}, FieldComments: {:?} CreatedOn: {:?} DropOn: {:?}",
+            "Engine: {}={:?}, Schema: {:?}, Options: {:?}, FieldComments: {:?} Indexes: {:?} CreatedOn: {:?} DropOn: {:?}",
             self.engine,
             self.engine_options,
             self.schema,
             self.options,
             self.field_comments,
+            self.indexes,
             self.created_on,
             self.drop_on,
         )
@@ -449,7 +476,7 @@ impl Display for TableIdList {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableReq {
     pub create_option: CreateOption,
     pub name_ident: TableNameIdent,
@@ -471,7 +498,7 @@ impl CreateTableReq {
 impl Display for CreateTableReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.create_option {
-            CreateOption::None => write!(
+            CreateOption::Create => write!(
                 f,
                 "create_table:{}/{}-{}={}",
                 self.tenant(),
@@ -499,7 +526,7 @@ impl Display for CreateTableReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateTableReply {
     pub table_id: u64,
     pub new_table: bool,
@@ -510,7 +537,7 @@ pub struct CreateTableReply {
 ///
 /// Dropping a table requires just `table_id`, but when dropping a table, it also needs to update
 /// the count of tables belonging to a tenant, which require tenant information.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableByIdReq {
     pub if_exists: bool,
 
@@ -540,12 +567,12 @@ impl Display for DropTableByIdReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableReply {
     pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTableReq {
     pub name_ident: TableNameIdent,
 }
@@ -574,10 +601,10 @@ impl Display for UndropTableReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTableReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTableReq {
     pub if_exists: bool,
     pub name_ident: TableNameIdent,
@@ -611,12 +638,12 @@ impl Display for RenameTableReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTableReply {
     pub table_id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableOptionReq {
     pub table_id: u64,
     pub seq: MatchSeq,
@@ -635,7 +662,7 @@ pub struct UpdateStreamMetaReq {
     pub options: BTreeMap<String, String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateTableMetaReq {
     pub table_id: u64,
     pub seq: MatchSeq,
@@ -676,7 +703,7 @@ impl Display for UpsertTableOptionReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SetTableColumnMaskPolicyAction {
     // new mask name, old mask name(if any)
     Set(String, Option<String>),
@@ -684,7 +711,7 @@ pub enum SetTableColumnMaskPolicyAction {
     Unset(String),
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetTableColumnMaskPolicyReq {
     pub tenant: String,
     pub table_id: u64,
@@ -693,22 +720,73 @@ pub struct SetTableColumnMaskPolicyReq {
     pub action: SetTableColumnMaskPolicyAction,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetTableColumnMaskPolicyReply {
     pub share_table_info: Option<Vec<ShareTableInfoMap>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableOptionReply {
     pub share_table_info: Option<Vec<ShareTableInfoMap>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateTableMetaReply {
     pub share_table_info: Option<Vec<ShareTableInfoMap>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateTableIndexReq {
+    pub create_option: CreateOption,
+    pub table_id: u64,
+    pub name: String,
+    pub column_ids: Vec<u32>,
+}
+
+impl Display for CreateTableIndexReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.create_option {
+            CreateOption::Create => {
+                write!(f, "create_table_index:{}={:?}", self.name, self.column_ids)
+            }
+            CreateOption::CreateIfNotExists => write!(
+                f,
+                "create_table_index_if_not_exists:{}={:?}",
+                self.name, self.column_ids
+            ),
+            CreateOption::CreateOrReplace => write!(
+                f,
+                "create_or_replace_table_index:{}={:?}",
+                self.name, self.column_ids
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreateTableIndexReply {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropTableIndexReq {
+    pub if_exists: bool,
+    pub table_id: u64,
+    pub name: String,
+}
+
+impl Display for DropTableIndexReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "drop_table_index(if_exists={}):{}/{}",
+            self.if_exists, self.table_id, self.name,
+        )
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropTableIndexReply {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableReq {
     pub inner: TableNameIdent,
 }
@@ -739,7 +817,7 @@ impl GetTableReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListTableReq {
     pub inner: DatabaseNameIdent,
 }
@@ -763,7 +841,7 @@ impl ListTableReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TableInfoFilter {
     // if datatime is some, filter only dropped tables which drop time before that,
     // else filter all dropped tables
@@ -778,14 +856,14 @@ pub enum TableInfoFilter {
     All,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListDroppedTableReq {
     pub inner: DatabaseNameIdent,
     pub filter: TableInfoFilter,
     pub limit: Option<usize>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DroppedId {
     // db id, db name
     Db(u64, String),
@@ -793,22 +871,22 @@ pub enum DroppedId {
     Table(u64, u64, String),
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListDroppedTableResp {
     pub drop_table_infos: Vec<Arc<TableInfo>>,
     pub drop_ids: Vec<DroppedId>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GcDroppedTableReq {
     pub tenant: String,
     pub drop_ids: Vec<DroppedId>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GcDroppedTableResp {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct CountTablesKey {
     pub tenant: String,
 }
@@ -828,7 +906,7 @@ impl CountTablesKey {
 }
 
 /// count tables for a tenant
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CountTablesReq {
     pub tenant: String,
 }
@@ -838,7 +916,7 @@ pub struct CountTablesReply {
     pub count: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TableIdToName {
     pub table_id: u64,
 }
@@ -849,41 +927,41 @@ impl Display for TableIdToName {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableCopiedFileNameIdent {
     pub table_id: u64,
     pub file: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableCopiedFileInfo {
     pub etag: Option<String>,
     pub content_length: u64,
     pub last_modified: Option<DateTime<Utc>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableCopiedFileReq {
     pub table_id: u64,
     pub files: Vec<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableCopiedFileReply {
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableCopiedFileReq {
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,
     pub expire_at: Option<u64>,
     pub fail_if_duplicated: bool,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableCopiedFileReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TruncateTableReq {
     pub table_id: u64,
     /// Specify the max number copied file to delete in every sub-transaction.
@@ -892,10 +970,10 @@ pub struct TruncateTableReq {
     pub batch_size: Option<u64>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TruncateTableReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EmptyProto {}
 
 mod kvapi_key_impl {

@@ -87,7 +87,7 @@ const CATALOG_HIVE: &str = "hive";
 /// Only adding new fields is allowed.
 /// This same rules should be applied to all fields of this struct.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Parser)]
-#[clap(name = "databend-query", about, version = &**DATABEND_COMMIT_VERSION, author)]
+#[clap(name = "databend-query", about, version = & * * DATABEND_COMMIT_VERSION, author)]
 #[serde(default)]
 pub struct Config {
     /// Run a command and quit
@@ -1406,7 +1406,7 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub max_server_memory_usage: u64,
 
-    #[clap(long,  value_name = "VALUE",value_parser = clap::value_parser!(bool), default_value = "false")]
+    #[clap(long, value_name = "VALUE", value_parser = clap::value_parser!(bool), default_value = "false")]
     pub max_memory_limit_enabled: bool,
 
     #[deprecated(note = "clickhouse tcp support is deprecated")]
@@ -1490,7 +1490,7 @@ pub struct QueryConfig {
     pub rpc_client_timeout_secs: u64,
 
     /// Table engine memory enabled
-    #[clap(long,  value_name = "VALUE",value_parser = clap::value_parser!(bool), default_value = "true")]
+    #[clap(long, value_name = "VALUE", value_parser = clap::value_parser!(bool), default_value = "true")]
     pub table_engine_memory_enabled: bool,
 
     #[clap(long, value_name = "VALUE", default_value = "5000")]
@@ -2766,6 +2766,30 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_filter_size: u64,
 
+    /// Max number of cached inverted index info objects. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-inverted-index-info-count",
+        value_name = "VALUE",
+        default_value = "3000"
+    )]
+    pub inverted_index_info_count: u64,
+
+    /// Max bytes of cached inverted index filters used. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-inverted-index-filter-size",
+        value_name = "VALUE",
+        default_value = "2147483648"
+    )]
+    pub inverted_index_filter_size: u64,
+
+    /// Max percentage of in memory inverted index filter cache relative to whole memory. By default it is 0 (disabled).
+    #[clap(
+        long = "cache-inverted-index-filter-memory-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub inverted_index_filter_memory_ratio: u64,
+
     #[clap(
         long = "cache-table-prune-partitions-count",
         value_name = "VALUE",
@@ -2810,7 +2834,7 @@ pub struct CacheConfig {
 
     /// Max size of in memory table column object cache. By default it is 0 (disabled)
     ///
-    /// CAUTION: The cached items are deserialized table column objects, may take a lot of memory.
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
     ///
     /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
@@ -2820,6 +2844,19 @@ pub struct CacheConfig {
         default_value = "0"
     )]
     pub table_data_deserialized_data_bytes: u64,
+
+    /// Max percentage of in memory table column object cache relative to whole memory. By default it is 0 (disabled)
+    ///
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
+    ///
+    /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
+    /// and the access pattern will benefit from caching, consider enabled this cache.
+    #[clap(
+        long = "cache-table-data-deserialized-memory-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub table_data_deserialized_memory_ratio: u64,
 
     // ----- the following options/args are all deprecated               ----
     /// Max number of cached table segment
@@ -2946,12 +2983,16 @@ mod cache_config_converters {
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 table_bloom_index_filter_size: value.table_bloom_index_filter_size,
+                inverted_index_info_count: value.inverted_index_info_count,
+                inverted_index_filter_size: value.inverted_index_filter_size,
+                inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.try_into()?,
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+                table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
             })
         }
     }
@@ -2967,12 +3008,16 @@ mod cache_config_converters {
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 table_bloom_index_filter_size: value.table_bloom_index_filter_size,
+                inverted_index_info_count: value.inverted_index_info_count,
+                inverted_index_filter_size: value.inverted_index_filter_size,
+                inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.into(),
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+                table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
                 table_meta_segment_count: None,
             }
         }

@@ -41,12 +41,14 @@ impl StageTable {
         &self,
         ctx: &Arc<dyn TableContext>,
     ) -> Result<(PartStatistics, Partitions)> {
+        let thread_num = ctx.get_settings().get_max_threads()? as usize;
+
         let stage_info = &self.table_info;
         // User set the files.
         let files = if let Some(files) = &stage_info.files_to_copy {
             files.clone()
         } else {
-            StageTable::list_files(stage_info, None).await?
+            StageTable::list_files(stage_info, thread_num, None).await?
         };
         let format = InputContext::get_input_format(&stage_info.stage_info.file_format_params)?;
         let operator = StageTable::get_op(&stage_info.stage_info)?;
@@ -68,7 +70,7 @@ impl StageTable {
             .collect::<Vec<_>>();
         Ok((
             PartStatistics::default(),
-            Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions),
+            Partitions::create(PartitionsShuffleKind::Seq, partitions),
         ))
     }
 
@@ -108,7 +110,7 @@ impl StageTable {
         let schema = TableSchemaRefExt::create(fields);
         let stage_info = stage_table_info.stage_info.clone();
         let operator = StageTable::get_op(&stage_table_info.stage_info)?;
-        let compact_threshold = self.get_block_compact_thresholds_with_default();
+        let compact_threshold = ctx.get_read_block_thresholds();
         let on_error_map = ctx.get_on_error_map().unwrap_or_else(|| {
             let m = Arc::new(DashMap::new());
             ctx.set_on_error_map(m.clone());

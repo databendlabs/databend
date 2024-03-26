@@ -22,9 +22,9 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_comma_separated_map;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
+use crate::ast::FileFormatOptions;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -144,6 +144,7 @@ impl Display for MergeIntoStmt {
                         write!(f, "AND {} ", e)?;
                     }
                     write!(f, "THEN INSERT")?;
+
                     if let Some(columns) = &unmatch_clause.insert_operation.columns {
                         if !columns.is_empty() {
                             write!(f, " (")?;
@@ -151,9 +152,17 @@ impl Display for MergeIntoStmt {
                             write!(f, ")")?;
                         }
                     }
-                    write!(f, " VALUES(")?;
-                    write_comma_separated_list(f, unmatch_clause.insert_operation.values.clone())?;
-                    write!(f, ")")?;
+
+                    if unmatch_clause.insert_operation.is_star {
+                        write!(f, " *")?;
+                    } else {
+                        write!(f, " VALUES(")?;
+                        write_comma_separated_list(
+                            f,
+                            unmatch_clause.insert_operation.values.clone(),
+                        )?;
+                        write!(f, ")")?;
+                    }
                 }
             }
         }
@@ -208,8 +217,7 @@ impl MergeIntoStmt {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum MergeSource {
     StreamingV2 {
-        #[drive(skip)]
-        settings: BTreeMap<String, String>,
+        settings: FileFormatOptions,
         #[drive(skip)]
         on_error_mode: Option<String>,
         #[drive(skip)]
@@ -284,9 +292,7 @@ impl Display for MergeSource {
                 on_error_mode,
                 start: _,
             } => {
-                write!(f, " FILE_FORMAT = (")?;
-                write_comma_separated_map(f, settings)?;
-                write!(f, " )")?;
+                write!(f, " FILE_FORMAT = ({})", settings)?;
                 write!(
                     f,
                     " ON_ERROR = '{}'",

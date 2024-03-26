@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::hash_join::build_spill::BuildSpillHandler;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
@@ -48,6 +49,7 @@ pub struct TransformHashJoinBuild {
     input_port: Arc<InputPort>,
     input_data: Option<DataBlock>,
     step: HashJoinBuildStep,
+    step_logs: Vec<HashJoinBuildStep>,
     build_state: Arc<HashJoinBuildState>,
     finalize_finished: bool,
     processor_id: usize,
@@ -66,6 +68,7 @@ impl TransformHashJoinBuild {
             input_port,
             input_data: None,
             step: HashJoinBuildStep::Running,
+            step_logs: vec![HashJoinBuildStep::Running],
             build_state,
             finalize_finished: false,
             processor_id,
@@ -101,6 +104,7 @@ impl TransformHashJoinBuild {
             self.build_state.hash_join_state.reset();
         }
         self.step = HashJoinBuildStep::Running;
+        self.step_logs.push(HashJoinBuildStep::Running);
         self.build_state.restore_barrier.wait().await;
         Ok(())
     }
@@ -121,6 +125,7 @@ impl Processor for TransformHashJoinBuild {
             HashJoinBuildStep::Running => {
                 if self.spill_handler.check_need_spill(&mut self.input_data)? {
                     self.step = HashJoinBuildStep::Spill;
+                    self.step_logs.push(HashJoinBuildStep::Spill);
                     return Ok(Event::Async);
                 }
 
@@ -133,6 +138,7 @@ impl Processor for TransformHashJoinBuild {
                         self.step = self
                             .spill_handler
                             .finalize_spill(&self.build_state, self.processor_id)?;
+                        self.step_logs.push(self.step.clone());
                         if self.step == HashJoinBuildStep::Spill {
                             return Ok(Event::Async);
                         }
@@ -146,6 +152,7 @@ impl Processor for TransformHashJoinBuild {
                         self.input_data = Some(self.input_port.pull_data().unwrap()?);
                         if self.spill_handler.check_need_spill(&mut self.input_data)? {
                             self.step = HashJoinBuildStep::Spill;
+                            self.step_logs.push(HashJoinBuildStep::Spill);
                             return Ok(Event::Async);
                         }
                         Ok(Event::Sync)
@@ -164,6 +171,7 @@ impl Processor for TransformHashJoinBuild {
                     // Then restore data from disk and build hash table, util all spilled data are processed.
                     if !self.build_state.spilled_partition_set.read().is_empty() {
                         self.step = HashJoinBuildStep::WaitProbe;
+                        self.step_logs.push(HashJoinBuildStep::WaitProbe);
                         Ok(Event::Async)
                     } else {
                         Ok(Event::Finished)
@@ -217,9 +225,11 @@ impl Processor for TransformHashJoinBuild {
                     .load(Ordering::Relaxed)
                 {
                     self.step = HashJoinBuildStep::FastReturn;
+                    self.step_logs.push(HashJoinBuildStep::FastReturn);
                     return Ok(());
                 }
                 self.step = HashJoinBuildStep::Finalize;
+                self.step_logs.push(HashJoinBuildStep::Finalize);
             }
             HashJoinBuildStep::Spill => {
                 self.spill_handler
@@ -227,17 +237,26 @@ impl Processor for TransformHashJoinBuild {
                     .await?;
                 // After spill, the processor should continue to run, and process incoming data.
                 self.step = HashJoinBuildStep::Running;
+                self.step_logs.push(HashJoinBuildStep::Running);
             }
             HashJoinBuildStep::WaitProbe => {
                 self.build_state.hash_join_state.wait_probe_notify().await?;
-                // Currently, each processor will read its own partition
-                // Note: we assume that the partition files will fit into memory
-                // later, will introduce multiple level spill or other way to handle this.
                 let partition_id = self
                     .build_state
                     .hash_join_state
                     .partition_id
                     .load(Ordering::Relaxed);
+                if self.build_state.join_type() == JoinType::Cross {
+                    if partition_id == -1 {
+                        self.step = HashJoinBuildStep::Finished;
+                        self.step_logs.push(HashJoinBuildStep::Finished);
+                        return Ok(());
+                    }
+                    self.input_data = self.spill_handler.restore_cross_join().await?;
+                    self.build_state.restore_barrier.wait().await;
+                    self.reset().await?;
+                    return Ok(());
+                }
                 // If there is no partition to restore, probe will send `-1` to build
                 // Which means it's time to finish.
                 if partition_id == -1 {
@@ -249,6 +268,7 @@ impl Processor for TransformHashJoinBuild {
                             ErrorCode::TokioError("build_done_watcher channel is closed")
                         })?;
                     self.step = HashJoinBuildStep::Finished;
+                    self.step_logs.push(HashJoinBuildStep::Finished);
                     return Ok(());
                 }
                 self.input_data = self.spill_handler.restore(partition_id).await?;
@@ -258,5 +278,17 @@ impl Processor for TransformHashJoinBuild {
             _ => unreachable!(),
         }
         Ok(())
+    }
+
+    fn details_status(&self) -> Option<String> {
+        #[derive(Debug)]
+        #[allow(dead_code)]
+        struct Display {
+            step_logs: Vec<HashJoinBuildStep>,
+        }
+
+        Some(format!("{:?}", Display {
+            step_logs: self.step_logs.clone(),
+        }))
     }
 }

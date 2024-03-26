@@ -98,6 +98,7 @@ impl Plan {
             Plan::CreateView(_) => Ok("CreateView".to_string()),
             Plan::AlterView(_) => Ok("AlterView".to_string()),
             Plan::DropView(_) => Ok("DropView".to_string()),
+            Plan::DescribeView(_) => Ok("DescribeView".to_string()),
 
             // Streams
             Plan::CreateStream(_) => Ok("CreateStream".to_string()),
@@ -107,6 +108,9 @@ impl Plan {
             Plan::CreateIndex(_) => Ok("CreateIndex".to_string()),
             Plan::DropIndex(_) => Ok("DropIndex".to_string()),
             Plan::RefreshIndex(_) => Ok("RefreshIndex".to_string()),
+            Plan::CreateTableIndex(_) => Ok("CreateTableIndex".to_string()),
+            Plan::DropTableIndex(_) => Ok("DropTableIndex".to_string()),
+            Plan::RefreshTableIndex(_) => Ok("RefreshTableIndex".to_string()),
 
             // Virtual Columns
             Plan::CreateVirtualColumn(_) => Ok("CreateVirtualColumn".to_string()),
@@ -256,7 +260,9 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
             prewhere: None,
             agg_index: None,
             change_type: None,
+            inverted_index: None,
             statistics: Default::default(),
+            update_stream_columns: false,
         });
         let scan_expr = SExpr::create_leaf(Arc::new(scan));
         let mut predicates = vec![];
@@ -321,7 +327,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
     ));
     // add macthed clauses
     let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len());
-    let taregt_schema = table_entry.table().schema();
+    let taregt_schema = table_entry.table().schema_with_stream();
     for evaluator in &merge_into.matched_evaluators {
         let condition_format = evaluator.condition.as_ref().map_or_else(
             || "condition: None".to_string(),

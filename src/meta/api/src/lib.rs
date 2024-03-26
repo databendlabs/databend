@@ -20,31 +20,27 @@ extern crate databend_common_meta_types;
 
 mod background_api;
 mod background_api_impl;
-mod background_api_keys;
 mod background_api_test_suite;
 mod data_mask_api;
 mod data_mask_api_impl;
-mod data_mask_api_keys;
-mod id_generator;
 pub mod kv_app_error;
 pub mod kv_pb_api;
 pub mod reply;
 mod schema_api;
 mod schema_api_impl;
-mod schema_api_keys;
 mod schema_api_test_suite;
 mod share_api;
 mod share_api_impl;
-mod share_api_keys;
 mod share_api_test_suite;
 pub(crate) mod testing;
 pub mod txn_backoff;
 pub(crate) mod util;
 
+pub mod crud;
+
 pub use background_api::BackgroundApi;
 pub use background_api_test_suite::BackgroundApiTestSuite;
 pub use data_mask_api::DatamaskApi;
-pub use id_generator::IdGenerator;
 pub use schema_api::SchemaApi;
 pub(crate) use schema_api_impl::get_db_or_err;
 pub use schema_api_test_suite::SchemaApiTestSuite;

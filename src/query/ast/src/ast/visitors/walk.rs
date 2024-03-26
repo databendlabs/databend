@@ -96,7 +96,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
             expr,
             trim_where,
         } => visitor.visit_trim(*span, expr, trim_where),
-        Expr::Literal { span, lit } => visitor.visit_literal(*span, lit),
+        Expr::Literal { span, value } => visitor.visit_literal(*span, value),
         Expr::CountAll { span, window } => visitor.visit_count_all(*span, window),
         Expr::Tuple { span, exprs } => visitor.visit_tuple(*span, exprs),
         Expr::FunctionCall {
@@ -149,6 +149,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
             unit,
         } => visitor.visit_date_sub(*span, unit, interval, date),
         Expr::DateTrunc { span, unit, date } => visitor.visit_date_trunc(*span, unit, date),
+        Expr::Hole { .. } => {}
     }
 }
 
@@ -451,6 +452,8 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
+        Statement::ShowViews(stmt) => visitor.visit_show_views(stmt),
+        Statement::DescribeView(stmt) => visitor.visit_describe_view(stmt),
         Statement::CreateStream(stmt) => visitor.visit_create_stream(stmt),
         Statement::DropStream(stmt) => visitor.visit_drop_stream(stmt),
         Statement::ShowStreams(stmt) => visitor.visit_show_streams(stmt),
@@ -458,6 +461,9 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::CreateIndex(stmt) => visitor.visit_create_index(stmt),
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
         Statement::RefreshIndex(stmt) => visitor.visit_refresh_index(stmt),
+        Statement::CreateInvertedIndex(stmt) => visitor.visit_create_inverted_index(stmt),
+        Statement::DropInvertedIndex(stmt) => visitor.visit_drop_inverted_index(stmt),
+        Statement::RefreshInvertedIndex(stmt) => visitor.visit_refresh_inverted_index(stmt),
         Statement::CreateVirtualColumn(stmt) => visitor.visit_create_virtual_column(stmt),
         Statement::AlterVirtualColumn(stmt) => visitor.visit_alter_virtual_column(stmt),
         Statement::DropVirtualColumn(stmt) => visitor.visit_drop_virtual_column(stmt),

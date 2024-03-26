@@ -40,8 +40,8 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 pub use databend_common_catalog::table_context::TableContext;
 pub use fuse_column::FuseTableColumnStatisticsProvider;
+pub use fuse_part::FuseBlockPartInfo;
 pub use fuse_part::FuseLazyPartInfo;
-pub use fuse_part::FusePartInfo;
 pub use fuse_table::FuseTable;
 pub use fuse_type::FuseStorageFormat;
 pub use fuse_type::FuseTableType;
@@ -51,4 +51,5 @@ pub use pruning::SegmentLocation;
 mod sessions {
     pub use databend_common_catalog::table_context::TableContext;
 }
+
 pub use databend_storages_common_index as index;

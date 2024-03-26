@@ -34,6 +34,7 @@ use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
@@ -72,6 +73,7 @@ use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
+use crate::UdfRewriter;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
@@ -82,9 +84,12 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         match &stmt.src {
             CopyIntoTableSource::Location(location) => {
-                let plan = self
+                let mut plan = self
                     .bind_copy_into_table_common(bind_context, stmt, location)
                     .await?;
+
+                // for copy from location, collect files explicitly
+                plan.collect_files(self.ctx.as_ref()).await?;
                 self.bind_copy_into_table_from_location(bind_context, plan)
                     .await
             }
@@ -160,6 +165,7 @@ impl<'a> Binder {
                 files_info,
                 stage_info,
                 files_to_copy: None,
+                duplicated_files_detected: vec![],
                 is_select: false,
                 default_values: Some(default_values),
             },
@@ -191,6 +197,7 @@ impl<'a> Binder {
                         database: None,
                         table: None,
                         column: AstColumnID::Name(Identifier::from_name(
+                            None,
                             dest_field.name().to_string(),
                         )),
                     },
@@ -281,7 +288,19 @@ impl<'a> Binder {
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let catalog_info = catalog.info();
 
+        let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
+
         let (stage_info, files_info) = self.bind_attachment(attachment).await?;
+
+        // list the files to be copied in binding phase
+        // note that, this method(`bind_copy_from_attachment`) are used by
+        // - bind_insert (insert from attachment)
+        // - bind_replace only (replace from attachment),
+        // currently, they do NOT enforce the deduplication detection rules,
+        // as the vanilla Copy-Into does.
+        // thus, we do not care about the "duplicated_files_detected", just set it to empty vector.
+        let files_to_copy = list_stage_files(&stage_info, &files_info, thread_num, None).await?;
+        let duplicated_files_detected = vec![];
 
         let stage_schema = infer_table_schema(&data_schema)?;
 
@@ -303,7 +322,8 @@ impl<'a> Binder {
                 schema: stage_schema,
                 files_info,
                 stage_info,
-                files_to_copy: None,
+                files_to_copy: Some(files_to_copy),
+                duplicated_files_detected,
                 is_select: false,
                 default_values: Some(default_values),
             },
@@ -327,13 +347,10 @@ impl<'a> Binder {
         select_list: &'a [SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
-        let need_copy_file_infos = plan.collect_files(self.ctx.as_ref()).await?;
-
-        if need_copy_file_infos.is_empty() {
-            plan.no_file_to_copy = true;
+        plan.collect_files(self.ctx.as_ref()).await?;
+        if plan.no_file_to_copy {
             return Ok(Plan::CopyIntoTable(Box::new(plan)));
         }
-        plan.stage_table_info.files_to_copy = Some(need_copy_file_infos.clone());
 
         let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
@@ -343,20 +360,20 @@ impl<'a> Binder {
                 plan.stage_table_info.stage_info.clone(),
                 plan.stage_table_info.files_info.clone(),
                 alias,
-                Some(need_copy_file_infos.clone()),
+                plan.stage_table_info.files_to_copy.clone(),
             )
             .await?;
 
-        // Generate a analyzed select list with from context
+        // Generate an analyzed select list with from context
         let select_list = self
             .normalize_select_list(&mut from_context, select_list)
             .await?;
 
         for item in select_list.items.iter() {
-            if !self.check_allowed_scalar_expr_with_subquery(&item.scalar)? {
+            if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
                 // in fact, if there is a join, we will stop in `check_transform_query()`
                 return Err(ErrorCode::SemanticError(
-                    "copy into table source can't contain window|aggregate|udf|join functions"
+                    "copy into table source can't contain window|aggregate|join functions"
                         .to_string(),
                 ));
             };
@@ -375,11 +392,19 @@ impl<'a> Binder {
             )));
         }
 
-        let s_expr =
+        let mut s_expr =
             self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
+
+        // rewrite udf for interpreter udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
+
+        // rewrite udf for server udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
 
         // disable variant check to allow copy invalid JSON into tables
         let disable_variant_check = plan
@@ -390,10 +415,10 @@ impl<'a> Binder {
         if disable_variant_check {
             let hints = Hint {
                 hints_list: vec![HintItem {
-                    name: Identifier::from_name("disable_variant_check"),
+                    name: Identifier::from_name(None, "disable_variant_check"),
                     expr: Expr::Literal {
                         span: None,
-                        lit: Literal::UInt64(1),
+                        value: Literal::UInt64(1),
                     },
                 }],
             };

@@ -138,6 +138,7 @@ message NdJsonFileFormatParams {
   StageFileCompression compression = 1;
   optional string missing_field_as = 2;
   optional string null_field_as = 3;
+  repeated string null_if = 4;
 }
 
 message JsonFileFormatParams {

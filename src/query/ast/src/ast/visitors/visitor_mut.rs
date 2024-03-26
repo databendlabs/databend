@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::Span;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::schema::CreateOption;
@@ -585,6 +584,10 @@ pub trait VisitorMut: Sized {
 
     fn visit_drop_view(&mut self, _stmt: &mut DropViewStmt) {}
 
+    fn visit_show_views(&mut self, _stmt: &mut ShowViewsStmt) {}
+
+    fn visit_describe_view(&mut self, _stmt: &mut DescribeViewStmt) {}
+
     fn visit_create_stream(&mut self, _stmt: &mut CreateStreamStmt) {}
 
     fn visit_drop_stream(&mut self, _stmt: &mut DropStreamStmt) {}
@@ -596,7 +599,14 @@ pub trait VisitorMut: Sized {
     fn visit_create_index(&mut self, _stmt: &mut CreateIndexStmt) {}
 
     fn visit_drop_index(&mut self, _stmt: &mut DropIndexStmt) {}
+
     fn visit_refresh_index(&mut self, _stmt: &mut RefreshIndexStmt) {}
+
+    fn visit_create_inverted_index(&mut self, _stmt: &mut CreateInvertedIndexStmt) {}
+
+    fn visit_drop_inverted_index(&mut self, _stmt: &mut DropInvertedIndexStmt) {}
+
+    fn visit_refresh_inverted_index(&mut self, _stmt: &mut RefreshInvertedIndexStmt) {}
 
     fn visit_create_virtual_column(&mut self, _stmt: &mut CreateVirtualColumnStmt) {}
 
@@ -650,7 +660,7 @@ pub trait VisitorMut: Sized {
         &mut self,
         _create_option: &CreateOption,
         _name: &mut String,
-        _file_format_options: &mut FileFormatOptionsAst,
+        _file_format_options: &mut FileFormatOptions,
     ) {
     }
 

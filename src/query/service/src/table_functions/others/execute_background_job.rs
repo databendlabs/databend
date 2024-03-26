@@ -32,6 +32,7 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
@@ -153,9 +154,13 @@ impl AsyncSource for ExecuteBackgroundJobSource {
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         let background_handler = get_background_service_handler();
+
+        let non_empty = self.ctx.get_tenant();
+        let tenant = Tenant::new_nonempty(non_empty);
+
         background_handler
             .execute_scheduled_job(
-                self.ctx.get_tenant().to_string(),
+                tenant,
                 self.ctx.get_current_user()?.identity(),
                 self.job_name.clone(),
             )

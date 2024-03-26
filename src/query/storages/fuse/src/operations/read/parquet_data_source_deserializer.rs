@@ -23,7 +23,6 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
@@ -44,11 +43,10 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::IndexType;
 use xorf::BinaryFuse16;
 
-use super::fuse_source::fill_internal_column_meta;
 use super::parquet_data_source::ParquetDataSource;
-use super::util::add_row_prefix_meta;
+use super::util::add_data_block_meta;
 use super::util::need_reserve_block_info;
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
@@ -263,7 +261,7 @@ impl Processor for DeserializeDataTransform {
                 ParquetDataSource::Normal((data, virtual_data)) => {
                     let start = Instant::now();
                     let columns_chunks = data.columns_chunks()?;
-                    let part = FusePartInfo::from_part(&part)?;
+                    let part = FuseBlockPartInfo::from_part(&part)?;
 
                     let mut data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
                         &part.location,
@@ -315,30 +313,25 @@ impl Processor for DeserializeDataTransform {
 
                     // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
                     // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
-                    if self.block_reader.query_internal_columns() {
-                        let offsets = filter.as_ref().map(|bitmap| {
+                    let offsets = if self.block_reader.query_internal_columns() {
+                        filter.as_ref().map(|bitmap| {
                             (0..origin_num_rows)
                                 .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
                                 .collect()
-                        });
-                        data_block = fill_internal_column_meta(
-                            data_block,
-                            part,
-                            offsets,
-                            self.base_block_ids.clone(),
-                        )?;
-                    }
+                        })
+                    } else {
+                        None
+                    };
 
-                    // we will do recluster for stream here.
-                    if self.block_reader.update_stream_columns() {
-                        let inner_meta = data_block.take_meta();
-                        let meta = gen_mutation_stream_meta(inner_meta, &part.location)?;
-                        data_block = data_block.add_meta(Some(Box::new(meta)))?;
-                    }
-
-                    // for merge into target build
-                    data_block =
-                        add_row_prefix_meta(self.need_reserve_block_info, part, data_block)?;
+                    data_block = add_data_block_meta(
+                        data_block,
+                        part,
+                        offsets,
+                        self.base_block_ids.clone(),
+                        self.block_reader.update_stream_columns(),
+                        self.block_reader.query_internal_columns(),
+                        self.need_reserve_block_info,
+                    )?;
 
                     self.output_data = Some(data_block);
                 }

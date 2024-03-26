@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::lock::Lock;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
@@ -27,7 +28,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::gen_mutation_stream_operator;
+use databend_common_sql::StreamContext;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::TableMutationAggregator;
@@ -119,10 +120,11 @@ impl FuseTable {
         column_ids: HashSet<ColumnId>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let is_lazy = parts.is_lazy;
+        let is_lazy = parts.partitions_type() == PartInfoType::LazyLevel;
         let thresholds = self.get_block_thresholds();
         let cluster_key_id = self.cluster_key_id();
         let mut max_threads = ctx.get_settings().get_max_threads()? as usize;
+
         if is_lazy {
             let query_ctx = ctx.clone();
 
@@ -153,7 +155,7 @@ impl FuseTable {
                     Result::<_, ErrorCode>::Ok(partitions)
                 })?;
 
-                let partitions = Partitions::create_nolazy(PartitionsShuffleKind::Mod, partitions);
+                let partitions = Partitions::create(PartitionsShuffleKind::Mod, partitions);
                 query_ctx.set_partitions(partitions)?;
                 Ok(())
             });
@@ -171,14 +173,15 @@ impl FuseTable {
             self.change_tracking_enabled(),
             false,
         )?;
-        let (stream_columns, stream_operators) = if self.change_tracking_enabled() {
-            gen_mutation_stream_operator(
+        let stream_ctx = if self.change_tracking_enabled() {
+            Some(StreamContext::try_create(
+                ctx.get_function_context()?,
                 self.schema_with_stream(),
                 self.get_table_info().ident.seq,
                 false,
-            )?
+            )?)
         } else {
-            (vec![], vec![])
+            None
         };
         // Add source pipe.
         pipeline.add_source(
@@ -187,8 +190,7 @@ impl FuseTable {
                     ctx.clone(),
                     self.storage_format,
                     block_reader.clone(),
-                    stream_columns.clone(),
-                    stream_operators.clone(),
+                    stream_ctx.clone(),
                     output,
                 )
             },

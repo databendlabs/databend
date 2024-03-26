@@ -4,5 +4,3 @@ call  system$execute_background_job('test_tenant-compactor-job');
 target1	COMPACTION	'root'@'%'
 target1	COMPACTION	'root'@'%'
 target2	COMPACTION	'root'@'%'
-default	target1
-default	target2

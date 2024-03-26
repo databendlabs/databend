@@ -21,7 +21,7 @@ mod stage;
 pub use data_source_info::DataSourceInfo;
 pub use parquet::FullParquetMeta;
 pub use parquet::ParquetTableInfo;
-pub use parquet::ParquetTableInfo as ParquetTableInfoV2;
 pub use parquet_read_options::ParquetReadOptions;
 pub use result_scan::ResultScanTableInfo;
+pub use stage::list_stage_files;
 pub use stage::StageTableInfo;

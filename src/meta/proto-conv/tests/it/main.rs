@@ -84,3 +84,6 @@ mod v077_s3_remove_allow_anonymous;
 mod v078_grantentry;
 mod v079_udf_created_on;
 mod v081_udf_script;
+mod v082_table_index;
+mod v083_ndjson_format_params;
+mod v084_background_task_creator;

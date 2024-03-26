@@ -49,7 +49,7 @@ impl Display for IndexNameIdent {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct IndexIdToName {
     pub index_id: u64,
 }
@@ -60,7 +60,7 @@ impl Display for IndexIdToName {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct IndexId {
     pub index_id: u64,
 }
@@ -143,7 +143,7 @@ pub struct CreateIndexReq {
 impl Display for CreateIndexReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
-            CreateOption::None => {
+            CreateOption::Create => {
                 write!(f, "create_index:{}={:?}", self.name_ident.tenant, self.meta)
             }
             CreateOption::CreateIfNotExists => write!(

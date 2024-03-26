@@ -15,13 +15,21 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::ops::Range;
+use std::sync::Arc;
 
+use bumpalo::Bump;
+use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::AggregateFunction;
+use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::HashTableConfig;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
+use databend_common_expression::ProbeState;
 
 use crate::pipelines::processors::transforms::aggregator::HashTableCell;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -44,6 +52,60 @@ impl SerializedPayload {
         let entry = self.data_block.columns().last().unwrap();
         entry.value.as_column().unwrap()
     }
+
+    pub fn convert_to_aggregate_table(
+        &self,
+        group_types: Vec<DataType>,
+        aggrs: Vec<Arc<dyn AggregateFunction>>,
+        radix_bits: u64,
+        arena: Arc<Bump>,
+    ) -> Result<AggregateHashTable> {
+        let rows_num = self.data_block.num_rows();
+        let config = HashTableConfig::default().with_initial_radix_bits(radix_bits);
+        let mut state = ProbeState::default();
+        let agg_len = aggrs.len();
+        let group_len = group_types.len();
+        let mut hashtable =
+            AggregateHashTable::new_directly(group_types, aggrs, config, rows_num, arena);
+
+        let agg_states = (0..agg_len)
+            .map(|i| {
+                self.data_block
+                    .get_by_offset(i)
+                    .value
+                    .as_column()
+                    .unwrap()
+                    .clone()
+            })
+            .collect::<Vec<_>>();
+        let group_columns = (agg_len..(agg_len + group_len))
+            .map(|i| {
+                self.data_block
+                    .get_by_offset(i)
+                    .value
+                    .as_column()
+                    .unwrap()
+                    .clone()
+            })
+            .collect::<Vec<_>>();
+
+        let _ =
+            hashtable.add_groups(&mut state, &group_columns, &[vec![]], &agg_states, rows_num)?;
+
+        hashtable.payload.mark_min_cardinality();
+        Ok(hashtable)
+    }
+
+    pub fn convert_to_partitioned_payload(
+        &self,
+        group_types: Vec<DataType>,
+        aggrs: Vec<Arc<dyn AggregateFunction>>,
+        radix_bits: u64,
+        arena: Arc<Bump>,
+    ) -> Result<PartitionedPayload> {
+        let hashtable = self.convert_to_aggregate_table(group_types, aggrs, radix_bits, arena)?;
+        Ok(hashtable.payload)
+    }
 }
 
 pub struct BucketSpilledPayload {
@@ -51,11 +113,13 @@ pub struct BucketSpilledPayload {
     pub location: String,
     pub data_range: Range<u64>,
     pub columns_layout: Vec<u64>,
+    pub max_partition_count: usize,
 }
 
 pub struct AggregatePayload {
     pub bucket: isize,
     pub payload: Payload,
+    // use for new agg_hashtable
     pub max_partition_count: usize,
 }
 
@@ -64,6 +128,7 @@ pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
     HashTable(HashTablePayload<Method, V>),
     AggregateHashTable(PartitionedPayload),
     AggregatePayload(AggregatePayload),
+    AggregateSpilling(PartitionedPayload),
     BucketSpilled(BucketSpilledPayload),
     Spilled(Vec<BucketSpilledPayload>),
     Spilling(HashTablePayload<PartitionedHashMethod<Method>, V>),
@@ -95,6 +160,10 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
                 max_partition_count,
             },
         ))
+    }
+
+    pub fn create_agg_spilling(payload: PartitionedPayload) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::AggregateSpilling(payload))
     }
 
     pub fn create_serialized(
@@ -167,6 +236,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
             }
             AggregateMeta::AggregatePayload(_) => {
                 f.debug_struct("AggregateMeta:AggregatePayload").finish()
+            }
+            AggregateMeta::AggregateSpilling(_) => {
+                f.debug_struct("AggregateMeta:AggregateSpilling").finish()
             }
         }
     }

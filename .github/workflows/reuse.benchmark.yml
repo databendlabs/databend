@@ -95,8 +95,43 @@ jobs:
           source: ${{ inputs.source }}
           source_id: ${{ inputs.source_id }}
 
+  load:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        if: inputs.source == 'release'
+      - uses: actions/checkout@v4
+        if: inputs.source == 'pr'
+        with:
+          ref: "refs/pull/${{ inputs.source_id }}/merge"
+      - uses: ./.github/actions/setup_bendsql
+      - uses: ./.github/actions/benchmark_cloud
+        if: inputs.target == 'load' || inputs.target == 'all'
+        timeout-minutes: 120
+        id: benchmark
+        with:
+          sha: ${{ inputs.sha }}
+          run_id: ${{ inputs.run_id }}
+          dataset: load
+          source: ${{ inputs.source }}
+          source_id: ${{ inputs.source_id }}
+          size: Small
+          version: ${{ inputs.version }}
+          cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
+          cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
+          cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
+      - name: clean
+        if: always()
+        continue-on-error: true
+        env:
+          BENDSQL_DSN: "databend://${{ secrets.BENCHMARK_CLOUD_USER }}:${{ secrets.BENCHMARK_CLOUD_PASSWORD }}@${{ secrets.BENCHMARK_CLOUD_GATEWAY }}:443/?warehouse=default"
+        run: |
+          echo "DROP DATABASE IF EXISTS load_test_${{ inputs.run_id }};" | bendsql
+          echo "DROP WAREHOUSE IF EXISTS 'benchmark-${{ inputs.run_id }}';" | bendsql
+
   cloud:
     runs-on: ubuntu-latest
+    needs: load
     strategy:
       matrix:
         include:
@@ -129,6 +164,13 @@ jobs:
           cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
           cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
+      - name: clean
+        if: always()
+        continue-on-error: true
+        env:
+          BENDSQL_DSN: "databend://${{ secrets.BENCHMARK_CLOUD_USER }}:${{ secrets.BENCHMARK_CLOUD_PASSWORD }}@${{ secrets.BENCHMARK_CLOUD_GATEWAY }}:443/?warehouse=default"
+        run: |
+          echo "DROP WAREHOUSE IF EXISTS 'benchmark-${{ inputs.run_id }}';" | bendsql
 
   comment:
     needs: [local, cloud]
@@ -187,6 +229,8 @@ jobs:
         dataset:
           - "tpch"
           - "hits"
+          - "load"
+          - "internal"
     steps:
       - uses: actions/checkout@v4
       - name: Install Dependencies
@@ -196,7 +240,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: benchmark/clickbench/results
-          pattern: benchmark-*
+          pattern: benchmark-${{ matrix.dataset }}-*
           merge-multiple: true
       - name: Generate report and upload to R2
         working-directory: benchmark/clickbench

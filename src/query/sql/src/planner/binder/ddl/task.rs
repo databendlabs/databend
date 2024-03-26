@@ -129,7 +129,7 @@ impl Binder {
             schedule_opts: schedule_opts.clone(),
             suspend_task_after_num_failures: *suspend_task_after_num_failures,
             after: after.clone(),
-            when_condition: when_condition.clone(),
+            when_condition: when_condition.as_ref().map(|expr| expr.to_string()),
             comment: comments.clone(),
             session_parameters: session_parameters.clone(),
             error_integration: error_integration.clone(),

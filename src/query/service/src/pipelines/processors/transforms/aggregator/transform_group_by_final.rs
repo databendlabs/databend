@@ -40,6 +40,7 @@ pub struct TransformFinalGroupBy<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
     flush_state: PayloadFlushState,
+    reach_limit: bool,
 }
 
 impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
@@ -56,13 +57,14 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                 method,
                 params,
                 flush_state: PayloadFlushState::default(),
+                reach_limit: false,
             },
         )))
     }
 
     fn transform_agg_hashtable(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
         let mut agg_hashtable: Option<AggregateHashTable> = None;
-        if let AggregateMeta::Partitioned { bucket: _, data } = meta {
+        if let AggregateMeta::Partitioned { bucket, data } = meta {
             for bucket_data in data {
                 match bucket_data {
                     AggregateMeta::AggregateHashTable(payload) => match agg_hashtable.as_mut() {
@@ -77,9 +79,33 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                                 self.params.aggregate_functions.clone(),
                                 HashTableConfig::default().with_initial_radix_bits(0),
                                 capacity,
+                                Arc::new(Bump::new()),
                             );
                             hashtable.combine_payloads(&payload, &mut self.flush_state)?;
                             agg_hashtable = Some(hashtable);
+                        }
+                    },
+                    AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
+                        Some(ht) => {
+                            debug_assert!(bucket == payload.bucket);
+                            let arena = Arc::new(Bump::new());
+                            let payload = payload.convert_to_partitioned_payload(
+                                self.params.group_data_types.clone(),
+                                self.params.aggregate_functions.clone(),
+                                0,
+                                arena,
+                            )?;
+                            ht.combine_payloads(&payload, &mut self.flush_state)?;
+                        }
+                        None => {
+                            debug_assert!(bucket == payload.bucket);
+                            let arena = Arc::new(Bump::new());
+                            agg_hashtable = Some(payload.convert_to_aggregate_table(
+                                self.params.group_data_types.clone(),
+                                self.params.aggregate_functions.clone(),
+                                0,
+                                arena,
+                            )?);
                         }
                     },
                     _ => unreachable!(),
@@ -90,11 +116,23 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
         if let Some(mut ht) = agg_hashtable {
             let mut blocks = vec![];
             self.flush_state.clear();
+
+            let mut rows = 0;
             loop {
                 if ht.merge_result(&mut self.flush_state)? {
-                    blocks.push(DataBlock::new_from_columns(
-                        self.flush_state.take_group_columns(),
-                    ));
+                    let cols = self.flush_state.take_group_columns();
+                    rows += cols[0].len();
+                    blocks.push(DataBlock::new_from_columns(cols));
+
+                    if rows >= self.params.limit.unwrap_or(usize::MAX) {
+                        log::info!(
+                            "reach limit optimization in flush agg hashtable, current {}, total {}",
+                            rows,
+                            ht.len(),
+                        );
+                        self.reach_limit = true;
+                        break;
+                    }
                 } else {
                     break;
                 }
@@ -116,6 +154,10 @@ where Method: HashMethodBounds
     const NAME: &'static str = "TransformFinalGroupBy";
 
     fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
+        if self.reach_limit {
+            return Ok(self.params.empty_result_block());
+        }
+
         if self.params.enable_experimental_aggregate_hashtable {
             return self.transform_agg_hashtable(meta);
         }
@@ -142,6 +184,7 @@ where Method: HashMethodBounds
 
                             if let Some(limit) = self.params.limit {
                                 if hashtable.len() >= limit {
+                                    self.reach_limit = true;
                                     break 'merge_hashtable;
                                 }
                             }
@@ -162,6 +205,7 @@ where Method: HashMethodBounds
                     },
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(_) => unreachable!(),
+                    AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 }
             }
 

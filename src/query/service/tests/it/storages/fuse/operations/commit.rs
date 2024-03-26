@@ -32,12 +32,14 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -56,6 +58,8 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateTableIndexReply;
+use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
@@ -66,6 +70,8 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableIndexReply;
+use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
@@ -260,6 +266,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 table.schema().as_ref().clone(),
                 Statistics::default(),
                 new_segments,
+                None,
                 None,
                 None,
             );
@@ -473,9 +480,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn attach_query_str(&self, _kind: QueryKind, _query: String) {
-        todo!()
-    }
+    fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
 
     fn get_query_str(&self) -> String {
         todo!()
@@ -635,7 +640,7 @@ impl TableContext for CtxDelegation {
         _table_name: &str,
         _files: &[StageFileInfo],
         _max_files: Option<usize>,
-    ) -> Result<Vec<StageFileInfo>> {
+    ) -> Result<FilteredCopyFiles> {
         todo!()
     }
 
@@ -744,6 +749,14 @@ impl TableContext for CtxDelegation {
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         todo!()
     }
+
+    fn get_read_block_thresholds(&self) -> BlockThresholds {
+        todo!()
+    }
+
+    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -798,8 +811,18 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_name_by_id(table_id).await
     }
 
+    #[async_backtrace::framed]
+    async fn mget_table_names_by_ids(&self, table_id: &[MetaId]) -> Result<Vec<Option<String>>> {
+        self.cat.mget_table_names_by_ids(table_id).await
+    }
+
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         self.cat.get_db_name_by_id(db_id).await
+    }
+
+    #[async_backtrace::framed]
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
+        self.cat.mget_database_names_by_ids(db_ids).await
     }
 
     async fn get_table(
@@ -865,6 +888,16 @@ impl Catalog for FakedCatalog {
         _req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply> {
         todo!()
+    }
+
+    #[async_backtrace::framed]
+    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+        unimplemented!()
     }
 
     async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {

@@ -71,20 +71,20 @@ pub trait SyncSystemTable: Send + Sync {
         match Self::IS_LOCAL {
             true => Ok((
                 PartStatistics::default(),
-                Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
+                Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
                     SystemTablePart,
                 ))]),
             )),
             false => Ok((
                 PartStatistics::default(),
-                Partitions::create_nolazy(PartitionsShuffleKind::Broadcast, vec![Arc::new(
-                    Box::new(SystemTablePart),
-                )]),
+                Partitions::create(PartitionsShuffleKind::Broadcast, vec![Arc::new(Box::new(
+                    SystemTablePart,
+                ))]),
             )),
         }
     }
 
-    fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
+    fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
         Ok(())
     }
 }
@@ -150,8 +150,8 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
     }
 
     #[async_backtrace::framed]
-    async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        self.inner_table.truncate(ctx)
+    async fn truncate(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+        self.inner_table.truncate(ctx, pipeline)
     }
 
     fn broadcast_truncate_to_cluster(&self) -> bool {
@@ -215,15 +215,15 @@ pub trait AsyncSystemTable: Send + Sync {
         match Self::IS_LOCAL {
             true => Ok((
                 PartStatistics::default(),
-                Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
+                Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
                     SystemTablePart,
                 ))]),
             )),
             false => Ok((
                 PartStatistics::default(),
-                Partitions::create_nolazy(PartitionsShuffleKind::Broadcast, vec![Arc::new(
-                    Box::new(SystemTablePart),
-                )]),
+                Partitions::create(PartitionsShuffleKind::Broadcast, vec![Arc::new(Box::new(
+                    SystemTablePart,
+                ))]),
             )),
         }
     }

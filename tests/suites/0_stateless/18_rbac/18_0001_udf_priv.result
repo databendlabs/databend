@@ -1,42 +1,42 @@
 === test UDF priv
 === Only Has Privilege on f2 ===
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
 2
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
 select 1 from (select f2(f1(10)));
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
 select * from system.one where f2(f1(1));
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
 1	NULL
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f1 for user 'test-user'@'%' with roles [public]
 === Only Has Privilege on f1 ===
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
 2
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
 1	NULL
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF f2 for user 'test-user'@'%' with roles [public]
 === Has Privilege on f1, f2 ===
 1
 2
@@ -55,4 +55,4 @@ Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] i
 100
 200
 4
-Error: APIError: ResponseError with 1063: Permission denied, privilege [Usage] is required on UDF b for user 'test-user'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF b for user 'test-user'@'%' with roles [public]

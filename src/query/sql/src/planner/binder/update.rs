@@ -13,13 +13,16 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UpdateStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
 use databend_common_expression::ROW_VERSION_COL_NAME;
 
 use crate::binder::Binder;
@@ -31,6 +34,7 @@ use crate::plans::FunctionCall;
 use crate::plans::Plan;
 use crate::plans::UpdatePlan;
 use crate::BindContext;
+use crate::ColumnBinding;
 use crate::ScalarExpr;
 
 impl Binder {
@@ -132,41 +136,14 @@ impl Binder {
             }
         }
 
-        let bind_context = Box::new(context.clone());
         if table.change_tracking_enabled() {
-            let schema = table.schema_with_stream();
-            let col_name = ROW_VERSION_COL_NAME;
-            let index = schema.index_of(col_name)?;
-            let mut row_version = None;
-            for column_binding in bind_context.columns.iter() {
-                if BindContext::match_column_binding(
-                    Some(&database_name),
-                    Some(&table_name),
-                    col_name,
-                    column_binding,
-                ) {
-                    row_version = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: column_binding.clone(),
-                    }));
-                    break;
-                }
-            }
-            let col = row_version.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
-            let scalar = ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "plus".to_string(),
-                params: vec![],
-                arguments: vec![
-                    col,
-                    ConstantExpr {
-                        span: None,
-                        value: Scalar::Number(NumberScalar::UInt64(1)),
-                    }
-                    .into(),
-                ],
-            });
-            update_columns.insert(index, scalar);
+            let (index, row_version) = Self::update_row_version(
+                table.schema_with_stream(),
+                &context.columns,
+                Some(&database_name),
+                Some(&table_name),
+            )?;
+            update_columns.insert(index, row_version);
         }
 
         let plan = UpdatePlan {
@@ -175,10 +152,45 @@ impl Binder {
             table: table_name,
             update_list: update_columns,
             selection,
-            bind_context,
+            bind_context: Box::new(context),
             metadata: self.metadata.clone(),
             subquery_desc,
         };
         Ok(Plan::Update(Box::new(plan)))
+    }
+
+    pub fn update_row_version(
+        schema: Arc<TableSchema>,
+        columns: &[ColumnBinding],
+        database: Option<&str>,
+        table: Option<&str>,
+    ) -> Result<(FieldIndex, ScalarExpr)> {
+        let col_name = ROW_VERSION_COL_NAME;
+        let index = schema.index_of(col_name)?;
+        let mut row_version = None;
+        for column_binding in columns.iter() {
+            if BindContext::match_column_binding(database, table, col_name, column_binding) {
+                row_version = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: column_binding.clone(),
+                }));
+                break;
+            }
+        }
+        let col = row_version.ok_or_else(|| ErrorCode::Internal("row_version It's a bug"))?;
+        let scalar = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "plus".to_string(),
+            params: vec![],
+            arguments: vec![
+                col,
+                ConstantExpr {
+                    span: None,
+                    value: Scalar::Number(NumberScalar::UInt64(1)),
+                }
+                .into(),
+            ],
+        });
+        Ok((index, scalar))
     }
 }

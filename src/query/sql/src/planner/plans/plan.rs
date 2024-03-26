@@ -56,6 +56,7 @@ use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
+use crate::plans::CreateTableIndexPlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
@@ -71,6 +72,7 @@ use crate::plans::DescPasswordPolicyPlan;
 use crate::plans::DescSharePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
+use crate::plans::DescribeViewPlan;
 use crate::plans::DropCatalogPlan;
 use crate::plans::DropConnectionPlan;
 use crate::plans::DropDatabasePlan;
@@ -87,6 +89,7 @@ use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
+use crate::plans::DropTableIndexPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
@@ -107,6 +110,7 @@ use crate::plans::OptimizeTablePlan;
 use crate::plans::PresignPlan;
 use crate::plans::ReclusterTablePlan;
 use crate::plans::RefreshIndexPlan;
+use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
@@ -227,6 +231,7 @@ pub enum Plan {
     CreateView(Box<CreateViewPlan>),
     AlterView(Box<AlterViewPlan>),
     DropView(Box<DropViewPlan>),
+    DescribeView(Box<DescribeViewPlan>),
 
     // Streams
     CreateStream(Box<CreateStreamPlan>),
@@ -236,6 +241,9 @@ pub enum Plan {
     CreateIndex(Box<CreateIndexPlan>),
     DropIndex(Box<DropIndexPlan>),
     RefreshIndex(Box<RefreshIndexPlan>),
+    CreateTableIndex(Box<CreateTableIndexPlan>),
+    DropTableIndex(Box<DropTableIndexPlan>),
+    RefreshTableIndex(Box<RefreshTableIndexPlan>),
 
     // Virtual Columns
     CreateVirtualColumn(Box<CreateVirtualColumnPlan>),
@@ -426,6 +434,7 @@ impl Plan {
             Plan::VacuumDropTable(plan) => plan.schema(),
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
+            Plan::DescribeView(plan) => plan.schema(),
             Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),

@@ -18,6 +18,9 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_store::MetaStore;
 use databend_common_pipeline_core::processors::InputPort;
@@ -82,6 +85,23 @@ impl SelectInterpreter {
 
     pub fn get_result_columns(&self) -> Vec<ColumnBinding> {
         self.bind_context.columns.clone()
+    }
+
+    pub fn get_result_schema(&self) -> DataSchemaRef {
+        // Building data schema from bind_context columns
+        // TODO(leiyskey): Extract the following logic as new API of BindContext.
+        let fields = self
+            .bind_context
+            .columns
+            .iter()
+            .map(|column_binding| {
+                DataField::new(
+                    &column_binding.column_name,
+                    *column_binding.data_type.clone(),
+                )
+            })
+            .collect();
+        DataSchemaRefExt::create(fields)
     }
 
     #[inline]

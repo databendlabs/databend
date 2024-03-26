@@ -18,7 +18,6 @@ Filter
     │   ├── aggregate functions: [count()]
     │   ├── estimated rows: 1.00
     │   └── AggregatePartial
-    │       ├── output columns: [COUNT(*) (#4), #_group_by_key]
     │       ├── group by: [number]
     │       ├── aggregate functions: [count()]
     │       ├── estimated rows: 1.00
@@ -126,7 +125,6 @@ HashJoin
 │       ├── aggregate functions: [count()]
 │       ├── estimated rows: 1.00
 │       └── AggregatePartial
-│           ├── output columns: [count(*) (#2)]
 │           ├── group by: []
 │           ├── aggregate functions: [count()]
 │           ├── estimated rows: 1.00
@@ -184,7 +182,6 @@ HashJoin
 │           ├── limit: 1
 │           ├── estimated rows: 1.00
 │           └── AggregatePartial
-│               ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
 │               ├── group by: []
 │               ├── aggregate functions: [count(), any(number)]
 │               ├── estimated rows: 1.00
@@ -401,14 +398,14 @@ Filter
 ├── filters: [is_true(try_to_boolean(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), TRY_CAST(scalar_subquery_4 (#4) AS UInt64 NULL), 0)))]
 ├── estimated rows: 0.20
 └── HashJoin
-    ├── output columns: [t.number (#0), (count(*) = 1) (#4)]
+    ├── output columns: [t.number (#0), count(*) = 1 (#4)]
     ├── join type: LEFT SINGLE
     ├── build keys: [number (#2)]
     ├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
     ├── filters: []
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── output columns: [numbers.number (#2), (count(*) = 1) (#4)]
+    │   ├── output columns: [numbers.number (#2), count(*) = 1 (#4)]
     │   ├── expressions: [COUNT(*) (#3) = 1]
     │   ├── estimated rows: 1.00
     │   └── AggregateFinal
@@ -417,7 +414,6 @@ Filter
     │       ├── aggregate functions: [count()]
     │       ├── estimated rows: 1.00
     │       └── AggregatePartial
-    │           ├── output columns: [COUNT(*) (#3), #_group_by_key]
     │           ├── group by: [number]
     │           ├── aggregate functions: [count()]
     │           ├── estimated rows: 1.00

@@ -38,9 +38,9 @@ use crate::io::SegmentsIO;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
+use crate::operations::mutation::CompactBlockPartInfo;
 use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::CompactLazyPartInfo;
-use crate::operations::mutation::CompactPartInfo;
 use crate::operations::mutation::CompactTaskInfo;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::mutation::MAX_BLOCK_COUNT;
@@ -199,7 +199,7 @@ impl BlockCompactMutator {
                         .clone()
                 })
                 .collect::<Vec<_>>();
-            Partitions::create_nolazy(
+            Partitions::create(
                 PartitionsShuffleKind::Mod,
                 BlockCompactMutator::build_compact_tasks(
                     self.ctx.clone(),
@@ -211,7 +211,7 @@ impl BlockCompactMutator {
                 .await?,
             )
         } else {
-            Partitions::create(PartitionsShuffleKind::Mod, parts, true)
+            Partitions::create(PartitionsShuffleKind::Mod, parts)
         };
         Ok(partitions)
     }
@@ -572,16 +572,15 @@ impl CompactTaskBuilder {
         let segment_idx = removed_segment_indexes.pop().unwrap();
         let mut partitions: Vec<PartInfoPtr> = Vec::with_capacity(tasks.len() + 1);
         for (block_idx, blocks) in tasks.into_iter() {
-            partitions.push(Arc::new(Box::new(CompactPartInfo::CompactTaskInfo(
+            partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactTaskInfo(
                 CompactTaskInfo::create(blocks, BlockMetaIndex {
                     segment_idx,
                     block_idx,
-                    inner: None,
                 }),
             ))));
         }
 
-        partitions.push(Arc::new(Box::new(CompactPartInfo::CompactExtraInfo(
+        partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactExtraInfo(
             CompactExtraInfo::create(
                 segment_idx,
                 unchanged_blocks,

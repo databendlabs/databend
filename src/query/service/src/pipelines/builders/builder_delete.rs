@@ -15,15 +15,15 @@
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_sources::EmptySource;
-use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::DeleteSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::gen_mutation_stream_operator;
+use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseLazyPartInfo;
@@ -54,7 +54,8 @@ impl PipelineBuilder {
             return self.main_pipeline.add_source(EmptySource::create, 1);
         }
 
-        if delete.parts.is_lazy {
+        let is_lazy = delete.parts.partitions_type() == PartInfoType::LazyLevel;
+        if is_lazy {
             let ctx = self.ctx.clone();
             let projection = Projection::Columns(delete.col_indices.clone());
             let filters = delete.filters.clone();
@@ -62,7 +63,7 @@ impl PipelineBuilder {
             let mut segment_locations = Vec::with_capacity(delete.parts.partitions.len());
             for part in &delete.parts.partitions {
                 // Safe to downcast because we know the the partition is lazy
-                let part: &FuseLazyPartInfo = part.as_any().downcast_ref().unwrap();
+                let part: &FuseLazyPartInfo = FuseLazyPartInfo::from_part(part)?;
                 segment_locations.push(SegmentLocation {
                     segment_idx: part.segment_index,
                     location: part.segment_location.clone(),
@@ -105,9 +106,10 @@ impl PipelineBuilder {
             delete.query_row_id_col,
             &mut self.main_pipeline,
         )?;
+
         if table.change_tracking_enabled() {
-            let func_ctx = self.ctx.get_function_context()?;
-            let (stream, operators) = gen_mutation_stream_operator(
+            let stream_ctx = StreamContext::try_create(
+                self.ctx.get_function_context()?,
                 table.schema_with_stream(),
                 table.get_table_info().ident.seq,
                 true,
@@ -117,14 +119,11 @@ impl PipelineBuilder {
                     TransformAddStreamColumns::try_create(
                         transform_input_port,
                         transform_output_port,
-                        CompoundBlockOperator {
-                            operators: operators.clone(),
-                            ctx: func_ctx.clone(),
-                        },
-                        stream.clone(),
+                        stream_ctx.clone(),
                     )
                 })?;
         }
+
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds(), None)?;
         self.main_pipeline.add_transform(|input, output| {
@@ -138,8 +137,9 @@ impl PipelineBuilder {
             )?;
             proc.into_processor()
         })?;
+
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
-        if delete.parts.is_lazy {
+        if is_lazy {
             table.chain_mutation_aggregator(
                 &ctx,
                 &mut self.main_pipeline,

@@ -27,12 +27,10 @@ fn test_normalize_identifier_default() {
 
     {
         // Unquoted
-        let ident = Identifier {
-            name: "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung"
-                .to_string(),
-            quote: None,
-            span: None,
-        };
+        let ident = Identifier::from_name(
+            None,
+            "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung",
+        );
         let norm_name = normalize_identifier(&ident, &ctx).name;
         assert_eq!(
             norm_name,
@@ -42,12 +40,11 @@ fn test_normalize_identifier_default() {
 
     {
         // Quoted
-        let ident = Identifier {
-            name: "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung"
-                .to_string(),
-            quote: Some('"'),
-            span: None,
-        };
+        let ident = Identifier::from_name_with_quoted(
+            None,
+            "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung",
+            Some('"'),
+        );
         let norm_name = normalize_identifier(&ident, &ctx).name;
         assert_eq!(
             norm_name,
@@ -66,12 +63,11 @@ fn test_normalize_identifier_quoted_case_insensitive() {
 
     {
         // Quoted
-        let ident = Identifier {
-            name: "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung"
-                .to_string(),
-            quote: Some('"'),
-            span: None,
-        };
+        let ident = Identifier::from_name_with_quoted(
+            None,
+            "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung",
+            Some('"'),
+        );
         let norm_name = normalize_identifier(&ident, &ctx).name;
         assert_eq!(
             norm_name,
@@ -90,12 +86,10 @@ fn test_normalize_identifier_unquoted_case_sensitive() {
 
     {
         // Unquoted
-        let ident = Identifier {
-            name: "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung"
-                .to_string(),
-            quote: None,
-            span: None,
-        };
+        let ident = Identifier::from_name(
+            None,
+            "FooBar 这是一个标识符 これは識別子です Это ИДЕНТификатор Dies ist eine Kennung",
+        );
         let norm_name = normalize_identifier(&ident, &ctx).name;
         assert_eq!(
             norm_name,
@@ -116,6 +110,6 @@ fn test_normalize_identifiers_in_expr() {
 
     assert_eq!(
         format!("{:#}", expr),
-        "EXISTS (SELECT func((\"T\".a + 1)) AS b)".to_string()
+        "EXISTS (SELECT func(\"T\".a + 1) AS b)".to_string()
     );
 }

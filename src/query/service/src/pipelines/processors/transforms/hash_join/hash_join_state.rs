@@ -35,14 +35,12 @@ use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
 use ethnum::U256;
 use parking_lot::RwLock;
 
 use super::merge_into_hash_join_optimization::MergeIntoState;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
-use crate::pipelines::processors::transforms::hash_join::spill_common::spilling_supported_join_type;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
@@ -131,8 +129,8 @@ impl HashJoinState {
         build_projections: &ColumnSet,
         hash_join_desc: HashJoinDesc,
         probe_to_build: &[(usize, (bool, bool))],
-        merge_into_target_table_index: IndexType,
         merge_into_is_distributed: bool,
+        enable_merge_into_optimization: bool,
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -143,9 +141,7 @@ impl HashJoinState {
         let (build_done_watcher, _build_done_dummy_receiver) = watch::channel(0);
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
         let mut enable_spill = false;
-        if spilling_supported_join_type(&hash_join_desc.join_type)
-            && ctx.get_settings().get_join_spilling_memory_ratio()? != 0
-        {
+        if ctx.get_settings().get_join_spilling_memory_ratio()? != 0 {
             enable_spill = true;
         }
         Ok(Arc::new(HashJoinState {
@@ -164,10 +160,12 @@ impl HashJoinState {
             _continue_build_dummy_receiver,
             partition_id: AtomicI8::new(-2),
             enable_spill,
-            merge_into_state: MergeIntoState::try_create_merge_into_state(
-                merge_into_target_table_index,
-                merge_into_is_distributed,
-            ),
+            merge_into_state: match enable_merge_into_optimization {
+                false => None,
+                true => Some(MergeIntoState::create_merge_into_state(
+                    merge_into_is_distributed,
+                )),
+            },
         }))
     }
 

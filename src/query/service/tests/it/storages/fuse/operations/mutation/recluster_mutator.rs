@@ -31,7 +31,7 @@ use databend_common_storages_fuse::operations::ReclusterMutator;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
-use databend_common_storages_fuse::FusePartInfo;
+use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
@@ -225,6 +225,7 @@ async fn test_safety_for_recluster() -> Result<()> {
             locations.clone(),
             None,
             None,
+            None,
         ));
 
         let mut block_ids = HashSet::new();
@@ -290,7 +291,7 @@ async fn test_safety_for_recluster() -> Result<()> {
                 let parts = task.parts.partitions;
                 assert!(task.total_bytes <= recluster_block_size);
                 for part in parts.into_iter() {
-                    let fuse_part = FusePartInfo::from_part(&part)?;
+                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                     blocks.push(fuse_part.location.clone());
                 }
             }

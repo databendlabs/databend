@@ -1,0 +1,23 @@
+GRANT OWNERSHIP ON 'default'.'c_r'.* TO ROLE `role3`
+GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
+GRANT SELECT,INSERT ON 'default'.'c_r2'.* TO ROLE `role3`
+GRANT SELECT,OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
+GRANT UPDATE,DELETE ON 'default'.'c_r1'.'t1' TO ROLE `role3`
+GRANT UPDATE,DELETE ON 'default'.'c_r2'.'t2' TO ROLE `role3`
+=== drop database c_r , c_r2 ===
+GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
+GRANT UPDATE,DELETE ON 'default'.'c_r1'.'t1' TO ROLE `role3`
+=== undrop database c_r2 ===
+GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
+GRANT SELECT,INSERT ON 'default'.'c_r2'.* TO ROLE `role3`
+GRANT UPDATE,DELETE ON 'default'.'c_r1'.'t1' TO ROLE `role3`
+GRANT UPDATE,DELETE ON 'default'.'c_r2'.'t2' TO ROLE `role3`
+=== undrop database c_r, contain table c_r.t's ownership ===
+GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
+GRANT SELECT,INSERT ON 'default'.'c_r2'.* TO ROLE `role3`
+GRANT SELECT,OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
+GRANT UPDATE,DELETE ON 'default'.'c_r1'.'t1' TO ROLE `role3`
+GRANT UPDATE,DELETE ON 'default'.'c_r2'.'t2' TO ROLE `role3`
+=== drop database c_r, c_r2, re-create c_r, c_r2 ===
+GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
+GRANT UPDATE,DELETE ON 'default'.'c_r1'.'t1' TO ROLE `role3`

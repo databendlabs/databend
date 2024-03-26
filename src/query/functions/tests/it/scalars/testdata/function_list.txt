@@ -10,7 +10,11 @@ ceiling -> ceil
 char_length -> length
 character_length -> length
 current_timestamp -> now
+date -> to_date
 date_format -> to_string
+day -> to_day_of_month
+dayofmonth -> to_day_of_month
+dayofyear -> to_day_of_year
 hex -> to_hex
 intdiv -> div
 ipv4_num_to_string -> inet_ntoa
@@ -20,10 +24,12 @@ lcase -> lower
 length_utf8 -> length
 mid -> substr
 mod -> modulo
+month -> to_month
 neg -> minus
 negate -> minus
 object_keys -> json_object_keys
 power -> pow
+quarter -> to_quarter
 remove_nullable -> assume_not_null
 rlike -> regexp
 sha1 -> sha
@@ -36,6 +42,7 @@ st_geomfromtext -> st_geometryfromwkt
 st_geomfromwkt -> st_geometryfromwkt
 str_to_date -> to_date
 str_to_timestamp -> to_timestamp
+str_to_year -> to_year
 substr_utf8 -> substr
 substring -> substr
 substring_utf8 -> substr
@@ -50,6 +57,9 @@ try_to_datetime -> try_to_timestamp
 ucase -> upper
 unhex -> from_hex
 uuid -> gen_random_uuid
+week -> to_week_of_year
+weekofyear -> to_week_of_year
+year -> to_year
 
 Functions overloads:
 0 abs FACTORY
@@ -2172,6 +2182,7 @@ Functions overloads:
 1 is_float(Variant NULL) :: Boolean NULL
 0 is_integer(Variant) :: Boolean
 1 is_integer(Variant NULL) :: Boolean NULL
+0 is_not_error(T0) :: Boolean
 0 is_not_null(NULL) :: Boolean
 1 is_not_null(T0 NULL) :: Boolean
 0 is_null_value(Variant) :: Boolean

@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -34,7 +35,9 @@ use crate::executor::physical_plans::ChunkProject;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
+use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
+use crate::executor::physical_plans::CopyIntoTableSource;
 use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DeleteSource;
 use crate::executor::physical_plans::DistributedInsertSelect;
@@ -68,7 +71,7 @@ use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, EnumAsInner)]
 pub enum PhysicalPlan {
     /// Query
     TableScan(TableScan),
@@ -104,6 +107,7 @@ pub enum PhysicalPlan {
 
     /// Copy into table
     CopyIntoTable(Box<CopyIntoTable>),
+    CopyIntoLocation(Box<CopyIntoLocation>),
 
     /// Replace
     ReplaceAsyncSourcer(ReplaceAsyncSourcer),
@@ -262,6 +266,15 @@ impl PhysicalPlan {
             PhysicalPlan::CopyIntoTable(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
+                match &mut plan.source {
+                    CopyIntoTableSource::Query(input) => input.adjust_plan_id(next_id),
+                    CopyIntoTableSource::Stage(input) => input.adjust_plan_id(next_id),
+                };
+            }
+            PhysicalPlan::CopyIntoLocation(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
             }
             PhysicalPlan::DeleteSource(plan) => {
                 plan.plan_id = *next_id;
@@ -404,6 +417,7 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoAppendNotMatched(v) => v.plan_id,
             PhysicalPlan::CommitSink(v) => v.plan_id,
             PhysicalPlan::CopyIntoTable(v) => v.plan_id,
+            PhysicalPlan::CopyIntoLocation(v) => v.plan_id,
             PhysicalPlan::ReplaceAsyncSourcer(v) => v.plan_id,
             PhysicalPlan::ReplaceDeduplicate(v) => v.plan_id,
             PhysicalPlan::ReplaceInto(v) => v.plan_id,
@@ -444,6 +458,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
+            PhysicalPlan::CopyIntoLocation(plan) => plan.output_schema(),
             PhysicalPlan::CteScan(plan) => plan.output_schema(),
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
@@ -476,7 +491,12 @@ impl PhysicalPlan {
 
     pub fn name(&self) -> String {
         match self {
-            PhysicalPlan::TableScan(_) => "TableScan".to_string(),
+            PhysicalPlan::TableScan(v) => match &v.source.source_info {
+                DataSourceInfo::TableSource(_) => "TableScan".to_string(),
+                DataSourceInfo::StageSource(_) => "StageScan".to_string(),
+                DataSourceInfo::ParquetSource(_) => "ParquetScan".to_string(),
+                DataSourceInfo::ResultScanSource(_) => "ResultScan".to_string(),
+            },
             PhysicalPlan::Filter(_) => "Filter".to_string(),
             PhysicalPlan::Project(_) => "Project".to_string(),
             PhysicalPlan::EvalScalar(_) => "EvalScalar".to_string(),
@@ -499,6 +519,7 @@ impl PhysicalPlan {
             PhysicalPlan::CommitSink(_) => "CommitSink".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
             PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
+            PhysicalPlan::CopyIntoLocation(_) => "CopyIntoLocation".to_string(),
             PhysicalPlan::ReplaceAsyncSourcer(_) => "ReplaceAsyncSourcer".to_string(),
             PhysicalPlan::ReplaceDeduplicate(_) => "ReplaceDeduplicate".to_string(),
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
@@ -580,6 +601,7 @@ impl PhysicalPlan {
             ),
             PhysicalPlan::ReclusterSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Udf(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::CopyIntoLocation(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Duplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Shuffle(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkFilter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -610,6 +632,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::CopyIntoLocation(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
@@ -826,7 +849,7 @@ impl PhysicalPlan {
                         v.output_schema()?.num_fields(),
                         std::cmp::max(
                             v.output_schema()?.num_fields(),
-                            v.source.source_info.schema().num_fields()
+                            v.source.source_info.schema().num_fields(),
                         )
                     ),
                     v.name_mapping.keys().cloned().collect(),

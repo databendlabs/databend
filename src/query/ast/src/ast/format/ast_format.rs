@@ -733,12 +733,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     "({})",
                     options
                         .iter()
-                        .flat_map(|opt| {
+                        .map(|opt| {
                             match opt {
-                                ExplainOption::Verbose(true) => Some("Verbose"),
-                                ExplainOption::Logical(true) => Some("Logical"),
-                                ExplainOption::Optimized(true) => Some("Optimized"),
-                                _ => None,
+                                ExplainOption::Verbose => "Verbose",
+                                ExplainOption::Logical => "Logical",
+                                ExplainOption::Optimized => "Optimized",
                             }
                         })
                         .join(", ")
@@ -816,8 +815,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             children.push(pattern_node);
         }
         if !copy.file_format.is_empty() {
-            let mut file_formats_children = Vec::with_capacity(copy.file_format.len());
-            for (k, v) in copy.file_format.iter() {
+            let mut file_formats_children = Vec::new();
+            for (k, v) in copy.file_format.options.iter() {
                 let file_format_name = format!("FileFormat {} = {:?}", k, v);
                 let file_format_format_ctx = AstFormatContext::new(file_format_name);
                 let file_format_node = FormatTreeNode::new(file_format_format_ctx);
@@ -899,9 +898,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         );
         children.push(from_node);
 
-        if !copy.file_format.is_empty() {
-            let mut file_formats_children = Vec::with_capacity(copy.file_format.len());
-            for (k, v) in copy.file_format.iter() {
+        if !copy.file_format.options.is_empty() {
+            let mut file_formats_children = Vec::with_capacity(copy.file_format.options.len());
+            for (k, v) in copy.file_format.options.iter() {
                 let file_format_name = format!("FileFormat {} = {:?}", k, v);
                 let file_format_format_ctx = AstFormatContext::new(file_format_name);
                 let file_format_node = FormatTreeNode::new(file_format_format_ctx);
@@ -1095,8 +1094,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 self.children.push(streaming_node);
             }
             InsertSource::StreamingV2 { settings, .. } => {
-                let mut file_formats_children = Vec::with_capacity(settings.len());
-                for (k, v) in settings.iter() {
+                let mut file_formats_children = Vec::new();
+                for (k, v) in settings.options.iter() {
                     let file_format_name = format!("FileFormat {} = {:?}", k, v);
                     let file_format_format_ctx = AstFormatContext::new(file_format_name);
                     let file_format_node = FormatTreeNode::new(file_format_format_ctx);
@@ -1574,10 +1573,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     AstFormatContext::with_children(action_name, children.len());
                 FormatTreeNode::with_children(action_format_ctx, children)
             }
-            AlterTableAction::RevertTo { point } => {
+            AlterTableAction::FlashbackTo { point } => {
                 self.visit_time_travel_point(point);
                 let point_node = self.children.pop().unwrap();
-                let action_name = "Action RevertTo".to_string();
+                let action_name = "Action FlashbackTo".to_string();
                 let action_format_ctx = AstFormatContext::with_children(action_name, 1);
                 FormatTreeNode::with_children(action_format_ctx, vec![point_node])
             }
@@ -1723,6 +1722,33 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_show_views(&mut self, stmt: &'ast ShowViewsStmt) {
+        let mut children = Vec::new();
+        if let Some(database) = &stmt.database {
+            let database_name = format!("Database {}", database);
+            let database_format_ctx = AstFormatContext::new(database_name);
+            let database_node = FormatTreeNode::new(database_format_ctx);
+            children.push(database_node);
+        }
+        if let Some(limit) = &stmt.limit {
+            self.visit_show_limit(limit);
+            children.push(self.children.pop().unwrap());
+        }
+        let name = "ShowViews".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_describe_view(&mut self, stmt: &'ast DescribeViewStmt) {
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.view);
+        let child = self.children.pop().unwrap();
+        let name = "DescribeView".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
     fn visit_create_stream(&mut self, stmt: &'ast CreateStreamStmt) {
         let mut children = Vec::new();
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.stream);
@@ -1812,6 +1838,60 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         }
 
         let name = "RefreshIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_create_inverted_index(&mut self, stmt: &'ast CreateInvertedIndexStmt) {
+        self.visit_index_ref(&stmt.index_name);
+        let index_child = self.children.pop().unwrap();
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        let table_child = self.children.pop().unwrap();
+        let mut columns_children = Vec::with_capacity(stmt.columns.len());
+        for column in stmt.columns.iter() {
+            self.visit_identifier(column);
+            columns_children.push(self.children.pop().unwrap());
+        }
+        let columns_name = "Column".to_string();
+        let columns_ctx = AstFormatContext::with_children(columns_name, columns_children.len());
+        let columns_child = FormatTreeNode::with_children(columns_ctx, columns_children);
+
+        let name = "CreateInvertedIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 3);
+        let node = FormatTreeNode::with_children(format_ctx, vec![
+            index_child,
+            table_child,
+            columns_child,
+        ]);
+        self.children.push(node);
+    }
+
+    fn visit_drop_inverted_index(&mut self, stmt: &'ast DropInvertedIndexStmt) {
+        self.visit_index_ref(&stmt.index_name);
+        let index_child = self.children.pop().unwrap();
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        let table_child = self.children.pop().unwrap();
+
+        let name = "DropInvertedIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 2);
+        let node = FormatTreeNode::with_children(format_ctx, vec![index_child, table_child]);
+        self.children.push(node);
+    }
+
+    fn visit_refresh_inverted_index(&mut self, stmt: &'ast RefreshInvertedIndexStmt) {
+        let mut children = Vec::new();
+        self.visit_index_ref(&stmt.index_name);
+        children.push(self.children.pop().unwrap());
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        children.push(self.children.pop().unwrap());
+        if let Some(limit) = stmt.limit {
+            let name = format!("Refresh inverted index limit {}", limit);
+            let limit_format_ctx = AstFormatContext::new(name);
+            children.push(FormatTreeNode::new(limit_format_ctx));
+        }
+
+        let name = "RefreshInvertedIndex".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
@@ -2399,8 +2479,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             children.push(FormatTreeNode::new(location_format_ctx));
         }
         if !stmt.file_format_options.is_empty() {
-            let mut file_formats_children = Vec::with_capacity(stmt.file_format_options.len());
-            for (k, v) in stmt.file_format_options.iter() {
+            let mut file_formats_children = Vec::new();
+            for (k, v) in stmt.file_format_options.options.iter() {
                 let file_format_name = format!("FileFormat {} = {:?}", k, v);
                 let file_format_format_ctx = AstFormatContext::new(file_format_name);
                 let file_format_node = FormatTreeNode::new(file_format_format_ctx);

@@ -96,9 +96,9 @@ macro_rules! transform_interval_add_sub {
 
 pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
     match ast {
-        AExpr::Literal { span, lit } => RawExpr::Constant {
+        AExpr::Literal { span, value } => RawExpr::Constant {
             span,
-            scalar: transform_literal(lit),
+            scalar: transform_literal(value),
         },
         AExpr::ColumnRef {
             span,
@@ -313,7 +313,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             let mut keys = Vec::with_capacity(kvs.len());
             let mut vals = Vec::with_capacity(kvs.len());
             for (key, val) in kvs {
-                keys.push(transform_expr(AExpr::Literal { span, lit: key }, columns));
+                keys.push(transform_expr(AExpr::Literal { span, value: key }, columns));
                 vals.push(transform_expr(val, columns));
             }
             let keys = RawExpr::FunctionCall {
@@ -474,7 +474,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
 
             let list: Vec<AExpr> = list
                 .into_iter()
-                .filter(|e| matches!(e, AExpr::Literal { lit, .. } if lit != &ASTLiteral::Null))
+                .filter(|e| matches!(e, AExpr::Literal { value, .. } if value != &ASTLiteral::Null))
                 .collect();
             if list.is_empty()
                 || (list.len() > 3 && list.iter().all(|e| matches!(e, AExpr::Literal { .. })))

@@ -799,7 +799,7 @@ select to_day_of_year(to_date(18902))  =  275
 
 
 query I
-select to_day_of_month(to_datetime(1633173324000000))
+select day(to_datetime(1633173324000000))
 ----
 2
 
@@ -887,10 +887,10 @@ select to_year(to_datetime(1646404329000000)) = 2022
 ----
 1
 
-query B
-select to_quarter(to_datetime(1646404329000000)) = 1
+query BB
+select to_quarter(to_datetime(1646404329000000)) = 1, quarter(to_datetime(1646404329000000)) = 1
 ----
-1
+1 1
 
 query T
 select date_add(QUARTER, 1, to_date('2018-01-02'))
@@ -1071,7 +1071,7 @@ select to_timestamp('2022年02月04日，8时58分59秒,时区：+0800', '%Y年%
 2022-02-04 00:58:59.000000
 
 query I
-select to_week_of_year('2017-01-01');
+select week('2017-01-01');
 ----
 52
 

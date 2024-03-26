@@ -26,6 +26,7 @@ use databend_common_expression::AggregateHashTable;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::InputPort;
@@ -124,10 +125,12 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
             let _dropper = GroupByHashTableDropper::<Method>::create();
             HashTable::HashTable(HashTableCell::create(hashtable, _dropper))
         } else {
+            let arena = Arc::new(Bump::new());
             HashTable::AggregateHashTable(AggregateHashTable::new(
                 params.group_data_types.clone(),
                 params.aggregate_functions.clone(),
                 config,
+                arena,
             ))
         };
 
@@ -227,6 +230,40 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
 
                     unreachable!()
                 }
+
+                if matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
+                    || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage)
+                {
+                    if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
+                        let group_types = v.payload.group_types.clone();
+                        let aggrs = v.payload.aggrs.clone();
+                        v.config.update_current_max_radix_bits();
+                        let config = v
+                            .config
+                            .clone()
+                            .with_initial_radix_bits(v.config.max_radix_bits);
+                        let mut state = PayloadFlushState::default();
+
+                        // repartition to max for normalization
+                        let partitioned_payload = v
+                            .payload
+                            .repartition(1 << config.max_radix_bits, &mut state);
+                        let blocks = vec![DataBlock::empty_with_meta(
+                            AggregateMeta::<Method, ()>::create_agg_spilling(partitioned_payload),
+                        )];
+
+                        let arena = Arc::new(Bump::new());
+                        self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
+                            group_types,
+                            aggrs,
+                            config,
+                            arena,
+                        ));
+                        return Ok(blocks);
+                    }
+
+                    unreachable!()
+                }
             }
         }
 
@@ -241,9 +278,11 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             },
             HashTable::HashTable(cell) => match cell.hashtable.len() == 0 {
                 true => vec![],
-                false => vec![DataBlock::empty_with_meta(
-                    AggregateMeta::<Method, ()>::create_hashtable(-1, cell),
-                )],
+                false => {
+                    vec![DataBlock::empty_with_meta(
+                        AggregateMeta::<Method, ()>::create_hashtable(-1, cell),
+                    )]
+                }
             },
             HashTable::PartitionedHashTable(v) => {
                 info!(
@@ -251,6 +290,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                     convert_number_size(v.len() as f64),
                     convert_byte_size(v.allocated_bytes() as f64)
                 );
+
                 let _ = v.hashtable.unsize_key_size();
                 let cells = PartitionedHashTableDropper::split_cell(v);
                 let mut blocks = Vec::with_capacity(cells.len());
@@ -267,8 +307,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             HashTable::AggregateHashTable(hashtable) => {
                 let partition_count = hashtable.payload.partition_count();
                 let mut blocks = Vec::with_capacity(partition_count);
-                for (bucket, mut payload) in hashtable.payload.payloads.into_iter().enumerate() {
-                    payload.arenas.extend_from_slice(&hashtable.payload.arenas);
+                for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
                     blocks.push(DataBlock::empty_with_meta(
                         AggregateMeta::<Method, ()>::create_agg_payload(
                             bucket as isize,

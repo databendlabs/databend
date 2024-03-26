@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod abort_operation;
-mod mutation_log;
+mod generators;
+mod meta;
 mod processors;
-mod snapshot_generator;
 
-pub use abort_operation::AbortOperation;
-pub use mutation_log::*;
+pub use generators::*;
+pub use meta::*;
 pub use processors::*;
-pub use snapshot_generator::*;

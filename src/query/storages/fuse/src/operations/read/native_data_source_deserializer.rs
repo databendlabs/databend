@@ -27,7 +27,6 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PushDownInfo;
@@ -65,16 +64,15 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::IndexType;
 use xorf::BinaryFuse16;
 
-use super::fuse_source::fill_internal_column_meta;
 use super::native_data_source::NativeDataSource;
+use super::util::add_data_block_meta;
 use super::util::need_reserve_block_info;
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::operations::read::runtime_filter_prunner::update_bitmap_with_bloom_filter;
-use crate::operations::read::util::add_row_prefix_meta;
 use crate::DEFAULT_ROW_PER_PAGE;
 
 /// A helper struct to store the intermediate state while reading a native partition.
@@ -544,7 +542,7 @@ impl NativeDeserializeDataTransform {
                 // Default value satisfies the filter, update the value of top-k column.
                 if let Some((_, sorter, index)) = self.top_k.as_mut() {
                     if !self.read_state.array_iters.contains_key(index) {
-                        let part = FusePartInfo::from_part(&self.parts[0])?;
+                        let part = FuseBlockPartInfo::from_part(&self.parts[0])?;
                         let num_rows = part.nums_rows;
 
                         let data_type = self.src_schema.field(*index).data_type().clone();
@@ -568,7 +566,7 @@ impl NativeDeserializeDataTransform {
     }
 
     /// Build a block whose columns are all default values.
-    fn build_default_block(&self, fuse_part: &FusePartInfo) -> Result<DataBlock> {
+    fn build_default_block(&self, fuse_part: &FuseBlockPartInfo) -> Result<DataBlock> {
         let mut data_block = self
             .block_reader
             .build_default_values_block(fuse_part.nums_rows)?;
@@ -582,19 +580,17 @@ impl NativeDeserializeDataTransform {
                 data_block.add_column(column);
             }
         }
-        if self.block_reader.query_internal_columns() {
-            data_block = fill_internal_column_meta(
-                data_block,
-                fuse_part,
-                None,
-                self.base_block_ids.clone(),
-            )?;
-        }
-        if self.block_reader.update_stream_columns() {
-            let inner_meta = data_block.take_meta();
-            let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
-            data_block = data_block.add_meta(Some(Box::new(meta)))?;
-        }
+
+        data_block = add_data_block_meta(
+            data_block,
+            fuse_part,
+            None,
+            self.base_block_ids.clone(),
+            self.block_reader.update_stream_columns(),
+            self.block_reader.query_internal_columns(),
+            self.need_reserve_block_info,
+        )?;
+
         data_block.resort(&self.src_schema, &self.output_schema)
     }
 
@@ -606,7 +602,7 @@ impl NativeDeserializeDataTransform {
 
         if let NativeDataSource::Normal(chunks) = self.chunks.front_mut().unwrap() {
             let part = self.parts.front().unwrap();
-            let part = FusePartInfo::from_part(part)?;
+            let part = FuseBlockPartInfo::from_part(part)?;
 
             if let Some(range) = part.range() {
                 self.read_state.offset = part.page_size() * range.start;
@@ -802,6 +798,7 @@ impl NativeDeserializeDataTransform {
             )?;
 
             let filter_executor = self.filter_executor.as_mut().unwrap();
+
             let count = filter_executor.select(&prewhere_block)?;
 
             // If it's all filtered, we can skip the current pages.
@@ -845,7 +842,8 @@ impl NativeDeserializeDataTransform {
                 if unset_bits == bitmap.len() {
                     // skip current page.
                     return Ok(false);
-                } else if unset_bits != 0 {
+                }
+                if unset_bits != 0 {
                     bitmaps.push(bitmap);
                 }
             }
@@ -879,20 +877,25 @@ impl NativeDeserializeDataTransform {
             let data_type = top_k.field.data_type().into();
             let col = Column::from_arrow(array.as_ref(), &data_type)?;
 
-            let mut bitmap = MutableBitmap::from_len_set(col.len());
-            sorter.push_column(&col, &mut bitmap);
-
             let filter_executor = self.filter_executor.as_mut().unwrap();
             let count = if let Some(count) = self.read_state.filtered_count {
-                filter_executor.select_bitmap(count, bitmap)
+                sorter.push_column_with_selection::<false>(
+                    &col,
+                    filter_executor.mutable_true_selection(),
+                    count,
+                )
             } else {
-                filter_executor.from_bitmap(bitmap)
+                // If there is no prewhere filter, initialize the true selection.
+                sorter.push_column_with_selection::<true>(
+                    &col,
+                    filter_executor.mutable_true_selection(),
+                    col.len(),
+                )
             };
 
             if count == 0 {
                 return Ok(false);
             }
-
             self.read_state.filtered_count = Some(count);
         };
 
@@ -954,11 +957,10 @@ impl NativeDeserializeDataTransform {
         if self.read_state.array_iters.is_empty() {
             // All columns are default values, not need to read.
             let part = self.parts.front().unwrap();
-            let fuse_part = FusePartInfo::from_part(part)?;
-            let mut block = self.build_default_block(fuse_part)?;
-            // for merge into target build
-            block = add_row_prefix_meta(self.need_reserve_block_info, fuse_part, block)?;
+            let fuse_part = FuseBlockPartInfo::from_part(part)?;
+            let block = self.build_default_block(fuse_part)?;
             self.add_output_block(block);
+
             self.finish_partition();
             return Ok(());
         }
@@ -979,8 +981,8 @@ impl NativeDeserializeDataTransform {
         // Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
         // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
         let mut block = block.resort(&self.src_schema, &self.output_schema)?;
-        let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
-        if self.block_reader.query_internal_columns() {
+        let fuse_part = FuseBlockPartInfo::from_part(&self.parts[0])?;
+        let offsets = if self.block_reader.query_internal_columns() {
             let offset = self.read_state.offset;
             let offsets = if let Some(count) = self.read_state.filtered_count {
                 let filter_executor = self.filter_executor.as_mut().unwrap();
@@ -991,24 +993,19 @@ impl NativeDeserializeDataTransform {
             } else {
                 (offset..offset + origin_num_rows).collect()
             };
-
-            block = fill_internal_column_meta(
-                block,
-                fuse_part,
-                Some(offsets),
-                self.base_block_ids.clone(),
-            )?;
-        }
-
-        // we will do recluster for stream here.
-        if self.block_reader.update_stream_columns() {
-            let inner_meta = block.take_meta();
-            let meta = gen_mutation_stream_meta(inner_meta, &fuse_part.location)?;
-            block = block.add_meta(Some(Box::new(meta)))?;
-        }
-
-        // for merge into target build
-        block = add_row_prefix_meta(self.need_reserve_block_info, fuse_part, block)?;
+            Some(offsets)
+        } else {
+            None
+        };
+        block = add_data_block_meta(
+            block,
+            fuse_part,
+            offsets,
+            self.base_block_ids.clone(),
+            self.block_reader.update_stream_columns(),
+            self.block_reader.query_internal_columns(),
+            self.need_reserve_block_info,
+        )?;
 
         self.read_state.offset += origin_num_rows;
 
@@ -1092,18 +1089,17 @@ impl Processor for NativeDeserializeDataTransform {
                 if chunks.is_empty() {
                     // This means it's an empty projection
                     let part = self.parts.front().unwrap();
-                    let fuse_part = FusePartInfo::from_part(part)?;
+                    let fuse_part = FuseBlockPartInfo::from_part(part)?;
                     let mut data_block = DataBlock::new(vec![], fuse_part.nums_rows);
-                    if self.block_reader.query_internal_columns() {
-                        data_block = fill_internal_column_meta(
-                            data_block,
-                            fuse_part,
-                            None,
-                            self.base_block_ids.clone(),
-                        )?;
-                    }
-                    data_block =
-                        add_row_prefix_meta(self.need_reserve_block_info, fuse_part, data_block)?;
+                    data_block = add_data_block_meta(
+                        data_block,
+                        fuse_part,
+                        None,
+                        self.base_block_ids.clone(),
+                        self.block_reader.update_stream_columns(),
+                        self.block_reader.query_internal_columns(),
+                        self.need_reserve_block_info,
+                    )?;
 
                     self.finish_partition();
                     self.add_output_block(data_block);

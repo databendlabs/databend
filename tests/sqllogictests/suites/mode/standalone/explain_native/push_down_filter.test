@@ -129,7 +129,6 @@ AggregateFinal
 ├── aggregate functions: []
 ├── estimated rows: 0.00
 └── AggregatePartial
-    ├── output columns: [#_group_by_key]
     ├── group by: [id]
     ├── aggregate functions: []
     ├── estimated rows: 0.00
@@ -146,7 +145,6 @@ AggregateFinal
         │       ├── aggregate functions: [sum(sum(coalesce(t3.val, 0)))]
         │       ├── estimated rows: 0.00
         │       └── AggregatePartial
-        │           ├── output columns: [sum(tb.de) (#7), #_group_by_key]
         │           ├── group by: [id]
         │           ├── aggregate functions: [sum(sum(coalesce(t3.val, 0)))]
         │           ├── estimated rows: 0.00
@@ -163,7 +161,6 @@ AggregateFinal
         │               │   ├── aggregate functions: [sum(sum_arg_0)]
         │               │   ├── estimated rows: 0.00
         │               │   └── AggregatePartial
-        │               │       ├── output columns: [sum(coalesce(t3.val, 0)) (#5), #_group_by_key]
         │               │       ├── group by: [sid]
         │               │       ├── aggregate functions: [sum(sum_arg_0)]
         │               │       ├── estimated rows: 0.00
@@ -203,7 +200,6 @@ AggregateFinal
                     ├── aggregate functions: []
                     ├── estimated rows: 0.00
                     └── AggregatePartial
-                        ├── output columns: [#_group_by_key]
                         ├── group by: [id]
                         ├── aggregate functions: []
                         ├── estimated rows: 0.00

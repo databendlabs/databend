@@ -31,16 +31,23 @@ mod user_info;
 mod user_privilege;
 mod user_quota;
 mod user_setting;
-mod user_setting_ident;
 mod user_stage;
 mod user_stage_file_ident;
-mod user_stage_ident;
+
+pub mod connection_ident;
+pub mod network_policy_ident;
+pub mod password_policy_ident;
+pub mod user_defined_file_format_ident;
+pub mod user_setting_ident;
+pub mod user_stage_ident;
 
 pub use connection::*;
 pub use file_format::*;
 pub use network_policy::NetworkPolicy;
+pub use network_policy_ident::NetworkPolicyIdent;
 pub use ownership_info::OwnershipInfo;
 pub use password_policy::PasswordPolicy;
+pub use password_policy_ident::PasswordPolicyIdent;
 pub use principal_identity::PrincipalIdentity;
 pub use role_ident::RoleIdent;
 pub use role_info::RoleInfo;

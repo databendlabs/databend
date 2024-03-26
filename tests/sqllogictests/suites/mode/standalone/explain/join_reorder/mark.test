@@ -81,18 +81,18 @@ FROM
     t2;
 ----
 EvalScalar
-├── output columns: [(select if(exists (select 1 from t1 where (t1.a = t2.c)), '1', '0')) (#6)]
+├── output columns: [(select if(exists (select 1 from t1 where t1.a = t2.c), '1', '0')) (#6)]
 ├── expressions: [scalar_subquery_5 (#5)]
 ├── estimated rows: 4.00
 └── HashJoin
-    ├── output columns: [if(exists (select 1 from t1 where (t1.a = t2.c)), '1', '0') (#5)]
+    ├── output columns: [if(exists (select 1 from t1 where t1.a = t2.c), '1', '0') (#5)]
     ├── join type: LEFT SINGLE
     ├── build keys: [c (#8)]
     ├── probe keys: [c (#0)]
     ├── filters: []
     ├── estimated rows: 4.00
     ├── EvalScalar(Build)
-    │   ├── output columns: [c (#8), if(exists (select 1 from t1 where (t1.a = t2.c)), '1', '0') (#5)]
+    │   ├── output columns: [c (#8), if(exists (select 1 from t1 where t1.a = t2.c), '1', '0') (#5)]
     │   ├── expressions: [if(7 (#7), '1', '0')]
     │   ├── estimated rows: 0.00
     │   └── HashJoin
@@ -115,7 +115,6 @@ EvalScalar
     │       │   │   ├── aggregate functions: []
     │       │   │   ├── estimated rows: 0.00
     │       │   │   └── AggregatePartial
-    │       │   │       ├── output columns: [#_group_by_key]
     │       │   │       ├── group by: [c]
     │       │   │       ├── aggregate functions: []
     │       │   │       ├── estimated rows: 0.00

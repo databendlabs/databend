@@ -152,6 +152,7 @@ impl PipelineBuilder {
 
             // Copy into.
             PhysicalPlan::CopyIntoTable(copy) => self.build_copy_into_table(copy),
+            PhysicalPlan::CopyIntoLocation(copy) => self.build_copy_into_location(copy),
 
             // Delete.
             PhysicalPlan::DeleteSource(delete) => self.build_delete_source(delete),

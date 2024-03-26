@@ -38,8 +38,8 @@ use crate::optimizer::SExpr;
 pub type IndexType = usize;
 
 /// Use IndexType::MAX to represent dummy table.
-pub static DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
-pub static DUMMY_COLUMN_INDEX: IndexType = IndexType::MAX;
+pub const DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
+pub const DUMMY_COLUMN_INDEX: IndexType = IndexType::MAX;
 
 /// ColumnSet represents a set of columns identified by its IndexType.
 pub type ColumnSet = HashSet<IndexType>;
@@ -58,6 +58,11 @@ pub struct Metadata {
     columns: Vec<ColumnEntry>,
     /// Columns that are lazy materialized.
     lazy_columns: HashSet<IndexType>,
+    /// Columns that are used for compute lazy materialized.
+    /// If outer query match the lazy materialized rule but inner query doesn't,
+    /// we need add cols that inner query required to non_lazy_columns
+    /// to prevent these cols to be pruned.
+    non_lazy_columns: HashSet<IndexType>,
     /// Mappings from table index to _row_id column index.
     table_row_id_index: HashMap<IndexType, IndexType>,
     agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
@@ -129,8 +134,17 @@ impl Metadata {
         self.lazy_columns.extend(indices);
     }
 
+    pub fn add_non_lazy_columns(&mut self, indices: HashSet<usize>) {
+        debug_assert!(indices.iter().all(|i| *i < self.columns.len()));
+        self.non_lazy_columns.extend(indices);
+    }
+
     pub fn lazy_columns(&self) -> &HashSet<usize> {
         &self.lazy_columns
+    }
+
+    pub fn non_lazy_columns(&self) -> &HashSet<usize> {
+        &self.non_lazy_columns
     }
 
     pub fn set_table_row_id_index(&mut self, table_index: IndexType, row_id_index: IndexType) {
@@ -609,5 +623,5 @@ pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) ->
         && !distinct
         && args
             .iter()
-            .all(|expr| matches!(expr, Expr::Literal{lit,..} if *lit!=Literal::Null))
+            .all(|expr| matches!(expr, Expr::Literal { value,.. } if *value != Literal::Null))
 }

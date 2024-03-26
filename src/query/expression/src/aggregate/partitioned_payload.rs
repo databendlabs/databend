@@ -20,6 +20,7 @@ use itertools::Itertools;
 
 use super::payload::Payload;
 use super::probe_state::ProbeState;
+use crate::read;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
@@ -54,14 +55,13 @@ impl PartitionedPayload {
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
         partition_count: u64,
+        arenas: Vec<Arc<Bump>>,
     ) -> Self {
         let radix_bits = partition_count.trailing_zeros() as u64;
         debug_assert_eq!(1 << radix_bits, partition_count);
 
-        let arena = Arc::new(Bump::new());
-
         let payloads = (0..partition_count)
-            .map(|_| Payload::new(arena.clone(), group_types.clone(), aggrs.clone()))
+            .map(|_| Payload::new(arenas[0].clone(), group_types.clone(), aggrs.clone()))
             .collect_vec();
 
         let group_sizes = payloads[0].group_sizes.clone();
@@ -85,9 +85,15 @@ impl PartitionedPayload {
             state_layout,
             partition_count,
 
-            arenas: vec![arena],
+            arenas,
             mask_v: mask(radix_bits),
             shift_v: shift(radix_bits),
+        }
+    }
+
+    pub fn mark_min_cardinality(&mut self) {
+        for payload in self.payloads.iter_mut() {
+            payload.mark_min_cardinality();
         }
     }
 
@@ -145,13 +151,14 @@ impl PartitionedPayload {
             self.group_types.clone(),
             self.aggrs.clone(),
             new_partition_count as u64,
+            self.arenas.clone(),
         );
 
         new_partition_payload.combine(self, state);
         new_partition_payload
     }
 
-    pub fn combine(&mut self, mut other: PartitionedPayload, state: &mut PayloadFlushState) {
+    pub fn combine(&mut self, other: PartitionedPayload, state: &mut PayloadFlushState) {
         if other.partition_count == self.partition_count {
             for (l, r) in self.payloads.iter_mut().zip(other.payloads.into_iter()) {
                 l.combine(r);
@@ -160,13 +167,17 @@ impl PartitionedPayload {
             state.clear();
 
             for payload in other.payloads.into_iter() {
-                self.combine_single(payload, state)
+                self.combine_single(payload, state, None)
             }
         }
-        self.arenas.append(&mut other.arenas);
     }
 
-    pub fn combine_single(&mut self, mut other: Payload, state: &mut PayloadFlushState) {
+    pub fn combine_single(
+        &mut self,
+        mut other: Payload,
+        state: &mut PayloadFlushState,
+        only_bucket: Option<usize>,
+    ) {
         if other.len() == 0 {
             return;
         }
@@ -179,7 +190,9 @@ impl PartitionedPayload {
             // flush for other's each page to correct partition
             while self.gather_flush(&other, state) {
                 // copy rows
-                for partition in 0..self.partition_count as usize {
+                for partition in (0..self.partition_count as usize)
+                    .filter(|x| only_bucket.is_none() || only_bucket == Some(*x))
+                {
                     let payload = &mut self.payloads[partition];
                     let count = state.probe_state.partition_count[partition];
 
@@ -218,8 +231,7 @@ impl PartitionedPayload {
         for idx in 0..rows {
             state.addresses[idx] = other.data_ptr(page, idx + state.flush_page_row);
 
-            let hash =
-                unsafe { core::ptr::read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
+            let hash = unsafe { read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
 
             let partition_idx = ((hash & self.mask_v) >> self.shift_v) as usize;
 
@@ -249,6 +261,16 @@ impl PartitionedPayload {
     #[allow(dead_code)]
     pub fn memory_size(&self) -> usize {
         self.payloads.iter().map(|x| x.memory_size()).sum()
+    }
+
+    pub fn include_arena(&self, other: &Arc<Bump>) -> bool {
+        for arena in self.arenas.iter() {
+            if Arc::ptr_eq(arena, other) {
+                return true;
+            }
+        }
+
+        false
     }
 }
 

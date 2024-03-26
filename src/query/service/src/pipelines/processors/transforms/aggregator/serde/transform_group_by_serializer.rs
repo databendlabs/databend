@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::PayloadFlushState;
 use databend_common_hashtable::HashtableEntryRefLike;
@@ -29,7 +28,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use itertools::Itertools;
 
 use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
@@ -131,6 +129,7 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
                     AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
+                    AggregateMeta::AggregateSpilling(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(p) => {
                         self.input_data = Some(SerializeGroupByStream::create(
                             &self.method,
@@ -180,6 +179,7 @@ pub struct SerializeGroupByStream<Method: HashMethodBounds> {
     pub payload: Pin<Box<SerializePayload<Method, ()>>>,
     // old hashtable' iter
     iter: Option<<Method::HashTable<()> as HashtableLike>::Iterator<'static>>,
+    flush_state: Option<PayloadFlushState>,
     end_iter: bool,
 }
 
@@ -198,9 +198,17 @@ impl<Method: HashMethodBounds> SerializeGroupByStream<Method> {
                 None
             };
 
+            let flush_state =
+                if let SerializePayload::AggregatePayload(_) = payload.as_ref().get_ref() {
+                    Some(PayloadFlushState::default())
+                } else {
+                    None
+                };
+
             SerializeGroupByStream::<Method> {
                 iter,
                 payload,
+                flush_state,
                 method: method.clone(),
                 end_iter: false,
             }
@@ -246,44 +254,20 @@ impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
                 Some(data_block.add_meta(Some(AggregateSerdeMeta::create(bucket))))
             }
             SerializePayload::AggregatePayload(p) => {
-                let mut state = PayloadFlushState::default();
-                let mut blocks = vec![];
+                let state = self.flush_state.as_mut().unwrap();
+                let block = p.payload.aggregate_flush(state).unwrap();
 
-                while p.payload.flush(&mut state) {
-                    let col = state.take_group_columns();
-                    blocks.push(DataBlock::new_from_columns(col));
+                if block.is_none() {
+                    self.end_iter = true;
                 }
 
-                self.end_iter = true;
-
-                let data_block = if blocks.is_empty() {
-                    empty_block(p)
-                } else {
-                    DataBlock::concat(&blocks).unwrap()
-                };
-                Some(
-                    data_block.add_meta(Some(AggregateSerdeMeta::create_agg_payload(
+                block.map(|block| {
+                    block.add_meta(Some(AggregateSerdeMeta::create_agg_payload(
                         p.bucket,
                         p.max_partition_count,
-                    ))),
-                )
+                    )))
+                })
             }
         }
     }
-}
-
-pub fn empty_block(p: &AggregatePayload) -> DataBlock {
-    let columns = p
-        .payload
-        .aggrs
-        .iter()
-        .map(|f| ColumnBuilder::with_capacity(&f.return_type().unwrap(), 0).build())
-        .chain(
-            p.payload
-                .group_types
-                .iter()
-                .map(|t| ColumnBuilder::with_capacity(t, 0).build()),
-        )
-        .collect_vec();
-    DataBlock::new_from_columns(columns)
 }

@@ -41,18 +41,13 @@ const OPT_ROW_TAG: &str = "row_tag";
 const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
 const MISSING_FIELD_AS: &str = "missing_field_as";
 const NULL_FIELD_AS: &str = "null_field_as";
+const NULL_IF: &str = "null_if";
 const OPT_EMPTY_FIELD_AS: &str = "empty_field_as";
 const OPT_BINARY_FORMAT: &str = "binary_format";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileFormatOptionsAst {
     pub options: BTreeMap<String, String>,
-}
-
-impl Display for FileFormatOptionsAst {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.options)
-    }
 }
 
 impl FileFormatOptionsAst {
@@ -184,10 +179,24 @@ impl FileFormatParams {
                 let compression = ast.take_compression()?;
                 let missing_field_as = ast.options.remove(MISSING_FIELD_AS);
                 let null_field_as = ast.options.remove(NULL_FIELD_AS);
+                let null_if = ast.options.remove(NULL_IF);
+                let null_if = match null_if {
+                    None => {
+                        vec![]
+                    }
+                    Some(s) => {
+                        let values: Vec<String> = serde_json::from_str(&s).map_err(|_|
+                            ErrorCode::InvalidArgument(format!(
+                            "Invalid option value: NULL_IF is currently set to {s} (in JSON). The valid values are a list of strings."
+                            )))?;
+                        values
+                    }
+                };
                 FileFormatParams::NdJson(NdJsonFileFormatParams::try_create(
                     compression,
                     missing_field_as.as_deref(),
                     null_field_as.as_deref(),
+                    null_if,
                 )?)
             }
             StageFileFormatType::Parquet => {
@@ -586,6 +595,7 @@ pub struct NdJsonFileFormatParams {
     pub compression: StageFileCompression,
     pub missing_field_as: NullAs,
     pub null_field_as: NullAs,
+    pub null_if: Vec<String>,
 }
 
 impl NdJsonFileFormatParams {
@@ -593,6 +603,7 @@ impl NdJsonFileFormatParams {
         compression: StageFileCompression,
         missing_field_as: Option<&str>,
         null_field_as: Option<&str>,
+        null_if: Vec<String>,
     ) -> Result<Self> {
         let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
         let null_field_as = NullAs::parse(null_field_as, MISSING_FIELD_AS, NullAs::Null)?;
@@ -605,6 +616,7 @@ impl NdJsonFileFormatParams {
             compression,
             missing_field_as,
             null_field_as,
+            null_if,
         })
     }
 }
@@ -615,6 +627,7 @@ impl Default for NdJsonFileFormatParams {
             compression: StageFileCompression::None,
             missing_field_as: NullAs::Error,
             null_field_as: NullAs::FieldDefault,
+            null_if: vec![],
         }
     }
 }

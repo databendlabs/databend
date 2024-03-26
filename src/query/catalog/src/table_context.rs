@@ -27,6 +27,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -107,6 +108,12 @@ pub struct StageAttachment {
     pub location: String,
     pub file_format_options: Option<BTreeMap<String, String>>,
     pub copy_options: Option<BTreeMap<String, String>>,
+}
+
+#[derive(Debug, Default)]
+pub struct FilteredCopyFiles {
+    pub files_to_copy: Vec<StageFileInfo>,
+    pub duplicated_files: Vec<String>,
 }
 
 #[async_trait::async_trait]
@@ -212,7 +219,7 @@ pub trait TableContext: Send + Sync {
         table_name: &str,
         files: &[StageFileInfo],
         max_files: Option<usize>,
-    ) -> Result<Vec<StageFileInfo>>;
+    ) -> Result<FilteredCopyFiles>;
 
     fn set_materialized_cte(
         &self,
@@ -262,4 +269,7 @@ pub trait TableContext: Send + Sync {
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
     fn txn_mgr(&self) -> TxnManagerRef;
+
+    fn get_read_block_thresholds(&self) -> BlockThresholds;
+    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
 }

@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_hashtable::FastHash;
@@ -81,7 +82,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                         AggregateMeta::HashTable(v) => Ok(v.bucket),
                         AggregateMeta::AggregateHashTable(_) => unreachable!(),
                         AggregateMeta::AggregatePayload(v) => Ok(v.bucket),
-                        AggregateMeta::Spilled(_)
+                        AggregateMeta::AggregateSpilling(_)
+                        | AggregateMeta::Spilled(_)
                         | AggregateMeta::Spilling(_)
                         | AggregateMeta::BucketSpilled(_) => Ok(-1),
                     },
@@ -142,7 +144,7 @@ fn scatter<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
     Ok(res)
 }
 
-fn scatter_paylaod(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>> {
+fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>> {
     let mut buckets = Vec::with_capacity(buckets);
 
     let group_types = payload.group_types.clone();
@@ -150,15 +152,8 @@ fn scatter_paylaod(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
     let mut state = PayloadFlushState::default();
 
     for _ in 0..buckets.capacity() {
-        buckets.push(Payload::new(
-            Arc::new(Bump::new()),
-            group_types.clone(),
-            aggrs.clone(),
-        ));
-    }
-
-    for bucket in buckets.iter_mut() {
-        bucket.arenas.extend_from_slice(&payload.arenas);
+        let p = Payload::new(payload.arena.clone(), group_types.clone(), aggrs.clone());
+        buckets.push(p);
     }
 
     // scatter each page of the payload.
@@ -174,6 +169,60 @@ fn scatter_paylaod(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
         }
     }
     payload.state_move_out = true;
+
+    Ok(buckets)
+}
+
+fn scatter_partitioned_payload(
+    partitioned_payload: PartitionedPayload,
+    buckets: usize,
+) -> Result<Vec<PartitionedPayload>> {
+    let mut buckets = Vec::with_capacity(buckets);
+
+    let group_types = partitioned_payload.group_types.clone();
+    let aggrs = partitioned_payload.aggrs.clone();
+    let partition_count = partitioned_payload.partition_count() as u64;
+    let mut state = PayloadFlushState::default();
+
+    for _ in 0..buckets.capacity() {
+        buckets.push(PartitionedPayload::new(
+            group_types.clone(),
+            aggrs.clone(),
+            partition_count,
+            partitioned_payload.arenas.clone(),
+        ));
+    }
+
+    let mut payloads = Vec::with_capacity(buckets.len());
+
+    for _ in 0..payloads.capacity() {
+        payloads.push(Payload::new(
+            Arc::new(Bump::new()),
+            group_types.clone(),
+            aggrs.clone(),
+        ));
+    }
+
+    for mut payload in partitioned_payload.payloads.into_iter() {
+        // scatter each page of the payload.
+        while payload.scatter(&mut state, buckets.len()) {
+            // copy to the corresponding bucket.
+            for (idx, bucket) in payloads.iter_mut().enumerate() {
+                let count = state.probe_state.partition_count[idx];
+
+                if count > 0 {
+                    let sel = &state.probe_state.partition_entries[idx];
+                    bucket.copy_rows(sel, count, &state.addresses);
+                }
+            }
+        }
+        state.clear();
+        payload.state_move_out = true;
+    }
+
+    for (idx, payload) in payloads.into_iter().enumerate() {
+        buckets[idx].combine_single(payload, &mut state, None);
+    }
 
     Ok(buckets)
 }
@@ -201,6 +250,13 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                             });
                         }
                     }
+                    AggregateMeta::AggregateSpilling(payload) => {
+                        for p in scatter_partitioned_payload(payload, self.buckets)? {
+                            blocks.push(DataBlock::empty_with_meta(
+                                AggregateMeta::<Method, V>::create_agg_spilling(p),
+                            ))
+                        }
+                    }
                     AggregateMeta::HashTable(payload) => {
                         let bucket = payload.bucket;
                         for hashtable_cell in scatter(payload, self.buckets, &self.method)? {
@@ -217,7 +273,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                     }
                     AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(p) => {
-                        for payload in scatter_paylaod(p.payload, self.buckets)? {
+                        for payload in scatter_payload(p.payload, self.buckets)? {
                             blocks.push(DataBlock::empty_with_meta(
                                 AggregateMeta::<Method, V>::create_agg_payload(
                                     p.bucket,

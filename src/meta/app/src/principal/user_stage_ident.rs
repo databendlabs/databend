@@ -12,57 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tenant::Tenant;
+use crate::tenant_key::TIdent;
 
 /// Define the meta-service key for a stage.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StageIdent {
-    pub tenant: Tenant,
-    pub name: String,
-}
+pub type StageIdent = TIdent<Resource>;
 
-impl StageIdent {
-    pub fn new(tenant: Tenant, name: impl ToString) -> Self {
-        Self {
-            tenant,
-            name: name.to_string(),
-        }
-    }
-}
+pub use kvapi_impl::Resource;
 
-mod kvapi_key_impl {
+mod kvapi_impl {
+
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyError;
 
-    use crate::principal::user_stage_ident::StageIdent;
     use crate::principal::StageInfo;
-    use crate::tenant::Tenant;
-    use crate::KeyWithTenant;
+    use crate::tenant_key::TenantResource;
 
-    impl kvapi::Key for StageIdent {
+    pub struct Resource;
+    impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_stages";
         type ValueType = StageInfo;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_str(self.tenant_name()).push_str(&self.name)
-        }
-
-        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
-            let tenant = p.next_nonempty()?;
-            let name = p.next_str()?;
-
-            Ok(StageIdent::new(Tenant::new_nonempty(tenant), name))
-        }
-    }
-
-    impl KeyWithTenant for StageIdent {
-        fn tenant(&self) -> &Tenant {
-            &self.tenant
-        }
     }
 
     impl kvapi::Value for StageInfo {
@@ -75,13 +42,14 @@ mod kvapi_key_impl {
 #[cfg(test)]
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
+    use databend_common_meta_types::NonEmptyString;
 
     use crate::principal::user_stage_ident::StageIdent;
     use crate::tenant::Tenant;
 
     #[test]
     fn test_kvapi_key_for_stage_ident() {
-        let tenant = Tenant::new("test");
+        let tenant = Tenant::new_nonempty(NonEmptyString::new("test").unwrap());
         let stage = StageIdent::new(tenant, "stage");
 
         let key = stage.to_string_key();
