@@ -34,6 +34,8 @@ use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::cast_expr_to_non_null_boolean;
+use crate::sql::executor::physical_plans::ChunkFilter;
 use crate::sql::executor::physical_plans::Duplicate;
 use crate::sql::executor::physical_plans::Shuffle;
 pub struct InsertMultiTableInterpreter {
@@ -152,7 +154,17 @@ impl InsertMultiTableInterpreter {
             });
         }
 
-        // let predicates = vec![];
+        let mut predicates = vec![];
+        for (_, opt_scalar_expr, _, _) in branches.iter() {
+            if let Some(scalar_expr) = opt_scalar_expr {
+                let expr = cast_expr_to_non_null_boolean(
+                    scalar_expr.as_expr()?.project_column_ref(|col| col.index),
+                )?;
+                predicates.push(Some(expr.as_remote_expr()));
+            } else {
+                predicates.push(None);
+            }
+        }
 
         root = PhysicalPlan::Duplicate(Box::new(Duplicate {
             plan_id: 0,
@@ -165,6 +177,12 @@ impl InsertMultiTableInterpreter {
             plan_id: 0,
             input: Box::new(root),
             strategy: shuffle_strategy,
+        }));
+
+        root = PhysicalPlan::ChunkFilter(Box::new(ChunkFilter {
+            plan_id: 0,
+            input: Box::new(root),
+            predicates,
         }));
 
         root = PhysicalPlan::ChunkAppendData(Box::new(ChunkAppendData {
@@ -187,21 +205,6 @@ impl InsertMultiTableInterpreter {
             deduplicated_label: None,
             targets: serialable_tables.clone(),
         }));
-
-        // let chunk_filter = PhysicalPlan::ChunkFilter(Box::new(ChunkFilter {
-        //     plan_id: 0,
-        //     input: Box::new(shuffle),
-        //     predicates,
-        // }));
-        // let filters: Result<Vec<RemoteExpr>> = whens
-        //     .iter()
-        //     .map(|v| {
-        //         let expr = cast_expr_to_non_null_boolean(
-        //             v.condition.as_expr()?.project_column_ref(|col| col.index),
-        //         )?;
-        //         Ok(expr.as_remote_expr())
-        //     })
-        //     .collect();
         Ok(root)
     }
 }

@@ -125,3 +125,27 @@ select * from t2 order by c1;
 1 2
 3 4
 5 6
+
+statement ok
+INSERT ALL
+    WHEN c3 = 1 THEN
+      INTO t1
+    WHEN c3 = 3 THEN
+      INTO t2
+SELECT * from s;
+
+query II
+select * from t1 order by c1;
+----
+1 2
+1 2
+3 4
+5 6
+
+query II
+select * from t2 order by c1;
+----
+1 2
+3 4
+3 4
+5 6

@@ -477,9 +477,9 @@ impl PhysicalPlan {
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::ReclusterSink(_)
             | PhysicalPlan::UpdateSource(_) => Ok(DataSchemaRef::default()),
-            PhysicalPlan::Duplicate(_) => todo!(),
-            PhysicalPlan::Shuffle(_) => todo!(),
-            PhysicalPlan::ChunkFilter(_) => todo!(),
+            PhysicalPlan::Duplicate(plan) => plan.input.output_schema(),
+            PhysicalPlan::Shuffle(plan) => plan.input.output_schema(),
+            PhysicalPlan::ChunkFilter(plan) => plan.input.output_schema(),
             PhysicalPlan::ChunkProject(_) => todo!(),
             PhysicalPlan::ChunkCastSchema(_) => todo!(),
             PhysicalPlan::ChunkFillAndReorder(_) => todo!(),

@@ -52,11 +52,12 @@ impl PipelineBuilder {
             return Ok(());
         }
         let mut f: Vec<DynTransformBuilder> = Vec::with_capacity(plan.predicates.len());
+        let projection: HashSet<_> = (0..plan.input.output_schema()?.fields.len()).collect();
         for predicate in plan.predicates.iter() {
             if let Some(predicate) = predicate {
                 f.push(Box::new(self.filter_transform_builder(
                     &[predicate.clone()],
-                    HashSet::default(),
+                    projection.clone(),
                 )?));
             } else {
                 f.push(Box::new(self.dummy_transform_builder()?));
