@@ -3748,7 +3748,7 @@ CreateStream(
                             span: Some(
                                 70..98,
                             ),
-                            lit: String(
+                            value: String(
                                 "2023-06-26 09:49:02.038483",
                             ),
                         },
