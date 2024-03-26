@@ -293,7 +293,7 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
         if to_merged.is_empty() {
             return Ok(vec![]);
         }
-        let table_id = to_merged[0].table_id.clone();
+        let table_id = to_merged[0].table_id;
         let merged = to_merged
             .into_iter()
             .fold(CommitMeta::empty(table_id), |acc, x| {

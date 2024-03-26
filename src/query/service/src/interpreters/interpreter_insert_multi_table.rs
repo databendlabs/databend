@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::chunk::Chunk;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::Result;
-use databend_common_expression::RemoteExpr;
 use databend_common_sql::executor::physical_plans::ChunkAppendData;
 use databend_common_sql::executor::physical_plans::ChunkCommitInsert;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
@@ -37,8 +34,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::cast_expr_to_non_null_boolean;
-use crate::sql::executor::physical_plans::ChunkFilter;
 use crate::sql::executor::physical_plans::Duplicate;
 use crate::sql::executor::physical_plans::Shuffle;
 pub struct InsertMultiTableInterpreter {
@@ -82,7 +77,7 @@ impl InsertMultiTableInterpreter {
             intos,
         } = &self.plan;
 
-        let (source_plan, select_column_bindings, _metadata) = match input_source {
+        let (source_plan, _select_column_bindings, _metadata) = match input_source {
             Plan::Query {
                 s_expr,
                 metadata,
@@ -115,7 +110,7 @@ impl InsertMultiTableInterpreter {
                             projection,
                             casted_schema,
                         } = into;
-                        let table = self.ctx.get_table(&catalog, &database, &table).await?;
+                        let table = self.ctx.get_table(catalog, database, table).await?;
                         branches.push((table, Some(&when.condition), projection, casted_schema));
                     }
                 }
@@ -128,7 +123,7 @@ impl InsertMultiTableInterpreter {
                             projection,
                             casted_schema,
                         } = into;
-                        let table = self.ctx.get_table(&catalog, &database, &table).await?;
+                        let table = self.ctx.get_table(catalog, database, table).await?;
                         branches.push((table, None, projection, casted_schema));
                     }
                 }
@@ -141,7 +136,7 @@ impl InsertMultiTableInterpreter {
                         projection,
                         casted_schema,
                     } = into;
-                    let table = self.ctx.get_table(&catalog, &database, &table).await?;
+                    let table = self.ctx.get_table(catalog, database, table).await?;
                     branches.push((table, None, projection, casted_schema));
                 }
             }

@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
@@ -23,29 +22,16 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::BlockRowIndex;
 use databend_common_expression::DataBlock;
-use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
-use databend_common_metrics::storage::*;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::AsyncSink;
-use databend_common_pipeline_sinks::AsyncSinker;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
-use futures::future::Fuse;
-use opendal::Operator;
 
-use crate::fuse_table;
-use crate::io;
-use crate::io::TableMetaLocationGenerator;
-use crate::io::WriteSettings;
 use crate::operations::common::CommitMeta;
 use crate::operations::merge_commit_meta;
 use crate::operations::AppendGenerator;

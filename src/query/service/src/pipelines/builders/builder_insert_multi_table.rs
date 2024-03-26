@@ -16,14 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::block_thresholds;
-use databend_common_expression::filter::build_select_expr;
-use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::DynTransformBuilder;
 use databend_common_pipeline_sinks::AsyncSinker;
@@ -35,11 +28,9 @@ use databend_common_sql::executor::physical_plans::ChunkFilter;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
 use databend_common_sql::executor::physical_plans::ChunkProject;
 use databend_common_sql::executor::physical_plans::Duplicate;
-use databend_common_sql::executor::physical_plans::Filter;
 use databend_common_sql::executor::physical_plans::Shuffle;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 
-use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {
     pub(crate) fn build_duplicate(&mut self, plan: &Duplicate) -> Result<()> {
@@ -64,7 +55,7 @@ impl PipelineBuilder {
         for predicate in plan.predicates.iter() {
             if let Some(predicate) = predicate {
                 f.push(Box::new(self.filter_transform_builder(
-                    &vec![predicate.clone()],
+                    &[predicate.clone()],
                     HashSet::default(),
                 )?));
             } else {
@@ -75,17 +66,17 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub(crate) fn build_chunk_project(&mut self, plan: &ChunkProject) -> Result<()> {
+    pub(crate) fn build_chunk_project(&mut self, _plan: &ChunkProject) -> Result<()> {
         Ok(())
     }
 
-    pub(crate) fn build_chunk_cast_schema(&mut self, plan: &ChunkCastSchema) -> Result<()> {
+    pub(crate) fn build_chunk_cast_schema(&mut self, _plan: &ChunkCastSchema) -> Result<()> {
         Ok(())
     }
 
     pub(crate) fn build_chunk_fill_and_reorder(
         &mut self,
-        plan: &ChunkFillAndReorder,
+        _plan: &ChunkFillAndReorder,
     ) -> Result<()> {
         Ok(())
     }
@@ -130,7 +121,7 @@ impl PipelineBuilder {
             deduplicated_label,
             targets,
         } = plan;
-        self.build_pipeline(&input)?;
+        self.build_pipeline(input)?;
         let mut serialize_segment_builders: Vec<DynTransformBuilder> =
             Vec::with_capacity(targets.len());
         let mut mutation_aggregator_builders: Vec<DynTransformBuilder> =
