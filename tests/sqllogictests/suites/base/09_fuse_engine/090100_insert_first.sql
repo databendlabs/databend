@@ -105,7 +105,23 @@ INSERT FIRST
     INTO t2
 SELECT * from s;
 
+
+statement ok
 INSERT ALL
     INTO t1
     INTO t2
 SELECT * from s;
+
+query II
+select * from t1 order by c1;
+----
+1 2
+3 4
+5 6
+
+query II
+select * from t2 order by c1;
+----
+1 2
+3 4
+5 6
