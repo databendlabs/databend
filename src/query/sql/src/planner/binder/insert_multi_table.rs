@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::InsertMultiTableStmt;
 use databend_common_ast::ast::IntoClause;
 use databend_common_ast::ast::TableReference;
-use databend_common_catalog::plan::Projection;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -138,11 +137,11 @@ impl Binder {
         let mut intos = vec![];
         for into_clause in into_clauses {
             let IntoClause {
-                catalog,
                 database,
                 table,
                 target_columns,
                 source_columns,
+                catalog,
             } = into_clause;
             let (catalog_name, database_name, table_name) =
                 self.normalize_object_identifier_triple(catalog, database, table);
@@ -168,7 +167,7 @@ impl Binder {
                     )?;
                     indices.push(index);
                 }
-                Some(Projection::Columns(indices))
+                Some(indices)
             };
 
             if casted_schema.fields().len()

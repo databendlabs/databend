@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::Projection;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -66,7 +65,7 @@ pub struct ChunkFilter {
 pub struct ChunkProject {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    pub projections: Vec<Option<Projection>>,
+    pub projections: Vec<Option<Vec<usize>>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

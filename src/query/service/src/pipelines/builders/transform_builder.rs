@@ -28,6 +28,8 @@ use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransforme
 use databend_common_pipeline_transforms::processors::BlockCompactor;
 use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_pipeline_transforms::processors::TransformDummy;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -143,6 +145,25 @@ impl PipelineBuilder {
                 TableMutationAggregator::new(fuse_table, ctx.clone(), vec![], MutationKind::Insert);
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
+            )))
+        })
+    }
+
+    pub(crate) fn project_transform_builder(
+        &self,
+        projection: Vec<usize>,
+        num_input_columns: usize,
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+        let func_ctx = self.func_ctx.clone();
+        Ok(move |input, output| {
+            Ok(ProcessorPtr::create(CompoundBlockOperator::create(
+                input,
+                output,
+                num_input_columns,
+                func_ctx.clone(),
+                vec![BlockOperator::Project {
+                    projection: projection.clone(),
+                }],
             )))
         })
     }

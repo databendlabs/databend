@@ -180,3 +180,34 @@ select * from t2 order by c1;
 ----
 1 2
 3 4
+
+statement ok 
+create or replace table t1(c1 int,c2 int);
+
+statement ok
+create or replace table t2(c1 int,c2 int);
+
+statement ok
+create or replace table s(c3 int,c4 int);
+
+statement ok
+insert into s values(1,2),(3,4),(5,6);
+
+statement ok
+INSERT FIRST
+    WHEN c3 = 5 THEN
+      INTO t1 values(c4,c3)
+    WHEN c3 > 0 THEN
+      INTO t2 values(c4,c3)
+SELECT * from s;
+
+query II
+select * from t1 order by c1;
+----
+6 5
+
+query II
+select * from t2 order by c1;
+----
+2 1
+4 3

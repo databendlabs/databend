@@ -67,7 +67,24 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub(crate) fn build_chunk_project(&mut self, _plan: &ChunkProject) -> Result<()> {
+    pub(crate) fn build_chunk_project(&mut self, plan: &ChunkProject) -> Result<()> {
+        self.build_pipeline(&plan.input)?;
+        if plan.projections.iter().all(|x| x.is_none()) {
+            return Ok(());
+        }
+        let num_input_columns = plan.input.output_schema()?.num_fields();
+        let mut f: Vec<DynTransformBuilder> = Vec::with_capacity(plan.projections.len());
+        for projection in plan.projections.iter() {
+            if let Some(projection) = projection {
+                f.push(Box::new(self.project_transform_builder(
+                    projection.clone(),
+                    num_input_columns,
+                )?));
+            } else {
+                f.push(Box::new(self.dummy_transform_builder()?));
+            }
+        }
+        self.main_pipeline.add_transform_by_chunk(f)?;
         Ok(())
     }
 

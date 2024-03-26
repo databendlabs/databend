@@ -14,11 +14,13 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::RemoteExpr;
 use databend_common_sql::executor::physical_plans::ChunkAppendData;
 use databend_common_sql::executor::physical_plans::ChunkCommitInsert;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
+use databend_common_sql::executor::physical_plans::ChunkProject;
 use databend_common_sql::executor::physical_plans::SerializableTable;
 use databend_common_sql::executor::physical_plans::ShuffleStrategy;
 use databend_common_sql::executor::PhysicalPlan;
@@ -40,6 +42,7 @@ use crate::sql::executor::cast_expr_to_non_null_boolean;
 use crate::sql::executor::physical_plans::ChunkFilter;
 use crate::sql::executor::physical_plans::Duplicate;
 use crate::sql::executor::physical_plans::Shuffle;
+use crate::storages::Table;
 pub struct InsertMultiTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: InsertMultiTable,
@@ -72,16 +75,64 @@ impl Interpreter for InsertMultiTableInterpreter {
 
 impl InsertMultiTableInterpreter {
     async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
-        let InsertMultiTable {
-            input_source,
-            whens,
-            opt_else,
-            overwrite,
-            is_first,
-            intos,
-        } = &self.plan;
+        let mut root = self.build_source_physical_plan().await?;
+        let mut branches = self.build_insert_into_branches().await?;
+        let serialable_tables = branches
+            .build_serializable_target_tables(self.ctx.clone())
+            .await?;
+        let predicates = branches.build_predicates(self.plan.is_first)?;
+        let projections = branches.build_projections();
 
-        let (source_plan, _select_column_bindings, _metadata) = match input_source {
+        root = PhysicalPlan::Duplicate(Box::new(Duplicate {
+            plan_id: 0,
+            input: Box::new(root),
+            n: branches.len(),
+        }));
+
+        let shuffle_strategy = ShuffleStrategy::Transpose(branches.len());
+        root = PhysicalPlan::Shuffle(Box::new(Shuffle {
+            plan_id: 0,
+            input: Box::new(root),
+            strategy: shuffle_strategy,
+        }));
+
+        root = PhysicalPlan::ChunkFilter(Box::new(ChunkFilter {
+            plan_id: 0,
+            input: Box::new(root),
+            predicates,
+        }));
+
+        root = PhysicalPlan::ChunkProject(Box::new(ChunkProject {
+            plan_id: 0,
+            input: Box::new(root),
+            projections,
+        }));
+
+        root = PhysicalPlan::ChunkAppendData(Box::new(ChunkAppendData {
+            plan_id: 0,
+            input: Box::new(root),
+            target_tables: serialable_tables.clone(),
+        }));
+
+        root = PhysicalPlan::ChunkMerge(Box::new(ChunkMerge {
+            plan_id: 0,
+            input: Box::new(root),
+            chunk_num: branches.len(),
+        }));
+
+        root = PhysicalPlan::ChunkCommitInsert(Box::new(ChunkCommitInsert {
+            plan_id: 0,
+            input: Box::new(root),
+            update_stream_meta: vec![],
+            overwrite: self.plan.overwrite,
+            deduplicated_label: None,
+            targets: serialable_tables.clone(),
+        }));
+        Ok(root)
+    }
+
+    async fn build_source_physical_plan(&self) -> Result<PhysicalPlan> {
+        match &self.plan.input_source {
             Plan::Query {
                 s_expr,
                 metadata,
@@ -90,18 +141,22 @@ impl InsertMultiTableInterpreter {
             } => {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                (
-                    builder1.build(s_expr, bind_context.column_set()).await?,
-                    bind_context.columns.clone(),
-                    metadata,
-                )
+                builder1.build(s_expr, bind_context.column_set()).await
             }
             _ => unreachable!(),
-        };
-        let mut root: PhysicalPlan = source_plan;
+        }
+    }
 
-        // Table, Filter, Projection, CastedSchema
-        let mut branches = vec![];
+    async fn build_insert_into_branches(&self) -> Result<InsertIntoBranches> {
+        let InsertMultiTable {
+            input_source: _,
+            whens,
+            opt_else,
+            overwrite: _,
+            is_first: _,
+            intos,
+        } = &self.plan;
+        let mut branches = InsertIntoBranches::default();
 
         for when in whens {
             for into in &when.intos {
@@ -113,7 +168,12 @@ impl InsertMultiTableInterpreter {
                     casted_schema,
                 } = into;
                 let table = self.ctx.get_table(catalog, database, table).await?;
-                branches.push((table, Some(&when.condition), projection, casted_schema));
+                branches.push(
+                    table,
+                    Some(when.condition.clone()),
+                    projection.clone(),
+                    casted_schema.clone(),
+                );
             }
         }
         if let Some(Else { intos }) = opt_else {
@@ -126,7 +186,7 @@ impl InsertMultiTableInterpreter {
                     casted_schema,
                 } = into;
                 let table = self.ctx.get_table(catalog, database, table).await?;
-                branches.push((table, None, projection, casted_schema));
+                branches.push(table, None, projection.clone(), casted_schema.clone());
             }
         }
 
@@ -139,25 +199,82 @@ impl InsertMultiTableInterpreter {
                 casted_schema,
             } = into;
             let table = self.ctx.get_table(catalog, database, table).await?;
-            branches.push((table, None, projection, casted_schema));
+            branches.push(table, None, projection.clone(), casted_schema.clone());
         }
 
+        Ok(branches)
+    }
+}
+
+fn and(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
+    ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "and".to_string(),
+        params: vec![],
+        arguments: vec![left, right],
+    })
+}
+
+fn not(expr: ScalarExpr) -> ScalarExpr {
+    ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "not".to_string(),
+        params: vec![],
+        arguments: vec![expr],
+    })
+}
+
+#[derive(Default)]
+struct InsertIntoBranches {
+    tables: Vec<Arc<dyn Table>>,
+    conditions: Vec<Option<ScalarExpr>>,
+    projections: Vec<Option<Vec<usize>>>,
+    casted_schemas: Vec<DataSchemaRef>,
+    len: usize,
+}
+
+impl InsertIntoBranches {
+    fn push(
+        &mut self,
+        table: Arc<dyn Table>,
+        condition: Option<ScalarExpr>,
+        projection: Option<Vec<usize>>,
+        casted_schema: DataSchemaRef,
+    ) {
+        self.tables.push(table);
+        self.conditions.push(condition);
+        self.projections.push(projection);
+        self.casted_schemas.push(casted_schema);
+        self.len += 1;
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    async fn build_serializable_target_tables(
+        &self,
+        ctx: Arc<QueryContext>,
+    ) -> Result<Vec<SerializableTable>> {
         let mut serialable_tables = vec![];
-        let catalog_info = self.ctx.get_catalog(CATALOG_DEFAULT).await?.info();
-        for (table, _, _, _) in &branches {
+        for table in &self.tables {
             let table_info = table.get_table_info();
+            let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
             serialable_tables.push(SerializableTable {
-                target_catalog_info: catalog_info.clone(),
+                target_catalog_info: catalog_info,
                 target_table_info: table_info.clone(),
             });
         }
+        Ok(serialable_tables)
+    }
 
+    fn build_predicates(&self, is_first: bool) -> Result<Vec<Option<RemoteExpr>>> {
         let mut predicates = vec![];
         match is_first {
             true => {
                 let mut previous_not: Option<ScalarExpr> = None;
-                for (_, opt_scalar_expr, _, _) in branches.iter() {
-                    if let Some(curr) = *opt_scalar_expr {
+                for opt_scalar_expr in self.conditions.iter() {
+                    if let Some(curr) = opt_scalar_expr {
                         let merged_curr = if let Some(prev_not) = &previous_not {
                             let merged_scalar_expr = and(prev_not.clone(), curr.clone());
                             previous_not = Some(and(prev_not.clone(), not(curr.clone())));
@@ -181,7 +298,7 @@ impl InsertMultiTableInterpreter {
                 }
             }
             false => {
-                for (_, opt_scalar_expr, _, _) in branches.iter() {
+                for opt_scalar_expr in self.conditions.iter() {
                     if let Some(scalar_expr) = opt_scalar_expr {
                         let expr = cast_expr_to_non_null_boolean(
                             scalar_expr.as_expr()?.project_column_ref(|col| col.index),
@@ -193,64 +310,10 @@ impl InsertMultiTableInterpreter {
                 }
             }
         };
-
-        root = PhysicalPlan::Duplicate(Box::new(Duplicate {
-            plan_id: 0,
-            input: Box::new(root),
-            n: branches.len(),
-        }));
-
-        let shuffle_strategy = ShuffleStrategy::Transpose(branches.len());
-        root = PhysicalPlan::Shuffle(Box::new(Shuffle {
-            plan_id: 0,
-            input: Box::new(root),
-            strategy: shuffle_strategy,
-        }));
-
-        root = PhysicalPlan::ChunkFilter(Box::new(ChunkFilter {
-            plan_id: 0,
-            input: Box::new(root),
-            predicates,
-        }));
-
-        root = PhysicalPlan::ChunkAppendData(Box::new(ChunkAppendData {
-            plan_id: 0,
-            input: Box::new(root),
-            target_tables: serialable_tables.clone(),
-        }));
-
-        root = PhysicalPlan::ChunkMerge(Box::new(ChunkMerge {
-            plan_id: 0,
-            input: Box::new(root),
-            chunk_num: branches.len(),
-        }));
-
-        root = PhysicalPlan::ChunkCommitInsert(Box::new(ChunkCommitInsert {
-            plan_id: 0,
-            input: Box::new(root),
-            update_stream_meta: vec![],
-            overwrite: *overwrite,
-            deduplicated_label: None,
-            targets: serialable_tables.clone(),
-        }));
-        Ok(root)
+        Ok(predicates)
     }
-}
 
-fn and(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "and".to_string(),
-        params: vec![],
-        arguments: vec![left, right],
-    })
-}
-
-fn not(expr: ScalarExpr) -> ScalarExpr {
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "not".to_string(),
-        params: vec![],
-        arguments: vec![expr],
-    })
+    fn build_projections(&mut self) -> Vec<Option<Vec<usize>>> {
+        std::mem::take(&mut self.projections)
+    }
 }

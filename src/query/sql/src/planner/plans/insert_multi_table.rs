@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::Projection;
 use databend_common_expression::DataSchemaRef;
 
 use super::Plan;
@@ -40,7 +39,7 @@ pub struct Into {
     pub database: String,
     pub table: String,
     // project subquery's output with VALUES ( source_col_name [ , ... ] ) (if exists)
-    pub projection: Option<Projection>,
+    pub projection: Option<Vec<usize>>,
     //  cast to ( target_col_name [ , ... ] )'s schema (if exists) or target table's schema
     pub casted_schema: DataSchemaRef,
 }
