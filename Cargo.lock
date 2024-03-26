@@ -4367,10 +4367,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "databend-common-expression",
  "databend-common-meta-app",
- "databend-common-storages-fuse",
- "databend-storages-common-table-meta",
 ]
 
 [[package]]
