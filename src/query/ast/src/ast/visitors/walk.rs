@@ -96,7 +96,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
             expr,
             trim_where,
         } => visitor.visit_trim(*span, expr, trim_where),
-        Expr::Literal { span, lit } => visitor.visit_literal(*span, lit),
+        Expr::Literal { span, value } => visitor.visit_literal(*span, value),
         Expr::CountAll { span, window } => visitor.visit_count_all(*span, window),
         Expr::Tuple { span, exprs } => visitor.visit_tuple(*span, exprs),
         Expr::FunctionCall {
@@ -321,6 +321,9 @@ pub fn walk_stream_point<'a, V: Visitor<'a>>(visitor: &mut V, point: &'a StreamP
             }
 
             visitor.visit_identifier(name);
+        }
+        StreamPoint::AtPoint(point) => {
+            visitor.visit_time_travel_point(point);
         }
     }
 }

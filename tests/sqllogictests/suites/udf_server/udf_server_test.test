@@ -462,3 +462,38 @@ DROP FUNCTION split_and_join;
 
 statement ok
 set enable_experimental_merge_into = 0;
+
+### enable udf for copy into table
+statement ok
+drop stage if exists udf_stage;
+
+statement ok
+create stage udf_stage FILE_FORMAT = (TYPE = CSV);
+
+statement ok
+copy into @udf_stage from (select 'aaaa');
+
+statement ok
+copy into @udf_stage from (select 'bbbbb');
+
+statement ok
+CREATE FUNCTION url_len (VARCHAR) RETURNS BIGINT LANGUAGE python HANDLER = 'url_len' ADDRESS = 'http://0.0.0.0:8815';
+
+statement ok
+create table _tmp_table(field1 int);
+
+statement ok
+COPY INTO _tmp_table FROM (SELECT url_len($1) as field1 FROM @udf_stage);
+
+query T 
+select * from _tmp_table order by field1;
+----
+4
+5
+
+
+statement ok
+remove @udf_stage;
+
+statement ok
+drop FUNCTION url_len;

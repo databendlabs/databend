@@ -173,12 +173,12 @@ impl Display for CreateTableStmt {
             write!(f, " {source}")?;
         }
 
-        if let Some(uri_location) = &self.uri_location {
-            write!(f, " {uri_location}")?;
-        }
-
         if let Some(engine) = &self.engine {
             write!(f, " ENGINE = {engine}")?;
+        }
+
+        if let Some(uri_location) = &self.uri_location {
+            write!(f, " {uri_location}")?;
         }
 
         if !self.cluster_by.is_empty() {
@@ -222,7 +222,7 @@ impl Display for AttachTableStmt {
                 .chain(Some(&self.table)),
         )?;
 
-        write!(f, " FROM {}", self.uri_location)?;
+        write!(f, " {}", self.uri_location)?;
 
         if self.read_only {
             write!(f, " READ_ONLY")?;
@@ -382,7 +382,7 @@ pub enum AlterTableAction {
         #[drive(skip)]
         limit: Option<u64>,
     },
-    RevertTo {
+    FlashbackTo {
         point: TimeTravelPoint,
     },
     SetOptions {
@@ -441,8 +441,8 @@ impl Display for AlterTableAction {
                     write!(f, " LIMIT {limit}")?;
                 }
             }
-            AlterTableAction::RevertTo { point } => {
-                write!(f, "REVERT TO {}", point)?;
+            AlterTableAction::FlashbackTo { point } => {
+                write!(f, "FLASHBACK TO {}", point)?;
             }
         };
         Ok(())

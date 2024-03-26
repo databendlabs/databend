@@ -623,5 +623,5 @@ pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) ->
         && !distinct
         && args
             .iter()
-            .all(|expr| matches!(expr, Expr::Literal{lit,..} if *lit!=Literal::Null))
+            .all(|expr| matches!(expr, Expr::Literal { value,.. } if *value != Literal::Null))
 }

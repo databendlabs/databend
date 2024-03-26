@@ -310,8 +310,10 @@ impl FuseTable {
         ctx.set_status_info("mutation: begin try to commit");
 
         loop {
-            let mut snapshot_tobe_committed =
-                TableSnapshot::from_previous(latest_snapshot.as_ref());
+            let mut snapshot_tobe_committed = TableSnapshot::from_previous(
+                latest_snapshot.as_ref(),
+                Some(latest_table_info.ident.seq),
+            );
 
             let schema = self.schema();
             let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(

@@ -33,7 +33,6 @@ use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
-// for unmatched clause, we need to calculate the
 #[derive(Clone, Debug)]
 pub struct UnmatchedEvaluator {
     pub source_schema: DataSchemaRef,
