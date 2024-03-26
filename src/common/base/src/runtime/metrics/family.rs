@@ -20,8 +20,10 @@ use prometheus_client::metrics::family::Family as PFamily;
 use prometheus_client::metrics::family::MetricConstructor;
 use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
+
 use crate::runtime::metrics::registry::SampleMetric;
-use crate::runtime::metrics::sample::{MetricSample, MetricValue};
+use crate::runtime::metrics::sample::MetricSample;
+use crate::runtime::metrics::sample::MetricValue;
 
 #[derive(Debug)]
 pub struct Family<S, M, C = fn() -> M> {
@@ -76,10 +78,10 @@ impl<S, M: TypedMetric, C> TypedMetric for Family<S, M, C> {
 }
 
 impl<S, M, C> EncodeMetric for Family<S, M, C>
-    where
-        S: Clone + std::hash::Hash + Eq + EncodeLabelSet,
-        M: EncodeMetric + TypedMetric,
-        C: MetricConstructor<M>,
+where
+    S: Clone + std::hash::Hash + Eq + EncodeLabelSet,
+    M: EncodeMetric + TypedMetric,
+    C: MetricConstructor<M>,
 {
     fn encode(&self, encoder: MetricEncoder) -> Result<(), std::fmt::Error> {
         self.inner.encode(encoder)
@@ -91,10 +93,10 @@ impl<S, M, C> EncodeMetric for Family<S, M, C>
 }
 
 impl<S, M, C> SampleMetric for Family<S, M, C>
-    where
-        S: Clone + std::hash::Hash + Eq + EncodeLabelSet,
-        M: EncodeMetric + TypedMetric,
-        C: MetricConstructor<M>,
+where
+    S: Clone + std::hash::Hash + Eq + EncodeLabelSet,
+    M: EncodeMetric + TypedMetric,
+    C: MetricConstructor<M>,
 {
     fn sample(&self, name: &str, samples: &mut Vec<MetricSample>) {
         samples.push(MetricSample {
@@ -106,7 +108,8 @@ impl<S, M, C> SampleMetric for Family<S, M, C>
 }
 
 // #[derive(Debug)]
-// pub struct FamilyCount {
+// pub struct FamilyCount<S: Clone + std::hash::Hash + Eq + EncodeLabelSet> {
+//     labels: S,
 //     value: Arc<AtomicU64>,
 //     index: usize,
 // }

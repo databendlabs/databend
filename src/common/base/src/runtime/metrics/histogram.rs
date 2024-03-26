@@ -22,8 +22,12 @@ use prometheus_client::encoding::EncodeMetric;
 use prometheus_client::encoding::MetricEncoder;
 use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
+
 use crate::runtime::metrics::registry::SampleMetric;
-use crate::runtime::metrics::sample::{HistogramCount, MetricSample, MetricValue};
+use crate::runtime::metrics::sample::HistogramCount;
+use crate::runtime::metrics::sample::MetricSample;
+use crate::runtime::metrics::sample::MetricValue;
+use crate::runtime::metrics::ScopedRegistry;
 
 pub static BUCKET_SECONDS: [f64; 15] = [
     0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 30.0, 60.0, 300.0, 600.0, 1800.0,
@@ -60,7 +64,7 @@ pub(crate) struct Inner {
 
 impl Histogram {
     /// Create a new [`Histogram`].
-    pub fn new(index: usize, buckets: impl Iterator<Item=f64>) -> Self {
+    pub fn new(index: usize, buckets: impl Iterator<Item = f64>) -> Self {
         Self {
             index,
             inner: Arc::new(RwLock::new(Inner {
@@ -77,14 +81,13 @@ impl Histogram {
 
     /// Observe the given value.
     pub fn observe(&self, v: f64) {
+        ScopedRegistry::op(self.index, |m: &Self| {
+            m.observe_and_bucket(v);
+        });
+
         self.observe_and_bucket(v);
     }
 
-    /// Observes the given value, returning the index of the first bucket the
-    /// value is added to.
-    ///
-    /// Needed in
-    /// [`HistogramWithExemplars`](crate::metrics::exemplar::HistogramWithExemplars).
     pub(crate) fn observe_and_bucket(&self, v: f64) -> Option<usize> {
         let mut inner = self.inner.write();
         inner.sum += v;
@@ -113,7 +116,7 @@ impl Histogram {
         (sum, count, buckets)
     }
 
-    pub(crate) fn reset(&self) {
+    pub fn reset(&self) {
         let mut inner = self.inner.write();
         inner.sum = 0.0;
         inner.count = 0;
@@ -142,16 +145,16 @@ impl EncodeMetric for Histogram {
 
 impl SampleMetric for Histogram {
     fn sample(&self, name: &str, samples: &mut Vec<MetricSample>) {
-        let (sum, count, buckets) = self.get();
+        let (_sum, _count, buckets) = self.get();
 
         let mut histogram_count = vec![];
-        let mut cummulative = 0;
+        let mut cumulative = 0;
         for (upper_bound, count) in buckets.iter() {
-            cummulative += count;
+            cumulative += count;
 
             histogram_count.push(HistogramCount {
                 less_than: *upper_bound,
-                count: cummulative as f64,
+                count: cumulative as f64,
             });
         }
 

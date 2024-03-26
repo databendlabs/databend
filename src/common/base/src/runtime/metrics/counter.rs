@@ -21,8 +21,10 @@ use prometheus_client::encoding::MetricEncoder;
 use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 
-use crate::runtime::metrics::registry::{SampleMetric, ScopedRegistry};
-use crate::runtime::metrics::sample::{MetricSample, MetricValue};
+use crate::runtime::metrics::registry::SampleMetric;
+use crate::runtime::metrics::registry::ScopedRegistry;
+use crate::runtime::metrics::sample::MetricSample;
+use crate::runtime::metrics::sample::MetricValue;
 
 #[derive(Debug)]
 pub struct Counter {

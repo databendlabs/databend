@@ -37,6 +37,6 @@ impl MetricValue {
             MetricValue::Histogram(_) => "histogram",
             MetricValue::Summary(_) => "summary",
         }
-            .to_string()
+        .to_string()
     }
 }

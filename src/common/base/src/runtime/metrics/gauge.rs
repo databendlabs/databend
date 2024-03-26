@@ -12,25 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicI64;
-
-use prometheus_client::encoding::EncodeGaugeValue;
 use prometheus_client::encoding::EncodeMetric;
 use prometheus_client::encoding::MetricEncoder;
-use prometheus_client::metrics::gauge::Atomic;
 use prometheus_client::metrics::gauge::Gauge as PGauge;
 use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
-use crate::runtime::metrics::registry::{SampleMetric};
-use crate::runtime::metrics::sample::{MetricSample, MetricValue};
+
+use crate::runtime::metrics::registry::SampleMetric;
+use crate::runtime::metrics::sample::MetricSample;
+use crate::runtime::metrics::sample::MetricValue;
+use crate::runtime::metrics::ScopedRegistry;
 
 #[derive(Debug)]
-pub struct Gauge<N = i64, A = AtomicI64> {
-    inner: PGauge<N, A>,
+pub struct Gauge {
+    inner: PGauge,
     index: usize,
 }
 
-impl<N, A> Clone for Gauge<N, A> {
+impl Clone for Gauge {
     fn clone(&self) -> Self {
         Gauge {
             index: self.index,
@@ -40,7 +39,7 @@ impl<N, A> Clone for Gauge<N, A> {
 }
 
 // TODO: Maybe impl deref is better
-impl<N, A: Atomic<N>> Gauge<N, A> {
+impl Gauge {
     pub fn create(index: usize) -> Gauge {
         Gauge {
             index,
@@ -48,40 +47,56 @@ impl<N, A: Atomic<N>> Gauge<N, A> {
         }
     }
 
-    pub fn inc(&self) -> N {
+    pub fn inc(&self) -> i64 {
+        ScopedRegistry::op(self.index, |m: &Self| {
+            m.inner.inc();
+        });
+
         self.inner.inc()
     }
 
-    pub fn inc_by(&self, v: N) -> N {
+    pub fn inc_by(&self, v: i64) -> i64 {
+        ScopedRegistry::op(self.index, |m: &Self| {
+            m.inner.inc_by(v);
+        });
+
         self.inner.inc_by(v)
     }
 
-    pub fn dec(&self) -> N {
+    pub fn dec(&self) -> i64 {
+        ScopedRegistry::op(self.index, |m: &Self| {
+            m.inner.dec();
+        });
+
         self.inner.dec()
     }
 
-    pub fn dec_by(&self, v: N) -> N {
+    pub fn dec_by(&self, v: i64) -> i64 {
+        ScopedRegistry::op(self.index, |m: &Self| {
+            m.inner.dec_by(v);
+        });
+
         self.inner.dec_by(v)
     }
 
-    pub fn set(&self, v: N) -> N {
+    pub fn set(&self, v: i64) -> i64 {
+        ScopedRegistry::op(self.index, |m: &Self| {
+            m.inner.set(v);
+        });
+
         self.inner.set(v)
     }
 
-    pub fn get(&self) -> N {
+    pub fn get(&self) -> i64 {
         self.inner.get()
-    }
-
-    pub fn inner(&self) -> &A {
-        self.inner.inner()
     }
 }
 
-impl<N, A: Atomic<N>> TypedMetric for Gauge<N, A> {
+impl TypedMetric for Gauge {
     const TYPE: MetricType = MetricType::Gauge;
 }
 
-impl<N: EncodeGaugeValue, A: Atomic<N>> EncodeMetric for Gauge<N, A> {
+impl EncodeMetric for Gauge {
     fn encode(&self, encoder: MetricEncoder) -> Result<(), std::fmt::Error> {
         self.inner.encode(encoder)
     }
@@ -91,7 +106,7 @@ impl<N: EncodeGaugeValue, A: Atomic<N>> EncodeMetric for Gauge<N, A> {
     }
 }
 
-impl SampleMetric for Gauge<i64, AtomicI64> {
+impl SampleMetric for Gauge {
     fn sample(&self, name: &str, samples: &mut Vec<MetricSample>) {
         samples.push(MetricSample {
             name: name.to_string(),
@@ -100,6 +115,3 @@ impl SampleMetric for Gauge<i64, AtomicI64> {
         })
     }
 }
-// impl<N:EncodeGaugeValue, A> Metric for Gauge<N, A> {
-//
-// }

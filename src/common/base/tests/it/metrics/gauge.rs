@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicI64;
 use databend_common_base::runtime::metrics::Gauge;
 
 #[test]
 fn test_clone_gauge_metric() {
-    let gauge = Gauge::<i64, AtomicI64>::create(0);
+    let gauge = Gauge::create(0);
     gauge.inc();
     gauge.inc_by(5);
     gauge.dec();
@@ -39,7 +38,6 @@ fn test_clone_gauge_metric() {
     assert_eq!(1, gauge2.get());
 }
 
-//
 // #[test]
 // fn test_reset_gauge_metric() {
 //     let gauge = Gauge::<i64, AtomicI64>::create(0);
