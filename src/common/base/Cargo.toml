@@ -55,6 +55,8 @@ tikv-jemalloc-ctl = { workspace = true }
 tikv-jemalloc-sys = "0.5.2"
 tokio = { workspace = true }
 uuid = { workspace = true }
+prometheus-client = { workspace = true }
+prometheus-parse = "0.2.3"
 
 [dev-dependencies]
 anyerror = { workspace = true }
