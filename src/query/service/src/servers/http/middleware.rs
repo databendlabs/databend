@@ -32,6 +32,10 @@ use http::HeaderMap;
 use http::HeaderValue;
 use log::error;
 use log::warn;
+use opentelemetry::baggage::BaggageExt;
+use opentelemetry::propagation::TextMapPropagator;
+use opentelemetry_http::HeaderExtractor;
+use opentelemetry_sdk::propagation::BaggagePropagator;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
@@ -66,6 +70,21 @@ impl HTTPSessionMiddleware {
     pub fn create(kind: HttpHandlerKind, auth_manager: Arc<AuthMgr>) -> HTTPSessionMiddleware {
         HTTPSessionMiddleware { kind, auth_manager }
     }
+}
+
+fn extract_baggage_from_headers(headers: &HeaderMap) -> Option<Vec<(String, String)>> {
+    headers.get("baggage")?;
+    let propagator = BaggagePropagator::new();
+    let extractor = HeaderExtractor(headers);
+    let result: Vec<(String, String)> = {
+        let context = propagator.extract(&extractor);
+        let baggage = context.baggage();
+        baggage
+            .iter()
+            .map(|(key, (value, _metadata))| (key.to_string(), value.to_string()))
+            .collect()
+    };
+    Some(result)
 }
 
 fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
@@ -210,7 +229,7 @@ impl<E> HTTPSessionEndpoint<E> {
             .headers()
             .get(TRACE_PARENT)
             .map(|id| id.to_str().unwrap().to_string());
-
+        let baggage = extract_baggage_from_headers(req.headers());
         Ok(HttpQueryContext::new(
             session,
             query_id,
@@ -218,6 +237,7 @@ impl<E> HTTPSessionEndpoint<E> {
             deduplicate_label,
             user_agent,
             trace_parent,
+            baggage,
             req.method().to_string(),
             req.uri().to_string(),
         ))
