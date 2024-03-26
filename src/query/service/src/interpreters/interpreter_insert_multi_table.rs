@@ -24,9 +24,11 @@ use databend_common_sql::executor::physical_plans::ShuffleStrategy;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::Else;
+use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::InsertMultiTable;
 use databend_common_sql::plans::Into;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::ScalarExpr;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -100,48 +102,44 @@ impl InsertMultiTableInterpreter {
 
         // Table, Filter, Projection, CastedSchema
         let mut branches = vec![];
-        match is_first {
-            true => todo!(),
-            false => {
-                for when in whens {
-                    for into in &when.intos {
-                        let Into {
-                            catalog,
-                            database,
-                            table,
-                            projection,
-                            casted_schema,
-                        } = into;
-                        let table = self.ctx.get_table(catalog, database, table).await?;
-                        branches.push((table, Some(&when.condition), projection, casted_schema));
-                    }
-                }
-                if let Some(Else { intos }) = opt_else {
-                    for into in intos {
-                        let Into {
-                            catalog,
-                            database,
-                            table,
-                            projection,
-                            casted_schema,
-                        } = into;
-                        let table = self.ctx.get_table(catalog, database, table).await?;
-                        branches.push((table, None, projection, casted_schema));
-                    }
-                }
 
-                for into in intos {
-                    let Into {
-                        catalog,
-                        database,
-                        table,
-                        projection,
-                        casted_schema,
-                    } = into;
-                    let table = self.ctx.get_table(catalog, database, table).await?;
-                    branches.push((table, None, projection, casted_schema));
-                }
+        for when in whens {
+            for into in &when.intos {
+                let Into {
+                    catalog,
+                    database,
+                    table,
+                    projection,
+                    casted_schema,
+                } = into;
+                let table = self.ctx.get_table(catalog, database, table).await?;
+                branches.push((table, Some(&when.condition), projection, casted_schema));
             }
+        }
+        if let Some(Else { intos }) = opt_else {
+            for into in intos {
+                let Into {
+                    catalog,
+                    database,
+                    table,
+                    projection,
+                    casted_schema,
+                } = into;
+                let table = self.ctx.get_table(catalog, database, table).await?;
+                branches.push((table, None, projection, casted_schema));
+            }
+        }
+
+        for into in intos {
+            let Into {
+                catalog,
+                database,
+                table,
+                projection,
+                casted_schema,
+            } = into;
+            let table = self.ctx.get_table(catalog, database, table).await?;
+            branches.push((table, None, projection, casted_schema));
         }
 
         let mut serialable_tables = vec![];
@@ -155,16 +153,46 @@ impl InsertMultiTableInterpreter {
         }
 
         let mut predicates = vec![];
-        for (_, opt_scalar_expr, _, _) in branches.iter() {
-            if let Some(scalar_expr) = opt_scalar_expr {
-                let expr = cast_expr_to_non_null_boolean(
-                    scalar_expr.as_expr()?.project_column_ref(|col| col.index),
-                )?;
-                predicates.push(Some(expr.as_remote_expr()));
-            } else {
-                predicates.push(None);
+        match is_first {
+            true => {
+                let mut previous_not: Option<ScalarExpr> = None;
+                for (_, opt_scalar_expr, _, _) in branches.iter() {
+                    if let Some(curr) = *opt_scalar_expr {
+                        let merged_curr = if let Some(prev_not) = &previous_not {
+                            let merged_scalar_expr = and(prev_not.clone(), curr.clone());
+                            previous_not = Some(and(prev_not.clone(), not(curr.clone())));
+                            merged_scalar_expr
+                        } else {
+                            previous_not = Some(not(curr.clone()));
+                            curr.clone()
+                        };
+
+                        let expr = cast_expr_to_non_null_boolean(
+                            merged_curr.as_expr()?.project_column_ref(|col| col.index),
+                        )?;
+                        predicates.push(Some(expr.as_remote_expr()));
+                    } else {
+                        let previous_not = previous_not.take().unwrap();
+                        let expr = cast_expr_to_non_null_boolean(
+                            previous_not.as_expr()?.project_column_ref(|col| col.index),
+                        )?;
+                        predicates.push(Some(expr.as_remote_expr()));
+                    }
+                }
             }
-        }
+            false => {
+                for (_, opt_scalar_expr, _, _) in branches.iter() {
+                    if let Some(scalar_expr) = opt_scalar_expr {
+                        let expr = cast_expr_to_non_null_boolean(
+                            scalar_expr.as_expr()?.project_column_ref(|col| col.index),
+                        )?;
+                        predicates.push(Some(expr.as_remote_expr()));
+                    } else {
+                        predicates.push(None);
+                    }
+                }
+            }
+        };
 
         root = PhysicalPlan::Duplicate(Box::new(Duplicate {
             plan_id: 0,
@@ -207,4 +235,22 @@ impl InsertMultiTableInterpreter {
         }));
         Ok(root)
     }
+}
+
+fn and(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
+    ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "and".to_string(),
+        params: vec![],
+        arguments: vec![left, right],
+    })
+}
+
+fn not(expr: ScalarExpr) -> ScalarExpr {
+    ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "not".to_string(),
+        params: vec![],
+        arguments: vec![expr],
+    })
 }
