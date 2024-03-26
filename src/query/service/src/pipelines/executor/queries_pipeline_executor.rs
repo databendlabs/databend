@@ -182,7 +182,9 @@ impl QueriesPipelineExecutor {
             }
 
             while !self.global_tasks_queue.is_finished() && context.has_task() {
-                match context.execute_task(Some(self)) {
+                let graph = context.get_graph();
+                let res = catch_unwind(|| context.execute_task(Some(self))).flatten();
+                match res {
                     Ok(Some((executed_pid, graph))) => {
                         // Not scheduled graph if pipeline is finished.
                         if !self.global_tasks_queue.is_finished() && !graph.is_should_finish() {
@@ -212,7 +214,11 @@ impl QueriesPipelineExecutor {
                     Ok(None) => {}
                     Err(cause) => {
                         warn!("Execute task error: {:?}", cause);
-                        Err(cause)?;
+                        if let Some(graph) = graph {
+                            graph
+                                .should_finish(Err(cause))
+                                .expect("graph cannot finish");
+                        }
                     }
                 }
             }

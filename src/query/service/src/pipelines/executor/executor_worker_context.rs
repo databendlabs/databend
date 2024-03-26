@@ -18,7 +18,6 @@ use std::intrinsics::assume;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ThreadTracker;
@@ -98,6 +97,15 @@ impl ExecutorWorkerContext {
         std::mem::replace(&mut self.task, ExecutorTask::None)
     }
 
+    pub fn get_graph(&self) -> Option<Arc<RunningGraph>> {
+        match &self.task {
+            ExecutorTask::None => None,
+            ExecutorTask::Sync(p) => Some(p.graph.clone()),
+            ExecutorTask::Async(p) => Some(p.graph.clone()),
+            ExecutorTask::AsyncCompleted(p) => Some(p.graph.clone()),
+        }
+    }
+
     /// # Safety
     pub unsafe fn execute_task(
         &mut self,
@@ -105,48 +113,15 @@ impl ExecutorWorkerContext {
     ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
-            ExecutorTask::Sync(processor) => {
-                let graph_clone = processor.graph.clone();
-                let may_panic = catch_unwind(move || self.execute_sync_task(processor));
-                match may_panic {
-                    Ok(res) => res,
-                    Err(cause) => {
-                        let error = Err(cause.clone());
-                        graph_clone
-                            .should_finish(error)
-                            .expect("executor cannot send error message");
-                        Err(cause)
-                    }
-                }
-            }
+            ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
             ExecutorTask::Async(processor) => {
                 if let Some(executor) = executor {
-                    let graph_clone = processor.graph.clone();
-                    let may_panic = catch_unwind(move || {
-                        self.execute_async_task(
-                            processor,
-                            executor,
-                            executor.global_tasks_queue.clone(),
-                        )
-                    });
-                    match may_panic {
-                        Ok(res) => res,
-                        Err(cause) => {
-                            let error = Err(cause.clone());
-                            graph_clone
-                                .should_finish(error)
-                                .expect("executor cannot send error message");
-                            Err(cause)
-                        }
-                    }
+                    self.execute_async_task(
+                        processor,
+                        executor,
+                        executor.global_tasks_queue.clone(),
+                    )
                 } else {
-                    let error = Err(ErrorCode::Internal(
-                        "Async task should only be executed on queries executor",
-                    ));
-                    processor
-                        .graph
-                        .should_finish(error)
-                        .expect("executor cannot send error message");
                     Err(ErrorCode::Internal(
                         "Async task should only be executed on queries executor",
                     ))
@@ -154,13 +129,7 @@ impl ExecutorWorkerContext {
             }
             ExecutorTask::AsyncCompleted(task) => match task.res {
                 Ok(_) => Ok(Some((task.id, task.graph))),
-                Err(cause) => {
-                    let error = Err(cause.clone());
-                    task.graph
-                        .should_finish(error)
-                        .expect("executor cannot send error message");
-                    Err(cause)
-                }
+                Err(cause) => Err(cause),
             },
         }
     }
@@ -175,22 +144,11 @@ impl ExecutorWorkerContext {
 
         let instant = Instant::now();
 
-        match proc.processor.process() {
-            Ok(_) => {
-                let nanos = instant.elapsed().as_nanos();
-                assume(nanos < 18446744073709551615_u128);
-                Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
-                Ok(Some((proc.processor.id(), proc.graph)))
-            }
-            Err(cause) => {
-                let error = Err(cause.clone());
-                proc.graph
-                    .should_finish(error)
-                    .expect("executor cannot send error message");
-
-                Err(cause)
-            }
-        }
+        proc.processor.process()?;
+        let nanos = instant.elapsed().as_nanos();
+        assume(nanos < 18446744073709551615_u128);
+        Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
+        Ok(Some((proc.processor.id(), proc.graph)))
     }
 
     pub fn execute_async_task(
