@@ -108,6 +108,7 @@ pub struct TransformPartialGroupBy<Method: HashMethodBounds> {
     group_columns: Vec<IndexType>,
     probe_state: ProbeState,
     settings: GroupBySettings,
+    params: Arc<AggregatorParams>,
 }
 
 impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
@@ -140,6 +141,7 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
             TransformPartialGroupBy::<Method> {
                 method,
                 hash_table,
+                params,
                 probe_state: ProbeState::default(),
                 group_columns: params.group_columns.clone(),
                 settings: GroupBySettings::try_from(ctx)?,
@@ -194,13 +196,17 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 }
             };
 
+            let is_new_agg = self.params.enable_experimental_aggregate_hashtable;
+
             #[allow(clippy::collapsible_if)]
             if Method::SUPPORT_PARTITIONED {
-                if matches!(&self.hash_table, HashTable::HashTable(cell)
-                    if cell.len() >= self.settings.convert_threshold ||
-                        cell.allocated_bytes() >= self.settings.spilling_bytes_threshold_per_proc ||
-                        GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
-                ) {
+                if !is_new_agg
+                    && matches!(&self.hash_table, HashTable::HashTable(cell)
+                        if cell.len() >= self.settings.convert_threshold ||
+                            cell.allocated_bytes() >= self.settings.spilling_bytes_threshold_per_proc ||
+                            GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
+                    )
+                {
                     if let HashTable::HashTable(cell) = std::mem::take(&mut self.hash_table) {
                         self.hash_table = HashTable::PartitionedHashTable(
                             PartitionedHashMethod::convert_hashtable(&self.method, cell)?,
@@ -208,7 +214,8 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                     }
                 }
 
-                if matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
+                if !is_new_agg
+                    && matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
                     || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage
                 {
                     if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table)
@@ -230,40 +237,41 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
 
                     unreachable!()
                 }
+            }
 
-                if matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
+            if !is_new_agg
+                && matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
                     || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage)
-                {
-                    if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
-                        let group_types = v.payload.group_types.clone();
-                        let aggrs = v.payload.aggrs.clone();
-                        v.config.update_current_max_radix_bits();
-                        let config = v
-                            .config
-                            .clone()
-                            .with_initial_radix_bits(v.config.max_radix_bits);
-                        let mut state = PayloadFlushState::default();
+            {
+                if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
+                    let group_types = v.payload.group_types.clone();
+                    let aggrs = v.payload.aggrs.clone();
+                    v.config.update_current_max_radix_bits();
+                    let config = v
+                        .config
+                        .clone()
+                        .with_initial_radix_bits(v.config.max_radix_bits);
+                    let mut state = PayloadFlushState::default();
 
-                        // repartition to max for normalization
-                        let partitioned_payload = v
-                            .payload
-                            .repartition(1 << config.max_radix_bits, &mut state);
-                        let blocks = vec![DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, ()>::create_agg_spilling(partitioned_payload),
-                        )];
+                    // repartition to max for normalization
+                    let partitioned_payload = v
+                        .payload
+                        .repartition(1 << config.max_radix_bits, &mut state);
+                    let blocks = vec![DataBlock::empty_with_meta(
+                        AggregateMeta::<Method, ()>::create_agg_spilling(partitioned_payload),
+                    )];
 
-                        let arena = Arc::new(Bump::new());
-                        self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
-                            group_types,
-                            aggrs,
-                            config,
-                            arena,
-                        ));
-                        return Ok(blocks);
-                    }
-
-                    unreachable!()
+                    let arena = Arc::new(Bump::new());
+                    self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
+                        group_types,
+                        aggrs,
+                        config,
+                        arena,
+                    ));
+                    return Ok(blocks);
                 }
+
+                unreachable!()
             }
         }
 
