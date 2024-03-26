@@ -215,10 +215,9 @@ impl QueriesPipelineExecutor {
                     Err(cause) => {
                         warn!("Execute task error: {:?}", cause);
                         if let Some(graph) = graph {
-                            graph
-                                .should_finish(Err(cause))
-                                .expect("graph cannot finish");
+                            graph.should_finish(Err(cause.clone()))?;
                         }
+                        self.finish(Some(cause));
                     }
                 }
             }
