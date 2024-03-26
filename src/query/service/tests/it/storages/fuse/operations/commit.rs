@@ -261,6 +261,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
             let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION)];
             let new_snapshot = TableSnapshot::new(
                 Uuid::new_v4(),
+                None,
                 &None,
                 None,
                 table.schema().as_ref().clone(),
