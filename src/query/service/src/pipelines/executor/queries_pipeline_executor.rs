@@ -187,12 +187,19 @@ impl QueriesPipelineExecutor {
                         // Not scheduled graph if pipeline is finished.
                         if !self.global_tasks_queue.is_finished() && !graph.is_should_finish() {
                             // We immediately schedule the processor again.
-                            let schedule_queue = graph.clone().schedule_queue(executed_pid)?;
-                            schedule_queue.schedule_with_condition(
-                                &self.global_tasks_queue,
-                                &mut context,
-                                self,
-                            );
+                            let schedule_queue_res = graph.clone().schedule_queue(executed_pid);
+                            match schedule_queue_res {
+                                Ok(schedule_queue) => {
+                                    schedule_queue.schedule_with_condition(
+                                        &self.global_tasks_queue,
+                                        &mut context,
+                                        self,
+                                    );
+                                }
+                                Err(error) => {
+                                    graph.should_finish(Err(error))?;
+                                }
+                            }
                         }
                         if graph.is_should_finish() {
                             // TODO: temporary finish method, will remove after change executor to a global service
