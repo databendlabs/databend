@@ -31,18 +31,6 @@ output domain  : Undefined
 output         : 'LINESTRING(1 2,10.1 5.5,3.5 4.5,6.1 7.9)'
 
 
-error: 
-  --> SQL:1:13
-  |
-1 | st_makeline(to_geometry(a), to_geometry(b))
-  |             ^^^^^^^^^^^^^^ no overload satisfies `st_geometryfromwkt(Binary)`
-
-has tried possible overloads:
-  st_geometryfromwkt(String) :: Geometry            : unable to unify `Binary` with `String`
-  st_geometryfromwkt(String NULL) :: Geometry NULL  : unable to unify `Binary` with `String`
-
-
-
 ast            : st_makegeompoint(7.0, 8.0)
 raw expr       : st_makegeompoint(7.0, 8.0)
 checked expr   : st_makegeompoint<Float64, Float64>(to_float64<Decimal(2, 1)>(7.0_d128(2,1)), to_float64<Decimal(2, 1)>(8.0_d128(2,1)))

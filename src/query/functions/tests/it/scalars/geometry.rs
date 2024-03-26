@@ -14,7 +14,6 @@
 
 use std::io::Write;
 
-use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
@@ -56,16 +55,6 @@ fn test_st_makeline(file: &mut impl Write) {
                             to_geometry('MULTIPOINT(3.5 4.5, 6.1 7.9)'))",
         &[],
     );
-    run_ast(file, "st_makeline(to_geometry(a), to_geometry(b))", &[
-        (
-            "a",
-            BinaryType::from_data(vec!["LINESTRING(1.0 2.0, 10.1 5.5)".as_bytes()]),
-        ),
-        (
-            "b",
-            BinaryType::from_data(vec!["MULTIPOINT(3.5 4.5, 6.1 7.9)".as_bytes()]),
-        ),
-    ]);
 }
 
 fn test_st_makepoint(file: &mut impl Write) {
