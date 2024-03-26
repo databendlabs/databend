@@ -460,7 +460,7 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
                     }),
                     right: Box::new(Expr::Literal {
                         span: Some(t.span),
-                        lit: Literal::String(s),
+                        value: Literal::String(s),
                     }),
                 }),
             })),

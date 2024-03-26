@@ -741,7 +741,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 if i == 1 {
                     args.push(Expr::Literal {
                         span: None,
-                        lit: Literal::UInt64(self.rng.gen_range(1..=10)),
+                        value: Literal::UInt64(self.rng.gen_range(1..=10)),
                     })
                 } else {
                     args.push(self.gen_expr(ty))
@@ -749,7 +749,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             } else if name == "factorial" {
                 args.push(Expr::Literal {
                     span: None,
-                    lit: Literal::UInt64(self.rng.gen_range(0..=20)),
+                    value: Literal::UInt64(self.rng.gen_range(0..=20)),
                 })
             } else {
                 args.push(self.gen_expr(ty))
@@ -760,7 +760,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             .into_iter()
             .map(|param| Expr::Literal {
                 span: None,
-                lit: param,
+                value: param,
             })
             .collect();
 

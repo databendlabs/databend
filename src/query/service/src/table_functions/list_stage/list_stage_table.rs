@@ -202,6 +202,7 @@ impl AsyncSource for ListStagesSource {
             }
         }
         let op = StageTable::get_op(&stage_info)?;
+        let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
 
         let files_info = StageFilesInfo {
             path,
@@ -209,7 +210,7 @@ impl AsyncSource for ListStagesSource {
             pattern: self.args_parsed.files_info.pattern.clone(),
         };
 
-        let files = files_info.list(&op, false, None).await?;
+        let files = files_info.list(&op, thread_num, false, None).await?;
 
         let names: Vec<String> = files.iter().map(|file| file.path.to_string()).collect();
 

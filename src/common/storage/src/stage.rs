@@ -16,6 +16,7 @@ use std::path::Path;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
@@ -106,6 +107,7 @@ impl StageFilesInfo {
     pub async fn list(
         &self,
         operator: &Operator,
+        thread_num: usize,
         first_only: bool,
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
@@ -115,28 +117,20 @@ impl StageFilesInfo {
 
         let max_files = max_files.unwrap_or(usize::MAX);
         if let Some(files) = &self.files {
-            let mut res = Vec::new();
-            let mut limit: usize = 0;
-            for file in files {
-                let full_path = Path::new(&self.path)
-                    .join(file)
-                    .to_string_lossy()
-                    .trim_start_matches('/')
-                    .to_string();
-                let meta = operator.stat(&full_path).await?;
-                if meta.mode().is_file() {
-                    res.push(StageFileInfo::new(full_path, &meta))
-                } else {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "{full_path} is not a file"
-                    )));
-                }
-                if first_only {
-                    return Ok(res);
-                }
-                limit += 1;
-                if limit == max_files {
-                    return Ok(res);
+            let file_infos = self
+                .stat_concurrent(operator, thread_num, first_only, max_files, files)
+                .await?;
+            let mut res = Vec::with_capacity(file_infos.len());
+
+            for file_info in file_infos {
+                match file_info {
+                    Ok((path, meta)) if meta.is_dir() => {
+                        return Err(ErrorCode::BadArguments(format!("{path} is not a file")));
+                    }
+                    Ok((path, meta)) => res.push(StageFileInfo::new(path, &meta)),
+                    Err(e) => {
+                        return Err(e);
+                    }
                 }
             }
             Ok(res)
@@ -151,7 +145,8 @@ impl StageFilesInfo {
 
     #[async_backtrace::framed]
     pub async fn first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
-        let mut files = self.list(operator, true, None).await?;
+        // We only fetch first file.
+        let mut files = self.list(operator, 1, true, None).await?;
         files
             .pop()
             .ok_or_else(|| ErrorCode::BadArguments("no file found"))
@@ -246,6 +241,52 @@ impl StageFilesInfo {
             }
         }
         Ok(files)
+    }
+
+    /// Stat files concurrently.
+    #[async_backtrace::framed]
+    pub async fn stat_concurrent(
+        &self,
+        operator: &Operator,
+        thread_num: usize,
+        first_only: bool,
+        max_files: usize,
+        files: &[String],
+    ) -> Result<Vec<Result<(String, Metadata)>>> {
+        if first_only {
+            let Some(file) = files.first() else {
+                return Ok(vec![]);
+            };
+            let full_path = Path::new(&self.path)
+                .join(file)
+                .to_string_lossy()
+                .trim_start_matches('/')
+                .to_string();
+            let meta = operator.stat(&full_path).await;
+            return Ok(vec![meta.map(|m| (full_path, m)).map_err(Into::into)]);
+        }
+
+        // This clone is required to make sure we are not referring `file: &String` in the closure
+        let tasks = files.iter().take(max_files).cloned().map(|file| {
+            let full_path = Path::new(&self.path)
+                .join(file)
+                .to_string_lossy()
+                .trim_start_matches('/')
+                .to_string();
+            let operator = operator.clone();
+            async move {
+                let meta = operator.stat(&full_path).await?;
+                Ok((full_path, meta))
+            }
+        });
+
+        execute_futures_in_parallel(
+            tasks,
+            thread_num * 5,
+            thread_num * 10,
+            "batch-stat-file-worker".to_owned(),
+        )
+        .await
     }
 }
 

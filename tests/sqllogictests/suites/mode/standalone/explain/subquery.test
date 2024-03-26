@@ -398,14 +398,14 @@ Filter
 ├── filters: [is_true(try_to_boolean(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), TRY_CAST(scalar_subquery_4 (#4) AS UInt64 NULL), 0)))]
 ├── estimated rows: 0.20
 └── HashJoin
-    ├── output columns: [t.number (#0), (count(*) = 1) (#4)]
+    ├── output columns: [t.number (#0), count(*) = 1 (#4)]
     ├── join type: LEFT SINGLE
     ├── build keys: [number (#2)]
     ├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
     ├── filters: []
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── output columns: [numbers.number (#2), (count(*) = 1) (#4)]
+    │   ├── output columns: [numbers.number (#2), count(*) = 1 (#4)]
     │   ├── expressions: [COUNT(*) (#3) = 1]
     │   ├── estimated rows: 1.00
     │   └── AggregateFinal
