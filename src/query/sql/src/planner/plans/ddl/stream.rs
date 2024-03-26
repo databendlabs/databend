@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::table::NavigationPoint;
 use databend_common_meta_app::schema::CreateOption;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum StreamNavigation {
     AtStream { database: String, name: String },
+    AtPoint(NavigationPoint),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

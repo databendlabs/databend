@@ -207,6 +207,7 @@ async fn test_safety() -> Result<()> {
         let id = Uuid::new_v4();
         let snapshot = TableSnapshot::new(
             id,
+            None,
             &None,
             None,
             schema.as_ref().clone(),

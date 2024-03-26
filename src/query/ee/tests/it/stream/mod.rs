@@ -12,10 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(unwrap_infallible)]
-mod aggregating_index;
-mod background_service;
-mod inverted_index;
-mod license;
-mod storages;
-mod stream;
+mod stream_create;
