@@ -15,11 +15,13 @@
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::runtime::metrics::register_counter;
 use databend_common_base::runtime::metrics::register_gauge;
+use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
 use databend_common_base::runtime::metrics::register_histogram_in_seconds;
 use databend_common_base::runtime::metrics::HistogramCount;
 use databend_common_base::runtime::metrics::MetricSample;
 use databend_common_base::runtime::metrics::MetricValue;
 use databend_common_base::runtime::metrics::ScopedRegistry;
+use databend_common_base::runtime::metrics::BUCKET_MILLISECONDS;
 use databend_common_base::runtime::metrics::BUCKET_SECONDS;
 use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
 use databend_common_base::runtime::ThreadTracker;
@@ -173,6 +175,66 @@ fn test_tracking_scoped_histogram_in_seconds_metrics() -> Result<()> {
 
     // untracking assert
     histogram.observe(1801.0);
+
+    assert_contain_metric(GLOBAL_METRICS_REGISTRY.dump_sample()?, MetricSample {
+        name: uniq_metric_name.clone(),
+        labels: Default::default(),
+        value: MetricValue::Histogram(seconds_histogram_value(3_f64)),
+    });
+
+    assert_contain_metric(scoped_registry.dump_sample()?, MetricSample {
+        name: uniq_metric_name.clone(),
+        labels: Default::default(),
+        value: MetricValue::Histogram(seconds_histogram_value(1_f64)),
+    });
+
+    Ok(())
+}
+
+#[test]
+fn test_tracking_scoped_histogram_in_milliseconds_metrics() -> Result<()> {
+    let uniq_metric_name = GlobalUniqName::unique();
+    let histogram = register_histogram_in_milliseconds(&uniq_metric_name);
+    histogram.observe(1800001.0);
+
+    fn seconds_histogram_value(v: f64) -> Vec<HistogramCount> {
+        BUCKET_MILLISECONDS
+            .iter()
+            .map(|lt| HistogramCount {
+                less_than: *lt,
+                count: 0.0,
+            })
+            .chain(std::iter::once(HistogramCount {
+                less_than: f64::MAX,
+                count: v,
+            }))
+            .collect::<Vec<_>>()
+    }
+
+    let scoped_registry = ScopedRegistry::create(None);
+    {
+        // tracking assert
+        let mut new_tracking_payload = ThreadTracker::new_tracking_payload();
+        new_tracking_payload.metrics = Some(scoped_registry.clone());
+        let _guard = ThreadTracker::tracking(new_tracking_payload);
+
+        histogram.observe(1800001.0);
+
+        assert_contain_metric(GLOBAL_METRICS_REGISTRY.dump_sample()?, MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: Default::default(),
+            value: MetricValue::Histogram(seconds_histogram_value(2_f64)),
+        });
+
+        assert_contain_metric(scoped_registry.dump_sample()?, MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: Default::default(),
+            value: MetricValue::Histogram(seconds_histogram_value(1_f64)),
+        });
+    }
+
+    // untracking assert
+    histogram.observe(1800001.0);
 
     assert_contain_metric(GLOBAL_METRICS_REGISTRY.dump_sample()?, MetricSample {
         name: uniq_metric_name.clone(),
