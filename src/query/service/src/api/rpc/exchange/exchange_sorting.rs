@@ -123,6 +123,10 @@ impl Processor for TransformExchangeSorting {
             let mut min_partition = usize::MAX;
             for (index, buffer) in self.buffer.iter().enumerate() {
                 if let Some((block_number, partition_count, _)) = buffer {
+                    if *block_number == -1 {
+                        min_index = index;
+                        break;
+                    }
                     // sort by partition asc, bucket asc
                     if *partition_count < min_partition {
                         min_index = index;
