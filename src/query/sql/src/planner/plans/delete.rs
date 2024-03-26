@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use super::ComparisonOp;
+use super::JoinType;
+use super::SubqueryType;
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
@@ -27,6 +29,11 @@ pub struct SubqueryDesc {
     pub index: IndexType,
     // Comparison operator for Any/All, such as t1.a = Any (...), `compare_op` is `=`.
     pub compare_op: Option<ComparisonOp>,
+    pub typ: SubqueryType,
+    // true if `marker` column in `predicate_columns` or `outer_columns`
+    pub predicate_with_marker: bool,
+    pub from_correlated_subquery: bool,
+    pub subquery_join_type: JoinType,
 }
 
 #[derive(Clone, Debug)]

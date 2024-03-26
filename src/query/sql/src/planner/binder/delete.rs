@@ -225,7 +225,7 @@ impl Binder {
         })];
         let join = Join {
             left_conditions: conditions.clone(),
-            right_conditions: conditions.clone(),
+            right_conditions: conditions,
             non_equi_conditions: vec![],
             join_type: crate::plans::JoinType::Left,
             marker_index: None,
@@ -239,8 +239,8 @@ impl Binder {
         // use filter children as join right child, and add filter predicate result into outer_columns
         let input_expr = SExpr::create_binary(
             Arc::new(join),
-            Arc::new(filter_expr.children[0].as_ref().clone()),
             Arc::new(table_expr),
+            Arc::new(filter_expr.children[0].as_ref().clone()),
         );
         let predicate_columns = if let RelOperator::Filter(filter) = filter_expr.plan.as_ref() {
             filter.used_columns()?
@@ -249,6 +249,18 @@ impl Binder {
                 "subquery data type in delete/update statement should be boolean".to_string(),
             ));
         };
+        let (marker_index, from_correlated_subquery, subquery_join_type) =
+            if let RelOperator::Join(join) = filter_expr.children[0].plan.as_ref() {
+                (
+                    join.marker_index,
+                    join.from_correlated_subquery,
+                    join.join_type.clone(),
+                )
+            } else {
+                return Err(ErrorCode::from_string(
+                    "subquery should be a join operation".to_string(),
+                ));
+            };
 
         // add all table columns into outer columns
         let metadata = self.metadata.read();
@@ -258,6 +270,9 @@ impl Binder {
                 outer_columns.insert(column.column_index);
             }
         }
+        let predicate_with_marker = marker_index.map_or(false, |marker_index| {
+            predicate_columns.contains(&marker_index) || outer_columns.contains(&marker_index)
+        });
 
         Ok(SubqueryDesc {
             input_expr,
@@ -265,6 +280,10 @@ impl Binder {
             predicate_columns,
             index: row_id_index.unwrap(),
             compare_op: subquery_expr.compare_op,
+            typ: subquery_expr.typ.clone(),
+            predicate_with_marker,
+            from_correlated_subquery,
+            subquery_join_type,
         })
     }
 

@@ -22,6 +22,25 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::plans::JoinType;
+
+/// Checks if a join type can eliminate valids.
+pub fn check_for_eliminate_valids(from_correlated_subquery: bool, join_type: &JoinType) -> bool {
+    if !from_correlated_subquery {
+        return false;
+    }
+    matches!(
+        join_type,
+        JoinType::Inner
+            | JoinType::Full
+            | JoinType::Left
+            | JoinType::LeftSingle
+            | JoinType::LeftAnti
+            | JoinType::LeftSemi
+            | JoinType::LeftMark
+            | JoinType::RightMark
+    )
+}
 
 pub fn get_and(
     filter1: Value<BooleanType>,

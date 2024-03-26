@@ -45,6 +45,8 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::UpdateSource;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::optimizer::optimize_query;
+use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::SubqueryMutation;
@@ -295,7 +297,13 @@ impl UpdateInterpreter {
         // 1. build sub query join input
         let mut builder =
             PhysicalPlanBuilder::new(self.plan.metadata.clone(), self.ctx.clone(), false);
-        let join_input = builder.build(input_expr, outer_columns).await?;
+        let opt_ctx = OptimizerContext::new(ctx.clone(), self.plan.metadata.clone())
+            .with_enable_distributed_optimization(false)
+            .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
+            .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
+
+        let input_expr = optimize_query(opt_ctx, input_expr.clone())?;
+        let join_input = builder.build(&input_expr, outer_columns).await?;
 
         let pipeline_builder = PipelineBuilder::create(
             ctx.get_function_context()?,
@@ -312,7 +320,7 @@ impl UpdateInterpreter {
                 input,
                 output,
                 SubqueryMutation::Update(operators.clone()),
-                subquery_desc.compare_op,
+                subquery_desc.clone(),
             )?
             .into_processor()
         })?;

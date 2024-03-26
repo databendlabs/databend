@@ -274,6 +274,17 @@ statement ok
 insert into t1 values(1), (2), (3), (8);
 
 statement ok
+delete from t1 where not exists(select b from t2 where b > 2);
+
+query I
+select * from t1 order by a;
+----
+1
+2
+3
+8
+
+statement ok
 delete from t1 where a = any(select b from t2 where t1.a = t2.b) or a != any(select b from t2 where t1.a = t2.b);
 
 query I

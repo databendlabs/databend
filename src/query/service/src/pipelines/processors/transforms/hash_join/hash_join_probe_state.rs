@@ -41,6 +41,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::Interval;
 use databend_common_sql::ColumnSet;
+use databend_common_storages_fuse::operations::check_for_eliminate_valids;
 use itertools::Itertools;
 use log::info;
 use parking_lot::Mutex;
@@ -236,7 +237,7 @@ impl HashJoinProbeState {
         }
 
         let mut valids = None;
-        if !Self::check_for_eliminate_valids(
+        if !check_for_eliminate_valids(
             self.hash_join_state.hash_join_desc.from_correlated_subquery,
             &self.hash_join_state.hash_join_desc.join_type,
         ) && probe_keys
@@ -352,27 +353,6 @@ impl HashJoinProbeState {
                 "Aborted query, because the hash table is uninitialized.",
             )),
         })
-    }
-
-    /// Checks if a join type can eliminate valids.
-    pub fn check_for_eliminate_valids(
-        from_correlated_subquery: bool,
-        join_type: &JoinType,
-    ) -> bool {
-        if !from_correlated_subquery {
-            return false;
-        }
-        matches!(
-            join_type,
-            JoinType::Inner
-                | JoinType::Full
-                | JoinType::Left
-                | JoinType::LeftSingle
-                | JoinType::LeftAnti
-                | JoinType::LeftSemi
-                | JoinType::LeftMark
-                | JoinType::RightMark
-        )
     }
 
     /// Checks if the join type need to use unmatched selection.

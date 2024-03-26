@@ -33,7 +33,7 @@ use databend_common_pipeline_transforms::processors::Transformer;
 use crate::optimizer::ColumnSet;
 
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum BlockOperator {
     /// Batch mode of map which merges map operators into one.
     Map {
