@@ -39,9 +39,9 @@ pub struct Into {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    // project subquery's output with VALUES ( source_col_name [ , ... ] ) (if exsits)
+    // project subquery's output with VALUES ( source_col_name [ , ... ] ) (if exists)
     pub projection: Option<Projection>,
-    //  cast to ( target_col_name [ , ... ] )'s schema (if exsits) or target table's schema
+    //  cast to ( target_col_name [ , ... ] )'s schema (if exists) or target table's schema
     pub casted_schema: DataSchemaRef,
 }
 

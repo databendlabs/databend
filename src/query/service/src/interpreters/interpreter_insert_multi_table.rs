@@ -170,7 +170,7 @@ impl InsertMultiTableInterpreter {
         root = PhysicalPlan::ChunkAppendData(Box::new(ChunkAppendData {
             plan_id: 0,
             input: Box::new(root),
-            append_datas: serialable_tables.clone(),
+            target_tables: serialable_tables.clone(),
         }));
 
         root = PhysicalPlan::ChunkMerge(Box::new(ChunkMerge {

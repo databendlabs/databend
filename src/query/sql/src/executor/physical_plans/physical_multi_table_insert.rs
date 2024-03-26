@@ -100,7 +100,7 @@ pub struct FillAndReorder {
 pub struct ChunkAppendData {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    pub append_datas: Vec<SerializableTable>,
+    pub target_tables: Vec<SerializableTable>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

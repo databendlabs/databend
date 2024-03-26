@@ -90,10 +90,10 @@ impl PipelineBuilder {
     pub(crate) fn build_chunk_append_data(&mut self, plan: &ChunkAppendData) -> Result<()> {
         self.build_pipeline(&plan.input)?;
         let mut compact_builders: Vec<DynTransformBuilder> =
-            Vec::with_capacity(plan.append_datas.len());
+            Vec::with_capacity(plan.target_tables.len());
         let mut serialize_block_builders: Vec<DynTransformBuilder> =
-            Vec::with_capacity(plan.append_datas.len());
-        for append_data in plan.append_datas.iter() {
+            Vec::with_capacity(plan.target_tables.len());
+        for append_data in plan.target_tables.iter() {
             let table = self.ctx.build_table_by_table_info(
                 &append_data.target_catalog_info,
                 &append_data.target_table_info,
