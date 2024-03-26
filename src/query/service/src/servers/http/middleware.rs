@@ -55,6 +55,8 @@ const DEDUPLICATE_LABEL: &str = "X-DATABEND-DEDUPLICATE-LABEL";
 const USER_AGENT: &str = "User-Agent";
 const QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 
+const TRACE_PARENT: &str = "traceparent";
+
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
     pub auth_manager: Arc<AuthMgr>,
@@ -204,12 +206,18 @@ impl<E> HTTPSessionEndpoint<E> {
             .map(|id| id.to_str().unwrap().to_string())
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
+        let trace_parent = req
+            .headers()
+            .get(TRACE_PARENT)
+            .map(|id| id.to_str().unwrap().to_string());
+
         Ok(HttpQueryContext::new(
             session,
             query_id,
             node_id,
             deduplicate_label,
             user_agent,
+            trace_parent,
             req.method().to_string(),
             req.uri().to_string(),
         ))

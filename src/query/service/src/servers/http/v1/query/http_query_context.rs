@@ -30,6 +30,7 @@ pub struct HttpQueryContext {
     pub node_id: String,
     pub deduplicate_label: Option<String>,
     pub user_agent: Option<String>,
+    pub trace_parent: Option<String>,
     pub http_method: String,
     pub uri: String,
 }
@@ -41,6 +42,7 @@ impl HttpQueryContext {
         node_id: String,
         deduplicate_label: Option<String>,
         user_agent: Option<String>,
+        trace_parent: Option<String>,
         http_method: String,
         uri: String,
     ) -> Self {
@@ -50,6 +52,7 @@ impl HttpQueryContext {
             node_id,
             deduplicate_label,
             user_agent,
+            trace_parent,
             http_method,
             uri,
         }
