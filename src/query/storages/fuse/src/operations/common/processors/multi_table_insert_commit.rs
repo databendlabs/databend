@@ -32,8 +32,8 @@ use databend_common_pipeline_sinks::AsyncSink;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 
+use super::TransformMergeCommitMeta;
 use crate::operations::common::CommitMeta;
-use crate::operations::merge_commit_meta;
 use crate::operations::AppendGenerator;
 use crate::operations::SnapshotGenerator;
 use crate::FuseTable;
@@ -137,7 +137,11 @@ impl AsyncSink for CommitMultiTableInsert {
             Some(m) => {
                 let table = self.tables.get(&meta.table_id).unwrap();
                 let table = FuseTable::try_from_table(table.as_ref()).unwrap();
-                *m = merge_commit_meta(m.clone(), meta, table.cluster_key_id());
+                *m = TransformMergeCommitMeta::merge_commit_meta(
+                    m.clone(),
+                    meta,
+                    table.cluster_key_id(),
+                );
             }
             None => {
                 self.commit_metas.insert(meta.table_id, meta);
