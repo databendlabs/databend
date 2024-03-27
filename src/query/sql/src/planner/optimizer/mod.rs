@@ -28,6 +28,7 @@ mod optimizer;
 mod property;
 mod rule;
 pub mod s_expr;
+mod statistics;
 mod util;
 
 pub use cascades::CascadesOptimizer;

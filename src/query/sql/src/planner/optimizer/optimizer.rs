@@ -36,6 +36,7 @@ use crate::optimizer::filter::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
@@ -239,6 +240,10 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
 pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SExpr> {
     let enable_distributed_query = opt_ctx.enable_distributed_optimization
         && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
+
+    // Collect statistics for each leaf node in SExpr.
+    s_expr = CollectStatisticsOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+        .run(&s_expr)?;
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {

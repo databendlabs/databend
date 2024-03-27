@@ -76,6 +76,26 @@ pub fn infer_schema_with_extension(meta: &FileMetaData) -> Result<ArrowSchema> {
     Ok(arrow_schema)
 }
 
+// pub fn read_metadata(
+//     path: &str,
+//     operator: &BlockingOperator,
+//     file_size: u64,
+// ) -> Result<ParquetMetaData> {
+//     check_footer_size(file_size)?;
+//     let default_end_len = DEFAULT_FOOTER_READ_SIZE.min(file_size);
+//     let footer = operator
+//         .read_with(path)
+//         .range((file_size - default_end_len)..file_size)
+//         .call()?;
+//     let metadata_len = decode_footer(&footer[0..8].try_into().unwrap())? as u64;
+//     let metadata = operator
+//         .read_with(path)
+//         .range((file_size - FOOTER_SIZE - metadata_len)..file_size)
+//         .call()?;
+//     check_meta_size(file_size, metadata_len)?;
+//     Ok(decode_metadata(&metadata)?)
+// }
+
 /// Layout of Parquet file
 /// +---------------------------+-----+---+
 /// |      Rest of file         |  B  | A |

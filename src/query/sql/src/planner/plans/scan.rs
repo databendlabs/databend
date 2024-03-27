@@ -82,9 +82,9 @@ impl AggIndexInfo {
 #[derive(Clone, Debug, Default)]
 pub struct Statistics {
     // statistics will be ignored in comparison and hashing
-    pub statistics: Option<TableStatistics>,
+    pub table_stats: Option<TableStatistics>,
     // statistics will be ignored in comparison and hashing
-    pub col_stats: HashMap<IndexType, Option<BasicColumnStatistics>>,
+    pub column_stats: HashMap<IndexType, Option<BasicColumnStatistics>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -105,9 +105,9 @@ pub struct Scan {
 
 impl Scan {
     pub fn prune_columns(&self, columns: ColumnSet, prewhere: Option<Prewhere>) -> Self {
-        let col_stats = self
+        let column_stats = self
             .statistics
-            .col_stats
+            .column_stats
             .iter()
             .filter(|(col, _)| columns.contains(*col))
             .map(|(col, stat)| (*col, stat.clone()))
@@ -120,8 +120,8 @@ impl Scan {
             limit: self.limit,
             order_by: self.order_by.clone(),
             statistics: Statistics {
-                statistics: self.statistics.statistics,
-                col_stats,
+                table_stats: self.statistics.table_stats,
+                column_stats,
             },
             prewhere,
             agg_index: self.agg_index.clone(),
@@ -202,13 +202,13 @@ impl Operator for Scan {
 
         let num_rows = self
             .statistics
-            .statistics
+            .table_stats
             .as_ref()
             .map(|s| s.num_rows.unwrap_or(0))
             .unwrap_or(0);
 
         let mut column_stats: ColumnStatSet = Default::default();
-        for (k, v) in &self.statistics.col_stats {
+        for (k, v) in &self.statistics.column_stats {
             // No need to cal histogram for unused columns
             if !used_columns.contains(k) {
                 continue;
@@ -238,7 +238,7 @@ impl Operator for Scan {
 
         let precise_cardinality = self
             .statistics
-            .statistics
+            .table_stats
             .as_ref()
             .and_then(|stat| stat.num_rows);
 
