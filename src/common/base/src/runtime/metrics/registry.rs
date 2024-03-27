@@ -18,15 +18,13 @@ use std::sync::LazyLock;
 use databend_common_exception::Result;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use prometheus_client::encoding::EncodeLabelSet;
-use prometheus_client::metrics::counter::Counter as PCounter;
-use prometheus_client::metrics::gauge::Gauge as PGauge;
-use prometheus_client::metrics::histogram::Histogram as PHistogram;
 use prometheus_client::registry::Metric as PMetrics;
 use prometheus_client::registry::Registry;
 
 use crate::runtime::metrics::counter::Counter;
 use crate::runtime::metrics::family::Family;
+use crate::runtime::metrics::family::FamilyLabels;
+use crate::runtime::metrics::family_metrics::FamilyCounter;
 use crate::runtime::metrics::gauge::Gauge;
 use crate::runtime::metrics::histogram::Histogram;
 use crate::runtime::metrics::histogram::BUCKET_MILLISECONDS;
@@ -221,30 +219,31 @@ pub fn register_histogram_in_seconds(name: &str) -> Histogram {
     })
 }
 
-pub fn register_counter_family<T>(name: &str) -> Family<T, PCounter>
-where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send + Sync + 'static {
-    GLOBAL_METRICS_REGISTRY.register(name, "", |index| Family::<T, PCounter>::create(index))
-}
-
-pub fn register_gauge_family<T>(name: &str) -> Family<T, PGauge>
-where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send + Sync + 'static {
-    GLOBAL_METRICS_REGISTRY.register(name, "", |index| Family::<T, PGauge>::create(index))
-}
-
-pub fn register_histogram_family_in_milliseconds<T>(name: &str) -> Family<T, PHistogram>
-where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send + Sync + 'static {
+pub fn register_counter_family<T: FamilyLabels>(name: &str) -> Family<T, FamilyCounter<T>> {
     GLOBAL_METRICS_REGISTRY.register(name, "", |index| {
-        Family::<T, PHistogram>::create_with_constructor(index, || {
-            PHistogram::new(BUCKET_MILLISECONDS.iter().copied())
-        })
+        Family::<T, FamilyCounter<T>>::create(index, FamilyCounter::create)
     })
 }
 
-pub fn register_histogram_family_in_seconds<T>(name: &str) -> Family<T, PHistogram>
-where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send + Sync + 'static {
-    GLOBAL_METRICS_REGISTRY.register(name, "", |index| {
-        Family::<T, PHistogram>::create_with_constructor(index, || {
-            PHistogram::new(BUCKET_SECONDS.iter().copied())
-        })
-    })
-}
+// pub fn register_gauge_family<T>(name: &str) -> Family<T, PGauge>
+// where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send + Sync + 'static {
+//     GLOBAL_METRICS_REGISTRY.register(name, "", |index| Family::<T, PGauge>::create(index))
+// }
+//
+// pub fn register_histogram_family_in_milliseconds<T>(name: &str) -> Family<T, PHistogram>
+// where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send + Sync + 'static {
+//     GLOBAL_METRICS_REGISTRY.register(name, "", |index| {
+//         Family::<T, PHistogram>::create_with_constructor(index, || {
+//             PHistogram::new(BUCKET_MILLISECONDS.iter().copied())
+//         })
+//     })
+// }
+//
+// pub fn register_histogram_family_in_seconds<T>(name: &str) -> Family<T, PHistogram>
+// where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send + Sync + 'static {
+//     GLOBAL_METRICS_REGISTRY.register(name, "", |index| {
+//         Family::<T, PHistogram>::create_with_constructor(index, || {
+//             PHistogram::new(BUCKET_SECONDS.iter().copied())
+//         })
+//     })
+// }

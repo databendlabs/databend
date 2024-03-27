@@ -2789,6 +2789,7 @@ dependencies = [
  "pin-project-lite",
  "pprof",
  "prometheus-client",
+ "prometheus-parse",
  "rand 0.8.5",
  "regex",
  "replace_with",

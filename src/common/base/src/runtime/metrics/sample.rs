@@ -14,26 +14,26 @@
 
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MetricSample {
     pub name: String,
     pub labels: HashMap<String, String>,
     pub value: MetricValue,
 }
 
-#[derive(Debug, PartialEq, serde::Serialize)]
+#[derive(Debug, PartialEq, serde::Serialize, Clone)]
 pub struct HistogramCount {
     pub less_than: f64,
     pub count: f64,
 }
 
-#[derive(Debug, PartialEq, serde::Serialize)]
+#[derive(Debug, PartialEq, serde::Serialize, Clone)]
 pub struct SummaryCount {
     pub quantile: f64,
     pub count: f64,
 }
 
-#[derive(Debug, PartialEq, serde::Serialize)]
+#[derive(Debug, PartialEq, serde::Serialize, Clone)]
 pub enum MetricValue {
     Counter(f64),
     Gauge(f64),

@@ -14,6 +14,7 @@
 
 mod counter;
 mod family;
+mod family_metrics;
 mod gauge;
 mod histogram;
 mod registry;
@@ -26,9 +27,9 @@ pub use histogram::BUCKET_SECONDS;
 pub use registry::register_counter;
 pub use registry::register_counter_family;
 pub use registry::register_gauge;
-pub use registry::register_gauge_family;
-pub use registry::register_histogram_family_in_milliseconds;
-pub use registry::register_histogram_family_in_seconds;
+// pub use registry::register_gauge_family;
+// pub use registry::register_histogram_family_in_milliseconds;
+// pub use registry::register_histogram_family_in_seconds;
 pub use registry::register_histogram_in_milliseconds;
 pub use registry::register_histogram_in_seconds;
 pub use registry::ScopedRegistry;

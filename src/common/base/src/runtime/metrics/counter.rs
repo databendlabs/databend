@@ -84,7 +84,6 @@ impl TypedMetric for Counter {
 
 impl EncodeMetric for Counter {
     fn encode(&self, mut encoder: MetricEncoder) -> Result<(), std::fmt::Error> {
-        // self.type_id()
         encoder.encode_counter::<(), _, u64>(&self.get(), None)
     }
 

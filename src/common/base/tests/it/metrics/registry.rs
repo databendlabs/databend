@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::runtime::metrics::register_counter;
+use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_base::runtime::metrics::register_gauge;
 use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
 use databend_common_base::runtime::metrics::register_histogram_in_seconds;
@@ -29,14 +32,19 @@ use databend_common_exception::Result;
 
 fn assert_contain_metric(samples: Vec<MetricSample>, expected: MetricSample) {
     for sample in samples {
-        if sample.name == expected.name {
+        if sample.name == expected.name && sample.labels == expected.labels {
             assert_eq!(sample.value, expected.value);
-            assert_eq!(sample.labels, expected.labels);
             return;
         }
     }
 
     panic!()
+}
+
+fn assert_contain_metrics(samples: Vec<MetricSample>, expected: Vec<MetricSample>) {
+    for expected in expected {
+        assert_contain_metric(samples.clone(), expected);
+    }
 }
 
 #[test]
@@ -197,7 +205,7 @@ fn test_tracking_scoped_histogram_in_milliseconds_metrics() -> Result<()> {
     let histogram = register_histogram_in_milliseconds(&uniq_metric_name);
     histogram.observe(1800001.0);
 
-    fn seconds_histogram_value(v: f64) -> Vec<HistogramCount> {
+    fn milliseconds_histogram_value(v: f64) -> Vec<HistogramCount> {
         BUCKET_MILLISECONDS
             .iter()
             .map(|lt| HistogramCount {
@@ -223,13 +231,13 @@ fn test_tracking_scoped_histogram_in_milliseconds_metrics() -> Result<()> {
         assert_contain_metric(GLOBAL_METRICS_REGISTRY.dump_sample()?, MetricSample {
             name: uniq_metric_name.clone(),
             labels: Default::default(),
-            value: MetricValue::Histogram(seconds_histogram_value(2_f64)),
+            value: MetricValue::Histogram(milliseconds_histogram_value(2_f64)),
         });
 
         assert_contain_metric(scoped_registry.dump_sample()?, MetricSample {
             name: uniq_metric_name.clone(),
             labels: Default::default(),
-            value: MetricValue::Histogram(seconds_histogram_value(1_f64)),
+            value: MetricValue::Histogram(milliseconds_histogram_value(1_f64)),
         });
     }
 
@@ -239,14 +247,178 @@ fn test_tracking_scoped_histogram_in_milliseconds_metrics() -> Result<()> {
     assert_contain_metric(GLOBAL_METRICS_REGISTRY.dump_sample()?, MetricSample {
         name: uniq_metric_name.clone(),
         labels: Default::default(),
-        value: MetricValue::Histogram(seconds_histogram_value(3_f64)),
+        value: MetricValue::Histogram(milliseconds_histogram_value(3_f64)),
     });
 
     assert_contain_metric(scoped_registry.dump_sample()?, MetricSample {
         name: uniq_metric_name.clone(),
         labels: Default::default(),
-        value: MetricValue::Histogram(seconds_histogram_value(1_f64)),
+        value: MetricValue::Histogram(milliseconds_histogram_value(1_f64)),
     });
+
+    Ok(())
+}
+
+#[test]
+fn test_tracking_scoped_family_counter_metrics() -> Result<()> {
+    let uniq_metric_name = GlobalUniqName::unique();
+    let counter = register_counter_family::<Vec<(&'static str, u64)>>(&uniq_metric_name);
+    counter.get_or_create(&vec![("TEST_LABEL1", 1)]).inc();
+    counter.get_or_create(&vec![("TEST_LABEL1", 2)]).inc();
+    counter.get_or_create(&vec![("TEST_LABEL2", 1)]).inc();
+    counter.get_or_create(&vec![("TEST_LABEL3", 1)]).inc();
+
+    let scoped_registry = ScopedRegistry::create(None);
+    {
+        // tracking assert
+        let mut new_tracking_payload = ThreadTracker::new_tracking_payload();
+        new_tracking_payload.metrics = Some(scoped_registry.clone());
+        let _guard = ThreadTracker::tracking(new_tracking_payload);
+
+        counter.get_or_create(&vec![("TEST_LABEL1", 1)]).inc();
+        counter.get_or_create(&vec![("TEST_LABEL1", 2)]).inc();
+        counter.get_or_create(&vec![("TEST_LABEL1", 3)]).inc();
+        counter.get_or_create(&vec![("TEST_LABEL2", 1)]).inc();
+        counter.get_or_create(&vec![("TEST_LABEL4", 1)]).inc();
+
+        assert_contain_metrics(GLOBAL_METRICS_REGISTRY.dump_sample()?, vec![
+            MetricSample {
+                name: uniq_metric_name.clone(),
+                labels: HashMap::from([("TEST_LABEL1".to_string(), "1".to_string())]),
+                value: MetricValue::Counter(2_f64),
+            },
+            MetricSample {
+                name: uniq_metric_name.clone(),
+                labels: HashMap::from([("TEST_LABEL1".to_string(), "2".to_string())]),
+                value: MetricValue::Counter(2_f64),
+            },
+            MetricSample {
+                name: uniq_metric_name.clone(),
+                labels: HashMap::from([("TEST_LABEL1".to_string(), "3".to_string())]),
+                value: MetricValue::Counter(1_f64),
+            },
+            MetricSample {
+                name: uniq_metric_name.clone(),
+                labels: HashMap::from([("TEST_LABEL2".to_string(), "1".to_string())]),
+                value: MetricValue::Counter(2_f64),
+            },
+            MetricSample {
+                name: uniq_metric_name.clone(),
+                labels: HashMap::from([("TEST_LABEL3".to_string(), "1".to_string())]),
+                value: MetricValue::Counter(1_f64),
+            },
+            MetricSample {
+                name: uniq_metric_name.clone(),
+                labels: HashMap::from([("TEST_LABEL4".to_string(), "1".to_string())]),
+                value: MetricValue::Counter(1_f64),
+            },
+        ]);
+
+        assert_contain_metrics(scoped_registry.dump_sample()?, vec![
+            MetricSample {
+                name: uniq_metric_name.clone(),
+                labels: HashMap::from([("TEST_LABEL1".to_string(), "1".to_string())]),
+                value: MetricValue::Counter(1_f64),
+            },
+            MetricSample {
+                name: uniq_metric_name.clone(),
+                labels: HashMap::from([("TEST_LABEL1".to_string(), "2".to_string())]),
+                value: MetricValue::Counter(1_f64),
+            },
+            MetricSample {
+                name: uniq_metric_name.clone(),
+                labels: HashMap::from([("TEST_LABEL1".to_string(), "3".to_string())]),
+                value: MetricValue::Counter(1_f64),
+            },
+            MetricSample {
+                name: uniq_metric_name.clone(),
+                labels: HashMap::from([("TEST_LABEL1".to_string(), "2".to_string())]),
+                value: MetricValue::Counter(1_f64),
+            },
+            MetricSample {
+                name: uniq_metric_name.clone(),
+                labels: HashMap::from([("TEST_LABEL2".to_string(), "1".to_string())]),
+                value: MetricValue::Counter(1_f64),
+            },
+            MetricSample {
+                name: uniq_metric_name.clone(),
+                labels: HashMap::from([("TEST_LABEL4".to_string(), "1".to_string())]),
+                value: MetricValue::Counter(1_f64),
+            },
+        ]);
+    }
+
+    // untracking assert
+    counter.get_or_create(&vec![("TEST_LABEL1", 1)]).inc();
+    counter.get_or_create(&vec![("TEST_LABEL1", 2)]).inc();
+    counter.get_or_create(&vec![("TEST_LABEL2", 1)]).inc();
+    counter.get_or_create(&vec![("TEST_LABEL3", 1)]).inc();
+
+    assert_contain_metrics(GLOBAL_METRICS_REGISTRY.dump_sample()?, vec![
+        MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: HashMap::from([("TEST_LABEL1".to_string(), "1".to_string())]),
+            value: MetricValue::Counter(3_f64),
+        },
+        MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: HashMap::from([("TEST_LABEL1".to_string(), "2".to_string())]),
+            value: MetricValue::Counter(3_f64),
+        },
+        MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: HashMap::from([("TEST_LABEL1".to_string(), "3".to_string())]),
+            value: MetricValue::Counter(1_f64),
+        },
+        MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: HashMap::from([("TEST_LABEL2".to_string(), "1".to_string())]),
+            value: MetricValue::Counter(3_f64),
+        },
+        MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: HashMap::from([("TEST_LABEL3".to_string(), "1".to_string())]),
+            value: MetricValue::Counter(2_f64),
+        },
+        MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: HashMap::from([("TEST_LABEL4".to_string(), "1".to_string())]),
+            value: MetricValue::Counter(1_f64),
+        },
+    ]);
+
+    assert_contain_metrics(scoped_registry.dump_sample()?, vec![
+        MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: HashMap::from([("TEST_LABEL1".to_string(), "1".to_string())]),
+            value: MetricValue::Counter(1_f64),
+        },
+        MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: HashMap::from([("TEST_LABEL1".to_string(), "2".to_string())]),
+            value: MetricValue::Counter(1_f64),
+        },
+        MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: HashMap::from([("TEST_LABEL1".to_string(), "3".to_string())]),
+            value: MetricValue::Counter(1_f64),
+        },
+        MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: HashMap::from([("TEST_LABEL1".to_string(), "2".to_string())]),
+            value: MetricValue::Counter(1_f64),
+        },
+        MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: HashMap::from([("TEST_LABEL2".to_string(), "1".to_string())]),
+            value: MetricValue::Counter(1_f64),
+        },
+        MetricSample {
+            name: uniq_metric_name.clone(),
+            labels: HashMap::from([("TEST_LABEL4".to_string(), "1".to_string())]),
+            value: MetricValue::Counter(1_f64),
+        },
+    ]);
 
     Ok(())
 }
