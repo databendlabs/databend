@@ -98,15 +98,9 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc, need_lock: bool) 
     }
 
     // Generate sync inverted indexes.
-    if ctx
-        .get_settings()
-        .get_enable_refresh_inverted_index_after_write()?
-    {
-        let inverted_index_plans =
-            generate_refresh_inverted_index_plan(ctx.clone(), &desc, table.clone(), need_lock)
-                .await?;
-        plans.extend_from_slice(&inverted_index_plans);
-    }
+    let inverted_index_plans =
+        generate_refresh_inverted_index_plan(ctx.clone(), &desc, table.clone(), need_lock).await?;
+    plans.extend_from_slice(&inverted_index_plans);
 
     // Generate virtual columns.
     if ctx
