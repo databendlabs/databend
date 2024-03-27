@@ -1552,7 +1552,7 @@ fn parse_table_function_args(
                 Some(val) => args.push(val),
                 None => args.push(Expr::Literal {
                     span: None,
-                    lit: Literal::Null,
+                    value: Literal::Null,
                 }),
             }
         }

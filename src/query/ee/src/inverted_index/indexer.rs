@@ -189,7 +189,10 @@ impl Indexer {
         write_data(index_bytes, operator, &new_index_info_loc).await?;
 
         // Generate new table snapshot file
-        let mut new_snapshot = TableSnapshot::from_previous(snapshot.as_ref());
+        let mut new_snapshot = TableSnapshot::from_previous(
+            snapshot.as_ref(),
+            Some(fuse_table.get_table_info().ident.seq),
+        );
         let mut index_info_locations = BTreeMap::new();
         if let Some(old_index_info_locations) = &snapshot.index_info_locations {
             for (old_index_name, location) in old_index_info_locations {

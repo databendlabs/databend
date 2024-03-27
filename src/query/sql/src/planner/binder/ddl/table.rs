@@ -991,7 +991,7 @@ impl Binder {
                     limit: limit.map(|v| v as usize),
                 })))
             }
-            AlterTableAction::RevertTo { point } => {
+            AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point).await?;
                 Ok(Plan::RevertTable(Box::new(RevertTablePlan {
                     tenant: tenant.to_string(),

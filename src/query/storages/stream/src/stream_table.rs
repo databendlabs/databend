@@ -162,14 +162,14 @@ impl StreamTable {
             .options()
             .get(OPT_KEY_CHANGE_TRACKING_BEGIN_VER)
         {
-            let begin_version = value.to_lowercase().parse::<u64>()?;
+            let begin_version = value.parse::<u64>()?;
             if begin_version > self.table_version {
                 return Err(ErrorCode::IllegalStream(format!(
                     "Change tracking has been missing for the time range requested on table '{}.{}'",
                     self.table_database, self.table_name
                 )));
             }
-        };
+        }
 
         Ok(table)
     }

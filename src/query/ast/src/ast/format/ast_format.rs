@@ -1573,10 +1573,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     AstFormatContext::with_children(action_name, children.len());
                 FormatTreeNode::with_children(action_format_ctx, children)
             }
-            AlterTableAction::RevertTo { point } => {
+            AlterTableAction::FlashbackTo { point } => {
                 self.visit_time_travel_point(point);
                 let point_node = self.children.pop().unwrap();
-                let action_name = "Action RevertTo".to_string();
+                let action_name = "Action FlashbackTo".to_string();
                 let action_format_ctx = AstFormatContext::with_children(action_name, 1);
                 FormatTreeNode::with_children(action_format_ctx, vec![point_node])
             }
@@ -3292,6 +3292,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_stream_point(&mut self, point: &'ast StreamPoint) {
         match point {
             StreamPoint::AtStream { database, name } => self.visit_table_ref(&None, database, name),
+            StreamPoint::AtPoint(point) => self.visit_time_travel_point(point),
         }
     }
 

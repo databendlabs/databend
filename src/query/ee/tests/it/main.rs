@@ -18,3 +18,4 @@ mod background_service;
 mod inverted_index;
 mod license;
 mod storages;
+mod stream;

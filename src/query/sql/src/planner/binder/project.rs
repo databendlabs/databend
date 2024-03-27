@@ -476,7 +476,7 @@ impl Binder {
                     .into_iter()
                     .map(|x| Expr::Literal {
                         span,
-                        lit: Literal::String(x),
+                        value: Literal::String(x),
                     })
                     .collect_vec(),
             };

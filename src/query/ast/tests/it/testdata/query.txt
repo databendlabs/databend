@@ -1,7 +1,7 @@
 ---------- Input ----------
 select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1
 ---------- Output ---------
-SELECT * EXCLUDE (c1), b.* EXCLUDE (c2, c3, c4) FROM customer INNER JOIN orders ON (a = b) LIMIT 1
+SELECT * EXCLUDE (c1), b.* EXCLUDE (c2, c3, c4) FROM customer INNER JOIN orders ON a = b LIMIT 1
 ---------- AST ------------
 Query {
     span: Some(
@@ -198,7 +198,7 @@ Query {
             span: Some(
                 93..94,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -211,7 +211,7 @@ Query {
 ---------- Input ----------
 select columns('abc'), columns(a -> length(a) = 3) from t
 ---------- Output ---------
-SELECT COLUMNS(_t -> (_t REGEXP 'abc')), COLUMNS(a -> (length(a) = 3)) FROM t
+SELECT COLUMNS(_t -> _t REGEXP 'abc'), COLUMNS(a -> length(a) = 3) FROM t
 ---------- AST ------------
 Query {
     span: Some(
@@ -273,7 +273,7 @@ Query {
                                         span: Some(
                                             7..14,
                                         ),
-                                        lit: String(
+                                        value: String(
                                             "abc",
                                         ),
                                     },
@@ -352,7 +352,7 @@ Query {
                                         span: Some(
                                             48..49,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             3,
                                         ),
                                     },
@@ -589,7 +589,7 @@ Query {
 ---------- Input ----------
 select * from customer inner join orders on (a = b)
 ---------- Output ---------
-SELECT * FROM customer INNER JOIN orders ON (a = b)
+SELECT * FROM customer INNER JOIN orders ON a = b
 ---------- AST ------------
 Query {
     span: Some(
@@ -728,7 +728,7 @@ Query {
 ---------- Input ----------
 select * from customer inner join orders on a = b limit 1
 ---------- Output ---------
-SELECT * FROM customer INNER JOIN orders ON (a = b) LIMIT 1
+SELECT * FROM customer INNER JOIN orders ON a = b LIMIT 1
 ---------- AST ------------
 Query {
     span: Some(
@@ -863,7 +863,7 @@ Query {
             span: Some(
                 56..57,
             ),
-            lit: UInt64(
+            value: UInt64(
                 1,
             ),
         },
@@ -876,7 +876,7 @@ Query {
 ---------- Input ----------
 select * from customer inner join orders on a = b limit 2 offset 3
 ---------- Output ---------
-SELECT * FROM customer INNER JOIN orders ON (a = b) LIMIT 2 OFFSET 3
+SELECT * FROM customer INNER JOIN orders ON a = b LIMIT 2 OFFSET 3
 ---------- AST ------------
 Query {
     span: Some(
@@ -1011,7 +1011,7 @@ Query {
             span: Some(
                 56..57,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -1021,7 +1021,7 @@ Query {
             span: Some(
                 65..66,
             ),
-            lit: UInt64(
+            value: UInt64(
                 3,
             ),
         },
@@ -1261,7 +1261,7 @@ Query {
 ---------- Input ----------
 with t2(tt) as (select a from t) select t2.tt from t2  where t2.tt > 1
 ---------- Output ---------
-WITH t2(tt) AS (SELECT a FROM t) SELECT t2.tt FROM t2 WHERE (t2.tt > 1)
+WITH t2(tt) AS (SELECT a FROM t) SELECT t2.tt FROM t2 WHERE t2.tt > 1
 ---------- AST ------------
 Query {
     span: Some(
@@ -1473,7 +1473,7 @@ Query {
                         span: Some(
                             69..70,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -1495,7 +1495,7 @@ Query {
 ---------- Input ----------
 with t2(tt) as materialized (select a from t) select t2.tt from t2  where t2.tt > 1
 ---------- Output ---------
-WITH t2(tt) AS MATERIALIZED (SELECT a FROM t) SELECT t2.tt FROM t2 WHERE (t2.tt > 1)
+WITH t2(tt) AS MATERIALIZED (SELECT a FROM t) SELECT t2.tt FROM t2 WHERE t2.tt > 1
 ---------- AST ------------
 Query {
     span: Some(
@@ -1707,7 +1707,7 @@ Query {
                         span: Some(
                             82..83,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -1729,7 +1729,7 @@ Query {
 ---------- Input ----------
 with t2 as (select a from t) select t2.a from t2  where t2.a > 1
 ---------- Output ---------
-WITH t2 AS (SELECT a FROM t) SELECT t2.a FROM t2 WHERE (t2.a > 1)
+WITH t2 AS (SELECT a FROM t) SELECT t2.a FROM t2 WHERE t2.a > 1
 ---------- AST ------------
 Query {
     span: Some(
@@ -1932,7 +1932,7 @@ Query {
                         span: Some(
                             63..64,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -1954,7 +1954,7 @@ Query {
 ---------- Input ----------
 with t2(tt) as materialized (select a from t), t3 as materialized (select * from t), t4 as (select a from t where a > 1) select t2.tt, t3.a, t4.a from t2, t3, t4 where t2.tt > 1
 ---------- Output ---------
-WITH t2(tt) AS MATERIALIZED (SELECT a FROM t), t3 AS MATERIALIZED (SELECT * FROM t), t4 AS (SELECT a FROM t WHERE (a > 1)) SELECT t2.tt, t3.a, t4.a FROM t2, t3, t4 WHERE (t2.tt > 1)
+WITH t2(tt) AS MATERIALIZED (SELECT a FROM t), t3 AS MATERIALIZED (SELECT * FROM t), t4 AS (SELECT a FROM t WHERE a > 1) SELECT t2.tt, t3.a, t4.a FROM t2, t3, t4 WHERE t2.tt > 1
 ---------- AST ------------
 Query {
     span: Some(
@@ -2241,7 +2241,7 @@ Query {
                                             span: Some(
                                                 118..119,
                                             ),
-                                            lit: UInt64(
+                                            value: UInt64(
                                                 1,
                                             ),
                                         },
@@ -2464,7 +2464,7 @@ Query {
                         span: Some(
                             176..177,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -2807,7 +2807,7 @@ Query {
                                         span: Some(
                                             23..24,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -2815,7 +2815,7 @@ Query {
                                         span: Some(
                                             25..26,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -2825,7 +2825,7 @@ Query {
                                         span: Some(
                                             29..30,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             2,
                                         ),
                                     },
@@ -2833,7 +2833,7 @@ Query {
                                         span: Some(
                                             31..35,
                                         ),
-                                        lit: Null,
+                                        value: Null,
                                     },
                                 ],
                                 [
@@ -2841,13 +2841,13 @@ Query {
                                         span: Some(
                                             38..42,
                                         ),
-                                        lit: Null,
+                                        value: Null,
                                     },
                                     Literal {
                                         span: Some(
                                             43..44,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             5,
                                         ),
                                     },
@@ -2988,7 +2988,7 @@ group by c_count
 order by custdist desc nulls first, c_count asc, totacctbal nulls last
 limit 10, totacctbal
 ---------- Output ---------
-SELECT c_count AS cc, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer, orders AS ODS, (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON ((c_custkey = o_custkey) AND (o_comment NOT LIKE '%:1%:2%')) GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY custdist DESC NULLS FIRST, c_count ASC, totacctbal NULLS LAST LIMIT 10, totacctbal
+SELECT c_count AS cc, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer, orders AS ODS, (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%:1%:2%' GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY custdist DESC NULLS FIRST, c_count ASC, totacctbal NULLS LAST LIMIT 10, totacctbal
 ---------- AST ------------
 Query {
     span: Some(
@@ -3327,7 +3327,7 @@ Query {
                                                             span: Some(
                                                                 308..317,
                                                             ),
-                                                            lit: String(
+                                                            value: String(
                                                                 "%:1%:2%",
                                                             ),
                                                         },
@@ -3543,7 +3543,7 @@ Query {
             span: Some(
                 469..471,
             ),
-            lit: UInt64(
+            value: UInt64(
                 10,
             ),
         },
@@ -5256,7 +5256,7 @@ Query {
                                     span: Some(
                                         60..65,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "JAN",
                                     ),
                                 },
@@ -5264,7 +5264,7 @@ Query {
                                     span: Some(
                                         67..72,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "FEB",
                                     ),
                                 },
@@ -5272,7 +5272,7 @@ Query {
                                     span: Some(
                                         74..79,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "MAR",
                                     ),
                                 },
@@ -5280,7 +5280,7 @@ Query {
                                     span: Some(
                                         81..86,
                                     ),
-                                    lit: String(
+                                    value: String(
                                         "APR",
                                     ),
                                 },
@@ -5518,7 +5518,7 @@ Query {
                             span: Some(
                                 20..21,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -5526,7 +5526,7 @@ Query {
                             span: Some(
                                 23..24,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 2,
                             ),
                         },
@@ -6330,7 +6330,7 @@ Query {
                                         span: Some(
                                             22..23,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -6338,7 +6338,7 @@ Query {
                                         span: Some(
                                             24..25,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             1,
                                         ),
                                     },
@@ -6348,7 +6348,7 @@ Query {
                                         span: Some(
                                             28..29,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             2,
                                         ),
                                     },
@@ -6356,7 +6356,7 @@ Query {
                                         span: Some(
                                             30..34,
                                         ),
-                                        lit: Null,
+                                        value: Null,
                                     },
                                 ],
                                 [
@@ -6364,13 +6364,13 @@ Query {
                                         span: Some(
                                             37..41,
                                         ),
-                                        lit: Null,
+                                        value: Null,
                                     },
                                     Literal {
                                         span: Some(
                                             42..43,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             5,
                                         ),
                                     },
@@ -6448,7 +6448,7 @@ Query {
                     span: Some(
                         7..8,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         1,
                     ),
                 },
@@ -6456,7 +6456,7 @@ Query {
                     span: Some(
                         9..12,
                     ),
-                    lit: String(
+                    value: String(
                         "a",
                     ),
                 },
@@ -6466,7 +6466,7 @@ Query {
                     span: Some(
                         15..16,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         2,
                     ),
                 },
@@ -6474,7 +6474,7 @@ Query {
                     span: Some(
                         17..20,
                     ),
-                    lit: String(
+                    value: String(
                         "b",
                     ),
                 },
@@ -6484,13 +6484,13 @@ Query {
                     span: Some(
                         23..27,
                     ),
-                    lit: Null,
+                    value: Null,
                 },
                 Literal {
                     span: Some(
                         28..31,
                     ),
-                    lit: String(
+                    value: String(
                         "c",
                     ),
                 },
@@ -6527,7 +6527,7 @@ Query {
             span: Some(
                 53..54,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -6578,7 +6578,7 @@ Query {
                                 span: Some(
                                     47..51,
                                 ),
-                                lit: Boolean(
+                                value: Boolean(
                                     true,
                                 ),
                             },
@@ -6626,7 +6626,7 @@ Query {
                                                     span: Some(
                                                         41..42,
                                                     ),
-                                                    lit: UInt64(
+                                                    value: UInt64(
                                                         1,
                                                     ),
                                                 },
@@ -6673,7 +6673,7 @@ Query {
                                             span: Some(
                                                 68..69,
                                             ),
-                                            lit: UInt64(
+                                            value: UInt64(
                                                 2,
                                             ),
                                         },

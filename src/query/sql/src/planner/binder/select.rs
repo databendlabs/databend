@@ -1028,7 +1028,7 @@ impl<'a> SelectRewriter<'a> {
                 .into_iter()
                 .map(|expr| Expr::Literal {
                     span: None,
-                    lit: Literal::String(expr.name),
+                    value: Literal::String(expr.name),
                 })
                 .collect(),
         }
@@ -1054,7 +1054,7 @@ impl<'a> SelectRewriter<'a> {
     // For Expr::Literal, expr.to_string() is quoted, sometimes we need the raw string.
     fn raw_string_from_literal_expr(expr: &Expr) -> Option<String> {
         match expr {
-            Expr::Literal { lit, .. } => match lit {
+            Expr::Literal { value, .. } => match value {
                 Literal::String(v) => Some(v.clone()),
                 _ => Some(expr.to_string()),
             },
@@ -1109,7 +1109,7 @@ impl<'a> SelectRewriter<'a> {
                     })
                     .map(|col| Expr::Literal {
                         span: Span::default(),
-                        lit: Literal::UInt64(col.index as u64 + 1),
+                        value: Literal::UInt64(col.index as u64 + 1),
                     })
                     .collect(),
             )

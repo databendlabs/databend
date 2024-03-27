@@ -305,7 +305,7 @@ FunctionCall {
 ---------- Input ----------
 1 + {'k1': 4}.k1
 ---------- Output ---------
-(1 + {'k1':4}:k1)
+1 + {'k1':4}:k1
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -316,7 +316,7 @@ BinaryOp {
         span: Some(
             0..1,
         ),
-        lit: UInt64(
+        value: UInt64(
             1,
         ),
     },
@@ -337,7 +337,7 @@ BinaryOp {
                         span: Some(
                             11..12,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             4,
                         ),
                     },
@@ -382,7 +382,7 @@ FunctionCall {
                 span: Some(
                     0..3,
                 ),
-                lit: String(
+                value: String(
                     "3",
                 ),
             },
@@ -390,7 +390,7 @@ FunctionCall {
                 span: Some(
                     9..10,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     4,
                 ),
             },
@@ -426,7 +426,7 @@ FunctionCall {
                 span: Some(
                     1..2,
                 ),
-                lit: UInt64(
+                value: UInt64(
                     3,
                 ),
             },
@@ -447,7 +447,7 @@ FunctionCall {
                                 span: Some(
                                     15..16,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     4,
                                 ),
                             },
@@ -476,7 +476,7 @@ FunctionCall {
 ---------- Input ----------
 [ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]
 ---------- Output ---------
-array_map(array_filter([1, 2, 3], x -> ((x % 2) = 0)), x -> (x * 100))
+array_map(array_filter([1, 2, 3], x -> x % 2 = 0), x -> x * 100)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -517,7 +517,7 @@ FunctionCall {
                                     span: Some(
                                         20..21,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -525,7 +525,7 @@ FunctionCall {
                                     span: Some(
                                         22..23,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         2,
                                     ),
                                 },
@@ -533,7 +533,7 @@ FunctionCall {
                                     span: Some(
                                         24..25,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -587,7 +587,7 @@ FunctionCall {
                                         span: Some(
                                             34..35,
                                         ),
-                                        lit: UInt64(
+                                        value: UInt64(
                                             2,
                                         ),
                                     },
@@ -596,7 +596,7 @@ FunctionCall {
                                     span: Some(
                                         38..39,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         0,
                                     ),
                                 },
@@ -648,7 +648,7 @@ FunctionCall {
                         span: Some(
                             6..9,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             100,
                         ),
                     },

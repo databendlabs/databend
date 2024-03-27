@@ -41,12 +41,14 @@ impl StageTable {
         &self,
         ctx: &Arc<dyn TableContext>,
     ) -> Result<(PartStatistics, Partitions)> {
+        let thread_num = ctx.get_settings().get_max_threads()? as usize;
+
         let stage_info = &self.table_info;
         // User set the files.
         let files = if let Some(files) = &stage_info.files_to_copy {
             files.clone()
         } else {
-            StageTable::list_files(stage_info, None).await?
+            StageTable::list_files(stage_info, thread_num, None).await?
         };
         let format = InputContext::get_input_format(&stage_info.stage_info.file_format_params)?;
         let operator = StageTable::get_op(&stage_info.stage_info)?;
