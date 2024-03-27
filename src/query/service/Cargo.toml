@@ -142,6 +142,9 @@ naive-cityhash = "0.2.0"
 once_cell = { workspace = true }
 opendal = { workspace = true }
 opensrv-mysql = { version = "0.5.0", features = ["tls"] }
+opentelemetry = { version = "0.21", features = ["trace", "logs"] }
+opentelemetry-http = "0.10.0"
+opentelemetry_sdk = { version = "0.21", features = ["trace", "logs", "rt-tokio"] }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 paste = "1.0.9"
