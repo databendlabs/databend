@@ -67,9 +67,9 @@ struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'stat
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
     for AggregateExchangeSorting<Method, V>
 {
-    fn block_number(&self, data_block: &DataBlock) -> Result<(isize, usize)> {
+    fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         match data_block.get_meta() {
-            None => Ok((-1, 0)),
+            None => Ok(-1),
             Some(block_meta_info) => {
                 match AggregateMeta::<Method, V>::downcast_ref_from(block_meta_info) {
                     None => Err(ErrorCode::Internal(format!(
@@ -78,13 +78,17 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                     ))),
                     Some(meta_info) => match meta_info {
                         AggregateMeta::Partitioned { .. } => unreachable!(),
-                        AggregateMeta::Serialized(v) => Ok((v.bucket, v.max_partition_count)),
-                        AggregateMeta::HashTable(v) => Ok((v.bucket, 0)),
-                        AggregateMeta::AggregatePayload(v) => Ok((v.bucket, v.max_partition_count)),
-                        AggregateMeta::AggregateSpilling(v) => Ok((-1, v.partition_count())),
-                        AggregateMeta::Spilled(v) => Ok((-1, v[0].max_partition_count)),
-                        AggregateMeta::BucketSpilled(v) => Ok((-1, v.max_partition_count)),
-                        AggregateMeta::Spilling(_) => Ok((-1, 0)),
+                        AggregateMeta::Serialized(v) => {
+                            Ok(v.max_partition_count as isize * 1000 + v.bucket)
+                        }
+                        AggregateMeta::HashTable(v) => Ok(v.bucket),
+                        AggregateMeta::AggregatePayload(v) => {
+                            Ok(v.max_partition_count as isize * 1000 + v.bucket)
+                        }
+                        AggregateMeta::AggregateSpilling(_)
+                        | AggregateMeta::Spilled(_)
+                        | AggregateMeta::BucketSpilled(_)
+                        | AggregateMeta::Spilling(_) => Ok(-1),
                     },
                 }
             }

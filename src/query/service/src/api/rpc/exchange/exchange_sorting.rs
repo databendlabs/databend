@@ -23,7 +23,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 
 pub trait ExchangeSorting: Send + Sync + 'static {
-    fn block_number(&self, data_block: &DataBlock) -> Result<(isize, usize)>;
+    fn block_number(&self, data_block: &DataBlock) -> Result<isize>;
 }
 
 // N input one output
@@ -33,7 +33,7 @@ pub struct TransformExchangeSorting {
     sorting: Arc<dyn ExchangeSorting>,
 
     buffer_len: usize,
-    buffer: Vec<Option<(isize, usize, DataBlock)>>,
+    buffer: Vec<Option<(isize, DataBlock)>>,
 }
 
 impl TransformExchangeSorting {
@@ -94,9 +94,8 @@ impl Processor for TransformExchangeSorting {
             if self.buffer[index].is_none() {
                 if input.has_data() {
                     let data_block = input.pull_data().unwrap()?;
-                    let (block_number, max_partition_count) =
-                        self.sorting.block_number(&data_block)?;
-                    self.buffer[index] = Some((block_number, max_partition_count, data_block));
+                    let block_number = self.sorting.block_number(&data_block)?;
+                    self.buffer[index] = Some((block_number, data_block));
                     self.buffer_len += 1;
                     input.set_need_data();
                     continue;
@@ -119,27 +118,17 @@ impl Processor for TransformExchangeSorting {
 
         if !unready_inputs {
             let mut min_index = 0;
-            let mut min_bucket = isize::MAX;
-            let mut min_partition = usize::MAX;
+            let mut min_value = isize::MAX;
             for (index, buffer) in self.buffer.iter().enumerate() {
-                if let Some((block_number, partition_count, _)) = buffer {
-                    if *block_number == -1 {
+                if let Some((block_number, _)) = buffer {
+                    if *block_number < min_value {
                         min_index = index;
-                        break;
-                    }
-                    // sort by partition asc, bucket asc
-                    if *partition_count < min_partition {
-                        min_index = index;
-                        min_bucket = *block_number;
-                        min_partition = *partition_count;
-                    } else if *partition_count == min_partition && *block_number < min_bucket {
-                        min_index = index;
-                        min_bucket = *block_number;
+                        min_value = *block_number;
                     }
                 }
             }
 
-            if let Some((_, _, block)) = self.buffer[min_index].take() {
+            if let Some((_, block)) = self.buffer[min_index].take() {
                 self.buffer_len -= 1;
                 self.output.push_data(Ok(block));
                 return Ok(Event::NeedConsume);

@@ -363,7 +363,7 @@ fn agg_spilling_aggregate_payload<Method: HashMethodBounds>(
 
             let ipc_fields = exchange_defines::spilled_ipc_fields();
             let write_options = exchange_defines::spilled_write_options();
-            return serialize_block(-1, data_block, ipc_fields, write_options, partition_count);
+            return serialize_block(-1, data_block, ipc_fields, write_options, 0);
         }
 
         Ok(DataBlock::empty())

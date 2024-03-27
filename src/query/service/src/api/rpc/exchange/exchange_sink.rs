@@ -123,7 +123,7 @@ impl SinkExchangeSorting {
 }
 
 impl ExchangeSorting for SinkExchangeSorting {
-    fn block_number(&self, data_block: &DataBlock) -> Result<(isize, usize)> {
+    fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         let block_meta = data_block.get_meta();
         let shuffle_meta = block_meta
             .and_then(ExchangeSerializeMeta::downcast_ref_from)
@@ -134,6 +134,6 @@ impl ExchangeSorting for SinkExchangeSorting {
                 ))
             })?;
 
-        Ok((shuffle_meta.block_number, shuffle_meta.max_partition_count))
+        Ok(shuffle_meta.max_partition_count as isize * 1000 + shuffle_meta.block_number)
     }
 }

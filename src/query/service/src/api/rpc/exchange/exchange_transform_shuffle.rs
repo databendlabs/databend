@@ -455,7 +455,7 @@ impl ShuffleExchangeSorting {
 }
 
 impl ExchangeSorting for ShuffleExchangeSorting {
-    fn block_number(&self, data_block: &DataBlock) -> Result<(isize, usize)> {
+    fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         let block_meta = data_block.get_meta();
         let shuffle_meta = block_meta
             .and_then(ExchangeShuffleMeta::downcast_ref_from)
@@ -464,7 +464,9 @@ impl ExchangeSorting for ShuffleExchangeSorting {
         for block in &shuffle_meta.blocks {
             if let Some(block_meta) = block.get_meta() {
                 if let Some(block_meta) = ExchangeSerializeMeta::downcast_ref_from(block_meta) {
-                    return Ok((block_meta.block_number, block_meta.max_partition_count));
+                    return Ok(
+                        block_meta.max_partition_count as isize * 1000 + block_meta.block_number
+                    );
                 }
             }
 
