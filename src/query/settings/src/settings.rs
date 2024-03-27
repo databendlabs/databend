@@ -65,7 +65,7 @@ pub struct ChangeValue {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Settings {
     pub(crate) tenant: NonEmptyString,
-    pub(crate) changes: DashMap<String, ChangeValue>,
+    pub(crate) changes: Arc<DashMap<String, ChangeValue>>,
     pub(crate) configs: HashMap<String, UserSettingValue>,
 }
 
@@ -77,7 +77,7 @@ impl Settings {
         };
         Arc::new(Settings {
             tenant,
-            changes: DashMap::new(),
+            changes: Arc::new(DashMap::new()),
             configs,
         })
     }
@@ -112,13 +112,17 @@ impl Settings {
         !self.changes.is_empty()
     }
 
+    pub fn changes(&self) -> &Arc<DashMap<String, ChangeValue>> {
+        &self.changes
+    }
+
     /// # Safety
     ///
     /// We will not validate the setting value type
-    pub unsafe fn unchecked_apply_changes(&self, changes: &Settings) {
-        for change in changes.changes.iter() {
-            self.changes
-                .insert(change.key().clone(), change.value().clone());
+    pub unsafe fn unchecked_apply_changes(&self, changes: &DashMap<String, ChangeValue>) {
+        for r in changes.iter() {
+            let (k, v) = r.pair();
+            self.changes.insert(k.clone(), v.clone());
         }
     }
 }

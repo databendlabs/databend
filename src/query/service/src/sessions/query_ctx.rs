@@ -645,7 +645,7 @@ impl TableContext for QueryContext {
         if !self.query_settings.is_changed() {
             unsafe {
                 self.query_settings
-                    .unchecked_apply_changes(&self.shared.get_settings());
+                    .unchecked_apply_changes(self.shared.get_settings().changes());
             }
         }
 
