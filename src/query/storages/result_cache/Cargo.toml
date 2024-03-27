@@ -27,6 +27,7 @@ databend-storages-common-table-meta = { path = "../common/table_meta" }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 opendal = { workspace = true }
+tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10.6"

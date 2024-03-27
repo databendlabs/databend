@@ -21,6 +21,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
+use tokio::time::Instant;
 use uuid::Uuid;
 
 pub(super) struct ResultCacheWriter {
@@ -29,6 +30,7 @@ pub(super) struct ResultCacheWriter {
 
     current_bytes: usize,
     max_bytes: usize,
+    min_execute_secs: usize,
     num_rows: usize,
 
     schema: TableSchemaRef,
@@ -42,6 +44,7 @@ impl ResultCacheWriter {
         location: String,
         operator: Operator,
         max_bytes: usize,
+        min_execute_secs: usize,
         ctx: Arc<dyn TableContext>,
     ) -> Self {
         ResultCacheWriter {
@@ -49,6 +52,7 @@ impl ResultCacheWriter {
             operator,
             current_bytes: 0,
             max_bytes,
+            min_execute_secs,
             num_rows: 0,
             schema,
             blocks: vec![],
@@ -64,6 +68,10 @@ impl ResultCacheWriter {
 
     pub fn over_limit(&self) -> bool {
         self.current_bytes > self.max_bytes
+    }
+
+    pub fn not_over_time(&self, instant: &Instant) -> bool {
+        instant.elapsed().as_secs() < self.min_execute_secs as u64
     }
 
     /// Write the result cache to the storage and return the location.

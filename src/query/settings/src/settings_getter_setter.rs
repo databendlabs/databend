@@ -346,6 +346,10 @@ impl Settings {
         Ok(self.try_get_u64("query_result_cache_max_bytes")? as usize)
     }
 
+    pub fn get_query_result_cache_min_execute_secs(&self) -> Result<usize> {
+        Ok(self.try_get_u64("query_result_cache_min_execute_secs")? as usize)
+    }
+
     pub fn get_http_handler_result_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("http_handler_result_timeout_secs")
     }
