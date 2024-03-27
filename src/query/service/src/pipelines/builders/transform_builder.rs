@@ -35,6 +35,7 @@ use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformSerializeSegment;
+use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
 
 use crate::pipelines::processors::transforms::TransformFilter;
@@ -102,6 +103,7 @@ impl PipelineBuilder {
     pub(crate) fn serialize_block_transform_builder(
         &self,
         table: Arc<dyn Table>,
+        cluster_stats_gen: ClusterStatsGenerator,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
@@ -111,7 +113,7 @@ impl PipelineBuilder {
                 input,
                 output,
                 fuse_table,
-                Default::default(),
+                cluster_stats_gen.clone(),
                 MutationKind::Insert,
             )?;
             proc.into_processor()

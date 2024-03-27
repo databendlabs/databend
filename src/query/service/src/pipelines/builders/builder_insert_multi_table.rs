@@ -224,7 +224,9 @@ impl PipelineBuilder {
             } else {
                 sort_builders.push(Box::new(self.dummy_transform_builder()?));
             }
-            serialize_block_builders.push(Box::new(self.serialize_block_transform_builder(table)?));
+            serialize_block_builders.push(Box::new(
+                self.serialize_block_transform_builder(table, cluster_stats_gen)?,
+            ));
         }
         self.main_pipeline
             .add_transform_by_chunk(compact_builders)?;
