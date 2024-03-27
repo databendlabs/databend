@@ -56,7 +56,7 @@ impl HashJoinProbeState {
             .other_predicate
             .is_none();
         match self.hash_join_state.hash_join_desc.join_type {
-            JoinType::Inner => match self.hash_join_state.hash_join_desc.original_join_type {
+            JoinType::Inner => match self.hash_join_state.hash_join_desc.single_to_inner {
                 Some(JoinType::LeftSingle) => {
                     self.inner_join::<_, true, false>(input, keys, hash_table, probe_state)
                 }

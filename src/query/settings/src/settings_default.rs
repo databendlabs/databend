@@ -380,6 +380,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("query_result_cache_min_execute_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "For a query to be cached, it must take at least this many seconds to fetch the first block. It helps to avoid caching queries that are too fast to execute or queries with streaming scan.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("query_result_cache_ttl_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(300), // seconds
                     desc: "Sets the time-to-live (TTL) in seconds for cached query results. \

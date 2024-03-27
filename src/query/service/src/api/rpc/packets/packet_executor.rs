@@ -15,12 +15,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use dashmap::DashMap;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
-use databend_common_settings::Settings;
+use databend_common_settings::ChangeValue;
 
 use crate::api::rpc::flight_actions::InitQueryFragmentsPlan;
 use crate::api::rpc::packets::packet::create_client;
@@ -35,7 +36,7 @@ pub struct QueryFragmentsPlanPacket {
     pub executor: String,
     pub request_executor: String,
     pub fragments: Vec<FragmentPlanPacket>,
-    pub changed_settings: Arc<Settings>,
+    pub changed_settings: Arc<DashMap<String, ChangeValue>>,
     // We send nodes info for each node. This is a bad choice
     pub executors_info: HashMap<String, Arc<NodeInfo>>,
 }
@@ -48,7 +49,7 @@ impl QueryFragmentsPlanPacket {
         executor: String,
         fragments: Vec<FragmentPlanPacket>,
         executors_info: HashMap<String, Arc<NodeInfo>>,
-        changed_settings: Arc<Settings>,
+        changed_settings: Arc<DashMap<String, ChangeValue>>,
         request_executor: String,
     ) -> QueryFragmentsPlanPacket {
         QueryFragmentsPlanPacket {
