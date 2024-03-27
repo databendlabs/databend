@@ -35,6 +35,7 @@ use databend_common_sql::executor::physical_plans::Duplicate;
 use databend_common_sql::executor::physical_plans::Shuffle;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::PipelineBuilder;
 use crate::sql::evaluator::CompoundBlockOperator;
@@ -274,7 +275,8 @@ impl PipelineBuilder {
         self.main_pipeline
             .add_transform_by_chunk(mutation_aggregator_builders)?;
         self.main_pipeline.try_resize(1)?;
-        let catalog = CatalogManager::instance().build_catalog(&targets[0].target_catalog_info)?;
+        let catalog = CatalogManager::instance()
+            .build_catalog(&targets[0].target_catalog_info, self.ctx.txn_mgr())?;
         self.main_pipeline.add_sink(|input| {
             Ok(ProcessorPtr::create(AsyncSinker::create(
                 input,

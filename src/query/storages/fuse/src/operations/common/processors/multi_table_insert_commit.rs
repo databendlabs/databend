@@ -75,6 +75,7 @@ impl AsyncSink for CommitMultiTableInsert {
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
         let mut update_table_meta_reqs = Vec::with_capacity(self.commit_metas.len());
+        let mut table_infos = Vec::with_capacity(self.commit_metas.len());
         for (table_id, commit_meta) in std::mem::take(&mut self.commit_metas).into_iter() {
             // generate snapshot
             let mut snapshot_generator = AppendGenerator::new(self.ctx.clone(), self.overwrite);
@@ -111,16 +112,33 @@ impl AsyncSink for CommitMultiTableInsert {
                 update_stream_meta: vec![],
             };
             update_table_meta_reqs.push(req);
+            table_infos.push(table.get_table_info());
         }
-        let update_multi_table_meta_req = UpdateMultiTableMetaReq {
-            update_table_metas: update_table_meta_reqs,
-            copied_files: vec![],
-            update_stream_metas: std::mem::take(&mut self.update_stream_meta),
-            deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
-        };
-        self.catalog
-            .update_multi_table_meta(update_multi_table_meta_req)
-            .await?;
+        let is_active = self.ctx.txn_mgr().lock().is_active();
+        match is_active {
+            true => {
+                update_table_meta_reqs[0].update_stream_meta =
+                    std::mem::take(&mut self.update_stream_meta);
+                update_table_meta_reqs[0].deduplicated_label = self.deduplicated_label.clone();
+                for (req, info) in update_table_meta_reqs
+                    .into_iter()
+                    .zip(table_infos.into_iter())
+                {
+                    self.catalog.update_table_meta(info, req).await?;
+                }
+            }
+            false => {
+                let update_multi_table_meta_req = UpdateMultiTableMetaReq {
+                    update_table_metas: update_table_meta_reqs,
+                    copied_files: vec![],
+                    update_stream_metas: std::mem::take(&mut self.update_stream_meta),
+                    deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
+                };
+                self.catalog
+                    .update_multi_table_meta(update_multi_table_meta_req)
+                    .await?;
+            }
+        }
         Ok(())
     }
 

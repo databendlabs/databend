@@ -298,3 +298,50 @@ select * from t2;
 ----
 1 2
 3 4
+
+# test multi-statement transaction
+statement ok 
+create or replace table t1(c1 bigint,c2 int) cluster by (c1 + 1);
+
+statement ok
+create or replace table t2(c1 int,c2 bigint) cluster by (c1 + 1);
+
+statement ok
+create or replace table s(c3 int,c4 int);
+
+statement ok
+begin transaction;
+
+statement ok
+insert into s values(3,4),(1,2),(5,6);
+
+statement ok
+INSERT FIRST
+    WHEN c3 = 5 THEN
+      INTO t1 (c2) values(c4)
+    WHEN c3 > 0 THEN
+      INTO t2 (c2,c1) values(c4,c3)
+SELECT * from s;
+
+query II
+select * from t1 order by c1;
+----
+NULL 6
+
+query II
+select * from t2;
+----
+1 2
+3 4
+
+statement ok
+rollback;
+
+query II
+select * from t1 order by c1;
+----
+
+
+query II
+select * from t2;
+----
