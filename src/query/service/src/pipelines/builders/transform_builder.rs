@@ -41,6 +41,7 @@ use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::TransformCastSchema;
+use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuilder;
 use crate::sql::executor::physical_plans::MutationKind;
 impl PipelineBuilder {
@@ -183,6 +184,24 @@ impl PipelineBuilder {
                 source_schema.clone(),
                 target_schema.clone(),
                 func_ctx.clone(),
+            )
+        })
+    }
+
+    pub(crate) fn fill_and_reorder_transform_builder(
+        &self,
+        table: Arc<dyn Table>,
+        source_schema: DataSchemaRef,
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+        let ctx = self.ctx.clone();
+        Ok(move |transform_input_port, transform_output_port| {
+            TransformResortAddOn::try_create(
+                ctx.clone(),
+                transform_input_port,
+                transform_output_port,
+                source_schema.clone(),
+                Arc::new(table.schema().into()),
+                table.clone(),
             )
         })
     }

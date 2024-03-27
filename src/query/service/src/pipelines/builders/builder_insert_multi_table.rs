@@ -110,8 +110,29 @@ impl PipelineBuilder {
 
     pub(crate) fn build_chunk_fill_and_reorder(
         &mut self,
-        _plan: &ChunkFillAndReorder,
+        plan: &ChunkFillAndReorder,
     ) -> Result<()> {
+        self.build_pipeline(&plan.input)?;
+        if plan.fill_and_reorders.iter().all(|x| x.is_none()) {
+            return Ok(());
+        }
+        let mut f: Vec<DynTransformBuilder> = Vec::with_capacity(plan.fill_and_reorders.len());
+        for fill_and_reorder in plan.fill_and_reorders.iter() {
+            if let Some(fill_and_reorder) = fill_and_reorder {
+                let table = self.ctx.build_table_by_table_info(
+                    &fill_and_reorder.catalog_info,
+                    &fill_and_reorder.target_table_info,
+                    None,
+                )?;
+                f.push(Box::new(self.fill_and_reorder_transform_builder(
+                    table,
+                    fill_and_reorder.source_schema.clone(),
+                )?));
+            } else {
+                f.push(Box::new(self.dummy_transform_builder()?));
+            }
+        }
+        self.main_pipeline.add_transform_by_chunk(f)?;
         Ok(())
     }
 

@@ -85,13 +85,13 @@ pub struct CastSchema {
 pub struct ChunkFillAndReorder {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    pub fill_and_reorders: Vec<Option<(DataSchemaRef, DataSchemaRef)>>,
+    pub fill_and_reorders: Vec<Option<FillAndReorder>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FillAndReorder {
     pub source_schema: DataSchemaRef,
-    pub target_catalog_info: CatalogInfo,
+    pub catalog_info: CatalogInfo,
     pub target_table_info: TableInfo,
 }
 

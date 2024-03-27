@@ -21,8 +21,10 @@ use databend_common_sql::executor::physical_plans::CastSchema;
 use databend_common_sql::executor::physical_plans::ChunkAppendData;
 use databend_common_sql::executor::physical_plans::ChunkCastSchema;
 use databend_common_sql::executor::physical_plans::ChunkCommitInsert;
+use databend_common_sql::executor::physical_plans::ChunkFillAndReorder;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
 use databend_common_sql::executor::physical_plans::ChunkProject;
+use databend_common_sql::executor::physical_plans::FillAndReorder;
 use databend_common_sql::executor::physical_plans::SerializableTable;
 use databend_common_sql::executor::physical_plans::ShuffleStrategy;
 use databend_common_sql::executor::PhysicalPlan;
@@ -95,6 +97,7 @@ impl InsertMultiTableInterpreter {
             })
             .collect::<Vec<_>>();
         let cast_schemas = branches.build_cast_schema(source_schemas);
+        let fill_and_reorders = branches.build_fill_and_reorder(self.ctx.clone()).await?;
 
         root = PhysicalPlan::Duplicate(Box::new(Duplicate {
             plan_id: 0,
@@ -125,6 +128,12 @@ impl InsertMultiTableInterpreter {
             plan_id: 0,
             input: Box::new(root),
             cast_schemas,
+        }));
+
+        root = PhysicalPlan::ChunkFillAndReorder(Box::new(ChunkFillAndReorder {
+            plan_id: 0,
+            input: Box::new(root),
+            fill_and_reorders,
         }));
 
         root = PhysicalPlan::ChunkAppendData(Box::new(ChunkAppendData {
@@ -351,5 +360,24 @@ impl InsertIntoBranches {
                 }
             })
             .collect()
+    }
+
+    async fn build_fill_and_reorder(&self,ctx:Arc<dyn TableContext>) -> Result<Vec<Option<FillAndReorder>>> {
+        let mut fill_and_reorders = vec![];
+        for (table, casted_schema) in self.tables.iter().zip(self.casted_schemas.iter()) {
+            let target_schema: DataSchemaRef = Arc::new(table.schema().into());
+            if target_schema.as_ref() != casted_schema.as_ref() {
+                let table_info = table.get_table_info();
+                let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
+                fill_and_reorders.push(Some(FillAndReorder {
+                    source_schema: casted_schema.clone(),
+                    catalog_info,
+                    target_table_info: table_info.clone(),
+                }));
+            } else {
+                fill_and_reorders.push(None);
+            }
+        }
+        Ok(fill_and_reorders)
     }
 }
