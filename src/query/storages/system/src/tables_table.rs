@@ -19,9 +19,7 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
@@ -38,7 +36,6 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_sql::Planner;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
@@ -399,7 +396,7 @@ where TablesTable<T>: HistoryAware
                     "VIEW" => {
                         let query = tbl_info.options().get(QUERY);
                         match query {
-                            Some(query) => return query.clone(),
+                            Some(query) => query.clone(),
                             None => String::from(""),
                         }
                     }
