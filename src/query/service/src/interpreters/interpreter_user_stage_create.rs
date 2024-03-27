@@ -74,7 +74,7 @@ impl Interpreter for CreateUserStageInterpreter {
             ));
         }
 
-        let tenant = Tenant::new_or_error_code(&plan.tenant, func_name!())?;
+        let tenant = Tenant::new_or_err(&plan.tenant, func_name!())?;
 
         let quota_api = user_mgr.tenant_quota_api(&tenant);
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
@@ -86,7 +86,7 @@ impl Interpreter for CreateUserStageInterpreter {
             )));
         };
 
-        let tenant = Tenant::new_or_error_code(&plan.tenant, "CreateUserStageInterpreter")?;
+        let tenant = Tenant::new_or_err(&plan.tenant, "CreateUserStageInterpreter")?;
 
         let old_stage = match plan.create_option {
             CreateOption::CreateOrReplace => user_mgr
@@ -96,7 +96,7 @@ impl Interpreter for CreateUserStageInterpreter {
             _ => None,
         };
 
-        let tenant = Tenant::new_or_error_code(&plan.tenant, "CreateUserStageInterpreter")?;
+        let tenant = Tenant::new_or_err(&plan.tenant, "CreateUserStageInterpreter")?;
 
         let mut user_stage = user_stage;
         user_stage.creator = Some(self.ctx.get_current_user()?.identity());

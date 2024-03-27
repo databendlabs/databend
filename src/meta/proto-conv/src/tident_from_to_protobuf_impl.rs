@@ -40,7 +40,7 @@ where R: TenantResource
 
         if p.tenant.is_empty() {
             return Err(Incompatible {
-                reason: "CatalogName.tenant is empty".to_string(),
+                reason: "tenant is empty".to_string(),
             });
         }
 

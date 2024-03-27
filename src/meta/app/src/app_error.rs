@@ -33,10 +33,16 @@ pub struct TenantIsEmpty {
 }
 
 impl TenantIsEmpty {
-    pub fn new(context: impl Into<String>) -> Self {
+    pub fn new(context: impl ToString) -> Self {
         Self {
-            context: context.into(),
+            context: context.to_string(),
         }
+    }
+}
+
+impl From<TenantIsEmpty> for ErrorCode {
+    fn from(err: TenantIsEmpty) -> Self {
+        ErrorCode::TenantIsEmpty(err.to_string())
     }
 }
 

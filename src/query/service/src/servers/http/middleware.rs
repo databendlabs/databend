@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_request_count;
 use databend_common_metrics::http::metrics_incr_http_response_panics_count;
 use databend_common_metrics::http::metrics_incr_http_slow_request_count;
@@ -32,6 +33,7 @@ use http::HeaderMap;
 use http::HeaderValue;
 use log::error;
 use log::warn;
+use minitrace::func_name;
 use opentelemetry::baggage::BaggageExt;
 use opentelemetry::propagation::TextMapPropagator;
 use opentelemetry_http::HeaderExtractor;
@@ -201,7 +203,8 @@ impl<E> HTTPSessionEndpoint<E> {
         let ctx = session.create_query_context().await?;
         if let Some(tenant_id) = req.headers().get("X-DATABEND-TENANT") {
             let tenant_id = tenant_id.to_str().unwrap().to_string();
-            session.set_current_tenant(tenant_id);
+            let tenant = Tenant::new_or_err(tenant_id.clone(), func_name!())?;
+            session.set_current_tenant(tenant);
         }
         let node_id = ctx.get_cluster().local_id.clone();
 

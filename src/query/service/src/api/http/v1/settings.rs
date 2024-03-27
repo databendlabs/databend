@@ -32,7 +32,7 @@ pub struct SettingsItem {
 }
 
 async fn list_settings_impl(tenant: &str) -> Result<Vec<SettingsItem>> {
-    let settings = Settings::create(Tenant::new_or_error_code(tenant, func_name!())?);
+    let settings = Settings::create(Tenant::new_or_err(tenant, func_name!())?);
     settings.load_changes().await?;
 
     Ok(settings
@@ -61,7 +61,7 @@ async fn set_setting_impl(tenant: &str, key: &str, value: String) -> Result<Vec<
         ));
     }
 
-    let settings = Settings::create(Tenant::new_or_error_code(tenant, func_name!())?);
+    let settings = Settings::create(Tenant::new_or_err(tenant, func_name!())?);
     settings.set_global_setting(key.to_string(), value).await?;
 
     Ok(settings
@@ -90,7 +90,7 @@ async fn unset_setting_impl(tenant: &str, key: &str) -> Result<Vec<SettingsItem>
         ));
     }
 
-    let settings = Settings::create(Tenant::new_or_error_code(tenant, func_name!())?);
+    let settings = Settings::create(Tenant::new_or_err(tenant, func_name!())?);
     settings.try_drop_global_setting(key).await?;
 
     Ok(settings

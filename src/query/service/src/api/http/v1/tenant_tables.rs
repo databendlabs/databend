@@ -99,8 +99,8 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
 pub async fn list_tenant_tables_handler(
     Path(tenant): Path<String>,
 ) -> poem::Result<impl IntoResponse> {
-    let tenant = Tenant::new_or_error_code(&tenant, func_name!())
-        .map_err(poem::error::InternalServerError)?;
+    let tenant =
+        Tenant::new_or_err(&tenant, func_name!()).map_err(poem::error::InternalServerError)?;
 
     let resp = load_tenant_tables(&tenant)
         .await

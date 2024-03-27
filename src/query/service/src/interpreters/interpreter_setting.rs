@@ -93,7 +93,7 @@ impl Interpreter for SettingInterpreter {
                     if config.query.internal_enable_sandbox_tenant && !tenant.is_empty() {
                         UserApiProvider::try_create_simple(
                             config.meta.to_meta_grpc_client_conf(),
-                            &Tenant::new_or_error_code(tenant, func_name!())?,
+                            &Tenant::new_or_err(tenant, func_name!())?,
                         )
                         .await?;
                     }
