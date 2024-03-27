@@ -264,7 +264,7 @@ impl QueryContextShared {
         self.session.get_current_role()
     }
 
-    pub fn set_current_tenant(&self, tenant: String) {
+    pub fn set_current_tenant(&self, tenant: Tenant) {
         self.session.set_current_tenant(tenant);
     }
 

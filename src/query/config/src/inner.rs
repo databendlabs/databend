@@ -237,7 +237,7 @@ pub struct QueryConfig {
 impl Default for QueryConfig {
     fn default() -> Self {
         Self {
-            tenant_id: Tenant::new_or_error_code("admin", "default()").unwrap(),
+            tenant_id: Tenant::new_or_err("admin", "default()").unwrap(),
             cluster_id: "".to_string(),
             node_id: "".to_string(),
             num_cpus: 0,

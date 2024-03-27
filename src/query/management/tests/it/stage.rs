@@ -142,7 +142,7 @@ async fn new_stage_api() -> Result<(Arc<MetaEmbedded>, StageMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
     let mgr = StageMgr::create(
         test_api.clone(),
-        &Tenant::new_or_error_code("admin", func_name!()).unwrap(),
+        &Tenant::new_or_err("admin", func_name!()).unwrap(),
     );
     Ok((test_api, mgr))
 }

@@ -41,7 +41,7 @@ pub struct SessionContext {
     // The current tenant can be determined by databend-query's config file, or by X-DATABEND-TENANT
     // if it's in management mode. If databend-query is not in management mode, the current tenant
     // can not be modified at runtime.
-    current_tenant: RwLock<String>,
+    current_tenant: RwLock<Option<Tenant>>,
     // The current user is determined by the authentication phase on each connection. It will not be
     // changed during a session.
     current_user: RwLock<Option<UserInfo>>,
@@ -157,28 +157,23 @@ impl SessionContext {
         if conf.query.internal_enable_sandbox_tenant {
             let sandbox_tenant = self.settings.get_sandbox_tenant().unwrap_or_default();
             if !sandbox_tenant.is_empty() {
-                return Tenant::new_or_error_code(sandbox_tenant, "create from sandbox_tenant")
-                    .unwrap();
+                return Tenant::new_or_err(sandbox_tenant, "create from sandbox_tenant").unwrap();
             }
         }
 
         if conf.query.management_mode || self.typ == SessionType::Local {
             let lock = self.current_tenant.read();
-            if !lock.is_empty() {
-                return Tenant::new_or_error_code(
-                    lock.clone(),
-                    "create from SessionContext.current_tenant",
-                )
-                .unwrap();
+            if let Some(tenant) = &*lock {
+                return tenant.clone();
             }
         }
 
         conf.query.tenant_id.clone()
     }
 
-    pub fn set_current_tenant(&self, tenant: String) {
+    pub fn set_current_tenant(&self, tenant: Tenant) {
         let mut lock = self.current_tenant.write();
-        *lock = tenant;
+        *lock = Some(tenant);
     }
 
     // Get current user

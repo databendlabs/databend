@@ -1671,7 +1671,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
 
     fn try_into(self) -> Result<InnerQueryConfig> {
         Ok(InnerQueryConfig {
-            tenant_id: Tenant::new_or_error_code(self.tenant_id, "")
+            tenant_id: Tenant::new_or_err(self.tenant_id, "")
                 .map_err(|_e| ErrorCode::InvalidConfig("tenant-id can not be empty"))?,
             cluster_id: self.cluster_id,
             node_id: "".to_string(),

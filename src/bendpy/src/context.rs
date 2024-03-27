@@ -65,7 +65,7 @@ impl PySessionContext {
                 .await
                 .unwrap();
 
-            session.set_current_tenant(tenant.name().to_string());
+            session.set_current_tenant(tenant);
 
             let mut user = UserInfo::new_no_auth("root", "%");
             user.grants.grant_privileges(

@@ -118,7 +118,7 @@ async fn new_setting_api() -> Result<(Arc<MetaEmbedded>, SettingMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
     let mgr = SettingMgr::create(
         test_api.clone(),
-        &Tenant::new_or_error_code("databend_query", func_name!()).unwrap(),
+        &Tenant::new_or_err("databend_query", func_name!()).unwrap(),
     );
     Ok((test_api, mgr))
 }

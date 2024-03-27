@@ -195,7 +195,7 @@ impl Session {
         self.session_ctx.get_current_tenant()
     }
 
-    pub fn set_current_tenant(self: &Arc<Self>, tenant: String) {
+    pub fn set_current_tenant(self: &Arc<Self>, tenant: Tenant) {
         self.session_ctx.set_current_tenant(tenant);
     }
 

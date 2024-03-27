@@ -245,7 +245,7 @@ impl AsyncSource for TenantQuotaSource {
                     UserOptionFlag::TenantSetting
                 )));
             }
-            tenant = Tenant::new_or_error_code(args[0].clone(), func_name!())?;
+            tenant = Tenant::new_or_err(args[0].clone(), func_name!())?;
         }
         let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
         let res = quota_api.get_quota(MatchSeq::GE(0)).await?;

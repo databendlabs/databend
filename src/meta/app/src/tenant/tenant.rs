@@ -14,8 +14,9 @@
 
 use std::fmt::Display;
 
-use databend_common_exception::ErrorCode;
 use databend_common_meta_types::NonEmptyString;
+
+use crate::app_error::TenantIsEmpty;
 
 /// Tenant is not stored directly in meta-store.
 ///
@@ -27,15 +28,16 @@ pub struct Tenant {
 }
 
 impl Tenant {
+    // #[deprecated]
     pub fn new(tenant: impl ToString) -> Self {
         Self {
             tenant: tenant.to_string(),
         }
     }
 
-    pub fn new_or_error_code(tenant: impl ToString, ctx: impl Display) -> Result<Self, ErrorCode> {
-        let non_empty = NonEmptyString::new(tenant.to_string())
-            .map_err(|_e| ErrorCode::TenantIsEmpty(format!("Tenant is empty when {}", ctx)))?;
+    pub fn new_or_err(tenant: impl ToString, ctx: impl Display) -> Result<Self, TenantIsEmpty> {
+        let non_empty =
+            NonEmptyString::new(tenant.to_string()).map_err(|_e| TenantIsEmpty::new(ctx))?;
 
         let t = Self {
             tenant: non_empty.as_str().to_string(),

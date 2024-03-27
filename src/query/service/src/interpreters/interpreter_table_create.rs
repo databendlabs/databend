@@ -100,8 +100,7 @@ impl Interpreter for CreateTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant =
-            Tenant::new_or_error_code(&self.plan.tenant, "CreateTableInterpreter::execute2")?;
+        let tenant = Tenant::new_or_err(&self.plan.tenant, "CreateTableInterpreter::execute2")?;
 
         let has_computed_column = self
             .plan
