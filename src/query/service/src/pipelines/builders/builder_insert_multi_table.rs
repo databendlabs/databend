@@ -14,12 +14,16 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
+use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::DynTransformBuilder;
 use databend_common_pipeline_sinks::AsyncSinker;
+use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_sql::executor::physical_plans::ChunkAppendData;
 use databend_common_sql::executor::physical_plans::ChunkCastSchema;
 use databend_common_sql::executor::physical_plans::ChunkCommitInsert;
@@ -30,8 +34,10 @@ use databend_common_sql::executor::physical_plans::ChunkProject;
 use databend_common_sql::executor::physical_plans::Duplicate;
 use databend_common_sql::executor::physical_plans::Shuffle;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
+use databend_common_storages_fuse::FuseTable;
 
 use crate::pipelines::PipelineBuilder;
+use crate::sql::evaluator::CompoundBlockOperator;
 impl PipelineBuilder {
     pub(crate) fn build_duplicate(&mut self, plan: &Duplicate) -> Result<()> {
         self.build_pipeline(&plan.input)?;
@@ -148,6 +154,13 @@ impl PipelineBuilder {
             Vec::with_capacity(plan.target_tables.len());
         let mut serialize_block_builders: Vec<DynTransformBuilder> =
             Vec::with_capacity(plan.target_tables.len());
+        let mut eval_cluster_key_builders: Vec<DynTransformBuilder> =
+            Vec::with_capacity(plan.target_tables.len());
+        let mut eval_cluster_key_num = 0;
+        let mut sort_builders: Vec<DynTransformBuilder> =
+            Vec::with_capacity(plan.target_tables.len());
+        let mut sort_num = 0;
+
         for append_data in plan.target_tables.iter() {
             let table = self.ctx.build_table_by_table_info(
                 &append_data.target_catalog_info,
@@ -158,10 +171,69 @@ impl PipelineBuilder {
             compact_builders.push(Box::new(
                 self.block_compact_transform_builder(block_thresholds)?,
             ));
+            let schema: Arc<DataSchema> = DataSchema::from(table.schema()).into();
+            let num_input_columns = schema.num_fields();
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            let cluster_stats_gen = fuse_table.get_cluster_stats_gen(
+                self.ctx.clone(),
+                0,
+                block_thresholds,
+                Some(schema),
+            )?;
+            let operators = cluster_stats_gen.operators.clone();
+            if !operators.is_empty() {
+                let func_ctx2 = cluster_stats_gen.func_ctx.clone();
+
+                eval_cluster_key_builders.push(Box::new(move |input, output| {
+                    Ok(ProcessorPtr::create(CompoundBlockOperator::create(
+                        input,
+                        output,
+                        num_input_columns,
+                        func_ctx2.clone(),
+                        operators.clone(),
+                    )))
+                }));
+                eval_cluster_key_num += 1;
+            } else {
+                eval_cluster_key_builders.push(Box::new(self.dummy_transform_builder()?));
+            }
+            let cluster_keys = &cluster_stats_gen.cluster_key_index;
+            if !cluster_keys.is_empty() {
+                let sort_desc: Vec<SortColumnDescription> = cluster_keys
+                    .iter()
+                    .map(|index| SortColumnDescription {
+                        offset: *index,
+                        asc: true,
+                        nulls_first: false,
+                        is_nullable: false, // This information is not needed here.
+                    })
+                    .collect();
+                let sort_desc = Arc::new(sort_desc);
+                sort_builders.push(Box::new(
+                    move |transform_input_port, transform_output_port| {
+                        Ok(ProcessorPtr::create(TransformSortPartial::try_create(
+                            transform_input_port,
+                            transform_output_port,
+                            None,
+                            sort_desc.clone(),
+                        )?))
+                    },
+                ));
+                sort_num += 1;
+            } else {
+                sort_builders.push(Box::new(self.dummy_transform_builder()?));
+            }
             serialize_block_builders.push(Box::new(self.serialize_block_transform_builder(table)?));
         }
         self.main_pipeline
             .add_transform_by_chunk(compact_builders)?;
+        if eval_cluster_key_num > 0 {
+            self.main_pipeline
+                .add_transform_by_chunk(eval_cluster_key_builders)?;
+        }
+        if sort_num > 0 {
+            self.main_pipeline.add_transform_by_chunk(sort_builders)?;
+        }
         self.main_pipeline
             .add_transform_by_chunk(serialize_block_builders)?;
         Ok(())
