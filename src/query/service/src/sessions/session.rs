@@ -73,17 +73,20 @@ impl Session {
         }))
     }
 
-    pub fn to_minitrace_properties(self: &Arc<Self>) -> Vec<(&'static str, String)> {
+    pub fn to_minitrace_properties(self: &Arc<Self>) -> Vec<(String, String)> {
         let mut properties = vec![
-            ("session_id", self.id.clone()),
-            ("session_database", self.get_current_database()),
-            ("session_tenant", self.get_current_tenant().to_string()),
+            ("session_id".to_string(), self.id.clone()),
+            ("session_database".to_string(), self.get_current_database()),
+            (
+                "session_tenant".to_string(),
+                self.get_current_tenant().to_string(),
+            ),
         ];
         if let Some(query_id) = self.get_current_query_id() {
-            properties.push(("query_id", query_id));
+            properties.push(("query_id".to_string(), query_id));
         }
         if let Some(connection_id) = self.get_mysql_conn_id() {
-            properties.push(("connection_id", connection_id.to_string()));
+            properties.push(("connection_id".to_string(), connection_id.to_string()));
         }
         properties
     }
