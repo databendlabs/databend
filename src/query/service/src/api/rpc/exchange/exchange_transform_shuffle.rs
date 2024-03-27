@@ -464,9 +464,7 @@ impl ExchangeSorting for ShuffleExchangeSorting {
         for block in &shuffle_meta.blocks {
             if let Some(block_meta) = block.get_meta() {
                 if let Some(block_meta) = ExchangeSerializeMeta::downcast_ref_from(block_meta) {
-                    return Ok(
-                        block_meta.max_partition_count as isize * 1000 + block_meta.block_number
-                    );
+                    return Ok(block_meta.block_number);
                 }
             }
 

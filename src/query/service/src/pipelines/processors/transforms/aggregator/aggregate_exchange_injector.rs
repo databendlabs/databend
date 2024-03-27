@@ -64,6 +64,10 @@ struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'stat
     _phantom: PhantomData<(Method, V)>,
 }
 
+pub fn compute_block_number(bucket: isize, max_partition_count: usize) -> Result<isize> {
+    Ok(max_partition_count as isize * 1000 + bucket)
+}
+
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
     for AggregateExchangeSorting<Method, V>
 {
@@ -79,11 +83,11 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                     Some(meta_info) => match meta_info {
                         AggregateMeta::Partitioned { .. } => unreachable!(),
                         AggregateMeta::Serialized(v) => {
-                            Ok(v.max_partition_count as isize * 1000 + v.bucket)
+                            compute_block_number(v.bucket, v.max_partition_count)
                         }
                         AggregateMeta::HashTable(v) => Ok(v.bucket),
                         AggregateMeta::AggregatePayload(v) => {
-                            Ok(v.max_partition_count as isize * 1000 + v.bucket)
+                            compute_block_number(v.bucket, v.max_partition_count)
                         }
                         AggregateMeta::AggregateSpilling(_)
                         | AggregateMeta::Spilled(_)

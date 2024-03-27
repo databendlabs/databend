@@ -52,6 +52,7 @@ use super::SerializePayload;
 use crate::api::serialize_block;
 use crate::api::ExchangeShuffleMeta;
 use crate::pipelines::processors::transforms::aggregator::agg_spilling_aggregate_payload as local_agg_spilling_aggregate_payload;
+use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::compute_block_number;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
@@ -200,7 +201,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                             c.replace_meta(meta);
                         }
 
-                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options, 0)?;
+                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options)?;
                         serialized_blocks.push(FlightSerialized::DataBlock(c));
                     }
                 }
@@ -214,8 +215,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                         continue;
                     }
 
-                    let bucket = p.bucket;
-                    let max_partition_count = p.max_partition_count;
+                    let bucket = compute_block_number(p.bucket, p.max_partition_count)?;
                     let stream = SerializeAggregateStream::create(
                         &self.method,
                         &self.params,
@@ -231,13 +231,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                             c.replace_meta(meta);
                         }
 
-                        let c = serialize_block(
-                            bucket,
-                            c,
-                            &self.ipc_fields,
-                            &self.options,
-                            max_partition_count,
-                        )?;
+                        let c = serialize_block(bucket, c, &self.ipc_fields, &self.options)?;
                         serialized_blocks.push(FlightSerialized::DataBlock(c));
                     }
                 }
@@ -363,7 +357,7 @@ fn agg_spilling_aggregate_payload<Method: HashMethodBounds>(
 
             let ipc_fields = exchange_defines::spilled_ipc_fields();
             let write_options = exchange_defines::spilled_write_options();
-            return serialize_block(-1, data_block, ipc_fields, write_options, 0);
+            return serialize_block(-1, data_block, ipc_fields, write_options);
         }
 
         Ok(DataBlock::empty())
@@ -483,7 +477,7 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
 
             let ipc_fields = exchange_defines::spilled_ipc_fields();
             let write_options = exchange_defines::spilled_write_options();
-            return serialize_block(-1, data_block, ipc_fields, write_options, 0);
+            return serialize_block(-1, data_block, ipc_fields, write_options);
         }
 
         Ok(DataBlock::empty())
