@@ -13,7 +13,7 @@ test -- insert
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Insert] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public]
 1
 2
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Insert, Delete] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Delete] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
 1
 2
 test -- update

@@ -270,7 +270,7 @@ impl Session {
     pub async fn validate_privilege(
         self: &Arc<Self>,
         object: &GrantObject,
-        privilege: Vec<UserPrivilegeType>,
+        privilege: UserPrivilegeType,
     ) -> Result<()> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());

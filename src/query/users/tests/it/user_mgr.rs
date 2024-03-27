@@ -135,12 +135,12 @@ async fn test_user_manager() -> Result<()> {
         assert!(
             new_user
                 .grants
-                .verify_privilege(&GrantObject::Global, vec![UserPrivilegeType::Set])
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Set)
         );
         assert!(
             !new_user
                 .grants
-                .verify_privilege(&GrantObject::Global, vec![UserPrivilegeType::Create])
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create)
         );
         user_mgr
             .drop_user(tenant.clone(), new_user.identity(), true)
