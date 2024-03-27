@@ -917,7 +917,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query
+query 
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)
 ----
 ConstantTableScan

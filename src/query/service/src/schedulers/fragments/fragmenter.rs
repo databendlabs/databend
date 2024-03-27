@@ -249,7 +249,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             probe_keys_rt: plan.probe_keys_rt.clone(),
             enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
             broadcast: plan.broadcast,
-            original_join_type: plan.original_join_type.clone(),
+            single_to_inner: plan.single_to_inner.clone(),
         }))
     }
 

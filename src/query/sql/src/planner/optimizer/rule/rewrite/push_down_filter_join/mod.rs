@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod derive_filter;
 mod extract_or_predicates;
 mod mark_join_to_semi_join;
 mod outer_join_to_inner_join;
 
-pub use derive_filter::try_derive_predicates;
 pub use extract_or_predicates::rewrite_predicates;
 pub use mark_join_to_semi_join::convert_mark_to_semi_join;
-pub use outer_join_to_inner_join::outer_to_inner;
+pub use outer_join_to_inner_join::can_filter_null;
+pub use outer_join_to_inner_join::outer_join_to_inner_join;

@@ -12,13 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod deduplicate_join_condition;
-mod infer_filter;
-mod normalize_disjunctive_filter;
-mod pull_up_filter;
+mod single_to_inner;
 
-pub use deduplicate_join_condition::DeduplicateJoinConditionOptimizer;
-pub use infer_filter::InferFilterOptimizer;
-pub use infer_filter::JoinProperty;
-pub use normalize_disjunctive_filter::NormalizeDisjunctiveFilterOptimizer;
-pub use pull_up_filter::PullUpFilterOptimizer;
+pub use single_to_inner::SingleToInnerOptimizer;

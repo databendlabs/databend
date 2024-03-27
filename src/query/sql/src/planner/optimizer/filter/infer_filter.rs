@@ -30,31 +30,42 @@ use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
+use crate::plans::VisitorMut;
+use crate::ColumnSet;
 
 // The InferFilterOptimizer tries to infer new predicates from existing predicates, for example:
 // 1. [A > 1 and A > 5] => [A > 5], [A > 1 and A <= 1 => false], [A = 1 and A < 10] => [A = 1]
 // 2. [A = 10 and A = B] => [B = 10]
 // 3. [A = B and A = C] => [B = C]
-pub struct InferFilterOptimizer {
+pub struct InferFilterOptimizer<'a> {
+    // All ScalarExprs.
     exprs: Vec<ScalarExpr>,
+    // The index of ScalarExpr in `exprs`.
     expr_index: HashMap<ScalarExpr, usize>,
+    // The equal ScalarExprs of each ScalarExpr.
     expr_equal_to: Vec<Vec<ScalarExpr>>,
-    predicates: Vec<Vec<Predicate>>,
+    // The predicates of each ScalarExpr.
+    expr_predicates: Vec<Vec<Predicate>>,
+    // If the whole predicates is false.
     is_falsy: bool,
+    // The `join_prop` is used for filter push down join.
+    join_prop: Option<JoinProperty<'a>>,
 }
 
-impl InferFilterOptimizer {
-    pub fn new() -> Self {
+impl<'a> InferFilterOptimizer<'a> {
+    pub fn new(join_prop: Option<JoinProperty<'a>>) -> Self {
         Self {
             exprs: vec![],
             expr_index: HashMap::new(),
             expr_equal_to: vec![],
-            predicates: vec![],
+            expr_predicates: vec![],
             is_falsy: false,
+            join_prop,
         }
     }
 
     pub fn run(mut self, mut predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
+        // Remove trivial type cast.
         for predicate in predicates.iter_mut() {
             if let ScalarExpr::FunctionCall(func) = predicate {
                 if ComparisonOp::try_from_func_name(&func.func_name).is_some() {
@@ -72,74 +83,71 @@ impl InferFilterOptimizer {
             }
         }
 
-        let mut new_predicates = vec![];
+        // Process each predicate, add it to the optimizer if it can be used to infer new predicates,
+        // otherwise, add it to the remaining predicates.
+        let mut remaining_predicates = vec![];
         for predicate in predicates.into_iter() {
             if let ScalarExpr::FunctionCall(func) = &predicate {
                 if let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) {
                     match (
-                        func.arguments[0].is_column_ref(),
-                        func.arguments[1].is_column_ref(),
+                        func.arguments[0].has_one_column_ref(),
+                        func.arguments[1].has_one_column_ref(),
                     ) {
                         (true, true) => {
                             if op == ComparisonOp::Equal {
-                                self.add_equal(&func.arguments[0], &func.arguments[1]);
+                                self.add_equal_expr(&func.arguments[0], &func.arguments[1]);
                             } else {
-                                new_predicates.push(predicate);
+                                remaining_predicates.push(predicate);
                             }
                         }
-                        (true, false) => {
-                            if let ScalarExpr::ConstantExpr(constant) = &func.arguments[1] {
-                                let (is_adjusted, constant) = adjust_scalar(
-                                    constant.value.clone(),
-                                    func.arguments[0].data_type()?,
-                                );
-                                if is_adjusted {
-                                    self.add_predicate(&func.arguments[0], Predicate {
-                                        op,
-                                        constant,
-                                    });
-                                } else {
-                                    new_predicates.push(predicate);
-                                }
+                        (true, false)
+                            if let ScalarExpr::ConstantExpr(constant) = &func.arguments[1] =>
+                        {
+                            let (is_adjusted, constant) = adjust_scalar(
+                                constant.value.clone(),
+                                func.arguments[0].data_type()?,
+                            );
+                            if is_adjusted {
+                                self.add_expr_predicate(&func.arguments[0], Predicate {
+                                    op,
+                                    constant,
+                                });
                             } else {
-                                new_predicates.push(predicate);
+                                remaining_predicates.push(predicate);
                             }
                         }
-                        (false, true) => {
-                            if let ScalarExpr::ConstantExpr(constant) = &func.arguments[0] {
-                                let (is_adjusted, constant) = adjust_scalar(
-                                    constant.value.clone(),
-                                    func.arguments[1].data_type()?,
-                                );
-                                if is_adjusted {
-                                    self.add_predicate(&func.arguments[1], Predicate {
-                                        op: op.reverse(),
-                                        constant,
-                                    });
-                                } else {
-                                    new_predicates.push(predicate);
-                                }
+                        (false, true)
+                            if let ScalarExpr::ConstantExpr(constant) = &func.arguments[0] =>
+                        {
+                            let (is_adjusted, constant) = adjust_scalar(
+                                constant.value.clone(),
+                                func.arguments[1].data_type()?,
+                            );
+                            if is_adjusted {
+                                self.add_expr_predicate(&func.arguments[1], Predicate {
+                                    op: op.reverse(),
+                                    constant,
+                                });
                             } else {
-                                new_predicates.push(predicate);
+                                remaining_predicates.push(predicate);
                             }
                         }
-                        (false, false) => {
-                            new_predicates.push(predicate);
-                        }
+                        _ => remaining_predicates.push(predicate),
                     }
                 } else {
-                    new_predicates.push(predicate);
+                    remaining_predicates.push(predicate);
                 }
             } else {
-                new_predicates.push(predicate);
+                remaining_predicates.push(predicate);
             }
         }
+
+        let mut new_predicates = vec![];
         if !self.is_falsy {
-            // `derive_predicates` may change is_falsy to true.
-            let mut derived_predicates = self.derive_predicates();
-            derived_predicates.extend(new_predicates);
-            new_predicates = derived_predicates;
+            // Derive new predicates from existing predicates, `derive_predicates` may change is_falsy to true.
+            new_predicates = self.derive_predicates();
         }
+
         if self.is_falsy {
             new_predicates = vec![
                 ConstantExpr {
@@ -148,23 +156,27 @@ impl InferFilterOptimizer {
                 }
                 .into(),
             ];
+        } else {
+            // Derive new predicates from remaining predicates.
+            new_predicates.extend(self.derive_remaining_predicates(remaining_predicates));
         }
+
         Ok(new_predicates)
     }
 
     fn add_expr(
         &mut self,
         expr: &ScalarExpr,
-        predicates: Vec<Predicate>,
+        expr_predicates: Vec<Predicate>,
         expr_equal_to: Vec<ScalarExpr>,
     ) {
         self.expr_index.insert(expr.clone(), self.exprs.len());
         self.exprs.push(expr.clone());
-        self.predicates.push(predicates);
+        self.expr_predicates.push(expr_predicates);
         self.expr_equal_to.push(expr_equal_to);
     }
 
-    fn add_equal(&mut self, left: &ScalarExpr, right: &ScalarExpr) {
+    pub fn add_equal_expr(&mut self, left: &ScalarExpr, right: &ScalarExpr) {
         match self.expr_index.get(left) {
             Some(index) => self.expr_equal_to[*index].push(right.clone()),
             None => self.add_expr(left, vec![], vec![right.clone()]),
@@ -176,12 +188,12 @@ impl InferFilterOptimizer {
         };
     }
 
-    fn add_predicate(&mut self, left: &ScalarExpr, right: Predicate) {
-        match self.expr_index.get(left) {
+    fn add_expr_predicate(&mut self, expr: &ScalarExpr, new_predicate: Predicate) {
+        match self.expr_index.get(expr) {
             Some(index) => {
-                let predicates = &mut self.predicates[*index];
+                let predicates = &mut self.expr_predicates[*index];
                 for predicate in predicates.iter_mut() {
-                    match Self::merge(predicate, &right) {
+                    match Self::merge_predicate(predicate, &new_predicate) {
                         MergeResult::None => {
                             self.is_falsy = true;
                             return;
@@ -190,21 +202,21 @@ impl InferFilterOptimizer {
                             return;
                         }
                         MergeResult::Right => {
-                            *predicate = right;
+                            *predicate = new_predicate;
                             return;
                         }
                         MergeResult::All => (),
                     }
                 }
-                predicates.push(right);
+                predicates.push(new_predicate);
             }
             None => {
-                self.add_expr(left, vec![right], vec![]);
+                self.add_expr(expr, vec![new_predicate], vec![]);
             }
         };
     }
 
-    fn merge(left: &Predicate, right: &Predicate) -> MergeResult {
+    fn merge_predicate(left: &Predicate, right: &Predicate) -> MergeResult {
         match left.op {
             ComparisonOp::Equal => match right.op {
                 ComparisonOp::Equal => match left.constant == right.constant {
@@ -368,6 +380,8 @@ impl InferFilterOptimizer {
         let mut result = vec![];
         let num_exprs = self.exprs.len();
 
+        // Using the Union-Find algorithm to construct the equal ScalarExpr index sets.
+        let mut equal_index_sets: HashMap<usize, HashSet<usize>> = HashMap::new();
         let mut parents = vec![0; num_exprs];
         for (i, parent) in parents.iter_mut().enumerate().take(num_exprs) {
             *parent = i;
@@ -378,8 +392,6 @@ impl InferFilterOptimizer {
                 Self::union(&mut parents, left_index, *right_index);
             }
         }
-
-        let mut equal_index_sets: HashMap<usize, HashSet<usize>> = HashMap::new();
         for index in 0..num_exprs {
             let parent_index = Self::find(&mut parents, index);
             match equal_index_sets.get_mut(&parent_index) {
@@ -391,18 +403,20 @@ impl InferFilterOptimizer {
                 }
             }
             if index != parent_index {
+                // Add the predicates to the parent ScalarExpr.
                 let expr = self.exprs[parent_index].clone();
-                let predicates = self.predicates[index].clone();
+                let predicates = self.expr_predicates[index].clone();
                 for predicate in predicates {
-                    self.add_predicate(&expr, predicate);
+                    self.add_expr_predicate(&expr, predicate);
                 }
             }
         }
 
+        // Construct predicates for each ScalarExpr.
         for expr in self.exprs.iter() {
             let index = self.expr_index.get(expr).unwrap();
             let parent_index = Self::find(&mut parents, *index);
-            let parent_predicates = &self.predicates[parent_index];
+            let parent_predicates = &self.expr_predicates[parent_index];
             for predicate in parent_predicates.iter() {
                 result.push(ScalarExpr::FunctionCall(FunctionCall {
                     span: None,
@@ -416,6 +430,7 @@ impl InferFilterOptimizer {
             }
         }
 
+        // Construct equal condition predicates for each equal ScalarExpr index set.
         for index in 0..num_exprs {
             let parent_index = Self::find(&mut parents, index);
             if index == parent_index {
@@ -442,6 +457,109 @@ impl InferFilterOptimizer {
 
         result
     }
+
+    fn derive_remaining_predicates(&self, predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
+        // The ReplaceScalarExpr is used to replace the ScalarExpr of a predicate.
+        struct ReplaceScalarExpr<'a> {
+            // The index of ScalarExpr in `exprs`.
+            expr_index: &'a HashMap<ScalarExpr, usize>,
+            // The equal ScalarExprs of each ScalarExpr.
+            expr_equal_to: &'a Vec<Vec<ScalarExpr>>,
+            // The columns used by the predicate.
+            column_set: HashSet<usize>,
+            // If the predicate can be replaced to generate a new predicate.
+            can_replace: bool,
+        }
+
+        impl<'a> ReplaceScalarExpr<'a> {
+            fn reset(&mut self) {
+                self.column_set.clear();
+                self.can_replace = true;
+            }
+        }
+
+        impl<'a> VisitorMut<'_> for ReplaceScalarExpr<'a> {
+            fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+                if let Some(index) = self.expr_index.get(expr) {
+                    let equal_to = &self.expr_equal_to[*index];
+                    if !equal_to.is_empty() {
+                        let used_columns = expr.used_columns();
+                        for column in used_columns {
+                            self.column_set.insert(column);
+                        }
+                        *expr = equal_to[0].clone();
+                        return Ok(());
+                    }
+                }
+                match expr {
+                    ScalarExpr::FunctionCall(expr) => self.visit_function_call(expr),
+                    ScalarExpr::CastExpr(expr) => self.visit_cast_expr(expr),
+                    ScalarExpr::ConstantExpr(_) => Ok(()),
+                    ScalarExpr::BoundColumnRef(_)
+                    | ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::LambdaFunction(_)
+                    | ScalarExpr::SubqueryExpr(_)
+                    | ScalarExpr::UDFCall(_)
+                    | ScalarExpr::UDFLambdaCall(_) => {
+                        // Can not replace `BoundColumnRef` or can not replace unsupported ScalarExpr.
+                        self.can_replace = false;
+                        Ok(())
+                    }
+                }
+            }
+        }
+
+        let mut replace = ReplaceScalarExpr {
+            expr_index: &self.expr_index,
+            expr_equal_to: &self.expr_equal_to,
+            column_set: HashSet::new(),
+            can_replace: true,
+        };
+
+        let mut result_predicates = Vec::with_capacity(predicates.len());
+        for predicate in predicates {
+            replace.reset();
+            let mut new_predicate = predicate.clone();
+            replace.visit(&mut new_predicate).unwrap();
+            if !replace.can_replace {
+                result_predicates.push(predicate);
+                continue;
+            }
+
+            let mut can_replace = false;
+            if let Some(join_prop) = &self.join_prop {
+                let mut has_left = false;
+                let mut has_right = false;
+                for column in replace.column_set.iter() {
+                    if join_prop.left_columns.contains(column) {
+                        has_left = true;
+                    } else if join_prop.right_columns.contains(column) {
+                        has_right = true;
+                    }
+                }
+                // We only derive new predicates when the predicate contains columns only from one side of the join.
+                if has_left && !has_right || !has_left && has_right {
+                    can_replace = true;
+                }
+            } else if replace.column_set.len() == 1 {
+                can_replace = true;
+            }
+
+            if !can_replace {
+                result_predicates.push(predicate);
+                continue;
+            }
+
+            if new_predicate != predicate {
+                result_predicates.push(new_predicate);
+            }
+
+            result_predicates.push(predicate);
+        }
+
+        result_predicates
+    }
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
@@ -455,6 +573,20 @@ enum MergeResult {
     Left,
     Right,
     None,
+}
+
+pub struct JoinProperty<'a> {
+    left_columns: &'a ColumnSet,
+    right_columns: &'a ColumnSet,
+}
+
+impl<'a> JoinProperty<'a> {
+    pub fn new(left_columns: &'a ColumnSet, right_columns: &'a ColumnSet) -> Self {
+        Self {
+            left_columns,
+            right_columns,
+        }
+    }
 }
 
 pub fn adjust_scalar(scalar: Scalar, data_type: DataType) -> (bool, ConstantExpr) {
