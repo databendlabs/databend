@@ -180,7 +180,8 @@ impl Binder {
                 .with_column("num_rows")
                 .with_column("data_size")
                 .with_column("data_compressed_size")
-                .with_column("index_size");
+                .with_column("index_size")
+                .with_column("view_query");
         } else {
             select_builder.with_column(format!("name AS `Views_in_{database}`"));
             if *with_history {
