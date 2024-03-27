@@ -17,7 +17,9 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
+use databend_common_sql::executor::physical_plans::CastSchema;
 use databend_common_sql::executor::physical_plans::ChunkAppendData;
+use databend_common_sql::executor::physical_plans::ChunkCastSchema;
 use databend_common_sql::executor::physical_plans::ChunkCommitInsert;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
 use databend_common_sql::executor::physical_plans::ChunkProject;
@@ -76,12 +78,23 @@ impl Interpreter for InsertMultiTableInterpreter {
 impl InsertMultiTableInterpreter {
     async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
         let mut root = self.build_source_physical_plan().await?;
+        let source_schema = root.output_schema()?;
         let mut branches = self.build_insert_into_branches().await?;
         let serialable_tables = branches
             .build_serializable_target_tables(self.ctx.clone())
             .await?;
         let predicates = branches.build_predicates(self.plan.is_first)?;
         let projections = branches.build_projections();
+        let source_schemas = projections
+            .iter()
+            .map(|opt_projection| {
+                opt_projection
+                    .as_ref()
+                    .map(|p| Arc::new(source_schema.project(p)))
+                    .unwrap_or_else(|| source_schema.clone())
+            })
+            .collect::<Vec<_>>();
+        let cast_schemas = branches.build_cast_schema(source_schemas);
 
         root = PhysicalPlan::Duplicate(Box::new(Duplicate {
             plan_id: 0,
@@ -106,6 +119,12 @@ impl InsertMultiTableInterpreter {
             plan_id: 0,
             input: Box::new(root),
             projections,
+        }));
+
+        root = PhysicalPlan::ChunkCastSchema(Box::new(ChunkCastSchema {
+            plan_id: 0,
+            input: Box::new(root),
+            cast_schemas,
         }));
 
         root = PhysicalPlan::ChunkAppendData(Box::new(ChunkAppendData {
@@ -315,5 +334,22 @@ impl InsertIntoBranches {
 
     fn build_projections(&mut self) -> Vec<Option<Vec<usize>>> {
         std::mem::take(&mut self.projections)
+    }
+
+    fn build_cast_schema(&self, source_schemas: Vec<DataSchemaRef>) -> Vec<Option<CastSchema>> {
+        self.casted_schemas
+            .iter()
+            .zip(source_schemas.iter())
+            .map(|(casted_schema, source_schema)| {
+                if casted_schema != source_schema {
+                    Some(CastSchema {
+                        source_schema: source_schema.clone(),
+                        target_schema: casted_schema.clone(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }

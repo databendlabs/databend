@@ -21,6 +21,7 @@ use databend_common_expression::filter::build_select_expr;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -39,6 +40,7 @@ use databend_common_storages_fuse::FuseTable;
 use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
+use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;
 use crate::sql::executor::physical_plans::MutationKind;
 impl PipelineBuilder {
@@ -165,6 +167,23 @@ impl PipelineBuilder {
                     projection: projection.clone(),
                 }],
             )))
+        })
+    }
+
+    pub(crate) fn cast_schema_transform_builder(
+        &self,
+        source_schema: DataSchemaRef,
+        target_schema: DataSchemaRef,
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+        let func_ctx = self.func_ctx.clone();
+        Ok(move |transform_input_port, transform_output_port| {
+            TransformCastSchema::try_create(
+                transform_input_port,
+                transform_output_port,
+                source_schema.clone(),
+                target_schema.clone(),
+                func_ctx.clone(),
+            )
         })
     }
 }

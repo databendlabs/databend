@@ -88,7 +88,23 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub(crate) fn build_chunk_cast_schema(&mut self, _plan: &ChunkCastSchema) -> Result<()> {
+    pub(crate) fn build_chunk_cast_schema(&mut self, plan: &ChunkCastSchema) -> Result<()> {
+        self.build_pipeline(&plan.input)?;
+        if plan.cast_schemas.iter().all(|x| x.is_none()) {
+            return Ok(());
+        }
+        let mut f: Vec<DynTransformBuilder> = Vec::with_capacity(plan.cast_schemas.len());
+        for cast_schema in plan.cast_schemas.iter() {
+            if let Some(cast_schema) = cast_schema {
+                f.push(Box::new(self.cast_schema_transform_builder(
+                    cast_schema.source_schema.clone(),
+                    cast_schema.target_schema.clone(),
+                )?));
+            } else {
+                f.push(Box::new(self.dummy_transform_builder()?));
+            }
+        }
+        self.main_pipeline.add_transform_by_chunk(f)?;
         Ok(())
     }
 
