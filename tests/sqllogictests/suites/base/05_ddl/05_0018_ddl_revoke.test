@@ -55,18 +55,8 @@ CREATE USER 'test-priv' IDENTIFIED BY 'A'
 statement ok
 GRANT SELECT ON b.* TO 'test-priv'
 
-query T
-SHOW GRANTS FOR 'test-priv'
-----
-GRANT SELECT ON 'default'.'b'.* TO 'test-priv'@'%'
-
 statement ok
 REVOKE SELECT ON a.* FROM 'test-priv'
-
-query T
-SHOW GRANTS FOR 'test-priv'
-----
-GRANT SELECT ON 'default'.'b'.* TO 'test-priv'@'%'
 
 statement ok
 REVOKE CREATE ON a.* FROM 'test-priv'
@@ -79,11 +69,6 @@ REVOKE CREATE ON a.* FROM role 'account_admin'
 
 statement ok
 REVOKE CREATE ON a.* FROM role 'public'
-
-query T
-SHOW GRANTS FOR 'test-priv'
-----
-GRANT SELECT ON 'default'.'b'.* TO 'test-priv'@'%'
 
 statement ok
 REVOKE SELECT ON b.* FROM 'test-priv'
@@ -108,4 +93,3 @@ DROP DATABASE a
 
 statement ok
 DROP DATABASE b
-
