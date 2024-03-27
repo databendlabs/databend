@@ -479,22 +479,20 @@ impl Drop for SlowRequestLogTracker {
 // get_http_tracing_span always return a valid span for tracing
 // it will try to decode w3 traceparent and if empty or failed, it will create a new root span and throw a warning
 fn get_http_tracing_span(name: &'static str, ctx: &HttpQueryContext, query_id: &str) -> Span {
-    let trace_id = query_id_to_trace_id(query_id);
-    let new_root = Span::root(name, SpanContext::new(trace_id, SpanId(rand::random())))
-        .with_properties(|| ctx.to_minitrace_properties());
-    match ctx.trace_parent.as_ref() {
-        Some(parent) => {
-            let trace = parent.as_str();
-            match SpanContext::decode_w3c_traceparent(trace) {
-                Some(span_context) => {
-                    Span::root(name, span_context).with_properties(|| ctx.to_minitrace_properties())
-                }
-                None => {
-                    warn!("failed to decode trace parent: {}", trace);
-                    new_root
-                }
+    if let Some(parent) = ctx.trace_parent.as_ref() {
+        let trace = parent.as_str();
+        match SpanContext::decode_w3c_traceparent(trace) {
+            Some(span_context) => {
+                return Span::root(name, span_context)
+                    .with_properties(|| ctx.to_minitrace_properties());
+            }
+            None => {
+                warn!("failed to decode trace parent: {}", trace);
             }
         }
-        None => new_root,
     }
+
+    let trace_id = query_id_to_trace_id(query_id);
+    Span::root(name, SpanContext::new(trace_id, SpanId(rand::random())))
+        .with_properties(|| ctx.to_minitrace_properties())
 }

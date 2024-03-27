@@ -82,11 +82,6 @@ prefix_filter = ""
 on = true
 dir = "./.databend/structlog_1"
 
-#[log.tracing]
-#on = true
-#capture_log_level = "TRACE"
-#otlp_endpoint = "http://0.0.0.0:4317"
-
 [meta]
 # It is a list of `grpc_api_advertise_host:<grpc-api-port>` of databend-meta config
 endpoints = ["0.0.0.0:9191"]

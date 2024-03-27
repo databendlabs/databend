@@ -32,7 +32,7 @@ pub struct HttpQueryContext {
     pub deduplicate_label: Option<String>,
     pub user_agent: Option<String>,
     pub trace_parent: Option<String>,
-    pub open_telemetry_baggage: Option<Vec<(String, String)>>,
+    pub opentelemetry_baggage: Option<Vec<(String, String)>>,
     pub http_method: String,
     pub uri: String,
 }
@@ -56,7 +56,7 @@ impl HttpQueryContext {
             deduplicate_label,
             user_agent,
             trace_parent,
-            open_telemetry_baggage,
+            opentelemetry_baggage: open_telemetry_baggage,
             http_method,
             uri,
         }
@@ -89,7 +89,7 @@ impl HttpQueryContext {
             ("http_method".to_string(), self.http_method.clone()),
             ("uri".to_string(), self.uri.clone()),
         ]);
-        if let Some(baggage) = self.open_telemetry_baggage.clone() {
+        if let Some(baggage) = self.opentelemetry_baggage.clone() {
             result.extend(baggage);
         }
         result
