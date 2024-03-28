@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(try_blocks)]
+
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
@@ -36,18 +38,42 @@ use goldenfile::Mint;
 fn run_script(file: &mut dyn Write, src: &str, client: Option<MockClient>) {
     let src = unindent::unindent(src);
     let src = src.trim();
-    let tokens = tokenize_sql(src).unwrap();
-    let ast = run_parser(
-        &tokens,
-        Dialect::PostgreSQL,
-        ParseMode::Template,
-        false,
-        script_stmts,
-    )
-    .unwrap();
 
-    let ir = match compile(&ast) {
-        Ok(ir) => ir,
+    let res: Result<_> = try {
+        let tokens = tokenize_sql(src).unwrap();
+        let ast = run_parser(
+            &tokens,
+            Dialect::PostgreSQL,
+            ParseMode::Template,
+            false,
+            script_stmts,
+        )?;
+        let ir = compile(&ast)?;
+        let client = client.unwrap();
+        let query_log = client.query_log.clone();
+        let mut executor = Executor::load(client, ir.clone(), 1000);
+        let result = executor.run()?;
+
+        (ir, query_log, result)
+    };
+
+    match res {
+        Ok((ir, query_log, result)) => {
+            writeln!(file, "---------- Input ----------").unwrap();
+            writeln!(file, "{}", src).unwrap();
+            writeln!(file, "---------- IR -------------").unwrap();
+            for line in ir {
+                writeln!(file, "{}", line).unwrap();
+            }
+            writeln!(file, "---------- QUERY ---------").unwrap();
+            for (query, block) in query_log.lock().unwrap().iter() {
+                writeln!(file, "QUERY: {}", query).unwrap();
+                writeln!(file, "BLOCK: {}", block).unwrap();
+            }
+            writeln!(file, "---------- Output ---------").unwrap();
+            writeln!(file, "{:?}", result).unwrap();
+            writeln!(file, "\n").unwrap();
+        }
         Err(err) => {
             let report = err.display_with_sql(src).message().trim().to_string();
             writeln!(file, "---------- Input ----------").unwrap();
@@ -55,29 +81,8 @@ fn run_script(file: &mut dyn Write, src: &str, client: Option<MockClient>) {
             writeln!(file, "---------- Output ----------").unwrap();
             writeln!(file, "{}", report).unwrap();
             writeln!(file, "\n").unwrap();
-            return;
         }
-    };
-
-    let client = client.unwrap();
-    let query_log = client.query_log.clone();
-    let mut executor = Executor::load(client, ir.clone());
-    let result = executor.run().unwrap();
-
-    writeln!(file, "---------- Input ----------").unwrap();
-    writeln!(file, "{}", src).unwrap();
-    writeln!(file, "---------- IR -------------").unwrap();
-    for line in ir {
-        writeln!(file, "{}", line).unwrap();
     }
-    writeln!(file, "---------- QUERY ---------").unwrap();
-    for (query, block) in query_log.lock().unwrap().iter() {
-        writeln!(file, "QUERY: {}", query).unwrap();
-        writeln!(file, "BLOCK: {}", block).unwrap();
-    }
-    writeln!(file, "---------- Output ---------").unwrap();
-    writeln!(file, "{:?}", result).unwrap();
-    writeln!(file, "\n").unwrap();
 }
 
 #[test]
@@ -373,6 +378,15 @@ fn test_script_error() {
             END LOOP bar;
         "#,
         None,
+    );
+    run_script(
+        file,
+        r#"
+            LOOP
+                CONTINUE;
+            END LOOP;
+        "#,
+        mock_client(),
     );
 }
 

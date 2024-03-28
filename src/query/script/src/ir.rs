@@ -95,43 +95,38 @@ impl<const REFKIND: usize> Ref<REFKIND> {
 
 #[derive(Debug, Clone)]
 pub enum ScriptIR {
+    /// Executes a SQL query and stores the result in a named result set.
     Query {
         stmt: StatementTemplate,
         to_set: SetRef,
     },
-    Iter {
-        set: SetRef,
-        to_iter: IterRef,
-    },
+    /// Initializes an iterator for a given result set.
+    Iter { set: SetRef, to_iter: IterRef },
+    /// Retrieves a cell value in the current row to a variable.
     Read {
         iter: IterRef,
         column: ColumnAccess,
         to_var: VarRef,
     },
-    Next {
-        iter: IterRef,
-    },
-    Label {
-        label: LabelRef,
-    },
-    JumpIfEnded {
-        iter: IterRef,
-        to_label: LabelRef,
-    },
+    /// Forward the iterator to the next line.
+    Next { iter: IterRef },
+    /// Defines a label.
+    Label { label: LabelRef },
+    /// Jumps to a specified label if the iterator has reached the end of the result set.
+    JumpIfEnded { iter: IterRef, to_label: LabelRef },
+    /// Jumps to a specified label if the condition is true.
     JumpIfTrue {
         condition: VarRef,
         to_label: LabelRef,
     },
-    Goto {
-        to_label: LabelRef,
-    },
+    /// Uncoditionally jumps to a specified label.
+    Goto { to_label: LabelRef },
+    /// Returns from the script.
     Return,
-    ReturnVar {
-        var: VarRef,
-    },
-    ReturnSet {
-        set: SetRef,
-    },
+    /// Returns a variable from the script.
+    ReturnVar { var: VarRef },
+    /// Returns a result set from the script.
+    ReturnSet { set: SetRef },
 }
 
 impl Display for ScriptIR {

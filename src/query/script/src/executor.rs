@@ -58,6 +58,7 @@ struct Cursor {
 pub struct Executor<C: Client> {
     client: C,
     code: Vec<ScriptIR>,
+    max_steps: usize,
     vars: HashMap<VarRef, C::Scalar>,
     sets: HashMap<SetRef, C::DataBlock>,
     iters: HashMap<IterRef, Cursor>,
@@ -67,7 +68,7 @@ pub struct Executor<C: Client> {
 }
 
 impl<C: Client> Executor<C> {
-    pub fn load(client: C, code: Vec<ScriptIR>) -> Self {
+    pub fn load(client: C, code: Vec<ScriptIR>, max_steps: usize) -> Self {
         assert!(!code.is_empty());
 
         let mut label_to_pc = HashMap::new();
@@ -80,6 +81,7 @@ impl<C: Client> Executor<C> {
         Executor {
             client,
             code,
+            max_steps,
             vars: HashMap::new(),
             sets: HashMap::new(),
             iters: HashMap::new(),
@@ -90,10 +92,17 @@ impl<C: Client> Executor<C> {
     }
 
     pub fn run(&mut self) -> Result<Option<ReturnValue<C>>> {
-        while self.pc < self.code.len() {
+        for _ in 0..self.max_steps {
+            if self.pc >= self.code.len() {
+                return Ok(self.return_value.take());
+            }
             self.step()?;
         }
-        Ok(self.return_value.take())
+
+        Err(ErrorCode::ScriptExecutionError(format!(
+            "max steps exceeded: {}",
+            self.max_steps
+        )))
     }
 
     fn step(&mut self) -> Result<()> {

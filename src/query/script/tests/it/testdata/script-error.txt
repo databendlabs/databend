@@ -140,3 +140,11 @@ error:
   |              ^^^ `foo` is not defined
 
 
+---------- Input ----------
+LOOP
+    CONTINUE;
+END LOOP;
+---------- Output ----------
+max steps exceeded: 1000
+
+
