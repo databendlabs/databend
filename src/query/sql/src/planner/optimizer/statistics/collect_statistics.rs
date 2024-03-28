@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -36,6 +37,7 @@ pub struct CollectStatisticsOptimizer {
     table_ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
     cte_statistics: HashMap<IndexType, Arc<StatInfo>>,
+    async_runtime: Arc<Runtime>,
 }
 
 impl CollectStatisticsOptimizer {
@@ -44,6 +46,7 @@ impl CollectStatisticsOptimizer {
             table_ctx,
             metadata,
             cte_statistics: HashMap::new(),
+            async_runtime: GlobalIORuntime::instance(),
         }
     }
 
@@ -65,7 +68,7 @@ impl CollectStatisticsOptimizer {
                 let table_ctx = self.table_ctx.clone();
                 let change_type = scan.change_type.clone();
                 let (column_statistics_provider, table_stats) =
-                    Runtime::with_worker_threads(2, None)?.block_on(async move {
+                    self.async_runtime.block_on(async move {
                         let column_statistics_provider =
                             table.column_statistics_provider(table_ctx.clone()).await?;
                         let table_stats = table
