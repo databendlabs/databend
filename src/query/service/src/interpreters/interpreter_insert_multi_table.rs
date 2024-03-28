@@ -34,8 +34,10 @@ use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::InsertMultiTable;
 use databend_common_sql::plans::Into;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 
+use crate::interpreters::common::build_update_stream_meta_seq;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
@@ -79,7 +81,8 @@ impl Interpreter for InsertMultiTableInterpreter {
 
 impl InsertMultiTableInterpreter {
     async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
-        let mut root = self.build_source_physical_plan().await?;
+        let (mut root, metadata) = self.build_source_physical_plan().await?;
+        let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), &metadata).await?;
         let source_schema = root.output_schema()?;
         let mut branches = self.build_insert_into_branches().await?;
         let serialable_tables = branches
@@ -151,7 +154,7 @@ impl InsertMultiTableInterpreter {
         root = PhysicalPlan::ChunkCommitInsert(Box::new(ChunkCommitInsert {
             plan_id: 0,
             input: Box::new(root),
-            update_stream_meta: vec![],
+            update_stream_meta,
             overwrite: self.plan.overwrite,
             deduplicated_label: None,
             targets: serialable_tables.clone(),
@@ -159,7 +162,7 @@ impl InsertMultiTableInterpreter {
         Ok(root)
     }
 
-    async fn build_source_physical_plan(&self) -> Result<PhysicalPlan> {
+    async fn build_source_physical_plan(&self) -> Result<(PhysicalPlan, MetadataRef)> {
         match &self.plan.input_source {
             Plan::Query {
                 s_expr,
@@ -169,7 +172,10 @@ impl InsertMultiTableInterpreter {
             } => {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                builder1.build(s_expr, bind_context.column_set()).await
+                builder1
+                    .build(s_expr, bind_context.column_set())
+                    .await
+                    .map(|x| (x, metadata.clone()))
             }
             _ => unreachable!(),
         }
