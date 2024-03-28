@@ -345,3 +345,36 @@ select * from t1 order by c1;
 query II
 select * from t2;
 ----
+
+
+# render subquery results
+statement ok 
+create or replace table t1(c1 int,c2 int);
+
+statement ok
+create or replace table t2(c1 int,c2 int);
+
+statement ok
+create or replace table s(c3 int,c4 int);
+
+statement ok
+insert into s values(1,2),(3,4),(5,6);
+
+statement ok
+INSERT FIRST
+    WHEN c3 = 6 THEN
+      INTO t1
+    WHEN c3 > 0 THEN
+      INTO t2
+SELECT (c3 + 1) as c3, (c4 + 2) as c4 from s;
+
+query II
+select * from t1 order by c1;
+----
+6 8
+
+query II
+select * from t2 order by c1;
+----
+2 4
+4 6

@@ -14,7 +14,9 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_sql::executor::physical_plans::CastSchema;
@@ -25,6 +27,7 @@ use databend_common_sql::executor::physical_plans::ChunkFillAndReorder;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
 use databend_common_sql::executor::physical_plans::ChunkProject;
 use databend_common_sql::executor::physical_plans::FillAndReorder;
+use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::physical_plans::SerializableTable;
 use databend_common_sql::executor::physical_plans::ShuffleStrategy;
 use databend_common_sql::executor::PhysicalPlan;
@@ -88,7 +91,7 @@ impl InsertMultiTableInterpreter {
         let serialable_tables = branches
             .build_serializable_target_tables(self.ctx.clone())
             .await?;
-        let predicates = branches.build_predicates(self.plan.is_first)?;
+        let predicates = branches.build_predicates(self.plan.is_first, source_schema.as_ref())?;
         let projections = branches.build_projections();
         let source_schemas = projections
             .iter()
@@ -172,10 +175,22 @@ impl InsertMultiTableInterpreter {
             } => {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                builder1
-                    .build(s_expr, bind_context.column_set())
-                    .await
-                    .map(|x| (x, metadata.clone()))
+                let input_source = builder1.build(s_expr, bind_context.column_set()).await?;
+                let input_schema = input_source.output_schema()?;
+                let mut projections = Vec::with_capacity(input_schema.num_fields());
+                for col in &bind_context.columns {
+                    let index = col.index;
+                    projections.push(input_schema.index_of(index.to_string().as_str())?);
+                }
+                let rendered_input_source = PhysicalPlan::Project(Project {
+                    plan_id: 0,
+                    input: Box::new(input_source),
+                    projections,
+                    ignore_result: false,
+                    columns: Default::default(),
+                    stat_info: None,
+                });
+                Ok((rendered_input_source, metadata.clone()))
             }
             _ => unreachable!(),
         }
@@ -302,8 +317,18 @@ impl InsertIntoBranches {
         Ok(serialable_tables)
     }
 
-    fn build_predicates(&self, is_first: bool) -> Result<Vec<Option<RemoteExpr>>> {
+    fn build_predicates(
+        &self,
+        is_first: bool,
+        source_schema: &DataSchema,
+    ) -> Result<Vec<Option<RemoteExpr>>> {
         let mut predicates = vec![];
+        let prepare_filter = |expr: ScalarExpr| {
+            let expr = cast_expr_to_non_null_boolean(expr.as_expr()?.project_column_ref(|col| {
+                source_schema.index_of(&col.index.to_string()).unwrap()
+            }))?;
+            Ok::<RemoteExpr, ErrorCode>(expr.as_remote_expr())
+        };
         match is_first {
             true => {
                 let mut previous_not: Option<ScalarExpr> = None;
@@ -317,27 +342,17 @@ impl InsertIntoBranches {
                             previous_not = Some(not(curr.clone()));
                             curr.clone()
                         };
-
-                        let expr = cast_expr_to_non_null_boolean(
-                            merged_curr.as_expr()?.project_column_ref(|col| col.index),
-                        )?;
-                        predicates.push(Some(expr.as_remote_expr()));
+                        predicates.push(Some(prepare_filter(merged_curr)?));
                     } else {
                         let previous_not = previous_not.take().unwrap();
-                        let expr = cast_expr_to_non_null_boolean(
-                            previous_not.as_expr()?.project_column_ref(|col| col.index),
-                        )?;
-                        predicates.push(Some(expr.as_remote_expr()));
+                        predicates.push(Some(prepare_filter(previous_not)?));
                     }
                 }
             }
             false => {
                 for opt_scalar_expr in self.conditions.iter() {
                     if let Some(scalar_expr) = opt_scalar_expr {
-                        let expr = cast_expr_to_non_null_boolean(
-                            scalar_expr.as_expr()?.project_column_ref(|col| col.index),
-                        )?;
-                        predicates.push(Some(expr.as_remote_expr()));
+                        predicates.push(Some(prepare_filter(scalar_expr.clone())?));
                     } else {
                         predicates.push(None);
                     }
