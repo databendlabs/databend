@@ -42,10 +42,10 @@ impl ShuffleStrategy {
     pub fn shuffle(&self, total: usize) -> Vec<usize> {
         match self {
             ShuffleStrategy::Transpose(n) => {
-                let mut result = Vec::with_capacity(total);
+                let mut result = vec![0; total];
                 for i in 0..*n {
                     for j in 0..total / n {
-                        result.push(j * n + i);
+                        result[i + j * n] = i * (total / n) + j;
                     }
                 }
                 result
