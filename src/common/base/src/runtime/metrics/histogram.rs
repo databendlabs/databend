@@ -23,7 +23,7 @@ use prometheus_client::encoding::MetricEncoder;
 use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 
-use crate::runtime::metrics::registry::SampleMetric;
+use crate::runtime::metrics::registry::DatabendMetric;
 use crate::runtime::metrics::sample::HistogramCount;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::metrics::sample::MetricValue;
@@ -115,17 +115,6 @@ impl Histogram {
         let buckets = RwLockReadGuard::map(inner, |inner| &inner.buckets);
         (sum, count, buckets)
     }
-
-    pub fn reset(&self) {
-        let mut inner = self.inner.write();
-        inner.sum = 0.0;
-        inner.count = 0;
-        inner.buckets = inner
-            .buckets
-            .iter()
-            .map(|(upper_bound, _value)| (*upper_bound, 0))
-            .collect();
-    }
 }
 
 impl TypedMetric for Histogram {
@@ -143,7 +132,18 @@ impl EncodeMetric for Histogram {
     }
 }
 
-impl SampleMetric for Histogram {
+impl DatabendMetric for Histogram {
+    fn reset_metric(&self) {
+        let mut inner = self.inner.write();
+        inner.sum = 0.0;
+        inner.count = 0;
+        inner.buckets = inner
+            .buckets
+            .iter()
+            .map(|(upper_bound, _value)| (*upper_bound, 0))
+            .collect();
+    }
+
     fn sample(&self, name: &str, samples: &mut Vec<MetricSample>) {
         let (_sum, _count, buckets) = self.get();
 

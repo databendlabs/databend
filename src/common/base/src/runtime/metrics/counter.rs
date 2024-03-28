@@ -21,7 +21,7 @@ use prometheus_client::encoding::MetricEncoder;
 use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 
-use crate::runtime::metrics::registry::SampleMetric;
+use crate::runtime::metrics::registry::DatabendMetric;
 use crate::runtime::metrics::registry::ScopedRegistry;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::metrics::sample::MetricValue;
@@ -92,7 +92,11 @@ impl EncodeMetric for Counter {
     }
 }
 
-impl SampleMetric for Counter {
+impl DatabendMetric for Counter {
+    fn reset_metric(&self) {
+        self.value.store(0, Ordering::Release);
+    }
+
     fn sample(&self, name: &str, samples: &mut Vec<MetricSample>) {
         samples.push(MetricSample {
             name: name.to_string(),

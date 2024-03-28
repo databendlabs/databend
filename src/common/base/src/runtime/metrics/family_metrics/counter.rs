@@ -25,7 +25,7 @@ use prometheus_client::metrics::TypedMetric;
 use crate::runtime::metrics::family::Family;
 use crate::runtime::metrics::family::FamilyLabels;
 use crate::runtime::metrics::family::FamilyMetric;
-use crate::runtime::metrics::registry::SampleMetric;
+use crate::runtime::metrics::registry::DatabendMetric;
 use crate::runtime::metrics::MetricSample;
 use crate::runtime::metrics::MetricValue;
 use crate::runtime::metrics::ScopedRegistry;
@@ -101,7 +101,11 @@ impl<Labels: FamilyLabels> EncodeMetric for FamilyCounter<Labels> {
 
 impl<Labels: FamilyLabels> FamilyMetric for FamilyCounter<Labels> {}
 
-impl<Labels: FamilyLabels> SampleMetric for FamilyCounter<Labels> {
+impl<Labels: FamilyLabels> DatabendMetric for FamilyCounter<Labels> {
+    fn reset_metric(&self) {
+        self.value.store(0, Ordering::Release);
+    }
+
     fn sample(&self, name: &str, samples: &mut Vec<MetricSample>) {
         samples.push(MetricSample {
             name: name.to_string(),

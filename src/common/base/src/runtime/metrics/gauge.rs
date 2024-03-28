@@ -18,7 +18,7 @@ use prometheus_client::metrics::gauge::Gauge as PGauge;
 use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 
-use crate::runtime::metrics::registry::SampleMetric;
+use crate::runtime::metrics::registry::DatabendMetric;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::metrics::sample::MetricValue;
 use crate::runtime::metrics::ScopedRegistry;
@@ -106,7 +106,11 @@ impl EncodeMetric for Gauge {
     }
 }
 
-impl SampleMetric for Gauge {
+impl DatabendMetric for Gauge {
+    fn reset_metric(&self) {
+        self.inner.inc_by(-self.inner.get());
+    }
+
     fn sample(&self, name: &str, samples: &mut Vec<MetricSample>) {
         samples.push(MetricSample {
             name: name.to_string(),

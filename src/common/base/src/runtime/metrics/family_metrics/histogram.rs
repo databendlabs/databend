@@ -26,7 +26,7 @@ use prometheus_client::metrics::TypedMetric;
 use crate::runtime::metrics::family::Family;
 use crate::runtime::metrics::family::FamilyLabels;
 use crate::runtime::metrics::family::FamilyMetric;
-use crate::runtime::metrics::registry::SampleMetric;
+use crate::runtime::metrics::registry::DatabendMetric;
 use crate::runtime::metrics::sample::HistogramCount;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::metrics::sample::MetricValue;
@@ -112,17 +112,6 @@ impl<Labels: FamilyLabels> FamilyHistogram<Labels> {
         let buckets = RwLockReadGuard::map(inner, |inner| &inner.buckets);
         (sum, count, buckets)
     }
-
-    pub fn reset(&self) {
-        let mut inner = self.inner.write();
-        inner.sum = 0.0;
-        inner.count = 0;
-        inner.buckets = inner
-            .buckets
-            .iter()
-            .map(|(upper_bound, _value)| (*upper_bound, 0))
-            .collect();
-    }
 }
 
 impl<Labels: FamilyLabels> TypedMetric for FamilyHistogram<Labels> {
@@ -140,7 +129,18 @@ impl<Labels: FamilyLabels> EncodeMetric for FamilyHistogram<Labels> {
     }
 }
 
-impl<Labels: FamilyLabels> SampleMetric for FamilyHistogram<Labels> {
+impl<Labels: FamilyLabels> DatabendMetric for FamilyHistogram<Labels> {
+    fn reset_metric(&self) {
+        let mut inner = self.inner.write();
+        inner.sum = 0.0;
+        inner.count = 0;
+        inner.buckets = inner
+            .buckets
+            .iter()
+            .map(|(upper_bound, _value)| (*upper_bound, 0))
+            .collect();
+    }
+
     fn sample(&self, name: &str, samples: &mut Vec<MetricSample>) {
         let (_sum, _count, buckets) = self.get();
 

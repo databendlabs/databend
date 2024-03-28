@@ -30,8 +30,8 @@ use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 use prometheus_client::registry::Registry;
 
+use crate::runtime::metrics::registry::DatabendMetric;
 use crate::runtime::metrics::registry::Metric;
-use crate::runtime::metrics::registry::SampleMetric;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::metrics::ScopedRegistry;
 
@@ -133,7 +133,11 @@ impl<S: FamilyLabels, M: FamilyMetric> EncodeMetric for Family<S, M> {
     }
 }
 
-impl<S: FamilyLabels, M: FamilyMetric> SampleMetric for Family<S, M> {
+impl<S: FamilyLabels, M: FamilyMetric> DatabendMetric for Family<S, M> {
+    fn reset_metric(&self) {
+        self.clear()
+    }
+
     fn sample(&self, name: &str, samples: &mut Vec<MetricSample>) {
         // TODO: hack, using prometheus parser for get metric labels
         let mut registry = Registry::with_labels(vec![].into_iter());

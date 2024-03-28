@@ -15,8 +15,11 @@
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use parking_lot::MappedMutexGuard;
 use parking_lot::Mutex;
+use parking_lot::MutexGuard;
 use parking_lot::RwLock;
 use prometheus_client::registry::Metric as PMetrics;
 use prometheus_client::registry::Registry;
@@ -24,9 +27,9 @@ use prometheus_client::registry::Registry;
 use crate::runtime::metrics::counter::Counter;
 use crate::runtime::metrics::family::Family;
 use crate::runtime::metrics::family::FamilyLabels;
-use crate::runtime::metrics::family_metrics::FamilyCounter;
-use crate::runtime::metrics::family_metrics::FamilyGauge;
-use crate::runtime::metrics::family_metrics::FamilyHistogram;
+use crate::runtime::metrics::family_metrics::FamilyCounter as InnerFamilyCounter;
+use crate::runtime::metrics::family_metrics::FamilyGauge as InnerFamilyGauge;
+use crate::runtime::metrics::family_metrics::FamilyHistogram as InnerFamilyHistogram;
 use crate::runtime::metrics::gauge::Gauge;
 use crate::runtime::metrics::histogram::Histogram;
 use crate::runtime::metrics::histogram::BUCKET_MILLISECONDS;
@@ -37,13 +40,15 @@ use crate::runtime::ThreadTracker;
 pub static GLOBAL_METRICS_REGISTRY: LazyLock<GlobalRegistry> =
     LazyLock::new(GlobalRegistry::create);
 
-pub trait SampleMetric {
+pub trait DatabendMetric {
+    fn reset_metric(&self);
+
     fn sample(&self, name: &str, samples: &mut Vec<MetricSample>);
 }
 
-pub trait Metric: PMetrics + SampleMetric {}
+pub trait Metric: PMetrics + DatabendMetric {}
 
-impl<T: PMetrics + SampleMetric + Clone> Metric for T {}
+impl<T: PMetrics + DatabendMetric + Clone> Metric for T {}
 
 #[allow(dead_code)]
 struct GlobalMetric {
@@ -110,6 +115,18 @@ impl GlobalRegistry {
         scoped_metrics.into_iter()
     }
 
+    pub fn inner_mut(&self) -> MappedMutexGuard<'_, Registry> {
+        let guard = self.inner.lock();
+        MutexGuard::map(guard, |f| &mut f.registry)
+    }
+
+    pub fn reset(&self) {
+        let global_registry = self.inner.lock();
+        for metric in &global_registry.metrics {
+            metric.metric.reset_metric();
+        }
+    }
+
     pub fn dump_sample(&self) -> Result<Vec<MetricSample>> {
         let global_registry = self.inner.lock();
 
@@ -123,6 +140,17 @@ impl GlobalRegistry {
         // let proc_stats = dump_proc_stats().unwrap_or_default();
         // samples.extend(proc_stats);
         Ok(samples)
+    }
+
+    pub fn render_metrics(&self) -> Result<String> {
+        let mut text = String::new();
+        match prometheus_client::encoding::text::encode(&mut text, &self.inner.lock().registry) {
+            Ok(_) => Ok(text),
+            Err(err) => Err(ErrorCode::Internal(format!(
+                "Failed to encode metrics: {}",
+                err
+            ))),
+        }
     }
 }
 
@@ -221,34 +249,35 @@ pub fn register_histogram_in_seconds(name: &str) -> Histogram {
     })
 }
 
-pub fn register_counter_family<T: FamilyLabels>(name: &str) -> Family<T, FamilyCounter<T>> {
+pub fn register_counter_family<T: FamilyLabels>(name: &str) -> FamilyCounter<T> {
     GLOBAL_METRICS_REGISTRY.register(name, "", |index| {
-        Family::<T, FamilyCounter<T>>::create(index, FamilyCounter::create)
+        FamilyCounter::create(index, InnerFamilyCounter::create)
     })
 }
 
-pub fn register_gauge_family<T: FamilyLabels>(name: &str) -> Family<T, FamilyGauge<T>> {
+pub fn register_gauge_family<T: FamilyLabels>(name: &str) -> FamilyGauge<T> {
     GLOBAL_METRICS_REGISTRY.register(name, "", |index| {
-        Family::<T, FamilyGauge<T>>::create(index, FamilyGauge::create)
+        FamilyGauge::create(index, InnerFamilyGauge::create)
     })
 }
 
-pub fn register_histogram_family_in_milliseconds<T: FamilyLabels>(
-    name: &str,
-) -> Family<T, FamilyHistogram<T>> {
+pub fn register_histogram_family_in_seconds<T: FamilyLabels>(name: &str) -> FamilyHistogram<T> {
     GLOBAL_METRICS_REGISTRY.register(name, "", |index| {
-        Family::<T, FamilyHistogram<T>>::create(index, |index, labels| {
-            FamilyHistogram::new(index, labels, BUCKET_MILLISECONDS.iter().copied())
+        FamilyHistogram::create(index, |index, labels| {
+            InnerFamilyHistogram::new(index, labels, BUCKET_SECONDS.iter().copied())
         })
     })
 }
 
-pub fn register_histogram_family_in_seconds<T: FamilyLabels>(
-    name: &str,
-) -> Family<T, FamilyHistogram<T>> {
+pub fn register_histogram_family_in_milliseconds<T>(name: &str) -> FamilyHistogram<T>
+where T: FamilyLabels {
     GLOBAL_METRICS_REGISTRY.register(name, "", |index| {
-        Family::<T, FamilyHistogram<T>>::create(index, |index, labels| {
-            FamilyHistogram::new(index, labels, BUCKET_SECONDS.iter().copied())
+        FamilyHistogram::create(index, |index, labels| {
+            InnerFamilyHistogram::new(index, labels, BUCKET_MILLISECONDS.iter().copied())
         })
     })
 }
+
+pub type FamilyGauge<T> = Family<T, InnerFamilyGauge<T>>;
+pub type FamilyCounter<T> = Family<T, InnerFamilyCounter<T>>;
+pub type FamilyHistogram<T> = Family<T, InnerFamilyHistogram<T>>;
