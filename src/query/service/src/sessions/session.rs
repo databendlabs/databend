@@ -25,7 +25,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_txn::TxnManagerRef;
@@ -79,7 +79,7 @@ impl Session {
             ("session_database".to_string(), self.get_current_database()),
             (
                 "session_tenant".to_string(),
-                self.get_current_tenant().to_string(),
+                self.get_current_tenant().name().to_string(),
             ),
         ];
         if let Some(query_id) = self.get_current_query_id() {
@@ -191,11 +191,11 @@ impl Session {
         self.session_ctx.get_current_catalog()
     }
 
-    pub fn get_current_tenant(self: &Arc<Self>) -> NonEmptyString {
+    pub fn get_current_tenant(self: &Arc<Self>) -> Tenant {
         self.session_ctx.get_current_tenant()
     }
 
-    pub fn set_current_tenant(self: &Arc<Self>, tenant: String) {
+    pub fn set_current_tenant(self: &Arc<Self>, tenant: Tenant) {
         self.session_ctx.set_current_tenant(tenant);
     }
 
@@ -270,7 +270,7 @@ impl Session {
     pub async fn validate_privilege(
         self: &Arc<Self>,
         object: &GrantObject,
-        privilege: Vec<UserPrivilegeType>,
+        privilege: UserPrivilegeType,
     ) -> Result<()> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());

@@ -43,6 +43,7 @@ use databend_common_meta_app::principal::UserOptionFlag;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NonEmptyString;
@@ -53,6 +54,7 @@ use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_storages_factory::Table;
 use databend_common_users::UserApiProvider;
+use minitrace::func_name;
 
 pub struct TenantQuotaTable {
     table_info: TableInfo,
@@ -243,7 +245,7 @@ impl AsyncSource for TenantQuotaSource {
                     UserOptionFlag::TenantSetting
                 )));
             }
-            tenant = args[0].clone();
+            tenant = Tenant::new_or_err(args[0].clone(), func_name!())?;
         }
         let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
         let res = quota_api.get_quota(MatchSeq::GE(0)).await?;

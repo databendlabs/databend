@@ -133,6 +133,7 @@ impl ShareEndpointManager {
             .as_ref()
             .query
             .tenant_id
+            .name()
             .to_string();
         let req = Request::builder()
             .method(Method::POST)
@@ -198,6 +199,7 @@ impl ShareEndpointManager {
                 .as_ref()
                 .query
                 .tenant_id
+                .name()
                 .to_string();
             let req = Request::builder()
                 .method(Method::POST)

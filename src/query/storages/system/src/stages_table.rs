@@ -57,6 +57,7 @@ impl AsyncSystemTable for StagesTable {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
+
         let stages = UserApiProvider::instance().get_stages(&tenant).await?;
         let enable_experimental_rbac_check =
             ctx.get_settings().get_enable_experimental_rbac_check()?;

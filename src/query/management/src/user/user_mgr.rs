@@ -28,7 +28,6 @@ use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::NonEmptyStr;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 
@@ -42,10 +41,10 @@ pub struct UserMgr {
 }
 
 impl UserMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: NonEmptyStr) -> Self {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &Tenant) -> Self {
         UserMgr {
             kv_api,
-            tenant: Tenant::new_nonempty(tenant.into()),
+            tenant: tenant.clone(),
         }
     }
 

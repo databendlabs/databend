@@ -25,7 +25,6 @@ use databend_common_meta_types::IntoSeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
@@ -38,13 +37,10 @@ pub struct QuotaMgr {
 }
 
 impl QuotaMgr {
-    pub fn create(
-        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
-        tenant: &NonEmptyString,
-    ) -> Self {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &Tenant) -> Self {
         QuotaMgr {
             kv_api,
-            ident: TenantQuotaIdent::new(Tenant::new_nonempty(tenant.clone())),
+            ident: TenantQuotaIdent::new(tenant.clone()),
         }
     }
 

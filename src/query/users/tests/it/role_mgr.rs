@@ -20,15 +20,14 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_manager() -> Result<()> {
     let conf = RpcClientConf::default();
-    let tenant_name = "tenant1";
-    let tenant = NonEmptyString::new(tenant_name).unwrap();
+    let tenant = Tenant::new_literal("tenant1");
 
     let role_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
 
@@ -85,7 +84,7 @@ async fn test_role_manager() -> Result<()> {
         let role = role_mgr.get_role(&tenant, role_name.clone()).await?;
         assert!(
             role.grants
-                .verify_privilege(&GrantObject::Global, vec![UserPrivilegeType::Alter])
+                .verify_privilege(&GrantObject::Global, UserPrivilegeType::Alter)
         );
     }
 
