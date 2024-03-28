@@ -3626,16 +3626,13 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         | #share_from
     )(i)?;
 
-    match &opt {
-        CreateDatabaseOption::FromShare(ident) => {
-            if ident.tenant.name().is_empty() {
-                return Err(nom::Err::Error(Error::from_error_kind(
-                    i,
-                    ErrorKind::Other("tenant is empty string"),
-                )));
-            }
+    if let CreateDatabaseOption::FromShare(ident) = &opt {
+        if ident.tenant.name().is_empty() {
+            return Err(nom::Err::Error(Error::from_error_kind(
+                i,
+                ErrorKind::Other("tenant is empty string"),
+            )));
         }
-        _ => {}
     }
 
     Ok((i, opt))

@@ -379,7 +379,7 @@ mod kvapi_key_impl {
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant.name())
+                .push_str(self.tenant.name())
                 .push_str(&self.db_name)
                 .done()
         }
@@ -461,7 +461,7 @@ mod kvapi_key_impl {
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant.name())
+                .push_str(self.tenant.name())
                 .push_str(&self.db_name)
                 .done()
         }
