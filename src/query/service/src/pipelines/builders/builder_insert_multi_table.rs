@@ -145,7 +145,23 @@ impl PipelineBuilder {
 
     pub(crate) fn build_chunk_merge(&mut self, plan: &ChunkMerge) -> Result<()> {
         self.build_pipeline(&plan.input)?;
-        self.main_pipeline.chunk_merge(plan.chunk_num)?;
+        let group_ids = &plan.group_ids;
+        assert_eq!(self.main_pipeline.output_len() % group_ids.len(), 0);
+        let chunk_size = self.main_pipeline.output_len() / group_ids.len();
+        let mut widths = Vec::with_capacity(group_ids.len());
+        let mut last_group_id = group_ids[0];
+        let mut width = 1;
+        for group_id in group_ids.iter().skip(1) {
+            if *group_id == last_group_id {
+                width += 1;
+            } else {
+                widths.push(width * chunk_size);
+                last_group_id = *group_id;
+                width = 1;
+            }
+        }
+        widths.push(width * chunk_size);
+        self.main_pipeline.resize_partial_one_with_width(widths)?;
         Ok(())
     }
 

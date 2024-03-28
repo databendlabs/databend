@@ -112,7 +112,7 @@ pub struct SerializableTable {
 pub struct ChunkMerge {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    pub chunk_num: usize,
+    pub group_ids: Vec<u64>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

@@ -91,7 +91,10 @@ impl InsertMultiTableInterpreter {
         let serialable_tables = branches
             .build_serializable_target_tables(self.ctx.clone())
             .await?;
-        let predicates = branches.build_predicates(self.plan.is_first, source_schema.as_ref())?;
+        let deduplicated_serialable_tables = branches
+            .build_deduplicated_serializable_target_tables(self.ctx.clone())
+            .await?;
+        let predicates = branches.build_predicates(source_schema.as_ref())?;
         let projections = branches.build_projections();
         let source_schemas = projections
             .iter()
@@ -104,6 +107,7 @@ impl InsertMultiTableInterpreter {
             .collect::<Vec<_>>();
         let cast_schemas = branches.build_cast_schema(source_schemas);
         let fill_and_reorders = branches.build_fill_and_reorder(self.ctx.clone()).await?;
+        let group_ids = branches.build_group_ids();
 
         root = PhysicalPlan::Duplicate(Box::new(Duplicate {
             plan_id: 0,
@@ -151,7 +155,7 @@ impl InsertMultiTableInterpreter {
         root = PhysicalPlan::ChunkMerge(Box::new(ChunkMerge {
             plan_id: 0,
             input: Box::new(root),
-            chunk_num: branches.len(),
+            group_ids,
         }));
 
         root = PhysicalPlan::ChunkCommitInsert(Box::new(ChunkCommitInsert {
@@ -160,7 +164,7 @@ impl InsertMultiTableInterpreter {
             update_stream_meta,
             overwrite: self.plan.overwrite,
             deduplicated_label: None,
-            targets: serialable_tables.clone(),
+            targets: deduplicated_serialable_tables,
         }));
         Ok(root)
     }
@@ -202,44 +206,53 @@ impl InsertMultiTableInterpreter {
             whens,
             opt_else,
             overwrite: _,
-            is_first: _,
+            is_first,
             intos,
         } = &self.plan;
         let mut branches = InsertIntoBranches::default();
-
+        let mut condition_intos = vec![];
         for when in whens {
             for into in &when.intos {
-                let Into {
-                    catalog,
-                    database,
-                    table,
-                    projection,
-                    casted_schema,
-                } = into;
-                let table = self.ctx.get_table(catalog, database, table).await?;
-                branches.push(
-                    table,
-                    Some(when.condition.clone()),
-                    projection.clone(),
-                    casted_schema.clone(),
-                );
+                condition_intos.push((Some(when.condition.clone()), into));
             }
         }
         if let Some(Else { intos }) = opt_else {
             for into in intos {
-                let Into {
-                    catalog,
-                    database,
-                    table,
-                    projection,
-                    casted_schema,
-                } = into;
-                let table = self.ctx.get_table(catalog, database, table).await?;
-                branches.push(table, None, projection.clone(), casted_schema.clone());
+                condition_intos.push((None, into));
+            }
+        }
+        for into in intos {
+            condition_intos.push((None, into));
+        }
+
+        condition_intos.sort_by(|a, b| {
+            a.1.catalog
+                .cmp(&b.1.catalog)
+                .then(a.1.database.cmp(&b.1.database))
+                .then(a.1.table.cmp(&b.1.table))
+        });
+
+        if *is_first {
+            let mut previous_not: Option<ScalarExpr> = None;
+            for (opt_scalar_expr, _) in condition_intos.iter_mut() {
+                if let Some(curr) = opt_scalar_expr {
+                    let merged_curr = if let Some(prev_not) = &previous_not {
+                        let merged_scalar_expr = and(prev_not.clone(), curr.clone());
+                        previous_not = Some(and(prev_not.clone(), not(curr.clone())));
+                        merged_scalar_expr
+                    } else {
+                        previous_not = Some(not(curr.clone()));
+                        curr.clone()
+                    };
+                    *curr = merged_curr;
+                } else {
+                    let previous_not = previous_not.take().unwrap();
+                    *opt_scalar_expr = Some(previous_not);
+                }
             }
         }
 
-        for into in intos {
+        for (condition, into) in condition_intos {
             let Into {
                 catalog,
                 database,
@@ -247,8 +260,8 @@ impl InsertMultiTableInterpreter {
                 projection,
                 casted_schema,
             } = into;
-            let table = self.ctx.get_table(catalog, database, table).await?;
-            branches.push(table, None, projection.clone(), casted_schema.clone());
+            let table = self.ctx.get_table(&catalog, &database, &table).await?;
+            branches.push(table, condition, projection.clone(), casted_schema.clone());
         }
 
         Ok(branches)
@@ -317,11 +330,29 @@ impl InsertIntoBranches {
         Ok(serialable_tables)
     }
 
-    fn build_predicates(
+    async fn build_deduplicated_serializable_target_tables(
         &self,
-        is_first: bool,
-        source_schema: &DataSchema,
-    ) -> Result<Vec<Option<RemoteExpr>>> {
+        ctx: Arc<QueryContext>,
+    ) -> Result<Vec<SerializableTable>> {
+        let mut serialable_tables = vec![];
+        let mut last_table_id = None;
+        for table in &self.tables {
+            let table_info = table.get_table_info();
+            let table_id = table_info.ident.table_id;
+            if last_table_id == Some(table_id) {
+                continue;
+            }
+            last_table_id = Some(table_id);
+            let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
+            serialable_tables.push(SerializableTable {
+                target_catalog_info: catalog_info,
+                target_table_info: table_info.clone(),
+            });
+        }
+        Ok(serialable_tables)
+    }
+
+    fn build_predicates(&self, source_schema: &DataSchema) -> Result<Vec<Option<RemoteExpr>>> {
         let mut predicates = vec![];
         let prepare_filter = |expr: ScalarExpr| {
             let expr = cast_expr_to_non_null_boolean(expr.as_expr()?.project_column_ref(|col| {
@@ -329,36 +360,13 @@ impl InsertIntoBranches {
             }))?;
             Ok::<RemoteExpr, ErrorCode>(expr.as_remote_expr())
         };
-        match is_first {
-            true => {
-                let mut previous_not: Option<ScalarExpr> = None;
-                for opt_scalar_expr in self.conditions.iter() {
-                    if let Some(curr) = opt_scalar_expr {
-                        let merged_curr = if let Some(prev_not) = &previous_not {
-                            let merged_scalar_expr = and(prev_not.clone(), curr.clone());
-                            previous_not = Some(and(prev_not.clone(), not(curr.clone())));
-                            merged_scalar_expr
-                        } else {
-                            previous_not = Some(not(curr.clone()));
-                            curr.clone()
-                        };
-                        predicates.push(Some(prepare_filter(merged_curr)?));
-                    } else {
-                        let previous_not = previous_not.take().unwrap();
-                        predicates.push(Some(prepare_filter(previous_not)?));
-                    }
-                }
+        for opt_scalar_expr in self.conditions.iter() {
+            if let Some(scalar_expr) = opt_scalar_expr {
+                predicates.push(Some(prepare_filter(scalar_expr.clone())?));
+            } else {
+                predicates.push(None);
             }
-            false => {
-                for opt_scalar_expr in self.conditions.iter() {
-                    if let Some(scalar_expr) = opt_scalar_expr {
-                        predicates.push(Some(prepare_filter(scalar_expr.clone())?));
-                    } else {
-                        predicates.push(None);
-                    }
-                }
-            }
-        };
+        }
         Ok(predicates)
     }
 
@@ -403,5 +411,9 @@ impl InsertIntoBranches {
             }
         }
         Ok(fill_and_reorders)
+    }
+
+    fn build_group_ids(&self) -> Vec<u64> {
+        self.tables.iter().map(|table| table.get_id()).collect()
     }
 }

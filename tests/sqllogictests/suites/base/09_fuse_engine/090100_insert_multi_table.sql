@@ -378,3 +378,39 @@ select * from t2 order by c1;
 ----
 2 4
 4 6
+
+
+# same table in different branches
+statement ok 
+create or replace table t1(c1 int,c2 int);
+
+statement ok
+create or replace table t2(c1 int,c2 int);
+
+statement ok
+create or replace table s(c3 int,c4 int);
+
+statement ok
+insert into s values(1,2),(3,4),(5,6);
+
+statement ok
+INSERT FIRST
+    WHEN c3 = 5 THEN
+      INTO t1
+    WHEN c3 > 0 THEN
+      INTO t2
+      INTO t1
+SELECT * from s;
+
+query II
+select * from t1 order by c1;
+----
+1 2
+3 4
+5 6
+
+query II
+select * from t2 order by c1;
+----
+1 2
+3 4

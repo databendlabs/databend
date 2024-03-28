@@ -22,6 +22,7 @@ use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use petgraph::matrix_graph::Zero;
 
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
@@ -341,6 +342,11 @@ impl Pipeline {
     /// but you can't give [0,3],[1,4],[2]
     /// that says the number is successive.
     pub fn resize_partial_one(&mut self, ranges: Vec<Vec<usize>>) -> Result<()> {
+        let widths = ranges.iter().map(|r| r.len()).collect::<Vec<_>>();
+        self.resize_partial_one_with_width(widths)
+    }
+
+    pub fn resize_partial_one_with_width(&mut self, widths: Vec<usize>) -> Result<()> {
         match self.pipes.last() {
             None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
             Some(pipe) if pipe.output_length == 0 => {
@@ -350,14 +356,14 @@ impl Pipeline {
                 let mut input_len = 0;
                 let mut output_len = 0;
                 let mut pipe_items = Vec::new();
-                for range in ranges {
-                    if range.is_empty() {
+                for width in widths {
+                    if width.is_zero() {
                         return Err(ErrorCode::Internal("Cannot resize empty pipe."));
                     }
                     output_len += 1;
-                    input_len += range.len();
+                    input_len += width;
 
-                    let processor = ResizeProcessor::create(range.len(), 1);
+                    let processor = ResizeProcessor::create(width, 1);
                     let inputs_port = processor.get_inputs().to_vec();
                     let outputs_port = processor.get_outputs().to_vec();
                     pipe_items.push(PipeItem::create(
@@ -367,37 +373,6 @@ impl Pipeline {
                     ));
                 }
                 self.add_pipe(Pipe::create(input_len, output_len, pipe_items));
-                Ok(())
-            }
-        }
-    }
-
-    pub fn chunk_merge(&mut self, chunk_num: usize) -> Result<()> {
-        match self.pipes.last() {
-            None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
-            Some(pipe) if pipe.output_length == 0 => {
-                Err(ErrorCode::Internal("Cannot resize empty pipe."))
-            }
-            Some(pipe) => {
-                let input_len = pipe.output_length;
-                if input_len % chunk_num != 0 {
-                    return Err(ErrorCode::Internal(
-                        "Cannot chunk merge pipe with invalid chunk number.",
-                    ));
-                }
-                let chunk_size = input_len / chunk_num;
-                let mut pipe_items = Vec::new();
-                for _ in 0..chunk_num {
-                    let processor = ResizeProcessor::create(chunk_size, 1);
-                    let inputs_port = processor.get_inputs().to_vec();
-                    let outputs_port = processor.get_outputs().to_vec();
-                    pipe_items.push(PipeItem::create(
-                        ProcessorPtr::create(Box::new(processor)),
-                        inputs_port,
-                        outputs_port,
-                    ));
-                }
-                self.add_pipe(Pipe::create(input_len, chunk_num, pipe_items));
                 Ok(())
             }
         }
