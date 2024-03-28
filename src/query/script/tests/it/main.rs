@@ -35,7 +35,7 @@ use databend_common_script::Client;
 use databend_common_script::Executor;
 use goldenfile::Mint;
 
-fn run_script(file: &mut dyn Write, src: &str, client: Option<MockClient>) {
+fn run_script(file: &mut dyn Write, src: &str) {
     let src = unindent::unindent(src);
     let src = src.trim();
 
@@ -49,7 +49,7 @@ fn run_script(file: &mut dyn Write, src: &str, client: Option<MockClient>) {
             script_stmts,
         )?;
         let ir = compile(&ast)?;
-        let client = client.unwrap();
+        let client = mock_client();
         let query_log = client.query_log.clone();
         let mut executor = Executor::load(client, ir.clone(), 1000);
         let result = executor.run()?;
@@ -97,7 +97,6 @@ fn test_script() {
             INSERT INTO t1 VALUES (1, 2, 3);
             DROP TABLE t1;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -106,14 +105,12 @@ fn test_script() {
             LET y := x + 1;
             LET z RESULTSET := SELECT :y + 1;
         "#,
-        mock_client(),
     );
     run_script(
         file,
         r#"
             RETURN;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -125,7 +122,6 @@ fn test_script() {
             END FOR;
             RETURN sum;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -136,7 +132,6 @@ fn test_script() {
             END FOR;
             RETURN sum;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -148,7 +143,6 @@ fn test_script() {
             END FOR;
             RETURN sum;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -159,7 +153,6 @@ fn test_script() {
             END WHILE;
             RETURN x;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -171,7 +164,6 @@ fn test_script() {
             END REPEAT;
             RETURN x;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -189,7 +181,6 @@ fn test_script() {
                 END LOOP;
             END LOOP loop_label;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -201,7 +192,6 @@ fn test_script() {
             END LOOP;
             RETURN x;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -213,7 +203,6 @@ fn test_script() {
                 ELSE RETURN 'OTHER';
             END CASE;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -225,7 +214,6 @@ fn test_script() {
                 ELSE RETURN 'OTHER';
             END CASE;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -237,7 +225,6 @@ fn test_script() {
                 ELSE RETURN 'OTHER';
             END CASE;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -249,7 +236,6 @@ fn test_script() {
                 ELSE RETURN 'OTHER';
             END CASE;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -261,7 +247,6 @@ fn test_script() {
                 ELSE RETURN 'OTHER';
             END CASE;
         "#,
-        mock_client(),
     );
     run_script(
         file,
@@ -273,7 +258,6 @@ fn test_script() {
                 ELSE RETURN 'OTHER';
             END CASE;
         "#,
-        mock_client(),
     );
 }
 
@@ -287,7 +271,6 @@ fn test_script_error() {
         r#"
             LET x := y + 1;
         "#,
-        None,
     );
     run_script(
         file,
@@ -295,7 +278,6 @@ fn test_script_error() {
             LET x := 1;
             LET x RESULTSET := SELECT 1;
         "#,
-        None,
     );
     run_script(
         file,
@@ -303,7 +285,6 @@ fn test_script_error() {
             LET x RESULTSET := SELECT 1;
             LET x := 1;
         "#,
-        None,
     );
     run_script(
         file,
@@ -311,7 +292,6 @@ fn test_script_error() {
             LET x RESULTSET := SELECT 1;
             LET y := x;
         "#,
-        None,
     );
     run_script(
         file,
@@ -319,7 +299,6 @@ fn test_script_error() {
             LET x := 1;
             LET y := x.a;
         "#,
-        None,
     );
     run_script(
         file,
@@ -327,7 +306,6 @@ fn test_script_error() {
             LET x := 'min';
             LET y := IDENTIFIER(:x)([1,2]);
         "#,
-        None,
     );
     run_script(
         file,
@@ -335,7 +313,6 @@ fn test_script_error() {
             LET x := 1;
             LET y := :x + 1;
         "#,
-        None,
     );
     run_script(
         file,
@@ -345,21 +322,18 @@ fn test_script_error() {
                 BREAK;
             END FOR;
         "#,
-        None,
     );
     run_script(
         file,
         r#"
             BREAK;
         "#,
-        None,
     );
     run_script(
         file,
         r#"
             CONTINUE;
         "#,
-        None,
     );
     run_script(
         file,
@@ -368,7 +342,6 @@ fn test_script_error() {
                 BREAK foo;
             END LOOP bar;
         "#,
-        None,
     );
     run_script(
         file,
@@ -377,7 +350,6 @@ fn test_script_error() {
                 CONTINUE foo;
             END LOOP bar;
         "#,
-        None,
     );
     run_script(
         file,
@@ -386,12 +358,11 @@ fn test_script_error() {
                 CONTINUE;
             END LOOP;
         "#,
-        mock_client(),
     );
 }
 
-fn mock_client() -> Option<MockClient> {
-    let client = MockClient::new()
+fn mock_client() -> MockClient {
+    MockClient::new()
         .response_when(
             "SELECT * FROM numbers(3)",
             MockBlock::named(vec!["number"], vec![
@@ -545,9 +516,7 @@ fn mock_client() -> Option<MockClient> {
         .response_when(
             "SELECT NOT is_true(3 < 3)",
             MockBlock::unnamed(vec![vec![Literal::Boolean(true)]]),
-        );
-
-    Some(client)
+        )
 }
 
 #[derive(Debug, Clone)]

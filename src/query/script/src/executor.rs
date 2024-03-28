@@ -100,7 +100,9 @@ impl<C: Client> Executor<C> {
         }
 
         Err(ErrorCode::ScriptExecutionError(format!(
-            "max steps exceeded: {}",
+            "Execution of script has exceeded the limit of {} steps, \
+             which usually means you may have an infinite loop. Otherwise, \
+             You can increase the limit with `set script_max_steps = 10000;`.",
             self.max_steps
         )))
     }

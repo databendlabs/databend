@@ -145,6 +145,6 @@ LOOP
     CONTINUE;
 END LOOP;
 ---------- Output ----------
-max steps exceeded: 1000
+Execution of script has exceeded the limit of 1000 steps, which usually means you may have an infinite loop. Otherwise, You can increase the limit with `set script_max_steps = 10000;`.
 
 
