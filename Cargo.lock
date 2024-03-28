@@ -3270,7 +3270,6 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
- "derive_more",
  "enumflags2",
  "hex",
  "itertools 0.10.5",
