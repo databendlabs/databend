@@ -211,14 +211,26 @@ impl InsertMultiTableInterpreter {
         } = &self.plan;
         let mut branches = InsertIntoBranches::default();
         let mut condition_intos = vec![];
+        let mut previous_not: Option<ScalarExpr> = None;
         for when in whens {
+            let mut condition = when.condition.clone();
+            if *is_first {
+                if let Some(prev_not) = &previous_not {
+                    let merged_condition = and(prev_not.clone(), condition.clone());
+                    previous_not = Some(and(prev_not.clone(), not(condition.clone())));
+                    condition = merged_condition;
+                } else {
+                    previous_not = Some(not(condition.clone()));
+                };
+            }
             for into in &when.intos {
-                condition_intos.push((Some(when.condition.clone()), into));
+                condition_intos.push((Some(condition.clone()), into));
             }
         }
         if let Some(Else { intos }) = opt_else {
+            let condition = if *is_first { previous_not.take() } else { None };
             for into in intos {
-                condition_intos.push((None, into));
+                condition_intos.push((condition.clone(), into));
             }
         }
         for into in intos {
@@ -232,26 +244,6 @@ impl InsertMultiTableInterpreter {
                 .then(a.1.table.cmp(&b.1.table))
         });
 
-        if *is_first {
-            let mut previous_not: Option<ScalarExpr> = None;
-            for (opt_scalar_expr, _) in condition_intos.iter_mut() {
-                if let Some(curr) = opt_scalar_expr {
-                    let merged_curr = if let Some(prev_not) = &previous_not {
-                        let merged_scalar_expr = and(prev_not.clone(), curr.clone());
-                        previous_not = Some(and(prev_not.clone(), not(curr.clone())));
-                        merged_scalar_expr
-                    } else {
-                        previous_not = Some(not(curr.clone()));
-                        curr.clone()
-                    };
-                    *curr = merged_curr;
-                } else {
-                    let previous_not = previous_not.take().unwrap();
-                    *opt_scalar_expr = Some(previous_not);
-                }
-            }
-        }
-
         for (condition, into) in condition_intos {
             let Into {
                 catalog,
@@ -260,7 +252,7 @@ impl InsertMultiTableInterpreter {
                 projection,
                 casted_schema,
             } = into;
-            let table = self.ctx.get_table(&catalog, &database, &table).await?;
+            let table = self.ctx.get_table(catalog, database, table).await?;
             branches.push(table, condition, projection.clone(), casted_schema.clone());
         }
 
