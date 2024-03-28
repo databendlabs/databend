@@ -5795,6 +5795,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 name: index_name_1.clone(),
                 column_ids: index_column_ids_1.clone(),
+                sync_creation: true,
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
@@ -5804,6 +5805,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 name: index_name_2.clone(),
                 column_ids: index_column_ids_2.clone(),
+                sync_creation: true,
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
@@ -5816,6 +5818,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 name: index_name_1.clone(),
                 column_ids: index_column_ids_1.clone(),
+                sync_creation: true,
             };
 
             let res = mt.create_table_index(req).await;
@@ -5833,6 +5836,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 name: index_name_1.clone(),
                 column_ids: index_column_ids_1.clone(),
+                sync_creation: true,
             };
 
             let res = mt.create_table_index(req).await;
@@ -5846,6 +5850,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 name: index_name_3.clone(),
                 column_ids: index_column_ids_3.clone(),
+                sync_creation: true,
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_err());

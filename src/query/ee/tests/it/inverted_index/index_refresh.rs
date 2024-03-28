@@ -13,19 +13,23 @@
 // limitations under the License.
 
 use databend_common_base::base::tokio;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
+use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::io::read::load_inverted_index_info;
 use databend_common_storages_fuse::io::read::InvertedIndexReader;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_enterprise_inverted_index::get_inverted_index_handler;
 use databend_enterprise_query::test_kits::context::EESetup;
+use databend_query::interpreters::Interpreter;
+use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::test_kits::append_string_sample_data;
 use databend_query::test_kits::*;
-use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
@@ -45,10 +49,8 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
 
     let handler = get_inverted_index_handler();
 
-    let table_ctx = fixture.new_query_ctx().await?;
-    let catalog = table_ctx
-        .get_catalog(&fixture.default_catalog_name())
-        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
     let table_id = table.get_id();
     let index_name = "idx1".to_string();
     let req = CreateTableIndexReq {
@@ -56,36 +58,26 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         table_id,
         name: index_name.clone(),
         column_ids: vec![0, 1],
+        sync_creation: true,
     };
 
-    let res = handler.do_create_table_index(catalog, req).await;
+    let res = handler.do_create_table_index(catalog.clone(), req).await;
     assert!(res.is_ok());
 
-    let table = fixture.latest_default_table().await?;
-    let table_schema = table.schema();
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let dal = fuse_table.get_operator_ref();
+    let refresh_index_plan = RefreshTableIndexPlan {
+        catalog: fixture.default_catalog_name(),
+        database: fixture.default_db_name(),
+        table: fixture.default_table_name(),
+        index_name: index_name.clone(),
+        segment_locs: None,
+        need_lock: true,
+    };
+    let interpreter = RefreshTableIndexInterpreter::try_create(ctx.clone(), refresh_index_plan)?;
+    let _ = interpreter.execute(ctx.clone()).await?;
 
-    let new_snapshot_location = handler
-        .do_refresh_index(
-            fuse_table,
-            table_ctx.clone(),
-            index_name.clone(),
-            table_schema.clone(),
-            None,
-        )
-        .await?;
-    assert!(new_snapshot_location.is_some());
-    let new_snapshot_location = new_snapshot_location.unwrap();
-
-    // add new snapshot location to table meta options
-    let mut new_table_info = table.get_table_info().clone();
-    new_table_info.meta.options.insert(
-        OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
-        new_snapshot_location.clone(),
-    );
-
-    let new_fuse_table = FuseTable::do_create(new_table_info.clone())?;
+    let new_table = table.refresh(ctx.as_ref()).await?;
+    let new_fuse_table = FuseTable::do_create(new_table.get_table_info().clone())?;
+    let table_schema = new_fuse_table.schema();
 
     // get index location from new table snapshot
     let new_snapshot = new_fuse_table.read_table_snapshot().await?;
@@ -101,6 +93,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let index_info = index_info.unwrap();
     assert_eq!(index_info.indexes.len(), 1);
 
+    let dal = new_fuse_table.get_operator_ref();
     let schema = DataSchema::from(table_schema);
     let query_columns = vec!["title".to_string(), "content".to_string()];
     let index_reader =

@@ -61,6 +61,7 @@ use futures_util::TryStreamExt;
 use log::debug;
 
 use crate::interpreters::common::create_push_down_filters;
+use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::locks::LockManager;
@@ -285,6 +286,21 @@ impl Interpreter for DeleteInterpreter {
 
         build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        {
+            let hook_operator = HookOperator::create(
+                self.ctx.clone(),
+                catalog_name.to_string(),
+                db_name.to_string(),
+                tbl_name.to_string(),
+                "delete".to_string(),
+                // table lock has been added, no need to check.
+                false,
+            );
+            hook_operator
+                .execute_refresh(&mut build_res.main_pipeline)
+                .await;
+        }
+
         Ok(build_res)
     }
 }
