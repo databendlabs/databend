@@ -354,6 +354,7 @@ build_exceptions! {
 
     // Script error codes.
     ScriptSemanticError(3001),
+    ScriptExecutionError(3002),
 }
 
 // Storage errors [3001, 4000].

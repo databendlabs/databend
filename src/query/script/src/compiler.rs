@@ -18,6 +18,8 @@ use std::fmt::Display;
 use std::vec;
 
 use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
@@ -34,6 +36,8 @@ use databend_common_ast::ast::UnaryOperator;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
+use derive_visitor::DriveMut;
+use derive_visitor::VisitorMut;
 
 use crate::ir::ColumnAccess;
 use crate::ir::IterRef;
@@ -46,9 +50,15 @@ use crate::ir::VarRef;
 
 #[minitrace::trace]
 pub fn compile(code: &[ScriptStatement]) -> Result<Vec<ScriptIR>> {
+    if code.is_empty() {
+        return Err(ErrorCode::ScriptSemanticError("empty script".to_string()));
+    }
+
     let mut compiler = Compiler::new();
     let result = compiler.compile(code);
+
     assert!(compiler.scopes.len() == 1 || result.is_err());
+
     result
 }
 
@@ -75,16 +85,12 @@ impl Compiler {
                     output.append(&mut self.compile_expr(&declare.default, to_var)?);
                 }
                 ScriptStatement::LetStatement { span, declare } => {
-                    // QUERY <stmt>, to_set
-                    let stmt = self.build_sql_statement(*span, &declare.stmt)?;
                     let to_set = self.declare_set(&declare.name)?;
-                    output.push(ScriptIR::Query { stmt, to_set });
+                    output.append(&mut self.compile_sql_statement(*span, &declare.stmt, to_set)?);
                 }
                 ScriptStatement::RunStatement { span, stmt } => {
-                    // QUERY <stmt>, unused_result
-                    let stmt = self.build_sql_statement(*span, stmt)?;
                     let to_set = self.declare_anonymous_set(*span, "unused_result")?;
-                    output.push(ScriptIR::Query { stmt, to_set });
+                    output.append(&mut self.compile_sql_statement(*span, stmt, to_set)?);
                 }
                 ScriptStatement::Assign { name, value, .. } => {
                     let to_var = self.lookup_var(name)?;
@@ -223,30 +229,34 @@ impl Compiler {
     fn compile_expr(&mut self, expr: &Expr, to_var: VarRef) -> Result<Vec<ScriptIR>> {
         let mut output = vec![];
 
-        let stmt = StatementTemplate::build_expr(
-            expr,
-            self,
-            |this, hole| {
-                let var = this.lookup_var(hole)?;
-                Ok(var.index)
-            },
-            |this, iter, column| {
-                // READ <iter>, <column>, to_var
-                let to_var =
-                    this.declare_anonymous_var(column.span, &format!("{iter}.{column}"))?;
-                let iter = this.lookup_iter(iter)?;
-                let column = ColumnAccess::Name(this.normalize_ident(column).0);
-                output.push(ScriptIR::Read {
-                    iter,
-                    column,
-                    to_var: to_var.clone(),
-                });
-
-                Ok(to_var)
-            },
-        )?;
+        let (mut lines, expr) = self.quote_expr(expr)?;
+        output.append(&mut lines);
 
         // QUERY 'SELECT <expr>', expr_result
+        let select_stmt = Statement::Query(Box::new(Query {
+            span: expr.span(),
+            with: None,
+            body: SetExpr::Select(Box::new(SelectStmt {
+                span: expr.span(),
+                hints: None,
+                distinct: false,
+                select_list: vec![SelectTarget::AliasedExpr {
+                    expr: Box::new(expr.clone()),
+                    alias: None,
+                }],
+                from: vec![],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            })),
+            order_by: vec![],
+            limit: vec![],
+            offset: None,
+            ignore_result: false,
+        }));
+        let stmt = StatementTemplate::new(expr.span(), select_stmt);
         let set_ref = self.declare_anonymous_set(expr.span(), "expr_result")?;
         output.push(ScriptIR::Query {
             stmt,
@@ -290,6 +300,10 @@ impl Compiler {
         };
 
         // QUERY 'SELECT * FROM generate_series(<start>, <end>, <step>)', for_index_set
+        let (mut lines, lower_bound) = self.quote_expr(lower_bound)?;
+        output.append(&mut lines);
+        let (mut lines, upper_bound) = self.quote_expr(upper_bound)?;
+        output.append(&mut lines);
         let (start, end, step) = if is_reverse {
             (upper_bound, lower_bound, -1)
         } else {
@@ -332,7 +346,7 @@ impl Compiler {
             offset: None,
             ignore_result: false,
         }));
-        let stmt = self.build_sql_statement(variable.span, &select_stmt)?;
+        let stmt = StatementTemplate::new(variable.span, select_stmt);
         let to_set = self.declare_anonymous_set(variable.span, "for_index_set")?;
         output.push(ScriptIR::Query {
             stmt,
@@ -656,11 +670,71 @@ impl Compiler {
         self.compile_if(span, &conditions, results, else_result)
     }
 
-    fn build_sql_statement(&self, span: Span, stmt: &Statement) -> Result<StatementTemplate> {
-        StatementTemplate::build_statement(span, stmt, |hole| {
-            let var = self.lookup_var(hole)?;
-            Ok(var.index)
-        })
+    fn compile_sql_statement(
+        &self,
+        span: Span,
+        stmt: &Statement,
+        to_set: SetRef,
+    ) -> Result<Vec<ScriptIR>> {
+        #[derive(VisitorMut)]
+        #[visitor(Expr(enter), Identifier(enter))]
+        struct QuoteVisitor<'a> {
+            compiler: &'a Compiler,
+            error: Option<ErrorCode>,
+        }
+
+        impl QuoteVisitor<'_> {
+            fn enter_expr(&mut self, expr: &mut Expr) {
+                if let Expr::Hole { span, name } = expr {
+                    let index = self
+                        .compiler
+                        .lookup_var(&Identifier::from_name(*span, name.clone()));
+                    match index {
+                        Ok(index) => {
+                            *expr = Expr::Hole {
+                                span: *span,
+                                name: index.index.to_string(),
+                            };
+                        }
+                        Err(e) => {
+                            self.error = Some(e.set_span(*span));
+                        }
+                    }
+                }
+            }
+
+            fn enter_identifier(&mut self, ident: &mut Identifier) {
+                if ident.is_hole {
+                    let index = self.compiler.lookup_var(ident);
+                    match index {
+                        Ok(index) => {
+                            *ident = Identifier::from_name(ident.span, index.to_string());
+                            ident.is_hole = true;
+                        }
+                        Err(e) => {
+                            self.error = Some(e.set_span(ident.span));
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut stmt = stmt.clone();
+        let mut visitor = QuoteVisitor {
+            compiler: self,
+            error: None,
+        };
+        stmt.drive_mut(&mut visitor);
+
+        if let Some(e) = visitor.error {
+            return Err(e);
+        }
+
+        // QUERY <stmt>, to_set
+        let stmt = StatementTemplate::new(span, stmt);
+        let output = vec![ScriptIR::Query { stmt, to_set }];
+
+        Ok(output)
     }
 
     fn push_scope(&mut self) {
@@ -837,6 +911,114 @@ impl Compiler {
             }
         }
         Err(ErrorCode::ScriptSemanticError("not in a loop".to_string()).set_span(span))
+    }
+
+    fn quote_expr(&mut self, expr: &Expr) -> Result<(Vec<ScriptIR>, Expr)> {
+        #[derive(VisitorMut)]
+        #[visitor(Expr(enter), Identifier(enter))]
+        struct QuoteVisitor<'a> {
+            compiler: &'a mut Compiler,
+            output: Vec<ScriptIR>,
+            error: Option<ErrorCode>,
+        }
+
+        impl QuoteVisitor<'_> {
+            fn enter_expr(&mut self, expr: &mut Expr) {
+                match expr {
+                    Expr::ColumnRef {
+                        span,
+                        column:
+                            ColumnRef {
+                                database: None,
+                                table: None,
+                                column: ColumnID::Name(column),
+                            },
+                    } => {
+                        let index = self.compiler.lookup_var(column);
+                        match index {
+                            Ok(index) => {
+                                *expr = Expr::Hole {
+                                    span: *span,
+                                    name: index.index.to_string(),
+                                };
+                            }
+                            Err(e) => {
+                                self.error = Some(e.set_span(*span));
+                            }
+                        }
+                    }
+                    Expr::ColumnRef {
+                        span,
+                        column:
+                            ColumnRef {
+                                database: None,
+                                table: Some(iter),
+                                column: ColumnID::Name(column),
+                            },
+                    } => {
+                        let res = try {
+                            // READ <iter>, <column>, to_var
+                            let to_var = self
+                                .compiler
+                                .declare_anonymous_var(column.span, &format!("{iter}.{column}"))?;
+                            let iter = self.compiler.lookup_iter(iter)?;
+                            let column =
+                                ColumnAccess::Name(self.compiler.normalize_ident(column).0);
+                            self.output.push(ScriptIR::Read {
+                                iter,
+                                column,
+                                to_var: to_var.clone(),
+                            });
+
+                            *expr = Expr::Hole {
+                                span: *span,
+                                name: to_var.index.to_string(),
+                            };
+                        };
+
+                        if let Err(err) = res {
+                            self.error = Some(err);
+                        }
+                    }
+                    Expr::Hole { span, .. } => {
+                        self.error = Some(
+                            ErrorCode::ScriptSemanticError(
+                                "variable doesn't need to be quoted in this context, \
+                                    try removing the colon"
+                                    .to_string(),
+                            )
+                            .set_span(*span),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+
+            fn enter_identifier(&mut self, ident: &mut Identifier) {
+                if ident.is_hole {
+                    self.error = Some(
+                        ErrorCode::ScriptSemanticError(
+                            "variable is not allowed in this context".to_string(),
+                        )
+                        .set_span(ident.span),
+                    );
+                }
+            }
+        }
+
+        let mut expr = expr.clone();
+        let mut visitor = QuoteVisitor {
+            compiler: self,
+            output: vec![],
+            error: None,
+        };
+        expr.drive_mut(&mut visitor);
+
+        if let Some(err) = visitor.error {
+            return Err(err);
+        }
+
+        Ok((visitor.output, expr))
     }
 }
 

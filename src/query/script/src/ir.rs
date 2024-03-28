@@ -14,17 +14,11 @@
 
 use std::fmt;
 use std::fmt::Display;
-use std::vec;
+use std::hash::Hash;
 
-use databend_common_ast::ast::ColumnID;
-use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
-use databend_common_ast::ast::Query;
-use databend_common_ast::ast::SelectStmt;
-use databend_common_ast::ast::SelectTarget;
-use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -42,6 +36,20 @@ pub struct Ref<const REFKIND: usize> {
     pub span: Span,
     pub index: usize,
     pub display_name: String,
+}
+
+impl<const REFKIND: usize> PartialEq for Ref<REFKIND> {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index
+    }
+}
+
+impl<const REFKIND: usize> Eq for Ref<REFKIND> {}
+
+impl<const REFKIND: usize> Hash for Ref<REFKIND> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.index.hash(state);
+    }
 }
 
 impl<const REFKIND: usize> Display for Ref<REFKIND> {
@@ -73,6 +81,14 @@ impl<const REFKIND: usize> Ref<REFKIND> {
             span,
             index,
             display_name: format!("__{hint}{index}"),
+        }
+    }
+
+    pub fn placeholder(index: usize) -> Self {
+        Ref {
+            span: None,
+            index,
+            display_name: format!(":{}", index),
         }
     }
 }
@@ -179,198 +195,15 @@ pub struct StatementTemplate {
 }
 
 impl StatementTemplate {
-    pub fn build_statement(
-        span: Span,
-        stmt: &Statement,
-        lookup_var: impl Fn(&Identifier) -> Result<usize>,
-    ) -> Result<Self> {
-        #[derive(VisitorMut)]
-        #[visitor(Expr(enter), Identifier(enter))]
-        struct TemplateVisitor<'a> {
-            lookup_var: &'a dyn Fn(&Identifier) -> Result<usize>,
-            error: Option<ErrorCode>,
-        }
-
-        impl TemplateVisitor<'_> {
-            fn enter_expr(&mut self, expr: &mut Expr) {
-                if let Expr::Hole { span, name } = expr {
-                    let index = (self.lookup_var)(&Identifier::from_name(*span, name.clone()));
-                    match index {
-                        Ok(index) => {
-                            *expr = Expr::Hole {
-                                span: *span,
-                                name: index.to_string(),
-                            };
-                        }
-                        Err(e) => {
-                            self.error = Some(e.set_span(*span));
-                        }
-                    }
-                }
-            }
-
-            fn enter_identifier(&mut self, ident: &mut Identifier) {
-                if ident.is_hole {
-                    let index = (self.lookup_var)(ident);
-                    match index {
-                        Ok(index) => {
-                            *ident = Identifier::from_name(ident.span, index.to_string());
-                            ident.is_hole = true;
-                        }
-                        Err(e) => {
-                            self.error = Some(e.set_span(ident.span));
-                        }
-                    }
-                }
-            }
-        }
-
-        let mut stmt = stmt.clone();
-        let mut visitor = TemplateVisitor {
-            lookup_var: &lookup_var,
-            error: None,
-        };
-        stmt.drive_mut(&mut visitor);
-
-        if let Some(e) = visitor.error {
-            return Err(e);
-        }
-
-        Ok(StatementTemplate { span, stmt })
+    pub fn new(span: Span, stmt: Statement) -> Self {
+        StatementTemplate { span, stmt }
     }
 
-    pub fn build_expr<T>(
-        expr: &Expr,
-        common: &mut T,
-        lookup_var: impl Fn(&mut T, &Identifier) -> Result<usize>,
-        mut read_iter: impl FnMut(&mut T, &Identifier, &Identifier) -> Result<VarRef>,
-    ) -> Result<Self> {
-        #[derive(VisitorMut)]
-        #[visitor(Expr(enter), Identifier(enter))]
-        struct TemplateVisitor<'a, T> {
-            common: &'a mut T,
-            lookup_var: &'a dyn Fn(&mut T, &Identifier) -> Result<usize>,
-            read_iter: &'a mut dyn FnMut(&mut T, &Identifier, &Identifier) -> Result<VarRef>,
-            error: Option<ErrorCode>,
-        }
-
-        impl<T> TemplateVisitor<'_, T> {
-            fn enter_expr(&mut self, expr: &mut Expr) {
-                match expr {
-                    Expr::ColumnRef {
-                        span,
-                        column:
-                            ColumnRef {
-                                database: None,
-                                table: None,
-                                column: ColumnID::Name(column),
-                            },
-                    } => {
-                        let index = (self.lookup_var)(self.common, column);
-                        match index {
-                            Ok(index) => {
-                                *expr = Expr::Hole {
-                                    span: *span,
-                                    name: index.to_string(),
-                                };
-                            }
-                            Err(e) => {
-                                self.error = Some(e.set_span(*span));
-                            }
-                        }
-                    }
-                    Expr::ColumnRef {
-                        span,
-                        column:
-                            ColumnRef {
-                                database: None,
-                                table: Some(iter),
-                                column: ColumnID::Name(column),
-                            },
-                    } => {
-                        let index = (self.read_iter)(self.common, iter, column);
-                        match index {
-                            Ok(index) => {
-                                *expr = Expr::Hole {
-                                    span: *span,
-                                    name: index.to_string(),
-                                };
-                            }
-                            Err(e) => {
-                                self.error = Some(e.set_span(*span));
-                            }
-                        }
-                    }
-                    Expr::Hole { span, .. } => {
-                        self.error = Some(
-                                ErrorCode::ScriptSemanticError("variable doesn't need to be quoted in this context, try removing the colon".to_string())
-                                .set_span(*span),
-                            );
-                    }
-                    _ => {}
-                }
-            }
-
-            fn enter_identifier(&mut self, ident: &mut Identifier) {
-                if ident.is_hole {
-                    self.error = Some(
-                        ErrorCode::ScriptSemanticError(
-                            "variable is not allowed in this context".to_string(),
-                        )
-                        .set_span(ident.span),
-                    );
-                }
-            }
-        }
-
-        let mut expr = expr.clone();
-        let mut visitor = TemplateVisitor {
-            common,
-            lookup_var: &lookup_var,
-            read_iter: &mut read_iter,
-            error: None,
-        };
-        expr.drive_mut(&mut visitor);
-
-        if let Some(e) = visitor.error {
-            return Err(e);
-        }
-
-        let select_stmt = Statement::Query(Box::new(Query {
-            span: expr.span(),
-            with: None,
-            body: SetExpr::Select(Box::new(SelectStmt {
-                span: expr.span(),
-                hints: None,
-                distinct: false,
-                select_list: vec![SelectTarget::AliasedExpr {
-                    expr: Box::new(expr.clone()),
-                    alias: None,
-                }],
-                from: vec![],
-                selection: None,
-                group_by: None,
-                having: None,
-                window_list: None,
-                qualify: None,
-            })),
-            order_by: vec![],
-            limit: vec![],
-            offset: None,
-            ignore_result: false,
-        }));
-
-        Ok(StatementTemplate {
-            span: expr.span(),
-            stmt: select_stmt,
-        })
-    }
-
-    pub fn subst(&self, lookup_var: impl Fn(usize) -> Result<Literal>) -> Result<Statement> {
+    pub fn subst(&self, lookup_var: impl Fn(VarRef) -> Result<Literal>) -> Result<Statement> {
         #[derive(VisitorMut)]
         #[visitor(Expr(enter), Identifier(enter))]
         struct SubstVisitor<'a> {
-            lookup_var: &'a dyn Fn(usize) -> Result<Literal>,
+            lookup_var: &'a dyn Fn(VarRef) -> Result<Literal>,
             error: Option<ErrorCode>,
         }
 
@@ -378,7 +211,7 @@ impl StatementTemplate {
             fn enter_expr(&mut self, expr: &mut Expr) {
                 if let Expr::Hole { span, name } = expr {
                     let index = name.parse::<usize>().unwrap();
-                    let value = (self.lookup_var)(index);
+                    let value = (self.lookup_var)(VarRef::placeholder(index));
                     match value {
                         Ok(value) => {
                             *expr = Expr::Literal { span: *span, value };
@@ -393,7 +226,7 @@ impl StatementTemplate {
             fn enter_identifier(&mut self, ident: &mut Identifier) {
                 if ident.is_hole {
                     let index = ident.name.parse::<usize>().unwrap();
-                    let value = (self.lookup_var)(index);
+                    let value = (self.lookup_var)(VarRef::placeholder(index));
                     match value {
                         Ok(Literal::String(name)) => {
                             *ident = Identifier::from_name(ident.span, name);

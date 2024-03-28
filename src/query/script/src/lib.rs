@@ -12,7 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(try_blocks)]
+
 pub mod ir;
 
 mod compiler;
 pub use compiler::compile;
+
+mod executor;
+pub use executor::Client;
+pub use executor::Executor;
+pub use executor::ReturnValue;
