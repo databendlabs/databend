@@ -22,7 +22,6 @@ use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_query::catalogs::default::ImmutableCatalog;
 use databend_query::catalogs::Catalog;
-use minitrace::func_name;
 
 use crate::tests::create_catalog;
 

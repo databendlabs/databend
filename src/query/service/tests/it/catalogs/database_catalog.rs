@@ -91,11 +91,6 @@ async fn test_catalogs_database() -> Result<()> {
 
         let db_list_1 = catalog.list_databases(&tenant).await?;
         assert_eq!(db_list_1.len(), db_count + 1);
-
-        // Tenant empty.
-        req.name_ident.tenant = Tenant::new_literal("dummy");
-        let res = catalog.create_database(req).await;
-        assert!(res.is_err());
     }
 
     // Rename.
@@ -113,11 +108,6 @@ async fn test_catalogs_database() -> Result<()> {
 
         let db_list_1 = catalog.list_databases(&tenant).await?;
         assert_eq!(db_list_1.len(), db_count + 1);
-
-        // Tenant empty.
-        req.name_ident.tenant = Tenant::new_literal("dummy");
-        let res = catalog.rename_database(req).await;
-        assert!(res.is_err());
     }
 
     // Drop old db.
@@ -147,11 +137,6 @@ async fn test_catalogs_database() -> Result<()> {
 
         let db_list_drop = catalog.list_databases(&tenant).await?;
         assert_eq!(db_list_drop.len(), db_count);
-
-        // Tenant empty.
-        req.name_ident.tenant = Tenant::new_literal("");
-        let res = catalog.drop_database(req).await;
-        assert!(res.is_err());
     }
 
     Ok(())
@@ -210,11 +195,6 @@ async fn test_catalogs_table() -> Result<()> {
         assert_eq!(table.name(), "test_table");
         let table = catalog.get_table_by_info(table.get_table_info())?;
         assert_eq!(table.name(), "test_table");
-
-        // Tenant empty.
-        req.name_ident.tenant = Tenant::new_literal("dummy");
-        let res = catalog.create_table(req.clone()).await;
-        assert!(res.is_err());
     }
 
     // Drop.

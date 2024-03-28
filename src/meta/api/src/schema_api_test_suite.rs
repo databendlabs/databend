@@ -2013,7 +2013,7 @@ impl SchemaApiTestSuite {
                 .await?
                 .count;
 
-            let req = GetTableReq::new(&tenant, db_name, tbl_name);
+            let req = GetTableReq::new(&tenant, db_name, table);
             let res = mt.get_table(req).await?;
             assert_eq!(res.meta.created_on, old_created_on);
 
@@ -2049,7 +2049,7 @@ impl SchemaApiTestSuite {
                     .count
             );
             // table meta has been changed
-            let req = GetTableReq::new(&tenant, db_name, tbl_name);
+            let req = GetTableReq::new(&tenant, db_name, table);
             let res = mt.get_table(req).await?;
             assert_eq!(res.meta.created_on, created_on);
 
