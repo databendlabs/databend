@@ -1287,7 +1287,6 @@ impl Binder {
             self.ctes_map
                 .entry(table_name.clone())
                 .and_modify(|cte_info| {
-                    cte_info.stat_info = None;
                     cte_info.columns = cte_bind_ctx.columns.clone();
                 });
             self.set_m_cte_bound_ctx(cte_info.cte_idx, cte_bind_ctx.clone());
@@ -1379,7 +1378,7 @@ impl Binder {
                 Scan {
                     table_index,
                     columns: columns.into_iter().map(|col| col.index()).collect(),
-                    statistics: Statistics::default(),
+                    statistics: Arc::new(Statistics::default()),
                     change_type,
                     ..Default::default()
                 }

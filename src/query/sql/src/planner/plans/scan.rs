@@ -100,7 +100,7 @@ pub struct Scan {
     // Whether to update stream columns.
     pub update_stream_columns: bool,
 
-    pub statistics: Statistics,
+    pub statistics: Arc<Statistics>,
 }
 
 impl Scan {
@@ -119,10 +119,10 @@ impl Scan {
             push_down_predicates: self.push_down_predicates.clone(),
             limit: self.limit,
             order_by: self.order_by.clone(),
-            statistics: Statistics {
+            statistics: Arc::new(Statistics {
                 table_stats: self.statistics.table_stats,
                 column_stats,
-            },
+            }),
             prewhere,
             agg_index: self.agg_index.clone(),
             change_type: self.change_type.clone(),

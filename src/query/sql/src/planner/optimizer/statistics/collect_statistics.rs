@@ -95,10 +95,10 @@ impl CollectStatisticsOptimizer {
                 }
 
                 let mut scan = scan.clone();
-                scan.statistics = Statistics {
+                scan.statistics = Arc::new(Statistics {
                     table_stats,
                     column_stats,
-                };
+                });
 
                 Ok(s_expr.replace_plan(Arc::new(RelOperator::Scan(scan))))
             }
