@@ -55,7 +55,7 @@ impl Interpreter for DropDatabaseInterpreter {
 
         // unset the ownership of the database, the database may not exists.
         let db = catalog
-            .get_database(tenant.as_str(), &self.plan.database)
+            .get_database(tenant.name(), &self.plan.database)
             .await;
         if let Ok(db) = db {
             let role_api = UserApiProvider::instance().role_api(&tenant);
@@ -79,7 +79,7 @@ impl Interpreter for DropDatabaseInterpreter {
             }
 
             save_share_spec(
-                &self.ctx.get_tenant().to_string(),
+                &self.ctx.get_tenant().name().to_string(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_into),

@@ -116,7 +116,18 @@ impl Payload {
         let mut state = PayloadFlushState::default();
         let mut blocks = vec![];
 
-        while self.flush(&mut state) {
+        while let Some(block) = self.aggregate_flush(&mut state)? {
+            blocks.push(block);
+        }
+
+        if blocks.is_empty() {
+            return Ok(self.empty_block());
+        }
+        DataBlock::concat(&blocks)
+    }
+
+    pub fn aggregate_flush(&self, state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
+        if self.flush(state) {
             let row_count = state.row_count;
 
             let mut state_builders: Vec<BinaryColumnBuilder> = self
@@ -146,15 +157,10 @@ impl Payload {
             }
 
             cols.extend_from_slice(&state.take_group_columns());
-
-            blocks.push(DataBlock::new_from_columns(cols));
+            return Ok(Some(DataBlock::new_from_columns(cols)));
         }
 
-        if blocks.is_empty() {
-            return Ok(self.empty_block());
-        }
-
-        DataBlock::concat(&blocks)
+        Ok(None)
     }
 
     pub fn group_by_flush_all(&self) -> Result<DataBlock> {

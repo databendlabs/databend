@@ -131,6 +131,8 @@ impl TaskService for MockTaskService {
         Ok(Response::new(ShowTaskRunsResponse {
             task_runs: vec![],
             error: None,
+            next_page_token: None,
+            previous_page_token: None,
         }))
     }
 

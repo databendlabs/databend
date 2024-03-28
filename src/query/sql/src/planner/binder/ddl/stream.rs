@@ -37,6 +37,7 @@ impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_stream(
         &mut self,
+        bind_context: &mut BindContext,
         stmt: &CreateStreamStmt,
     ) -> Result<Plan> {
         let CreateStreamStmt {
@@ -61,20 +62,25 @@ impl Binder {
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
 
-        let navigation = stream_point.as_ref().map(|point| match point {
-            StreamPoint::AtStream { database, name } => {
+        let navigation = match stream_point {
+            Some(StreamPoint::AtStream { database, name }) => {
                 let database = database
                     .as_ref()
                     .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_database());
                 let name = normalize_identifier(name, &self.name_resolution_ctx).name;
-                StreamNavigation::AtStream { database, name }
+                Some(StreamNavigation::AtStream { database, name })
             }
-        });
+            Some(StreamPoint::AtPoint(point)) => {
+                let point = self.resolve_data_travel_point(bind_context, point).await?;
+                Some(StreamNavigation::AtPoint(point))
+            }
+            None => None,
+        };
 
         let plan = CreateStreamPlan {
             create_option: *create_option,
-            tenant: tenant.to_string(),
+            tenant: tenant.name().to_string(),
             catalog,
             database,
             stream_name,
@@ -104,7 +110,7 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, stream);
         let plan = DropStreamPlan {
             if_exists: *if_exists,
-            tenant: tenant.to_string(),
+            tenant: tenant.name().to_string(),
             catalog,
             database,
             stream_name,

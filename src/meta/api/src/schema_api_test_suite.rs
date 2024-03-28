@@ -126,6 +126,7 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
 use log::debug;
@@ -1418,16 +1419,17 @@ impl SchemaApiTestSuite {
 
     #[minitrace::trace]
     async fn catalog_create_get_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let tenant = "tenant1";
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_literal(tenant_name);
+
         let catalog_name = "catalog1";
+
+        let ident = CatalogNameIdent::new(tenant.clone(), catalog_name);
 
         info!("--- create catalog1");
         let req = CreateCatalogReq {
             if_not_exists: false,
-            name_ident: CatalogNameIdent {
-                tenant: tenant.to_string(),
-                catalog_name: catalog_name.to_string(),
-            },
+            name_ident: ident.clone(),
             meta: CatalogMeta {
                 catalog_option: CatalogOption::Iceberg(IcebergCatalogOption {
                     storage_params: Box::new(StorageParams::S3(StorageS3Config {
@@ -1442,9 +1444,7 @@ impl SchemaApiTestSuite {
         let res = mt.create_catalog(req).await?;
         info!("create catalog res: {:?}", res);
 
-        let got = mt
-            .get_catalog(GetCatalogReq::new(tenant, catalog_name))
-            .await?;
+        let got = mt.get_catalog(GetCatalogReq::new(ident.clone())).await?;
         assert_eq!(got.id.catalog_id, res.catalog_id);
         assert_eq!(got.name_ident.tenant, "tenant1");
         assert_eq!(got.name_ident.catalog_name, "catalog1");
@@ -1457,10 +1457,7 @@ impl SchemaApiTestSuite {
         let _ = mt
             .drop_catalog(DropCatalogReq {
                 if_exists: false,
-                name_ident: CatalogNameIdent {
-                    tenant: tenant.to_string(),
-                    catalog_name: catalog_name.to_string(),
-                },
+                name_ident: ident.clone(),
             })
             .await?;
 
@@ -3605,7 +3602,7 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "db_table_gc_out_of_retention_time";
-        let tenant = Tenant::new(tenant_name);
+        let tenant = Tenant::new_nonempty(NonEmptyString::new(tenant_name).unwrap());
         let db1_name = "db1";
         let tb1_name = "tb1";
         let idx1_name = "idx1";
@@ -5506,7 +5503,7 @@ impl SchemaApiTestSuite {
             assert_eq!(table_info.name, tb1.to_string());
             assert_eq!(table_info.ident.table_id, share_table_id);
             assert_eq!(table_info.tenant, tenant2.to_string());
-            assert_eq!(table_info.db_type, DatabaseType::ShareDB(share_name));
+            assert_eq!(table_info.db_type, DatabaseType::ShareDB(share_name.into()));
         }
 
         info!("--- get tables from share db");
@@ -5794,6 +5791,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 name: index_name_1.clone(),
                 column_ids: index_column_ids_1.clone(),
+                sync_creation: true,
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
@@ -5803,6 +5801,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 name: index_name_2.clone(),
                 column_ids: index_column_ids_2.clone(),
+                sync_creation: true,
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
@@ -5815,6 +5814,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 name: index_name_1.clone(),
                 column_ids: index_column_ids_1.clone(),
+                sync_creation: true,
             };
 
             let res = mt.create_table_index(req).await;
@@ -5832,6 +5832,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 name: index_name_1.clone(),
                 column_ids: index_column_ids_1.clone(),
+                sync_creation: true,
             };
 
             let res = mt.create_table_index(req).await;
@@ -5845,6 +5846,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 name: index_name_3.clone(),
                 column_ids: index_column_ids_3.clone(),
+                sync_creation: true,
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_err());
@@ -5914,7 +5916,7 @@ impl SchemaApiTestSuite {
     async fn index_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant_name = "tenant1";
-        let tenant = Tenant::new(tenant_name);
+        let tenant = Tenant::new_nonempty(NonEmptyString::new(tenant_name).unwrap());
 
         let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;

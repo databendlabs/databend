@@ -22,6 +22,7 @@ use databend_common_ast::ast::Query;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::WindowSpec;
 use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
@@ -134,6 +135,8 @@ pub struct BindContext {
     /// The key is the `Expr::to_string` of the function.
     pub srfs: DashMap<String, ScalarExpr>,
 
+    pub inverted_index_map: Box<IndexMap<IndexType, InvertedIndexInfo>>,
+
     pub expr_context: ExprContext,
 
     pub allow_internal_columns: bool,
@@ -170,6 +173,7 @@ impl BindContext {
             in_grouping: false,
             view_info: None,
             srfs: DashMap::new(),
+            inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -189,6 +193,7 @@ impl BindContext {
             in_grouping: false,
             view_info: None,
             srfs: DashMap::new(),
+            inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -585,9 +590,16 @@ impl BindContext {
 
     pub fn add_internal_column_into_expr(&self, s_expr: SExpr) -> SExpr {
         let bound_internal_columns = &self.bound_internal_columns;
+        let mut inverted_index_map = self.inverted_index_map.clone();
         let mut s_expr = s_expr;
         for (table_index, column_index) in bound_internal_columns.values() {
-            s_expr = SExpr::add_internal_column_index(&s_expr, *table_index, *column_index);
+            let inverted_index = inverted_index_map.shift_remove(table_index);
+            s_expr = SExpr::add_internal_column_index(
+                &s_expr,
+                *table_index,
+                *column_index,
+                &inverted_index,
+            );
         }
         s_expr
     }

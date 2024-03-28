@@ -468,6 +468,9 @@ select * from t1 order by a,b,c;
 1 a1 b1
 
 statement ok
+drop table if exists employees;
+
+statement ok
 CREATE TABLE employees (employee_id INT, employee_name VARCHAR(255),department VARCHAR(255))  cluster by(employee_id,employee_name);
 
 statement ok

@@ -63,8 +63,10 @@ impl Display for CreateIndexStmt {
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
-        let sync = if self.sync_creation { "SYNC" } else { "ASYNC" };
-        write!(f, "{} {} INDEX", sync, self.index_type)?;
+        if !self.sync_creation {
+            write!(f, "ASYNC ")?;
+        }
+        write!(f, "{} INDEX", self.index_type)?;
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
@@ -132,8 +134,10 @@ impl Display for CreateInvertedIndexStmt {
         if let CreateOption::CreateOrReplace = self.create_option {
             write!(f, "OR REPLACE ")?;
         }
-        let sync = if self.sync_creation { "SYNC" } else { "ASYNC" };
-        write!(f, "{} INVERTED INDEX", sync)?;
+        if !self.sync_creation {
+            write!(f, "ASYNC ")?;
+        }
+        write!(f, "INVERTED INDEX")?;
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }

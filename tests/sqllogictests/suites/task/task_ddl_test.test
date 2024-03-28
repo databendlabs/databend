@@ -127,6 +127,17 @@ select name, state, session_parameters from system.tasks where name = 'sessionTa
 ----
 sessionTask Suspended {"database":"db2","timezone":"Pacific/Honolulu"}
 
+query I
+select run_id from system.task_history where name = 'MockTask' limit 6;
+----
+1ftx0
+1ftx1
+1ftx2
+1ftx3
+1ftx4
+1ftx5
+
+
 statement ok
 DROP TASK mytask
 

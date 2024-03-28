@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::Span;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::schema::CreateOption;
@@ -572,6 +571,10 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_drop_view(&mut self, _stmt: &'ast DropViewStmt) {}
 
+    fn visit_show_views(&mut self, _stmt: &'ast ShowViewsStmt) {}
+
+    fn visit_describe_view(&mut self, _stmt: &'ast DescribeViewStmt) {}
+
     fn visit_create_stream(&mut self, _stmt: &'ast CreateStreamStmt) {}
 
     fn visit_drop_stream(&mut self, _stmt: &'ast DropStreamStmt) {}
@@ -644,7 +647,7 @@ pub trait Visitor<'ast>: Sized {
         &mut self,
         _create_option: &CreateOption,
         _name: &'ast str,
-        _file_format_options: &'ast FileFormatOptionsAst,
+        _file_format_options: &'ast FileFormatOptions,
     ) {
     }
 

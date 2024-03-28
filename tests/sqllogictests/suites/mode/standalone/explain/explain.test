@@ -210,10 +210,10 @@ COPY
 INTO t1
 FROM 's3://mybucket/data.csv'
 FILE_FORMAT = (
-    field_delimiter = ",",
-    record_delimiter = "\n",
-    skip_header = "1",
-    type = "CSV"
+    field_delimiter = ',',
+    record_delimiter = '\n',
+    skip_header = 1,
+    type = CSV
 )
 SIZE_LIMIT = 10
 PURGE = false
@@ -227,10 +227,10 @@ COPY
 INTO Uri(UriLocation { protocol: "s3", name: "mybucket", path: "/data.csv", part_prefix: "", connection: Connection { visited_keys: {}, conns: {} } })
 FROM t1
 FILE_FORMAT = (
-    field_delimiter = ",",
-    record_delimiter = "\n",
-    skip_header = "1",
-    type = "CSV"
+    field_delimiter = ',',
+    record_delimiter = '\n',
+    skip_header = 1,
+    type = CSV
 )
 SINGLE = false
 
@@ -467,10 +467,10 @@ CopyIntoTable (children 7)
 ├── FROM (children 1)
 │   └── Location 's3://mybucket/data.csv'
 ├── FileFormats (children 4)
-│   ├── FileFormat field_delimiter = ","
-│   ├── FileFormat record_delimiter = "\n"
-│   ├── FileFormat skip_header = "1"
-│   └── FileFormat type = "CSV"
+│   ├── FileFormat field_delimiter = String(",")
+│   ├── FileFormat record_delimiter = String("\n")
+│   ├── FileFormat skip_header = U64(1)
+│   └── FileFormat type = Keyword("CSV")
 ├── SizeLimit 10
 ├── MaxFiles 10
 ├── Purge false
@@ -866,7 +866,7 @@ Limit
                     ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
                     └── estimated rows: 5.00
 
-query
+query 
 explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
 ----
 HashJoin
@@ -901,7 +901,7 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 5.00
 
-query
+query 
 explain select count(distinct a) from t1;
 ----
 AggregateFinal
@@ -933,7 +933,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query
+query 
 explain select count_distinct(a) from t1;
 ----
 AggregateFinal
@@ -965,7 +965,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query
+query 
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)
 ----
 ConstantTableScan
@@ -979,28 +979,28 @@ drop table t1
 statement ok
 drop table t2
 
-query
+query 
 explain syntax select * from read_parquet('p1', 'p2', 'p3');
 ----
 SELECT *
 FROM
     read_parquet('p1', 'p2', 'p3')
 
-query
+query 
 explain syntax select * from read_parquet(prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT *
 FROM
     read_parquet(prune_page=>TRUE, refresh_meta_cache=>TRUE)
 
-query
+query 
 explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT *
 FROM
     read_parquet('p1', 'p2', 'p3', prune_page=>TRUE, refresh_meta_cache=>TRUE)
 
-query
+query 
 explain ast select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 Query (children 1)
@@ -1022,7 +1022,7 @@ drop table if exists t4
 statement ok
 create table t4(a int, b string);
 
-query
+query 
 explain select * from t4 where a = 1 and try_cast(get(try_parse_json(b),'bb') as varchar) = 'xx';
 ----
 Filter
@@ -1045,7 +1045,7 @@ drop view if exists v4
 statement ok
 create view v4 as select a as a, try_cast(get(try_parse_json(b), 'bb') as varchar) as b from t4;
 
-query
+query 
 explain select * from v4 where b = 'xx';
 ----
 EvalScalar
@@ -1173,8 +1173,8 @@ Sort
 └── HashJoin
     ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
     ├── join type: INNER
-    ├── build keys: [b.number (#2), b.register_at (#3)]
-    ├── probe keys: [a.number (#0), a.pt (#1)]
+    ├── build keys: [b.register_at (#3), b.number (#2)]
+    ├── probe keys: [a.pt (#1), a.number (#0)]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)

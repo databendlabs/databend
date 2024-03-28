@@ -123,13 +123,13 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let plan = CreateTaskPlan {
             if_not_exists: *if_not_exists,
-            tenant: tenant.to_string(),
+            tenant: tenant.name().to_string(),
             task_name: name.to_string(),
             warehouse_opts: warehouse_opts.clone(),
             schedule_opts: schedule_opts.clone(),
             suspend_task_after_num_failures: *suspend_task_after_num_failures,
             after: after.clone(),
-            when_condition: when_condition.clone(),
+            when_condition: when_condition.as_ref().map(|expr| expr.to_string()),
             comment: comments.clone(),
             session_parameters: session_parameters.clone(),
             error_integration: error_integration.clone(),
@@ -181,7 +181,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let plan = AlterTaskPlan {
             if_exists: *if_exists,
-            tenant: tenant.to_string(),
+            tenant: tenant.name().to_string(),
             task_name: name.to_string(),
             alter_options: options.clone(),
         };
@@ -199,7 +199,7 @@ impl Binder {
 
         let plan = DropTaskPlan {
             if_exists: *if_exists,
-            tenant: tenant.to_string(),
+            tenant: tenant.name().to_string(),
             task_name: name.to_string(),
         };
         Ok(Plan::DropTask(Box::new(plan)))
@@ -215,7 +215,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = DescribeTaskPlan {
-            tenant: tenant.to_string(),
+            tenant: tenant.name().to_string(),
             task_name: name.to_string(),
         };
         Ok(Plan::DescribeTask(Box::new(plan)))
@@ -231,7 +231,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = ExecuteTaskPlan {
-            tenant: tenant.to_string(),
+            tenant: tenant.name().to_string(),
             task_name: name.to_string(),
         };
         Ok(Plan::ExecuteTask(Box::new(plan)))
@@ -247,7 +247,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let plan = ShowTasksPlan {
-            tenant: tenant.to_string(),
+            tenant: tenant.name().to_string(),
             limit: limit.clone(),
         };
         Ok(Plan::ShowTasks(Box::new(plan)))

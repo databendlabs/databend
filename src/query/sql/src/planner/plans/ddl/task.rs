@@ -90,7 +90,7 @@ pub struct CreateTaskPlan {
     pub error_integration: Option<String>,
     pub session_parameters: BTreeMap<String, String>,
     pub sql: TaskSql,
-    pub comment: String,
+    pub comment: Option<String>,
 }
 
 impl CreateTaskPlan {

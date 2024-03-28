@@ -310,21 +310,13 @@ impl GrantEntry {
         &self.privileges
     }
 
-    pub fn verify_privilege(
-        &self,
-        object: &GrantObject,
-        privileges: Vec<UserPrivilegeType>,
-    ) -> bool {
+    pub fn verify_privilege(&self, object: &GrantObject, privilege: UserPrivilegeType) -> bool {
         // the verified object should be smaller than the object inside my grant entry.
         if !self.object.contains(object) {
             return false;
         }
 
-        let mut priv_set = UserPrivilegeSet::empty();
-        for privilege in privileges {
-            priv_set.set_privilege(privilege)
-        }
-        self.privileges.contains(BitFlags::from(priv_set))
+        self.privileges.contains(BitFlags::from(privilege))
     }
 
     pub fn matches_entry(&self, object: &GrantObject) -> bool {
@@ -384,14 +376,10 @@ impl UserGrantSet {
         self.roles.remove(role);
     }
 
-    pub fn verify_privilege(
-        &self,
-        object: &GrantObject,
-        privilege: Vec<UserPrivilegeType>,
-    ) -> bool {
+    pub fn verify_privilege(&self, object: &GrantObject, privilege: UserPrivilegeType) -> bool {
         self.entries
             .iter()
-            .any(|e| e.verify_privilege(object, privilege.clone()))
+            .any(|e| e.verify_privilege(object, privilege))
     }
 
     pub fn grant_privileges(&mut self, object: &GrantObject, privileges: UserPrivilegeSet) {
@@ -494,12 +482,12 @@ mod kvapi_key_impl {
         fn from_str_key(s: &str) -> Result<Self, KeyError> {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let tenant = p.next_str()?;
+            let tenant = p.next_nonempty()?;
             let subject = OwnershipObject::parse_key(&mut p)?;
             p.done()?;
 
             Ok(TenantOwnershipObject {
-                tenant: Tenant::new(tenant),
+                tenant: Tenant::new_nonempty(tenant),
                 object: subject,
             })
         }
@@ -529,10 +517,11 @@ mod tests {
 
     #[test]
     fn test_tenant_ownership_object_tenant_prefix() {
-        let r = TenantOwnershipObject::new(Tenant::new("tenant"), OwnershipObject::Database {
-            catalog_name: "cat".to_string(),
-            db_id: 1,
-        });
+        let r =
+            TenantOwnershipObject::new(Tenant::new_literal("tenant"), OwnershipObject::Database {
+                catalog_name: "cat".to_string(),
+                db_id: 1,
+            });
 
         assert_eq!("__fd_object_owners/tenant/", r.tenant_prefix());
     }
@@ -542,7 +531,7 @@ mod tests {
         // db with default catalog
         {
             let role_grantee = TenantOwnershipObject::new_unchecked(
-                Tenant::new("test"),
+                Tenant::new_literal("test"),
                 OwnershipObject::Database {
                     catalog_name: "default".to_string(),
                     db_id: 1,
@@ -559,7 +548,7 @@ mod tests {
         // db with catalog
         {
             let role_grantee = TenantOwnershipObject::new_unchecked(
-                Tenant::new("test"),
+                Tenant::new_literal("test"),
                 OwnershipObject::Database {
                     catalog_name: "cata/foo".to_string(),
                     db_id: 1,
@@ -578,35 +567,42 @@ mod tests {
 
         // table with default catalog
         {
-            let obj =
-                TenantOwnershipObject::new_unchecked(Tenant::new("test"), OwnershipObject::Table {
+            let obj = TenantOwnershipObject::new_unchecked(
+                Tenant::new_literal("test"),
+                OwnershipObject::Table {
                     catalog_name: "default".to_string(),
                     db_id: 1,
                     table_id: 2,
-                });
+                },
+            );
 
             let key = obj.to_string_key();
             assert_eq!("__fd_object_owners/test/table-by-id/2", key);
 
             let parsed = TenantOwnershipObject::from_str_key(&key).unwrap();
             assert_eq!(
-                TenantOwnershipObject::new_unchecked(Tenant::new("test"), OwnershipObject::Table {
-                    catalog_name: "default".to_string(),
-                    db_id: 0, // db_id is not encoded into key
-                    table_id: 2,
-                }),
+                TenantOwnershipObject::new_unchecked(
+                    Tenant::new_literal("test"),
+                    OwnershipObject::Table {
+                        catalog_name: "default".to_string(),
+                        db_id: 0, // db_id is not encoded into key
+                        table_id: 2,
+                    }
+                ),
                 parsed
             );
         }
 
         // table with catalog
         {
-            let obj =
-                TenantOwnershipObject::new_unchecked(Tenant::new("test"), OwnershipObject::Table {
+            let obj = TenantOwnershipObject::new_unchecked(
+                Tenant::new_literal("test"),
+                OwnershipObject::Table {
                     catalog_name: "cata/foo".to_string(),
                     db_id: 1,
                     table_id: 2,
-                });
+                },
+            );
 
             let key = obj.to_string_key();
             assert_eq!(
@@ -616,21 +612,26 @@ mod tests {
 
             let parsed = TenantOwnershipObject::from_str_key(&key).unwrap();
             assert_eq!(
-                TenantOwnershipObject::new_unchecked(Tenant::new("test"), OwnershipObject::Table {
-                    catalog_name: "cata/foo".to_string(),
-                    db_id: 0, // db_id is not encoded into key
-                    table_id: 2,
-                }),
+                TenantOwnershipObject::new_unchecked(
+                    Tenant::new_literal("test"),
+                    OwnershipObject::Table {
+                        catalog_name: "cata/foo".to_string(),
+                        db_id: 0, // db_id is not encoded into key
+                        table_id: 2,
+                    }
+                ),
                 parsed
             );
         }
 
         // stage
         {
-            let role_grantee =
-                TenantOwnershipObject::new_unchecked(Tenant::new("test"), OwnershipObject::Stage {
+            let role_grantee = TenantOwnershipObject::new_unchecked(
+                Tenant::new_literal("test"),
+                OwnershipObject::Stage {
                     name: "foo".to_string(),
-                });
+                },
+            );
 
             let key = role_grantee.to_string_key();
             assert_eq!("__fd_object_owners/test/stage-by-name/foo", key);
@@ -641,10 +642,12 @@ mod tests {
 
         // udf
         {
-            let role_grantee =
-                TenantOwnershipObject::new_unchecked(Tenant::new("test"), OwnershipObject::UDF {
+            let role_grantee = TenantOwnershipObject::new_unchecked(
+                Tenant::new_literal("test"),
+                OwnershipObject::UDF {
                     name: "foo".to_string(),
-                });
+                },
+            );
 
             let key = role_grantee.to_string_key();
             assert_eq!("__fd_object_owners/test/udf-by-name/foo", key);

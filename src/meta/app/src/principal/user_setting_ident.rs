@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn test_setting_ident() {
-        let tenant = Tenant::new("tenant1");
+        let tenant = Tenant::new_literal("tenant1");
         let ident = SettingIdent::new(tenant.clone(), "test");
         assert_eq!("__fd_settings/tenant1/test", ident.to_string_key());
 

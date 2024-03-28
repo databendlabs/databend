@@ -30,6 +30,7 @@ use databend_common_ast::parser::Backtrace;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::IResult;
 use databend_common_ast::parser::Input;
+use databend_common_ast::parser::ParseMode;
 use databend_common_ast::rule;
 use goldenfile::Mint;
 
@@ -38,11 +39,16 @@ where
     P: FnMut(Input) -> IResult<O>,
     O: Debug + Display,
 {
-    run_parser_with_dialect(file, parser, Dialect::PostgreSQL, src)
+    run_parser_with_dialect(file, parser, Dialect::PostgreSQL, ParseMode::Default, src)
 }
 
-fn run_parser_with_dialect<P, O>(file: &mut dyn Write, parser: P, dialect: Dialect, src: &str)
-where
+fn run_parser_with_dialect<P, O>(
+    file: &mut dyn Write,
+    parser: P,
+    dialect: Dialect,
+    mode: ParseMode,
+    src: &str,
+) where
     P: FnMut(Input) -> IResult<O>,
     O: Debug + Display,
 {
@@ -50,9 +56,15 @@ where
     let src = src.trim();
     let tokens = tokenize_sql(src).unwrap();
     let backtrace = Backtrace::new();
+    let input = Input {
+        tokens: &tokens,
+        dialect,
+        mode,
+        backtrace: &backtrace,
+    };
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
-    match parser(Input(&tokens, dialect, &backtrace)) {
+    match parser(input) {
         Ok((i, (output, _))) => {
             assert_eq!(i[0].kind, TokenKind::EOI);
             writeln!(file, "---------- Input ----------").unwrap();
@@ -132,6 +144,7 @@ fn test_statement() {
         r#"create database ctl.t engine = Default;"#,
         r#"create database t engine = Default;"#,
         r#"create database t FROM SHARE a.s;"#,
+        r#"CREATE TABLE `t3`(a int not null, b int not null, c int not null) bloom_index_columns='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native';"#,
         r#"create or replace database a;"#,
         r#"drop database ctl.t;"#,
         r#"drop database if exists t;"#,
@@ -142,8 +155,15 @@ fn test_statement() {
         r#"create view v1(c1) as select number % 3 as a from numbers(1000);"#,
         r#"create or replace view v1(c1) as select number % 3 as a from numbers(1000);"#,
         r#"alter view v1(c2) as select number % 3 as a from numbers(1000);"#,
+        r#"show views"#,
+        r#"show views format TabSeparatedWithNamesAndTypes;"#,
+        r#"show full views"#,
+        r#"show full views from db"#,
+        r#"show full views from ctl.db"#,
         r#"create stream test2.s1 on table test.t append_only = false;"#,
         r#"create stream if not exists test2.s2 on table test.t at (stream => test1.s1) comment = 'this is a stream';"#,
+        r#"create stream if not exists test2.s3 on table test.t at (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) append_only = false;"#,
+        r#"create stream if not exists test2.s3 on table test.t at (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') append_only = true;"#,
         r#"create or replace stream test2.s1 on table test.t append_only = false;"#,
         r#"show full streams from default.test2 like 's%';"#,
         r#"describe stream test2.s2;"#,
@@ -196,10 +216,14 @@ fn test_statement() {
         r#"select 'stringwith''quote'''"#,
         r#"select 'stringwith"doublequote'"#,
         r#"select '🦈'"#,
+        r#"select * FROM t where ((a));"#,
+        r#"select * FROM t where ((select 1) > 1);"#,
+        r#"select ((t1.a)>=(((((t2.b)<=(t3.c))) IS NOT NULL)::INTEGER));"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
+        r#"SELECT avg((number > 314)::UInt32);"#,
         r#"CREATE STAGE ~"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
@@ -214,6 +238,9 @@ fn test_statement() {
         r#"alter user 'test-e' identified by 'new-password';"#,
         r#"create role test"#,
         r#"create role 'test'"#,
+        r#"create role `a"a`"#,
+        r#"create role `a'a`"#,
+        r#"create user `a'a` identified by '123'"#,
         r#"drop role if exists test"#,
         r#"drop role if exists 'test'"#,
         r#"OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;"#,
@@ -617,14 +644,19 @@ fn test_statement() {
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
-        "GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';",
-        "GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';",
-        "GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';",
-        "GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';",
-        "CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));",
-        "CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';",
-        "CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
-        "CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';",
+        r#"REMOVE @t;"#,
+        r#"SELECT sum(d) OVER (w) FROM e;"#,
+        r#"SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);"#,
+        r#"GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';"#,
+        r#"GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';"#,
+        r#"GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';"#,
+        r#"GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';"#,
+        r#"attach table t 's3://a' connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')"#,
+        r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));"#,
+        r#"CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';"#,
+        r#"CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE STAGE s file_format=(record_delimiter='\n' escape='\\');"#,
         r#"create or replace function addone(int)
 returns int
 language python
@@ -634,8 +666,8 @@ $$
 def addone_py(i):
   return i+1
 $$;"#,
-        "DROP FUNCTION binary_reverse;",
-        "DROP FUNCTION isnotempty;",
+        r#"DROP FUNCTION binary_reverse;"#,
+        r#"DROP FUNCTION isnotempty;"#,
     ];
 
     for case in cases {
@@ -725,13 +757,16 @@ fn test_statement_error() {
                 )"#,
         r#"CREATE CONNECTION IF NOT EXISTS my_conn"#,
         r#"select $0 from t1"#,
-        "GRANT OWNERSHIP, SELECT ON d20_0014.* TO ROLE 'd20_0015_owner';",
-        "GRANT OWNERSHIP ON d20_0014.* TO USER A;",
-        "REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';",
-        "REVOKE OWNERSHIP ON d20_0014.* FROM USER A;",
-        "REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;",
-        "GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';",
-        "CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)",
+        r#"GRANT OWNERSHIP, SELECT ON d20_0014.* TO ROLE 'd20_0015_owner';"#,
+        r#"GRANT OWNERSHIP ON d20_0014.* TO USER A;"#,
+        r#"REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';"#,
+        r#"REVOKE OWNERSHIP ON d20_0014.* FROM USER A;"#,
+        r#"REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;"#,
+        r#"GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';"#,
+        r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)"#,
+        r#"drop table :a"#,
+        r#"drop table IDENTIFIER(a)"#,
+        r#"drop table IDENTIFIER(:a)"#,
     ];
 
     for case in cases {
@@ -959,7 +994,7 @@ fn test_experimental_expr() {
     ];
 
     for case in cases {
-        run_parser_with_dialect(file, expr, Dialect::Experimental, case);
+        run_parser_with_dialect(file, expr, Dialect::Experimental, ParseMode::Default, case);
     }
 }
 
@@ -1059,10 +1094,19 @@ fn test_script() {
                 SELECT c1, c2 FROM t WHERE c1 = 1;
             END LOOP
         "#,
+        r#"select :a + 1"#,
+        r#"select IDENTIFIER(:b)"#,
+        r#"select a.IDENTIFIER(:b).c + minus(:d)"#,
     ];
 
     for case in cases {
-        run_parser(file, script_stmt, case);
+        run_parser_with_dialect(
+            file,
+            script_stmt,
+            Dialect::PostgreSQL,
+            ParseMode::Template,
+            case,
+        );
     }
 }
 

@@ -93,6 +93,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use log::info;
 
@@ -184,13 +185,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
-        if tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while list databases)",
-            ));
-        }
-
+    async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let mut dbs = self.immutable_catalog.list_databases(tenant).await?;
         let mut other = self.mutable_catalog.list_databases(tenant).await?;
         dbs.append(&mut other);
@@ -301,7 +296,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_table_names_by_ids(&self, table_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_table_names_by_ids(&self, table_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         let mut tables = self
             .immutable_catalog
             .mget_table_names_by_ids(table_ids)
@@ -326,7 +321,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         let mut dbs = self
             .immutable_catalog
             .mget_database_names_by_ids(db_ids)

@@ -250,7 +250,7 @@ impl DefaultSettings {
                 }),
                 ("sql_dialect", DefaultSettingValue {
                     value: UserSettingValue::String("PostgreSQL".to_owned()),
-                    desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\",  \"Experimental\", and \"Hive\".",
+                    desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\",  \"Experimental\", \"Prql\", and \"Hive\".",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::String(vec!["PostgreSQL".into(), "MySQL".into(), "Experimental".into(), "Hive".into(), "Prql".into()])),
                 }),
@@ -380,6 +380,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("query_result_cache_min_execute_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "For a query to be cached, it must take at least this many seconds to fetch the first block. It helps to avoid caching queries that are too fast to execute or queries with streaming scan.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("query_result_cache_ttl_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(300), // seconds
                     desc: "Sets the time-to-live (TTL) in seconds for cached query results. \
@@ -469,13 +475,13 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(10),
+                    value: UserSettingValue::UInt64(15),
                     desc: "Sets the seconds that the table lock will expire in.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("acquire_lock_timeout", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(15),
+                    value: UserSettingValue::UInt64(20),
                     desc: "Sets the maximum timeout in seconds for acquire a lock.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),

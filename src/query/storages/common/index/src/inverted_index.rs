@@ -40,13 +40,18 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
+use std::marker::PhantomData;
 use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
 use std::result;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_table_meta::meta::testify_version;
+use databend_storages_common_table_meta::meta::IndexSegmentInfo;
+use databend_storages_common_table_meta::meta::Versioned;
 use log::warn;
 use tantivy::directory::error::DeleteError;
 use tantivy::directory::error::OpenReadError;
@@ -110,10 +115,10 @@ impl TerminatingWrite for VecWriter {
     }
 }
 
-// CacheDirectory holds all indexed data for tantivy queries to search for relevant data.
+// InvertedIndexDirectory holds all indexed data for tantivy queries to search for relevant data.
 // The data is read-only, write and delete operations will be ignored and return success directly.
 #[derive(Clone, Debug)]
-pub struct CacheDirectory {
+pub struct InvertedIndexDirectory {
     data: OwnedBytes,
 
     fast_fields_range: Range<usize>,
@@ -127,15 +132,17 @@ pub struct CacheDirectory {
 
     meta_path: PathBuf,
     managed_path: PathBuf,
+
+    index_segments: Vec<IndexSegmentInfo>,
 }
 
-impl CacheDirectory {
-    pub fn try_create(data: Vec<u8>) -> Result<Self> {
+impl InvertedIndexDirectory {
+    pub fn try_create(data: Vec<u8>, index_segments: Vec<IndexSegmentInfo>) -> Result<Self> {
         if data.len() < 64 {
             return Err(OpenReadError::IoError {
                 io_error: std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid data")
                     .into(),
-                filepath: PathBuf::from("CacheDirectory"),
+                filepath: PathBuf::from("InvertedIndexDirectory"),
             }
             .into());
         }
@@ -212,11 +219,24 @@ impl CacheDirectory {
             managed_range,
             meta_path,
             managed_path,
+            index_segments,
         })
+    }
+
+    pub fn index_segments(&self) -> &Vec<IndexSegmentInfo> {
+        &self.index_segments
+    }
+
+    pub fn size(&self) -> usize {
+        self.data.len()
+            + 8 * std::mem::size_of::<Range<usize>>()
+            + self.meta_path.capacity()
+            + self.managed_path.capacity()
+            + self.index_segments.len() * std::mem::size_of::<IndexSegmentInfo>()
     }
 }
 
-impl Directory for CacheDirectory {
+impl Directory for InvertedIndexDirectory {
     fn get_file_handle(&self, path: &Path) -> result::Result<Arc<dyn FileHandle>, OpenReadError> {
         let file_slice = self.open_read(path)?;
         Ok(Arc::new(file_slice))
@@ -307,4 +327,24 @@ impl Directory for CacheDirectory {
 fn read_u64<R: Read>(r: &mut R, buf: &mut [u8]) -> Result<u64> {
     r.read_exact(buf)?;
     Ok(u64::from_le_bytes(buf.try_into().unwrap()))
+}
+
+impl Versioned<0> for InvertedIndexDirectory {}
+
+pub enum InvertedIndexFilterVersion {
+    V0(PhantomData<InvertedIndexDirectory>),
+}
+
+impl TryFrom<u64> for InvertedIndexFilterVersion {
+    type Error = ErrorCode;
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(InvertedIndexFilterVersion::V0(testify_version::<_, 0>(
+                PhantomData,
+            ))),
+            _ => Err(ErrorCode::Internal(format!(
+                "unknown inverted index filer version {value}, versions supported: 0"
+            ))),
+        }
+    }
 }

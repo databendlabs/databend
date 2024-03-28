@@ -85,6 +85,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_storages_common_txn::TxnManagerRef;
 use databend_storages_common_txn::TxnState;
@@ -129,7 +130,7 @@ impl Catalog for SessionCatalog {
     }
 
     // Get all the databases.
-    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         self.inner.list_databases(tenant).await
     }
 
@@ -252,7 +253,7 @@ impl Catalog for SessionCatalog {
     async fn mget_table_names_by_ids(
         &self,
         table_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<String>> {
+    ) -> databend_common_exception::Result<Vec<Option<String>>> {
         self.inner.mget_table_names_by_ids(table_ids).await
     }
 
@@ -265,7 +266,7 @@ impl Catalog for SessionCatalog {
     async fn mget_database_names_by_ids(
         &self,
         db_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<String>> {
+    ) -> databend_common_exception::Result<Vec<Option<String>>> {
         self.inner.mget_database_names_by_ids(db_ids).await
     }
 

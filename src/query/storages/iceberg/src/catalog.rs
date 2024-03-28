@@ -89,6 +89,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_storage::DataOperator;
 use futures::TryStreamExt;
@@ -215,7 +216,7 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         self.list_database_from_read().await
     }
 
@@ -266,7 +267,7 @@ impl Catalog for IcebergCatalog {
         ))
     }
 
-    async fn mget_table_names_by_ids(&self, _table_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_table_names_by_ids(&self, _table_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get tables name by ids in HIVE catalog",
         ))
@@ -279,7 +280,7 @@ impl Catalog for IcebergCatalog {
         ))
     }
 
-    async fn mget_database_names_by_ids(&self, _db_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_database_names_by_ids(&self, _db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get dbs name by ids in ICEBERG catalog",
         ))

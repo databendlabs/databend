@@ -15,6 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::input::ParseMode;
 use super::statement::insert_stmt;
 use super::statement::replace_stmt;
 use crate::ast::Expr;
@@ -42,54 +43,102 @@ pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
 
 /// Parse a SQL string into `Statement`s.
 #[minitrace::trace]
-pub fn parse_sql(sql_tokens: &[Token], dialect: Dialect) -> Result<(Statement, Option<String>)> {
-    let stmt = run_parser(sql_tokens, dialect, false, statement)?;
+pub fn parse_sql(tokens: &[Token], dialect: Dialect) -> Result<(Statement, Option<String>)> {
+    let stmt = run_parser(tokens, dialect, ParseMode::Default, false, statement)?;
+
+    #[cfg(debug_assertions)]
+    {
+        // Check that the statement can be displayed and reparsed without loss
+        let res: Result<(), ErrorCode> = try {
+            let reparse_sql = stmt.stmt.to_string();
+            let reparse_tokens = crate::parser::tokenize_sql(&reparse_sql)?;
+            let reparsed = run_parser(
+                &reparse_tokens,
+                Dialect::PostgreSQL,
+                ParseMode::Default,
+                false,
+                statement,
+            )?;
+            let reparsed_sql = reparsed.stmt.to_string();
+            assert_eq!(reparse_sql, reparsed_sql, "AST:\n{:#?}", stmt.stmt);
+        };
+        res.unwrap_or_else(|e| {
+            let original_sql = tokens[0].source.to_string();
+            panic!(
+                "Failed to reparse SQL:\n{}\nAST:\n{:#?}\n{}",
+                original_sql, stmt.stmt, e
+            );
+        });
+    }
+
     Ok((stmt.stmt, stmt.format))
 }
 
 /// Parse udf function into Expr
-pub fn parse_expr(sql_tokens: &[Token], dialect: Dialect) -> Result<Expr> {
-    run_parser(sql_tokens, dialect, false, expr)
+pub fn parse_expr(tokens: &[Token], dialect: Dialect) -> Result<Expr> {
+    run_parser(tokens, dialect, ParseMode::Default, false, expr)
 }
 
-pub fn parse_comma_separated_exprs(sql_tokens: &[Token], dialect: Dialect) -> Result<Vec<Expr>> {
-    run_parser(sql_tokens, dialect, true, |i| {
+pub fn parse_comma_separated_exprs(tokens: &[Token], dialect: Dialect) -> Result<Vec<Expr>> {
+    run_parser(tokens, dialect, ParseMode::Default, true, |i| {
         comma_separated_list0(expr)(i)
     })
 }
 
-pub fn parse_comma_separated_idents(
-    sql_tokens: &[Token],
-    dialect: Dialect,
-) -> Result<Vec<Identifier>> {
-    run_parser(sql_tokens, dialect, true, |i| {
+pub fn parse_comma_separated_idents(tokens: &[Token], dialect: Dialect) -> Result<Vec<Identifier>> {
+    run_parser(tokens, dialect, ParseMode::Default, true, |i| {
         comma_separated_list1(ident)(i)
     })
 }
 
 pub fn parse_values_with_placeholder(
-    sql_tokens: &[Token],
+    tokens: &[Token],
     dialect: Dialect,
 ) -> Result<Vec<Option<Expr>>> {
-    run_parser(sql_tokens, dialect, false, values_with_placeholder)
+    run_parser(
+        tokens,
+        dialect,
+        ParseMode::Default,
+        false,
+        values_with_placeholder,
+    )
 }
 
-pub fn parse_raw_insert_stmt(sql_tokens: &[Token], dialect: Dialect) -> Result<Statement> {
-    run_parser(sql_tokens, dialect, false, insert_stmt(true))
+pub fn parse_raw_insert_stmt(tokens: &[Token], dialect: Dialect) -> Result<Statement> {
+    run_parser(
+        tokens,
+        dialect,
+        ParseMode::Default,
+        false,
+        insert_stmt(true),
+    )
 }
 
-pub fn parse_raw_replace_stmt(sql_tokens: &[Token], dialect: Dialect) -> Result<Statement> {
-    run_parser(sql_tokens, dialect, false, replace_stmt(true))
+pub fn parse_raw_replace_stmt(tokens: &[Token], dialect: Dialect) -> Result<Statement> {
+    run_parser(
+        tokens,
+        dialect,
+        ParseMode::Default,
+        false,
+        replace_stmt(true),
+    )
 }
 
 pub fn run_parser<O>(
-    sql_tokens: &[Token],
+    tokens: &[Token],
     dialect: Dialect,
+    mode: ParseMode,
     allow_partial: bool,
     mut parser: impl FnMut(Input) -> IResult<O>,
 ) -> Result<O> {
     let backtrace = Backtrace::new();
-    match parser(Input(sql_tokens, dialect, &backtrace)) {
+    let input = Input {
+        tokens,
+        dialect,
+        mode,
+        backtrace: &backtrace,
+    };
+    match parser(input) {
         Ok((rest, res)) => {
             let is_complete = rest[0].kind == TokenKind::EOI;
             if is_complete || allow_partial {
@@ -102,7 +151,7 @@ pub fn run_parser<O>(
             }
         }
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-            let source = sql_tokens[0].source;
+            let source = tokens[0].source;
             Err(ErrorCode::SyntaxException(display_parser_error(
                 err, source,
             )))

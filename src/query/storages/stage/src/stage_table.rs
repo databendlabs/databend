@@ -76,19 +76,23 @@ impl StageTable {
     #[async_backtrace::framed]
     pub async fn list_files(
         stage_info: &StageTableInfo,
+        thread_num: usize,
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
-        stage_info.list_files(max_files).await
+        stage_info.list_files(thread_num, max_files).await
     }
 
     pub async fn read_partitions_simple(
         &self,
+        ctx: Arc<dyn TableContext>,
         stage_table_info: &StageTableInfo,
     ) -> Result<(PartStatistics, Partitions)> {
+        let thread_num = ctx.get_settings().get_max_threads()? as usize;
+
         let files = if let Some(files) = &stage_table_info.files_to_copy {
             files.clone()
         } else {
-            StageTable::list_files(stage_table_info, None).await?
+            StageTable::list_files(stage_table_info, thread_num, None).await?
         };
         let size = files.iter().map(|f| f.size as usize).sum();
         // assuming all fields are empty
@@ -100,6 +104,7 @@ impl StageTable {
             partitions_scanned: files.len(),
             partitions_total: files.len(),
             is_exact: false,
+            index_info_locations: None,
             pruning_stats: Default::default(),
         };
 
@@ -117,7 +122,7 @@ impl StageTable {
 
         Ok((
             statistics,
-            Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions),
+            Partitions::create(PartitionsShuffleKind::Seq, partitions),
         ))
     }
 }
@@ -151,7 +156,7 @@ impl Table for StageTable {
                 ParquetTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
             }
             FileFormatParams::Csv(_) if settings.get_enable_new_copy_for_text_formats()? == 1 => {
-                self.read_partitions_simple(stage_table_info).await
+                self.read_partitions_simple(ctx, stage_table_info).await
             }
             _ => self.read_partition_old(&ctx).await,
         }

@@ -28,6 +28,7 @@ use databend_storages_common_cache::InMemoryItemCacheHolder;
 use databend_storages_common_cache::NamedCache;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
+use databend_storages_common_index::InvertedIndexDirectory;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::IndexInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -53,6 +54,9 @@ pub type BloomIndexFilterCache =
 pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 
 pub type InvertedIndexInfoCache = NamedCache<InMemoryItemCacheHolder<IndexInfo>>;
+pub type InvertedIndexFilterCache = NamedCache<
+    InMemoryItemCacheHolder<InvertedIndexDirectory, DefaultHashBuilder, InvertedIndexFilterMeter>,
+>;
 
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
@@ -140,6 +144,15 @@ impl CachedObject<FileMetaData> for FileMetaData {
     }
 }
 
+impl CachedObject<InvertedIndexDirectory, DefaultHashBuilder, InvertedIndexFilterMeter>
+    for InvertedIndexDirectory
+{
+    type Cache = InvertedIndexFilterCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_inverted_index_filter_cache()
+    }
+}
+
 pub struct ColumnArrayMeter;
 
 impl<K, V> Meter<K, Arc<(V, usize)>> for ColumnArrayMeter {
@@ -167,5 +180,15 @@ impl Meter<String, Arc<Xor8Filter>> for BloomIndexFilterMeter {
 
     fn measure<Q: ?Sized>(&self, _: &Q, value: &Arc<Xor8Filter>) -> Self::Measure {
         std::mem::size_of::<Xor8Filter>() + value.filter.finger_prints.len()
+    }
+}
+
+pub struct InvertedIndexFilterMeter;
+
+impl Meter<String, Arc<InvertedIndexDirectory>> for InvertedIndexFilterMeter {
+    type Measure = usize;
+
+    fn measure<Q: ?Sized>(&self, _: &Q, value: &Arc<InvertedIndexDirectory>) -> Self::Measure {
+        std::mem::size_of::<InvertedIndexDirectory>() + value.size()
     }
 }

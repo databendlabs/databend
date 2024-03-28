@@ -43,7 +43,7 @@ async fn test_parse_license() -> databend_common_exception::Result<()> {
 
     let key_pair = ES256KeyPair::generate();
     let license_mgr = RealLicenseManager::new(
-        fixture.default_tenant(),
+        fixture.default_tenant().name().to_string(),
         key_pair.public_key().to_pem().unwrap(),
     );
     let claims = Claims::with_custom_claims(
@@ -91,7 +91,7 @@ async fn test_license_features() -> databend_common_exception::Result<()> {
 
     let key_pair = ES256KeyPair::generate();
     let license_mgr = RealLicenseManager::new(
-        fixture.default_tenant(),
+        fixture.default_tenant().name().to_string(),
         key_pair.public_key().to_pem().unwrap(),
     );
     let claims = Claims::with_custom_claims(

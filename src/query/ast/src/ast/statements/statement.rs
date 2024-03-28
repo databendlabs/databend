@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_app::principal::FileFormatOptionsAst;
+use databend_common_io::escape_string_with_quote;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::schema::CreateOption;
@@ -154,6 +154,8 @@ pub enum Statement {
     CreateView(CreateViewStmt),
     AlterView(AlterViewStmt),
     DropView(DropViewStmt),
+    ShowViews(ShowViewsStmt),
+    DescribeView(DescribeViewStmt),
 
     // Streams
     CreateStream(CreateStreamStmt),
@@ -252,8 +254,7 @@ pub enum Statement {
         create_option: CreateOption,
         #[drive(skip)]
         name: String,
-        #[drive(skip)]
-        file_format_options: FileFormatOptionsAst,
+        file_format_options: FileFormatOptions,
     },
     DropFileFormat {
         #[drive(skip)]
@@ -386,15 +387,9 @@ impl Display for Statement {
                             .iter()
                             .map(|opt| {
                                 match opt {
-                                    ExplainOption::Verbose(v) => {
-                                        format!("VERBOSE = {}", v)
-                                    }
-                                    ExplainOption::Logical(v) => {
-                                        format!("LOGICAL = {}", v)
-                                    }
-                                    ExplainOption::Optimized(v) => {
-                                        format!("OPTIMIZED = {}", v)
-                                    }
+                                    ExplainOption::Verbose => "VERBOSE",
+                                    ExplainOption::Logical => "LOGICAL",
+                                    ExplainOption::Optimized => "OPTIMIZED",
                                 }
                             })
                             .join(", ")
@@ -418,12 +413,12 @@ impl Display for Statement {
             Statement::ExplainAnalyze { query } => {
                 write!(f, "EXPLAIN ANALYZE {query}")?;
             }
-            Statement::Query(query) => write!(f, "{query}")?,
-            Statement::Insert(insert) => write!(f, "{insert}")?,
-            Statement::Replace(replace) => write!(f, "{replace}")?,
-            Statement::MergeInto(merge_into) => write!(f, "{merge_into}")?,
-            Statement::Delete(delete) => write!(f, "{delete}")?,
-            Statement::Update(update) => write!(f, "{update}")?,
+            Statement::Query(stmt) => write!(f, "{stmt}")?,
+            Statement::Insert(stmt) => write!(f, "{stmt}")?,
+            Statement::Replace(stmt) => write!(f, "{stmt}")?,
+            Statement::MergeInto(stmt) => write!(f, "{stmt}")?,
+            Statement::Delete(stmt) => write!(f, "{stmt}")?,
+            Statement::Update(stmt) => write!(f, "{stmt}")?,
             Statement::CopyIntoTable(stmt) => write!(f, "{stmt}")?,
             Statement::CopyIntoLocation(stmt) => write!(f, "{stmt}")?,
             Statement::ShowSettings { show_options } => {
@@ -497,17 +492,16 @@ impl Display for Statement {
                 }
                 write!(f, "{variable} = {value}")?;
             }
-            Statement::UnSetVariable(unset) => write!(f, "{unset}")?,
+            Statement::UnSetVariable(stmt) => write!(f, "{stmt}")?,
             Statement::SetRole {
                 is_default,
                 role_name,
             } => {
-                write!(f, "SET ROLE ")?;
+                write!(f, "SET ")?;
                 if *is_default {
-                    write!(f, "DEFAULT")?;
-                } else {
-                    write!(f, "{role_name}")?;
+                    write!(f, "DEFAULT ")?;
                 }
+                write!(f, "ROLE '{role_name}'")?;
             }
             Statement::SetSecondaryRoles { option } => {
                 write!(f, "SET SECONDARY ROLES ")?;
@@ -549,6 +543,8 @@ impl Display for Statement {
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowViews(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeView(stmt) => write!(f, "{stmt}")?,
             Statement::CreateStream(stmt) => write!(f, "{stmt}")?,
             Statement::DropStream(stmt) => write!(f, "{stmt}")?,
             Statement::ShowStreams(stmt) => write!(f, "{stmt}")?,
@@ -583,7 +579,7 @@ impl Display for Statement {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " '{role}'")?;
+                write!(f, " '{}'", escape_string_with_quote(role, Some('\'')))?;
             }
             Statement::DropRole {
                 if_exists,
@@ -627,7 +623,7 @@ impl Display for Statement {
                 if_exists,
                 stage_name,
             } => {
-                write!(f, "DROP STAGES")?;
+                write!(f, "DROP STAGE")?;
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }
@@ -635,7 +631,7 @@ impl Display for Statement {
             }
             Statement::CreateStage(stmt) => write!(f, "{stmt}")?,
             Statement::RemoveStage { location, pattern } => {
-                write!(f, "REMOVE STAGE @{location}")?;
+                write!(f, "REMOVE @{location}")?;
                 if !pattern.is_empty() {
                     write!(f, " PATTERN = '{pattern}'")?;
                 }
@@ -650,7 +646,7 @@ impl Display for Statement {
                 if let CreateOption::CreateOrReplace = create_option {
                     write!(f, " OR REPLACE")?;
                 }
-                write!(f, " FILE_FORMAT")?;
+                write!(f, " FILE FORMAT")?;
                 if let CreateOption::CreateIfNotExists = create_option {
                     write!(f, " IF NOT EXISTS")?;
                 }
@@ -658,7 +654,7 @@ impl Display for Statement {
                 write!(f, " {file_format_options}")?;
             }
             Statement::DropFileFormat { if_exists, name } => {
-                write!(f, "DROP FILE_FORMAT")?;
+                write!(f, "DROP FILE FORMAT")?;
                 if *if_exists {
                     write!(f, " IF EXISTS")?;
                 }

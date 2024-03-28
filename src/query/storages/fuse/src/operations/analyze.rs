@@ -112,10 +112,10 @@ impl SinkAnalyzeState {
         // always use the latest table
         let tenant = self.ctx.get_tenant();
         let catalog = CatalogManager::instance()
-            .get_catalog(tenant.as_str(), &self.catalog, self.ctx.txn_mgr())
+            .get_catalog(tenant.name(), &self.catalog, self.ctx.txn_mgr())
             .await?;
         let table = catalog
-            .get_table(tenant.as_str(), &self.database, &self.table)
+            .get_table(tenant.name(), &self.database, &self.table)
             .await?;
 
         let table = FuseTable::try_from_table(table.as_ref())?;
@@ -175,7 +175,8 @@ impl SinkAnalyzeState {
         let (col_stats, cluster_stats) =
             regenerate_statistics(table, snapshot.as_ref(), &self.ctx).await?;
         // 4. Save table statistics
-        let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
+        let mut new_snapshot =
+            TableSnapshot::from_previous(&snapshot, Some(table.get_table_info().ident.seq));
         new_snapshot.summary.col_stats = col_stats;
         new_snapshot.summary.cluster_stats = cluster_stats;
         new_snapshot.table_statistics_location = Some(table_statistics_location);

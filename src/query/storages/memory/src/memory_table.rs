@@ -134,7 +134,7 @@ impl MemoryTable {
             }
         }
 
-        Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions)
+        Partitions::create(PartitionsShuffleKind::Seq, partitions)
     }
 }
 

@@ -221,7 +221,7 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
             } else {
                 RcDoc::nil()
             }),
-        AlterTableAction::RevertTo { point } => match point {
+        AlterTableAction::FlashbackTo { point } => match point {
             TimeTravelPoint::Snapshot(sid) => RcDoc::text(format!(" AT (SNAPSHOT => {sid})")),
             TimeTravelPoint::Timestamp(ts) => RcDoc::text(format!(" AT (TIMESTAMP => {ts})")),
         },
@@ -335,24 +335,27 @@ pub(crate) fn pretty_create_stream(stmt: CreateStreamStmt) -> RcDoc<'static> {
                     .append(RcDoc::text(stmt.table.to_string())),
             ),
         )
-        .append(
-            if let Some(StreamPoint::AtStream { database, name }) = stmt.stream_point {
-                RcDoc::space()
-                    .append(RcDoc::text("AT (STREAM => "))
-                    .append(
-                        RcDoc::space()
-                            .append(if let Some(database) = database {
-                                RcDoc::text(database.to_string()).append(RcDoc::text("."))
-                            } else {
-                                RcDoc::nil()
-                            })
-                            .append(RcDoc::text(name.to_string())),
-                    )
-                    .append(RcDoc::text(")"))
-            } else {
-                RcDoc::nil()
-            },
-        )
+        .append(match stmt.stream_point {
+            Some(StreamPoint::AtPoint(TimeTravelPoint::Snapshot(sid))) => {
+                RcDoc::text(format!(" AT (SNAPSHOT => {sid})"))
+            }
+            Some(StreamPoint::AtPoint(TimeTravelPoint::Timestamp(ts))) => {
+                RcDoc::text(format!(" AT (TIMESTAMP => {ts})"))
+            }
+            Some(StreamPoint::AtStream { database, name }) => RcDoc::space()
+                .append(RcDoc::text("AT (STREAM => "))
+                .append(
+                    RcDoc::space()
+                        .append(if let Some(database) = database {
+                            RcDoc::text(database.to_string()).append(RcDoc::text("."))
+                        } else {
+                            RcDoc::nil()
+                        })
+                        .append(RcDoc::text(name.to_string())),
+                )
+                .append(RcDoc::text(")")),
+            None => RcDoc::nil(),
+        })
         .append(if !stmt.append_only {
             RcDoc::space().append(RcDoc::text("APPEND_ONLY = false"))
         } else {

@@ -31,7 +31,7 @@ use databend_common_storages_fuse::operations::ReclusterMutator;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
-use databend_common_storages_fuse::FusePartInfo;
+use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
@@ -121,7 +121,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     test_segment_locations.push(segment_location);
     test_block_locations.push(block_location);
     // unused snapshot.
-    let snapshot = TableSnapshot::new_empty_snapshot(schema.as_ref().clone());
+    let snapshot = TableSnapshot::new_empty_snapshot(schema.as_ref().clone(), None);
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = create_segment_location_vector(test_segment_locations, None);
@@ -218,6 +218,7 @@ async fn test_safety_for_recluster() -> Result<()> {
         let id = Uuid::new_v4();
         let snapshot = Arc::new(TableSnapshot::new(
             id,
+            None,
             &None,
             None,
             schema.as_ref().clone(),
@@ -291,7 +292,7 @@ async fn test_safety_for_recluster() -> Result<()> {
                 let parts = task.parts.partitions;
                 assert!(task.total_bytes <= recluster_block_size);
                 for part in parts.into_iter() {
-                    let fuse_part = FusePartInfo::from_part(&part)?;
+                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                     blocks.push(fuse_part.location.clone());
                 }
             }

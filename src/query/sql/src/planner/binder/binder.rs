@@ -315,6 +315,8 @@ impl<'a> Binder {
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
             Statement::DropView(stmt) => self.bind_drop_view(stmt).await?,
+            Statement::ShowViews(stmt) => self.bind_show_views(bind_context, stmt).await?,
+            Statement::DescribeView(stmt) => self.bind_describe_view(stmt).await?,
 
             // Indexes
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
@@ -444,7 +446,7 @@ impl<'a> Binder {
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     create_option: *create_option,
                     name: name.clone(),
-                    file_format_params: file_format_options.clone().try_into()?,
+                    file_format_params: file_format_options.to_meta_ast().try_into()?,
                 }))
             }
             Statement::DropFileFormat {
@@ -604,7 +606,7 @@ impl<'a> Binder {
             }
 
             // Streams
-            Statement::CreateStream(stmt) => self.bind_create_stream(stmt).await?,
+            Statement::CreateStream(stmt) => self.bind_create_stream(bind_context, stmt).await?,
             Statement::DropStream(stmt) => self.bind_drop_stream(stmt).await?,
             Statement::ShowStreams(stmt) => self.bind_show_streams(bind_context, stmt).await?,
             Statement::DescribeStream(stmt) => self.bind_describe_stream(bind_context, stmt).await?,
@@ -822,6 +824,21 @@ impl<'a> Binder {
         }
     }
 
+    pub(crate) fn check_allowed_scalar_expr_with_subquery_for_copy_table(
+        &self,
+        scalar: &ScalarExpr,
+    ) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
+    }
+
     pub(crate) fn check_allowed_scalar_expr_with_subquery(
         &self,
         scalar: &ScalarExpr,
@@ -834,6 +851,7 @@ impl<'a> Binder {
                     | ScalarExpr::UDFCall(_)
             )
         };
+
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
         Ok(finder.scalars().is_empty())

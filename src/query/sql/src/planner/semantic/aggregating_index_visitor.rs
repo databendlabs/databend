@@ -174,7 +174,7 @@ impl AggregatingIndexRewriter {
     }
 
     // If `arg[0]` data type is *NOT* nullable, the optimizer will rewrite `count(arg)` to `count()`,
-    // this happened in `RuleID::NormalizeAggregate`.
+    // this happened in `NormalizeAggregateOptimizer`.
     // But here we cannot get the arg[0] type, so we provide both `count(arg)` and `count()`.
     pub fn extract_avg(&mut self, args: &[Expr]) {
         let sum = format!("SUM({})", args[0]);
@@ -295,17 +295,13 @@ impl RefreshAggregatingIndexRewriter {
                 self.has_agg_function = true;
                 name.name = format!("{}_STATE", name.name);
             }
-            Expr::CountAll { window, .. } if window.is_none() => {
+            Expr::CountAll { span, window } if window.is_none() => {
                 self.has_agg_function = true;
                 *expr = Expr::FunctionCall {
                     span: None,
                     func: FunctionCall {
                         distinct: false,
-                        name: Identifier {
-                            name: "COUNT_STATE".to_string(),
-                            quote: None,
-                            span: None,
-                        },
+                        name: Identifier::from_name(*span, "COUNT_STATE"),
                         args: vec![],
                         params: vec![],
                         window: None,
@@ -338,7 +334,7 @@ impl RefreshAggregatingIndexRewriter {
             column: ColumnRef {
                 database: None,
                 table: Some(table),
-                column: ColumnID::Name(Identifier::from_name(BLOCK_NAME_COL_NAME)),
+                column: ColumnID::Name(Identifier::from_name(stmt.span, BLOCK_NAME_COL_NAME)),
             },
         };
 

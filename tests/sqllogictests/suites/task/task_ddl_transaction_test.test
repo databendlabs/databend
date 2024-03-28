@@ -24,7 +24,7 @@ CREATE TASK transactionTask
 query SSSS
 select name, warehouse, schedule, SPLIT(definition, '\n') from system.tasks where name = 'transactionTask'
 ----
-transactionTask mywh CRON 0 0 0 1 1 ? 2100 ['BEGIN','SELECT 1;','BEGIN;','DELETE FROM t WHERE (c = '';'');','VACUUM TABLE t ;','MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;','COMMIT;','END;']
+transactionTask mywh CRON 0 0 0 1 1 ? 2100 ['BEGIN','SELECT 1;','BEGIN;','DELETE FROM t WHERE c = '';'';','VACUUM TABLE t ;','MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;','COMMIT;','END;']
 
 query S
 select state from system.tasks where name = 'transactionTask'
@@ -59,7 +59,7 @@ ALTER TASK transactionTask MODIFY AS BEGIN
 query S
 select SPLIT(definition, '\n') from system.tasks where name = 'transactionTask'
 ----
-['BEGIN','SELECT 2024;','BEGIN;','MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;','DELETE FROM t WHERE (c = '';'');','ABORT;','END;']
+['BEGIN','SELECT 2024;','BEGIN;','MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;','DELETE FROM t WHERE c = '';'';','ABORT;','END;'] 
 
 
 

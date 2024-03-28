@@ -86,6 +86,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use dyn_clone::DynClone;
 
@@ -120,7 +121,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>>;
 
     // Get all the databases.
-    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>>;
+    async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>>;
 
     // Operation with database.
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
@@ -197,7 +198,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn mget_table_names_by_ids(
         &self,
         table_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<String>>;
+    ) -> databend_common_exception::Result<Vec<Option<String>>>;
 
     // Mget the db name by meta id.
     async fn get_db_name_by_id(&self, db_ids: MetaId) -> databend_common_exception::Result<String>;
@@ -206,7 +207,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn mget_database_names_by_ids(
         &self,
         db_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<String>>;
+    ) -> databend_common_exception::Result<Vec<Option<String>>>;
 
     // Get one table by db and table name.
     async fn get_table(

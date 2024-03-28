@@ -16,13 +16,14 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
+use databend_common_storages_fuse::operations::CompactBlockPartInfo;
 use databend_common_storages_fuse::operations::CompactOptions;
-use databend_common_storages_fuse::operations::CompactPartInfo;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_query::interpreters::OptimizeTableInterpreter;
 use databend_query::pipelines::executor::ExecutorSettings;
@@ -59,7 +60,7 @@ async fn test_compact() -> Result<()> {
         .get_catalog(fixture.default_catalog_name().as_str())
         .await?;
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
+        .get_table(ctx.get_tenant().name(), &db_name, &tbl_name)
         .await?;
     let res = do_compact(ctx.clone(), table.clone()).await;
     assert!(res.is_ok());
@@ -76,7 +77,7 @@ async fn test_compact() -> Result<()> {
         .get_catalog(fixture.default_catalog_name().as_str())
         .await?;
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
+        .get_table(ctx.get_tenant().name(), &db_name, &tbl_name)
         .await?;
     let res = do_compact(ctx.clone(), table.clone()).await;
     assert!(res.is_ok());
@@ -206,6 +207,7 @@ async fn test_safety() -> Result<()> {
         let id = Uuid::new_v4();
         let snapshot = TableSnapshot::new(
             id,
+            None,
             &None,
             None,
             schema.as_ref().clone(),
@@ -236,15 +238,15 @@ async fn test_safety() -> Result<()> {
             eprintln!("no target select");
             continue;
         }
-        assert!(!selections.is_lazy);
+        assert!(selections.partitions_type() != PartInfoType::LazyLevel);
 
         let mut actual_blocks_number = 0;
         let mut compact_segment_indices = HashSet::new();
         let mut actual_block_ids = HashSet::new();
         for part in selections.partitions.into_iter() {
-            let part = CompactPartInfo::from_part(&part)?;
+            let part = CompactBlockPartInfo::from_part(&part)?;
             match part {
-                CompactPartInfo::CompactExtraInfo(extra) => {
+                CompactBlockPartInfo::CompactExtraInfo(extra) => {
                     compact_segment_indices.insert(extra.segment_index);
                     compact_segment_indices.extend(extra.removed_segment_indexes.iter());
                     actual_blocks_number += extra.unchanged_blocks.len();
@@ -252,7 +254,7 @@ async fn test_safety() -> Result<()> {
                         actual_block_ids.insert(b.1.location.clone());
                     }
                 }
-                CompactPartInfo::CompactTaskInfo(task) => {
+                CompactBlockPartInfo::CompactTaskInfo(task) => {
                     compact_segment_indices.insert(task.index.segment_idx);
                     actual_blocks_number += task.blocks.len();
                     for b in &task.blocks {

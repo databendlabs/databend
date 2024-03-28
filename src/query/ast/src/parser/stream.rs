@@ -14,7 +14,6 @@
 
 use nom::combinator::map;
 
-use super::statement::parse_create_option;
 use crate::ast::CreateStreamStmt;
 use crate::ast::DescribeStreamStmt;
 use crate::ast::DropStreamStmt;
@@ -27,6 +26,8 @@ use crate::parser::common::map_res;
 use crate::parser::common::IResult;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
+use crate::parser::query::travel_point;
+use crate::parser::statement::parse_create_option;
 use crate::parser::statement::show_limit;
 use crate::parser::token::TokenKind::*;
 use crate::parser::Input;
@@ -100,12 +101,16 @@ fn drop_stream(i: Input) -> IResult<Statement> {
 }
 
 fn stream_point(i: Input) -> IResult<StreamPoint> {
-    let mut at_stream = map(
+    let at_stream = map(
         rule! { AT ~ "(" ~ STREAM ~ "=>" ~  #dot_separated_idents_1_to_2 ~ ")" },
         |(_, _, _, _, (database, name), _)| StreamPoint::AtStream { database, name },
     );
+    let at_point = map(rule! { AT ~ ^#travel_point }, |(_, travel_point)| {
+        StreamPoint::AtPoint(travel_point)
+    });
+
     rule!(
-        #at_stream
+        #at_stream | #at_point
     )(i)
 }
 

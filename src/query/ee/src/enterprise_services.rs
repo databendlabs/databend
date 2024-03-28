@@ -30,7 +30,7 @@ pub struct EnterpriseServices;
 impl EnterpriseServices {
     #[async_backtrace::framed]
     pub async fn init(cfg: InnerConfig) -> Result<()> {
-        RealLicenseManager::init(cfg.query.tenant_id.to_string())?;
+        RealLicenseManager::init(cfg.query.tenant_id.name().to_string())?;
         RealStorageEncryptionHandler::init(&cfg)?;
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;

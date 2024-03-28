@@ -16,48 +16,39 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
-use crate::optimizer::extract::Matcher;
-use crate::optimizer::rule::Rule;
-use crate::optimizer::rule::TransformResult;
-use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
-use crate::plans::RelOp;
+use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::ColumnBinding;
 use crate::Visibility;
 
-pub struct RuleNormalizeAggregate {
-    id: RuleID,
-    matchers: Vec<Matcher>,
-}
+pub struct RuleNormalizeAggregateOptimizer {}
 
-impl RuleNormalizeAggregate {
+impl RuleNormalizeAggregateOptimizer {
     pub fn new() -> Self {
-        Self {
-            id: RuleID::NormalizeAggregate,
-            // Aggregate
-            //  \
-            //   *
-            matchers: vec![Matcher::MatchOp {
-                op_type: RelOp::Aggregate,
-                children: vec![Matcher::Leaf],
-            }],
+        RuleNormalizeAggregateOptimizer {}
+    }
+
+    pub fn run(&self, s_expr: &SExpr) -> Result<SExpr> {
+        let mut children = Vec::with_capacity(s_expr.arity());
+        for child in s_expr.children() {
+            let child = self.run(child)?;
+            children.push(Arc::new(child));
+        }
+        let s_expr = s_expr.replace_children(children);
+        if let RelOperator::Aggregate(_) = s_expr.plan.as_ref() {
+            self.normalize_aggregate(&s_expr)
+        } else {
+            Ok(s_expr)
         }
     }
-}
 
-impl Rule for RuleNormalizeAggregate {
-    fn id(&self) -> RuleID {
-        self.id
-    }
-
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
+    fn normalize_aggregate(&self, s_expr: &SExpr) -> Result<SExpr> {
         let aggregate: Aggregate = s_expr.plan().clone().try_into()?;
-
         let mut work_expr = None;
         let mut alias_functions_index = vec![];
         let mut new_aggregate_functions = Vec::with_capacity(aggregate.aggregate_functions.len());
@@ -120,7 +111,7 @@ impl Rule for RuleNormalizeAggregate {
         }
 
         if !rewritten {
-            return Ok(());
+            return Ok(s_expr.clone());
         }
 
         let new_aggregate = Aggregate {
@@ -136,12 +127,10 @@ impl Rule for RuleNormalizeAggregate {
             Arc::new(new_aggregate.into()),
             Arc::new(s_expr.child(0)?.clone()),
         );
-        new_aggregate.set_applied_rule(&self.id);
 
         if let Some((work_index, work_c)) = work_expr {
             if alias_functions_index.len() < 2 {
-                state.add_result(new_aggregate);
-                return Ok(());
+                return Ok(new_aggregate);
             }
             if !alias_functions_index.is_empty() {
                 let mut scalar_items = Vec::with_capacity(alias_functions_index.len());
@@ -175,17 +164,9 @@ impl Rule for RuleNormalizeAggregate {
                     Arc::new(new_aggregate),
                 );
             }
-
-            new_aggregate.set_applied_rule(&self.id);
-            state.add_result(new_aggregate);
-            Ok(())
+            Ok(new_aggregate)
         } else {
-            state.add_result(new_aggregate);
-            Ok(())
+            Ok(new_aggregate)
         }
-    }
-
-    fn matchers(&self) -> &[Matcher] {
-        &self.matchers
     }
 }

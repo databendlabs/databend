@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use databend_common_meta_app::principal::AuthType;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -111,13 +110,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ #task_warehouse_option
-            ~ (SCHEDULE ~ "=" ~ #task_schedule_option)?
-            ~ (AFTER ~ #comma_separated_list0(literal_string))?
-            ~ (WHEN ~ #expr )?
-            ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
+            ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
+            ~ ( AFTER ~ #comma_separated_list0(literal_string) )?
+            ~ ( WHEN ~ #expr )?
+            ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
             ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
-            ~ (#set_table_option)?
+            ~ #set_table_option?
             ~ AS ~ #task_sql_block
         },
         |(
@@ -143,13 +142,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 warehouse_opts,
                 schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
                 suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
-                comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                comments: comment_opt.map(|(_, _, comment)| comment),
                 after: match after_tasks {
                     Some((_, tasks)) => tasks,
                     None => Vec::new(),
                 },
                 error_integration: error_integration.map(|(_, _, name)| name.to_string()),
-                when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
+                when_condition: when_conditions.map(|(_, cond)| cond),
                 sql,
                 session_parameters: session_opts,
             })
@@ -918,6 +917,37 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let show_views = map(
+        rule! {
+            SHOW ~ FULL? ~ VIEWS ~ HISTORY? ~ ( ( FROM | IN ) ~ #dot_separated_idents_1_to_2 )? ~ #show_limit?
+        },
+        |(_, opt_full, _, opt_history, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
+            Statement::ShowViews(ShowViewsStmt {
+                catalog,
+                database,
+                full: opt_full.is_some(),
+                limit,
+                with_history: opt_history.is_some(),
+            })
+        },
+    );
+    let describe_view = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ VIEW ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, (catalog, database, view))| {
+            Statement::DescribeView(DescribeViewStmt {
+                catalog,
+                database,
+                view,
+            })
+        },
+    );
 
     let create_index = map_res(
         rule! {
@@ -1113,7 +1143,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let show_virtual_columns = map(
         rule! {
-            SHOW ~ VIRTUAL ~ COLUMNS ~ (( FROM | IN ) ~ #ident)? ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)? ~ #show_limit?
+            SHOW ~ VIRTUAL ~ COLUMNS ~ ( ( FROM | IN ) ~ #ident )? ~ ( ( FROM | IN ) ~ ^#dot_separated_idents_1_to_2 )? ~ #show_limit?
         },
         |(_, _, _, opt_table, opt_db, limit)| {
             let table = opt_table.map(|(_, table)| table);
@@ -1624,8 +1654,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CREATE ~ ( OR ~ ^REPLACE )? ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #format_options
         },
-        |(_, opt_or_replace, _, _, opt_if_not_exists, name, options)| {
-            let file_format_options = FileFormatOptionsAst { options };
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, file_format_options)| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             Ok(Statement::CreateFileFormat {
@@ -1914,11 +1943,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let create_notification = map(
         rule! {
-            CREATE ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ NOTIFICATION ~ INTEGRATION
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ TYPE ~ "=" ~ #ident
             ~ ENABLED ~ "=" ~ #literal_bool
-            ~ (#notification_webhook_clause)?
+            ~ #notification_webhook_clause?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
         },
         |(
@@ -1942,7 +1972,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 notification_type: notification_type.to_string(),
                 enabled,
                 webhook_opts: webhook,
-                comments: comment.map(|v| v.2).unwrap_or_default(),
+                comments: comment.map(|(_, _, comments)| comments),
             })
         },
     );
@@ -2048,6 +2078,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
             | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
+            | #describe_view : "`DESCRIBE VIEW [<database>.]<view>`"
             | #describe_table : "`DESCRIBE [<database>.]<table>`"
             | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
@@ -2071,6 +2102,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+            | #show_views : "`SHOW [FULL] VIEWS [FROM <database>] [<show_limit>]`"
             | #stream_table
             | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
@@ -2460,8 +2492,8 @@ pub fn hint(i: Input) -> IResult<Hint> {
 
 pub fn rest_str(i: Input) -> IResult<(String, usize)> {
     // It's safe to unwrap because input must contain EOI.
-    let first_token = i.0.first().unwrap();
-    let last_token = i.0.last().unwrap();
+    let first_token = i.tokens.first().unwrap();
+    let last_token = i.tokens.last().unwrap();
     Ok((
         i.slice((i.len() - 1)..),
         (
@@ -3089,7 +3121,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         rule! {
             FLASHBACK ~ TO ~ #travel_point
         },
-        |(_, _, point)| AlterTableAction::RevertTo { point },
+        |(_, _, point)| AlterTableAction::FlashbackTo { point },
     );
 
     let set_table_options = map(
@@ -3329,10 +3361,7 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
         rule! {
              MODIFY ~ WHEN ~ #expr
         },
-        |(_, _, expr)| {
-            let when = expr.to_string();
-            AlterTaskOptions::ModifyWhen(when)
-        },
+        |(_, _, expr)| AlterTaskOptions::ModifyWhen(expr),
     );
     let add_after = map(
         rule! {
@@ -3350,11 +3379,11 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
     let set = map(
         rule! {
              SET
-             ~ ( WAREHOUSE  ~ "=" ~  #literal_string )?
-             ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
-             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
-             ~ ( COMMENT ~ "=" ~ #literal_string )?
-             ~ ( ERROR_INTEGRATION  ~ "=" ~ #literal_string )?
+             ~ ( WAREHOUSE  ~ ^"=" ~ ^#literal_string )?
+             ~ ( SCHEDULE ~ ^"=" ~ ^#task_schedule_option )?
+             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ ^"=" ~ ^#literal_u64 )?
+             ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+             ~ ( ERROR_INTEGRATION  ~ ^"=" ~ ^#literal_string )?
              ~ #set_table_option?
         },
         |(
@@ -3426,7 +3455,7 @@ pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
 pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
     alt((map(
         rule! {
-            (WAREHOUSE  ~ "=" ~  #literal_string)?
+            (WAREHOUSE  ~ "=" ~ #literal_string)?
         },
         |warehouse_opt| {
             let warehouse = match warehouse_opt {
@@ -3525,19 +3554,17 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
 }
 
 pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
-    map(
+    let option = map(
         rule! {
-           ( #ident ~ "=" ~ #option_to_string ) ~ ("," ~ #ident ~ "=" ~ #option_to_string )*
+           #ident ~ "=" ~ #option_to_string
         },
-        |(key, _, value, opts)| {
-            let mut options = BTreeMap::from_iter(
-                opts.iter()
-                    .map(|(_, k, _, v)| (k.name.to_lowercase(), v.clone())),
-            );
-            options.insert(key.name.to_lowercase(), value);
-            options
-        },
-    )(i)
+        |(k, _, v)| (k, v),
+    );
+    map(comma_separated_list1(option), |opts| {
+        opts.into_iter()
+            .map(|(k, v)| (k.name.to_lowercase(), v.clone()))
+            .collect()
+    })(i)
 }
 
 fn option_to_string(i: Input) -> IResult<String> {
@@ -3709,7 +3736,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
             #dot_separated_idents_1_to_3 ~ #alias_name?
         }),
         |(span, ((catalog, database, table), alias))| TableReference::Table {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             catalog,
             database,
             table,
@@ -3731,7 +3758,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             #dot_separated_idents_1_to_3
         }),
         |(span, (catalog, database, table))| TableReference::Table {
-            span: transform_span(span.0),
+            span: transform_span(span.tokens),
             catalog,
             database,
             table,
@@ -3832,17 +3859,17 @@ pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
 pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
     map(
         rule! {
-             ( PASSWORD_MIN_LENGTH ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_HISTORY ~ Eq ~ ^#literal_u64 ) ?
+             ( PASSWORD_MIN_LENGTH ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_HISTORY ~ Eq ~ ^#literal_u64 )?
              ~ ( COMMENT ~ Eq ~ ^#literal_string)?
         },
         |(
@@ -3880,18 +3907,18 @@ pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
 pub fn password_unset_options(i: Input) -> IResult<PasswordUnSetOptions> {
     map(
         rule! {
-             PASSWORD_MIN_LENGTH ?
-             ~ PASSWORD_MAX_LENGTH ?
-             ~ PASSWORD_MIN_UPPER_CASE_CHARS ?
-             ~ PASSWORD_MIN_LOWER_CASE_CHARS ?
-             ~ PASSWORD_MIN_NUMERIC_CHARS ?
-             ~ PASSWORD_MIN_SPECIAL_CHARS ?
-             ~ PASSWORD_MIN_AGE_DAYS ?
-             ~ PASSWORD_MAX_AGE_DAYS ?
-             ~ PASSWORD_MAX_RETRIES ?
-             ~ PASSWORD_LOCKOUT_TIME_MINS ?
-             ~ PASSWORD_HISTORY ?
-             ~ COMMENT ?
+             PASSWORD_MIN_LENGTH?
+             ~ PASSWORD_MAX_LENGTH?
+             ~ PASSWORD_MIN_UPPER_CASE_CHARS?
+             ~ PASSWORD_MIN_LOWER_CASE_CHARS?
+             ~ PASSWORD_MIN_NUMERIC_CHARS?
+             ~ PASSWORD_MIN_SPECIAL_CHARS?
+             ~ PASSWORD_MIN_AGE_DAYS?
+             ~ PASSWORD_MAX_AGE_DAYS?
+             ~ PASSWORD_MAX_RETRIES?
+             ~ PASSWORD_LOCKOUT_TIME_MINS?
+             ~ PASSWORD_HISTORY?
+             ~ COMMENT?
         },
         |(
             opt_min_length,
@@ -3951,9 +3978,9 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
             VERBOSE | LOGICAL | OPTIMIZED
         },
         |opt| match &opt.kind {
-            VERBOSE => ExplainOption::Verbose(true),
-            LOGICAL => ExplainOption::Logical(true),
-            OPTIMIZED => ExplainOption::Optimized(true),
+            VERBOSE => ExplainOption::Verbose,
+            LOGICAL => ExplainOption::Logical,
+            OPTIMIZED => ExplainOption::Optimized,
             _ => unreachable!(),
         },
     )(i)

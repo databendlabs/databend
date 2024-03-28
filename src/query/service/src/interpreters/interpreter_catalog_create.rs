@@ -71,11 +71,9 @@ impl Interpreter for CreateCatalogInterpreter {
         // Build and check if catalog is valid.
         let ctl = catalog_manager
             .build_catalog(&CatalogInfo {
-                id: CatalogId::default(),
-                name_ident: CatalogNameIdent {
-                    tenant: self.plan.tenant.clone(),
-                    catalog_name: self.plan.catalog.clone(),
-                },
+                id: CatalogId::default().into(),
+                name_ident: CatalogNameIdent::new(self.plan.tenant.clone(), &self.plan.catalog)
+                    .into(),
                 meta: CatalogMeta {
                     catalog_option: self.plan.meta.catalog_option.clone(),
                     created_on: chrono::Utc::now(),

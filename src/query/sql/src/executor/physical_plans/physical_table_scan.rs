@@ -256,7 +256,7 @@ impl PhysicalPlanBuilder {
         let catalogs = CatalogManager::instance();
         let table = catalogs
             .get_default_catalog(self.ctx.txn_mgr())?
-            .get_table(self.ctx.get_tenant().as_str(), "system", "one")
+            .get_table(self.ctx.get_tenant().name(), "system", "one")
             .await?;
 
         if !table.result_can_be_cached() {
@@ -487,6 +487,7 @@ impl PhysicalPlanBuilder {
             lazy_materialization: !metadata.lazy_columns().is_empty(),
             agg_index: None,
             change_type: scan.change_type.clone(),
+            inverted_index: scan.inverted_index.clone(),
         })
     }
 

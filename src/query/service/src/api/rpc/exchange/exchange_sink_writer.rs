@@ -21,7 +21,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_metrics::transform::*;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -83,7 +82,6 @@ impl AsyncSink for ExchangeWriterSink {
         }?;
 
         let mut bytes = 0;
-        let count = serialize_meta.packet.len();
         for packet in serialize_meta.packet {
             bytes += packet.bytes_size();
             if let Err(error) = self.flight_sender.send(packet).await {
@@ -96,8 +94,6 @@ impl AsyncSink for ExchangeWriterSink {
         }
 
         {
-            metrics_inc_exchange_write_count(count);
-            metrics_inc_exchange_write_bytes(bytes);
             Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, bytes);
         }
 

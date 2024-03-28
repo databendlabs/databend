@@ -42,7 +42,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::evaluator::BlockOperator;
 
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::operations::common::BlockMetaIndex;
@@ -184,7 +184,7 @@ impl Processor for MutationSource {
                 )?;
                 let num_rows = data_block.num_rows();
 
-                let fuse_part = FusePartInfo::from_part(&part)?;
+                let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                 if let Some(filter) = self.filter.as_ref() {
                     if self.query_row_id_col {
                         // Add internal column to data block
@@ -198,6 +198,7 @@ impl Processor for MutationSource {
                             offsets: None,
                             base_block_ids: None,
                             inner: None,
+                            matched_rows: block_meta.matched_rows.clone(),
                         };
                         let internal_col = InternalColumn {
                             column_name: ROW_ID_COL_NAME.to_string(),
@@ -318,7 +319,7 @@ impl Processor for MutationSource {
                 mut data_block,
                 filter,
             } => {
-                let path = FusePartInfo::from_part(&part)?.location.clone();
+                let path = FuseBlockPartInfo::from_part(&part)?.location.clone();
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let chunks = merged_io_read_result.columns_chunks()?;
                     let remain_block = remain_reader.deserialize_chunks_with_part_info(
@@ -394,7 +395,7 @@ impl Processor for MutationSource {
                         }
 
                         let inner_part = part.inner_part.clone();
-                        let fuse_part = FusePartInfo::from_part(&inner_part)?;
+                        let fuse_part = FuseBlockPartInfo::from_part(&inner_part)?;
 
                         if part.whole_block_mutation
                             && matches!(self.action, MutationAction::Deletion)
@@ -433,7 +434,7 @@ impl Processor for MutationSource {
                 filter,
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let fuse_part = FusePartInfo::from_part(&part)?;
+                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
 
                     let settings = ReadSettings::from_ctx(&self.ctx)?;
                     let read_res = remain_reader

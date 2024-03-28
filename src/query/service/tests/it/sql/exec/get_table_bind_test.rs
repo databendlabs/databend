@@ -113,8 +113,8 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
@@ -156,7 +156,7 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         todo!()
     }
 
@@ -188,7 +188,7 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_name_by_id(table_id).await
     }
 
-    async fn mget_table_names_by_ids(&self, table_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_table_names_by_ids(&self, table_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         self.cat.mget_table_names_by_ids(table_ids).await
     }
 
@@ -196,7 +196,7 @@ impl Catalog for FakedCatalog {
         self.cat.get_db_name_by_id(db_id).await
     }
 
-    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_database_names_by_ids(&self, db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         self.cat.mget_database_names_by_ids(db_ids).await
     }
 
@@ -522,9 +522,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn attach_query_str(&self, _kind: QueryKind, _query: String) {
-        todo!()
-    }
+    fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
 
     fn get_query_str(&self) -> String {
         todo!()
@@ -592,7 +590,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_tenant(&self) -> NonEmptyString {
+    fn get_tenant(&self) -> Tenant {
         self.ctx.get_tenant()
     }
 
@@ -609,7 +607,7 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
-        Settings::create(NonEmptyString::new("fake_settings").unwrap())
+        Settings::create(Tenant::new_literal("fake_settings"))
     }
 
     fn get_shared_settings(&self) -> Arc<Settings> {
@@ -678,7 +676,7 @@ impl TableContext for CtxDelegation {
         let tenant = self.ctx.get_tenant();
         let db = database.to_string();
         let tbl = table.to_string();
-        let table_meta_key = (tenant.to_string(), db, tbl);
+        let table_meta_key = (tenant.name().to_string(), db, tbl);
         let already_in_cache = { self.cache.lock().contains_key(&table_meta_key) };
         if already_in_cache {
             self.table_from_cache
@@ -694,7 +692,7 @@ impl TableContext for CtxDelegation {
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let tbl = self
                 .cat
-                .get_table(self.ctx.get_tenant().as_str(), database, table)
+                .get_table(self.ctx.get_tenant().name(), database, table)
                 .await?;
             let tbl2 = tbl.clone();
             let mut guard = self.cache.lock();
@@ -854,6 +852,7 @@ async fn test_get_same_table_once() -> Result<()> {
 
     let mut planner = Planner::new(ctx.clone());
     let (_, _) = planner.plan_sql(query.as_str()).await?;
+
     assert_eq!(
         ctx.table_without_cache
             .load(std::sync::atomic::Ordering::SeqCst),

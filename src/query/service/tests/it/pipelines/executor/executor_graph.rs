@@ -347,8 +347,7 @@ async fn test_schedule_with_one_tasks() -> Result<()> {
 
     let executor = create_executor_with_simple_pipeline(ctx, 1).await?;
 
-    let mut context =
-        ExecutorWorkerContext::create(1, WorkersCondvar::create(1), Arc::new("".to_string()));
+    let mut context = ExecutorWorkerContext::create(1, WorkersCondvar::create(1));
 
     let init_queue = unsafe { graph.clone().init_schedule_queue(0)? };
     assert_eq!(init_queue.sync_queue.len(), 1);
@@ -371,8 +370,7 @@ async fn test_schedule_with_two_tasks() -> Result<()> {
 
     let executor = create_executor_with_simple_pipeline(ctx, 2).await?;
 
-    let mut context =
-        ExecutorWorkerContext::create(1, WorkersCondvar::create(1), Arc::new("".to_string()));
+    let mut context = ExecutorWorkerContext::create(1, WorkersCondvar::create(1));
 
     let init_queue = unsafe { graph.clone().init_schedule_queue(0)? };
     assert_eq!(init_queue.sync_queue.len(), 2);
@@ -394,7 +392,7 @@ fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.add_pipe(create_transform_pipe(1)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1)
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None)
 }
 
 fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -406,7 +404,7 @@ fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<Running
     pipeline.add_pipe(create_transform_pipe(2)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1)
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None)
 }
 
 fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -422,7 +420,7 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.try_resize(2)?;
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1)
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None)
 }
 
 fn create_source_pipe(
@@ -498,6 +496,7 @@ async fn create_executor_with_simple_pipeline(
         query_id: Arc::new("".to_string()),
         max_execute_time_in_seconds: Default::default(),
         enable_new_executor: false,
+        max_threads: 8,
     };
     QueryPipelineExecutor::create(pipeline, settings)
 }

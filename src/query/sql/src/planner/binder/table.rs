@@ -220,7 +220,7 @@ impl Binder {
         // Resolve table with catalog
         let table_meta = match self
             .resolve_data_source(
-                tenant.as_str(),
+                tenant.name(),
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),
@@ -248,6 +248,13 @@ impl Binder {
                         };
                     }
                     parent = bind_context.parent.as_mut();
+                }
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
+                    return Err(ErrorCode::UnknownDatabase(format!(
+                        "Unknown database `{}` in catalog '{catalog}'",
+                        database
+                    ))
+                    .set_span(*span));
                 }
                 if e.code() == ErrorCode::UNKNOWN_TABLE {
                     return Err(ErrorCode::UnknownTable(format!(
@@ -686,11 +693,10 @@ impl Binder {
                         span: *span,
                         func: ASTFunctionCall {
                             distinct: false,
-                            name: databend_common_ast::ast::Identifier {
-                                span: *span,
-                                name: func_name.name.clone(),
-                                quote: None,
-                            },
+                            name: databend_common_ast::ast::Identifier::from_name(
+                                *span,
+                                &func_name.name,
+                            ),
                             params: vec![],
                             args,
                             window: None,
@@ -1227,6 +1233,7 @@ impl Binder {
             in_grouping: false,
             view_info: None,
             srfs: Default::default(),
+            inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             allow_internal_columns: true,
@@ -1522,7 +1529,7 @@ fn parse_table_function_args(
                 Some(val) => args.push(val),
                 None => args.push(Expr::Literal {
                     span: None,
-                    lit: Literal::Null,
+                    value: Literal::Null,
                 }),
             }
         }

@@ -69,12 +69,13 @@ mod kvapi_key_impl {
 #[cfg(test)]
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
+    use databend_common_meta_types::NonEmptyString;
 
     use super::*;
 
     #[test]
     fn test_quota_ident() {
-        let tenant = Tenant::new("test");
+        let tenant = Tenant::new_nonempty(NonEmptyString::new("test").unwrap());
         let ident = TenantQuotaIdent::new(tenant.clone());
 
         let key = ident.to_string_key();

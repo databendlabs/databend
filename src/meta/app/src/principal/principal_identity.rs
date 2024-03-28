@@ -36,7 +36,7 @@ impl fmt::Display for PrincipalIdentity {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         match self {
             PrincipalIdentity::User(u) => write!(f, " USER {u}"),
-            PrincipalIdentity::Role(r) => write!(f, " ROLE {r}"),
+            PrincipalIdentity::Role(r) => write!(f, " ROLE '{r}'"),
         }
     }
 }

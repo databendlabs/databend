@@ -13,7 +13,7 @@
 // limitations under the License.
 
 pub mod agg_index;
-mod filter_join;
+mod push_down_filter_join;
 mod rule_commute_join;
 mod rule_eliminate_eval_scalar;
 mod rule_eliminate_filter;
@@ -21,7 +21,6 @@ mod rule_eliminate_sort;
 mod rule_fold_count_aggregate;
 mod rule_merge_eval_scalar;
 mod rule_merge_filter;
-mod rule_normalize_aggregate;
 mod rule_normalize_scalar;
 mod rule_push_down_filter_aggregate;
 mod rule_push_down_filter_eval_scalar;
@@ -51,7 +50,6 @@ pub use rule_eliminate_sort::RuleEliminateSort;
 pub use rule_fold_count_aggregate::RuleFoldCountAggregate;
 pub use rule_merge_eval_scalar::RuleMergeEvalScalar;
 pub use rule_merge_filter::RuleMergeFilter;
-pub use rule_normalize_aggregate::RuleNormalizeAggregate;
 pub use rule_normalize_scalar::RuleNormalizeScalarFilter;
 pub use rule_push_down_filter_aggregate::RulePushDownFilterAggregate;
 pub use rule_push_down_filter_eval_scalar::RulePushDownFilterEvalScalar;

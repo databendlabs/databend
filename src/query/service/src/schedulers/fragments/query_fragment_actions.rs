@@ -179,7 +179,7 @@ impl QueryFragmentsActions {
             cluster.local_id.clone(),
             fragments_packets.remove(&cluster.local_id).unwrap(),
             nodes_info.clone(),
-            settings.clone(),
+            settings.changes().clone(),
             cluster.local_id(),
         );
 
@@ -194,7 +194,7 @@ impl QueryFragmentsActions {
                 executor,
                 fragments,
                 executors_info,
-                settings.clone(),
+                settings.changes().clone(),
                 cluster.local_id(),
             ));
         }

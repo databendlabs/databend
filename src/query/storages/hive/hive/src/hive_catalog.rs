@@ -92,6 +92,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::*;
 use faststr::FastStr;
 use hive_metastore::Partition;
@@ -285,7 +286,7 @@ impl Catalog for HiveCatalog {
     // Get all the databases.
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let db_names = self
             .client
             .get_all_databases()
@@ -360,7 +361,7 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn mget_table_names_by_ids(&self, _table_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_table_names_by_ids(&self, _table_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get tables name by ids in HIVE catalog",
         ))
@@ -372,7 +373,7 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn mget_database_names_by_ids(&self, _db_ids: &[MetaId]) -> Result<Vec<String>> {
+    async fn mget_database_names_by_ids(&self, _db_ids: &[MetaId]) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get dbs name by ids in HIVE catalog",
         ))
