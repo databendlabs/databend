@@ -26,7 +26,6 @@ use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::tokio::time::Instant;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_config::InnerConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::BackgroundApi;
 use databend_common_meta_app::background::BackgroundJobIdent;
@@ -43,10 +42,8 @@ use databend_common_meta_app::background::UpdateBackgroundJobParamsReq;
 use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
 use databend_common_meta_app::background::UpdateBackgroundTaskReq;
 use databend_common_meta_app::schema::TableStatistics;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
@@ -149,10 +146,7 @@ impl CompactionJob {
         name: impl ToString,
         finish_tx: Arc<Mutex<Sender<u64>>>,
     ) -> Result<Self> {
-        let non_empty = NonEmptyString::new(&config.query.tenant_id).map_err(|_e| {
-            ErrorCode::TenantIsEmpty("config.query.tenant_id is empty when CompactionJob::create()")
-        })?;
-        let tenant = Tenant::new_nonempty(non_empty);
+        let tenant = config.query.tenant_id.clone();
 
         let creator = BackgroundJobIdent::new(tenant, name);
 

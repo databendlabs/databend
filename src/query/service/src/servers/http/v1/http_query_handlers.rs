@@ -358,7 +358,7 @@ pub(crate) async fn query_handler(
             Ok(query) => {
                 query.update_expire_time(true).await;
                 // tmp workaround to tolerant old clients
-                let max_wait_time = std::cmp::max(10, req.pagination.wait_time_secs);
+                let max_wait_time = std::cmp::max(1, req.pagination.wait_time_secs);
                 let start = std::time::Instant::now();
                 let resp = loop {
                     let resp = query

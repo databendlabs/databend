@@ -91,6 +91,11 @@ impl<R> TIdent<R> {
     pub fn name(&self) -> &str {
         &self.name
     }
+
+    //
+    pub fn display(&self) -> impl fmt::Display + '_ {
+        format!("'{}'/'{}'", self.tenant.name(), self.name)
+    }
 }
 
 mod kvapi_key_impl {

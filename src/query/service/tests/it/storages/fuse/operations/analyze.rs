@@ -82,7 +82,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
             .get_catalog(fixture.default_catalog_name().as_str())
             .await?;
         let table = catalog
-            .get_table(ctx.get_tenant().as_str(), &db, &tbl)
+            .get_table(ctx.get_tenant().name(), &db, &tbl)
             .await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let snapshot_opt = fuse_table.read_table_snapshot().await?;

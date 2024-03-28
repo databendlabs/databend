@@ -106,7 +106,7 @@ where TablesTable<T>: HistoryAware
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
         let catalogs = catalog_mgr
-            .list_catalogs(tenant.as_str(), ctx.txn_mgr())
+            .list_catalogs(tenant.name(), ctx.txn_mgr())
             .await?;
         let visibility_checker = ctx.get_visibility_checker().await?;
 
@@ -179,6 +179,7 @@ where TablesTable<T>: HistoryAware
         visibility_checker: GrantObjectVisibilityChecker,
     ) -> DataBlock {
         let tenant = ctx.get_tenant();
+
         let ctls: Vec<(String, Arc<dyn Catalog>)> =
             catalogs.iter().map(|e| (e.name(), e.clone())).collect();
 
@@ -205,7 +206,7 @@ where TablesTable<T>: HistoryAware
                         }
                     });
                     for db in db_name {
-                        match ctl.get_database(tenant.as_str(), db.as_str()).await {
+                        match ctl.get_database(tenant.name(), db.as_str()).await {
                             Ok(database) => dbs.push(database),
                             Err(err) => {
                                 let msg = format!("Failed to get database: {}, {}", db, err);
@@ -218,7 +219,7 @@ where TablesTable<T>: HistoryAware
             }
 
             if dbs.is_empty() {
-                dbs = match ctl.list_databases(tenant.as_str()).await {
+                dbs = match ctl.list_databases(&tenant).await {
                     Ok(dbs) => dbs,
                     Err(err) => {
                         let msg =
@@ -248,7 +249,7 @@ where TablesTable<T>: HistoryAware
                 let name = db.name().to_string().into_boxed_str();
                 let db_id = db.get_db_info().ident.db_id;
                 let name: &str = Box::leak(name);
-                let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
+                let tables = match Self::list_tables(&ctl, tenant.name(), name).await {
                     Ok(tables) => tables,
                     Err(err) => {
                         // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.

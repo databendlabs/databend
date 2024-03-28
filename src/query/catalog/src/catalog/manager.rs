@@ -33,8 +33,10 @@ use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::ListCatalogReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
+use databend_common_meta_types::NonEmptyString;
 use databend_storages_common_txn::TxnManagerRef;
 
 use super::Catalog;
@@ -99,11 +101,7 @@ impl CatalogManager {
             })?;
             let ctl = creator.try_create(&CatalogInfo {
                 id: CatalogId { catalog_id: 0 }.into(),
-                name_ident: CatalogNameIdent {
-                    tenant: tenant.to_string(),
-                    catalog_name: name.clone(),
-                }
-                .into(),
+                name_ident: CatalogNameIdent::new(tenant.clone(), name).into(),
                 meta: CatalogMeta {
                     catalog_option: CatalogOption::Hive(HiveCatalogOption {
                         address: hive_ctl_cfg.metastore_address.clone(),
@@ -165,6 +163,7 @@ impl CatalogManager {
     #[async_backtrace::framed]
     pub async fn get_catalog(
         &self,
+        // TODO: use Tenant or NonEmptyString
         tenant: &str,
         catalog_name: &str,
         txn_mgr: TxnManagerRef,
@@ -177,11 +176,14 @@ impl CatalogManager {
             return Ok(ctl.clone());
         }
 
+        let non_empty = NonEmptyString::new(tenant)
+            .map_err(|_e| ErrorCode::TenantIsEmpty("tenant is empty when get_catalog"))?;
+
+        let tenant = Tenant::new_nonempty(non_empty);
+        let ident = CatalogNameIdent::new(tenant, catalog_name);
+
         // Get catalog from metasrv.
-        let info = self
-            .meta
-            .get_catalog(GetCatalogReq::new(tenant, catalog_name))
-            .await?;
+        let info = self.meta.get_catalog(GetCatalogReq::new(ident)).await?;
 
         self.build_catalog(&info, txn_mgr)
     }
@@ -217,7 +219,7 @@ impl CatalogManager {
     /// Trying to drop default catalog will return an error.
     #[async_backtrace::framed]
     pub async fn drop_catalog(&self, req: DropCatalogReq) -> Result<()> {
-        let catalog_name = &req.name_ident.catalog_name;
+        let catalog_name = req.name_ident.name();
 
         if catalog_name == CATALOG_DEFAULT {
             return Err(ErrorCode::BadArguments(

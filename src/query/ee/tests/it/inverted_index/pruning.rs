@@ -18,6 +18,7 @@ use databend_common_ast::ast::Engine;
 use databend_common_base::base::tokio;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::NumberDataType;
@@ -32,6 +33,7 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_sql::plans::CreateTablePlan;
+use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::pruning::FusePruner;
@@ -41,17 +43,15 @@ use databend_enterprise_inverted_index::get_inverted_index_handler;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
+use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use opendal::Operator;
 
@@ -104,7 +104,7 @@ async fn test_block_pruner() -> Result<()> {
     let create_table_plan = CreateTablePlan {
         catalog: "default".to_owned(),
         create_option: CreateOption::Create,
-        tenant: fixture.default_tenant(),
+        tenant: fixture.default_tenant().name().to_string(),
         database: fixture.default_db_name(),
         table: test_tbl_name.to_string(),
         schema: test_schema.clone(),
@@ -131,7 +131,7 @@ async fn test_block_pruner() -> Result<()> {
     let catalog = ctx.get_catalog("default").await?;
     let table = catalog
         .get_table(
-            fixture.default_tenant().as_str(),
+            fixture.default_tenant().name(),
             fixture.default_db_name().as_str(),
             test_tbl_name,
         )
@@ -391,7 +391,7 @@ async fn test_block_pruner() -> Result<()> {
 
     let table = catalog
         .get_table(
-            fixture.default_tenant().as_str(),
+            fixture.default_tenant().name(),
             fixture.default_db_name().as_str(),
             test_tbl_name,
         )
@@ -400,10 +400,7 @@ async fn test_block_pruner() -> Result<()> {
     // create inverted index on table
     let handler = get_inverted_index_handler();
 
-    let table_ctx = fixture.new_query_ctx().await?;
-    let catalog = table_ctx
-        .get_catalog(&fixture.default_catalog_name())
-        .await?;
+    let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
     let table_id = table.get_id();
     let index_name = "idx1".to_string();
     let req = CreateTableIndexReq {
@@ -411,38 +408,34 @@ async fn test_block_pruner() -> Result<()> {
         table_id,
         name: index_name.clone(),
         column_ids: vec![1, 2],
+        sync_creation: true,
     };
 
-    let res = handler.do_create_table_index(catalog, req).await;
+    let res = handler.do_create_table_index(catalog.clone(), req).await;
     assert!(res.is_ok());
 
     let index_table_schema = TableSchemaRefExt::create(vec![
         TableField::new("idiom", TableDataType::String),
         TableField::new("meaning", TableDataType::String),
     ]);
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-    let new_snapshot_location = handler
-        .do_refresh_index(
-            fuse_table,
-            table_ctx.clone(),
-            index_name.clone(),
-            index_table_schema.clone(),
-            None,
-        )
-        .await?;
-    assert!(new_snapshot_location.is_some());
-    let new_snapshot_location = new_snapshot_location.unwrap();
-
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-
-    let load_params = LoadParams {
-        location: new_snapshot_location.clone(),
-        len_hint: None,
-        ver: TableSnapshot::VERSION,
-        put_cache: false,
+    let refresh_index_plan = RefreshTableIndexPlan {
+        catalog: fixture.default_catalog_name(),
+        database: fixture.default_db_name(),
+        table: test_tbl_name.to_string(),
+        index_name: index_name.clone(),
+        segment_locs: None,
+        need_lock: true,
     };
-    let snapshot = reader.read(&load_params).await?;
+    let interpreter = RefreshTableIndexInterpreter::try_create(ctx.clone(), refresh_index_plan)?;
+    let _ = interpreter.execute(ctx.clone()).await?;
+
+    let new_table = table.refresh(ctx.as_ref()).await?;
+    let fuse_table = FuseTable::do_create(new_table.get_table_info().clone())?;
+
+    let snapshot = fuse_table.read_table_snapshot().await?;
+    assert!(snapshot.is_some());
+    let snapshot = snapshot.unwrap();
 
     let index_schema = DataSchema::from(index_table_schema);
     let e1 = PushDownInfo {

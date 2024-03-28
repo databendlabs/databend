@@ -63,7 +63,7 @@ impl Interpreter for DescDataMaskInterpreter {
         let policy = handler
             .get_data_mask(
                 meta_api,
-                self.ctx.get_tenant().to_string(),
+                self.ctx.get_tenant().name().to_string(),
                 self.plan.name.clone(),
             )
             .await;
