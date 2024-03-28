@@ -62,17 +62,15 @@ impl CollectStatisticsOptimizer {
                     .read()
                     .columns_by_table_index(scan.table_index);
 
-                // TODO: change num of workers.
                 let table_ctx = self.table_ctx.clone();
                 let change_type = scan.change_type.clone();
                 let (column_statistics_provider, table_stats) =
-                    Runtime::with_worker_threads(2, None)?.block_on(async move {
+                    Runtime::with_worker_threads(1, None)?.block_on(async move {
                         let column_statistics_provider =
                             table.column_statistics_provider(table_ctx.clone()).await?;
                         let table_stats = table
                             .table_statistics(table_ctx.clone(), change_type.clone())
                             .await?;
-
                         Result::<_, ErrorCode>::Ok((column_statistics_provider, table_stats))
                     })?;
 
