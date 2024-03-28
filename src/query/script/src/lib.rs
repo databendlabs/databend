@@ -16,5 +16,3 @@ pub mod ir;
 
 mod compiler;
 pub use compiler::compile;
-
-mod executor;
