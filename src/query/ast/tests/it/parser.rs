@@ -782,7 +782,7 @@ fn test_statement_error() {
 #[test]
 fn test_raw_insert_stmt() {
     let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("raw_insert.txt").unwrap();
+    let file = &mut mint.new_goldenfile("raw-insert.txt").unwrap();
     let cases = &[
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,

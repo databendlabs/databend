@@ -465,14 +465,14 @@ Literal {
 ---------- Input ----------
 "a\"b"
 ---------- Output ---------
-'a\\"b'
+'a"b'
 ---------- AST ------------
 Literal {
     span: Some(
         0..6,
     ),
     value: String(
-        "a\\\"b",
+        "a\"b",
     ),
 }
 

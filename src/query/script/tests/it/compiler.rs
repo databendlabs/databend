@@ -75,16 +75,6 @@ fn test_compile() {
         "#,
         r#"
             LET x := 1;
-            IF x < 0 THEN
-                RETURN 'LESS THAN 0';
-            ELSEIF x = 0 THEN
-                RETURN 'EQUAL TO 0';
-            ELSE
-                RETURN 'GREATER THAN 0';
-            END IF;
-        "#,
-        r#"
-            LET x := 1;
             LET sum := 0;
             FOR x IN x TO x + 10 DO
                 sum := sum + x;
@@ -124,8 +114,32 @@ fn test_compile() {
                 END LOOP;
             END LOOP loop_label;
         "#,
-        // case
-        // if
+        r#"
+            LET x := 1;
+            CASE x
+                WHEN 1 THEN RETURN 'ONE';
+                WHEN 2 THEN RETURN 'TWO';
+                ELSE RETURN 'OTHER';
+            END CASE;
+        "#,
+        r#"
+            LET x := 1;
+            CASE
+                WHEN x = 1 THEN RETURN 'ONE';
+                WHEN x = 2 THEN RETURN 'TWO';
+                ELSE RETURN 'OTHER';
+            END CASE;
+        "#,
+        r#"
+            LET x := 1;
+            IF x < 0 THEN
+                RETURN 'LESS THAN 0';
+            ELSEIF x = 0 THEN
+                RETURN 'EQUAL TO 0';
+            ELSE
+                RETURN 'GREATER THAN 0';
+            END IF;
+        "#,
     ];
 
     for case in cases {
