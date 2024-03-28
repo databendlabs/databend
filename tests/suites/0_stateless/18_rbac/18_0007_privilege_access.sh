@@ -70,7 +70,9 @@ echo "select count(*) = 0 from t20_0012 where c=2" | $TEST_USER_CONNECT
 
 ## insert overwrite
 echo "select 'test -- insert overwrite'" | $TEST_USER_CONNECT
-echo "GRANT DELETE ON * TO role 'test-role1'" | $BENDSQL_CLIENT_CONNECT
+# now, user test-user has delete on default.t20_0012, role test-role1 has insert on default
+# insert overwrite should pass privilege check.
+echo "GRANT DELETE ON default.t20_0012 TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "insert overwrite t20_0012 values(2)" | $TEST_USER_CONNECT
 ## verify
 echo "select * from t20_0012 order by c" | $TEST_USER_CONNECT
