@@ -303,7 +303,7 @@ impl StatementTemplate {
                     }
                     Expr::Hole { span, .. } => {
                         self.error = Some(
-                                ErrorCode::ScriptSematicError("variable doesn't need to be quoted in this context, try removing the colon".to_string())
+                                ErrorCode::ScriptSemanticError("variable doesn't need to be quoted in this context, try removing the colon".to_string())
                                 .set_span(*span),
                             );
                     }
@@ -314,7 +314,7 @@ impl StatementTemplate {
             fn enter_identifier(&mut self, ident: &mut Identifier) {
                 if ident.is_hole {
                     self.error = Some(
-                        ErrorCode::ScriptSematicError(
+                        ErrorCode::ScriptSemanticError(
                             "variable is not allowed in this context".to_string(),
                         )
                         .set_span(ident.span),
@@ -400,7 +400,7 @@ impl StatementTemplate {
                         }
                         Ok(value) => {
                             self.error = Some(
-                                ErrorCode::ScriptSematicError(format!(
+                                ErrorCode::ScriptSemanticError(format!(
                                     "expected string literal, got {value}"
                                 ))
                                 .set_span(ident.span),

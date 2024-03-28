@@ -41,7 +41,7 @@
 //                 }
 //                 Expr::Hole { span, .. } => {
 //                     self.error = Some(
-//                             ErrorCode::ScriptSematicError(format!(
+//                             ErrorCode::ScriptSemanticError(format!(
 //                                 "variable doesn't need to be quoted in this context, try removing the colon"
 //                             ))
 //                             .set_span(*span),
@@ -54,7 +54,7 @@
 //         fn enter_identifier(&mut self, ident: &mut Identifier) {
 //             if ident.is_hole {
 //                 self.error = Some(
-//                     ErrorCode::ScriptSematicError(format!(
+//                     ErrorCode::ScriptSemanticError(format!(
 //                         "variable is not allowed in this context"
 //                     ))
 //                     .set_span(ident.span),

@@ -353,7 +353,7 @@ build_exceptions! {
     TenantQuotaExceeded(2903),
 
     // Script error codes.
-    ScriptSematicError(3001),
+    ScriptSemanticError(3001),
 }
 
 // Storage errors [3001, 4000].

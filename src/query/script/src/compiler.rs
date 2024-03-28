@@ -675,7 +675,7 @@ impl Compiler {
         for scope in self.scopes.iter().rev() {
             if let Some(shadowed) = scope.items.get(&name) {
                 if !shadowed.is_same_kind(&item) {
-                    return Err(ErrorCode::ScriptSematicError(format!(
+                    return Err(ErrorCode::ScriptSemanticError(format!(
                         "`{name}` is already defined as a different kind of variable"
                     ))
                     .set_span(ident.span));
@@ -767,13 +767,13 @@ impl Compiler {
                 return Ok(item.clone());
             }
         }
-        Err(ErrorCode::ScriptSematicError(format!("`{name}` is not defined")).set_span(ident.span))
+        Err(ErrorCode::ScriptSemanticError(format!("`{name}` is not defined")).set_span(ident.span))
     }
 
     fn lookup_var(&self, ident: &Identifier) -> Result<VarRef> {
         let RefItem::Var(var) = self.lookup_ref(ident)? else {
             let name = self.normalize_ident(ident);
-            return Err(ErrorCode::ScriptSematicError(format!(
+            return Err(ErrorCode::ScriptSemanticError(format!(
                 "`{name}` is not a scalar variable"
             ))
             .set_span(ident.span));
@@ -785,7 +785,7 @@ impl Compiler {
         let RefItem::Set(set) = self.lookup_ref(ident)? else {
             let name = self.normalize_ident(ident);
             return Err(
-                ErrorCode::ScriptSematicError(format!("`{name}` is not a set"))
+                ErrorCode::ScriptSemanticError(format!("`{name}` is not a set"))
                     .set_span(ident.span),
             );
         };
@@ -796,7 +796,7 @@ impl Compiler {
         let RefItem::Iter(iter) = self.lookup_ref(ident)? else {
             let name = self.normalize_ident(ident);
             return Err(
-                ErrorCode::ScriptSematicError(format!("`{name}` is not a row variable"))
+                ErrorCode::ScriptSemanticError(format!("`{name}` is not a row variable"))
                     .set_span(ident.span),
             );
         };
@@ -811,7 +811,7 @@ impl Compiler {
         else {
             let name = self.normalize_ident(ident);
             return Err(
-                ErrorCode::ScriptSematicError(format!("`{name}` is not a loop"))
+                ErrorCode::ScriptSemanticError(format!("`{name}` is not a loop"))
                     .set_span(ident.span),
             );
         };
@@ -830,7 +830,7 @@ impl Compiler {
                 }
             }
         }
-        Err(ErrorCode::ScriptSematicError("not in a loop".to_string()).set_span(span))
+        Err(ErrorCode::ScriptSemanticError("not in a loop".to_string()).set_span(span))
     }
 }
 
