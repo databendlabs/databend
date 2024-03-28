@@ -37,7 +37,7 @@ use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
@@ -180,7 +180,7 @@ pub trait TableContext: Send + Sync {
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
     fn get_format_settings(&self) -> Result<FormatSettings>;
-    fn get_tenant(&self) -> NonEmptyString;
+    fn get_tenant(&self) -> Tenant;
     /// Get the kind of session running query.
     fn get_query_kind(&self) -> QueryKind;
     fn get_function_context(&self) -> Result<FunctionContext>;

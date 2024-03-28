@@ -310,21 +310,13 @@ impl GrantEntry {
         &self.privileges
     }
 
-    pub fn verify_privilege(
-        &self,
-        object: &GrantObject,
-        privileges: Vec<UserPrivilegeType>,
-    ) -> bool {
+    pub fn verify_privilege(&self, object: &GrantObject, privilege: UserPrivilegeType) -> bool {
         // the verified object should be smaller than the object inside my grant entry.
         if !self.object.contains(object) {
             return false;
         }
 
-        let mut priv_set = UserPrivilegeSet::empty();
-        for privilege in privileges {
-            priv_set.set_privilege(privilege)
-        }
-        self.privileges.contains(BitFlags::from(priv_set))
+        self.privileges.contains(BitFlags::from(privilege))
     }
 
     pub fn matches_entry(&self, object: &GrantObject) -> bool {
@@ -384,14 +376,10 @@ impl UserGrantSet {
         self.roles.remove(role);
     }
 
-    pub fn verify_privilege(
-        &self,
-        object: &GrantObject,
-        privilege: Vec<UserPrivilegeType>,
-    ) -> bool {
+    pub fn verify_privilege(&self, object: &GrantObject, privilege: UserPrivilegeType) -> bool {
         self.entries
             .iter()
-            .any(|e| e.verify_privilege(object, privilege.clone()))
+            .any(|e| e.verify_privilege(object, privilege))
     }
 
     pub fn grant_privileges(&mut self, object: &GrantObject, privileges: UserPrivilegeSet) {

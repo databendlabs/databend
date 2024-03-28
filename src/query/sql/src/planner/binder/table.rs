@@ -221,7 +221,7 @@ impl Binder {
         // Resolve table with catalog
         let table_meta = match self
             .resolve_data_source(
-                tenant.as_str(),
+                tenant.name(),
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),

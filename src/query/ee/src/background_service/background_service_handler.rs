@@ -37,7 +37,6 @@ use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_background_service::background_service::BackgroundServiceHandlerWrapper;
 use databend_enterprise_background_service::BackgroundServiceHandler;
@@ -170,12 +169,10 @@ impl RealBackgroundService {
         params: BackgroundJobParams,
         creator: UserIdentity,
     ) -> Result<BackgroundJobIdent> {
-        let non_empty = NonEmptyString::new(&conf.query.tenant_id).map_err(|_e| {
-            ErrorCode::TenantIsEmpty("conf.query.tenant is empty when create_compactor_job")
-        })?;
-        let tenant = Tenant::new_nonempty(non_empty);
+        let tenant = conf.query.tenant_id.clone();
 
-        let name = RealBackgroundService::get_compactor_job_name(conf.query.tenant_id.to_string());
+        let name =
+            RealBackgroundService::get_compactor_job_name(conf.query.tenant_id.name().to_string());
         let id = BackgroundJobIdent::new(tenant, name);
 
         let info = BackgroundJobInfo::new_compactor_job(params, creator);

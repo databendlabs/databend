@@ -52,15 +52,6 @@ pub struct PlanProfile {
     pub title: Arc<String>,
     pub labels: Arc<Vec<ProfileLabel>>,
 
-    /// The time spent to process in nanoseconds
-    pub cpu_time: usize,
-    /// The time spent to wait in nanoseconds, usually used to
-    /// measure the time spent on waiting for I/O
-    pub wait_time: usize,
-
-    pub exchange_rows: usize,
-    pub exchange_bytes: usize,
-
     pub statistics: [usize; std::mem::variant_count::<ProfileStatisticsName>()],
 }
 
@@ -72,10 +63,6 @@ impl PlanProfile {
             parent_id: profile.plan_parent_id,
             title: profile.title.clone(),
             labels: profile.labels.clone(),
-            cpu_time: profile.load_profile(ProfileStatisticsName::CpuTime),
-            wait_time: profile.load_profile(ProfileStatisticsName::WaitTime),
-            exchange_rows: profile.load_profile(ProfileStatisticsName::ExchangeRows),
-            exchange_bytes: profile.load_profile(ProfileStatisticsName::ExchangeBytes),
             statistics: std::array::from_fn(|index| {
                 profile.statistics[index].load(Ordering::SeqCst)
             }),
@@ -86,11 +73,6 @@ impl PlanProfile {
         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
             self.statistics[index] += profile.statistics[index].load(Ordering::SeqCst);
         }
-
-        self.cpu_time += profile.load_profile(ProfileStatisticsName::CpuTime);
-        self.wait_time += profile.load_profile(ProfileStatisticsName::WaitTime);
-        self.exchange_rows += profile.load_profile(ProfileStatisticsName::ExchangeRows);
-        self.exchange_bytes += profile.load_profile(ProfileStatisticsName::ExchangeBytes);
     }
 
     pub fn merge(&mut self, profile: &PlanProfile) {
@@ -101,11 +83,6 @@ impl PlanProfile {
         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
             self.statistics[index] += profile.statistics[index];
         }
-
-        self.cpu_time += profile.cpu_time;
-        self.wait_time += profile.wait_time;
-        self.exchange_rows += profile.exchange_rows;
-        self.exchange_bytes += profile.exchange_bytes;
     }
 }
 
