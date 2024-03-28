@@ -33,8 +33,8 @@ use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::BloomIndexColumns;
@@ -100,10 +100,8 @@ impl Interpreter for CreateTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.plan.tenant.clone();
-        let tenant = NonEmptyString::new(tenant).map_err(|_e| {
-            ErrorCode::TenantIsEmpty("tenant is empty when CreateTableInterpreter")
-        })?;
+        let tenant = Tenant::new_or_err(&self.plan.tenant, "CreateTableInterpreter::execute2")?;
+
         let has_computed_column = self
             .plan
             .schema
@@ -170,6 +168,7 @@ impl CreateTableInterpreter {
         );
 
         let tenant = self.ctx.get_tenant();
+
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
@@ -179,14 +178,14 @@ impl CreateTableInterpreter {
         }
 
         let table = catalog
-            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+            .get_table(tenant.name(), &self.plan.database, &self.plan.table)
             .await?;
 
         // grant the ownership of the table to the current role.
         let current_role = self.ctx.get_current_role();
         if let Some(current_role) = current_role {
             let db = catalog
-                .get_database(tenant.as_str(), &self.plan.database)
+                .get_database(tenant.name(), &self.plan.database)
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
 
@@ -226,7 +225,7 @@ impl CreateTableInterpreter {
         // update share spec if needed
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
-                &tenant.to_string(),
+                &tenant.name().to_string(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),
@@ -278,7 +277,7 @@ impl CreateTableInterpreter {
         if let Some(current_role) = self.ctx.get_current_role() {
             let tenant = self.ctx.get_tenant();
             let db = catalog
-                .get_database(tenant.as_str(), &self.plan.database)
+                .get_database(tenant.name(), &self.plan.database)
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
 
@@ -299,7 +298,7 @@ impl CreateTableInterpreter {
         // update share spec if needed
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
-                &self.ctx.get_tenant().to_string(),
+                &self.ctx.get_tenant().name().to_string(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),

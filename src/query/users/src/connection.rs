@@ -16,8 +16,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::NonEmptyString;
 
 use crate::UserApiProvider;
 
@@ -27,7 +27,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_connection(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         connection: UserDefinedConnection,
         create_option: &CreateOption,
     ) -> Result<()> {
@@ -42,7 +42,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_connection(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         connection_name: &str,
     ) -> Result<UserDefinedConnection> {
         let connection_api_provider = self.connection_api(tenant);
@@ -52,10 +52,7 @@ impl UserApiProvider {
 
     // Get the tenant all connection list.
     #[async_backtrace::framed]
-    pub async fn get_connections(
-        &self,
-        tenant: &NonEmptyString,
-    ) -> Result<Vec<UserDefinedConnection>> {
+    pub async fn get_connections(&self, tenant: &Tenant) -> Result<Vec<UserDefinedConnection>> {
         let connection_api_provider = self.connection_api(tenant);
         let get_connections = connection_api_provider.list();
 
@@ -69,7 +66,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn drop_connection(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         name: &str,
         if_exists: bool,
     ) -> Result<()> {

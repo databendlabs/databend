@@ -91,7 +91,7 @@ async fn test_block_pruner() -> Result<()> {
     let create_table_plan = CreateTablePlan {
         catalog: "default".to_owned(),
         create_option: CreateOption::Create,
-        tenant: fixture.default_tenant(),
+        tenant: fixture.default_tenant().name().to_string(),
         database: fixture.default_db_name(),
         table: test_tbl_name.to_string(),
         schema: test_schema.clone(),
@@ -118,7 +118,7 @@ async fn test_block_pruner() -> Result<()> {
     let catalog = ctx.get_catalog("default").await?;
     let table = catalog
         .get_table(
-            fixture.default_tenant().as_str(),
+            fixture.default_tenant().name(),
             fixture.default_db_name().as_str(),
             test_tbl_name,
         )
@@ -151,7 +151,7 @@ async fn test_block_pruner() -> Result<()> {
     // get the latest tbl
     let table = catalog
         .get_table(
-            fixture.default_tenant().as_str(),
+            fixture.default_tenant().name(),
             fixture.default_db_name().as_str(),
             test_tbl_name,
         )

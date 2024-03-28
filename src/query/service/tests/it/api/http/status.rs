@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use databend_query::api::http::v1::instance_status::instance_status_handler;
 use databend_query::api::http::v1::instance_status::InstanceStatus;
@@ -58,10 +58,7 @@ async fn get_status(ep: &Route) -> InstanceStatus {
 async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>> {
     let sql = "select sleep(3) from numbers(1)";
     let user = UserApiProvider::instance()
-        .get_user(
-            &NonEmptyString::new("test").unwrap(),
-            UserIdentity::new("root", "%"),
-        )
+        .get_user(&Tenant::new_literal("test"), UserIdentity::new("root", "%"))
         .await?;
     query_ctx
         .get_current_session()

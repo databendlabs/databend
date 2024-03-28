@@ -15,6 +15,7 @@
 //! Schema types
 
 pub mod catalog;
+pub mod catalog_name_ident;
 mod create_option;
 mod database;
 mod index;
@@ -23,7 +24,9 @@ mod lock;
 mod ownership;
 mod table;
 mod virtual_column;
+
 pub use catalog::*;
+pub use catalog_name_ident::CatalogNameIdent;
 pub use create_option::CreateOption;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;

@@ -27,8 +27,8 @@ use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_users::idm_config::IDMConfig;
@@ -148,7 +148,7 @@ impl Debug for InnerConfig {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
-    pub tenant_id: NonEmptyString,
+    pub tenant_id: Tenant,
     /// ID for construct the cluster.
     pub cluster_id: String,
     // ID for the query node.
@@ -237,7 +237,7 @@ pub struct QueryConfig {
 impl Default for QueryConfig {
     fn default() -> Self {
         Self {
-            tenant_id: NonEmptyString::new("admin").unwrap(),
+            tenant_id: Tenant::new_or_err("admin", "default()").unwrap(),
             cluster_id: "".to_string(),
             node_id: "".to_string(),
             num_cpus: 0,

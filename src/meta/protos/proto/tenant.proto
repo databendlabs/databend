@@ -16,38 +16,15 @@ syntax = "proto3";
 
 package databend_proto;
 
-import "config.proto";
-
-message CatalogMeta {
+// `[T]enant[Ident]` is a common meta-service key structure in form of `<PREFIX>/<TENANT>/<NAME>`.
+message TIdent {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  // Catalog options
-  CatalogOption option = 2;
+  // The user this record belongs to.
+  // It must not be empty.
+  string tenant = 1;
 
-  // The time catalog created.
-  string created_on = 20;
-}
-
-message CatalogOption {
-  oneof catalog_option {
-    HiveCatalogOption hive = 2;
-    IcebergCatalogOption iceberg = 3;
-  }
-}
-
-message HiveCatalogOption {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  // Hive metastore thrift uri
-  string address = 1;
-  StorageConfig storage_params = 2;
-}
-
-message IcebergCatalogOption {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  StorageConfig storage_params = 1;
+  // Resource name
+  string name = 2;
 }

@@ -31,24 +31,26 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_query::catalogs::Catalog;
 
 use crate::tests::create_catalog;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_catalogs_get_database() -> Result<()> {
-    let tenant = "test";
+    let tenant_name = "test";
+    let tenant = Tenant::new_literal(tenant_name);
     let catalog = create_catalog().await?;
 
     // get system database
-    let database = catalog.get_database(tenant, "system").await?;
+    let database = catalog.get_database(tenant_name, "system").await?;
     assert_eq!(database.name(), "system");
 
-    let db_list = catalog.list_databases(tenant).await?;
+    let db_list = catalog.list_databases(&tenant).await?;
     assert_eq!(db_list.len(), 3);
 
     // get default database
-    let db_2 = catalog.get_database(tenant, "default").await?;
+    let db_2 = catalog.get_database(tenant_name, "default").await?;
     assert_eq!(db_2.name(), "default");
 
     // get non-exist database
@@ -64,10 +66,11 @@ async fn test_catalogs_get_database() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_catalogs_database() -> Result<()> {
-    let tenant = "admin";
+    let tenant_name = "admin";
+    let tenant = Tenant::new_literal(tenant_name);
     let catalog = create_catalog().await?;
 
-    let db_list = catalog.list_databases(tenant).await?;
+    let db_list = catalog.list_databases(&tenant).await?;
     let db_count = db_list.len();
 
     // Create.
@@ -75,7 +78,7 @@ async fn test_catalogs_database() -> Result<()> {
         let mut req = CreateDatabaseReq {
             create_option: CreateOption::Create,
             name_ident: DatabaseNameIdent {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 db_name: "db1".to_string(),
             },
             meta: DatabaseMeta {
@@ -86,7 +89,7 @@ async fn test_catalogs_database() -> Result<()> {
         let res = catalog.create_database(req.clone()).await;
         assert!(res.is_ok());
 
-        let db_list_1 = catalog.list_databases(tenant).await?;
+        let db_list_1 = catalog.list_databases(&tenant).await?;
         assert_eq!(db_list_1.len(), db_count + 1);
 
         // Tenant empty.
@@ -100,7 +103,7 @@ async fn test_catalogs_database() -> Result<()> {
         let mut req = RenameDatabaseReq {
             if_exists: false,
             name_ident: DatabaseNameIdent {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 db_name: "db1".to_string(),
             },
             new_db_name: "db2".to_string(),
@@ -108,7 +111,7 @@ async fn test_catalogs_database() -> Result<()> {
         let res = catalog.rename_database(req.clone()).await;
         assert!(res.is_ok());
 
-        let db_list_1 = catalog.list_databases(tenant).await?;
+        let db_list_1 = catalog.list_databases(&tenant).await?;
         assert_eq!(db_list_1.len(), db_count + 1);
 
         // Tenant empty.
@@ -122,7 +125,7 @@ async fn test_catalogs_database() -> Result<()> {
         let req = DropDatabaseReq {
             if_exists: false,
             name_ident: DatabaseNameIdent {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 db_name: "db1".to_string(),
             },
         };
@@ -135,14 +138,14 @@ async fn test_catalogs_database() -> Result<()> {
         let mut req = DropDatabaseReq {
             if_exists: false,
             name_ident: DatabaseNameIdent {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 db_name: "db2".to_string(),
             },
         };
         let res = catalog.drop_database(req.clone()).await;
         assert!(res.is_ok());
 
-        let db_list_drop = catalog.list_databases(tenant).await?;
+        let db_list_drop = catalog.list_databases(&tenant).await?;
         assert_eq!(db_list_drop.len(), db_count);
 
         // Tenant empty.
