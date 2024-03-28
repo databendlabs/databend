@@ -75,7 +75,7 @@ async fn test_catalogs_database() -> Result<()> {
 
     // Create.
     {
-        let mut req = CreateDatabaseReq {
+        let req = CreateDatabaseReq {
             create_option: CreateOption::Create,
             name_ident: DatabaseNameIdent {
                 tenant: tenant.clone(),
@@ -95,7 +95,7 @@ async fn test_catalogs_database() -> Result<()> {
 
     // Rename.
     {
-        let mut req = RenameDatabaseReq {
+        let req = RenameDatabaseReq {
             if_exists: false,
             name_ident: DatabaseNameIdent {
                 tenant: tenant.clone(),
@@ -125,7 +125,7 @@ async fn test_catalogs_database() -> Result<()> {
 
     // Drop renamed db.
     {
-        let mut req = DropDatabaseReq {
+        let req = DropDatabaseReq {
             if_exists: false,
             name_ident: DatabaseNameIdent {
                 tenant: tenant.clone(),
@@ -168,7 +168,7 @@ async fn test_catalogs_table() -> Result<()> {
         let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
         let created_on = Utc::now();
 
-        let mut req = CreateTableReq {
+        let req = CreateTableReq {
             create_option: CreateOption::Create,
             name_ident: TableNameIdent {
                 tenant: tenant.clone(),
