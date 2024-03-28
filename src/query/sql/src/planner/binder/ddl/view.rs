@@ -180,14 +180,15 @@ impl Binder {
                 .with_column("num_rows")
                 .with_column("data_size")
                 .with_column("data_compressed_size")
-                .with_column("index_size")
-                .with_column("view_query");
+                .with_column("index_size");
         } else {
             select_builder.with_column(format!("name AS `Views_in_{database}`"));
             if *with_history {
                 select_builder.with_column("dropped_on AS drop_time");
             };
         }
+
+        select_builder.with_column("view_query");
 
         select_builder
             .with_order_by("catalog")
