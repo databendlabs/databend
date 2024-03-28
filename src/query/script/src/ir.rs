@@ -66,7 +66,7 @@ impl<const REFKIND: usize> Ref<REFKIND> {
         }
     }
 
-    pub fn new_interal(span: Span, hint: &str, allocator: &mut RefAllocator) -> Self {
+    pub fn new_internal(span: Span, hint: &str, allocator: &mut RefAllocator) -> Self {
         let index = allocator.next_index;
         allocator.next_index += 1;
         Ref {

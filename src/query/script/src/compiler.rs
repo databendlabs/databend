@@ -47,7 +47,9 @@ use crate::ir::VarRef;
 #[minitrace::trace]
 pub fn compile(code: &[ScriptStatement]) -> Result<Vec<ScriptIR>> {
     let mut compiler = Compiler::new();
-    compiler.compile(code)
+    let result = compiler.compile(code);
+    assert!(compiler.scopes.len() == 1 || result.is_err());
+    result
 }
 
 struct Compiler {
@@ -578,13 +580,15 @@ impl Compiler {
     ) -> Result<Vec<ScriptIR>> {
         let mut output = vec![];
 
+        self.push_scope();
+
         let then_labels = conditions
             .iter()
             .map(|condition| {
-                LabelRef::new_interal(condition.span(), "IF_THEN", &mut self.ref_allocator)
+                LabelRef::new_internal(condition.span(), "IF_THEN", &mut self.ref_allocator)
             })
             .collect::<Vec<_>>();
-        let end_label = LabelRef::new_interal(span, "IF_END", &mut self.ref_allocator);
+        let end_label = LabelRef::new_internal(span, "IF_END", &mut self.ref_allocator);
 
         for (condition, then_label) in conditions.iter().zip(&then_labels) {
             // <let condition := is_true(condition)>
@@ -632,6 +636,8 @@ impl Compiler {
             label: end_label.clone(),
         });
 
+        self.pop_scope();
+
         Ok(output)
     }
 
@@ -666,7 +672,7 @@ impl Compiler {
     }
 
     fn normalize_ident(&self, ident: &Identifier) -> RefName {
-        // todo!()
+        // TODO(andylokandy): use NameResolutionCtx
         RefName(ident.name.clone())
     }
 
@@ -700,7 +706,7 @@ impl Compiler {
     }
 
     fn declare_anonymous_var(&mut self, span: Span, hint: &str) -> Result<VarRef> {
-        let var = VarRef::new_interal(span, hint, &mut self.ref_allocator);
+        let var = VarRef::new_internal(span, hint, &mut self.ref_allocator);
         self.declare_anonymous_ref(RefItem::Var(var.clone()))?;
         Ok(var)
     }
@@ -713,7 +719,7 @@ impl Compiler {
     }
 
     fn declare_anonymous_set(&mut self, span: Span, hint: &str) -> Result<SetRef> {
-        let set = SetRef::new_interal(span, hint, &mut self.ref_allocator);
+        let set = SetRef::new_internal(span, hint, &mut self.ref_allocator);
         self.declare_anonymous_ref(RefItem::Set(set.clone()))?;
         Ok(set)
     }
@@ -726,7 +732,7 @@ impl Compiler {
     }
 
     fn declare_anonymous_iter(&mut self, span: Span, hint: &str) -> Result<IterRef> {
-        let iter = IterRef::new_interal(span, hint, &mut self.ref_allocator);
+        let iter = IterRef::new_internal(span, hint, &mut self.ref_allocator);
         self.declare_anonymous_ref(RefItem::Iter(iter.clone()))?;
         Ok(iter)
     }
@@ -751,8 +757,8 @@ impl Compiler {
     }
 
     fn declare_anonymous_loop(&mut self, span: Span) -> Result<(LabelRef, LabelRef)> {
-        let continue_label = LabelRef::new_interal(span, "LOOP", &mut self.ref_allocator);
-        let break_label = LabelRef::new_interal(span, "LOOP_END", &mut self.ref_allocator);
+        let continue_label = LabelRef::new_internal(span, "LOOP", &mut self.ref_allocator);
+        let break_label = LabelRef::new_internal(span, "LOOP_END", &mut self.ref_allocator);
         self.declare_anonymous_ref(RefItem::Loop {
             continue_label: continue_label.clone(),
             break_label: break_label.clone(),
@@ -834,7 +840,7 @@ impl Compiler {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct Scope {
     items: HashMap<RefName, RefItem>,
     anonymous_items: Vec<RefItem>,
