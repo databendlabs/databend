@@ -270,6 +270,7 @@ where F: SnapshotGenerator + Send + 'static
                         schema,
                         cluster_key_meta,
                         previous,
+                        Some(table_info.ident.seq),
                     ) {
                         Ok(snapshot) => {
                             self.state = State::TryCommit {

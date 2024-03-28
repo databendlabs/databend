@@ -21,6 +21,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sharing::ShareEndpointManager;
 use databend_common_sql::plans::CreateDatabasePlan;
@@ -108,11 +109,12 @@ impl Interpreter for CreateDatabaseInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "create_database_execute");
 
-        let tenant = self.plan.tenant.clone();
+        let tenant = Tenant::new_nonempty(self.plan.tenant.clone());
+
         let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let databases = catalog.list_databases(tenant.as_str()).await?;
+        let databases = catalog.list_databases(&tenant).await?;
         if quota.max_databases != 0 && databases.len() >= quota.max_databases as usize {
             return Err(ErrorCode::TenantQuotaExceeded(format!(
                 "Max databases quota exceeded {}",
@@ -121,7 +123,7 @@ impl Interpreter for CreateDatabaseInterpreter {
         };
         // if create from other tenant, check from share endpoint
         if let Some(ref share_name) = self.plan.meta.from_share {
-            self.check_create_database_from_share(&tenant.to_string(), share_name)
+            self.check_create_database_from_share(&tenant.name().to_string(), share_name)
                 .await?;
         }
 
@@ -152,7 +154,7 @@ impl Interpreter for CreateDatabaseInterpreter {
             }
 
             save_share_spec(
-                &self.ctx.get_tenant().to_string(),
+                &self.ctx.get_tenant().name().to_string(),
                 self.ctx.get_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_into),

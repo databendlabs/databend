@@ -562,8 +562,11 @@ impl Table for FuseTable {
             (FuseStatistics::default(), vec![])
         };
 
+        let table_version = Some(self.get_table_info().ident.seq);
+
         let new_snapshot = TableSnapshot::new(
             Uuid::new_v4(),
+            table_version,
             &prev_timestamp,
             prev_snapshot_id,
             schema,
@@ -615,8 +618,11 @@ impl Table for FuseTable {
             (FuseStatistics::default(), vec![])
         };
 
+        let table_version = Some(self.get_table_info().ident.seq);
+
         let new_snapshot = TableSnapshot::new(
             Uuid::new_v4(),
+            table_version,
             &prev_timestamp,
             prev_snapshot_id,
             schema,

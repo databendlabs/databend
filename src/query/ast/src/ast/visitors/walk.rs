@@ -322,6 +322,9 @@ pub fn walk_stream_point<'a, V: Visitor<'a>>(visitor: &mut V, point: &'a StreamP
 
             visitor.visit_identifier(name);
         }
+        StreamPoint::AtPoint(point) => {
+            visitor.visit_time_travel_point(point);
+        }
     }
 }
 

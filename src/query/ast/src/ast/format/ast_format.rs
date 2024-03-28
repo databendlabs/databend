@@ -3292,6 +3292,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_stream_point(&mut self, point: &'ast StreamPoint) {
         match point {
             StreamPoint::AtStream { database, name } => self.visit_table_ref(&None, database, name),
+            StreamPoint::AtPoint(point) => self.visit_time_travel_point(point),
         }
     }
 

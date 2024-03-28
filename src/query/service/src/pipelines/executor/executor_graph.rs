@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -34,6 +35,8 @@ use databend_common_pipeline_core::Pipeline;
 use log::debug;
 use log::trace;
 use minitrace::prelude::*;
+use parking_lot::Condvar;
+use parking_lot::Mutex;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
@@ -156,22 +159,40 @@ struct ExecutingGraph {
     /// - the high 32 bit store the number of points that can be consumed
     /// - the low 32 bit store this points belong to which epoch
     points: AtomicU64,
+    query_id: Arc<String>,
+    should_finish: AtomicBool,
+    finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+    finished_error: Mutex<Option<ErrorCode>>,
 }
 
 type StateLockGuard = ExecutingGraph;
 
 impl ExecutingGraph {
-    pub fn create(mut pipeline: Pipeline, init_epoch: u32) -> Result<ExecutingGraph> {
+    pub fn create(
+        mut pipeline: Pipeline,
+        init_epoch: u32,
+        query_id: Arc<String>,
+        finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+    ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
         Self::init_graph(&mut pipeline, &mut graph);
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
             points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
+            query_id,
+            should_finish: AtomicBool::new(false),
+            finish_condvar_notify,
+            finished_error: Mutex::new(None),
         })
     }
 
-    pub fn from_pipelines(mut pipelines: Vec<Pipeline>, init_epoch: u32) -> Result<ExecutingGraph> {
+    pub fn from_pipelines(
+        mut pipelines: Vec<Pipeline>,
+        init_epoch: u32,
+        query_id: Arc<String>,
+        finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+    ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
 
         for pipeline in &mut pipelines {
@@ -182,6 +203,10 @@ impl ExecutingGraph {
             finished_nodes: AtomicUsize::new(0),
             graph,
             points: AtomicU64::new((MAX_POINTS << 32) | init_epoch as u64),
+            query_id,
+            should_finish: AtomicBool::new(false),
+            finish_condvar_notify,
+            finished_error: Mutex::new(None),
         })
     }
 
@@ -465,9 +490,10 @@ impl ScheduleQueue {
         debug_assert!(!context.has_task());
 
         while let Some(processor) = self.async_queue.pop_front() {
+            let query_id = processor.graph.get_query_id().clone();
             Self::schedule_async_task(
                 processor,
-                context.query_id.clone(),
+                query_id,
                 executor,
                 context.get_worker_id(),
                 context.get_workers_condvar().clone(),
@@ -550,9 +576,10 @@ impl ScheduleQueue {
                 .graph
                 .can_perform_task(executor.epoch.load(Ordering::SeqCst), MAX_POINTS)
             {
+                let query_id = processor.graph.get_query_id().clone();
                 Self::schedule_async_task_with_condition(
                     processor,
-                    context.query_id.clone(),
+                    query_id,
                     executor,
                     context.get_worker_id(),
                     context.get_workers_condvar().clone(),
@@ -636,14 +663,26 @@ impl ScheduleQueue {
 pub struct RunningGraph(ExecutingGraph);
 
 impl RunningGraph {
-    pub fn create(pipeline: Pipeline, init_epoch: u32) -> Result<Arc<RunningGraph>> {
-        let graph_state = ExecutingGraph::create(pipeline, init_epoch)?;
+    pub fn create(
+        pipeline: Pipeline,
+        init_epoch: u32,
+        query_id: Arc<String>,
+        finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+    ) -> Result<Arc<RunningGraph>> {
+        let graph_state =
+            ExecutingGraph::create(pipeline, init_epoch, query_id, finish_condvar_notify)?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
     }
 
-    pub fn from_pipelines(pipelines: Vec<Pipeline>, init_epoch: u32) -> Result<Arc<RunningGraph>> {
-        let graph_state = ExecutingGraph::from_pipelines(pipelines, init_epoch)?;
+    pub fn from_pipelines(
+        pipelines: Vec<Pipeline>,
+        init_epoch: u32,
+        query_id: Arc<String>,
+        finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+    ) -> Result<Arc<RunningGraph>> {
+        let graph_state =
+            ExecutingGraph::from_pipelines(pipelines, init_epoch, query_id, finish_condvar_notify)?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
     }
@@ -711,9 +750,50 @@ impl RunningGraph {
         }
     }
 
+    /// Checks if all nodes in the graph are finished.
+    pub fn is_all_nodes_finished(&self) -> bool {
+        self.0.finished_nodes.load(Ordering::SeqCst) >= self.0.graph.node_count()
+    }
+
+    /// Flag the graph should finish and no more tasks should be scheduled.
+    pub fn should_finish(&self, cause: Result<(), ErrorCode>) -> Result<()> {
+        if self.0.should_finish.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        self.0.should_finish.store(true, Ordering::SeqCst);
+        self.interrupt_running_nodes();
+        let mut finished_error = self.0.finished_error.lock();
+        if finished_error.is_none() {
+            *finished_error = cause.err();
+            drop(finished_error);
+        }
+
+        if let Some(notify) = self.0.finish_condvar_notify.clone() {
+            let (lock, cvar) = &*notify;
+            let mut started = lock.lock();
+            *started = true;
+            cvar.notify_one();
+        }
+        Ok(())
+    }
+
+    /// Checks if the graph should finish and no more tasks should be scheduled.
+    pub fn is_should_finish(&self) -> bool {
+        self.0.should_finish.load(Ordering::SeqCst)
+    }
+
     /// Checks if a task can be performed in the current epoch, consuming a point if possible.
     pub fn can_perform_task(&self, global_epoch: u32, max_points: u64) -> bool {
         self.0.can_perform_task(global_epoch, max_points)
+    }
+
+    pub fn get_query_id(&self) -> Arc<String> {
+        self.0.query_id.clone()
+    }
+
+    pub fn get_error(&self) -> Option<ErrorCode> {
+        let finished_error = self.0.finished_error.lock();
+        finished_error.clone()
     }
 
     pub fn format_graph_nodes(&self) -> String {

@@ -17,14 +17,14 @@ use std::net::SocketAddr;
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_query::sessions::SessionContext;
 use databend_query::sessions::SessionType;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_session_context() -> Result<()> {
-    let settings = Settings::create(NonEmptyString::new("default").unwrap());
+    let settings = Settings::create(Tenant::new_literal("default"));
     let session_ctx = SessionContext::try_create(settings, SessionType::MySQL)?;
 
     // Abort status.

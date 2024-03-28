@@ -177,6 +177,28 @@ impl ScalarExpr {
         visitor.visit(self)?;
         Ok(())
     }
+
+    pub fn has_one_column_ref(&self) -> bool {
+        struct BoundColumnRefVisitor {
+            has_column_ref: bool,
+            num_column_ref: usize,
+        }
+
+        impl<'a> Visitor<'a> for BoundColumnRefVisitor {
+            fn visit_bound_column_ref(&mut self, _col: &'a BoundColumnRef) -> Result<()> {
+                self.has_column_ref = true;
+                self.num_column_ref += 1;
+                Ok(())
+            }
+        }
+
+        let mut visitor = BoundColumnRefVisitor {
+            has_column_ref: false,
+            num_column_ref: 0,
+        };
+        visitor.visit(self).unwrap();
+        visitor.has_column_ref && visitor.num_column_ref == 1
+    }
 }
 
 impl From<BoundColumnRef> for ScalarExpr {

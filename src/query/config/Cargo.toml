@@ -20,7 +20,6 @@ databend-common-base = { path = "../../common/base" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-grpc = { path = "../../common/grpc" }
 databend-common-meta-app = { path = "../../meta/app" }
-databend-common-meta-types = { path = "../../meta/types" }
 databend-common-storage = { path = "../../common/storage" }
 databend-common-tracing = { path = "../../common/tracing" }
 databend-common-users = { path = "../users" }

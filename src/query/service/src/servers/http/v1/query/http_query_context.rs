@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use http::StatusCode;
@@ -30,6 +31,8 @@ pub struct HttpQueryContext {
     pub node_id: String,
     pub deduplicate_label: Option<String>,
     pub user_agent: Option<String>,
+    pub trace_parent: Option<String>,
+    pub opentelemetry_baggage: Option<Vec<(String, String)>>,
     pub http_method: String,
     pub uri: String,
 }
@@ -41,6 +44,8 @@ impl HttpQueryContext {
         node_id: String,
         deduplicate_label: Option<String>,
         user_agent: Option<String>,
+        trace_parent: Option<String>,
+        open_telemetry_baggage: Option<Vec<(String, String)>>,
         http_method: String,
         uri: String,
     ) -> Self {
@@ -50,6 +55,8 @@ impl HttpQueryContext {
             node_id,
             deduplicate_label,
             user_agent,
+            trace_parent,
+            opentelemetry_baggage: open_telemetry_baggage,
             http_method,
             uri,
         }
@@ -64,20 +71,28 @@ impl HttpQueryContext {
         Ok(self.session.clone())
     }
 
-    pub fn to_minitrace_properties(&self) -> Vec<(&'static str, String)> {
-        let mut properties = self.session.to_minitrace_properties();
-        properties.extend([
-            ("query_id", self.query_id.clone()),
-            ("node_id", self.node_id.clone()),
+    pub fn to_minitrace_properties(&self) -> BTreeMap<String, String> {
+        let mut result = BTreeMap::new();
+        let properties = self.session.to_minitrace_properties();
+        result.extend(properties);
+        result.extend([
+            ("query_id".to_string(), self.query_id.clone()),
+            ("node_id".to_string(), self.node_id.clone()),
             (
-                "deduplicate_label",
+                "deduplicate_label".to_string(),
                 self.deduplicate_label.clone().unwrap_or_default(),
             ),
-            ("user_agent", self.user_agent.clone().unwrap_or_default()),
-            ("http_method", self.http_method.clone()),
-            ("uri", self.uri.clone()),
+            (
+                "user_agent".to_string(),
+                self.user_agent.clone().unwrap_or_default(),
+            ),
+            ("http_method".to_string(), self.http_method.clone()),
+            ("uri".to_string(), self.uri.clone()),
         ]);
-        properties
+        if let Some(baggage) = self.opentelemetry_baggage.clone() {
+            result.extend(baggage);
+        }
+        result
     }
 
     pub fn set_fail(&self) {

@@ -22,6 +22,7 @@ use derive_visitor::DriveMut;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
+use crate::ast::TimeTravelPoint;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum StreamPoint {
@@ -29,6 +30,7 @@ pub enum StreamPoint {
         database: Option<Identifier>,
         name: Identifier,
     },
+    AtPoint(TimeTravelPoint),
 }
 
 impl Display for StreamPoint {
@@ -39,6 +41,7 @@ impl Display for StreamPoint {
                 write_dot_separated_list(f, database.iter().chain(Some(name)))?;
                 write!(f, ")")
             }
+            StreamPoint::AtPoint(point) => write!(f, " AT {}", point),
         }
     }
 }
