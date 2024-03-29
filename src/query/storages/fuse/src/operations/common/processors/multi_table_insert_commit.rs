@@ -34,6 +34,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 
 use super::TransformMergeCommitMeta;
 use crate::operations::common::CommitMeta;
+use crate::operations::update;
 use crate::operations::AppendGenerator;
 use crate::operations::SnapshotGenerator;
 use crate::FuseTable;
@@ -117,6 +118,14 @@ impl AsyncSink for CommitMultiTableInsert {
         let is_active = self.ctx.txn_mgr().lock().is_active();
         match is_active {
             true => {
+                if update_table_meta_reqs.is_empty() {
+                    return Err(ErrorCode::Internal(
+                        "No table meta to update in multi table insert commit. It's a bug",
+                    ));
+                }
+                // any one of the reqs may carry the update_stream_meta, we arbitrarily choose the first one... ".
+                // It is safe to index the first element because there is at least a into clause in the multi table insert,
+                // which will generate a req(by design, no matter whether the table is actually updated or not, it will generate a new snapshot).
                 update_table_meta_reqs[0].update_stream_meta =
                     std::mem::take(&mut self.update_stream_meta);
                 update_table_meta_reqs[0].deduplicated_label = self.deduplicated_label.clone();
