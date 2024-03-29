@@ -66,6 +66,7 @@ env_logger = { workspace = true }
 databend-common-compress = { path = "../../common/compress" }
 arrow-udf-wasm = { workspace = true, features = ["build"] }
 uuid = { workspace = true }
+infer = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { path = "../../common/building" }

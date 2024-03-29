@@ -222,6 +222,9 @@ tonic-build = { version = "0.10.2" }
 bumpalo = "3.12.0"
 tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
 
+# File Utility
+infer = "0.15"
+
 [profile.release]
 debug = 1
 lto = "thin"
