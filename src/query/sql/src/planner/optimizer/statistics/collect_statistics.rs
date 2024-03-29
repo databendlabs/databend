@@ -15,10 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::Runtime;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 
@@ -37,7 +34,6 @@ pub struct CollectStatisticsOptimizer {
     table_ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
     cte_statistics: HashMap<IndexType, Arc<StatInfo>>,
-    async_runtime: Arc<Runtime>,
 }
 
 impl CollectStatisticsOptimizer {
@@ -46,16 +42,14 @@ impl CollectStatisticsOptimizer {
             table_ctx,
             metadata,
             cte_statistics: HashMap::new(),
-            async_runtime: GlobalIORuntime::instance(),
         }
     }
 
-    pub fn run(mut self, s_expr: &SExpr) -> Result<SExpr> {
-        let s_expr = self.collect(s_expr)?;
-        Ok(s_expr)
+    pub async fn run(mut self, s_expr: &SExpr) -> Result<SExpr> {
+        self.collect(s_expr).await
     }
 
-    pub fn collect(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub async fn collect(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
             RelOperator::Scan(scan) => {
                 let table = self.metadata.read().table(scan.table_index).clone();
@@ -65,17 +59,12 @@ impl CollectStatisticsOptimizer {
                     .read()
                     .columns_by_table_index(scan.table_index);
 
-                let table_ctx = self.table_ctx.clone();
-                let change_type = scan.change_type.clone();
-                let (column_statistics_provider, table_stats) =
-                    self.async_runtime.block_on(async move {
-                        let column_statistics_provider =
-                            table.column_statistics_provider(table_ctx.clone()).await?;
-                        let table_stats = table
-                            .table_statistics(table_ctx.clone(), change_type.clone())
-                            .await?;
-                        Result::<_, ErrorCode>::Ok((column_statistics_provider, table_stats))
-                    })?;
+                let column_statistics_provider = table
+                    .column_statistics_provider(self.table_ctx.clone())
+                    .await?;
+                let table_stats = table
+                    .table_statistics(self.table_ctx.clone(), scan.change_type.clone())
+                    .await?;
 
                 let mut column_stats = HashMap::new();
                 for column in columns.iter() {
@@ -106,11 +95,11 @@ impl CollectStatisticsOptimizer {
                 Ok(s_expr.replace_plan(Arc::new(RelOperator::Scan(scan))))
             }
             RelOperator::MaterializedCte(materialized_cte) => {
-                let left = self.collect(s_expr.child(0)?)?;
+                let left = Box::pin(self.collect(s_expr.child(0)?)).await?;
                 let cte_stat_info = RelExpr::with_s_expr(&left).derive_cardinality_child(0)?;
                 self.cte_statistics
                     .insert(materialized_cte.cte_idx, cte_stat_info);
-                let right = self.collect(s_expr.child(1)?)?;
+                let right = Box::pin(self.collect(s_expr.child(1)?)).await?;
                 Ok(s_expr.replace_children(vec![Arc::new(left), Arc::new(right)]))
             }
             RelOperator::CteScan(cte_scan) => {
@@ -126,7 +115,7 @@ impl CollectStatisticsOptimizer {
             _ => {
                 let mut children = Vec::with_capacity(s_expr.arity());
                 for child in s_expr.children() {
-                    let child = self.collect(child)?;
+                    let child = Box::pin(self.collect(child)).await?;
                     children.push(Arc::new(child));
                 }
                 Ok(s_expr.replace_children(children))

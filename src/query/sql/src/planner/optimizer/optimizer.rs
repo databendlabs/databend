@@ -243,7 +243,8 @@ pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
 
     // Collect statistics for each leaf node in SExpr.
     s_expr = CollectStatisticsOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
-        .run(&s_expr)?;
+        .run(&s_expr)
+        .await?;
 
     // Normalize aggregate, it should be executed before RuleSplitAggregate.
     s_expr = RuleNormalizeAggregateOptimizer::new().run(&s_expr)?;
