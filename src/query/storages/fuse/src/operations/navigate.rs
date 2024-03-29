@@ -27,7 +27,6 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use futures::TryStreamExt;
 use log::warn;
 use opendal::EntryMode;
@@ -74,14 +73,8 @@ impl FuseTable {
             )));
         }
 
-        let version = options
-            .get(OPT_KEY_TABLE_VER)
-            .ok_or_else(|| ErrorCode::Internal("table version must be set"))?
-            .parse::<u64>()?;
-
         let Some(snapshot_loc) = options.get(OPT_KEY_SNAPSHOT_LOCATION) else {
             let mut table_info = self.table_info.clone();
-            table_info.ident.seq = version;
             table_info.meta.options.remove(OPT_KEY_SNAPSHOT_LOCATION);
             table_info.meta.statistics = TableStatistics::default();
             let table = FuseTable::do_create(table_info)?;
@@ -89,7 +82,7 @@ impl FuseTable {
         };
         let (snapshot, format_version) =
             SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator()).await?;
-        self.load_table_by_snapshot(snapshot.as_ref(), format_version, Some(version))
+        self.load_table_by_snapshot(snapshot.as_ref(), format_version)
     }
 
     #[async_backtrace::framed]
@@ -150,7 +143,7 @@ impl FuseTable {
         }
 
         if let Some((snapshot, format_version)) = instant {
-            self.load_table_by_snapshot(snapshot.as_ref(), format_version, None)
+            self.load_table_by_snapshot(snapshot.as_ref(), format_version)
         } else {
             Err(ErrorCode::TableHistoricalDataNotFound(
                 "No historical data found at given point",
@@ -163,20 +156,10 @@ impl FuseTable {
         &self,
         snapshot: &TableSnapshot,
         format_version: u64,
-        table_seq: Option<u64>,
     ) -> Result<Arc<FuseTable>> {
+        // The `seq` of ident that we cloned here is JUST a place holder
+        // we should NOT use it other than a pure place holder.
         let mut table_info = self.table_info.clone();
-
-        // The `seq` of ident here is primarily JUST a place holder
-        // we should NOT use it outside of create stream.
-        table_info.ident.seq = if let Some(seq) = table_seq {
-            seq
-        } else {
-            // The table version is the version of the table when the snapshot was created.
-            // We need make sure the version greater than the table version,
-            // and less equal than the table version after the snapshot commit.
-            snapshot.prev_table_seq.map_or(0, |v| v + 1)
-        };
 
         // There are more to be kept in snapshot, like engine_options, ordering keys...
         // or we could just keep a clone of TableMeta in the snapshot.
