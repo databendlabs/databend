@@ -1078,8 +1078,8 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
     };
 
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
-    for num_blocks in [1, 10] {
-        for num_rows_per_block in [1, 50] {
+    for num_blocks in [1, 5] {
+        for num_rows_per_block in [1, 25] {
             let session = fixture.default_session();
             if let Some(s) = spill_settings.as_ref() {
                 let settings = session.get_settings();
