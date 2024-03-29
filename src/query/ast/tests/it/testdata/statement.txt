@@ -1265,6 +1265,7 @@ CreateInvertedIndex(
             },
         ],
         sync_creation: true,
+        index_options: {},
     },
 )
 

@@ -281,6 +281,14 @@ pub struct TableIndex {
     // if true, index will create after data written to databend,
     // no need execute refresh index manually.
     pub sync_creation: bool,
+    // if the index columns or options change,
+    // the index data needs to be regenerated, 
+    // version is used to identify each change.
+    pub version: String,
+    // index options specify the index configs, like tokenizer.
+    pub options: BTreeMap<String, String>,
+    // refresh time, the most recently refreshed index will be used first.
+    pub refreshed_on: Option<DateTime<Utc>>,
 }
 
 impl TableMeta {
@@ -749,24 +757,33 @@ pub struct CreateTableIndexReq {
     pub name: String,
     pub column_ids: Vec<u32>,
     pub sync_creation: bool,
+    pub options: BTreeMap<String, String>,
 }
 
 impl Display for CreateTableIndexReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.create_option {
             CreateOption::Create => {
-                write!(f, "create_table_index:{}={:?}", self.name, self.column_ids)
+                write!(
+                    f,
+                    "create_table_index: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
+                    self.name, self.column_ids, self.sync_creation, self.options,
+                )
             }
-            CreateOption::CreateIfNotExists => write!(
-                f,
-                "create_table_index_if_not_exists:{}={:?}",
-                self.name, self.column_ids
-            ),
-            CreateOption::CreateOrReplace => write!(
-                f,
-                "create_or_replace_table_index:{}={:?}",
-                self.name, self.column_ids
-            ),
+            CreateOption::CreateIfNotExists => {
+                write!(
+                    f,
+                    "create_table_index_if_not_exists: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
+                    self.name, self.column_ids, self.sync_creation, self.options,
+                )
+            }
+            CreateOption::CreateOrReplace => {
+                write!(
+                    f,
+                    "create_or_replace_table_index: {} ColumnIds: {:?}, SyncCreation: {:?}, Options: {:?}",
+                    self.name, self.column_ids, self.sync_creation, self.options,
+                )
+            }
         }
     }
 }

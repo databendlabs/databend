@@ -2766,14 +2766,6 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_filter_size: u64,
 
-    /// Max number of cached inverted index info objects. Set it to 0 to disable it.
-    #[clap(
-        long = "cache-inverted-index-info-count",
-        value_name = "VALUE",
-        default_value = "3000"
-    )]
-    pub inverted_index_info_count: u64,
-
     /// Max bytes of cached inverted index filters used. Set it to 0 to disable it.
     #[clap(
         long = "cache-inverted-index-filter-size",
@@ -2983,7 +2975,6 @@ mod cache_config_converters {
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 table_bloom_index_filter_size: value.table_bloom_index_filter_size,
-                inverted_index_info_count: value.inverted_index_info_count,
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
@@ -3008,7 +2999,6 @@ mod cache_config_converters {
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 table_bloom_index_filter_size: value.table_bloom_index_filter_size,
-                inverted_index_info_count: value.inverted_index_info_count,
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,

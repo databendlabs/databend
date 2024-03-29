@@ -43,11 +43,10 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::ScalarRef;
-use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
+use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use opendal::Operator;
 use serde::Deserialize;
 use serde::Serialize;
-use tantivy::directory::RamDirectory;
 use tantivy::schema::Document;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
@@ -57,6 +56,7 @@ use tantivy::schema::TextOptions;
 use tantivy::tokenizer::Language;
 use tantivy::tokenizer::LowerCaser;
 use tantivy::tokenizer::RemoveLongFilter;
+use tantivy::tokenizer::SimpleTokenizer;
 use tantivy::tokenizer::Stemmer;
 use tantivy::tokenizer::StopWordFilter;
 use tantivy::tokenizer::TextAnalyzer;
@@ -65,14 +65,13 @@ use tantivy::Directory;
 use tantivy::Index;
 use tantivy::IndexBuilder;
 use tantivy::IndexSettings;
+use tantivy::IndexWriter;
 use tantivy::SegmentComponent;
-use tantivy::SegmentId;
-use tantivy::SingleSegmentIndexWriter;
+use tantivy::UserOperation;
 use tantivy_common::BinarySerializable;
 use tantivy_jieba::JiebaTokenizer;
 
 use crate::io::write_data;
-use crate::io::TableMetaLocationGenerator;
 
 // tantivy version is used to generate the footer data
 
@@ -128,13 +127,14 @@ impl Footer {
 
 pub struct InvertedIndexWriter {
     schema: DataSchema,
-    index_writer: SingleSegmentIndexWriter,
+    index_writer: IndexWriter,
+    operations: Vec<UserOperation>,
 }
 
 impl InvertedIndexWriter {
-    pub fn try_create(schema: DataSchema) -> Result<InvertedIndexWriter> {
+    pub fn try_create(schema: DataSchema, tokenizer_name: &str) -> Result<InvertedIndexWriter> {
         let text_field_indexing = TextFieldIndexing::default()
-            .set_tokenizer("jieba")
+            .set_tokenizer(tokenizer_name)
             .set_index_option(IndexRecordOption::WithFreqsAndPositions);
         let text_options = TextOptions::default().set_indexing_options(text_field_indexing);
 
@@ -164,16 +164,18 @@ impl InvertedIndexWriter {
             .schema(index_schema.clone())
             .tokenizers(tokenizer_manager.clone());
 
-        let ram_directory = RamDirectory::create();
-        let index_writer = index_builder.single_segment_index_writer(ram_directory, 50_000_000)?;
+        let index = index_builder.create_in_ram()?;
+        let index_writer = index.writer(DEFAULT_BLOCK_BUFFER_SIZE)?;
+        let operations = Vec::new();
 
         Ok(Self {
             schema,
             index_writer,
+            operations,
         })
     }
 
-    pub fn add_block(&mut self, block: DataBlock) -> Result<()> {
+    pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
         if block.num_columns() != self.schema.num_fields() {
             return Err(ErrorCode::TableSchemaMismatch(format!(
                 "Data schema mismatched. Data columns length: {}, schema fields length: {}",
@@ -203,28 +205,23 @@ impl InvertedIndexWriter {
                     doc.add_text(field, "");
                 }
             }
-            self.index_writer.add_document(doc)?;
+            self.operations.push(UserOperation::Add(doc));
         }
+
         Ok(())
     }
 
     #[async_backtrace::framed]
-    pub async fn finalize(
-        self,
-        operator: &Operator,
-        location_generator: &TableMetaLocationGenerator,
-    ) -> Result<String> {
-        let index = self.index_writer.finalize()?;
+    pub async fn finalize(mut self, operator: &Operator, index_location: String) -> Result<()> {
+        let _ = self.index_writer.run(self.operations);
+        let _ = self.index_writer.commit()?;
+        let index = self.index_writer.index();
 
-        let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let segment_id = Self::write_index(&mut buffer, index).await?;
-
-        let index_location =
-            location_generator.gen_inverted_index_location(segment_id.uuid_string());
-
+        let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
+        Self::write_index(&mut buffer, index).await?;
         write_data(buffer, operator, &index_location).await?;
 
-        Ok(index_location)
+        Ok(())
     }
 
     // The tantivy index data consists of eight files.
@@ -292,7 +289,7 @@ impl InvertedIndexWriter {
     // We merge the data from these files into one file and
     // record the offset to read each part of the data.
     #[async_backtrace::framed]
-    async fn write_index<W: Write>(mut writer: &mut W, index: Index) -> Result<SegmentId> {
+    async fn write_index<W: Write>(mut writer: &mut W, index: &Index) -> Result<()> {
         let directory = index.directory();
 
         let managed_filepath = Path::new(".managed.json");
@@ -355,36 +352,39 @@ impl InvertedIndexWriter {
         let managed_length = writer.write(&managed_bytes)?;
 
         // write offsets of each parts
-        let mut offset: u64 = 0;
-        offset += fast_fields_length as u64;
-        writer.write_all(&offset.to_le_bytes())?;
+        let mut offset: u32 = 0;
+        let mut offsets = Vec::with_capacity(8);
+        offset += fast_fields_length as u32;
+        offsets.push(offset);
 
-        offset += store_length as u64;
-        writer.write_all(&offset.to_le_bytes())?;
+        offset += store_length as u32;
+        offsets.push(offset);
 
-        offset += field_norms_length as u64;
-        writer.write_all(&offset.to_le_bytes())?;
+        offset += field_norms_length as u32;
+        offsets.push(offset);
 
-        offset += positions_length as u64;
-        writer.write_all(&offset.to_le_bytes())?;
+        offset += positions_length as u32;
+        offsets.push(offset);
 
-        offset += postings_length as u64;
-        writer.write_all(&offset.to_le_bytes())?;
+        offset += postings_length as u32;
+        offsets.push(offset);
 
-        offset += terms_length as u64;
-        writer.write_all(&offset.to_le_bytes())?;
+        offset += terms_length as u32;
+        offsets.push(offset);
 
-        offset += meta_length as u64;
-        writer.write_all(&offset.to_le_bytes())?;
+        offset += meta_length as u32;
+        offsets.push(offset);
 
-        offset += managed_length as u64;
-        writer.write_all(&offset.to_le_bytes())?;
+        offset += managed_length as u32;
+        offsets.push(offset);
+
+        for offset in offsets {
+            writer.write_all(&offset.to_le_bytes())?;
+        }
 
         writer.flush()?;
 
-        let segment_id = segment.id();
-
-        Ok(segment_id)
+        Ok(())
     }
 
     fn build_footer<W: Write>(writer: &mut W, bytes: &[u8]) -> Result<usize> {
@@ -405,7 +405,16 @@ impl InvertedIndexWriter {
 pub(crate) fn create_tokenizer_manager() -> TokenizerManager {
     let tokenizer_manager = TokenizerManager::new();
     tokenizer_manager.register(
-        "jieba",
+        "english",
+        TextAnalyzer::builder(SimpleTokenizer::default())
+            .filter(RemoveLongFilter::limit(40))
+            .filter(LowerCaser)
+            .filter(StopWordFilter::new(Language::English).unwrap())
+            .filter(Stemmer::new(Language::English))
+            .build(),
+    );
+    tokenizer_manager.register(
+        "chinese",
         TextAnalyzer::builder(JiebaTokenizer {})
             .filter(RemoveLongFilter::limit(40))
             .filter(LowerCaser)

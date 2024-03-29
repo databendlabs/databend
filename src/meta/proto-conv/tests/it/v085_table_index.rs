@@ -95,6 +95,9 @@ fn test_decode_v85_table_meta() -> anyhow::Result<()> {
             name: "idx1".to_string(),
             column_ids: vec![1, 2],
             sync_creation: true,
+            version: "".to_string(),
+            options: btreemap! {},
+            refreshed_on: None,
         }},
     };
     common::test_pb_from_to(func_name!(), want())?;

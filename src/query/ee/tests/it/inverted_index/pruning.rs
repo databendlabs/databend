@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -37,7 +38,6 @@ use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::pruning::FusePruner;
-use databend_common_storages_fuse::pruning::InvertedIndexPruner;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_inverted_index::get_inverted_index_handler;
 use databend_enterprise_query::test_kits::context::EESetup;
@@ -63,24 +63,13 @@ async fn apply_block_pruning(
     dal: Operator,
     bloom_index_cols: BloomIndexColumns,
 ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-    let index_info_locations = &table_snapshot.index_info_locations;
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
 
-    let inverted_index_pruner =
-        InvertedIndexPruner::try_create(dal.clone(), push_down, index_info_locations).await?;
-    FusePruner::create(
-        &ctx,
-        dal,
-        schema,
-        push_down,
-        bloom_index_cols,
-        inverted_index_pruner,
-    )
-    .await?
-    .read_pruning(segment_locs)
-    .await
+    FusePruner::create(&ctx, dal, schema, push_down, bloom_index_cols)?
+        .read_pruning(segment_locs)
+        .await
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -403,12 +392,15 @@ async fn test_block_pruner() -> Result<()> {
     let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
     let table_id = table.get_id();
     let index_name = "idx1".to_string();
+    let mut options = BTreeMap::new();
+    options.insert("tokenizer".to_string(), "chinese".to_string());
     let req = CreateTableIndexReq {
         create_option: CreateOption::Create,
         table_id,
         name: index_name.clone(),
         column_ids: vec![1, 2],
         sync_creation: true,
+        options,
     };
 
     let res = handler.do_create_table_index(catalog.clone(), req).await;
@@ -437,10 +429,16 @@ async fn test_block_pruner() -> Result<()> {
     assert!(snapshot.is_some());
     let snapshot = snapshot.unwrap();
 
+    let index = snapshot.indexes.as_ref().and_then(|i| i.get(&index_name));
+    assert!(index.is_some());
+    let index = index.unwrap();
+    let index_version = index.0.clone();
+
     let index_schema = DataSchema::from(index_table_schema);
     let e1 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
+            index_version: index_version.clone(),
             index_schema: index_schema.clone(),
             query_columns: vec!["idiom".to_string()],
             query_text: "test".to_string(),
@@ -450,6 +448,7 @@ async fn test_block_pruner() -> Result<()> {
     let e2 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
+            index_version: index_version.clone(),
             index_schema: index_schema.clone(),
             query_columns: vec!["idiom".to_string()],
             query_text: "save".to_string(),
@@ -459,6 +458,7 @@ async fn test_block_pruner() -> Result<()> {
     let e3 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
+            index_version: index_version.clone(),
             index_schema: index_schema.clone(),
             query_columns: vec!["idiom".to_string()],
             query_text: "one".to_string(),
@@ -468,6 +468,7 @@ async fn test_block_pruner() -> Result<()> {
     let e4 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
+            index_version: index_version.clone(),
             index_schema: index_schema.clone(),
             query_columns: vec!["idiom".to_string()],
             query_text: "the".to_string(),
@@ -477,6 +478,7 @@ async fn test_block_pruner() -> Result<()> {
     let e5 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
+            index_version: index_version.clone(),
             index_schema: index_schema.clone(),
             query_columns: vec!["idiom".to_string()],
             query_text: "光阴".to_string(),
@@ -486,6 +488,7 @@ async fn test_block_pruner() -> Result<()> {
     let e6 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
+            index_version: index_version.clone(),
             index_schema: index_schema.clone(),
             query_columns: vec!["idiom".to_string()],
             query_text: "人生".to_string(),
@@ -495,6 +498,7 @@ async fn test_block_pruner() -> Result<()> {
     let e7 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
+            index_version: index_version.clone(),
             index_schema: index_schema.clone(),
             query_columns: vec!["meaning".to_string()],
             query_text: "people".to_string(),
@@ -504,6 +508,7 @@ async fn test_block_pruner() -> Result<()> {
     let e8 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
+            index_version: index_version.clone(),
             index_schema: index_schema.clone(),
             query_columns: vec!["meaning".to_string()],
             query_text: "bad".to_string(),
@@ -513,6 +518,7 @@ async fn test_block_pruner() -> Result<()> {
     let e9 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
+            index_version: index_version.clone(),
             index_schema: index_schema.clone(),
             query_columns: vec!["meaning".to_string()],
             query_text: "黄金".to_string(),
@@ -522,6 +528,7 @@ async fn test_block_pruner() -> Result<()> {
     let e10 = PushDownInfo {
         inverted_index: Some(InvertedIndexInfo {
             index_name: index_name.clone(),
+            index_version: index_version.clone(),
             index_schema: index_schema.clone(),
             query_columns: vec!["meaning".to_string()],
             query_text: "时间".to_string(),

@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_base::base::uuid::Uuid;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CatalogAlreadyExists;
 use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
@@ -3222,10 +3223,26 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     )));
                 }
             }
+
+            // If the column ids and options do not change, 
+            // use the old index version, otherwise create a new index version.
+            let mut old_version = None;
+            let mut refreshed_on = None;
+            if let Some(old_index) = indexes.get(&req.name) {
+                if old_index.column_ids == req.column_ids && old_index.options == req.options {
+                    old_version = Some(old_index.version.clone());
+                    refreshed_on = old_index.refreshed_on;
+                }
+            }
+            let version = old_version.unwrap_or(Uuid::new_v4().simple().to_string());
+
             let index = TableIndex {
                 name: req.name.clone(),
                 column_ids: req.column_ids.clone(),
                 sync_creation: req.sync_creation,
+                version,
+                options: req.options.clone(),
+                refreshed_on,
             };
             indexes.insert(req.name.clone(), index);
 

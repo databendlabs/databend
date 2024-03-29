@@ -50,7 +50,6 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_table_meta::meta::testify_version;
-use databend_storages_common_table_meta::meta::IndexSegmentInfo;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::warn;
 use tantivy::directory::error::DeleteError;
@@ -132,13 +131,11 @@ pub struct InvertedIndexDirectory {
 
     meta_path: PathBuf,
     managed_path: PathBuf,
-
-    index_segments: Vec<IndexSegmentInfo>,
 }
 
 impl InvertedIndexDirectory {
-    pub fn try_create(data: Vec<u8>, index_segments: Vec<IndexSegmentInfo>) -> Result<Self> {
-        if data.len() < 64 {
+    pub fn try_create(data: Vec<u8>) -> Result<Self> {
+        if data.len() < 32 {
             return Err(OpenReadError::IoError {
                 io_error: std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid data")
                     .into(),
@@ -148,17 +145,17 @@ impl InvertedIndexDirectory {
         }
 
         let mut reader = Cursor::new(data.clone());
-        reader.seek(SeekFrom::End(-64))?;
+        reader.seek(SeekFrom::End(-32))?;
 
-        let mut buf = vec![0u8; 8];
-        let fast_fields_offset = read_u64(&mut reader, buf.as_mut_slice())? as usize;
-        let store_offset = read_u64(&mut reader, buf.as_mut_slice())? as usize;
-        let field_norms_offset = read_u64(&mut reader, buf.as_mut_slice())? as usize;
-        let positions_offset = read_u64(&mut reader, buf.as_mut_slice())? as usize;
-        let postings_offset = read_u64(&mut reader, buf.as_mut_slice())? as usize;
-        let terms_offset = read_u64(&mut reader, buf.as_mut_slice())? as usize;
-        let meta_offset = read_u64(&mut reader, buf.as_mut_slice())? as usize;
-        let managed_offset = read_u64(&mut reader, buf.as_mut_slice())? as usize;
+        let mut buf = vec![0u8; 4];
+        let fast_fields_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
+        let store_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
+        let field_norms_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
+        let positions_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
+        let postings_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
+        let terms_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
+        let meta_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
+        let managed_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;
 
         if data.len() < managed_offset {
             return Err(OpenReadError::IoError {
@@ -219,12 +216,7 @@ impl InvertedIndexDirectory {
             managed_range,
             meta_path,
             managed_path,
-            index_segments,
         })
-    }
-
-    pub fn index_segments(&self) -> &Vec<IndexSegmentInfo> {
-        &self.index_segments
     }
 
     pub fn size(&self) -> usize {
@@ -232,7 +224,6 @@ impl InvertedIndexDirectory {
             + 8 * std::mem::size_of::<Range<usize>>()
             + self.meta_path.capacity()
             + self.managed_path.capacity()
-            + self.index_segments.len() * std::mem::size_of::<IndexSegmentInfo>()
     }
 }
 
@@ -324,9 +315,9 @@ impl Directory for InvertedIndexDirectory {
 }
 
 #[inline(always)]
-fn read_u64<R: Read>(r: &mut R, buf: &mut [u8]) -> Result<u64> {
+fn read_u32<R: Read>(r: &mut R, buf: &mut [u8]) -> Result<u32> {
     r.read_exact(buf)?;
-    Ok(u64::from_le_bytes(buf.try_into().unwrap()))
+    Ok(u32::from_le_bytes(buf.try_into().unwrap()))
 }
 
 impl Versioned<0> for InvertedIndexDirectory {}

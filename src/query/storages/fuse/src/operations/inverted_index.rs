@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use std::collections::VecDeque;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
+use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
-use databend_common_catalog::plan::InvertedIndexMeta;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -27,48 +28,169 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
-use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline_transforms::processors::AsyncTransform;
+use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_common_storages_share::save_share_table_info;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_table_meta::meta::IndexInfo;
-use databend_storages_common_table_meta::meta::IndexSegmentInfo;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use opendal::Operator;
 
-use crate::io::read::load_inverted_index_info;
-use crate::io::write_data;
+use crate::io::BlockReader;
 use crate::io::InvertedIndexWriter;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
+use crate::io::TableMetaLocationGenerator;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
-use crate::DEFAULT_ROW_PER_INDEX;
 
 impl FuseTable {
+    // The big picture of refresh inverted index into pipeline:
+    //
+    //                                    ┌─────────────────────────┐
+    //                             ┌────> │ InvertedIndexTransform1 │ ────┐
+    //                             │      └─────────────────────────┘     │
+    //                             │                  ...                 │
+    // ┌─────────────────────┐     │      ┌─────────────────────────┐     │      ┌───────────────────┐
+    // │ InvertedIndexSource │ ────┼────> │ InvertedIndexTransformN │ ────┼────> │ InvertedIndexSink │
+    // └─────────────────────┘     │      └─────────────────────────┘     │      └───────────────────┘
+    //                             │                  ...                 │
+    //                             │      ┌─────────────────────────┐     │
+    //                             └────> │ InvertedIndexTransformZ │ ────┘
+    //                                    └─────────────────────────┘
+    //
     #[inline]
     #[async_backtrace::framed]
     pub async fn do_refresh_inverted_index(
         &self,
         ctx: Arc<dyn TableContext>,
-        meta: InvertedIndexMeta,
         catalog: Arc<dyn Catalog>,
         table: Arc<dyn Table>,
+        index_name: String,
+        index_version: String,
+        tokenizer_name: String,
+        index_schema: TableSchemaRef,
+        segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let Some(snapshot) = self.read_table_snapshot().await? else {
+            return Ok(());
+        };
+
+        let table_schema = &self.get_table_info().meta.schema;
+        // Collect field indices used by inverted index.
+        let mut field_indices = Vec::new();
+        for field in &index_schema.fields {
+            let field_index = table_schema.index_of(field.name())?;
+            field_indices.push(field_index);
+        }
+
+        // Read data here to keep the order of blocks in segment.
+        let projection = Projection::Columns(field_indices);
+
+        let block_reader =
+            self.create_block_reader(ctx.clone(), projection, false, false, false)?;
+
+        let segment_reader =
+            MetaReaders::segment_info_reader(self.get_operator(), table_schema.clone());
+
+        let mut generated_segment_locs = vec![];
+        if let Some(indexes) = &snapshot.indexes {
+            if let Some((ver, segment_locs)) = indexes.get(&index_name) {
+                // Every time the index info changed, a new index version is generated
+                // and the index data needs to be regenerated.
+                if ver == &index_version {
+                    generated_segment_locs = segment_locs.clone();
+                }
+            }
+        }
+
+        // If no segment locations are specified, iterates through all segments
+        let segment_locs = if let Some(segment_locs) = &segment_locs {
+            segment_locs.clone()
+        } else {
+            snapshot.segments.clone()
+        };
+
+        // Filter segments whose indexes already generated
+        let segment_locs: Vec<_> = segment_locs
+            .into_iter()
+            .filter(|l| !generated_segment_locs.contains(l))
+            .collect();
+
+        if segment_locs.is_empty() {
+            return Ok(());
+        }
+
+        // Read the segment infos and collect the block metas that need to generate the index.
+        let mut block_metas = VecDeque::new();
+        for (segment_loc, ver) in &segment_locs {
+            let segment_info = segment_reader
+                .read(&LoadParams {
+                    location: segment_loc.to_string(),
+                    len_hint: None,
+                    ver: *ver,
+                    put_cache: false,
+                })
+                .await?;
+
+            for block_meta in segment_info.block_metas()? {
+                block_metas.push_back(block_meta);
+            }
+        }
+        if block_metas.is_empty() {
+            return Ok(());
+        }
+
+        let data_schema = DataSchema::from(index_schema.as_ref());
+        let settings = ReadSettings::from_ctx(&ctx)?;
+        let write_settings = self.get_write_settings();
+        let storage_format = write_settings.storage_format;
+        let operator = self.get_operator_ref();
+
         pipeline.add_source(
             |output| {
-                let block = DataBlock::empty_with_meta(Box::new(meta.clone()));
-                OneBlockSource::create(output, block)
+                let inner = InvertedIndexSource::new(
+                    settings,
+                    storage_format,
+                    block_reader.clone(),
+                    block_metas.clone(),
+                );
+                AsyncSourcer::create(ctx.clone(), output, inner)
             },
             1,
         )?;
+
+        let block_nums = block_metas.len();
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = std::cmp::min(block_nums, max_threads);
+        pipeline.try_resize(max_threads)?;
+        let _ = pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(InvertedIndexTransform::try_create(
+                input,
+                output,
+                index_name.clone(),
+                index_version.clone(),
+                tokenizer_name.clone(),
+                data_schema.clone(),
+                operator.clone(),
+            )?))
+        });
 
         pipeline.try_resize(1)?;
         pipeline.add_sink(|input| {
@@ -78,10 +200,130 @@ impl FuseTable {
                 catalog.clone(),
                 table.clone(),
                 self.clone(),
+                snapshot.clone(),
+                index_name.clone(),
+                index_version.clone(),
+                segment_locs.clone(),
+                block_nums,
             )
         })?;
 
         Ok(())
+    }
+}
+
+/// `InvertedIndexSource` is used to read data blocks that need generate inverted indexes.
+pub struct InvertedIndexSource {
+    settings: ReadSettings,
+    storage_format: FuseStorageFormat,
+    block_reader: Arc<BlockReader>,
+    block_metas: VecDeque<Arc<BlockMeta>>,
+    is_finished: bool,
+}
+
+impl InvertedIndexSource {
+    pub fn new(
+        settings: ReadSettings,
+        storage_format: FuseStorageFormat,
+        block_reader: Arc<BlockReader>,
+        block_metas: VecDeque<Arc<BlockMeta>>,
+    ) -> Self {
+        Self {
+            settings,
+            storage_format,
+            block_reader,
+            block_metas,
+            is_finished: false,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncSource for InvertedIndexSource {
+    const NAME: &'static str = "InvertedIndexSource";
+
+    #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.is_finished {
+            return Ok(None);
+        }
+
+        match self.block_metas.pop_front() {
+            Some(block_meta) => {
+                let block = self
+                    .block_reader
+                    .read_by_meta(&self.settings, &block_meta, &self.storage_format)
+                    .await?;
+                let block = block.add_meta(Some(Box::new(Arc::unwrap_or_clone(block_meta))))?;
+
+                Ok(Some(block))
+            }
+            None => {
+                self.is_finished = true;
+                Ok(None)
+            }
+        }
+    }
+}
+
+/// `InvertedIndexTransform` is used to generate inverted index for each blocks.
+pub struct InvertedIndexTransform {
+    index_name: String,
+    index_version: String,
+    tokenizer_name: String,
+    data_schema: DataSchema,
+    operator: Operator,
+}
+
+impl InvertedIndexTransform {
+    pub fn try_create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        index_name: String,
+        index_version: String,
+        tokenizer_name: String,
+        data_schema: DataSchema,
+        operator: Operator,
+    ) -> Result<Box<dyn Processor>> {
+        Ok(AsyncTransformer::create(input, output, Self {
+            index_name,
+            index_version,
+            tokenizer_name,
+            data_schema,
+            operator,
+        }))
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncTransform for InvertedIndexTransform {
+    const NAME: &'static str = "InvertedIndexTransform";
+
+    #[async_backtrace::framed]
+    async fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+        let block_meta = data_block
+            .get_meta()
+            .and_then(BlockMeta::downcast_ref_from)
+            .unwrap();
+
+        let mut index_writer =
+            InvertedIndexWriter::try_create(self.data_schema.clone(), &self.tokenizer_name)?;
+        index_writer.add_block(&data_block)?;
+
+        let index_location =
+            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
+                &block_meta.location.0,
+                &self.index_name,
+                &self.index_version,
+            );
+
+        index_writer
+            .finalize(&self.operator, index_location)
+            .await?;
+
+        let new_block = DataBlock::new(vec![], 0);
+        Ok(new_block)
     }
 }
 
@@ -91,6 +333,11 @@ pub struct InvertedIndexSink {
     catalog: Arc<dyn Catalog>,
     table: Arc<dyn Table>,
     fuse_table: FuseTable,
+    snapshot: Arc<TableSnapshot>,
+    index_name: String,
+    index_version: String,
+    segment_locs: Vec<Location>,
+    block_nums: AtomicUsize,
     new_snapshot_loc: Option<String>,
 }
 
@@ -101,12 +348,22 @@ impl InvertedIndexSink {
         catalog: Arc<dyn Catalog>,
         table: Arc<dyn Table>,
         fuse_table: FuseTable,
+        snapshot: Arc<TableSnapshot>,
+        index_name: String,
+        index_version: String,
+        segment_locs: Vec<Location>,
+        block_nums: usize,
     ) -> Result<ProcessorPtr> {
         let sinker = AsyncSinker::create(input, ctx.clone(), InvertedIndexSink {
             ctx,
             catalog,
             table,
             fuse_table,
+            snapshot,
+            index_name,
+            index_version,
+            segment_locs,
+            block_nums: AtomicUsize::new(block_nums),
             new_snapshot_loc: None,
         });
         Ok(ProcessorPtr::create(sinker))
@@ -127,6 +384,12 @@ impl AsyncSink for InvertedIndexSink {
                 OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
                 new_snapshot_loc.clone(),
             );
+
+            // generate new `refreshed_on` time for the index
+            let indexes = &mut new_table_meta.indexes;
+            if let Some(index) = indexes.get_mut(&self.index_name) {
+                index.refreshed_on = Some(Utc::now());
+            }
 
             let table_info = self.table.get_table_info();
             let table_id = table_info.ident.table_id;
@@ -158,178 +421,36 @@ impl AsyncSink for InvertedIndexSink {
 
     #[unboxed_simple]
     #[async_backtrace::framed]
-    async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
-        let inverted_index_meta = data_block
-            .get_meta()
-            .and_then(InvertedIndexMeta::downcast_ref_from);
-
-        let Some(inverted_index_meta) = inverted_index_meta else {
-            return Ok(false);
-        };
-        let Some(snapshot) = self.fuse_table.read_table_snapshot().await? else {
-            return Ok(false);
-        };
-
-        let table_schema = &self.fuse_table.get_table_info().meta.schema;
-
-        // Collect field indices used by inverted index.
-        let mut field_indices = Vec::new();
-        for field in &inverted_index_meta.index_schema.fields {
-            let field_index = table_schema.index_of(field.name())?;
-            field_indices.push(field_index);
-        }
-
-        // Read data here to keep the order of blocks in segment.
-        let projection = Projection::Columns(field_indices);
-        let block_reader = self.fuse_table.create_block_reader(
-            self.ctx.clone(),
-            projection,
-            false,
-            false,
-            false,
-        )?;
-
-        let segment_reader =
-            MetaReaders::segment_info_reader(self.fuse_table.get_operator(), table_schema.clone());
-
-        let index_info_loc = match &snapshot.index_info_locations {
-            Some(locations) => locations.get(&inverted_index_meta.index_name),
-            None => None,
-        };
-        let old_index_info =
-            load_inverted_index_info(self.fuse_table.get_operator(), index_info_loc).await?;
-
-        let settings = ReadSettings::from_ctx(&self.ctx)?;
-        let write_settings = self.fuse_table.get_write_settings();
-        let storage_format = write_settings.storage_format;
-
-        let operator = self.fuse_table.get_operator_ref();
-
-        // If no segment locations are specified, iterates through all segments
-        let segment_locs = if let Some(segment_locs) = &inverted_index_meta.segment_locs {
-            segment_locs.clone()
-        } else {
-            snapshot.segments.clone()
-        };
-
-        let data_schema = DataSchema::from(inverted_index_meta.index_schema.as_ref());
-
-        // Grouping of segments, each group includes a number of segments to generate an index file.
-        // Limit the index file size by check the sum row count to avoid too large index file.
-        let mut sum_row_count = 0;
-        let mut segments = Vec::new();
-        let mut grouped_segments = Vec::new();
-        for (segment_loc, ver) in segment_locs {
-            // If segment has be indexed, we can ignore it.
-            if let Some(ref old_index_info) = old_index_info {
-                if old_index_info.indexed_segments.contains(&segment_loc) {
-                    continue;
-                }
-            }
-            let segment_info = segment_reader
-                .read(&LoadParams {
-                    location: segment_loc.to_string(),
-                    len_hint: None,
-                    ver,
-                    put_cache: false,
-                })
-                .await?;
-            sum_row_count += segment_info.summary.row_count as usize;
-            segments.push((segment_loc, segment_info));
-            // Check sum of row count to prevent index getting too large.
-            // TODO: suitable `DEFAULT_ROW_PER_INDEX` requires further testing.
-            if sum_row_count > DEFAULT_ROW_PER_INDEX {
-                let curr_segments = std::mem::take(&mut segments);
-                grouped_segments.push(curr_segments);
-                sum_row_count = 0;
-            }
-        }
-        if !segments.is_empty() {
-            grouped_segments.push(segments);
-        }
-
-        // All segments are already indexed and no need to do further operation.
-        // TODO: Segments may require further regrouping to optimise the index data.
-        if grouped_segments.is_empty() {
+    async fn consume(&mut self, _data_block: DataBlock) -> Result<bool> {
+        let num = self.block_nums.fetch_sub(1, Ordering::SeqCst);
+        if num > 1 {
             return Ok(false);
         }
-        let location_generator = self.fuse_table.meta_location_generator();
 
-        // Generate index data for each group of segments.
-        let mut indexes = BTreeMap::<String, Vec<IndexSegmentInfo>>::new();
-        let mut indexed_segments = BTreeSet::<String>::new();
-        for segments in grouped_segments {
-            let mut index_segments = Vec::with_capacity(segments.len());
-            let mut index_writer = InvertedIndexWriter::try_create(data_schema.clone())?;
-            for (segment_loc, segment_info) in segments {
-                let mut row_count = 0;
-                let block_metas = segment_info.block_metas()?;
-                for block_meta in block_metas {
-                    let block = block_reader
-                        .read_by_meta(&settings, &block_meta, &storage_format)
-                        .await?;
-
-                    index_writer.add_block(block)?;
-                    row_count += block_meta.row_count;
-                }
-                indexed_segments.insert(segment_loc.to_string());
-                let index_segment = IndexSegmentInfo {
-                    segment_location: segment_loc.to_string(),
-                    row_count,
-                    block_range: None,
-                };
-                index_segments.push(index_segment);
-            }
-
-            let index_location = index_writer.finalize(operator, location_generator).await?;
-            indexes.insert(index_location, index_segments);
-        }
-
-        // Merge old index info
-        // TODO: remove unused index file
-        if let Some(old_index_info) = old_index_info {
-            for (index_loc, index_segments) in &old_index_info.indexes {
-                indexes.insert(index_loc.to_string(), index_segments.to_vec());
-            }
-            for segment_loc in &old_index_info.indexed_segments {
-                indexed_segments.insert(segment_loc.to_string());
-            }
-        }
-
-        // Write new index info file
-        let index_info = IndexInfo::new(
-            inverted_index_meta.index_schema.clone(),
-            indexes,
-            indexed_segments,
-        );
-        let index_bytes = index_info.to_bytes()?;
-        let new_index_info_loc = location_generator.gen_inverted_index_info_location();
-
-        write_data(index_bytes, operator, &new_index_info_loc).await?;
-
-        // Generate new table snapshot file
+        // All blocks has generated the inverted indexes,
+        // generate a new snapshot
         let mut new_snapshot = TableSnapshot::from_previous(
-            snapshot.as_ref(),
+            self.snapshot.as_ref(),
             Some(self.fuse_table.get_table_info().ident.seq),
         );
-        let mut index_info_locations = BTreeMap::new();
-        if let Some(old_index_info_locations) = &snapshot.index_info_locations {
-            for (old_index_name, location) in old_index_info_locations {
-                if *old_index_name == inverted_index_meta.index_name {
-                    continue;
-                }
-                index_info_locations.insert(old_index_name.to_string(), location.clone());
+
+        let mut indexes = new_snapshot.indexes.clone().unwrap_or_default();
+        let mut segment_locs = self.segment_locs.clone();
+        if let Some((ver, mut old_segment_locs)) = indexes.remove(&self.index_name) {
+            if ver == self.index_version {
+                segment_locs.append(&mut old_segment_locs);
             }
         }
-        index_info_locations.insert(
-            inverted_index_meta.index_name.to_string(),
-            (new_index_info_loc, IndexInfo::VERSION),
+        indexes.insert(
+            self.index_name.clone(),
+            (self.index_version.clone(), segment_locs),
         );
-
-        new_snapshot.index_info_locations = Some(index_info_locations);
+        new_snapshot.indexes = Some(indexes);
 
         // Write new snapshot file
-        let new_snapshot_loc = location_generator
+        let new_snapshot_loc = self
+            .fuse_table
+            .meta_location_generator()
             .snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
 
         let data = new_snapshot.to_bytes()?;
@@ -348,6 +469,6 @@ impl AsyncSink for InvertedIndexSink {
 
         self.new_snapshot_loc = Some(new_snapshot_loc);
 
-        Ok(false)
+        Ok(true)
     }
 }
