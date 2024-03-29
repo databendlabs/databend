@@ -115,17 +115,11 @@ impl InsertMultiTableInterpreter {
             n: branches.len(),
         }));
 
-        let total = branches.len();
-        let mut strategy = vec![0; total];
-        for i in 0..*n {
-            for j in 0..total / n {
-                result[i + j * n] = i * (total / n) + j;
-            }
-        }
+        let shuffle_strategy = ShuffleStrategy::Transpose(branches.len());
         root = PhysicalPlan::Shuffle(Box::new(Shuffle {
             plan_id: 0,
             input: Box::new(root),
-            strategy,
+            strategy: shuffle_strategy,
         }));
 
         root = PhysicalPlan::ChunkFilter(Box::new(ChunkFilter {
