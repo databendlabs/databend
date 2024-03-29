@@ -73,6 +73,22 @@ impl Tenant {
     }
 }
 
+pub trait ToTenant {
+    fn to_tenant(self) -> Tenant;
+}
+
+impl ToTenant for Tenant {
+    fn to_tenant(self) -> Tenant {
+        self
+    }
+}
+
+impl ToTenant for &Tenant {
+    fn to_tenant(self) -> Tenant {
+        self.clone()
+    }
+}
+
 mod kvapi_key_impl {
     use std::convert::Infallible;
 

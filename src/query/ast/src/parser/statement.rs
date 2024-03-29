@@ -3615,12 +3615,12 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         },
         |(_, _, tenant, _, share_name)| {
             Tenant::new_or_err(tenant.to_string(), func_name!())
-                .map_err(|e| nom::Err::Error(ErrorKind::Other("tenant can not be empty string")))
-                .and_then(|tenant| {
-                    Ok(CreateDatabaseOption::FromShare(ShareNameIdent {
+                .map_err(|_e| nom::Err::Error(ErrorKind::Other("tenant can not be empty string")))
+                .map(|tenant| {
+                    CreateDatabaseOption::FromShare(ShareNameIdent {
                         tenant,
                         share_name: share_name.to_string(),
-                    }))
+                    })
                 })
         },
     );
