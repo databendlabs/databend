@@ -143,6 +143,7 @@ mod interpreter_virtual_column_alter;
 mod interpreter_virtual_column_create;
 mod interpreter_virtual_column_drop;
 mod interpreter_virtual_column_refresh;
+mod util;
 
 pub use access::ManagementModeAccess;
 pub use common::InterpreterQueryLog;
