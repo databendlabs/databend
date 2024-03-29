@@ -88,10 +88,10 @@ impl InsertMultiTableInterpreter {
         let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), &metadata).await?;
         let source_schema = root.output_schema()?;
         let mut branches = self.build_insert_into_branches().await?;
-        let serialable_tables = branches
+        let serializable_tables = branches
             .build_serializable_target_tables(self.ctx.clone())
             .await?;
-        let deduplicated_serialable_tables = branches
+        let deduplicated_serializable_tables = branches
             .build_deduplicated_serializable_target_tables(self.ctx.clone())
             .await?;
         let predicates = branches.build_predicates(source_schema.as_ref())?;
@@ -149,7 +149,7 @@ impl InsertMultiTableInterpreter {
         root = PhysicalPlan::ChunkAppendData(Box::new(ChunkAppendData {
             plan_id: 0,
             input: Box::new(root),
-            target_tables: serialable_tables.clone(),
+            target_tables: serializable_tables.clone(),
         }));
 
         root = PhysicalPlan::ChunkMerge(Box::new(ChunkMerge {
@@ -164,7 +164,7 @@ impl InsertMultiTableInterpreter {
             update_stream_meta,
             overwrite: self.plan.overwrite,
             deduplicated_label: None,
-            targets: deduplicated_serialable_tables,
+            targets: deduplicated_serializable_tables,
         }));
         Ok(root)
     }
@@ -310,23 +310,23 @@ impl InsertIntoBranches {
         &self,
         ctx: Arc<QueryContext>,
     ) -> Result<Vec<SerializableTable>> {
-        let mut serialable_tables = vec![];
+        let mut serializable_tables = vec![];
         for table in &self.tables {
             let table_info = table.get_table_info();
             let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
-            serialable_tables.push(SerializableTable {
+            serializable_tables.push(SerializableTable {
                 target_catalog_info: catalog_info,
                 target_table_info: table_info.clone(),
             });
         }
-        Ok(serialable_tables)
+        Ok(serializable_tables)
     }
 
     async fn build_deduplicated_serializable_target_tables(
         &self,
         ctx: Arc<QueryContext>,
     ) -> Result<Vec<SerializableTable>> {
-        let mut serialable_tables = vec![];
+        let mut serializable_tables = vec![];
         let mut last_table_id = None;
         for table in &self.tables {
             let table_info = table.get_table_info();
@@ -336,12 +336,12 @@ impl InsertIntoBranches {
             }
             last_table_id = Some(table_id);
             let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
-            serialable_tables.push(SerializableTable {
+            serializable_tables.push(SerializableTable {
                 target_catalog_info: catalog_info,
                 target_table_info: table_info.clone(),
             });
         }
-        Ok(serialable_tables)
+        Ok(serializable_tables)
     }
 
     fn build_predicates(&self, source_schema: &DataSchema) -> Result<Vec<Option<RemoteExpr>>> {
