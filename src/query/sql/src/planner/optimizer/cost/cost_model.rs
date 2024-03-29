@@ -22,7 +22,8 @@ use super::Cost;
 use super::CostModel;
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
-use crate::plans::{ConstantTableScan, Exchange};
+use crate::plans::ConstantTableScan;
+use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
@@ -79,8 +80,7 @@ impl DefaultCostModel {
         match m_expr.plan.as_ref() {
             RelOperator::Scan(plan) => self.compute_cost_scan(memo, m_expr, plan),
             RelOperator::ConstantTableScan(plan) => self.compute_cost_constant_scan(plan),
-            RelOperator::DummyTableScan(_)
-            | RelOperator::CteScan(_) => Ok(Cost(0.0)),
+            RelOperator::DummyTableScan(_) | RelOperator::CteScan(_) => Ok(Cost(0.0)),
             RelOperator::Join(plan) => self.compute_cost_join(memo, m_expr, plan),
             RelOperator::UnionAll(_) => self.compute_cost_union_all(memo, m_expr),
             RelOperator::Aggregate(_) => self.compute_aggregate(memo, m_expr),

@@ -1,3 +1,5 @@
+control sortmode rowsort
+
 statement ok
 use default
 

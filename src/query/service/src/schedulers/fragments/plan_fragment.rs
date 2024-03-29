@@ -188,24 +188,17 @@ impl PlanFragment {
                 DataSource::ConstTable(values) => {
                     let num_executors = executors.len();
                     let entries = values
+                        .columns
                         .iter()
                         .map(|col| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
                         .collect::<Vec<BlockEntry>>();
-                    let num_rows = if values.is_empty() {
-                        0
-                    } else {
-                        values[0].len()
-                    };
-                    let block = DataBlock::new(entries, num_rows);
+                    let block = DataBlock::new(entries, values.num_rows);
                     // Scatter the block
-                    let mut indices = Vec::with_capacity(num_rows);
-                    for i in 0..num_rows {
+                    let mut indices = Vec::with_capacity(values.num_rows);
+                    for i in 0..values.num_rows {
                         indices.push((i % num_executors) as u32);
                     }
-                    dbg!(&block);
-                    dbg!(&indices);
                     let blocks = block.scatter(&indices, num_executors)?;
-                    dbg!(&blocks);
                     for (executor, block) in executors.iter().zip(blocks) {
                         let columns = block
                             .columns()
@@ -216,7 +209,10 @@ impl PlanFragment {
                                     .convert_to_full_column(&entry.data_type, block.num_rows())
                             })
                             .collect::<Vec<Column>>();
-                        let source = DataSource::ConstTable(columns);
+                        let source = DataSource::ConstTable(ConstTableColumn {
+                            columns,
+                            num_rows: block.num_rows(),
+                        });
                         executor_partitions
                             .entry(executor.clone())
                             .or_default()
@@ -477,7 +473,13 @@ impl PlanFragment {
             if let PhysicalPlan::TableScan(scan) = plan {
                 data_sources.insert(scan.plan_id, DataSource::Table(*scan.source.clone()));
             } else if let PhysicalPlan::ConstantTableScan(scan) = plan {
-                data_sources.insert(scan.plan_id, DataSource::ConstTable(scan.values.clone()));
+                data_sources.insert(
+                    scan.plan_id,
+                    DataSource::ConstTable(ConstTableColumn {
+                        columns: scan.values.clone(),
+                        num_rows: scan.num_rows,
+                    }),
+                );
             }
         };
 
@@ -492,9 +494,15 @@ impl PlanFragment {
     }
 }
 
+struct ConstTableColumn {
+    columns: Vec<Column>,
+    num_rows: usize,
+}
+
 enum DataSource {
     Table(DataSourcePlan),
-    ConstTable(Vec<Column>),
+    // It's possible there is zero column, so we also save row number.
+    ConstTable(ConstTableColumn),
 }
 
 impl TryFrom<DataSource> for DataSourcePlan {
@@ -510,7 +518,7 @@ impl TryFrom<DataSource> for DataSourcePlan {
     }
 }
 
-impl TryFrom<DataSource> for Vec<Column> {
+impl TryFrom<DataSource> for ConstTableColumn {
     type Error = ErrorCode;
 
     fn try_from(value: DataSource) -> Result<Self> {
@@ -556,12 +564,12 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
             ))
         })?;
 
-        let source = Vec::<Column>::try_from(source)?;
+        let const_table_columns = ConstTableColumn::try_from(source)?;
 
         Ok(PhysicalPlan::ConstantTableScan(ConstantTableScan {
             plan_id: plan.plan_id,
-            values: source,
-            num_rows: plan.num_rows,
+            values: const_table_columns.columns,
+            num_rows: const_table_columns.num_rows,
             output_schema: plan.output_schema.clone(),
         }))
     }
