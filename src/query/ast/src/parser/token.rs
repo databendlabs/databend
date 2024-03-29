@@ -1556,7 +1556,6 @@ impl TokenKind {
             | TokenKind::USING
             // | TokenKind::VARIADIC
             // | TokenKind::VERBOSE
-            | TokenKind::FIRST
             | TokenKind::WHEN => true,
             | TokenKind::ARRAY
             | TokenKind::AS
