@@ -248,7 +248,7 @@ impl ShareApiTestSuite {
             assert!(res.is_err());
             let err = res.unwrap_err();
             assert_eq!(
-                ErrorCode::ShareEndpointAlreadyExists("").code(),
+                ErrorCode::SHARE_ENDPOINT_ALREADY_EXISTS,
                 ErrorCode::from(err).code()
             );
 
@@ -521,10 +521,7 @@ impl ShareApiTestSuite {
             let res = mt.add_share_tenants(req).await;
             assert!(res.is_err());
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownShare("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::UNKNOWN_SHARE, ErrorCode::from(err).code());
 
             let req = RemoveShareAccountsReq {
                 share_name: share_name.clone(),
@@ -535,10 +532,7 @@ impl ShareApiTestSuite {
             let res = mt.remove_share_tenants(req).await;
             assert!(res.is_err());
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownShare("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::UNKNOWN_SHARE, ErrorCode::from(err).code());
         }
 
         info!("--- prepare share1 share2 share3");
@@ -687,7 +681,7 @@ impl ShareApiTestSuite {
             info!("add share account res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
-                ErrorCode::ShareAccountsAlreadyExists("").code(),
+                ErrorCode::SHARE_ACCOUNTS_ALREADY_EXISTS,
                 ErrorCode::from(err).code()
             );
         }
@@ -735,7 +729,7 @@ impl ShareApiTestSuite {
             let res = get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await;
             let err = res.unwrap_err();
             assert_eq!(
-                ErrorCode::UnknownShareAccounts("").code(),
+                ErrorCode::UNKNOWN_SHARE_ACCOUNTS,
                 ErrorCode::from(err).code()
             );
         }
@@ -758,7 +752,7 @@ impl ShareApiTestSuite {
             let res = get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await;
             let err = res.unwrap_err();
             assert_eq!(
-                ErrorCode::UnknownShareAccounts("").code(),
+                ErrorCode::UNKNOWN_SHARE_ACCOUNTS,
                 ErrorCode::from(err).code()
             );
         }
@@ -890,10 +884,7 @@ impl ShareApiTestSuite {
             let res = mt.grant_share_object(req).await;
             info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownDatabase("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::UNKNOWN_DATABASE, ErrorCode::from(err).code());
 
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
@@ -908,10 +899,7 @@ impl ShareApiTestSuite {
             let res = mt.grant_share_object(req).await;
             info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownTable("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::UNKNOWN_TABLE, ErrorCode::from(err).code());
         }
 
         info!("--- grant unknown share2");
@@ -929,10 +917,7 @@ impl ShareApiTestSuite {
             let res = mt.grant_share_object(req).await;
             info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownShare("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::UNKNOWN_SHARE, ErrorCode::from(err).code());
         }
 
         info!("--- grant table2 on a unbound database share");
@@ -947,10 +932,7 @@ impl ShareApiTestSuite {
             let res = mt.grant_share_object(req).await;
             info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::WrongShareObject("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::WRONG_SHARE_OBJECT, ErrorCode::from(err).code());
         }
 
         info!("--- grant db object and table object");
@@ -1037,10 +1019,7 @@ impl ShareApiTestSuite {
             let res = mt.grant_share_object(req).await;
             info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::WrongShareObject("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::WRONG_SHARE_OBJECT, ErrorCode::from(err).code());
 
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
@@ -1052,10 +1031,7 @@ impl ShareApiTestSuite {
             let res = mt.grant_share_object(req).await;
             info!("grant object res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::WrongShareObject("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::WRONG_SHARE_OBJECT, ErrorCode::from(err).code());
         }
 
         info!("--- check db and table shared_by field");
@@ -1226,10 +1202,7 @@ impl ShareApiTestSuite {
             let res = mt.get_share_grant_objects(req).await;
             info!("get_share_grant_objects res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownShare("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::UNKNOWN_SHARE, ErrorCode::from(err).code());
         }
 
         info!("--- create share1");
@@ -1370,10 +1343,7 @@ impl ShareApiTestSuite {
             let res = mt.get_grant_privileges_of_object(req).await;
             info!("get_share_grant_objects res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownDatabase("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::UNKNOWN_DATABASE, ErrorCode::from(err).code());
 
             let req = GetObjectGrantPrivilegesReq {
                 tenant: tenant_name.to_string(),
@@ -1383,10 +1353,7 @@ impl ShareApiTestSuite {
             let res = mt.get_grant_privileges_of_object(req).await;
             info!("get_share_grant_objects res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownDatabase("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::UNKNOWN_DATABASE, ErrorCode::from(err).code());
         }
 
         info!("--- create share1 and share2");
@@ -1563,7 +1530,7 @@ impl ShareApiTestSuite {
                 assert!(res.is_err());
                 let err = res.unwrap_err();
                 assert_eq!(
-                    ErrorCode::CannotShareDatabaseCreatedFromShare("").code(),
+                    ErrorCode::CANNOT_SHARE_DATABASE_CREATED_FROM_SHARE,
                     ErrorCode::from(err).code()
                 );
             }
