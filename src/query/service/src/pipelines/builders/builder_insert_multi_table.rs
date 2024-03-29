@@ -70,7 +70,7 @@ impl PipelineBuilder {
                 f.push(Box::new(self.dummy_transform_builder()?));
             }
         }
-        self.main_pipeline.add_transform_by_chunk(f)?;
+        self.main_pipeline.add_transforms_by_chunk(f)?;
         Ok(())
     }
 
@@ -91,7 +91,7 @@ impl PipelineBuilder {
                 f.push(Box::new(self.dummy_transform_builder()?));
             }
         }
-        self.main_pipeline.add_transform_by_chunk(f)?;
+        self.main_pipeline.add_transforms_by_chunk(f)?;
         Ok(())
     }
 
@@ -111,7 +111,7 @@ impl PipelineBuilder {
                 f.push(Box::new(self.dummy_transform_builder()?));
             }
         }
-        self.main_pipeline.add_transform_by_chunk(f)?;
+        self.main_pipeline.add_transforms_by_chunk(f)?;
         Ok(())
     }
 
@@ -139,7 +139,7 @@ impl PipelineBuilder {
                 f.push(Box::new(self.dummy_transform_builder()?));
             }
         }
-        self.main_pipeline.add_transform_by_chunk(f)?;
+        self.main_pipeline.add_transforms_by_chunk(f)?;
         Ok(())
     }
 
@@ -245,16 +245,16 @@ impl PipelineBuilder {
             ));
         }
         self.main_pipeline
-            .add_transform_by_chunk(compact_builders)?;
+            .add_transforms_by_chunk(compact_builders)?;
         if eval_cluster_key_num > 0 {
             self.main_pipeline
-                .add_transform_by_chunk(eval_cluster_key_builders)?;
+                .add_transforms_by_chunk(eval_cluster_key_builders)?;
         }
         if sort_num > 0 {
-            self.main_pipeline.add_transform_by_chunk(sort_builders)?;
+            self.main_pipeline.add_transforms_by_chunk(sort_builders)?;
         }
         self.main_pipeline
-            .add_transform_by_chunk(serialize_block_builders)?;
+            .add_transforms_by_chunk(serialize_block_builders)?;
         Ok(())
     }
 
@@ -289,9 +289,9 @@ impl PipelineBuilder {
             tables.insert(table.get_id(), table);
         }
         self.main_pipeline
-            .add_transform_by_chunk(serialize_segment_builders)?;
+            .add_transforms_by_chunk(serialize_segment_builders)?;
         self.main_pipeline
-            .add_transform_by_chunk(mutation_aggregator_builders)?;
+            .add_transforms_by_chunk(mutation_aggregator_builders)?;
         self.main_pipeline.try_resize(1)?;
         let catalog = CatalogManager::instance()
             .build_catalog(&targets[0].target_catalog_info, self.ctx.txn_mgr())?;

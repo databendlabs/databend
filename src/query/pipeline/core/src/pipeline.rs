@@ -240,10 +240,12 @@ impl Pipeline {
         Ok(())
     }
 
-    pub fn add_transform_by_chunk(&mut self, f: Vec<DynTransformBuilder>) -> Result<()> {
+    /// Add a pipe to the pipeline, which contains `n` processors. The processors are created by the given m `builders`, and each builder will create `n / m` processors.
+    pub fn add_transforms_by_chunk(&mut self, builders: Vec<DynTransformBuilder>) -> Result<()> {
         let mut transform_builder = TransformPipeBuilder::create();
-        let chunk_size = self.output_len() / f.len();
-        for f in f {
+        assert_eq!(self.output_len() % builders.len(), 0);
+        let chunk_size = self.output_len() / builders.len();
+        for f in builders {
             for _index in 0..chunk_size {
                 let input_port = InputPort::create();
                 let output_port = OutputPort::create();
