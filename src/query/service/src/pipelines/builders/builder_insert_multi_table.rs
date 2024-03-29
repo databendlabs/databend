@@ -49,7 +49,7 @@ impl PipelineBuilder {
     pub(crate) fn build_shuffle(&mut self, plan: &Shuffle) -> Result<()> {
         self.build_pipeline(&plan.input)?;
         self.main_pipeline
-            .reorder_inputs(plan.strategy.shuffle(self.main_pipeline.output_len()));
+            .reorder_inputs(plan.strategy.shuffle(self.main_pipeline.output_len())?);
         Ok(())
     }
 

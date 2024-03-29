@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -39,16 +41,22 @@ pub enum ShuffleStrategy {
 }
 
 impl ShuffleStrategy {
-    pub fn shuffle(&self, total: usize) -> Vec<usize> {
+    pub fn shuffle(&self, total: usize) -> Result<Vec<usize>> {
         match self {
             ShuffleStrategy::Transpose(n) => {
+                if total % n != 0 {
+                    return Err(ErrorCode::Internal(format!(
+                        "total rows {} is not divisible by n {}",
+                        total, n
+                    )));
+                }
                 let mut result = vec![0; total];
                 for i in 0..*n {
                     for j in 0..total / n {
                         result[i + j * n] = i * (total / n) + j;
                     }
                 }
-                result
+                Ok(result)
             }
         }
     }
