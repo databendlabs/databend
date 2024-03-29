@@ -42,7 +42,7 @@ use crate::sql::evaluator::CompoundBlockOperator;
 impl PipelineBuilder {
     pub(crate) fn build_duplicate(&mut self, plan: &Duplicate) -> Result<()> {
         self.build_pipeline(&plan.input)?;
-        self.main_pipeline.duplicate(false, plan.n)?;
+        self.main_pipeline.duplicate(true, plan.n)?;
         Ok(())
     }
 
