@@ -30,28 +30,7 @@ pub struct Duplicate {
 pub struct Shuffle {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    pub strategy: ShuffleStrategy,
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub enum ShuffleStrategy {
-    Transpose(usize),
-}
-
-impl ShuffleStrategy {
-    pub fn shuffle(&self, total: usize) -> Vec<usize> {
-        match self {
-            ShuffleStrategy::Transpose(n) => {
-                let mut result = vec![0; total];
-                for i in 0..*n {
-                    for j in 0..total / n {
-                        result[i + j * n] = i * (total / n) + j;
-                    }
-                }
-                result
-            }
-        }
-    }
+    pub strategy: Vec<usize>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
