@@ -75,7 +75,7 @@ impl Binder {
                 ignore_result: false,
             };
 
-            let optimized_plan = optimize(opt_ctx, select_plan)?;
+            let optimized_plan = optimize(opt_ctx, select_plan).await?;
             (optimized_plan, bind_context)
         };
 
