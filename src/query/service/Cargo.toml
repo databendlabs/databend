@@ -95,6 +95,7 @@ databend-storages-common-index = { path = "../storages/common/index" }
 databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
 databend-storages-common-txn = { path = "../storages/common/txn" }
 jsonb = { workspace = true }
+async-std = { workspace = true }
 
 # GitHub dependencies
 
