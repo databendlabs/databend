@@ -417,14 +417,14 @@ with cte as (select a, a + 1 as X, b + 1 as Y from t1 order by a limit 3) select
 ----
 105 101 104
 
-query IT
+query IT rowsort
 with t(a) as (values(1,'a'),(2,'b'),(null,'c')) select a, col1 from t
 ----
 1 a
 2 b
 NULL c
 
-query II
+query II rowsort
 with t(a,b) as (values(1,1),(2,null),(null,5)) select * from t
 ----
 1 1
@@ -437,7 +437,7 @@ create table test (a int, b string);
 statement ok
 insert into test values (1, 'a'), (2, 'b');
 
-query TT
+query TT rowsort
 WITH tTqmc(cC0, cC1) AS (SELECT a AS cC0, b AS cC1 FROM test) SELECT tTqmc.cC1 FROM tTqmc;
 ----
 a
