@@ -6163,6 +6163,7 @@ source = "git+https://github.com/georust/geozero?rev=1d78b36#1d78b3604ea6d082980
 dependencies = [
  "geo-types",
  "geojson",
+ "geos",
  "log",
  "scroll",
  "serde_json",
