@@ -34,7 +34,6 @@ use databend_storages_common_table_meta::meta::Versioned;
 
 use super::TransformMergeCommitMeta;
 use crate::operations::common::CommitMeta;
-use crate::operations::update;
 use crate::operations::AppendGenerator;
 use crate::operations::SnapshotGenerator;
 use crate::FuseTable;
