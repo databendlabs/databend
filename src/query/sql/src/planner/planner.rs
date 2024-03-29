@@ -104,8 +104,8 @@ impl Planner {
         let first_token = tokenizer
             .peek()
             .and_then(|token| Some(token.as_ref().ok()?.kind));
-        let is_insert_stmt = {
-            let mut tokenizer = Tokenizer::new(sql);
+        let is_insert_stmt = matches!(first_token, Some(TokenKind::INSERT)) && {
+            let mut tokenizer = Tokenizer::new(&final_sql);
             tokenizer.next_chunk::<3>().is_ok_and(|first_three_tokens| {
                 matches!(first_token, Some(TokenKind::INSERT))
                     && !first_three_tokens.iter().any(|token| {
