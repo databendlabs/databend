@@ -152,10 +152,7 @@ mod add {
 
             let res = user_mgr.add_user(user_info, &CreateOption::Create).await;
 
-            assert_eq!(
-                res.unwrap_err().code(),
-                ErrorCode::UserAlreadyExists("").code()
-            );
+            assert_eq!(res.unwrap_err().code(), ErrorCode::USER_ALREADY_EXISTS);
         }
 
         Ok(())
@@ -243,7 +240,7 @@ mod get {
             )
             .await;
         assert!(res.is_err());
-        assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
+        assert_eq!(res.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
         Ok(())
     }
 
@@ -271,7 +268,7 @@ mod get {
             )
             .await;
         assert!(res.is_err());
-        assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
+        assert_eq!(res.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
         Ok(())
     }
 
@@ -298,7 +295,7 @@ mod get {
         );
         assert_eq!(
             res.await.unwrap_err().code(),
-            ErrorCode::IllegalUserInfoFormat("").code()
+            ErrorCode::ILLEGAL_USER_INFO_FORMAT
         );
 
         Ok(())
@@ -389,7 +386,7 @@ mod get_users {
         let res = user_mgr.get_users();
         assert_eq!(
             res.await.unwrap_err().code(),
-            ErrorCode::IllegalUserInfoFormat("").code()
+            ErrorCode::ILLEGAL_USER_INFO_FORMAT
         );
 
         Ok(())
@@ -448,10 +445,7 @@ mod drop {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
         let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), MatchSeq::GE(1));
-        assert_eq!(
-            res.await.unwrap_err().code(),
-            ErrorCode::UnknownUser("").code()
-        );
+        assert_eq!(res.await.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
         Ok(())
     }
 }
@@ -559,10 +553,7 @@ mod update {
             MatchSeq::GE(0),
             |ui: &mut UserInfo| ui.update_auth_option(Some(new_test_auth_info(false)), None),
         );
-        assert_eq!(
-            res.await.unwrap_err().code(),
-            ErrorCode::UnknownUser("").code()
-        );
+        assert_eq!(res.await.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
         Ok(())
     }
 
