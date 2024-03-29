@@ -319,8 +319,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             database,
             table,
             alias,
-            travel_point,
-            since_point,
+            temporal,
             pivot,
             unpivot,
         } => if let Some(catalog) = catalog {

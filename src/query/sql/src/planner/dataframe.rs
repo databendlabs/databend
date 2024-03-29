@@ -61,8 +61,7 @@ impl Dataframe {
             span: None,
             catalog: None,
             alias: None,
-            travel_point: None,
-            since_point: None,
+            temporal: None,
             pivot: None,
             unpivot: None,
         };
@@ -478,8 +477,7 @@ impl Dataframe {
                 span: None,
                 catalog: None,
                 alias: None,
-                travel_point: None,
-                since_point: None,
+                temporal: None,
                 pivot: None,
                 unpivot: None,
             };

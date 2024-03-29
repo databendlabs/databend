@@ -566,6 +566,52 @@ impl Display for Unpivot {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum ChangesType {
+    Default,
+    AppendOnly,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum TemporalAction {
+    TimeTravel(TimeTravelPoint),
+    Changes {
+        typ: ChangesType,
+        at_point: TimeTravelPoint,
+        end_point: Option<TimeTravelPoint>,
+    },
+}
+
+impl Display for TemporalAction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TemporalAction::TimeTravel(point) => {
+                write!(f, "AT {}", point)?;
+            }
+            TemporalAction::Changes {
+                typ,
+                at_point,
+                end_point,
+            } => {
+                write!(f, "CHANGES (INFORMATION => ")?;
+                match typ {
+                    ChangesType::Default => {
+                        write!(f, "DEFAULT")?;
+                    }
+                    ChangesType::AppendOnly => {
+                        write!(f, "APPEND_ONLY")?;
+                    }
+                }
+                write!(f, ") AT {}", at_point)?;
+                if let Some(end_point) = end_point {
+                    write!(f, " END {}", end_point)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TableReference {
@@ -577,8 +623,7 @@ pub enum TableReference {
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
-        travel_point: Option<TimeTravelPoint>,
-        since_point: Option<TimeTravelPoint>,
+        temporal: Option<TemporalAction>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
@@ -650,8 +695,7 @@ impl Display for TableReference {
                 database,
                 table,
                 alias,
-                travel_point,
-                since_point,
+                temporal,
                 pivot,
                 unpivot,
             } => {
@@ -660,12 +704,8 @@ impl Display for TableReference {
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
 
-                if let Some(travel) = travel_point {
-                    write!(f, " AT {}", travel)?;
-                }
-
-                if let Some(since) = since_point {
-                    write!(f, " SINCE {}", since)?;
+                if let Some(temporal) = temporal {
+                    write!(f, " {temporal}")?;
                 }
 
                 if let Some(alias) = alias {
