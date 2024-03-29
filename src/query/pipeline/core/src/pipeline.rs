@@ -378,7 +378,7 @@ impl Pipeline {
         }
     }
 
-    /// Duplicate a pipe input to two outputs.
+    /// Duplicate a pipe input to `n` outputs.
     ///
     /// If `force_finish_together` enabled, once one output is finished, the other output will be finished too.
     pub fn duplicate(&mut self, force_finish_together: bool, n: usize) -> Result<()> {
