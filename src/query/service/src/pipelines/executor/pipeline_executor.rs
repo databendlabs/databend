@@ -26,7 +26,7 @@ use parking_lot::Condvar;
 use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::QueriesPipelineExecutor;
+use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::executor::RunningGraph;
 
@@ -36,8 +36,6 @@ pub type FinishedCallback =
     Box<dyn FnOnce(&Result<Vec<Arc<Profile>>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
 pub struct QueryWrapper {
-    // TODO: will remove it after refactoring queries pipeline executor
-    executor: Arc<QueriesPipelineExecutor>,
     graph: Arc<RunningGraph>,
     settings: ExecutorSettings,
     on_init_callback: Mutex<Option<InitCallback>>,
@@ -74,7 +72,6 @@ impl PipelineExecutor {
             )?;
 
             Ok(PipelineExecutor::QueriesPipelineExecutor(QueryWrapper {
-                executor: QueriesPipelineExecutor::create(settings.clone())?,
                 graph,
                 settings,
                 on_init_callback: Mutex::new(on_init_callback),
@@ -137,7 +134,6 @@ impl PipelineExecutor {
             )?;
 
             Ok(PipelineExecutor::QueriesPipelineExecutor(QueryWrapper {
-                executor: QueriesPipelineExecutor::create(settings.clone())?,
                 graph,
                 settings,
                 on_init_callback: Mutex::new(on_init_callback),
@@ -177,9 +173,7 @@ impl PipelineExecutor {
                     &query_wrapper.on_init_callback,
                     &query_wrapper.settings.query_id,
                 )?;
-                query_wrapper
-                    .executor
-                    .send_graph(query_wrapper.graph.clone())?;
+                GlobalQueriesExecutor::instance().send_graph(query_wrapper.graph.clone())?;
 
                 let (lock, cvar) = &*query_wrapper.finish_condvar_wait;
                 let mut finished = lock.lock();
