@@ -3612,7 +3612,7 @@ CreateStream(
             quote: None,
             is_hole: false,
         },
-        stream_point: None,
+        travel_point: None,
         append_only: false,
         comment: None,
     },
@@ -3664,8 +3664,9 @@ CreateStream(
             quote: None,
             is_hole: false,
         },
-        stream_point: Some(
-            AtStream {
+        travel_point: Some(
+            Stream {
+                catalog: None,
                 database: Some(
                     Identifier {
                         span: Some(
@@ -3739,25 +3740,23 @@ CreateStream(
             quote: None,
             is_hole: false,
         },
-        stream_point: Some(
-            AtPoint(
-                Timestamp(
-                    Cast {
+        travel_point: Some(
+            Timestamp(
+                Cast {
+                    span: Some(
+                        98..109,
+                    ),
+                    expr: Literal {
                         span: Some(
-                            98..109,
+                            70..98,
                         ),
-                        expr: Literal {
-                            span: Some(
-                                70..98,
-                            ),
-                            value: String(
-                                "2023-06-26 09:49:02.038483",
-                            ),
-                        },
-                        target_type: Timestamp,
-                        pg_style: true,
+                        value: String(
+                            "2023-06-26 09:49:02.038483",
+                        ),
                     },
-                ),
+                    target_type: Timestamp,
+                    pg_style: true,
+                },
             ),
         ),
         append_only: false,
@@ -3811,11 +3810,9 @@ CreateStream(
             quote: None,
             is_hole: false,
         },
-        stream_point: Some(
-            AtPoint(
-                Snapshot(
-                    "9828b23f74664ff3806f44bbc1925ea5",
-                ),
+        travel_point: Some(
+            Snapshot(
+                "9828b23f74664ff3806f44bbc1925ea5",
             ),
         ),
         append_only: true,
@@ -3869,7 +3866,7 @@ CreateStream(
             quote: None,
             is_hole: false,
         },
-        stream_point: None,
+        travel_point: None,
         append_only: false,
         comment: None,
     },

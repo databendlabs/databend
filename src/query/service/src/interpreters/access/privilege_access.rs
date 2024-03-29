@@ -181,7 +181,7 @@ impl PrivilegeAccess {
                             )
                             .await
                         {
-                            if err.code() != ErrorCode::PermissionDenied("").code() {
+                            if err.code() != ErrorCode::PERMISSION_DENIED {
                                 return Err(err);
                             }
                             let current_user = self.ctx.get_current_user()?;
@@ -278,7 +278,7 @@ impl PrivilegeAccess {
                                     )
                                     .await
                                 {
-                                    if err.code() != ErrorCode::PermissionDenied("").code() {
+                                    if err.code() != ErrorCode::PERMISSION_DENIED {
                                         return Err(err);
                                     }
                                     let current_user = self.ctx.get_current_user()?;
@@ -377,7 +377,7 @@ impl PrivilegeAccess {
         match session.validate_privilege(grant_object, privilege).await {
             Ok(_) => Ok(()),
             Err(err) => {
-                if err.code() != ErrorCode::PermissionDenied("").code() {
+                if err.code() != ErrorCode::PERMISSION_DENIED {
                     return Err(err);
                 }
                 let current_user = self.ctx.get_current_user()?;

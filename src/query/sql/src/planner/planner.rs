@@ -175,7 +175,7 @@ impl Planner {
                     })
                     .with_enable_dphyp(self.ctx.get_settings().get_enable_dphyp()?);
 
-                let optimized_plan = optimize(opt_ctx, plan)?;
+                let optimized_plan = optimize(opt_ctx, plan).await?;
                 Ok((optimized_plan, PlanExtras {
                     metadata,
                     format,

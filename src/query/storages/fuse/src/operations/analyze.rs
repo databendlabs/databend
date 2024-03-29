@@ -203,7 +203,7 @@ impl AsyncSink for SinkAnalyzeState {
     #[unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
-        let mismatch_code = ErrorCode::TableVersionMismatched("").code();
+        let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
 
         loop {
             if let Err(e) = self.merge_analyze_states(data_block.clone()).await {

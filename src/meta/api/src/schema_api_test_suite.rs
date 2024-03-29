@@ -619,7 +619,7 @@ impl SchemaApiTestSuite {
             info!("create database res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(
-                ErrorCode::DatabaseAlreadyExists("").code(),
+                ErrorCode::DATABASE_ALREADY_EXISTS,
                 ErrorCode::from(err).code()
             );
         }
@@ -721,10 +721,7 @@ impl SchemaApiTestSuite {
                 .get_database(GetDatabaseReq::new(tenant.clone(), "db2"))
                 .await;
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownDatabase("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::UNKNOWN_DATABASE, ErrorCode::from(err).code());
         }
 
         info!("--- drop db2 with if_exists=true returns no error");
@@ -852,7 +849,7 @@ impl SchemaApiTestSuite {
                 .await;
             assert!(res.is_err());
             assert_eq!(
-                ErrorCode::UndropDbHasNoHistory("").code(),
+                ErrorCode::UNDROP_DB_HAS_NO_HISTORY,
                 ErrorCode::from(res.unwrap_err()).code()
             );
         }
@@ -951,7 +948,7 @@ impl SchemaApiTestSuite {
             let err = res.unwrap_err();
             let err = ErrorCode::from(err);
 
-            assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
+            assert_eq!(ErrorCode::UNKNOWN_DATABASE, err.code());
             assert!(err.message().contains("absent"));
         }
 
@@ -963,7 +960,7 @@ impl SchemaApiTestSuite {
             let res = res.unwrap_err();
             let err = ErrorCode::from(res);
 
-            assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
+            assert_eq!(ErrorCode::UNKNOWN_DATABASE, err.code());
             assert_eq!("Unknown database 'db2'".to_string(), err.message());
         }
 
@@ -985,10 +982,7 @@ impl SchemaApiTestSuite {
                 .get_database(GetDatabaseReq::new(tenant1.clone(), "db2"))
                 .await;
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownDatabase("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::UNKNOWN_DATABASE, ErrorCode::from(err).code());
         }
 
         info!("--- tenant1 drop db2 with if_exists=true returns no error");
@@ -1118,7 +1112,7 @@ impl SchemaApiTestSuite {
             info!("rename database res: {:?}", res);
             assert!(res.is_err());
             assert_eq!(
-                ErrorCode::UnknownDatabase("").code(),
+                ErrorCode::UNKNOWN_DATABASE,
                 ErrorCode::from(res.unwrap_err()).code()
             );
         }
@@ -1144,7 +1138,7 @@ impl SchemaApiTestSuite {
                 info!("rename database res: {:?}", res);
                 assert!(res.is_err());
                 assert_eq!(
-                    ErrorCode::UnknownDatabase("").code(),
+                    ErrorCode::UNKNOWN_DATABASE,
                     ErrorCode::from(res.unwrap_err()).code()
                 );
             }
@@ -1169,7 +1163,7 @@ impl SchemaApiTestSuite {
             info!("rename database res: {:?}", res);
             assert!(res.is_err());
             assert_eq!(
-                ErrorCode::DatabaseAlreadyExists("").code(),
+                ErrorCode::DATABASE_ALREADY_EXISTS,
                 ErrorCode::from(res.unwrap_err()).code()
             );
         }
@@ -1201,10 +1195,7 @@ impl SchemaApiTestSuite {
             {
                 let res = mt.get_database(GetDatabaseReq::new(tenant, db_name)).await;
                 let err = res.err().unwrap();
-                assert_eq!(
-                    ErrorCode::UnknownDatabase("").code(),
-                    ErrorCode::from(err).code()
-                );
+                assert_eq!(ErrorCode::UNKNOWN_DATABASE, ErrorCode::from(err).code());
             }
         }
 
@@ -1694,7 +1685,7 @@ impl SchemaApiTestSuite {
             ..TableMeta::default()
         };
 
-        let unknown_database_code = ErrorCode::UnknownDatabase("").code();
+        let unknown_database_code = ErrorCode::UNKNOWN_DATABASE;
 
         info!("--- create or get table on unknown db");
         {
@@ -1959,7 +1950,7 @@ impl SchemaApiTestSuite {
                 let res = mt.drop_table_by_id(plan).await;
                 let err = res.unwrap_err();
                 assert_eq!(
-                    ErrorCode::UnknownTable("").code(),
+                    ErrorCode::UNKNOWN_TABLE,
                     ErrorCode::from(err).code(),
                     "drop table {} with if_exists=false again",
                     tbl_name
@@ -2247,7 +2238,7 @@ impl SchemaApiTestSuite {
 
             assert!(got.is_err());
             assert_eq!(
-                ErrorCode::UnknownDatabase("").code(),
+                ErrorCode::UNKNOWN_DATABASE,
                 ErrorCode::from(got.unwrap_err()).code()
             );
         }
@@ -2339,7 +2330,7 @@ impl SchemaApiTestSuite {
             let res = mt.rename_table(rename_db1tb2_to_db1tb3(false)).await;
             let err = res.unwrap_err();
             assert_eq!(
-                ErrorCode::UnknownTable("").code(),
+                ErrorCode::UNKNOWN_TABLE,
                 ErrorCode::from(err).code(),
                 "rename table {} again",
                 tb2_name
@@ -2375,7 +2366,7 @@ impl SchemaApiTestSuite {
             let res = mt.rename_table(rename_db1tb2_to_db1tb3(false)).await;
             let err = res.unwrap_err();
             assert_eq!(
-                ErrorCode::TableAlreadyExists("").code(),
+                ErrorCode::TABLE_ALREADY_EXISTS,
                 ErrorCode::from(err).code(),
                 "rename table {} again after recreate",
                 tb2_name
@@ -2387,7 +2378,7 @@ impl SchemaApiTestSuite {
             let res = mt.rename_table(rename_db1tb2_to_db1tb3(true)).await;
             let err = res.unwrap_err();
             assert_eq!(
-                ErrorCode::TableAlreadyExists("").code(),
+                ErrorCode::TABLE_ALREADY_EXISTS,
                 ErrorCode::from(err).code(),
                 "rename table {} again after recreate",
                 tb2_name
@@ -2411,7 +2402,7 @@ impl SchemaApiTestSuite {
 
             assert!(res.is_err());
             assert_eq!(
-                ErrorCode::UnknownDatabase("").code(),
+                ErrorCode::UNKNOWN_DATABASE,
                 ErrorCode::from(res.unwrap_err()).code()
             );
         }
@@ -2731,7 +2722,7 @@ impl SchemaApiTestSuite {
                     .await;
                 let err = result.unwrap_err();
                 let err = ErrorCode::from(err);
-                assert_eq!(ErrorCode::DuplicatedUpsertFiles("").code(), err.code());
+                assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
             }
         }
         Ok(())
@@ -3223,7 +3214,7 @@ impl SchemaApiTestSuite {
                 let err = got.unwrap_err();
                 let err = ErrorCode::from(err);
 
-                assert_eq!(ErrorCode::TableVersionMismatched("").code(), err.code());
+                assert_eq!(ErrorCode::TABLE_VERSION_MISMATCHED, err.code());
 
                 // table is not affected.
                 let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
@@ -3248,7 +3239,7 @@ impl SchemaApiTestSuite {
                 let err = got.unwrap_err();
                 let err = ErrorCode::from(err);
 
-                assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
+                assert_eq!(ErrorCode::UNKNOWN_TABLE_ID, err.code());
 
                 // table is not affected.
                 let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
@@ -4903,7 +4894,7 @@ impl SchemaApiTestSuite {
                 .await;
             assert!(res.is_err());
             let code = ErrorCode::from(res.unwrap_err()).code();
-            let undrop_table_already_exists = ErrorCode::UndropTableAlreadyExists("").code();
+            let undrop_table_already_exists = ErrorCode::UNDROP_TABLE_ALREADY_EXISTS;
             assert_eq!(undrop_table_already_exists, code);
         }
 
@@ -5158,7 +5149,7 @@ impl SchemaApiTestSuite {
                 let err = got.unwrap_err();
                 let err = ErrorCode::from(err);
 
-                assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
+                assert_eq!(ErrorCode::UNKNOWN_TABLE_ID, err.code());
             }
         }
         Ok(())
@@ -5255,7 +5246,7 @@ impl SchemaApiTestSuite {
                 let err = got.unwrap_err();
                 let err = ErrorCode::from(err);
 
-                assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
+                assert_eq!(ErrorCode::UNKNOWN_TABLE_ID, err.code());
             }
         }
         Ok(())
@@ -5314,7 +5305,7 @@ impl SchemaApiTestSuite {
                 let err = got.unwrap_err();
                 let err = ErrorCode::from(err);
 
-                assert_eq!(ErrorCode::UnknownDatabaseId("").code(), err.code());
+                assert_eq!(ErrorCode::UNKNOWN_DATABASE_ID, err.code());
             }
         }
         Ok(())
@@ -5657,7 +5648,7 @@ impl SchemaApiTestSuite {
             assert!(got.is_err());
             assert_eq!(
                 ErrorCode::from(got.unwrap_err()).code(),
-                ErrorCode::WrongShareObject("").code()
+                ErrorCode::WRONG_SHARE_OBJECT
             );
         }
 
@@ -5677,7 +5668,7 @@ impl SchemaApiTestSuite {
             assert!(res.is_err());
 
             let code = ErrorCode::from(res.unwrap_err()).code();
-            assert_eq!(ErrorCode::UnknownDatabase("").code(), code);
+            assert_eq!(ErrorCode::UNKNOWN_DATABASE, code);
         }
 
         info!("--- prepare db");
@@ -5971,7 +5962,7 @@ impl SchemaApiTestSuite {
             let status = res.err().unwrap();
             let err_code = ErrorCode::from(status);
 
-            assert_eq!(ErrorCode::IndexAlreadyExists("").code(), err_code.code());
+            assert_eq!(ErrorCode::INDEX_ALREADY_EXISTS, err_code.code());
         }
 
         {
@@ -6157,7 +6148,7 @@ impl SchemaApiTestSuite {
             let status = res.err().unwrap();
             let err_code = ErrorCode::from(status);
 
-            assert_eq!(ErrorCode::IndexAlreadyExists("").code(), err_code.code());
+            assert_eq!(ErrorCode::INDEX_ALREADY_EXISTS, err_code.code());
         }
 
         {
@@ -6825,7 +6816,7 @@ impl SchemaApiTestSuite {
             debug!("get present database res: {:?}", res);
             let err = res.unwrap_err();
             let err = ErrorCode::from(err);
-            assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
+            assert_eq!(ErrorCode::UNKNOWN_DATABASE, err.code());
             assert_eq!("Unknown database 'nonexistent'", err.message());
             assert_eq!(
                 "UnknownDatabase. Code: 1003, Text = Unknown database 'nonexistent'.",
@@ -7043,10 +7034,7 @@ impl SchemaApiTestSuite {
                 .await;
             debug!("get present table res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownTable("").code(),
-                ErrorCode::from(err).code()
-            );
+            assert_eq!(ErrorCode::UNKNOWN_TABLE, ErrorCode::from(err).code());
         }
 
         Ok(())
@@ -7182,7 +7170,7 @@ impl SchemaApiTestSuite {
             let result = mt.update_table_meta(req).await;
             let err = result.unwrap_err();
             let err = ErrorCode::from(err);
-            assert_eq!(ErrorCode::DuplicatedUpsertFiles("").code(), err.code());
+            assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
 
             let req = GetTableCopiedFileReq {
                 table_id,

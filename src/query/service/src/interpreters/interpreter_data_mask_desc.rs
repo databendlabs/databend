@@ -72,7 +72,7 @@ impl Interpreter for DescDataMaskInterpreter {
             Ok(policy) => policy,
             Err(err) => {
                 warn!("DescDataMaskInterpreter err: {}", err);
-                if err.code() != ErrorCode::UnknownDatamask("").code() {
+                if err.code() != ErrorCode::UNKNOWN_DATAMASK {
                     return Err(err);
                 }
                 return Ok(PipelineBuildResult::create());
