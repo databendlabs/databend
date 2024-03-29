@@ -73,10 +73,14 @@ fn test_fuzz() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_fuzz_with_spill() -> Result<()> {
-    test_fuzz_impl("parquet", true).await?;
-    test_fuzz_impl("native", true).await
+#[test]
+fn test_fuzz_with_spill() -> Result<()> {
+    let runtime = Runtime::with_worker_threads(2, None)?;
+    runtime.block_on(async {
+        test_fuzz_impl("parquet", true).await?;
+        test_fuzz_impl("native", true).await
+    })?;
+    Ok(())
 }
 
 async fn plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<Plan> {
