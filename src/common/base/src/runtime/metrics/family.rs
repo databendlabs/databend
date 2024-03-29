@@ -30,6 +30,9 @@ use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 use prometheus_client::registry::Registry;
 
+use crate::runtime::metrics::family_metrics::FamilyCounter;
+use crate::runtime::metrics::family_metrics::FamilyGauge;
+use crate::runtime::metrics::family_metrics::FamilyHistogram;
 use crate::runtime::metrics::registry::DatabendMetric;
 use crate::runtime::metrics::registry::Metric;
 use crate::runtime::metrics::sample::MetricSample;
@@ -41,12 +44,18 @@ pub trait FamilyLabels: Clone + Hash + Eq + Debug + EncodeLabelSet + Send + Sync
 
 impl<T: Clone + Hash + Eq + Debug + EncodeLabelSet + Send + Sync + 'static> FamilyLabels for T {}
 
+pub trait FamilyMetricCreator<Labels: FamilyLabels, M: FamilyMetric>:
+    Send + Sync + 'static
+{
+    fn create(&self, index: usize, labels: Labels) -> M;
+}
+
 pub struct Family<S: FamilyLabels, M: FamilyMetric> {
     index: usize,
 
     metrics: Arc<RwLock<HashMap<S, Arc<M>>>>,
 
-    family_metric_creator: Arc<Box<dyn Fn(usize, S) -> M + Send + Sync + 'static>>,
+    family_metric_creator: Arc<Box<dyn FamilyMetricCreator<S, M>>>,
 }
 
 impl<S: FamilyLabels, M: FamilyMetric> Debug for Family<S, M> {
@@ -68,7 +77,7 @@ impl<S: FamilyLabels, M: FamilyMetric> Clone for Family<S, M> {
 }
 
 impl<S: FamilyLabels, M: FamilyMetric> Family<S, M> {
-    pub fn create<F: Fn(usize, S) -> M + Send + Sync + 'static>(index: usize, f: F) -> Self {
+    pub fn create<F: FamilyMetricCreator<S, M>>(index: usize, f: F) -> Self {
         Self {
             index,
             metrics: Arc::new(RwLock::new(Default::default())),
@@ -88,7 +97,10 @@ impl<S: FamilyLabels, M: FamilyMetric> Family<S, M> {
         match write_guard.entry(label_set.clone()) {
             Entry::Occupied(v) => v.get().clone(),
             Entry::Vacant(v) => {
-                let metric = Arc::new((self.family_metric_creator)(self.index, label_set.clone()));
+                let metric = Arc::new(
+                    self.family_metric_creator
+                        .create(self.index, label_set.clone()),
+                );
                 v.insert(metric.clone());
                 metric
             }
@@ -325,5 +337,33 @@ mod prometheus_parse {
         }
         samples.extend(buckets.drain().map(|(_k, v)| v).collect::<Vec<_>>());
         samples
+    }
+}
+
+pub struct FamilyCounterCreator;
+
+impl<Labels: FamilyLabels> FamilyMetricCreator<Labels, FamilyCounter<Labels>>
+    for FamilyCounterCreator
+{
+    fn create(&self, index: usize, labels: Labels) -> FamilyCounter<Labels> {
+        FamilyCounter::create(index, labels)
+    }
+}
+
+pub struct FamilyGaugeCreator;
+
+impl<Labels: FamilyLabels> FamilyMetricCreator<Labels, FamilyGauge<Labels>> for FamilyGaugeCreator {
+    fn create(&self, index: usize, labels: Labels) -> FamilyGauge<Labels> {
+        FamilyGauge::create(index, labels)
+    }
+}
+
+pub struct FamilyHistogramCreator(pub Vec<f64>);
+
+impl<Labels: FamilyLabels> FamilyMetricCreator<Labels, FamilyHistogram<Labels>>
+    for FamilyHistogramCreator
+{
+    fn create(&self, index: usize, labels: Labels) -> FamilyHistogram<Labels> {
+        FamilyHistogram::new(index, labels, self.0.iter().copied())
     }
 }

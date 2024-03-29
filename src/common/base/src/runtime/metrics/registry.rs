@@ -26,6 +26,9 @@ use prometheus_client::registry::Registry;
 
 use crate::runtime::metrics::counter::Counter;
 use crate::runtime::metrics::family::Family;
+use crate::runtime::metrics::family::FamilyCounterCreator as InnerFamilyCounterCreator;
+use crate::runtime::metrics::family::FamilyGaugeCreator as InnerFamilyGaugeCreator;
+use crate::runtime::metrics::family::FamilyHistogramCreator as InnerFamilyHistogramCreator;
 use crate::runtime::metrics::family::FamilyLabels;
 use crate::runtime::metrics::family_metrics::FamilyCounter as InnerFamilyCounter;
 use crate::runtime::metrics::family_metrics::FamilyGauge as InnerFamilyGauge;
@@ -49,6 +52,10 @@ pub trait DatabendMetric {
 pub trait Metric: PMetrics + DatabendMetric {}
 
 impl<T: PMetrics + DatabendMetric + Clone> Metric for T {}
+
+pub trait MetricCreator<M>: Send + Sync + 'static {
+    fn create(&self, index: usize) -> M;
+}
 
 #[allow(dead_code)]
 struct GlobalMetric {
@@ -81,13 +88,10 @@ impl GlobalRegistry {
         }
     }
 
-    pub fn register<M, F>(&self, name: &str, help: &str, metric_creator: F) -> M
-    where
-        M: Metric + Clone,
-        F: Fn(usize) -> M + 'static,
-    {
+    pub fn register<M, C: MetricCreator<M>>(&self, name: &str, help: &str, creator: C) -> M
+    where M: Metric + Clone {
         let mut global_registry_inner = self.inner.lock();
-        let metric = metric_creator(global_registry_inner.metrics.len());
+        let metric = creator.create(global_registry_inner.metrics.len());
         global_registry_inner
             .registry
             .register(name, help, metric.clone());
@@ -95,7 +99,7 @@ impl GlobalRegistry {
             name: name.to_string(),
             help: help.to_string(),
             metric: Box::new(metric.clone()),
-            creator: Box::new(move |index| Box::new(metric_creator(index))),
+            creator: Box::new(move |index| Box::new(creator.create(index))),
         });
 
         metric
@@ -229,55 +233,101 @@ impl ScopedRegistry {
     }
 }
 
-pub fn register_counter(name: &str) -> Counter {
-    GLOBAL_METRICS_REGISTRY.register(name, "", Counter::create)
+pub fn register_gauge(name: &str) -> Gauge {
+    GLOBAL_METRICS_REGISTRY.register(name, "", GaugeCreator)
 }
 
-pub fn register_gauge(name: &str) -> Gauge {
-    GLOBAL_METRICS_REGISTRY.register(name, "", Gauge::create)
+pub fn register_counter(name: &str) -> Counter {
+    GLOBAL_METRICS_REGISTRY.register(name, "", CounterCreator)
+}
+
+pub fn register_histogram(name: &str, buckets: impl Iterator<Item = f64>) -> Histogram {
+    let buckets = buckets.collect::<Vec<_>>();
+    GLOBAL_METRICS_REGISTRY.register(name, "", HistogramCreator(buckets))
 }
 
 pub fn register_histogram_in_milliseconds(name: &str) -> Histogram {
-    GLOBAL_METRICS_REGISTRY.register(name, "", {
-        move |index| Histogram::new(index, BUCKET_MILLISECONDS.iter().copied())
-    })
+    register_histogram(name, BUCKET_MILLISECONDS.iter().copied())
 }
 
 pub fn register_histogram_in_seconds(name: &str) -> Histogram {
-    GLOBAL_METRICS_REGISTRY.register(name, "", {
-        move |index| Histogram::new(index, BUCKET_SECONDS.iter().copied())
-    })
+    register_histogram(name, BUCKET_SECONDS.iter().copied())
 }
 
 pub fn register_counter_family<T: FamilyLabels>(name: &str) -> FamilyCounter<T> {
-    GLOBAL_METRICS_REGISTRY.register(name, "", |index| {
-        FamilyCounter::create(index, InnerFamilyCounter::create)
-    })
+    GLOBAL_METRICS_REGISTRY.register(name, "", FamilyCounterCreator)
 }
 
 pub fn register_gauge_family<T: FamilyLabels>(name: &str) -> FamilyGauge<T> {
-    GLOBAL_METRICS_REGISTRY.register(name, "", |index| {
-        FamilyGauge::create(index, InnerFamilyGauge::create)
-    })
+    GLOBAL_METRICS_REGISTRY.register(name, "", FamilyGaugeCreator)
+}
+
+pub fn register_histogram_family<T: FamilyLabels>(
+    name: &str,
+    buckets: impl Iterator<Item = f64>,
+) -> FamilyHistogram<T> {
+    let buckets = buckets.collect::<Vec<_>>();
+    GLOBAL_METRICS_REGISTRY.register(name, "", FamilyHistogramCreator(buckets))
 }
 
 pub fn register_histogram_family_in_seconds<T: FamilyLabels>(name: &str) -> FamilyHistogram<T> {
-    GLOBAL_METRICS_REGISTRY.register(name, "", |index| {
-        FamilyHistogram::create(index, |index, labels| {
-            InnerFamilyHistogram::new(index, labels, BUCKET_SECONDS.iter().copied())
-        })
-    })
+    register_histogram_family(name, BUCKET_SECONDS.iter().copied())
 }
 
 pub fn register_histogram_family_in_milliseconds<T>(name: &str) -> FamilyHistogram<T>
 where T: FamilyLabels {
-    GLOBAL_METRICS_REGISTRY.register(name, "", |index| {
-        FamilyHistogram::create(index, |index, labels| {
-            InnerFamilyHistogram::new(index, labels, BUCKET_MILLISECONDS.iter().copied())
-        })
-    })
+    register_histogram_family(name, BUCKET_MILLISECONDS.iter().copied())
 }
 
 pub type FamilyGauge<T> = Family<T, InnerFamilyGauge<T>>;
 pub type FamilyCounter<T> = Family<T, InnerFamilyCounter<T>>;
 pub type FamilyHistogram<T> = Family<T, InnerFamilyHistogram<T>>;
+
+struct CounterCreator;
+
+impl MetricCreator<Counter> for CounterCreator {
+    fn create(&self, index: usize) -> Counter {
+        Counter::create(index)
+    }
+}
+
+struct GaugeCreator;
+
+impl MetricCreator<Gauge> for GaugeCreator {
+    fn create(&self, index: usize) -> Gauge {
+        Gauge::create(index)
+    }
+}
+
+struct HistogramCreator(Vec<f64>);
+
+impl MetricCreator<Histogram> for HistogramCreator {
+    fn create(&self, index: usize) -> Histogram {
+        Histogram::new(index, self.0.iter().copied())
+    }
+}
+
+struct FamilyCounterCreator;
+
+impl<T: FamilyLabels> MetricCreator<FamilyCounter<T>> for FamilyCounterCreator {
+    fn create(&self, index: usize) -> FamilyCounter<T> {
+        FamilyCounter::create(index, InnerFamilyCounterCreator)
+    }
+}
+
+struct FamilyGaugeCreator;
+
+impl<T: FamilyLabels> MetricCreator<FamilyGauge<T>> for FamilyGaugeCreator {
+    fn create(&self, index: usize) -> FamilyGauge<T> {
+        FamilyGauge::create(index, InnerFamilyGaugeCreator)
+    }
+}
+
+struct FamilyHistogramCreator(Vec<f64>);
+
+impl<T: FamilyLabels> MetricCreator<FamilyHistogram<T>> for FamilyHistogramCreator {
+    fn create(&self, index: usize) -> FamilyHistogram<T> {
+        let buckets = self.0.clone();
+        FamilyHistogram::create(index, InnerFamilyHistogramCreator(buckets))
+    }
+}
