@@ -85,11 +85,7 @@ impl ModifyTableColumnInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
         let policy = handler
-            .get_data_mask(
-                meta_api,
-                self.ctx.get_tenant().name().to_string(),
-                mask_name.clone(),
-            )
+            .get_data_mask(meta_api, &self.ctx.get_tenant(), mask_name.clone())
             .await?;
 
         // check if column type match to the input type

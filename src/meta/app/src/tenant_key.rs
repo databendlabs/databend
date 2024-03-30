@@ -20,6 +20,7 @@ use std::hash::Hasher;
 use databend_common_meta_kvapi::kvapi;
 
 use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
 
 /// Defines the in-meta-service data for some resource that belongs to a tenant.
 /// Such as `PasswordPolicy`.
@@ -80,19 +81,24 @@ impl<R> Hash for TIdent<R> {
 }
 
 impl<R> TIdent<R> {
-    pub fn new(tenant: Tenant, name: impl ToString) -> Self {
+    pub fn new(tenant: impl ToTenant, name: impl ToString) -> Self {
         Self {
-            tenant,
+            tenant: tenant.to_tenant(),
             name: name.to_string(),
             _p: Default::default(),
         }
+    }
+
+    /// Create a new instance from TIdent of different resource definition.
+    pub fn new_from<T>(other: TIdent<T>) -> Self {
+        Self::new(other.tenant, other.name)
     }
 
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    //
+    /// Create a display-able instance.
     pub fn display(&self) -> impl fmt::Display + '_ {
         format!("'{}'/'{}'", self.tenant.name(), self.name)
     }
