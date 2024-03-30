@@ -67,6 +67,7 @@ pub use stage::STDIN_FD;
 
 mod copy;
 mod merge;
+mod metrics_layer;
 mod statistics;
 
 pub use copy::CopyStatus;
