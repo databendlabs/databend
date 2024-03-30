@@ -947,7 +947,16 @@ impl HashJoinBuildState {
         // `calculate_nullable_column_digest`, `apply_bloom_pruning`
         let merge_type = self.ctx.get_merge_into_join();
         if matches!(merge_type.merge_into_join_type, MergeIntoJoinType::Right) {
-            if let Expr::ColumnRef { id, .. } = probe_key {
+            let id = match probe_key {
+                Expr::ColumnRef { id, .. } => Some(id),
+                Expr::Cast {
+                    expr: box Expr::ColumnRef { id, .. },
+                    ..
+                } => Some(id),
+                _ => None,
+            };
+
+            if let Some(id) = id {
                 let mut columns = Vec::with_capacity(data_blocks.len());
                 for block in data_blocks.iter() {
                     if block.num_columns() == 0 {
