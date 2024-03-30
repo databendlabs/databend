@@ -37,7 +37,6 @@ use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
@@ -1665,7 +1664,6 @@ impl SchemaApiTestSuite {
 
         let db_name = "db1";
         let tbl_name = "tb2";
-        let mut expected_tb_count: u64 = 0;
 
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
@@ -1747,11 +1745,6 @@ impl SchemaApiTestSuite {
             res.db_id
         };
 
-        // check table count
-        info!("--- check table count of tenant1");
-        let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-        assert_eq!(expected_tb_count, tb_count.count);
-
         info!("--- create tb2 and get table");
         let created_on = Utc::now();
 
@@ -1797,12 +1790,6 @@ impl SchemaApiTestSuite {
             }
         };
 
-        expected_tb_count += 1;
-        // check table count
-        info!("--- check table count of tenant1");
-        let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-        assert_eq!(expected_tb_count, tb_count.count);
-
         info!("--- create table again with if_not_exists = true");
         {
             req.create_option = CreateOption::CreateIfNotExists;
@@ -1824,11 +1811,6 @@ impl SchemaApiTestSuite {
             };
             assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
         }
-
-        // check table count
-        info!("--- check table count of tenant1");
-        let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-        assert_eq!(expected_tb_count, tb_count.count);
 
         info!("--- create table again with if_not_exists = false");
         {
@@ -1863,11 +1845,6 @@ impl SchemaApiTestSuite {
             assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get old table");
         }
 
-        // check table count
-        info!("--- check table count of tenant1");
-        let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-        assert_eq!(expected_tb_count, tb_count.count);
-
         info!("--- create another table");
         {
             let created_on = Utc::now();
@@ -1896,12 +1873,6 @@ impl SchemaApiTestSuite {
                 tb_ident_2.table_id
             );
         }
-
-        expected_tb_count += 1;
-        // check table count
-        info!("--- check table count of tenant1");
-        let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-        assert_eq!(expected_tb_count, tb_count.count);
 
         let req = GetTableReq::new(&tenant, db_name, tbl_name);
         let tb_info = mt.get_table(req).await?;
@@ -1968,12 +1939,6 @@ impl SchemaApiTestSuite {
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
             }
-
-            expected_tb_count -= 1;
-            // check table count
-            info!("--- check table count of tenant1");
-            let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-            assert_eq!(expected_tb_count, tb_count.count);
         }
 
         info!("--- create or replace db1");
@@ -1998,11 +1963,6 @@ impl SchemaApiTestSuite {
 
             let res = mt.create_table(req.clone()).await?;
             let old_table_id = res.table_id;
-
-            let tb_count = mt
-                .count_tables(Self::req_count_table(tenant_name))
-                .await?
-                .count;
 
             let req = GetTableReq::new(&tenant, db_name, table);
             let res = mt.get_table(req).await?;
@@ -2032,13 +1992,6 @@ impl SchemaApiTestSuite {
             let res = mt.create_table(req.clone()).await?;
             let table_id = res.table_id;
 
-            // table count dose not change
-            assert_eq!(
-                tb_count,
-                mt.count_tables(Self::req_count_table(tenant_name))
-                    .await?
-                    .count
-            );
             // table meta has been changed
             let req = GetTableReq::new(&tenant, db_name, table);
             let res = mt.get_table(req).await?;
@@ -4554,7 +4507,6 @@ impl SchemaApiTestSuite {
             db_name: db_name.to_string(),
             table_name: new_tbl_name.to_string(),
         };
-        let mut expected_tb_count: u64 = 0;
 
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
@@ -4592,11 +4544,6 @@ impl SchemaApiTestSuite {
 
             assert_eq!(1, res.db_id, "first database id is 1");
         }
-
-        // check table count
-        info!("--- check table count of tenant1");
-        let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-        assert_eq!(expected_tb_count, tb_count.count);
 
         let created_on = Utc::now();
         let create_table_meta = table_meta(created_on);
@@ -4636,11 +4583,6 @@ impl SchemaApiTestSuite {
             .get_table((tenant_name, db_name, tbl_name).into())
             .await?;
         let tb_id = tb_info.ident.table_id;
-        expected_tb_count += 1;
-        // check table count
-        info!("--- check table count of tenant1");
-        let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-        assert_eq!(expected_tb_count, tb_count.count);
 
         info!("--- drop and undrop table");
         {
@@ -4660,12 +4602,6 @@ impl SchemaApiTestSuite {
                 .get_database(Self::req_get_db(tenant_name, db_name))
                 .await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
-
-            expected_tb_count -= 1;
-            // check table count
-            info!("--- check table count of tenant1");
-            let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-            assert_eq!(expected_tb_count, tb_count.count);
 
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -4692,12 +4628,6 @@ impl SchemaApiTestSuite {
                 .get_database(Self::req_get_db(tenant_name, db_name))
                 .await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
-
-            expected_tb_count += 1;
-            // check table count
-            info!("--- check table count of tenant1");
-            let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-            assert_eq!(expected_tb_count, tb_count.count);
 
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -4732,12 +4662,6 @@ impl SchemaApiTestSuite {
                 .await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
 
-            expected_tb_count -= 1;
-            // check table count
-            info!("--- check table count of tenant1");
-            let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-            assert_eq!(expected_tb_count, tb_count.count);
-
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
                 .await?;
@@ -4767,12 +4691,6 @@ impl SchemaApiTestSuite {
                 .await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
             assert!(res.table_id >= 1, "table id >= 1");
-
-            expected_tb_count += 1;
-            // check table count
-            info!("--- check table count of tenant1");
-            let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-            assert_eq!(expected_tb_count, tb_count.count);
 
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -4808,12 +4726,6 @@ impl SchemaApiTestSuite {
                 .await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
 
-            expected_tb_count -= 1;
-            // check table count
-            info!("--- check table count of tenant1");
-            let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-            assert_eq!(expected_tb_count, tb_count.count);
-
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
                 .await?;
@@ -4838,12 +4750,6 @@ impl SchemaApiTestSuite {
                 .get_database(Self::req_get_db(tenant_name, db_name))
                 .await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
-
-            expected_tb_count += 1;
-            // check table count
-            info!("--- check table count of tenant1");
-            let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-            assert_eq!(expected_tb_count, tb_count.count);
 
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -4891,12 +4797,6 @@ impl SchemaApiTestSuite {
                 .await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
 
-            expected_tb_count += 1;
-            // check table count
-            info!("--- check table count of tenant1");
-            let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-            assert_eq!(expected_tb_count, tb_count.count);
-
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
                     name: tbl_name.to_string(),
@@ -4940,12 +4840,6 @@ impl SchemaApiTestSuite {
                 .await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
 
-            expected_tb_count -= 1;
-            // check table count
-            info!("--- check table count of tenant1");
-            let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-            assert_eq!(expected_tb_count, tb_count.count);
-
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
                 .await?;
@@ -4986,11 +4880,6 @@ impl SchemaApiTestSuite {
                 .get_database(Self::req_get_db(tenant_name, db_name))
                 .await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
-
-            // check table count
-            info!("--- check table count of tenant1");
-            let tb_count = mt.count_tables(Self::req_count_table(tenant_name)).await?;
-            assert_eq!(expected_tb_count, tb_count.count);
 
             let res = mt
                 .get_table_history(ListTableReq::new(&tenant, db_name))
@@ -6701,12 +6590,6 @@ impl SchemaApiTestSuite {
                 tenant: Tenant::new_or_err(tenant, func_name!()).unwrap(),
                 db_name: db_name.to_string(),
             },
-        }
-    }
-
-    fn req_count_table(tenant: impl ToString) -> CountTablesReq {
-        CountTablesReq {
-            tenant: tenant.to_string(),
         }
     }
 
