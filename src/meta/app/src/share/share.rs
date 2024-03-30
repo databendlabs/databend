@@ -29,6 +29,7 @@ use crate::schema::CreateOption;
 use crate::schema::DatabaseMeta;
 use crate::schema::TableInfo;
 use crate::schema::TableMeta;
+use crate::share::ShareEndpointIdent;
 use crate::tenant::Tenant;
 
 // serde is required by `DatabaseType`
@@ -56,18 +57,6 @@ pub struct ShareConsumer {
 impl Display for ShareConsumer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "'{}'/'{}'", self.tenant, self.share_id)
-    }
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ShareEndpointIdent {
-    pub tenant: String,
-    pub endpoint: String,
-}
-
-impl Display for ShareEndpointIdent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant, self.endpoint)
     }
 }
 
@@ -303,7 +292,7 @@ pub struct UpsertShareEndpointReply {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetShareEndpointReq {
-    pub tenant: String,
+    pub tenant: Tenant,
     // If `endpoint` is not None, return the specified endpoint,
     // else return all share endpoints meta of tenant
     pub endpoint: Option<String>,
@@ -952,35 +941,6 @@ mod kvapi_key_impl {
         }
     }
 
-    /// __fd_share/<tenant>/<share_endpoint_name> -> ShareEndpointId
-    impl kvapi::Key for ShareEndpointIdent {
-        const PREFIX: &'static str = "__fd_share_endpoint";
-
-        type ValueType = ShareEndpointId;
-
-        /// It belongs to a tenant
-        fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
-                .push_str(&self.endpoint)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_str()?;
-            let endpoint = p.next_str()?;
-            p.done()?;
-
-            Ok(ShareEndpointIdent { tenant, endpoint })
-        }
-    }
-
     /// __fd_share_endpoint_id/<share_endpoint_id> -> <share_meta>
     impl kvapi::Key for ShareEndpointId {
         const PREFIX: &'static str = "__fd_share_endpoint_id";
@@ -1061,13 +1021,6 @@ mod kvapi_key_impl {
     impl kvapi::Value for ShareNameIdent {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
-        }
-    }
-
-    impl kvapi::Value for ShareEndpointId {
-        /// ShareEndpointId is id of the two level `name->id,id->value` mapping
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
         }
     }
 

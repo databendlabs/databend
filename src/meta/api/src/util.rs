@@ -513,7 +513,7 @@ fn share_endpoint_has_to_exist(
         debug!(seq = seq, name_key :? =(name_key); "share endpoint does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownShareEndpoint(
-            UnknownShareEndpoint::new(&name_key.endpoint, format!("{}: {}", msg, name_key)),
+            UnknownShareEndpoint::new(name_key.name(), format!("{}", msg)),
         )))
     } else {
         Ok(())

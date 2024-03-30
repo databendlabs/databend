@@ -988,10 +988,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 match req.create_option {
                     CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::ShareEndpointAlreadyExists(
-                            ShareEndpointAlreadyExists::new(
-                                &name_key.endpoint,
-                                format!("create share endpoint: tenant: {}", name_key.tenant),
-                            ),
+                            ShareEndpointAlreadyExists::new(name_key.name(), func_name!()),
                         )));
                     }
                     CreateOption::CreateIfNotExists => {
@@ -1176,10 +1173,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     ) -> Result<GetShareEndpointReply, KVAppError> {
         let mut share_endpoint_meta_vec = vec![];
 
-        let tenant_share_endpoint_name_key = ShareEndpointIdent {
-            tenant: req.tenant.clone(),
-            endpoint: req.endpoint.clone().unwrap_or("".to_string()),
-        };
+        let tenant_share_endpoint_name_key =
+            ShareEndpointIdent::new(&req.tenant, req.endpoint.clone().unwrap_or("".to_string()));
+
         let share_endpoints = list_keys(self, &tenant_share_endpoint_name_key).await?;
         for share_endpoint in share_endpoints {
             let (_seq, share_endpoint_id) = get_u64_value(self, &share_endpoint).await?;
@@ -1271,7 +1267,7 @@ async fn construct_drop_share_endpoint_txn_operations(
         name_key,
         format!(
             "construct_drop_share_endpoint_txn_operations: {}",
-            &name_key
+            name_key.display()
         ),
     )
     .await;
@@ -1294,7 +1290,7 @@ async fn construct_drop_share_endpoint_txn_operations(
         share_endpoint_id,
         format!(
             "construct_drop_share_endpoint_txn_operations: {}",
-            &name_key
+            name_key.display()
         ),
     )
     .await?;
