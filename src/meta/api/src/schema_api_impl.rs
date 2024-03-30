@@ -1276,7 +1276,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                                 req.name_ident.table_id,
                                 format!(
                                     "create virtual column with tenant: {} table_id: {}",
-                                    req.name_ident.tenant, req.name_ident.table_id
+                                    req.name_ident.tenant.name(),
+                                    req.name_ident.table_id
                                 ),
                             ),
                         )));
@@ -1459,10 +1460,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         if let Some(table_id) = req.table_id {
-            let name_ident = VirtualColumnNameIdent {
-                tenant: req.tenant.clone(),
-                table_id,
-            };
+            let name_ident = VirtualColumnNameIdent::new(&req.tenant, table_id);
             let (_, virtual_column_opt): (_, Option<VirtualColumnMeta>) =
                 get_pb_value(self, &name_ident).await?;
 
@@ -1475,7 +1473,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // Get virtual columns list by `prefix_list` "<prefix>/<tenant>"
         let prefix_key = kvapi::KeyBuilder::new_prefixed(VirtualColumnNameIdent::PREFIX)
-            .push_str(&req.tenant)
+            .push_str(req.tenant.name())
             .done();
 
         let list = self.prefix_list_kv(&prefix_key).await?;
