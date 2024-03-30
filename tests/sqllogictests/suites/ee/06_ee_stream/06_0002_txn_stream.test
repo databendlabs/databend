@@ -116,3 +116,4 @@ SELECT * FROM t_consume_append_only_6; -- empty
 
 statement ok
 drop database test_txn_stream;
+

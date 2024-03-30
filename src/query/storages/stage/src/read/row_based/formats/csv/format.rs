@@ -24,11 +24,6 @@ use crate::read::row_based::format::SeparatorState;
 use crate::read::row_based::formats::csv::block_builder::CsvDecoder;
 use crate::read::row_based::formats::csv::separator::CsvReader;
 
-pub struct Position {
-    pub path: String,
-    pub rows: usize,
-    pub offset: usize,
-}
 #[derive(Clone)]
 pub struct CsvInputFormat {
     pub(crate) params: CsvFileFormatParams,

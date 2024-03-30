@@ -22,8 +22,6 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -565,12 +563,6 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply> {
         Ok(self.ctx.meta.drop_table_index(req).await?)
-    }
-
-    #[async_backtrace::framed]
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
-        let res = self.ctx.meta.count_tables(req).await?;
-        Ok(res)
     }
 
     #[async_backtrace::framed]
