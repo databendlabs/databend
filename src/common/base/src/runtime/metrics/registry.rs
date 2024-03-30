@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
@@ -113,6 +115,7 @@ impl GlobalRegistry {
             scoped_metrics.push(ScopedMetric {
                 name: metric.name.to_string(),
                 metric: (metric.creator)(index),
+                recorded: AtomicBool::new(false),
             });
         }
 
@@ -160,6 +163,7 @@ impl GlobalRegistry {
 
 pub(crate) struct ScopedMetric {
     name: String,
+    recorded: AtomicBool,
     metric: Box<dyn Metric>,
 }
 
@@ -190,6 +194,7 @@ impl ScopedRegistry {
         match metrics.len() > index {
             true => {
                 if let Some(metric) = metrics.get(index) {
+                    metric.recorded.store(true, Ordering::Relaxed);
                     let metric =
                         unsafe { &*(metric.metric.as_ref() as *const dyn Metric as *const M) };
                     // avoid dead lock, is safely
@@ -208,6 +213,7 @@ impl ScopedRegistry {
                 }
 
                 if let Some(metric) = metrics.get(index) {
+                    metric.recorded.store(true, Ordering::Relaxed);
                     let metric =
                         unsafe { &*(metric.metric.as_ref() as *const dyn Metric as *const M) };
                     // avoid dead lock, is safely
@@ -226,7 +232,9 @@ impl ScopedRegistry {
         let metrics = self.metrics.read();
         let mut samples = Vec::with_capacity(metrics.len());
         for metric in metrics.iter() {
-            metric.metric.sample(&metric.name, &mut samples);
+            if metric.recorded.load(Ordering::Relaxed) {
+                metric.metric.sample(&metric.name, &mut samples);
+            }
         }
 
         Ok(samples)
