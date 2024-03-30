@@ -31,11 +31,13 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateStreamPlan;
 use databend_common_sql::plans::DropStreamPlan;
+use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_enterprise_stream_handler::StreamHandler;
 use databend_enterprise_stream_handler::StreamHandlerWrapper;
+use databend_query::storages::NavigationPoint;
 use databend_storages_common_table_meta::table::MODE_APPEND_ONLY;
 use databend_storages_common_table_meta::table::MODE_STANDARD;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
@@ -100,13 +102,34 @@ impl StreamHandler for RealStreamHandler {
 
         table = table.navigate_since_to(&None, &plan.navigation).await?;
         let source = FuseTable::try_from_table(table.as_ref())?;
-        let version = source.get_table_info().ident.seq;
-        if version == 0 {
-            return Err(ErrorCode::IllegalStream(
-                "The stream navigation at point has not table version".to_string(),
-            ));
-        }
         let snapshot_location = source.snapshot_loc().await?;
+        let version = match &plan.navigation {
+            Some(NavigationPoint::StreamInfo(info)) => info
+                .options()
+                .get(OPT_KEY_TABLE_VER)
+                .ok_or_else(|| ErrorCode::Internal("table version must be set"))?
+                .parse::<u64>()?,
+            Some(_) => {
+                if let Some(snapshot_loc) = &snapshot_location {
+                    let (snapshot, _) =
+                        SnapshotsIO::read_snapshot(snapshot_loc.clone(), source.get_operator())
+                            .await?;
+                    let Some(prev_table_seq) = snapshot.prev_table_seq else {
+                        return Err(ErrorCode::IllegalStream(
+                            "The stream navigation at point has not table version".to_string(),
+                        ));
+                    };
+
+                    // The table version is the version of the table when the snapshot was created.
+                    // We need make sure the version greater than the table version,
+                    // and less equal than the table version after the snapshot commit.
+                    prev_table_seq + 1
+                } else {
+                    unreachable!()
+                }
+            }
+            None => table.get_table_info().ident.seq,
+        };
 
         if let Some(value) = source
             .get_table_info()

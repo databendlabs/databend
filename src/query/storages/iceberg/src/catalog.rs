@@ -27,8 +27,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogOption;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -379,11 +377,6 @@ impl Catalog for IcebergCatalog {
 
     #[async_backtrace::framed]
     async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
         unimplemented!()
     }
 
