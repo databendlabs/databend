@@ -57,8 +57,9 @@ pub struct PlanProfile {
     pub labels: Arc<Vec<ProfileLabel>>,
 
     pub statistics: [usize; std::mem::variant_count::<ProfileStatisticsName>()],
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metrics: Option<BTreeMap<String, Vec<MetricSample>>>,
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    #[serde(default)]
+    pub metrics: BTreeMap<String, Vec<MetricSample>>,
 }
 
 impl PlanProfile {
@@ -72,7 +73,7 @@ impl PlanProfile {
             statistics: std::array::from_fn(|index| {
                 profile.statistics[index].load(Ordering::SeqCst)
             }),
-            metrics: None,
+            metrics: BTreeMap::new(),
         }
     }
 
@@ -91,21 +92,13 @@ impl PlanProfile {
             self.statistics[index] += profile.statistics[index];
         }
 
-        if let Some(metrics) = &profile.metrics {
-            if self.metrics.is_none() {
-                self.metrics = Some(BTreeMap::new());
-            }
-
-            if let Some(self_metrics) = &mut self.metrics {
-                for (id, metrics) in metrics {
-                    match self_metrics.entry(id.clone()) {
-                        Entry::Occupied(mut v) => {
-                            v.get_mut().extend(metrics.clone());
-                        }
-                        Entry::Vacant(v) => {
-                            v.insert(metrics.clone());
-                        }
-                    }
+        for (id, metrics) in &profile.metrics {
+            match self.metrics.entry(id.clone()) {
+                Entry::Occupied(mut v) => {
+                    v.get_mut().extend(metrics.clone());
+                }
+                Entry::Vacant(v) => {
+                    v.insert(metrics.clone());
                 }
             }
         }
@@ -116,20 +109,14 @@ impl PlanProfile {
             return;
         }
 
-        if self.metrics.is_none() {
-            self.metrics = Some(BTreeMap::new());
-        }
-
-        if let Some(self_metrics) = &mut self.metrics {
-            match self_metrics.entry(node_id) {
-                Entry::Vacant(v) => {
-                    v.insert(metrics);
-                }
-                Entry::Occupied(mut v) => {
-                    v.insert(metrics);
-                }
-            };
-        }
+        match self.metrics.entry(node_id) {
+            Entry::Vacant(v) => {
+                v.insert(metrics);
+            }
+            Entry::Occupied(mut v) => {
+                v.insert(metrics);
+            }
+        };
     }
 }
 
