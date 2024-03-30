@@ -18,8 +18,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -383,10 +381,6 @@ impl Catalog for SessionCatalog {
 
     async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply> {
         self.inner.drop_table_index(req).await
-    }
-
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
-        self.inner.count_tables(req).await
     }
 
     async fn get_table_copied_file_info(

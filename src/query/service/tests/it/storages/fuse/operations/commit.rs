@@ -50,8 +50,6 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -899,10 +897,6 @@ impl Catalog for FakedCatalog {
     #[async_backtrace::framed]
     async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
         unimplemented!()
-    }
-
-    async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
-        todo!()
     }
 
     async fn get_table_copied_file_info(

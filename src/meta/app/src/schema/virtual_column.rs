@@ -21,17 +21,19 @@ use chrono::Utc;
 use databend_common_meta_types::MetaId;
 
 use super::CreateOption;
+use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VirtualColumnNameIdent {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub table_id: u64,
 }
 
 impl VirtualColumnNameIdent {
-    pub fn new(tenant: impl Into<String>, table_id: impl Into<u64>) -> VirtualColumnNameIdent {
+    pub fn new(tenant: impl ToTenant, table_id: impl Into<u64>) -> VirtualColumnNameIdent {
         VirtualColumnNameIdent {
-            tenant: tenant.into(),
+            tenant: tenant.to_tenant(),
             table_id: table_id.into(),
         }
     }
@@ -43,7 +45,7 @@ impl VirtualColumnNameIdent {
 
 impl Display for VirtualColumnNameIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "'{}'/{}", self.tenant, self.table_id)
+        write!(f, "'{}'/{}", self.tenant.name(), self.table_id)
     }
 }
 
@@ -111,16 +113,16 @@ impl Display for DropVirtualColumnReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropVirtualColumnReply {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListVirtualColumnsReq {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub table_id: Option<MetaId>,
 }
 
 impl ListVirtualColumnsReq {
-    pub fn new(tenant: impl Into<String>, table_id: Option<MetaId>) -> ListVirtualColumnsReq {
+    pub fn new(tenant: impl ToTenant, table_id: Option<MetaId>) -> ListVirtualColumnsReq {
         ListVirtualColumnsReq {
-            tenant: tenant.into(),
+            tenant: tenant.to_tenant(),
             table_id,
         }
     }
@@ -141,12 +143,12 @@ mod kvapi_key_impl {
 
         /// It belongs to a tenant
         fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
+            Some(self.tenant.to_string_key())
         }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
+                .push_str(self.tenant.name())
                 .push_u64(self.table_id)
                 .done()
         }
@@ -154,9 +156,11 @@ mod kvapi_key_impl {
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let tenant = p.next_str()?;
+            let tenant = p.next_nonempty()?;
             let table_id = p.next_u64()?;
             p.done()?;
+
+            let tenant = Tenant::new_nonempty(tenant);
 
             Ok(VirtualColumnNameIdent { tenant, table_id })
         }
