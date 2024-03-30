@@ -99,7 +99,7 @@ impl DatabendMetric for Counter {
 
     fn sample(&self, name: &str, samples: &mut Vec<MetricSample>) {
         samples.push(MetricSample {
-            name: name.to_string(),
+            name: format!("{}_total", name),
             labels: Default::default(),
             value: MetricValue::Counter(self.get() as f64),
         });

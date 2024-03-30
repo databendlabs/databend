@@ -316,7 +316,7 @@ mod prometheus_parse {
 
                             samples.push(match ty {
                                 Some(SampleType::Counter) => MetricSample {
-                                    name: metric_name.trim_end_matches("_total").to_string(),
+                                    name: metric_name.to_string(),
                                     labels: labels_map,
                                     value: MetricValue::Counter(fvalue),
                                 },
