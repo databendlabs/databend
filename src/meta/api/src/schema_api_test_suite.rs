@@ -28,12 +28,12 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
+use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskId;
 use databend_common_meta_app::data_mask::DatamaskMeta;
-use databend_common_meta_app::data_mask::DatamaskNameIdent;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
+use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
-use databend_common_meta_app::data_mask::MaskpolicyTableIdListKey;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -2735,7 +2735,9 @@ impl SchemaApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant = "tenant1";
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
         let db_name = "db1";
         let tbl_name_1 = "tb1";
         let tbl_name_2 = "tb2";
@@ -2762,7 +2764,7 @@ impl SchemaApiTestSuite {
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
                 },
                 meta: DatabaseMeta {
@@ -2783,7 +2785,7 @@ impl SchemaApiTestSuite {
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
                     table_name: tbl_name_1.to_string(),
                 },
@@ -2794,7 +2796,7 @@ impl SchemaApiTestSuite {
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
                     table_name: tbl_name_2.to_string(),
                 },
@@ -2807,10 +2809,7 @@ impl SchemaApiTestSuite {
         {
             let req = CreateDatamaskReq {
                 create_option: CreateOption::CreateIfNotExists,
-                name: DatamaskNameIdent {
-                    tenant: tenant.to_string(),
-                    name: mask_name_1.to_string(),
-                },
+                name: DataMaskNameIdent::new(tenant.clone(), mask_name_1.to_string()),
                 args: vec![],
                 return_type: "".to_string(),
                 body: "".to_string(),
@@ -2821,10 +2820,7 @@ impl SchemaApiTestSuite {
 
             let req = CreateDatamaskReq {
                 create_option: CreateOption::CreateIfNotExists,
-                name: DatamaskNameIdent {
-                    tenant: tenant.to_string(),
-                    name: mask_name_2.to_string(),
-                },
+                name: DataMaskNameIdent::new(tenant.clone(), mask_name_2.to_string()),
                 args: vec![],
                 return_type: "".to_string(),
                 body: "".to_string(),
@@ -2839,7 +2835,7 @@ impl SchemaApiTestSuite {
         {
             let req = GetTableReq {
                 inner: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
                     table_name: tbl_name_1.to_string(),
                 },
@@ -2849,7 +2845,7 @@ impl SchemaApiTestSuite {
             table_id_1 = table_id;
 
             let req = SetTableColumnMaskPolicyReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
                 column: "number".to_string(),
@@ -2859,7 +2855,7 @@ impl SchemaApiTestSuite {
             // check table meta
             let req = GetTableReq {
                 inner: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
                     table_name: tbl_name_1.to_string(),
                 },
@@ -2869,10 +2865,7 @@ impl SchemaApiTestSuite {
             expect_column_mask_policy.insert("number".to_string(), mask_name_1.to_string());
             assert_eq!(res.meta.column_mask_policy, Some(expect_column_mask_policy));
             // check mask policy id list
-            let id_list_key = MaskpolicyTableIdListKey {
-                tenant: tenant.to_string(),
-                name: mask_name_1.to_string(),
-            };
+            let id_list_key = MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name_1);
             let id_list: MaskpolicyTableIdList = get_kv_data(mt.as_kv_api(), &id_list_key).await?;
             let mut expect_id_list = BTreeSet::new();
             expect_id_list.insert(table_id);
@@ -2884,7 +2877,7 @@ impl SchemaApiTestSuite {
         {
             let req = GetTableReq {
                 inner: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
                     table_name: tbl_name_2.to_string(),
                 },
@@ -2894,7 +2887,7 @@ impl SchemaApiTestSuite {
             table_id_2 = table_id;
 
             let req = SetTableColumnMaskPolicyReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
                 column: "number".to_string(),
@@ -2904,7 +2897,7 @@ impl SchemaApiTestSuite {
             // check table meta
             let req = GetTableReq {
                 inner: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
                     table_name: tbl_name_2.to_string(),
                 },
@@ -2914,10 +2907,7 @@ impl SchemaApiTestSuite {
             expect_column_mask_policy.insert("number".to_string(), mask_name_1.to_string());
             assert_eq!(res.meta.column_mask_policy, Some(expect_column_mask_policy));
             // check mask policy id list
-            let id_list_key = MaskpolicyTableIdListKey {
-                tenant: tenant.to_string(),
-                name: mask_name_1.to_string(),
-            };
+            let id_list_key = MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name_1);
             let id_list: MaskpolicyTableIdList = get_kv_data(mt.as_kv_api(), &id_list_key).await?;
             let mut expect_id_list = BTreeSet::new();
             expect_id_list.insert(table_id);
@@ -2929,7 +2919,7 @@ impl SchemaApiTestSuite {
         {
             let req = GetTableReq {
                 inner: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
                     table_name: tbl_name_1.to_string(),
                 },
@@ -2937,7 +2927,7 @@ impl SchemaApiTestSuite {
             let res = mt.get_table(req).await?;
 
             let req = SetTableColumnMaskPolicyReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
                 column: "number".to_string(),
@@ -2950,7 +2940,7 @@ impl SchemaApiTestSuite {
             // check table meta
             let req = GetTableReq {
                 inner: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
                     table_name: tbl_name_1.to_string(),
                 },
@@ -2960,19 +2950,13 @@ impl SchemaApiTestSuite {
             expect_column_mask_policy.insert("number".to_string(), mask_name_2.to_string());
             assert_eq!(res.meta.column_mask_policy, Some(expect_column_mask_policy));
             // check mask policy id list
-            let id_list_key = MaskpolicyTableIdListKey {
-                tenant: tenant.to_string(),
-                name: mask_name_1.to_string(),
-            };
+            let id_list_key = MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name_1);
             let id_list: MaskpolicyTableIdList = get_kv_data(mt.as_kv_api(), &id_list_key).await?;
             let mut expect_id_list = BTreeSet::new();
             expect_id_list.insert(table_id_2);
             assert_eq!(id_list.id_list, expect_id_list);
 
-            let id_list_key = MaskpolicyTableIdListKey {
-                tenant: tenant.to_string(),
-                name: mask_name_2.to_string(),
-            };
+            let id_list_key = MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name_2);
             let id_list: MaskpolicyTableIdList = get_kv_data(mt.as_kv_api(), &id_list_key).await?;
             let mut expect_id_list = BTreeSet::new();
             expect_id_list.insert(table_id_1);
@@ -2983,7 +2967,7 @@ impl SchemaApiTestSuite {
         {
             let req = GetTableReq {
                 inner: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
                     table_name: tbl_name_1.to_string(),
                 },
@@ -2991,7 +2975,7 @@ impl SchemaApiTestSuite {
             let res = mt.get_table(req).await?;
 
             let req = SetTableColumnMaskPolicyReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
                 column: "number".to_string(),
@@ -3002,7 +2986,7 @@ impl SchemaApiTestSuite {
             // check table meta
             let req = GetTableReq {
                 inner: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
                     table_name: tbl_name_1.to_string(),
                 },
@@ -3011,10 +2995,7 @@ impl SchemaApiTestSuite {
             assert_eq!(res.meta.column_mask_policy, None);
 
             // check mask policy id list
-            let id_list_key = MaskpolicyTableIdListKey {
-                tenant: tenant.to_string(),
-                name: mask_name_2.to_string(),
-            };
+            let id_list_key = MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name_2);
             let id_list: MaskpolicyTableIdList = get_kv_data(mt.as_kv_api(), &id_list_key).await?;
             let expect_id_list = BTreeSet::new();
             assert_eq!(id_list.id_list, expect_id_list);
@@ -3024,10 +3005,7 @@ impl SchemaApiTestSuite {
         {
             let req = DropDatamaskReq {
                 if_exists: true,
-                name: DatamaskNameIdent {
-                    tenant: tenant.to_string(),
-                    name: mask_name_1.to_string(),
-                },
+                name: DataMaskNameIdent::new(tenant.clone(), mask_name_1),
             };
 
             mt.drop_data_mask(req).await?;
@@ -3035,7 +3013,7 @@ impl SchemaApiTestSuite {
             // check table meta
             let req = GetTableReq {
                 inner: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant, func_name!())?,
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
                     table_name: tbl_name_2.to_string(),
                 },
@@ -3044,10 +3022,7 @@ impl SchemaApiTestSuite {
             assert_eq!(res.meta.column_mask_policy, None);
 
             // check mask policy id list
-            let id_list_key = MaskpolicyTableIdListKey {
-                tenant: tenant.to_string(),
-                name: mask_name_1.to_string(),
-            };
+            let id_list_key = MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name_1);
             let id_list: Result<MaskpolicyTableIdList, KVAppError> =
                 get_kv_data(mt.as_kv_api(), &id_list_key).await;
             assert!(id_list.is_err())
@@ -3056,10 +3031,7 @@ impl SchemaApiTestSuite {
         info!("--- create or replace mask policy");
         {
             let mask_name = "replace_mask";
-            let name = DatamaskNameIdent {
-                tenant: tenant.to_string(),
-                name: mask_name.to_string(),
-            };
+            let name = DataMaskNameIdent::new(tenant.clone(), mask_name);
             let req = CreateDatamaskReq {
                 create_option: CreateOption::CreateIfNotExists,
                 name: name.clone(),
