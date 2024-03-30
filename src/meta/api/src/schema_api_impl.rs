@@ -57,8 +57,8 @@ use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::app_error::WrongShare;
 use databend_common_meta_app::app_error::WrongShareObject;
+use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
-use databend_common_meta_app::data_mask::MaskpolicyTableIdListKey;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::CatalogId;
 use databend_common_meta_app::schema::CatalogIdToName;
@@ -5526,11 +5526,13 @@ async fn update_mask_policy(
     tenant: String,
     table_id: u64,
 ) -> Result<(), KVAppError> {
+    let tenant = Tenant::new_or_err(&tenant, func_name!())?;
+
     /// Fetch and update the table id list with `f`, and fill in the txn preconditions and operations.
     async fn update_table_ids(
         kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
         txn_req: &mut TxnRequest,
-        key: MaskpolicyTableIdListKey,
+        key: MaskPolicyTableIdListIdent,
         f: impl FnOnce(&mut BTreeSet<u64>),
     ) -> Result<(), KVAppError> {
         let (id_list_seq, id_list_opt): (_, Option<MaskpolicyTableIdList>) =
@@ -5554,7 +5556,7 @@ async fn update_mask_policy(
             update_table_ids(
                 kv_api,
                 txn_req,
-                MaskpolicyTableIdListKey::new(&tenant, new_mask_name),
+                MaskPolicyTableIdListIdent::new(tenant.clone(), new_mask_name),
                 |list: &mut BTreeSet<u64>| {
                     list.insert(table_id);
                 },
@@ -5565,7 +5567,7 @@ async fn update_mask_policy(
                 update_table_ids(
                     kv_api,
                     txn_req,
-                    MaskpolicyTableIdListKey::new(&tenant, old),
+                    MaskPolicyTableIdListIdent::new(tenant.clone(), old),
                     |list: &mut BTreeSet<u64>| {
                         list.remove(&table_id);
                     },
@@ -5577,7 +5579,7 @@ async fn update_mask_policy(
             update_table_ids(
                 kv_api,
                 txn_req,
-                MaskpolicyTableIdListKey::new(&tenant, mask_name),
+                MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name),
                 |list: &mut BTreeSet<u64>| {
                     list.remove(&table_id);
                 },

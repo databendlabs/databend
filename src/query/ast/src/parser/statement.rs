@@ -25,6 +25,7 @@ use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_app::tenant::Tenant;
+use minitrace::func_name;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -3693,34 +3694,26 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
     );
 
-    let share_from = map(
+    let share_from = map_res(
         rule! {
             FROM ~ SHARE ~ #ident ~ "." ~ #ident
         },
-        |(_x, _y, tenant, _z, share_name)| {
-            CreateDatabaseOption::FromShare(ShareNameIdent {
-                // TODO: non-safe new() that does not return an error
-                tenant: Tenant::new(tenant.to_string()),
-                share_name: share_name.to_string(),
-            })
+        |(_, _, tenant, _, share_name)| {
+            Tenant::new_or_err(tenant.to_string(), func_name!())
+                .map_err(|_e| nom::Err::Error(ErrorKind::Other("tenant can not be empty string")))
+                .map(|tenant| {
+                    CreateDatabaseOption::FromShare(ShareNameIdent {
+                        tenant,
+                        share_name: share_name.to_string(),
+                    })
+                })
         },
     );
 
-    let (i, opt) = rule!(
+    rule!(
         #create_db_engine
         | #share_from
-    )(i)?;
-
-    if let CreateDatabaseOption::FromShare(ident) = &opt {
-        if ident.tenant.name().is_empty() {
-            return Err(nom::Err::Error(Error::from_error_kind(
-                i,
-                ErrorKind::Other("tenant is empty string"),
-            )));
-        }
-    }
-
-    Ok((i, opt))
+    )(i)
 }
 
 pub fn catalog_type(i: Input) -> IResult<CatalogType> {
