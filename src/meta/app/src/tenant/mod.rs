@@ -19,4 +19,5 @@ mod tenant_quota_ident;
 
 pub use quota::TenantQuota;
 pub use tenant::Tenant;
+pub use tenant::ToTenant;
 pub use tenant_quota_ident::TenantQuotaIdent;

@@ -57,8 +57,8 @@ use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::app_error::WrongShare;
 use databend_common_meta_app::app_error::WrongShareObject;
+use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
-use databend_common_meta_app::data_mask::MaskpolicyTableIdListKey;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::CatalogId;
 use databend_common_meta_app::schema::CatalogIdToName;
@@ -290,7 +290,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
                             DatabaseAlreadyExists::new(
                                 &name_key.db_name,
-                                format!("create db: tenant: {}", name_key.tenant),
+                                format!("create db: tenant: {}", name_key.tenant.name()),
                             ),
                         )));
                     }
@@ -1555,7 +1555,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         };
 
         // fixed
-        let key_table_count = CountTablesKey::new(tenant);
+        let key_table_count = CountTablesKey::new(tenant.name());
 
         // The keys of values to re-fetch for every retry in this txn.
         let keys = vec![
@@ -1621,7 +1621,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // cannot operate on shared database
             if let Some(from_share) = db_meta.data.from_share {
                 return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
+                    ShareHasNoGrantedPrivilege::new(
+                        from_share.tenant.name(),
+                        &from_share.share_name,
+                    ),
                 )));
             }
 
@@ -1652,7 +1655,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             construct_drop_table_txn_operations(
                                 self,
                                 req.name_ident.table_name.clone(),
-                                req.name_ident.tenant.clone(),
+                                &req.name_ident.tenant,
                                 *id.data,
                                 db_id.data,
                                 false,
@@ -1824,7 +1827,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // cannot operate on shared database
             if let Some(from_share) = db_meta.from_share {
                 return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
+                    ShareHasNoGrantedPrivilege::new(
+                        from_share.tenant.name(),
+                        &from_share.share_name,
+                    ),
                 )));
             }
 
@@ -1879,7 +1885,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // get current table count from _fd_table_count/tenant
             let tb_count_key = CountTablesKey {
-                tenant: tenant_dbname.tenant.clone(),
+                tenant: tenant_dbname.tenant.name().to_string(),
             };
             (tb_count_seq, tb_count) = {
                 let (seq, count) = get_u64_value(self, &tb_count_key).await?;
@@ -1978,7 +1984,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // cannot operate on shared database
             if let Some(from_share) = db_meta.from_share {
                 return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
+                    ShareHasNoGrantedPrivilege::new(
+                        from_share.tenant.name(),
+                        &from_share.share_name,
+                    ),
                 )));
             }
 
@@ -2228,7 +2237,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             name: tenant_dbname_tbname.table_name.clone(),
             // Safe unwrap() because: tb_meta_seq > 0
             meta: tb_meta.unwrap(),
-            tenant: req.tenant.clone(),
+            tenant: req.tenant.name().to_string(),
             db_type,
         };
 
@@ -2353,7 +2362,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             ),
                             name: table_id_list_key.table_name.clone(),
                             meta: tb_meta,
-                            tenant: tenant_dbname.tenant.clone(),
+                            tenant: tenant_dbname.tenant.name().to_string(),
                             db_type,
                         };
 
@@ -2568,7 +2577,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let opt = construct_drop_table_txn_operations(
                 self,
                 req.table_name.clone(),
-                req.tenant.clone(),
+                &req.tenant,
                 table_id,
                 req.db_id,
                 req.if_exists,
@@ -2592,7 +2601,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                tenant :% =(&tenant),
+                tenant :% =(tenant.display()),
                 id :? =(&table_id),
                 succ = succ;
                 "drop_table_by_id"
@@ -4261,7 +4270,7 @@ async fn construct_drop_index_txn_operations(
 async fn construct_drop_table_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_name: String,
-    tenant: String,
+    tenant: &Tenant,
     table_id: u64,
     db_id: u64,
     if_exists: bool,
@@ -4315,7 +4324,7 @@ async fn construct_drop_table_txn_operations(
 
     // get current table count from _fd_table_count/<tenant>
     let tb_count_key = CountTablesKey {
-        tenant: tenant.clone(),
+        tenant: tenant.name().to_string(),
     };
     let (tb_count_seq, tb_count) = {
         let (seq, count) = get_u64_value(kv_api, &tb_count_key).await?;
@@ -4336,13 +4345,13 @@ async fn construct_drop_table_txn_operations(
     // cannot operate on shared database
     if let Some(from_share) = db_meta.from_share {
         return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-            ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
+            ShareHasNoGrantedPrivilege::new(from_share.tenant.name(), &from_share.share_name),
         )));
     }
 
     debug!(
         ident :% =(&tbid),
-        tenant :% =(&tenant);
+        tenant :% =(tenant.display());
         "drop table by id"
     );
 
@@ -4387,15 +4396,8 @@ async fn construct_drop_table_txn_operations(
     let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
     let mut mut_share_table_info = Vec::with_capacity(db_meta.shared_by.len());
     for share_id in &db_meta.shared_by {
-        let res = remove_table_from_share(
-            kv_api,
-            *share_id,
-            table_id,
-            tenant.clone(),
-            condition,
-            if_then,
-        )
-        .await;
+        let res =
+            remove_table_from_share(kv_api, *share_id, table_id, tenant, condition, if_then).await;
 
         match res {
             Ok((share_name, share_meta, share_table_info)) => {
@@ -4409,7 +4411,9 @@ async fn construct_drop_table_txn_operations(
                 KVAppError::AppError(AppError::UnknownShareId(_)) => {
                     error!(
                         "UnknownShareId {} when drop_table_by_id tenant:{} table_id:{} shared by",
-                        share_id, tenant, table_id
+                        share_id,
+                        tenant.name(),
+                        table_id
                     );
                 }
                 _ => return Err(e),
@@ -4794,7 +4798,7 @@ async fn count_tables(
     // we should compute the count by listing all tables of the tenant.
     let databases = kv_api
         .list_databases(ListDatabaseReq {
-            tenant: key.tenant.clone(),
+            tenant: Tenant::new_or_err(&key.tenant, func_name!())?,
             filter: None,
         })
         .await?;
@@ -5015,7 +5019,7 @@ async fn batch_filter_table_info(
             ),
             name: table_name.clone(),
             meta: tb_meta,
-            tenant: tenant_dbname.tenant.clone(),
+            tenant: tenant_dbname.tenant.name().to_string(),
             db_type: DatabaseType::NormalDB,
         };
 
@@ -5202,7 +5206,7 @@ pub(crate) async fn get_index_or_err(
 async fn gc_dropped_db_by_id(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     db_id: u64,
-    tenant: String,
+    tenant: Tenant,
     db_name: String,
 ) -> Result<(), KVAppError> {
     // List tables by tenant, db_id, table_name.
@@ -5307,7 +5311,7 @@ async fn gc_dropped_db_by_id(
 
 async fn gc_dropped_table_by_id(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant: String,
+    tenant: Tenant,
     db_id: u64,
     table_id: u64,
     table_name: String,
@@ -5399,13 +5403,14 @@ async fn gc_dropped_table_data(
 
 async fn gc_dropped_table_index(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant: &str,
+    tenant: &Tenant,
     table_id: u64,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), KVAppError> {
-    // Get index id list by `prefix_list` "<prefix>/<tenant>"
+    // Get index id list by `prefix_list` "<prefix>/<tenant>/"
     let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
-        .push_str(tenant)
+        .push_str(tenant.name())
+        .push_raw("")
         .done();
 
     let id_list = kv_api.prefix_list_kv(&prefix_key).await?;
@@ -5521,11 +5526,13 @@ async fn update_mask_policy(
     tenant: String,
     table_id: u64,
 ) -> Result<(), KVAppError> {
+    let tenant = Tenant::new_or_err(&tenant, func_name!())?;
+
     /// Fetch and update the table id list with `f`, and fill in the txn preconditions and operations.
     async fn update_table_ids(
         kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
         txn_req: &mut TxnRequest,
-        key: MaskpolicyTableIdListKey,
+        key: MaskPolicyTableIdListIdent,
         f: impl FnOnce(&mut BTreeSet<u64>),
     ) -> Result<(), KVAppError> {
         let (id_list_seq, id_list_opt): (_, Option<MaskpolicyTableIdList>) =
@@ -5549,7 +5556,7 @@ async fn update_mask_policy(
             update_table_ids(
                 kv_api,
                 txn_req,
-                MaskpolicyTableIdListKey::new(&tenant, new_mask_name),
+                MaskPolicyTableIdListIdent::new(tenant.clone(), new_mask_name),
                 |list: &mut BTreeSet<u64>| {
                     list.insert(table_id);
                 },
@@ -5560,7 +5567,7 @@ async fn update_mask_policy(
                 update_table_ids(
                     kv_api,
                     txn_req,
-                    MaskpolicyTableIdListKey::new(&tenant, old),
+                    MaskPolicyTableIdListIdent::new(tenant.clone(), old),
                     |list: &mut BTreeSet<u64>| {
                         list.remove(&table_id);
                     },
@@ -5572,7 +5579,7 @@ async fn update_mask_policy(
             update_table_ids(
                 kv_api,
                 txn_req,
-                MaskpolicyTableIdListKey::new(&tenant, mask_name),
+                MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name),
                 |list: &mut BTreeSet<u64>| {
                     list.remove(&table_id);
                 },
