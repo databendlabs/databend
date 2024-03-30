@@ -132,7 +132,7 @@ impl Debug for HttpQueryRequest {
 
 const DEFAULT_MAX_ROWS_IN_BUFFER: usize = 5 * 1000 * 1000;
 const DEFAULT_MAX_ROWS_PER_PAGE: usize = 10000;
-const DEFAULT_WAIT_TIME_SECS: u32 = 1;
+const DEFAULT_WAIT_TIME_SECS: u32 = 10;
 
 fn default_max_rows_in_buffer() -> usize {
     DEFAULT_MAX_ROWS_IN_BUFFER

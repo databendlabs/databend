@@ -265,13 +265,13 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         if self.flip_coin() {
             let limit = Expr::Literal {
                 span: None,
-                lit: Literal::UInt64(self.rng.gen_range(0..=100)),
+                value: Literal::UInt64(self.rng.gen_range(0..=100)),
             };
             res.push(limit);
             if self.flip_coin() {
                 let offset = Expr::Literal {
                     span: None,
-                    lit: Literal::UInt64(self.rng.gen_range(5..=10)),
+                    value: Literal::UInt64(self.rng.gen_range(5..=10)),
                 };
                 res.push(offset);
             }
@@ -283,7 +283,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         if self.flip_coin() && limit_len != 2 {
             return Some(Expr::Literal {
                 span: None,
-                lit: Literal::UInt64(self.rng.gen_range(0..=10)),
+                value: Literal::UInt64(self.rng.gen_range(0..=10)),
             });
         }
         None
@@ -517,7 +517,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     name: Identifier::from_name(None, name),
                     params: vec![Expr::Literal {
                         span: None,
-                        lit: Literal::UInt64(self.rng.gen_range(0..=10)),
+                        value: Literal::UInt64(self.rng.gen_range(0..=10)),
                     }],
                     named_params: vec![],
                     alias: None,
@@ -530,7 +530,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         0 => {
                             let arg = Expr::Literal {
                                 span: None,
-                                lit: Literal::UInt64(self.rng.gen_range(0..=10000000000000)),
+                                value: Literal::UInt64(self.rng.gen_range(0..=10000000000000)),
                             };
                             (TableDataType::Timestamp, Expr::FunctionCall {
                                 span: None,
@@ -547,7 +547,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         1 => {
                             let arg = Expr::Literal {
                                 span: None,
-                                lit: Literal::UInt64(self.rng.gen_range(0..=1000000)),
+                                value: Literal::UInt64(self.rng.gen_range(0..=1000000)),
                             };
                             (TableDataType::Date, Expr::FunctionCall {
                                 span: None,
@@ -565,7 +565,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             TableDataType::Number(NumberDataType::Int64),
                             Expr::Literal {
                                 span: None,
-                                lit: Literal::UInt64(self.rng.gen_range(0..=1000)),
+                                value: Literal::UInt64(self.rng.gen_range(0..=1000)),
                             },
                         ),
                         _ => unreachable!(),
@@ -735,14 +735,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     // avoiding `GROUP BY position n is not in select list` errors
     fn rewrite_position_expr(&mut self, expr: Expr) -> Expr {
         if let Expr::Literal {
-            lit: Literal::UInt64(n),
+            value: Literal::UInt64(n),
             ..
         } = expr
         {
             let pos = n % 3 + 1;
             Expr::Literal {
                 span: None,
-                lit: Literal::UInt64(pos),
+                value: Literal::UInt64(pos),
             }
         } else {
             expr

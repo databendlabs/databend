@@ -17,7 +17,9 @@ use chrono::Utc;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_meta_app::tenant::Tenant;
 use databend_storages_common_txn::TxnManager;
+use minitrace::func_name;
 use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;
@@ -46,19 +48,20 @@ pub struct TenantTableInfo {
     pub table_id: u64,
 }
 
-async fn load_tenant_tables(tenant: &str) -> Result<TenantTablesResponse> {
+async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
     let catalog = CatalogManager::instance().get_default_catalog(TxnManager::init())?;
+
     let databases = catalog.list_databases(tenant).await?;
 
     let mut table_infos: Vec<TenantTableInfo> = vec![];
     let mut warnings: Vec<String> = vec![];
     for database in databases {
-        let tables = match catalog.list_tables(tenant, database.name()).await {
+        let tables = match catalog.list_tables(tenant.name(), database.name()).await {
             Ok(v) => v,
             Err(err) => {
                 warnings.push(format!(
                     "failed to list tables of database {}.{}: {}",
-                    tenant,
+                    tenant.name(),
                     database.name(),
                     err
                 ));
@@ -96,6 +99,9 @@ async fn load_tenant_tables(tenant: &str) -> Result<TenantTablesResponse> {
 pub async fn list_tenant_tables_handler(
     Path(tenant): Path<String>,
 ) -> poem::Result<impl IntoResponse> {
+    let tenant =
+        Tenant::new_or_err(&tenant, func_name!()).map_err(poem::error::InternalServerError)?;
+
     let resp = load_tenant_tables(&tenant)
         .await
         .map_err(poem::error::InternalServerError)?;
@@ -108,7 +114,7 @@ pub async fn list_tenant_tables_handler(
 pub async fn list_tables_handler() -> poem::Result<impl IntoResponse> {
     let tenant = &GlobalConfig::instance().query.tenant_id;
 
-    let resp = load_tenant_tables(tenant.as_str())
+    let resp = load_tenant_tables(tenant)
         .await
         .map_err(poem::error::InternalServerError)?;
     Ok(Json(resp))

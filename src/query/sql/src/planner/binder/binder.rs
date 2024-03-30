@@ -395,6 +395,9 @@ impl<'a> Binder {
                 }
                 self.bind_insert(bind_context, stmt).await?
             }
+            Statement::InsertMultiTable(stmt) => {
+                self.bind_insert_multi_table(bind_context, stmt).await?
+            }
             Statement::Replace(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
@@ -606,7 +609,7 @@ impl<'a> Binder {
             }
 
             // Streams
-            Statement::CreateStream(stmt) => self.bind_create_stream(stmt).await?,
+            Statement::CreateStream(stmt) => self.bind_create_stream(bind_context, stmt).await?,
             Statement::DropStream(stmt) => self.bind_drop_stream(stmt).await?,
             Statement::ShowStreams(stmt) => self.bind_show_streams(bind_context, stmt).await?,
             Statement::DescribeStream(stmt) => self.bind_describe_stream(bind_context, stmt).await?,

@@ -221,7 +221,7 @@ impl Binder {
         // Resolve table with catalog
         let table_meta = match self
             .resolve_data_source(
-                tenant.as_str(),
+                tenant.name(),
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),
@@ -1489,6 +1489,22 @@ impl Binder {
                     ))),
                 }
             }
+            TimeTravelPoint::Stream {
+                catalog,
+                database,
+                name,
+            } => {
+                let (catalog, database, name) =
+                    self.normalize_object_identifier_triple(catalog, database, name);
+                let stream = self.ctx.get_table(&catalog, &database, &name).await?;
+                if stream.engine() != "STREAM" {
+                    return Err(ErrorCode::TableEngineNotSupported(format!(
+                        "{database}.{name} is not STREAM",
+                    )));
+                }
+                let info = stream.get_table_info().clone();
+                Ok(NavigationPoint::StreamInfo(info))
+            }
         }
     }
 
@@ -1552,7 +1568,7 @@ fn parse_table_function_args(
                 Some(val) => args.push(val),
                 None => args.push(Expr::Literal {
                     span: None,
-                    lit: Literal::Null,
+                    value: Literal::Null,
                 }),
             }
         }

@@ -15,6 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_io::escape_string_with_quote;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::schema::CreateOption;
@@ -103,6 +104,7 @@ pub enum Statement {
     },
 
     Insert(InsertStmt),
+    InsertMultiTable(InsertMultiTableStmt),
     Replace(ReplaceStmt),
     MergeInto(MergeIntoStmt),
     Delete(DeleteStmt),
@@ -414,6 +416,7 @@ impl Display for Statement {
             }
             Statement::Query(stmt) => write!(f, "{stmt}")?,
             Statement::Insert(stmt) => write!(f, "{stmt}")?,
+            Statement::InsertMultiTable(insert_multi_table) => write!(f, "{insert_multi_table}")?,
             Statement::Replace(stmt) => write!(f, "{stmt}")?,
             Statement::MergeInto(stmt) => write!(f, "{stmt}")?,
             Statement::Delete(stmt) => write!(f, "{stmt}")?,
@@ -496,12 +499,11 @@ impl Display for Statement {
                 is_default,
                 role_name,
             } => {
-                write!(f, "SET ROLE ")?;
+                write!(f, "SET ")?;
                 if *is_default {
-                    write!(f, "DEFAULT")?;
-                } else {
-                    write!(f, "'{role_name}'")?;
+                    write!(f, "DEFAULT ")?;
                 }
+                write!(f, "ROLE '{role_name}'")?;
             }
             Statement::SetSecondaryRoles { option } => {
                 write!(f, "SET SECONDARY ROLES ")?;
@@ -579,7 +581,7 @@ impl Display for Statement {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " '{role}'")?;
+                write!(f, " '{}'", escape_string_with_quote(role, Some('\'')))?;
             }
             Statement::DropRole {
                 if_exists,

@@ -54,7 +54,7 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let db = catalog
-            .get_database(tenant.as_str(), &self.plan.database)
+            .get_database(tenant.name(), &self.plan.database)
             .await?;
         let name = db.name();
         let mut info = format!("CREATE DATABASE `{}`", name);

@@ -419,6 +419,7 @@ impl MergeIntoInterpreter {
         let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
             Arc::new(TableSnapshot::new_empty_snapshot(
                 fuse_table.schema().as_ref().clone(),
+                Some(table_info.ident.seq),
             ))
         });
 
