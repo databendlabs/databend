@@ -185,6 +185,7 @@ impl Interpreter for ExplainInterpreter {
                             fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
                                 Arc::new(TableSnapshot::new_empty_snapshot(
                                     fuse_table.schema().as_ref().clone(),
+                                    None,
                                 ))
                             });
                         self.ctx.set_merge_into_source_build_segments(Arc::new(
