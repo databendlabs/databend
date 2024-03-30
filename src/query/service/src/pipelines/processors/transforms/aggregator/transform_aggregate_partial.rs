@@ -458,13 +458,15 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                 let partition_count = hashtable.payload.partition_count();
                 let mut blocks = Vec::with_capacity(partition_count);
                 for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
-                    blocks.push(DataBlock::empty_with_meta(
-                        AggregateMeta::<Method, usize>::create_agg_payload(
-                            bucket as isize,
-                            payload,
-                            partition_count,
-                        ),
-                    ));
+                    if payload.len() != 0 {
+                        blocks.push(DataBlock::empty_with_meta(
+                            AggregateMeta::<Method, usize>::create_agg_payload(
+                                bucket as isize,
+                                payload,
+                                partition_count,
+                            ),
+                        ));
+                    }
                 }
 
                 blocks

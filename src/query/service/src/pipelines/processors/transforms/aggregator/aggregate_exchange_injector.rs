@@ -259,9 +259,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                     }
                     AggregateMeta::AggregateSpilling(payload) => {
                         for p in scatter_partitioned_payload(payload, self.buckets)? {
-                            blocks.push(DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, V>::create_agg_spilling(p),
-                            ))
+                            blocks.push(match p.len() == 0 {
+                                true => DataBlock::empty(),
+                                false => DataBlock::empty_with_meta(
+                                    AggregateMeta::<Method, V>::create_agg_spilling(p),
+                                ),
+                            });
                         }
                     }
                     AggregateMeta::HashTable(payload) => {
@@ -280,13 +283,16 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                     }
                     AggregateMeta::AggregatePayload(p) => {
                         for payload in scatter_payload(p.payload, self.buckets)? {
-                            blocks.push(DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, V>::create_agg_payload(
-                                    p.bucket,
-                                    payload,
-                                    p.max_partition_count,
+                            blocks.push(match payload.len() == 0 {
+                                true => DataBlock::empty(),
+                                false => DataBlock::empty_with_meta(
+                                    AggregateMeta::<Method, V>::create_agg_payload(
+                                        p.bucket,
+                                        payload,
+                                        p.max_partition_count,
+                                    ),
                                 ),
-                            ))
+                            });
                         }
                     }
                 };

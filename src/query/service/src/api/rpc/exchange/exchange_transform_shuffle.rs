@@ -89,7 +89,6 @@ struct OutputsBuffer {
 
 impl OutputsBuffer {
     pub fn create(capacity: usize, outputs: usize) -> OutputsBuffer {
-        let capacity = capacity * 1000;
         OutputsBuffer {
             inner: vec![capacity; outputs]
                 .into_iter()
