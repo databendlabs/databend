@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateCatalogReply;
 use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
@@ -271,8 +269,6 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: GcDroppedTableReq,
     ) -> Result<GcDroppedTableResp, KVAppError>;
-
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, KVAppError>;
 
     async fn list_lock_revisions(
         &self,

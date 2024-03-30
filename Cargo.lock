@@ -1574,6 +1574,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "c_vec"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdd7a427adc0135366d99db65b36dae9237130997e560ed61118041fb72be6e8"
+
+[[package]]
 name = "cache-padded"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1705,6 +1711,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02f341c093d19155a6e41631ce5971aac4e9a868262212153124c15fa22d1cdc"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "cedarwood"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d910bedd62c24733263d0bed247460853c9d22e8956bd4cd964302095e04e90"
+dependencies = [
+ "smallvec",
 ]
 
 [[package]]
@@ -2822,6 +2837,7 @@ dependencies = [
  "async-trait-fn",
  "chrono",
  "dashmap",
+ "databend-common-arrow",
  "databend-common-base",
  "databend-common-config",
  "databend-common-exception",
@@ -2897,7 +2913,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-app",
- "databend-common-meta-types",
  "databend-common-storage",
  "databend-common-tracing",
  "databend-common-users",
@@ -3022,7 +3037,6 @@ dependencies = [
  "databend-common-expression",
  "databend-common-io",
  "databend-common-meta-app",
- "databend-common-meta-types",
  "databend-common-settings",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
@@ -3067,7 +3081,9 @@ dependencies = [
  "databend-common-vector",
  "ethnum 1.5.0 (git+https://github.com/ariesdevil/ethnum-rs?rev=4cb05f1)",
  "geo",
+ "geo-types",
  "geohash",
+ "geos",
  "geozero",
  "goldenfile",
  "h3o",
@@ -3254,7 +3270,6 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
- "derive_more",
  "enumflags2",
  "hex",
  "itertools 0.10.5",
@@ -3619,6 +3634,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-script"
+version = "0.1.0"
+dependencies = [
+ "databend-common-ast",
+ "databend-common-exception",
+ "derive-visitor",
+ "goldenfile",
+ "minitrace",
+ "unindent",
+]
+
+[[package]]
 name = "databend-common-settings"
 version = "0.1.0"
 dependencies = [
@@ -3852,6 +3879,7 @@ dependencies = [
  "databend-common-sharing",
  "databend-common-sql",
  "databend-common-storage",
+ "databend-common-storages-share",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
  "databend-storages-common-cache-manager",
@@ -3879,6 +3907,7 @@ dependencies = [
  "sys-info",
  "tantivy",
  "tantivy-common",
+ "tantivy-jieba",
  "typetag",
  "uuid",
  "xorf",
@@ -4078,6 +4107,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tokio",
  "uuid",
 ]
 
@@ -4104,6 +4134,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "bstr 1.9.1",
  "csv-core",
  "dashmap",
  "databend-common-base",
@@ -4120,9 +4151,11 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-storages-parquet",
+ "enum-as-inner 0.6.0",
  "log",
  "opendal",
  "serde",
+ "serde_json",
  "typetag",
  "uuid",
 ]
@@ -4347,10 +4380,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "databend-common-expression",
  "databend-common-meta-app",
- "databend-common-storages-fuse",
- "databend-storages-common-table-meta",
 ]
 
 [[package]]
@@ -4400,6 +4430,7 @@ dependencies = [
  "databend-enterprise-virtual-column",
  "databend-query",
  "databend-storages-common-cache",
+ "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "derive-visitor",
  "futures",
@@ -4627,6 +4658,9 @@ dependencies = [
  "once_cell",
  "opendal",
  "opensrv-mysql",
+ "opentelemetry",
+ "opentelemetry-http",
+ "opentelemetry_sdk",
  "ordered-float 4.2.0",
  "p256",
  "parking_lot 0.12.1",
@@ -4821,10 +4855,12 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-storages-common-table-meta",
+ "log",
  "match-template",
  "minitrace",
  "rand 0.8.5",
  "serde",
+ "tantivy",
  "thiserror",
  "xorfilter-rs",
 ]
@@ -6100,12 +6136,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "geos"
+version = "8.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b57a162bbfe8866b1ab898aad47e7fe634a9177c4b1bacc80af04d2b45772a46"
+dependencies = [
+ "c_vec",
+ "geo-types",
+ "geos-sys",
+ "libc",
+ "num",
+ "wkt",
+]
+
+[[package]]
+name = "geos-src"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8f5247861370ecfcd91a239376c572021cf355cddf52a6602ebbf403d9bb99e"
+dependencies = [
+ "cmake",
+]
+
+[[package]]
+name = "geos-sys"
+version = "2.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dc873d24aefc72aa94c3c1c251afb82beb7be5926002746c0e1f585fef9854c"
+dependencies = [
+ "geos-src",
+ "libc",
+ "link-cplusplus",
+ "pkg-config",
+ "semver",
+]
+
+[[package]]
 name = "geozero"
 version = "0.11.0"
 source = "git+https://github.com/georust/geozero?rev=1d78b36#1d78b3604ea6d082980092c2931170287e13de9e"
 dependencies = [
  "geo-types",
  "geojson",
+ "geos",
  "log",
  "scroll",
  "serde_json",
@@ -8191,6 +8264,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "jieba-rs"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93f0c1347cd3ac8d7c6e3a2dc33ac496d365cf09fc0831aa61111e1a6738983e"
+dependencies = [
+ "cedarwood",
+ "fxhash",
+ "hashbrown 0.14.3",
+ "lazy_static",
+ "phf",
+ "phf_codegen",
+ "regex",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8569,6 +8657,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19d3f1678107a67d955d3118a3f1d93db692c514849b53bd1746f5195d28a1fc"
 dependencies = [
  "thiserror",
+]
+
+[[package]]
+name = "link-cplusplus"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d240c6f7e1ba3a28b0249f774e6a9dd0175054b52dfbb61b16eb8505c3785c9"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -9725,6 +9822,18 @@ dependencies = [
  "pin-project-lite",
  "thiserror",
  "urlencoding",
+]
+
+[[package]]
+name = "opentelemetry-http"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f51189ce8be654f9b5f7e70e49967ed894e84a06fc35c6c042e64ac1fc5399e"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "http",
+ "opentelemetry",
 ]
 
 [[package]]
@@ -13252,6 +13361,17 @@ dependencies = [
  "byteorder",
  "regex-syntax 0.6.29",
  "utf8-ranges",
+]
+
+[[package]]
+name = "tantivy-jieba"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44022293c12a8f878e03439b2f11806d3d394130fe33d4e7781cba91abbac0a4"
+dependencies = [
+ "jieba-rs",
+ "lazy_static",
+ "tantivy-tokenizer-api",
 ]
 
 [[package]]

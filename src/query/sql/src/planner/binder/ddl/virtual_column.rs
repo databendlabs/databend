@@ -168,7 +168,7 @@ impl Binder {
         let catalog_info = self.ctx.get_catalog(&catalog).await?;
         let res = catalog_info
             .list_virtual_columns(ListVirtualColumnsReq {
-                tenant: self.ctx.get_tenant().to_string(),
+                tenant: self.ctx.get_tenant().name().to_string(),
                 table_id: Some(table_info.get_id()),
             })
             .await?;
@@ -209,8 +209,8 @@ impl Binder {
                 expr = &**inner_expr;
                 let path = match accessor {
                     MapAccessor::Bracket {
-                        key: box Expr::Literal { lit, .. },
-                    } => lit.clone(),
+                        key: box Expr::Literal { value, .. },
+                    } => value.clone(),
                     MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                     MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                     _ => {
@@ -298,7 +298,7 @@ impl Binder {
             Some(ident) => {
                 let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
                 catalog
-                    .get_database(self.ctx.get_tenant().as_str(), &database)
+                    .get_database(self.ctx.get_tenant().name(), &database)
                     .await?;
                 database
             }

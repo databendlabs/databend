@@ -38,7 +38,7 @@ use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_settings::Settings;
@@ -269,7 +269,7 @@ impl QueryContextShared {
         self.session.get_current_role()
     }
 
-    pub fn set_current_tenant(&self, tenant: String) {
+    pub fn set_current_tenant(&self, tenant: Tenant) {
         self.session.set_current_tenant(tenant);
     }
 
@@ -286,7 +286,7 @@ impl QueryContextShared {
         StorageMetrics::merge(&metrics)
     }
 
-    pub fn get_tenant(&self) -> NonEmptyString {
+    pub fn get_tenant(&self) -> Tenant {
         self.session.get_current_tenant()
     }
 
@@ -340,9 +340,9 @@ impl QueryContextShared {
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
         let catalog = self
             .catalog_manager
-            .get_catalog(tenant.as_str(), catalog, self.session.session_ctx.txn_mgr())
+            .get_catalog(tenant.name(), catalog, self.session.session_ctx.txn_mgr())
             .await?;
-        let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
+        let cache_table = catalog.get_table(tenant.name(), database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();
 
@@ -370,13 +370,13 @@ impl QueryContextShared {
                 let tenant = self.get_tenant();
                 let catalog = self
                     .catalog_manager
-                    .get_catalog(tenant.as_str(), catalog, self.session.session_ctx.txn_mgr())
+                    .get_catalog(tenant.name(), catalog, self.session.session_ctx.txn_mgr())
                     .await?;
                 let source_table = match catalog.get_stream_source_table(stream_desc)? {
                     Some(source_table) => source_table,
                     None => {
                         let source_table = catalog
-                            .get_table(tenant.as_str(), database, table_name)
+                            .get_table(tenant.name(), database, table_name)
                             .await?;
                         catalog.cache_stream_source_table(
                             stream.get_table_info().clone(),

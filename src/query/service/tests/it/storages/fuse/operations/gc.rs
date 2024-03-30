@@ -91,7 +91,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
             .snapshot_location_from_uuid(&orphan_snapshot_id, TableSnapshot::VERSION)?;
         // orphan_snapshot is created by using `from_previous`, which guarantees
         // that the timestamp of snapshot returned is larger than `current_snapshot`'s.
-        let orphan_snapshot = TableSnapshot::from_previous(current_snapshot.as_ref());
+        let orphan_snapshot = TableSnapshot::from_previous(current_snapshot.as_ref(), None);
         orphan_snapshot
             .write_meta(&operator, &orphan_snapshot_location)
             .await?;

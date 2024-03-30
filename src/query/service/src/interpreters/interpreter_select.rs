@@ -155,7 +155,7 @@ impl SelectInterpreter {
         //              └─────────┘    └─────────┘    └─────────┘
 
         // 1. Duplicate the pipes.
-        pipeline.duplicate(false)?;
+        pipeline.duplicate(false, 2)?;
         // 2. Reorder the pipes.
         let output_len = pipeline.output_len();
         debug_assert!(output_len % 2 == 0);
@@ -263,6 +263,7 @@ impl Interpreter for SelectInterpreter {
             self.ctx.get_id(),
             query_plan
         );
+
         if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.

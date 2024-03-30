@@ -17,17 +17,16 @@ use std::sync::Arc;
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use databend_query::api::http::v1::instance_status::instance_status_handler;
 use databend_query::api::http::v1::instance_status::InstanceStatus;
+use databend_query::interpreters::interpreter_plan_sql;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
-use databend_query::sessions::TableContext;
-use databend_query::sql::Planner;
 use databend_query::test_kits::*;
 use poem::get;
 use poem::http::header;
@@ -59,18 +58,14 @@ async fn get_status(ep: &Route) -> InstanceStatus {
 async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>> {
     let sql = "select sleep(3) from numbers(1)";
     let user = UserApiProvider::instance()
-        .get_user(
-            &NonEmptyString::new("test").unwrap(),
-            UserIdentity::new("root", "%"),
-        )
+        .get_user(&Tenant::new_literal("test"), UserIdentity::new("root", "%"))
         .await?;
     query_ctx
         .get_current_session()
         .set_authed_user(user, None)
         .await?;
-    let mut planner = Planner::new(query_ctx.clone());
-    let (plan, extras) = planner.plan_sql(sql).await?;
-    query_ctx.attach_query_str(plan.kind(), extras.statement.to_mask_sql());
+    let (plan, _) = interpreter_plan_sql(query_ctx.clone(), sql).await?;
+
     InterpreterFactory::get(query_ctx.clone(), &plan).await
 }
 

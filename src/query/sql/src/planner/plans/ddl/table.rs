@@ -31,7 +31,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 
 use crate::plans::Plan;
 
@@ -40,7 +40,7 @@ pub type TableOptions = BTreeMap<String, String>;
 #[derive(Clone, Debug)]
 pub struct CreateTablePlan {
     pub create_option: CreateOption,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -84,7 +84,7 @@ impl DescribeTablePlan {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTablePlan {
     pub if_exists: bool,
-    pub tenant: NonEmptyString,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     /// The table name
@@ -236,7 +236,7 @@ impl AnalyzeTablePlan {
 /// Rename.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTablePlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub if_exists: bool,
     pub catalog: String,
     pub database: String,
@@ -389,7 +389,7 @@ impl TruncateTablePlan {
 /// Undrop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTablePlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,

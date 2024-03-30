@@ -67,7 +67,7 @@ impl Binder {
 
         let plan = CreateViewPlan {
             create_option: *create_option,
-            tenant: tenant.to_string(),
+            tenant,
             catalog,
             database,
             view_name,
@@ -105,7 +105,7 @@ impl Binder {
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
-            tenant: tenant.to_string(),
+            tenant: tenant.name().to_string(),
             catalog,
             database,
             view_name,
@@ -132,7 +132,7 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, view);
         let plan = DropViewPlan {
             if_exists: *if_exists,
-            tenant: tenant.to_string(),
+            tenant,
             catalog,
             database,
             view_name,

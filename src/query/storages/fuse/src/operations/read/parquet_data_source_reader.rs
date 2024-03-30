@@ -35,7 +35,7 @@ use log::debug;
 use super::parquet_data_source::ParquetDataSource;
 use super::util::build_merge_into_source_build_bloom_info;
 use super::util::MergeIntoSourceBuildBloomInfo;
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
@@ -159,7 +159,7 @@ impl SyncSource for ReadParquetDataSource<true> {
                 }
 
                 if let Some(index_reader) = self.index_reader.as_ref() {
-                    let fuse_part = FusePartInfo::from_part(&part)?;
+                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                     let loc =
                         TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
                             &fuse_part.location,
@@ -180,7 +180,7 @@ impl SyncSource for ReadParquetDataSource<true> {
 
                 // If virtual column file exists, read the data from the virtual columns directly.
                 let virtual_source = if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                    let fuse_part = FusePartInfo::from_part(&part)?;
+                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                     let loc =
                         TableMetaLocationGenerator::gen_virtual_block_location(&fuse_part.location);
 
@@ -287,14 +287,14 @@ impl Processor for ReadParquetDataSource<false> {
 
                 chunks.push(async move {
                     databend_common_base::runtime::spawn(async move {
-                        let part = FusePartInfo::from_part(&part)?;
+                        let part = FuseBlockPartInfo::from_part(&part)?;
 
                         if let Some(index_reader) = index_reader.as_ref() {
                             let loc =
-                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                            &part.location,
-                            index_reader.index_id(),
-                        );
+                                TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                                    &part.location,
+                                    index_reader.index_id(),
+                                );
                             if let Some(data) = index_reader
                                 .read_parquet_data_by_merge_io(&settings, &loc)
                                 .await
@@ -334,8 +334,8 @@ impl Processor for ReadParquetDataSource<false> {
 
                         Ok(ParquetDataSource::Normal((source, virtual_source)))
                     })
-                    .await
-                    .unwrap()
+                        .await
+                        .unwrap()
                 });
             }
 

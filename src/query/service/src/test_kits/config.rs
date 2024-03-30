@@ -19,7 +19,7 @@ use databend_common_config::InnerConfig;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::idm_config::IDMConfig;
 use tempfile::TempDir;
 
@@ -30,7 +30,7 @@ pub struct ConfigBuilder {
 impl ConfigBuilder {
     pub fn create() -> ConfigBuilder {
         let mut conf = InnerConfig::default();
-        conf.query.tenant_id = NonEmptyString::new("test").unwrap();
+        conf.query.tenant_id = Tenant::new_literal("test");
         conf.log = databend_common_tracing::Config::new_testing();
         // add idm users for test
         let mut users = HashMap::new();
@@ -44,6 +44,7 @@ impl ConfigBuilder {
         let tmp_dir = TempDir::new().expect("create tmp dir failed");
         let root = tmp_dir.path().to_str().unwrap().to_string();
         conf.storage.params = StorageParams::Fs(StorageFsConfig { root });
+        conf.storage.allow_insecure = true;
 
         ConfigBuilder { conf }
     }

@@ -23,7 +23,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_storages_common_txn::TxnManager;
 use databend_storages_common_txn::TxnManagerRef;
@@ -41,7 +41,7 @@ pub struct SessionContext {
     // The current tenant can be determined by databend-query's config file, or by X-DATABEND-TENANT
     // if it's in management mode. If databend-query is not in management mode, the current tenant
     // can not be modified at runtime.
-    current_tenant: RwLock<String>,
+    current_tenant: RwLock<Option<Tenant>>,
     // The current user is determined by the authentication phase on each connection. It will not be
     // changed during a session.
     current_user: RwLock<Option<UserInfo>>,
@@ -151,29 +151,29 @@ impl SessionContext {
         *lock = role
     }
 
-    pub fn get_current_tenant(&self) -> NonEmptyString {
+    pub fn get_current_tenant(&self) -> Tenant {
         let conf = GlobalConfig::instance();
 
         if conf.query.internal_enable_sandbox_tenant {
             let sandbox_tenant = self.settings.get_sandbox_tenant().unwrap_or_default();
             if !sandbox_tenant.is_empty() {
-                return NonEmptyString::new(sandbox_tenant).unwrap();
+                return Tenant::new_or_err(sandbox_tenant, "create from sandbox_tenant").unwrap();
             }
         }
 
         if conf.query.management_mode || self.typ == SessionType::Local {
             let lock = self.current_tenant.read();
-            if !lock.is_empty() {
-                return NonEmptyString::new(lock.clone()).unwrap();
+            if let Some(tenant) = &*lock {
+                return tenant.clone();
             }
         }
 
         conf.query.tenant_id.clone()
     }
 
-    pub fn set_current_tenant(&self, tenant: String) {
+    pub fn set_current_tenant(&self, tenant: Tenant) {
         let mut lock = self.current_tenant.write();
-        *lock = tenant;
+        *lock = Some(tenant);
     }
 
     // Get current user

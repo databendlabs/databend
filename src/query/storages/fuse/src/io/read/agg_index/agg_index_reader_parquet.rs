@@ -24,7 +24,7 @@ use super::AggIndexReader;
 use crate::io::read::utils::build_columns_meta;
 use crate::io::ReadSettings;
 use crate::io::UncompressedBuffer;
-use crate::FusePartInfo;
+use crate::FuseBlockPartInfo;
 use crate::MergeIOReadResult;
 
 impl AggIndexReader {
@@ -43,7 +43,7 @@ impl AggIndexReader {
                 debug_assert_eq!(metadata.row_groups.len(), 1);
                 let row_group = &metadata.row_groups[0];
                 let columns_meta = build_columns_meta(row_group);
-                let part = FusePartInfo::create(
+                let part = FuseBlockPartInfo::create(
                     loc.to_string(),
                     row_group.num_rows() as u64,
                     columns_meta,
@@ -93,7 +93,7 @@ impl AggIndexReader {
                     .await
                     .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
                     .ok()?;
-                let part = FusePartInfo::create(
+                let part = FuseBlockPartInfo::create(
                     loc.to_string(),
                     row_group.num_rows() as u64,
                     columns_meta,
@@ -123,7 +123,7 @@ impl AggIndexReader {
         buffer: Arc<UncompressedBuffer>,
     ) -> Result<DataBlock> {
         let columns_chunks = data.columns_chunks()?;
-        let part = FusePartInfo::from_part(&part)?;
+        let part = FuseBlockPartInfo::from_part(&part)?;
         let block = self.reader.deserialize_parquet_chunks_with_buffer(
             &part.location,
             part.nums_rows,

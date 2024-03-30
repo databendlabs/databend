@@ -32,12 +32,6 @@ pub struct UpdateStmt {
     pub selection: Option<Expr>,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct UpdateExpr {
-    pub name: Identifier,
-    pub expr: Expr,
-}
-
 impl Display for UpdateStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "UPDATE ")?;
@@ -51,6 +45,12 @@ impl Display for UpdateStmt {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct UpdateExpr {
+    pub name: Identifier,
+    pub expr: Expr,
 }
 
 impl Display for UpdateExpr {

@@ -243,7 +243,7 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
 pub fn dot_separated_idents_1_to_2(i: Input) -> IResult<(Option<Identifier>, Identifier)> {
     map(
         rule! {
-           #ident ~ ("." ~ #ident)?
+           #ident ~ ( "." ~ #ident )?
         },
         |res| match res {
             (ident1, None) => (None, ident1),
@@ -260,7 +260,7 @@ pub fn dot_separated_idents_1_to_3(
 ) -> IResult<(Option<Identifier>, Option<Identifier>, Identifier)> {
     map(
         rule! {
-            #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?
+            #ident ~ ( "." ~ #ident ~ ( "." ~ #ident )? )?
         },
         |res| match res {
             (ident2, None) => (None, None, ident2),
@@ -280,6 +280,12 @@ pub fn comma_separated_list0_ignore_trailing<'a, T>(
     item: impl FnMut(Input<'a>) -> IResult<'a, T>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
     nom::multi::separated_list0(match_text(","), item)
+}
+
+pub fn comma_separated_list1_ignore_trailing<'a, T>(
+    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
+) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    nom::multi::separated_list1(match_text(","), item)
 }
 
 pub fn semicolon_terminated_list1<'a, T>(

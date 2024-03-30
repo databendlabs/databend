@@ -71,7 +71,7 @@ pub struct CreateNotificationPlan {
     pub notification_type: NotificationType,
     pub enabled: bool,
     pub webhook_opts: Option<NotificationWebhookOptions>,
-    pub comments: String,
+    pub comments: Option<String>,
 }
 
 impl CreateNotificationPlan {

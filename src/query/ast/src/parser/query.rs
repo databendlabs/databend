@@ -460,7 +460,7 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
                     }),
                     right: Box::new(Expr::Literal {
                         span: Some(t.span),
-                        lit: Literal::String(s),
+                        value: Literal::String(s),
                     }),
                 }),
             })),
@@ -508,9 +508,17 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
         rule! { "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
         |(_, _, _, e, _)| TimeTravelPoint::Timestamp(Box::new(e)),
     );
+    let at_stream = map(
+        rule! { "(" ~ STREAM ~ "=>" ~  #dot_separated_idents_1_to_3 ~ ")" },
+        |(_, _, _, (catalog, database, name), _)| TimeTravelPoint::Stream {
+            catalog,
+            database,
+            name,
+        },
+    );
 
     rule!(
-        #at_snapshot | #at_timestamp
+        #at_stream | #at_snapshot | #at_timestamp
     )(i)
 }
 
@@ -1002,7 +1010,7 @@ pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameB
 pub fn window_spec(i: Input) -> IResult<WindowSpec> {
     map(
         rule! {
-            (#ident )?
+            #ident?
             ~ ( PARTITION ~ ^BY ~ ^#comma_separated_list1(subexpr(0)) )?
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
             ~ ( (ROWS | RANGE) ~ ^#window_frame_between )?
@@ -1032,24 +1040,27 @@ pub fn window_spec_ident(i: Input) -> IResult<Window> {
     alt((
         map(
             rule! {
-               ("(" ~ #window_spec ~ ")")
+               "(" ~ #window_spec ~ ")"
             },
             |(_, spec, _)| Window::WindowSpec(spec),
         ),
-        map(rule! {#ident}, |window_name| {
-            Window::WindowReference(WindowRef { window_name })
-        }),
+        map(
+            rule! {
+                #ident
+            },
+            |window_name| Window::WindowReference(WindowRef { window_name }),
+        ),
     ))(i)
 }
 
 pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
     map(
         rule! {
-            #ident ~ (AS ~ "(" ~ #window_spec ~ ")")
+            #ident ~ AS ~ "(" ~ #window_spec ~ ")"
         },
-        |(ident, window)| WindowDefinition {
+        |(ident, _, _, window, _)| WindowDefinition {
             name: ident,
-            spec: window.2,
+            spec: window,
         },
     )(i)
 }

@@ -81,7 +81,7 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
         .await;
     assert!(r.is_err());
     let e = r.unwrap_err();
-    assert_eq!(e.code(), ErrorCode::TLSConfigurationFailure("").code());
+    assert_eq!(e.code(), ErrorCode::T_L_S_CONFIGURATION_FAILURE);
     Ok(())
 }
 

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 pub mod agg_index;
-mod filter_join;
+mod push_down_filter_join;
 mod rule_commute_join;
 mod rule_eliminate_eval_scalar;
 mod rule_eliminate_filter;

@@ -24,6 +24,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -36,7 +37,7 @@ use databend_storages_common_table_meta::meta::Location;
 
 /// Fuse table partition information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
-pub struct FusePartInfo {
+pub struct FuseBlockPartInfo {
     pub location: String,
 
     pub create_on: Option<DateTime<Utc>>,
@@ -50,14 +51,14 @@ pub struct FusePartInfo {
 }
 
 #[typetag::serde(name = "fuse")]
-impl PartInfo for FusePartInfo {
+impl PartInfo for FuseBlockPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
         info.as_any()
-            .downcast_ref::<FusePartInfo>()
+            .downcast_ref::<FuseBlockPartInfo>()
             .is_some_and(|other| self == other)
     }
 
@@ -66,9 +67,13 @@ impl PartInfo for FusePartInfo {
         self.location.hash(&mut s);
         s.finish()
     }
+
+    fn part_type(&self) -> PartInfoType {
+        PartInfoType::BlockLevel
+    }
 }
 
-impl FusePartInfo {
+impl FuseBlockPartInfo {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         location: String,
@@ -80,7 +85,7 @@ impl FusePartInfo {
         block_meta_index: Option<BlockMetaIndex>,
         create_on: Option<DateTime<Utc>>,
     ) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(FusePartInfo {
+        Arc::new(Box::new(FuseBlockPartInfo {
             location,
             create_on,
             columns_meta,
@@ -92,10 +97,12 @@ impl FusePartInfo {
         }))
     }
 
-    pub fn from_part(info: &PartInfoPtr) -> Result<&FusePartInfo> {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&FuseBlockPartInfo> {
         info.as_any()
-            .downcast_ref::<FusePartInfo>()
-            .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to FusePartInfo."))
+            .downcast_ref::<FuseBlockPartInfo>()
+            .ok_or_else(|| {
+                ErrorCode::Internal("Cannot downcast from PartInfo to FuseBlockPartInfo.")
+            })
     }
 
     pub fn range(&self) -> Option<&Range<usize>> {
@@ -142,6 +149,10 @@ impl PartInfo for FuseLazyPartInfo {
         self.segment_location.0.hash(&mut s);
         s.finish()
     }
+
+    fn part_type(&self) -> PartInfoType {
+        PartInfoType::LazyLevel
+    }
 }
 
 impl FuseLazyPartInfo {
@@ -150,5 +161,13 @@ impl FuseLazyPartInfo {
             segment_index: idx,
             segment_location,
         }))
+    }
+
+    pub fn from_part(info: &PartInfoPtr) -> Result<&FuseLazyPartInfo> {
+        info.as_any()
+            .downcast_ref::<FuseLazyPartInfo>()
+            .ok_or_else(|| {
+                ErrorCode::Internal("Cannot downcast from PartInfo to FuseLazyPartInfo.")
+            })
     }
 }

@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use databend_common_meta_app::principal::AuthType;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -25,6 +24,8 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::tenant::Tenant;
+use minitrace::func_name;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -111,13 +112,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ #task_warehouse_option
-            ~ (SCHEDULE ~ "=" ~ #task_schedule_option)?
-            ~ (AFTER ~ #comma_separated_list0(literal_string))?
-            ~ (WHEN ~ #expr )?
-            ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
+            ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
+            ~ ( AFTER ~ #comma_separated_list0(literal_string) )?
+            ~ ( WHEN ~ #expr )?
+            ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
             ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
-            ~ (#set_table_option)?
+            ~ #set_table_option?
             ~ AS ~ #task_sql_block
         },
         |(
@@ -143,13 +144,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 warehouse_opts,
                 schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
                 suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
-                comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                comments: comment_opt.map(|(_, _, comment)| comment),
                 after: match after_tasks {
                     Some((_, tasks)) => tasks,
                     None => Vec::new(),
                 },
                 error_integration: error_integration.map(|(_, _, name)| name.to_string()),
-                when_condition: when_conditions.map(|(_, cond)| cond.to_string()),
+                when_condition: when_conditions.map(|(_, cond)| cond),
                 sql,
                 session_parameters: session_opts,
             })
@@ -1144,7 +1145,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let show_virtual_columns = map(
         rule! {
-            SHOW ~ VIRTUAL ~ COLUMNS ~ (( FROM | IN ) ~ #ident)? ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)? ~ #show_limit?
+            SHOW ~ VIRTUAL ~ COLUMNS ~ ( ( FROM | IN ) ~ #ident )? ~ ( ( FROM | IN ) ~ ^#dot_separated_idents_1_to_2 )? ~ #show_limit?
         },
         |(_, _, _, opt_table, opt_db, limit)| {
             let table = opt_table.map(|(_, table)| table);
@@ -1655,8 +1656,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CREATE ~ ( OR ~ ^REPLACE )? ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #format_options
         },
-        |(_, opt_or_replace, _, _, opt_if_not_exists, name, options)| {
-            let file_format_options = FileFormatOptionsAst { options };
+        |(_, opt_or_replace, _, _, opt_if_not_exists, name, file_format_options)| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             Ok(Statement::CreateFileFormat {
@@ -1945,11 +1945,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let create_notification = map(
         rule! {
-            CREATE ~ NOTIFICATION ~ INTEGRATION ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ NOTIFICATION ~ INTEGRATION
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ TYPE ~ "=" ~ #ident
             ~ ENABLED ~ "=" ~ #literal_bool
-            ~ (#notification_webhook_clause)?
+            ~ #notification_webhook_clause?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
         },
         |(
@@ -1973,7 +1974,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 notification_type: notification_type.to_string(),
                 enabled,
                 webhook_opts: webhook,
-                comments: comment.map(|v| v.2).unwrap_or_default(),
+                comments: comment.map(|(_, _, comments)| comments),
             })
         },
     );
@@ -2062,7 +2063,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"
         ),
         rule!(
-            #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            #conditional_multi_table_insert() : "`INSERT [OVERWRITE] {FIRST|ALL} { WHEN <condition> THEN intoClause [ ... ] } [ ... ] [ ELSE intoClause ] <subquery>`"
+            | #unconditional_multi_table_insert() : "`INSERT [OVERWRITE] ALL intoClause [ ... ] <subquery>`"
+            | #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
@@ -2287,6 +2290,89 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
             },
         )(i)
     }
+}
+
+pub fn conditional_multi_table_insert() -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        map(
+            rule! {
+                INSERT ~ OVERWRITE? ~ (FIRST | ALL) ~ (#when_clause)+ ~ (#else_clause)? ~ #query
+            },
+            |(_, overwrite, kind, when_clauses, opt_else, source)| {
+                Statement::InsertMultiTable(InsertMultiTableStmt {
+                    overwrite: overwrite.is_some(),
+                    is_first: matches!(kind.kind, FIRST),
+                    when_clauses,
+                    else_clause: opt_else,
+                    into_clauses: vec![],
+                    source,
+                })
+            },
+        )(i)
+    }
+}
+
+pub fn unconditional_multi_table_insert() -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        map(
+            rule! {
+                INSERT ~ OVERWRITE? ~ ALL ~ (#into_clause)+ ~ #query
+            },
+            |(_, overwrite, _, into_clauses, source)| {
+                Statement::InsertMultiTable(InsertMultiTableStmt {
+                    overwrite: overwrite.is_some(),
+                    is_first: false,
+                    when_clauses: vec![],
+                    else_clause: None,
+                    into_clauses,
+                    source,
+                })
+            },
+        )(i)
+    }
+}
+
+fn when_clause(i: Input) -> IResult<WhenClause> {
+    map(
+        rule! {
+            WHEN ~ ^#expr ~ THEN ~ (#into_clause)+
+        },
+        |(_, expr, _, into_clauses)| WhenClause {
+            condition: expr,
+            into_clauses,
+        },
+    )(i)
+}
+
+fn into_clause(i: Input) -> IResult<IntoClause> {
+    map(
+        rule! {
+            INTO
+            ~ #dot_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ (VALUES ~ "(" ~ #comma_separated_list1(ident) ~ ")" )?
+        },
+        |(_, (catalog, database, table), opt_target_columns, opt_source_columns)| IntoClause {
+            catalog,
+            database,
+            table,
+            target_columns: opt_target_columns
+                .map(|(_, columns, _)| columns)
+                .unwrap_or_default(),
+            source_columns: opt_source_columns
+                .map(|(_, _, columns, _)| columns)
+                .unwrap_or_default(),
+        },
+    )(i)
+}
+
+fn else_clause(i: Input) -> IResult<ElseClause> {
+    map(
+        rule! {
+            ELSE ~ (#into_clause)+
+        },
+        |(_, into_clauses)| ElseClause { into_clauses },
+    )(i)
 }
 
 pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
@@ -3122,7 +3208,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         rule! {
             FLASHBACK ~ TO ~ #travel_point
         },
-        |(_, _, point)| AlterTableAction::RevertTo { point },
+        |(_, _, point)| AlterTableAction::FlashbackTo { point },
     );
 
     let set_table_options = map(
@@ -3362,10 +3448,7 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
         rule! {
              MODIFY ~ WHEN ~ #expr
         },
-        |(_, _, expr)| {
-            let when = expr.to_string();
-            AlterTaskOptions::ModifyWhen(when)
-        },
+        |(_, _, expr)| AlterTaskOptions::ModifyWhen(expr),
     );
     let add_after = map(
         rule! {
@@ -3383,11 +3466,11 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
     let set = map(
         rule! {
              SET
-             ~ ( WAREHOUSE  ~ "=" ~  #literal_string )?
-             ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
-             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
-             ~ ( COMMENT ~ "=" ~ #literal_string )?
-             ~ ( ERROR_INTEGRATION  ~ "=" ~ #literal_string )?
+             ~ ( WAREHOUSE  ~ ^"=" ~ ^#literal_string )?
+             ~ ( SCHEDULE ~ ^"=" ~ ^#task_schedule_option )?
+             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ ^"=" ~ ^#literal_u64 )?
+             ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+             ~ ( ERROR_INTEGRATION  ~ ^"=" ~ ^#literal_string )?
              ~ #set_table_option?
         },
         |(
@@ -3459,7 +3542,7 @@ pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
 pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
     alt((map(
         rule! {
-            (WAREHOUSE  ~ "=" ~  #literal_string)?
+            (WAREHOUSE  ~ "=" ~ #literal_string)?
         },
         |warehouse_opt| {
             let warehouse = match warehouse_opt {
@@ -3558,19 +3641,17 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
 }
 
 pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
-    map(
+    let option = map(
         rule! {
-           ( #ident ~ "=" ~ #option_to_string ) ~ ("," ~ #ident ~ "=" ~ #option_to_string )*
+           #ident ~ "=" ~ #option_to_string
         },
-        |(key, _, value, opts)| {
-            let mut options = BTreeMap::from_iter(
-                opts.iter()
-                    .map(|(_, k, _, v)| (k.name.to_lowercase(), v.clone())),
-            );
-            options.insert(key.name.to_lowercase(), value);
-            options
-        },
-    )(i)
+        |(k, _, v)| (k, v),
+    );
+    map(comma_separated_list1(option), |opts| {
+        opts.into_iter()
+            .map(|(k, v)| (k.name.to_lowercase(), v.clone()))
+            .collect()
+    })(i)
 }
 
 fn option_to_string(i: Input) -> IResult<String> {
@@ -3613,15 +3694,19 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
     );
 
-    let share_from = map(
+    let share_from = map_res(
         rule! {
             FROM ~ SHARE ~ #ident ~ "." ~ #ident
         },
         |(_, _, tenant, _, share_name)| {
-            CreateDatabaseOption::FromShare(ShareNameIdent {
-                tenant: tenant.to_string(),
-                share_name: share_name.to_string(),
-            })
+            Tenant::new_or_err(tenant.to_string(), func_name!())
+                .map_err(|_e| nom::Err::Error(ErrorKind::Other("tenant can not be empty string")))
+                .map(|tenant| {
+                    CreateDatabaseOption::FromShare(ShareNameIdent {
+                        tenant,
+                        share_name: share_name.to_string(),
+                    })
+                })
         },
     );
 
@@ -3865,17 +3950,17 @@ pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
 pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
     map(
         rule! {
-             ( PASSWORD_MIN_LENGTH ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ ^#literal_u64 ) ?
-             ~ ( PASSWORD_HISTORY ~ Eq ~ ^#literal_u64 ) ?
+             ( PASSWORD_MIN_LENGTH ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MAX_LENGTH ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_UPPER_CASE_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_LOWER_CASE_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_NUMERIC_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_SPECIAL_CHARS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MIN_AGE_DAYS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MAX_AGE_DAYS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_MAX_RETRIES ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_LOCKOUT_TIME_MINS ~ Eq ~ ^#literal_u64 )?
+             ~ ( PASSWORD_HISTORY ~ Eq ~ ^#literal_u64 )?
              ~ ( COMMENT ~ Eq ~ ^#literal_string)?
         },
         |(
@@ -3913,18 +3998,18 @@ pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
 pub fn password_unset_options(i: Input) -> IResult<PasswordUnSetOptions> {
     map(
         rule! {
-             PASSWORD_MIN_LENGTH ?
-             ~ PASSWORD_MAX_LENGTH ?
-             ~ PASSWORD_MIN_UPPER_CASE_CHARS ?
-             ~ PASSWORD_MIN_LOWER_CASE_CHARS ?
-             ~ PASSWORD_MIN_NUMERIC_CHARS ?
-             ~ PASSWORD_MIN_SPECIAL_CHARS ?
-             ~ PASSWORD_MIN_AGE_DAYS ?
-             ~ PASSWORD_MAX_AGE_DAYS ?
-             ~ PASSWORD_MAX_RETRIES ?
-             ~ PASSWORD_LOCKOUT_TIME_MINS ?
-             ~ PASSWORD_HISTORY ?
-             ~ COMMENT ?
+             PASSWORD_MIN_LENGTH?
+             ~ PASSWORD_MAX_LENGTH?
+             ~ PASSWORD_MIN_UPPER_CASE_CHARS?
+             ~ PASSWORD_MIN_LOWER_CASE_CHARS?
+             ~ PASSWORD_MIN_NUMERIC_CHARS?
+             ~ PASSWORD_MIN_SPECIAL_CHARS?
+             ~ PASSWORD_MIN_AGE_DAYS?
+             ~ PASSWORD_MAX_AGE_DAYS?
+             ~ PASSWORD_MAX_RETRIES?
+             ~ PASSWORD_LOCKOUT_TIME_MINS?
+             ~ PASSWORD_HISTORY?
+             ~ COMMENT?
         },
         |(
             opt_min_length,
@@ -3984,9 +4069,9 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
             VERBOSE | LOGICAL | OPTIMIZED
         },
         |opt| match &opt.kind {
-            VERBOSE => ExplainOption::Verbose(true),
-            LOGICAL => ExplainOption::Logical(true),
-            OPTIMIZED => ExplainOption::Optimized(true),
+            VERBOSE => ExplainOption::Verbose,
+            LOGICAL => ExplainOption::Logical,
+            OPTIMIZED => ExplainOption::Optimized,
             _ => unreachable!(),
         },
     )(i)

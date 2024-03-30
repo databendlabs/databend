@@ -34,6 +34,7 @@ use databend_common_meta_app::background::ManualTriggerParams;
 use databend_common_meta_app::background::UpdateBackgroundJobParamsReq;
 use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
 use databend_common_meta_app::background::UpdateBackgroundTaskReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::MetaError;
 use log::info;
@@ -108,17 +109,16 @@ impl BackgroundApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant = "tenant1";
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_literal(tenant_name);
+
         let task_id = "uuid1";
-        let task_name = BackgroundTaskIdent {
-            tenant: tenant.to_string(),
-            task_id: task_id.to_string(),
-        };
+        let task_ident = BackgroundTaskIdent::new(tenant, task_id);
 
         info!("--- list background tasks when their is no tasks");
         {
             let req = ListBackgroundTasksReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
             };
 
             let res = mt.list_background_tasks(req).await;
@@ -133,7 +133,7 @@ impl BackgroundApiTestSuite {
         let expire_at = create_on + chrono::Duration::seconds(5);
         {
             let req = UpdateBackgroundTaskReq {
-                task_name: task_name.clone(),
+                task_name: task_ident.clone(),
                 task_info: new_background_task(BackgroundTaskState::STARTED, create_on),
                 expire_at: expire_at.timestamp() as u64,
             };
@@ -142,7 +142,7 @@ impl BackgroundApiTestSuite {
             info!("update log res: {:?}", res);
             let res = mt
                 .get_background_task(GetBackgroundTaskReq {
-                    name: task_name.clone(),
+                    name: task_ident.clone(),
                 })
                 .await;
             info!("get log res: {:?}", res);
@@ -155,7 +155,7 @@ impl BackgroundApiTestSuite {
         }
         {
             let req = UpdateBackgroundTaskReq {
-                task_name: task_name.clone(),
+                task_name: task_ident.clone(),
                 task_info: new_background_task(BackgroundTaskState::DONE, create_on),
                 expire_at: expire_at.timestamp() as u64,
             };
@@ -164,7 +164,7 @@ impl BackgroundApiTestSuite {
             info!("update log res: {:?}", res);
             let res = mt
                 .get_background_task(GetBackgroundTaskReq {
-                    name: task_name.clone(),
+                    name: task_ident.clone(),
                 })
                 .await;
             info!("get log res: {:?}", res);
@@ -177,7 +177,7 @@ impl BackgroundApiTestSuite {
         }
         {
             let req = ListBackgroundTasksReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
             };
 
             let res = mt.list_background_tasks(req).await;
@@ -199,17 +199,16 @@ impl BackgroundApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant = "tenant1";
+        let tenant_name = "tenant1";
         let job_name = "uuid1";
-        let job_ident = BackgroundJobIdent {
-            tenant: tenant.to_string(),
-            name: job_name.to_string(),
-        };
+
+        let tenant = Tenant::new_literal(tenant_name);
+        let job_ident = BackgroundJobIdent::new(tenant.clone(), job_name);
 
         info!("--- list background jobs when their is no tasks");
         {
             let req = ListBackgroundJobsReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
             };
 
             let res = mt.list_background_jobs(req).await;
@@ -334,14 +333,14 @@ impl BackgroundApiTestSuite {
         info!("--- list background jobs when their is 1 tasks");
         {
             let req = ListBackgroundJobsReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name.to_string(),
             };
 
             let res = mt.list_background_jobs(req).await;
             assert!(res.is_ok());
             let resp = res.unwrap();
             assert_eq!(1, resp.len());
-            assert_eq!(job_ident.name, resp[0].1, "expect same ident name");
+            assert_eq!(job_ident.name(), resp[0].1, "expect same ident name");
             assert_eq!(
                 BackgroundJobState::FAILED,
                 resp[0].2.job_status.clone().unwrap().job_state,

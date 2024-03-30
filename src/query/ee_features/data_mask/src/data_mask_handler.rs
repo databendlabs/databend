@@ -33,6 +33,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 
 #[async_trait::async_trait]
@@ -48,7 +49,7 @@ pub trait DatamaskHandler: Sync + Send {
     async fn get_data_mask(
         &self,
         meta_api: Arc<MetaStore>,
-        tenant: String,
+        tenant: &Tenant,
         name: String,
     ) -> Result<DatamaskMeta>;
 }
@@ -81,7 +82,7 @@ impl DatamaskHandlerWrapper {
     pub async fn get_data_mask(
         &self,
         meta_api: Arc<MetaStore>,
-        tenant: String,
+        tenant: &Tenant,
         name: String,
     ) -> Result<DatamaskMeta> {
         self.handler.get_data_mask(meta_api, tenant, name).await

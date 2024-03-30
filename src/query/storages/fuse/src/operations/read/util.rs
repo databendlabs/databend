@@ -31,7 +31,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 
 use crate::operations::BlockMetaIndex;
 use crate::operations::SegmentIndex;
-use crate::FusePartInfo;
+use crate::FuseBlockPartInfo;
 
 pub struct MergeIntoSourceBuildBloomInfo {
     pub can_do_merge_into_runtime_filter_bloom: bool,
@@ -76,7 +76,7 @@ pub fn can_merge_into_target_build_bloom_filter(
 
 pub(crate) fn add_data_block_meta(
     block: DataBlock,
-    fuse_part: &FusePartInfo,
+    fuse_part: &FuseBlockPartInfo,
     offsets: Option<Vec<usize>>,
     base_block_ids: Option<Scalar>,
     update_stream_columns: bool,
@@ -113,6 +113,7 @@ pub(crate) fn add_data_block_meta(
             offsets,
             base_block_ids,
             inner: meta,
+            matched_rows: block_meta.matched_rows.clone(),
         };
         meta = Some(Box::new(internal_column_meta));
     }

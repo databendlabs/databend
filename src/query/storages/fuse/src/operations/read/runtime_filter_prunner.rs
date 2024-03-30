@@ -51,7 +51,7 @@ use super::util::MergeIntoSourceBuildBloomInfo;
 use crate::io::MetaReaders;
 use crate::operations::load_bloom_filter;
 use crate::operations::try_prune_use_bloom_filter;
-use crate::FusePartInfo;
+use crate::FuseBlockPartInfo;
 use crate::FuseTable;
 
 pub fn runtime_filter_pruner(
@@ -67,7 +67,7 @@ pub fn runtime_filter_pruner(
     if filters.is_empty() && !can_do_merge_into_target_build_bloom_filter {
         return Ok(false);
     }
-    let part = FusePartInfo::from_part(part)?;
+    let part = FuseBlockPartInfo::from_part(part)?;
     let pruned = filters.iter().any(|filter| {
         let column_refs = filter.column_refs();
         // Currently only support filter with one column(probe key).
@@ -143,7 +143,7 @@ pub fn runtime_filter_pruner(
 
 pub(crate) fn try_prune_merge_into_target_table(
     ctx: Arc<dyn TableContext>,
-    part: &FusePartInfo,
+    part: &FuseBlockPartInfo,
     merge_into_source_build_bloom_info: &mut MergeIntoSourceBuildBloomInfo,
     id: usize,
 ) -> Result<bool> {

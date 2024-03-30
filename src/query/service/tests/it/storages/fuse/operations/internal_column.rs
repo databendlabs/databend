@@ -20,10 +20,14 @@ use databend_common_catalog::plan::InternalColumnMeta;
 use databend_common_catalog::plan::Partitions;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::BLOCK_NAME_COL_NAME;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_expression::SEGMENT_NAME_COL_NAME;
+use databend_common_expression::SNAPSHOT_NAME_COL_NAME;
 use databend_common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::FusePartInfo;
+use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::test_kits::*;
@@ -38,12 +42,12 @@ fn expected_data_block(
     parts: &Partitions,
     internal_columns: &Vec<InternalColumn>,
 ) -> Result<Vec<DataBlock>> {
-    let mut data_blocks = Vec::new();
+    let mut data_blocks = Vec::with_capacity(parts.partitions.len());
     for part in &parts.partitions {
-        let fuse_part = FusePartInfo::from_part(part)?;
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
         let num_rows = fuse_part.nums_rows;
         let block_meta = fuse_part.block_meta_index.as_ref().unwrap();
-        let mut columns = Vec::new();
+        let mut columns = Vec::with_capacity(internal_columns.len());
         let internal_column_meta = InternalColumnMeta {
             segment_idx: block_meta.segment_idx,
             block_id: block_meta.block_id,
@@ -53,6 +57,7 @@ fn expected_data_block(
             offsets: None,
             base_block_ids: None,
             inner: None,
+            matched_rows: block_meta.matched_rows.clone(),
         };
         for internal_column in internal_columns {
             let column = internal_column.generate_column_values(&internal_column_meta, num_rows);
@@ -125,7 +130,7 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
     }
 
     for part in &parts.partitions {
-        let fuse_part = FusePartInfo::from_part(part)?;
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
         let block_meta = fuse_part.block_meta_index.as_ref().unwrap();
         assert_eq!(
             block_meta.snapshot_location.clone().unwrap(),
@@ -149,16 +154,16 @@ async fn test_internal_column() -> Result<()> {
 
     let internal_columns = vec![
         INTERNAL_COLUMN_FACTORY
-            .get_internal_column("_row_id")
+            .get_internal_column(ROW_ID_COL_NAME)
             .unwrap(),
         INTERNAL_COLUMN_FACTORY
-            .get_internal_column("_snapshot_name")
+            .get_internal_column(SNAPSHOT_NAME_COL_NAME)
             .unwrap(),
         INTERNAL_COLUMN_FACTORY
-            .get_internal_column("_segment_name")
+            .get_internal_column(SEGMENT_NAME_COL_NAME)
             .unwrap(),
         INTERNAL_COLUMN_FACTORY
-            .get_internal_column("_block_name")
+            .get_internal_column(BLOCK_NAME_COL_NAME)
             .unwrap(),
     ];
 
