@@ -57,7 +57,7 @@ pub fn get_hashes(
     }
 
     let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-    let columns: Vec<(Column, DataType)> = keys
+    let mut columns: Vec<(Column, DataType)> = keys
         .iter()
         .map(|expr| {
             let return_type = expr.data_type();
@@ -69,6 +69,11 @@ pub fn get_hashes(
             ))
         })
         .collect::<Result<_>>()?;
+    // When chose hash method, the keys are removed nullable, so we need to remove nullable here.
+    for (col, ty) in columns.iter_mut() {
+        *col = col.remove_nullable();
+        *ty = ty.remove_nullable();
+    }
     hash_by_method(method, &columns, block.num_rows(), hashes)?;
     Ok(())
 }

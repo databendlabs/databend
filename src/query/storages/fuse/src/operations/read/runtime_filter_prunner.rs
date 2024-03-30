@@ -40,7 +40,7 @@ use log::info;
 use xorf::BinaryFuse16;
 use xorf::Filter;
 
-use crate::FusePartInfo;
+use crate::FuseBlockPartInfo;
 
 pub fn runtime_filter_pruner(
     table_schema: Arc<TableSchema>,
@@ -51,7 +51,7 @@ pub fn runtime_filter_pruner(
     if filters.is_empty() {
         return Ok(false);
     }
-    let part = FusePartInfo::from_part(part)?;
+    let part = FuseBlockPartInfo::from_part(part)?;
     let pruned = filters.iter().any(|filter| {
         let column_refs = filter.column_refs();
         // Currently only support filter with one column(probe key).

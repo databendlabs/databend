@@ -73,10 +73,7 @@ impl Interpreter for DropVirtualColumnInterpreter {
 
         let drop_virtual_column_req = DropVirtualColumnReq {
             if_exists: self.plan.if_exists,
-            name_ident: VirtualColumnNameIdent {
-                tenant: tenant.to_string(),
-                table_id,
-            },
+            name_ident: VirtualColumnNameIdent::new(tenant, table_id),
         };
 
         let handler = get_virtual_column_handler();

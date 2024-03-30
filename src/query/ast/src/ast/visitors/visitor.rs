@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::Span;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::schema::CreateOption;
@@ -27,7 +26,6 @@ use super::walk::walk_select_target;
 use super::walk::walk_set_expr;
 use super::walk::walk_statement;
 use super::walk::walk_table_reference;
-use super::walk_stream_point;
 use super::walk_time_travel_point;
 use crate::ast::visitors::walk_window_definition;
 use crate::ast::*;
@@ -648,7 +646,7 @@ pub trait Visitor<'ast>: Sized {
         &mut self,
         _create_option: &CreateOption,
         _name: &'ast str,
-        _file_format_options: &'ast FileFormatOptionsAst,
+        _file_format_options: &'ast FileFormatOptions,
     ) {
     }
 
@@ -812,10 +810,6 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_time_travel_point(&mut self, time: &'ast TimeTravelPoint) {
         walk_time_travel_point(self, time);
-    }
-
-    fn visit_stream_point(&mut self, stream: &'ast StreamPoint) {
-        walk_stream_point(self, stream)
     }
 
     fn visit_join(&mut self, join: &'ast Join) {

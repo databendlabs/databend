@@ -802,7 +802,7 @@ async fn test_query_log() -> Result<()> {
     );
     assert_eq!(
         result.data[0][1].as_str().unwrap(),
-        ErrorCode::TableAlreadyExists("").code().to_string(),
+        ErrorCode::TABLE_ALREADY_EXISTS.to_string(),
         "{:?}",
         result
     );
@@ -858,7 +858,7 @@ async fn test_query_log_killed() -> Result<()> {
     );
     assert_eq!(
         result.data[0][1].as_str().unwrap(),
-        ErrorCode::AbortedQuery("").code().to_string(),
+        ErrorCode::ABORTED_QUERY.to_string(),
         "{:?}",
         result
     );

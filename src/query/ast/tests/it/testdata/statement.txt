@@ -79,7 +79,7 @@ ShowDropTables(
 ---------- Input ----------
 show drop tables where name='t'
 ---------- Output ---------
-SHOW DROP TABLE WHERE (name = 't')
+SHOW DROP TABLE WHERE name = 't'
 ---------- AST ------------
 ShowDropTables(
     ShowDropTablesStmt {
@@ -114,7 +114,7 @@ ShowDropTables(
                         span: Some(
                             28..31,
                         ),
-                        lit: String(
+                        value: String(
                             "t",
                         ),
                     },
@@ -399,7 +399,7 @@ ShowProcessList {
 ---------- Input ----------
 show processlist where database='default' limit 2;
 ---------- Output ---------
-SHOW PROCESSLIST WHERE (database = 'default') LIMIT 2
+SHOW PROCESSLIST WHERE database = 'default' LIMIT 2
 ---------- AST ------------
 ShowProcessList {
     show_options: Some(
@@ -434,7 +434,7 @@ ShowProcessList {
                             span: Some(
                                 32..41,
                             ),
-                            lit: String(
+                            value: String(
                                 "default",
                             ),
                         },
@@ -682,20 +682,14 @@ Explain {
 ---------- Input ----------
 explain(verbose, logical, optimized) select * from t where a = 1
 ---------- Output ---------
-EXPLAIN(VERBOSE = true, LOGICAL = true, OPTIMIZED = true) SELECT * FROM t WHERE (a = 1)
+EXPLAIN(VERBOSE, LOGICAL, OPTIMIZED) SELECT * FROM t WHERE a = 1
 ---------- AST ------------
 Explain {
     kind: Plan,
     options: [
-        Verbose(
-            true,
-        ),
-        Logical(
-            true,
-        ),
-        Optimized(
-            true,
-        ),
+        Verbose,
+        Logical,
+        Optimized,
     ],
     query: Query(
         Query {
@@ -773,7 +767,7 @@ Explain {
                                 span: Some(
                                     63..64,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -843,7 +837,7 @@ Some(
 ---------- Input ----------
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
 ---------- Output ---------
-CREATE SYNC AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
+CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
 ---------- AST ------------
 CreateIndex(
     CreateIndexStmt {
@@ -987,7 +981,7 @@ CreateIndex(
                                 span: Some(
                                     68..69,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     3,
                                 ),
                             },
@@ -1036,7 +1030,7 @@ CreateIndex(
 ---------- Input ----------
 CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
 ---------- Output ---------
-CREATE OR REPLACE SYNC AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
+CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
 ---------- AST ------------
 CreateIndex(
     CreateIndexStmt {
@@ -1180,7 +1174,7 @@ CreateIndex(
                                 span: Some(
                                     79..80,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     3,
                                 ),
                             },
@@ -1229,7 +1223,7 @@ CreateIndex(
 ---------- Input ----------
 CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b);
 ---------- Output ---------
-CREATE OR REPLACE SYNC INVERTED INDEX idx2 ON t1 (a, b)
+CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b)
 ---------- AST ------------
 CreateInvertedIndex(
     CreateInvertedIndexStmt {
@@ -1520,7 +1514,7 @@ CreateTable(
                                     span: Some(
                                         59..60,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -1602,7 +1596,7 @@ CreateTable(
                                     span: Some(
                                         50..51,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -1887,7 +1881,7 @@ CreateTable(
                                                 span: Some(
                                                     75..78,
                                                 ),
-                                                lit: String(
+                                                value: String(
                                                     " ",
                                                 ),
                                             },
@@ -1936,7 +1930,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (a int, b int, c int generated always as (a + b) virtual );
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32, b Int32, c Int32 AS ((a + b)) VIRTUAL)
+CREATE TABLE IF NOT EXISTS a.b (a Int32, b Int32, c Int32 AS (a + b) VIRTUAL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2169,7 +2163,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = '******min', aws_secret_key = '******min', endpoint_url = '******900' )
+CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = 'minioadmin', aws_secret_key = 'minioadmin', endpoint_url = 'http://127.0.0.1:9900' )
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2242,7 +2236,7 @@ create table if not exists a.b (a int) 's3://testbucket/admin/data/'
              connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
              location_prefix = 'db';
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' LOCATION_PREFIX = 'db' CONNECTION = ( aws_key_id = '******min', aws_secret_key = '******min', endpoint_url = '******900' )
+CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = 'minioadmin', aws_secret_key = 'minioadmin', endpoint_url = 'http://127.0.0.1:9900' ) LOCATION_PREFIX = 'db'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2442,7 +2436,7 @@ UseDatabase {
 ---------- Input ----------
 create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');
 ---------- Output ---------
-CREATE CATALOG ctl TYPE='HIVE' CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>' )
+CREATE CATALOG ctl TYPE=HIVE CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>' )
 ---------- AST ------------
 CreateCatalog(
     CreateCatalogStmt {
@@ -2486,7 +2480,7 @@ CreateDatabase(
 ---------- Input ----------
 create database ctl.t engine = Default;
 ---------- Output ---------
-CREATE DATABASEctl.t ENGINE = DEFAULT
+CREATE DATABASE ctl.t ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
@@ -2523,7 +2517,7 @@ CreateDatabase(
 ---------- Input ----------
 create database t engine = Default;
 ---------- Output ---------
-CREATE DATABASEt ENGINE = DEFAULT
+CREATE DATABASE t ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
@@ -2551,7 +2545,7 @@ CreateDatabase(
 ---------- Input ----------
 create database t FROM SHARE a.s;
 ---------- Output ---------
-CREATE DATABASEt FROM SHARE a.s
+CREATE DATABASE t FROM SHARE a.s
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
@@ -2571,7 +2565,9 @@ CreateDatabase(
         options: [],
         from_share: Some(
             ShareNameIdent {
-                tenant: "a",
+                tenant: Tenant {
+                    tenant: "a",
+                },
                 share_name: "s",
             },
         ),
@@ -2580,9 +2576,94 @@ CreateDatabase(
 
 
 ---------- Input ----------
+CREATE TABLE `t3`(a int not null, b int not null, c int not null) bloom_index_columns='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native';
+---------- Output ---------
+CREATE TABLE `t3` (a Int32 NOT NULL, b Int32 NOT NULL, c Int32 NOT NULL) bloom_index_columns = 'a,b,c' compression = 'zstd' storage_format = 'native'
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..17,
+            ),
+            name: "t3",
+            quote: Some(
+                '`',
+            ),
+            is_hole: false,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                18..19,
+                            ),
+                            name: "a",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: NotNull(
+                            Int32,
+                        ),
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                34..35,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: NotNull(
+                            Int32,
+                        ),
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                50..51,
+                            ),
+                            name: "c",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: NotNull(
+                            Int32,
+                        ),
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {
+            "bloom_index_columns": "a,b,c",
+            "compression": "zstd",
+            "storage_format": "native",
+        },
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
 create or replace database a;
 ---------- Output ---------
-CREATE OR REPLACE DATABASEa
+CREATE OR REPLACE DATABASE a
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
@@ -2721,7 +2802,7 @@ CreateTable(
 ---------- Input ----------
 create view v as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-CREATE VIEW v AS SELECT (number % 3) AS a FROM numbers(1000)
+CREATE VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
@@ -2779,7 +2860,7 @@ CreateView(
                                     span: Some(
                                         33..34,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -2815,7 +2896,7 @@ CreateView(
                                     span: Some(
                                         53..57,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -2843,7 +2924,7 @@ CreateView(
 ---------- Input ----------
 alter view v as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-ALTER VIEW v AS SELECT (number % 3) AS a FROM numbers(1000)
+ALTER VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 AlterView(
     AlterViewStmt {
@@ -2900,7 +2981,7 @@ AlterView(
                                     span: Some(
                                         32..33,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -2936,7 +3017,7 @@ AlterView(
                                     span: Some(
                                         52..56,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -2986,7 +3067,7 @@ DropView(
 ---------- Input ----------
 create view v1(c1) as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-CREATE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
+CREATE VIEW v1 (c1) AS SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
@@ -3053,7 +3134,7 @@ CreateView(
                                     span: Some(
                                         38..39,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -3089,7 +3170,7 @@ CreateView(
                                     span: Some(
                                         58..62,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -3117,7 +3198,7 @@ CreateView(
 ---------- Input ----------
 create or replace view v1(c1) as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-CREATE OR REPLACE VIEW v1 (c1) AS SELECT (number % 3) AS a FROM numbers(1000)
+CREATE OR REPLACE VIEW v1 (c1) AS SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
@@ -3184,7 +3265,7 @@ CreateView(
                                     span: Some(
                                         49..50,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -3220,7 +3301,7 @@ CreateView(
                                     span: Some(
                                         69..73,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -3248,7 +3329,7 @@ CreateView(
 ---------- Input ----------
 alter view v1(c2) as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-ALTER VIEW v1 (c2) AS SELECT (number % 3) AS a FROM numbers(1000)
+ALTER VIEW v1 (c2) AS SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 AlterView(
     AlterViewStmt {
@@ -3314,7 +3395,7 @@ AlterView(
                                     span: Some(
                                         37..38,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         3,
                                     ),
                                 },
@@ -3350,7 +3431,7 @@ AlterView(
                                     span: Some(
                                         57..61,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1000,
                                     ),
                                 },
@@ -3531,7 +3612,7 @@ CreateStream(
             quote: None,
             is_hole: false,
         },
-        stream_point: None,
+        travel_point: None,
         append_only: false,
         comment: None,
     },
@@ -3583,8 +3664,9 @@ CreateStream(
             quote: None,
             is_hole: false,
         },
-        stream_point: Some(
-            AtStream {
+        travel_point: Some(
+            Stream {
+                catalog: None,
                 database: Some(
                     Identifier {
                         span: Some(
@@ -3609,6 +3691,132 @@ CreateStream(
         comment: Some(
             "this is a stream",
         ),
+    },
+)
+
+
+---------- Input ----------
+create stream if not exists test2.s3 on table test.t at (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) append_only = false;
+---------- Output ---------
+CREATE STREAM IF NOT EXISTS test2.s3 ON TABLE test.t AT (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) APPEND_ONLY = false
+---------- AST ------------
+CreateStream(
+    CreateStreamStmt {
+        create_option: CreateIfNotExists,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    28..33,
+                ),
+                name: "test2",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        stream: Identifier {
+            span: Some(
+                34..36,
+            ),
+            name: "s3",
+            quote: None,
+            is_hole: false,
+        },
+        table_database: Some(
+            Identifier {
+                span: Some(
+                    46..50,
+                ),
+                name: "test",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                51..52,
+            ),
+            name: "t",
+            quote: None,
+            is_hole: false,
+        },
+        travel_point: Some(
+            Timestamp(
+                Cast {
+                    span: Some(
+                        98..109,
+                    ),
+                    expr: Literal {
+                        span: Some(
+                            70..98,
+                        ),
+                        value: String(
+                            "2023-06-26 09:49:02.038483",
+                        ),
+                    },
+                    target_type: Timestamp,
+                    pg_style: true,
+                },
+            ),
+        ),
+        append_only: false,
+        comment: None,
+    },
+)
+
+
+---------- Input ----------
+create stream if not exists test2.s3 on table test.t at (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') append_only = true;
+---------- Output ---------
+CREATE STREAM IF NOT EXISTS test2.s3 ON TABLE test.t AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5')
+---------- AST ------------
+CreateStream(
+    CreateStreamStmt {
+        create_option: CreateIfNotExists,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    28..33,
+                ),
+                name: "test2",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        stream: Identifier {
+            span: Some(
+                34..36,
+            ),
+            name: "s3",
+            quote: None,
+            is_hole: false,
+        },
+        table_database: Some(
+            Identifier {
+                span: Some(
+                    46..50,
+                ),
+                name: "test",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                51..52,
+            ),
+            name: "t",
+            quote: None,
+            is_hole: false,
+        },
+        travel_point: Some(
+            Snapshot(
+                "9828b23f74664ff3806f44bbc1925ea5",
+            ),
+        ),
+        append_only: true,
+        comment: None,
     },
 )
 
@@ -3658,7 +3866,7 @@ CreateStream(
             quote: None,
             is_hole: false,
         },
-        stream_point: None,
+        travel_point: None,
         append_only: false,
         comment: None,
     },
@@ -4165,7 +4373,7 @@ CreateTable(
                                     span: Some(
                                         30..31,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -4269,7 +4477,7 @@ CreateTable(
                         span: Some(
                             45..47,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             10,
                         ),
                     },
@@ -4335,7 +4543,7 @@ AlterUser(
 ---------- Input ----------
 ALTER USER u1 WITH DEFAULT_ROLE = role1, TENANTSETTING;
 ---------- Output ---------
-ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1' TENANTSETTING
+ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1', TENANTSETTING
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
@@ -4405,7 +4613,7 @@ AlterUser(
 ---------- Input ----------
 CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING
 ---------- Output ---------
-CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123' TENANTSETTING
+CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123', TENANTSETTING
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
@@ -4483,7 +4691,7 @@ DropDatabase(
 ---------- Input ----------
 select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;
 ---------- Output ---------
-SELECT DISTINCT a, COUNT(*) FROM t WHERE ((a = 1) AND ((b - 1) < a)) GROUP BY a HAVING (a = 1)
+SELECT DISTINCT a, COUNT(*) FROM t WHERE a = 1 AND b - 1 < a GROUP BY a HAVING a = 1
 ---------- AST ------------
 Query(
     Query {
@@ -4587,7 +4795,7 @@ Query(
                                 span: Some(
                                     45..46,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -4625,7 +4833,7 @@ Query(
                                     span: Some(
                                         55..56,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -4706,7 +4914,7 @@ Query(
                             span: Some(
                                 83..84,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -5132,7 +5340,7 @@ Query(
 ---------- Input ----------
 select * from a join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a INNER JOIN b ON (a.a = b.a)
+SELECT * FROM a INNER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -5291,7 +5499,7 @@ Query(
 ---------- Input ----------
 select * from a left outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT OUTER JOIN b ON (a.a = b.a)
+SELECT * FROM a LEFT OUTER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -5450,7 +5658,7 @@ Query(
 ---------- Input ----------
 select * from a right outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT OUTER JOIN b ON (a.a = b.a)
+SELECT * FROM a RIGHT OUTER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -5609,7 +5817,7 @@ Query(
 ---------- Input ----------
 select * from a left semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT SEMI JOIN b ON (a.a = b.a)
+SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -5768,7 +5976,7 @@ Query(
 ---------- Input ----------
 select * from a semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT SEMI JOIN b ON (a.a = b.a)
+SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -5927,7 +6135,7 @@ Query(
 ---------- Input ----------
 select * from a left anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT ANTI JOIN b ON (a.a = b.a)
+SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6086,7 +6294,7 @@ Query(
 ---------- Input ----------
 select * from a anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT ANTI JOIN b ON (a.a = b.a)
+SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6245,7 +6453,7 @@ Query(
 ---------- Input ----------
 select * from a right semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT SEMI JOIN b ON (a.a = b.a)
+SELECT * FROM a RIGHT SEMI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6404,7 +6612,7 @@ Query(
 ---------- Input ----------
 select * from a right anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT ANTI JOIN b ON (a.a = b.a)
+SELECT * FROM a RIGHT ANTI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6563,7 +6771,7 @@ Query(
 ---------- Input ----------
 select * from a full outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a FULL OUTER JOIN b ON (a.a = b.a)
+SELECT * FROM a FULL OUTER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6722,7 +6930,7 @@ Query(
 ---------- Input ----------
 select * from a inner join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a INNER JOIN b ON (a.a = b.a)
+SELECT * FROM a INNER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -7309,7 +7517,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = any (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE (a.a = ANY (SELECT b.a FROM b))
+SELECT * FROM a WHERE a.a = ANY (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -7498,7 +7706,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = all (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE (a.a = ALL (SELECT b.a FROM b))
+SELECT * FROM a WHERE a.a = ALL (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -7687,7 +7895,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = some (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE (a.a = SOME (SELECT b.a FROM b))
+SELECT * FROM a WHERE a.a = SOME (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -7876,7 +8084,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a > (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE (a.a > (SELECT b.a FROM b))
+SELECT * FROM a WHERE a.a > (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -8063,7 +8271,7 @@ Query(
 ---------- Input ----------
 select 1 from numbers(1) where ((1 = 1) or 1)
 ---------- Output ---------
-SELECT 1 FROM numbers(1) WHERE ((1 = 1) OR 1)
+SELECT 1 FROM numbers(1) WHERE 1 = 1 OR 1
 ---------- AST ------------
 Query(
     Query {
@@ -8084,7 +8292,7 @@ Query(
                             span: Some(
                                 7..8,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -8110,7 +8318,7 @@ Query(
                                 span: Some(
                                     22..23,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -8134,7 +8342,7 @@ Query(
                                 span: Some(
                                     33..34,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -8142,7 +8350,7 @@ Query(
                                 span: Some(
                                     37..38,
                                 ),
-                                lit: UInt64(
+                                value: UInt64(
                                     1,
                                 ),
                             },
@@ -8151,7 +8359,7 @@ Query(
                             span: Some(
                                 43..44,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 1,
                             ),
                         },
@@ -8220,7 +8428,7 @@ Query(
                                 span: Some(
                                     27..31,
                                 ),
-                                lit: String(
+                                value: String(
                                     "p1",
                                 ),
                             },
@@ -8228,7 +8436,7 @@ Query(
                                 span: Some(
                                     33..37,
                                 ),
-                                lit: String(
+                                value: String(
                                     "p2",
                                 ),
                             },
@@ -8236,7 +8444,7 @@ Query(
                                 span: Some(
                                     39..43,
                                 ),
-                                lit: String(
+                                value: String(
                                     "p3",
                                 ),
                             },
@@ -8255,7 +8463,7 @@ Query(
                                     span: Some(
                                         59..63,
                                     ),
-                                    lit: Boolean(
+                                    value: Boolean(
                                         true,
                                     ),
                                 },
@@ -8273,7 +8481,7 @@ Query(
                                     span: Some(
                                         87..91,
                                     ),
-                                    lit: Boolean(
+                                    value: Boolean(
                                         true,
                                     ),
                                 },
@@ -8300,7 +8508,7 @@ Query(
 ---------- Input ----------
 select * from @foo (pattern=>'[.]*parquet' file_format=>'tsv');
 ---------- Output ---------
-SELECT * FROM @foo ( FILE_FORMAT => 'tsv', PATTERN => '[.]*parquet', )
+SELECT * FROM '@foo' ( FILE_FORMAT => 'tsv', PATTERN => '[.]*parquet', )
 ---------- AST ------------
 Query(
     Query {
@@ -8387,7 +8595,7 @@ Query(
                             span: Some(
                                 7..28,
                             ),
-                            lit: String(
+                            value: String(
                                 "stringwith'quote'",
                             ),
                         },
@@ -8434,7 +8642,7 @@ Query(
                             span: Some(
                                 7..31,
                             ),
-                            lit: String(
+                            value: String(
                                 "stringwith\"doublequote",
                             ),
                         },
@@ -8481,9 +8689,370 @@ Query(
                             span: Some(
                                 7..13,
                             ),
-                            lit: String(
+                            value: String(
                                 "🦈",
                             ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * FROM t where ((a));
+---------- Output ---------
+SELECT * FROM t WHERE a
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..27,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..27,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        travel_point: None,
+                        since_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: Some(
+                    ColumnRef {
+                        span: Some(
+                            24..25,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        24..25,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                            ),
+                        },
+                    },
+                ),
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * FROM t where ((select 1) > 1);
+---------- Output ---------
+SELECT * FROM t WHERE (SELECT 1) > 1
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..38,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..38,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        travel_point: None,
+                        since_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: Some(
+                            34..35,
+                        ),
+                        op: Gt,
+                        left: Subquery {
+                            span: Some(
+                                23..33,
+                            ),
+                            modifier: None,
+                            subquery: Query {
+                                span: Some(
+                                    24..32,
+                                ),
+                                with: None,
+                                body: Select(
+                                    SelectStmt {
+                                        span: Some(
+                                            24..32,
+                                        ),
+                                        hints: None,
+                                        distinct: false,
+                                        select_list: [
+                                            AliasedExpr {
+                                                expr: Literal {
+                                                    span: Some(
+                                                        31..32,
+                                                    ),
+                                                    value: UInt64(
+                                                        1,
+                                                    ),
+                                                },
+                                                alias: None,
+                                            },
+                                        ],
+                                        from: [],
+                                        selection: None,
+                                        group_by: None,
+                                        having: None,
+                                        window_list: None,
+                                        qualify: None,
+                                    },
+                                ),
+                                order_by: [],
+                                limit: [],
+                                offset: None,
+                                ignore_result: false,
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                36..37,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                    },
+                ),
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select ((t1.a)>=(((((t2.b)<=(t3.c))) IS NOT NULL)::INTEGER));
+---------- Output ---------
+SELECT t1.a >= (t2.b <= t3.c IS NOT NULL)::Int32
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..60,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..60,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: BinaryOp {
+                            span: Some(
+                                14..16,
+                            ),
+                            op: Gte,
+                            left: ColumnRef {
+                                span: Some(
+                                    9..11,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            span: Some(
+                                                9..11,
+                                            ),
+                                            name: "t1",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                    ),
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                12..13,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                    ),
+                                },
+                            },
+                            right: Cast {
+                                span: Some(
+                                    49..58,
+                                ),
+                                expr: IsNull {
+                                    span: Some(
+                                        37..48,
+                                    ),
+                                    expr: BinaryOp {
+                                        span: Some(
+                                            26..28,
+                                        ),
+                                        op: Lte,
+                                        left: ColumnRef {
+                                            span: Some(
+                                                21..23,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            21..23,
+                                                        ),
+                                                        name: "t2",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            24..25,
+                                                        ),
+                                                        name: "b",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                        right: ColumnRef {
+                                            span: Some(
+                                                29..31,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            29..31,
+                                                        ),
+                                                        name: "t3",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            32..33,
+                                                        ),
+                                                        name: "c",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    },
+                                    not: true,
+                                },
+                                target_type: Int32,
+                                pg_style: true,
+                            },
                         },
                         alias: None,
                     },
@@ -8547,7 +9116,7 @@ Insert(
                         span: Some(
                             31..32,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -8555,7 +9124,7 @@ Insert(
                         span: Some(
                             34..35,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -8565,7 +9134,7 @@ Insert(
                         span: Some(
                             39..40,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             3,
                         ),
                     },
@@ -8573,7 +9142,7 @@ Insert(
                         span: Some(
                             42..43,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             4,
                         ),
                     },
@@ -8628,7 +9197,7 @@ Insert(
                         span: Some(
                             31..32,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -8636,7 +9205,7 @@ Insert(
                         span: Some(
                             34..35,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             2,
                         ),
                     },
@@ -8779,7 +9348,7 @@ Query(
                                                 span: Some(
                                                     18..37,
                                                 ),
-                                                lit: String(
+                                                value: String(
                                                     "{\"k1\": [0, 1, 2]}",
                                                 ),
                                             },
@@ -8805,10 +9374,110 @@ Query(
                                     span: Some(
                                         42..43,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         0,
                                     ),
                                 },
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT avg((number > 314)::UInt32);
+---------- Output ---------
+SELECT avg((number > 314)::UInt32)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..34,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..34,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                7..34,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        7..10,
+                                    ),
+                                    name: "avg",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                                args: [
+                                    Cast {
+                                        span: Some(
+                                            25..33,
+                                        ),
+                                        expr: BinaryOp {
+                                            span: Some(
+                                                19..20,
+                                            ),
+                                            op: Gt,
+                                            left: ColumnRef {
+                                                span: Some(
+                                                    12..18,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                12..18,
+                                                            ),
+                                                            name: "number",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            right: Literal {
+                                                span: Some(
+                                                    21..24,
+                                                ),
+                                                value: UInt64(
+                                                    314,
+                                                ),
+                                            },
+                                        },
+                                        target_type: UInt32,
+                                        pg_style: true,
+                                    },
+                                ],
+                                params: [],
+                                window: None,
+                                lambda: None,
                             },
                         },
                         alias: None,
@@ -8840,7 +9509,9 @@ CreateStage(
         create_option: Create,
         stage_name: "~",
         location: None,
-        file_format_options: {},
+        file_format_options: FileFormatOptions {
+            options: {},
+        },
         on_error: "",
         size_limit: 0,
         validation_mode: "",
@@ -8852,7 +9523,7 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '******b3c', aws_secret_key = '******y6z' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '1a2b3c', aws_secret_key = '4x5y6z' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -8873,10 +9544,18 @@ CreateStage(
                 },
             },
         ),
-        file_format_options: {
-            "compression": "GZIP",
-            "record_delimiter": ",",
-            "type": "CSV",
+        file_format_options: FileFormatOptions {
+            options: {
+                "compression": Keyword(
+                    "GZIP",
+                ),
+                "record_delimiter": String(
+                    ",",
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         on_error: "",
         size_limit: 0,
@@ -8889,7 +9568,7 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '******b3c', aws_secret_key = '******y6z' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '1a2b3c', aws_secret_key = '4x5y6z' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -8910,10 +9589,18 @@ CreateStage(
                 },
             },
         ),
-        file_format_options: {
-            "compression": "GZIP",
-            "record_delimiter": ",",
-            "type": "CSV",
+        file_format_options: FileFormatOptions {
+            options: {
+                "compression": Keyword(
+                    "GZIP",
+                ),
+                "record_delimiter": String(
+                    ",",
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         on_error: "",
         size_limit: 0,
@@ -8926,7 +9613,7 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( account_key = '******y6z', account_name = '******b3c' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( account_key = '4x5y6z', account_name = '1a2b3c' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -8947,10 +9634,18 @@ CreateStage(
                 },
             },
         ),
-        file_format_options: {
-            "compression": "GZIP",
-            "record_delimiter": ",",
-            "type": "CSV",
+        file_format_options: FileFormatOptions {
+            options: {
+                "compression": Keyword(
+                    "GZIP",
+                ),
+                "record_delimiter": String(
+                    ",",
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         on_error: "",
         size_limit: 0,
@@ -8963,7 +9658,7 @@ CreateStage(
 ---------- Input ----------
 CREATE OR REPLACE STAGE test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE OR REPLACE STAGE test_stage 'azblob://load/files/' CONNECTION = ( account_key = '******y6z', account_name = '******b3c' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE OR REPLACE STAGE test_stage 'azblob://load/files/' CONNECTION = ( account_key = '4x5y6z', account_name = '1a2b3c' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -8984,10 +9679,18 @@ CreateStage(
                 },
             },
         ),
-        file_format_options: {
-            "compression": "GZIP",
-            "record_delimiter": ",",
-            "type": "CSV",
+        file_format_options: FileFormatOptions {
+            options: {
+                "compression": Keyword(
+                    "GZIP",
+                ),
+                "record_delimiter": String(
+                    ",",
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         on_error: "",
         size_limit: 0,
@@ -9000,7 +9703,7 @@ CreateStage(
 ---------- Input ----------
 DROP STAGE abc
 ---------- Output ---------
-DROP STAGES abc
+DROP STAGE abc
 ---------- AST ------------
 DropStage {
     if_exists: false,
@@ -9011,7 +9714,7 @@ DropStage {
 ---------- Input ----------
 DROP STAGE ~
 ---------- Output ---------
-DROP STAGES ~
+DROP STAGE ~
 ---------- AST ------------
 DropStage {
     if_exists: false,
@@ -9127,6 +9830,51 @@ CreateRole {
 
 
 ---------- Input ----------
+create role `a"a`
+---------- Output ---------
+CREATE ROLE 'a"a'
+---------- AST ------------
+CreateRole {
+    if_not_exists: false,
+    role_name: "a\"a",
+}
+
+
+---------- Input ----------
+create role `a'a`
+---------- Output ---------
+CREATE ROLE 'a\'a'
+---------- AST ------------
+CreateRole {
+    if_not_exists: false,
+    role_name: "a'a",
+}
+
+
+---------- Input ----------
+create user `a'a` identified by '123'
+---------- Output ---------
+CREATE USER 'a%27a'@'%' IDENTIFIED BY '123'
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        create_option: Create,
+        user: UserIdentity {
+            username: "a'a",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: None,
+            password: Some(
+                "123",
+            ),
+        },
+        user_options: [],
+    },
+)
+
+
+---------- Input ----------
 drop role if exists test
 ---------- Output ---------
 DROP ROLE IF EXISTS 'test'
@@ -9205,7 +9953,7 @@ OptimizeTable(
 ---------- Input ----------
 OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;
 ---------- Output ---------
-OPTIMIZE TABLE t PURGE BEFORE  (SNAPSHOT => 9828b23f74664ff3806f44bbc1925ea5) LIMIT 10
+OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10
 ---------- AST ------------
 OptimizeTable(
     OptimizeTableStmt {
@@ -9236,7 +9984,7 @@ OptimizeTable(
 ---------- Input ----------
 OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;
 ---------- Output ---------
-OPTIMIZE TABLE t PURGE BEFORE  (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10
+OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10
 ---------- AST ------------
 OptimizeTable(
     OptimizeTableStmt {
@@ -9261,7 +10009,7 @@ OptimizeTable(
                             span: Some(
                                 44..72,
                             ),
-                            lit: String(
+                            value: String(
                                 "2023-06-26 09:49:02.038483",
                             ),
                         },
@@ -9281,7 +10029,7 @@ OptimizeTable(
 ---------- Input ----------
 ALTER TABLE t CLUSTER BY(c1);
 ---------- Output ---------
-ALTER TABLE t CLUSTER BY c1
+ALTER TABLE t CLUSTER BY (c1)
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -9369,7 +10117,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
 ---------- Output ---------
-ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0) LIMIT 10
+ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -9425,7 +10173,7 @@ AlterTable(
                         span: Some(
                             41..42,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             0,
                         ),
                     },
@@ -9584,7 +10332,7 @@ AlterTable(
                             span: Some(
                                 41..44,
                             ),
-                            lit: Decimal256 {
+                            value: Decimal256 {
                                 value: 11,
                                 precision: 76,
                                 scale: 1,
@@ -9647,7 +10395,7 @@ AlterTable(
                             span: Some(
                                 42..45,
                             ),
-                            lit: String(
+                            value: String(
                                 "b",
                             ),
                         },
@@ -9896,7 +10644,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t MODIFY COLUMN a int DEFAULT 1, COLUMN b float;
 ---------- Output ---------
-ALTER TABLE t MODIFY COLUMN a Int32 DEFAULT 1, COLUMN b Float32
+ALTER TABLE t MODIFY COLUMN a Int32 DEFAULT 1, b Float32
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -9940,7 +10688,7 @@ AlterTable(
                                     span: Some(
                                         42..43,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -9971,7 +10719,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';
 ---------- Output ---------
-ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1, COLUMN b Float32 NOT NULL COMMENT column b
+ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1, b Float32 NOT NULL COMMENT 'column b'
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -10017,7 +10765,7 @@ AlterTable(
                                     span: Some(
                                         47..48,
                                     ),
-                                    lit: UInt64(
+                                    value: UInt64(
                                         1,
                                     ),
                                 },
@@ -10532,7 +11280,7 @@ VacuumDropTable(
 ---------- Input ----------
 CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
 ---------- Output ---------
-CREATE TABLE t (a Int32 COMMENT 'col comment')comment = 'table comment'
+CREATE TABLE t (a Int32 COMMENT 'col comment') comment = 'table comment'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -10685,7 +11433,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO ROLE role1;
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO ROLE role1
+GRANT SELECT, CREATE ON * TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -10728,7 +11476,7 @@ Grant(
 ---------- Input ----------
 GRANT ALL ON *.* TO ROLE role2;
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON *.* TO ROLE role2
+GRANT ALL PRIVILEGES ON *.* TO ROLE 'role2'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -10767,7 +11515,7 @@ Grant(
 ---------- Input ----------
 GRANT ALL PRIVILEGES ON * TO ROLE role3;
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON * TO ROLE role3
+GRANT ALL PRIVILEGES ON * TO ROLE 'role3'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -10786,7 +11534,7 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO 'test-user';
 ---------- Output ---------
-GRANT ROLE test TO USER 'test-user'@'%'
+GRANT ROLE 'test' TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -10806,7 +11554,7 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO USER 'test-user';
 ---------- Output ---------
-GRANT ROLE test TO USER 'test-user'@'%'
+GRANT ROLE 'test' TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -10826,7 +11574,7 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO ROLE `test-user`;
 ---------- Output ---------
-GRANT ROLE test TO ROLE test-user
+GRANT ROLE 'test' TO ROLE 'test-user'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -10897,7 +11645,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.* TO ROLE role1
 ---------- Output ---------
-GRANT SELECT ON db01.* TO ROLE role1
+GRANT SELECT ON db01.* TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -10977,7 +11725,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.tb1 TO ROLE role1;
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO ROLE role1
+GRANT SELECT ON db01.tb1 TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11002,7 +11750,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON tb1 TO ROLE role1;
 ---------- Output ---------
-GRANT SELECT ON tb1 TO ROLE role1
+GRANT SELECT ON tb1 TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11092,7 +11840,7 @@ ShowGrants {
 ---------- Input ----------
 SHOW GRANTS FOR ROLE role1;
 ---------- Output ---------
-SHOW GRANTS FOR ROLE role1
+SHOW GRANTS FOR ROLE 'role1'
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -11106,7 +11854,7 @@ ShowGrants {
 ---------- Input ----------
 SHOW GRANTS FOR ROLE 'role1';
 ---------- Output ---------
-SHOW GRANTS FOR ROLE role1
+SHOW GRANTS FOR ROLE 'role1'
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -11146,7 +11894,7 @@ Revoke(
 ---------- Input ----------
 REVOKE SELECT ON tb1 FROM ROLE role1;
 ---------- Output ---------
-REVOKE SELECT ON tb1 FROM ROLE role1
+REVOKE SELECT ON tb1 FROM ROLE 'role1'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -11169,7 +11917,7 @@ Revoke(
 ---------- Input ----------
 REVOKE SELECT ON tb1 FROM ROLE 'role1';
 ---------- Output ---------
-REVOKE SELECT ON tb1 FROM ROLE role1
+REVOKE SELECT ON tb1 FROM ROLE 'role1'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -11203,7 +11951,7 @@ DropRole {
 ---------- Input ----------
 GRANT ROLE test TO ROLE 'test-user';
 ---------- Output ---------
-GRANT ROLE test TO ROLE test-user
+GRANT ROLE 'test' TO ROLE 'test-user'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11220,7 +11968,7 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO ROLE `test-user`;
 ---------- Output ---------
-GRANT ROLE test TO ROLE test-user
+GRANT ROLE 'test' TO ROLE 'test-user'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11237,7 +11985,7 @@ Grant(
 ---------- Input ----------
 SET ROLE `test-user`;
 ---------- Output ---------
-SET ROLE test-user
+SET ROLE 'test-user'
 ---------- AST ------------
 SetRole {
     is_default: false,
@@ -11248,7 +11996,7 @@ SetRole {
 ---------- Input ----------
 SET ROLE 'test-user';
 ---------- Output ---------
-SET ROLE test-user
+SET ROLE 'test-user'
 ---------- AST ------------
 SetRole {
     is_default: false,
@@ -11259,7 +12007,7 @@ SetRole {
 ---------- Input ----------
 SET ROLE ROLE1;
 ---------- Output ---------
-SET ROLE ROLE1
+SET ROLE 'ROLE1'
 ---------- AST ------------
 SetRole {
     is_default: false,
@@ -11295,7 +12043,7 @@ COPY INTO mytable
                 FROM '@~/mybucket/my data.csv'
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @~/mybucket/my data.csv SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@~/mybucket/my data.csv' SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -11318,7 +12066,9 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {},
+        file_format: FileFormatOptions {
+            options: {},
+        },
         files: None,
         pattern: None,
         force: false,
@@ -11345,8 +12095,7 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -11369,11 +12118,21 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         files: None,
         pattern: None,
@@ -11402,8 +12161,7 @@ COPY INTO mytable
                 size_limit=10
                 max_files=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -11435,11 +12193,21 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         files: None,
         pattern: None,
@@ -11468,8 +12236,7 @@ COPY INTO mytable
                 size_limit=10
                 max_files=3000;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -11501,11 +12268,21 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         files: None,
         pattern: None,
@@ -11536,8 +12313,7 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '******900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -11571,11 +12347,21 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         files: None,
         pattern: None,
@@ -11606,8 +12392,7 @@ COPY INTO mytable
                     skip_header = 1
                 );
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '******900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -11641,11 +12426,21 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         files: None,
         pattern: None,
@@ -11698,7 +12493,9 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {},
+        file_format: FileFormatOptions {
+            options: {},
+        },
         files: None,
         pattern: None,
         force: false,
@@ -11750,7 +12547,9 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {},
+        file_format: FileFormatOptions {
+            options: {},
+        },
         files: None,
         pattern: None,
         force: false,
@@ -11778,8 +12577,7 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @my_stage FILE_FORMAT = (error_on_column_count_mismatch = 'false', field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -11802,12 +12600,24 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {
-            "error_on_column_count_mismatch": "false",
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "error_on_column_count_mismatch": Bool(
+                    false,
+                ),
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         files: None,
         pattern: None,
@@ -11834,8 +12644,7 @@ COPY INTO 's3://mybucket/data.csv'
                     skip_header = 1
                 )
 ---------- Output ---------
-COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
+COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -11866,11 +12675,21 @@ CopyIntoLocation(
                 },
             },
         ),
-        file_format: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         single: false,
         max_file_size: 0,
@@ -11883,7 +12702,7 @@ CopyIntoLocation(
 COPY INTO '@my_stage/my data'
                 FROM mytable;
 ---------- Output ---------
-COPY INTO @my_stage/my data FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
+COPY INTO '@my_stage/my data' FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -11905,7 +12724,9 @@ CopyIntoLocation(
         dst: Stage(
             "my_stage/my data",
         ),
-        file_format: {},
+        file_format: FileFormatOptions {
+            options: {},
+        },
         single: false,
         max_file_size: 0,
         detailed_output: false,
@@ -11923,8 +12744,7 @@ COPY INTO @my_stage
                     skip_header = 1
                 );
 ---------- Output ---------
-COPY INTO @my_stage FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
+COPY INTO '@my_stage' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -11946,11 +12766,21 @@ CopyIntoLocation(
         dst: Stage(
             "my_stage",
         ),
-        file_format: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         single: false,
         max_file_size: 0,
@@ -11974,8 +12804,7 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = '******key', aws_secret_key = '******key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12010,11 +12839,21 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         files: None,
         pattern: None,
@@ -12042,8 +12881,7 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12066,11 +12904,21 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         files: None,
         pattern: None,
@@ -12098,8 +12946,7 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12122,11 +12969,21 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         files: None,
         pattern: None,
@@ -12154,8 +13011,7 @@ COPY INTO mytable
                 )
                 force=true;
 ---------- Output ---------
-COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12178,11 +13034,21 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         files: None,
         pattern: None,
@@ -12211,8 +13077,7 @@ COPY INTO mytable
                 size_limit=10
                 disable_variant_check=true;
 ---------- Output ---------
-COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
-', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort
+COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12244,11 +13109,21 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "field_delimiter": String(
+                    ",",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+                "skip_header": U64(
+                    1,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         files: None,
         pattern: None,
@@ -12275,7 +13150,7 @@ COPY INTO books FROM 's3://databend/books.csv'
                 )
                 FILE_FORMAT = (type = CSV);
 ---------- Output ---------
-COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = '******SER', endpoint_url = '******00/', region = '******t-2', secret_access_key = '******123' ) FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV) PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12312,8 +13187,12 @@ CopyIntoTable(
         },
         dst_columns: None,
         hints: None,
-        file_format: {
-            "type": "CSV",
+        file_format: FileFormatOptions {
+            options: {
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
         },
         files: None,
         pattern: None,
@@ -12333,7 +13212,7 @@ CopyIntoTable(
 ---------- Input ----------
 CALL system$test(a)
 ---------- Output ---------
-CALL system$test(a)
+CALL system$test('a')
 ---------- AST ------------
 Call(
     CallStmt {
@@ -12348,7 +13227,7 @@ Call(
 ---------- Input ----------
 CALL system$test('a')
 ---------- Output ---------
-CALL system$test(a)
+CALL system$test('a')
 ---------- AST ------------
 Call(
     CallStmt {
@@ -12384,7 +13263,7 @@ ShowSettings {
 ---------- Input ----------
 show settings where name='max_memory_usage' limit 1
 ---------- Output ---------
-SHOW SETTINGS WHERE (name = 'max_memory_usage') LIMIT 1
+SHOW SETTINGS WHERE name = 'max_memory_usage' LIMIT 1
 ---------- AST ------------
 ShowSettings {
     show_options: Some(
@@ -12419,7 +13298,7 @@ ShowSettings {
                             span: Some(
                                 25..43,
                             ),
-                            lit: String(
+                            value: String(
                                 "max_memory_usage",
                             ),
                         },
@@ -12458,7 +13337,7 @@ ShowFunctions {
 ---------- Input ----------
 show functions where name='to_day_of_year' limit 1
 ---------- Output ---------
-SHOW FUNCTIONS WHERE (name = 'to_day_of_year') LIMIT 1
+SHOW FUNCTIONS WHERE name = 'to_day_of_year' LIMIT 1
 ---------- AST ------------
 ShowFunctions {
     show_options: Some(
@@ -12493,7 +13372,7 @@ ShowFunctions {
                             span: Some(
                                 26..42,
                             ),
-                            lit: String(
+                            value: String(
                                 "to_day_of_year",
                             ),
                         },
@@ -12532,7 +13411,7 @@ ShowEngines {
 ---------- Input ----------
 show engines where engine='MEMORY' limit 1
 ---------- Output ---------
-SHOW ENGINES WHERE (engine = 'MEMORY') LIMIT 1
+SHOW ENGINES WHERE engine = 'MEMORY' LIMIT 1
 ---------- AST ------------
 ShowEngines {
     show_options: Some(
@@ -12567,7 +13446,7 @@ ShowEngines {
                             span: Some(
                                 26..34,
                             ),
-                            lit: String(
+                            value: String(
                                 "MEMORY",
                             ),
                         },
@@ -12606,7 +13485,7 @@ ShowMetrics {
 ---------- Input ----------
 show metrics where metric='session_connect_numbers' limit 1
 ---------- Output ---------
-SHOW METRICS WHERE (metric = 'session_connect_numbers') LIMIT 1
+SHOW METRICS WHERE metric = 'session_connect_numbers' LIMIT 1
 ---------- AST ------------
 ShowMetrics {
     show_options: Some(
@@ -12641,7 +13520,7 @@ ShowMetrics {
                             span: Some(
                                 26..51,
                             ),
-                            lit: String(
+                            value: String(
                                 "session_connect_numbers",
                             ),
                         },
@@ -12680,7 +13559,7 @@ ShowTableFunctions {
 ---------- Input ----------
 show table_functions where name='fuse_snapshot' limit 1
 ---------- Output ---------
-SHOW TABLE_FUNCTIONS WHERE (name = 'fuse_snapshot') LIMIT 1
+SHOW TABLE_FUNCTIONS WHERE name = 'fuse_snapshot' LIMIT 1
 ---------- AST ------------
 ShowTableFunctions {
     show_options: Some(
@@ -12715,7 +13594,7 @@ ShowTableFunctions {
                             span: Some(
                                 32..47,
                             ),
-                            lit: String(
+                            value: String(
                                 "fuse_snapshot",
                             ),
                         },
@@ -12754,7 +13633,7 @@ ShowIndexes {
 ---------- Input ----------
 show indexes where name='test_idx' limit 1
 ---------- Output ---------
-SHOW INDEXES WHERE (name = 'test_idx') LIMIT 1
+SHOW INDEXES WHERE name = 'test_idx' LIMIT 1
 ---------- AST ------------
 ShowIndexes {
     show_options: Some(
@@ -12789,7 +13668,7 @@ ShowIndexes {
                             span: Some(
                                 24..34,
                             ),
-                            lit: String(
+                            value: String(
                                 "test_idx",
                             ),
                         },
@@ -12807,7 +13686,7 @@ ShowIndexes {
 ---------- Input ----------
 PRESIGN @my_stage
 ---------- Output ---------
-PRESIGN DOWNLOAD my_stage EXPIRE = 3600
+PRESIGN DOWNLOAD @my_stage EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -12824,7 +13703,7 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/path/to/dir/
 ---------- Output ---------
-PRESIGN DOWNLOAD my_stage/path/to/dir/ EXPIRE = 3600
+PRESIGN DOWNLOAD @my_stage/path/to/dir/ EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -12841,7 +13720,7 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/path/to/file
 ---------- Output ---------
-PRESIGN DOWNLOAD my_stage/path/to/file EXPIRE = 3600
+PRESIGN DOWNLOAD @my_stage/path/to/file EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -12858,7 +13737,7 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/my\ file.csv
 ---------- Output ---------
-PRESIGN DOWNLOAD my_stage/my file.csv EXPIRE = 3600
+PRESIGN DOWNLOAD @my_stage/my\ file.csv EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -12875,7 +13754,7 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/\"file\".csv
 ---------- Output ---------
-PRESIGN DOWNLOAD my_stage/"file".csv EXPIRE = 3600
+PRESIGN DOWNLOAD @my_stage/\"file\".csv EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -12892,7 +13771,7 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/\'file\'.csv
 ---------- Output ---------
-PRESIGN DOWNLOAD my_stage/'file'.csv EXPIRE = 3600
+PRESIGN DOWNLOAD @my_stage/\'file\'.csv EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -12909,7 +13788,7 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/\\file\\.csv
 ---------- Output ---------
-PRESIGN DOWNLOAD my_stage/\file\.csv EXPIRE = 3600
+PRESIGN DOWNLOAD @my_stage/\\file\\.csv EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -12926,7 +13805,7 @@ Presign(
 ---------- Input ----------
 PRESIGN DOWNLOAD @my_stage/path/to/file
 ---------- Output ---------
-PRESIGN DOWNLOAD my_stage/path/to/file EXPIRE = 3600
+PRESIGN DOWNLOAD @my_stage/path/to/file EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -12943,7 +13822,7 @@ Presign(
 ---------- Input ----------
 PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200
 ---------- Output ---------
-PRESIGN UPLOAD my_stage/path/to/file EXPIRE = 7200
+PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -12960,7 +13839,7 @@ Presign(
 ---------- Input ----------
 PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'
 ---------- Output ---------
-PRESIGN UPLOAD my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
+PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -12979,7 +13858,7 @@ Presign(
 ---------- Input ----------
 PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200
 ---------- Output ---------
-PRESIGN UPLOAD my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
+PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -12998,7 +13877,7 @@ Presign(
 ---------- Input ----------
 CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
 ---------- Output ---------
-CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file=https://eks.public/keys,ssl_cert=cert.pem,) COMMENT = 'share endpoint comment'
+CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file = 'https://eks.public/keys', ssl_cert = 'cert.pem') COMMENT = 'share endpoint comment'
 ---------- AST ------------
 CreateShareEndpoint(
     CreateShareEndpointStmt {
@@ -13043,7 +13922,7 @@ CreateShareEndpoint(
 ---------- Input ----------
 CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
 ---------- Output ---------
-CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file=https://eks.public/keys,ssl_cert=cert.pem,) COMMENT = 'share endpoint comment'
+CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file = 'https://eks.public/keys', ssl_cert = 'cert.pem') COMMENT = 'share endpoint comment'
 ---------- AST ------------
 CreateShareEndpoint(
     CreateShareEndpointStmt {
@@ -13669,7 +14548,7 @@ ShowGrantsOfShare(
 ---------- Input ----------
 UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;
 ---------- Output ---------
-UPDATE db1.tb1 SET a = (a + 1), b = 2 WHERE (c > 3)
+UPDATE db1.tb1 SET a = a + 1, b = 2 WHERE c > 3
 ---------- AST ------------
 Update(
     UpdateStmt {
@@ -13741,7 +14620,7 @@ Update(
                         span: Some(
                             27..28,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -13760,7 +14639,7 @@ Update(
                     span: Some(
                         34..35,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         2,
                     ),
                 },
@@ -13795,7 +14674,7 @@ Update(
                     span: Some(
                         46..47,
                     ),
-                    lit: UInt64(
+                    value: UInt64(
                         3,
                     ),
                 },
@@ -13824,7 +14703,7 @@ SetVariable {
         span: Some(
             18..20,
         ),
-        lit: UInt64(
+        value: UInt64(
             10,
         ),
     },
@@ -13834,7 +14713,7 @@ SetVariable {
 ---------- Input ----------
 SET max_threads = 10*2;
 ---------- Output ---------
-SET max_threads = (10 * 2)
+SET max_threads = 10 * 2
 ---------- AST ------------
 SetVariable {
     is_global: false,
@@ -13855,7 +14734,7 @@ SetVariable {
             span: Some(
                 18..20,
             ),
-            lit: UInt64(
+            value: UInt64(
                 10,
             ),
         },
@@ -13863,7 +14742,7 @@ SetVariable {
             span: Some(
                 21..22,
             ),
-            lit: UInt64(
+            value: UInt64(
                 2,
             ),
         },
@@ -13926,7 +14805,7 @@ UnSetVariable(
 ---------- Input ----------
 select $1 FROM '@my_stage/my data/'
 ---------- Output ---------
-SELECT $1 FROM @my_stage/my data/
+SELECT $1 FROM '@my_stage/my data/'
 ---------- AST ------------
 Query(
     Query {
@@ -14000,7 +14879,7 @@ Query(
 SELECT t.c1 FROM @stage1/dir/file
         ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;
 ---------- Output ---------
-SELECT t.c1 FROM @stage1/dir/file ( FILES => ('file1', 'file2'), FILE_FORMAT => 'PARQUET', ) AS t
+SELECT t.c1 FROM '@stage1/dir/file' ( FILES => ('file1', 'file2'), FILE_FORMAT => 'PARQUET', ) AS t
 ---------- AST ------------
 Query(
     Query {
@@ -14104,7 +14983,7 @@ select table0.c1, table1.c2 from
             @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
             left join table1;
 ---------- Output ---------
-SELECT table0.c1, table1.c2 FROM @stage1/dir/file ( FILES => ('file1', 'file2'), FILE_FORMAT => 'parquet', ) AS table0 LEFT OUTER JOIN table1
+SELECT table0.c1, table1.c2 FROM '@stage1/dir/file' ( FILES => ('file1', 'file2'), FILE_FORMAT => 'parquet', ) AS table0 LEFT OUTER JOIN table1
 ---------- AST ------------
 Query(
     Query {
@@ -14366,17 +15245,25 @@ Query(
 CREATE FILE FORMAT my_csv
             type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
 ---------- Output ---------
-CREATE FILE_FORMAT my_csv {"field_delimiter": ",", "record_delimiter": "\n", "skip_header": "1", "type": "CSV"}
+CREATE FILE FORMAT my_csv field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV
 ---------- AST ------------
 CreateFileFormat {
     create_option: Create,
     name: "my_csv",
-    file_format_options: FileFormatOptionsAst {
+    file_format_options: FileFormatOptions {
         options: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+            "field_delimiter": String(
+                ",",
+            ),
+            "record_delimiter": String(
+                "\n",
+            ),
+            "skip_header": U64(
+                1,
+            ),
+            "type": Keyword(
+                "CSV",
+            ),
         },
     },
 }
@@ -14386,17 +15273,25 @@ CreateFileFormat {
 CREATE OR REPLACE FILE FORMAT my_csv
             type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
 ---------- Output ---------
-CREATE OR REPLACE FILE_FORMAT my_csv {"field_delimiter": ",", "record_delimiter": "\n", "skip_header": "1", "type": "CSV"}
+CREATE OR REPLACE FILE FORMAT my_csv field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV
 ---------- AST ------------
 CreateFileFormat {
     create_option: CreateOrReplace,
     name: "my_csv",
-    file_format_options: FileFormatOptionsAst {
+    file_format_options: FileFormatOptions {
         options: {
-            "field_delimiter": ",",
-            "record_delimiter": "\n",
-            "skip_header": "1",
-            "type": "CSV",
+            "field_delimiter": String(
+                ",",
+            ),
+            "record_delimiter": String(
+                "\n",
+            ),
+            "skip_header": U64(
+                1,
+            ),
+            "type": Keyword(
+                "CSV",
+            ),
         },
     },
 }
@@ -14413,7 +15308,7 @@ ShowFileFormats
 ---------- Input ----------
 DROP FILE FORMAT my_csv
 ---------- Output ---------
-DROP FILE_FORMAT my_csv
+DROP FILE FORMAT my_csv
 ---------- AST ------------
 DropFileFormat {
     if_exists: false,
@@ -15367,7 +16262,7 @@ CreateDatamaskPolicy(
                                 span: Some(
                                     96..105,
                                 ),
-                                lit: String(
+                                value: String(
                                     "ANALYST",
                                 ),
                             },
@@ -15401,7 +16296,7 @@ CreateDatamaskPolicy(
                         span: Some(
                             121..132,
                         ),
-                        lit: String(
+                        value: String(
                             "*********",
                         ),
                     },
@@ -15467,7 +16362,7 @@ CreateDatamaskPolicy(
                                 span: Some(
                                     107..116,
                                 ),
-                                lit: String(
+                                value: String(
                                     "ANALYST",
                                 ),
                             },
@@ -15501,7 +16396,7 @@ CreateDatamaskPolicy(
                         span: Some(
                             132..143,
                         ),
-                        lit: String(
+                        value: String(
                             "*********",
                         ),
                     },
@@ -15591,7 +16486,7 @@ CreateVirtualColumn(
                             span: Some(
                                 25..29,
                             ),
-                            lit: String(
+                            value: String(
                                 "k1",
                             ),
                         },
@@ -15602,7 +16497,7 @@ CreateVirtualColumn(
                         span: Some(
                             31..35,
                         ),
-                        lit: String(
+                        value: String(
                             "k2",
                         ),
                     },
@@ -15640,7 +16535,7 @@ CreateVirtualColumn(
                             span: Some(
                                 40..41,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 0,
                             ),
                         },
@@ -15651,7 +16546,7 @@ CreateVirtualColumn(
                         span: Some(
                             43..44,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -15713,7 +16608,7 @@ CreateVirtualColumn(
                             span: Some(
                                 36..40,
                             ),
-                            lit: String(
+                            value: String(
                                 "k1",
                             ),
                         },
@@ -15724,7 +16619,7 @@ CreateVirtualColumn(
                         span: Some(
                             42..46,
                         ),
-                        lit: String(
+                        value: String(
                             "k2",
                         ),
                     },
@@ -15762,7 +16657,7 @@ CreateVirtualColumn(
                             span: Some(
                                 51..52,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 0,
                             ),
                         },
@@ -15773,7 +16668,7 @@ CreateVirtualColumn(
                         span: Some(
                             54..55,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -15835,7 +16730,7 @@ AlterVirtualColumn(
                             span: Some(
                                 24..28,
                             ),
-                            lit: String(
+                            value: String(
                                 "k1",
                             ),
                         },
@@ -15846,7 +16741,7 @@ AlterVirtualColumn(
                         span: Some(
                             30..34,
                         ),
-                        lit: String(
+                        value: String(
                             "k2",
                         ),
                     },
@@ -15884,7 +16779,7 @@ AlterVirtualColumn(
                             span: Some(
                                 39..40,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 0,
                             ),
                         },
@@ -15895,7 +16790,7 @@ AlterVirtualColumn(
                         span: Some(
                             42..43,
                         ),
-                        lit: UInt64(
+                        value: UInt64(
                             1,
                         ),
                     },
@@ -16027,7 +16922,7 @@ AlterNetworkPolicy(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 900 SECOND database = 'target' timezone = 'America/Los Angeles' SUSPEND_TASK_AFTER 3 FAILURES COMMENTS = 'This is test task 1' ERROR INTEGRATION = 'notification_name' AS SELECT * FROM MyTable1
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 900 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENTS = 'This is test task 1'database = 'target', timezone = 'America/Los Angeles' AS SELECT * FROM MyTable1
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -16053,7 +16948,9 @@ CreateTask(
         error_integration: Some(
             "notification_name",
         ),
-        comments: "This is test task 1",
+        comments: Some(
+            "This is test task 1",
+        ),
         after: [],
         when_condition: None,
         sql: SingleStatement(
@@ -16066,7 +16963,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 15 SECOND SUSPEND_TASK_AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -16087,7 +16984,9 @@ CreateTask(
             3,
         ),
         error_integration: None,
-        comments: "This is test task 1",
+        comments: Some(
+            "This is test task 1",
+        ),
         after: [],
         when_condition: None,
         sql: SingleStatement(
@@ -16100,7 +16999,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 1215 SECOND SUSPEND_TASK_AFTER 3 FAILURES COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -16121,7 +17020,9 @@ CreateTask(
             3,
         ),
         error_integration: None,
-        comments: "This is test task 1",
+        comments: Some(
+            "This is test task 1",
+        ),
         after: [],
         when_condition: None,
         sql: SingleStatement(
@@ -16134,7 +17035,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 6 * * *' TIMEZONE 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
+CREATE TASK IF NOT EXISTS MyTask1  SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -16154,7 +17055,9 @@ CreateTask(
         session_parameters: {},
         suspend_task_after_num_failures: None,
         error_integration: None,
-        comments: "serverless + cron",
+        comments: Some(
+            "serverless + cron",
+        ),
         after: [],
         when_condition: None,
         sql: SingleStatement(
@@ -16167,7 +17070,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS copy into streams_test.paper_table from @stream_stage FILE_FORMAT = (TYPE = PARQUET) PURGE=true
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM @stream_stage FILE_FORMAT = (type = 'PARQUET') PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+CREATE TASK IF NOT EXISTS MyTask1  SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -16185,11 +17088,11 @@ CreateTask(
         session_parameters: {},
         suspend_task_after_num_failures: None,
         error_integration: None,
-        comments: "",
+        comments: None,
         after: [],
         when_condition: None,
         sql: SingleStatement(
-            "COPY INTO streams_test.paper_table FROM @stream_stage FILE_FORMAT = (type = 'PARQUET') PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort",
+            "COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort",
         ),
     },
 )
@@ -16198,7 +17101,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (type = 'PARQUET') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
+CREATE TASK IF NOT EXISTS MyTask1  SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -16216,11 +17119,11 @@ CreateTask(
         session_parameters: {},
         suspend_task_after_num_failures: None,
         error_integration: None,
-        comments: "",
+        comments: None,
         after: [],
         when_condition: None,
         sql: SingleStatement(
-            "COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (type = 'PARQUET') SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false",
+            "COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false",
         ),
     },
 )
@@ -16229,7 +17132,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 AFTER = '["task2", "task3"]' WHEN = 'Some("(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')")' AS VACUUM TABLE t 
+CREATE TASK IF NOT EXISTS MyTask1  AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION' AS VACUUM TABLE t 
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -16242,13 +17145,55 @@ CreateTask(
         session_parameters: {},
         suspend_task_after_num_failures: None,
         error_integration: None,
-        comments: "",
+        comments: None,
         after: [
             "task2",
             "task3",
         ],
         when_condition: Some(
-            "(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')",
+            BinaryOp {
+                span: Some(
+                    111..113,
+                ),
+                op: NotEq,
+                left: FunctionCall {
+                    span: Some(
+                        62..110,
+                    ),
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier {
+                            span: Some(
+                                62..97,
+                            ),
+                            name: "SYSTEM$GET_PREDECESSOR_RETURN_VALUE",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        args: [
+                            Literal {
+                                span: Some(
+                                    98..109,
+                                ),
+                                value: String(
+                                    "task_name",
+                                ),
+                            },
+                        ],
+                        params: [],
+                        window: None,
+                        lambda: None,
+                    },
+                },
+                right: Literal {
+                    span: Some(
+                        114..126,
+                    ),
+                    value: String(
+                        "VALIDATION",
+                    ),
+                },
+            },
         ),
         sql: SingleStatement(
             "VACUUM TABLE t ",
@@ -16260,7 +17205,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 database = 'target' timezone = 'America/Los Angeles' AS VACUUM TABLE t 
+CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS VACUUM TABLE t 
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -16276,7 +17221,7 @@ CreateTask(
         },
         suspend_task_after_num_failures: None,
         error_integration: None,
-        comments: "",
+        comments: None,
         after: [],
         when_condition: None,
         sql: SingleStatement(
@@ -16297,12 +17242,12 @@ CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los A
               commit;
             END
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 database = 'target' timezone = 'America/Los Angeles' AS BEGIN
+CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS BEGIN
 BEGIN;
 INSERT INTO t VALUES ('a;');
-DELETE FROM t WHERE (c = ';');
+DELETE FROM t WHERE c = ';';
 VACUUM TABLE t ;
-MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;
+MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;
 COMMIT;
 END;
 ---------- AST ------------
@@ -16320,16 +17265,16 @@ CreateTask(
         },
         suspend_task_after_num_failures: None,
         error_integration: None,
-        comments: "",
+        comments: None,
         after: [],
         when_condition: None,
         sql: ScriptBlock(
             [
                 "BEGIN",
                 "INSERT INTO t VALUES ('a;')",
-                "DELETE FROM t WHERE (c = ';')",
+                "DELETE FROM t WHERE c = ';'",
                 "VACUUM TABLE t ",
-                "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *",
+                "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *",
                 "COMMIT",
             ],
         ),
@@ -16349,8 +17294,8 @@ CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECO
                 *;
         END
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = test-parser SCHEDULE 1 SECOND AS BEGIN
-MERGE INTO t USING s ON (t.c = s.c) WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *;
+CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND AS BEGIN
+MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *;
 END;
 ---------- AST ------------
 CreateTask(
@@ -16370,12 +17315,12 @@ CreateTask(
         session_parameters: {},
         suspend_task_after_num_failures: None,
         error_integration: None,
-        comments: "",
+        comments: None,
         after: [],
         when_condition: None,
         sql: ScriptBlock(
             [
-                "MERGE INTO t USING s ON (t.c = s.c) WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *",
+                "MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *",
             ],
         ),
     },
@@ -16393,8 +17338,8 @@ CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECO
             INSERT values('a;', 1, "str");
         END
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = test-parser SCHEDULE 1 SECOND AS BEGIN
-MERGE INTO t USING s ON (t.c = s.c) WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, "str");
+CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND AS BEGIN
+MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, "str");
 END;
 ---------- AST ------------
 CreateTask(
@@ -16414,12 +17359,12 @@ CreateTask(
         session_parameters: {},
         suspend_task_after_num_failures: None,
         error_integration: None,
-        comments: "",
+        comments: None,
         after: [],
         when_condition: None,
         sql: ScriptBlock(
             [
-                "MERGE INTO t USING s ON (t.c = s.c) WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, \"str\")",
+                "MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, \"str\")",
             ],
         ),
     },
@@ -16457,7 +17402,7 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'
 ---------- Output ---------
-ALTER TASK MyTask1 ADD AFTER = '["task2", "task3"]'
+ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -16476,7 +17421,7 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 REMOVE AFTER 'task2'
 ---------- Output ---------
-ALTER TASK MyTask1 REMOVE AFTER = '["task2"]'
+ALTER TASK MyTask1 REMOVE AFTER 'task2'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -16494,7 +17439,7 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron'
 ---------- Output ---------
-ALTER TASK MyTask1 SET WAREHOUSE = MyWarehouse SET  SCHEDULE CRON '0 6 * * *' TIMEZONE 'America/Los_Angeles' COMMENTS = 'serverless + cron'
+ALTER TASK MyTask1 SET WAREHOUSE = 'MyWarehouse' SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -16526,7 +17471,7 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 13 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- Output ---------
-ALTER TASK MyTask1 SET WAREHOUSE = MyWarehouse SET  SCHEDULE 780 SECOND SUSPEND TASK AFTER 10 FAILURES COMMENTS = 'serverless + cron'
+ALTER TASK MyTask1 SET WAREHOUSE = 'MyWarehouse' SCHEDULE = 780 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -16557,7 +17502,7 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- Output ---------
-ALTER TASK MyTask1 SET WAREHOUSE = MyWarehouse SET  SCHEDULE 5 SECOND SUSPEND TASK AFTER 10 FAILURES COMMENTS = 'serverless + cron'
+ALTER TASK MyTask1 SET WAREHOUSE = 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -16588,7 +17533,7 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 SET DATABASE='newDB', TIMEZONE='America/Los_Angeles'
 ---------- Output ---------
-ALTER TASK MyTask1 database = 'newDB' timezone = 'America/Los_Angeles'
+ALTER TASK MyTask1 SET database = 'newDB', timezone = 'America/Los_Angeles'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -16614,7 +17559,7 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 SET ERROR_INTEGRATION = 'candidate_notifictaion'
 ---------- Output ---------
-ALTER TASK MyTask1 ERROR INTEGRATION = 'candidate_notifictaion'
+ALTER TASK MyTask1 SET ERROR_INTEGRATION = 'candidate_notifictaion'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -16637,7 +17582,7 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()
 ---------- Output ---------
-ALTER TASK MyTask2 AS SELECT CURRENT_VERSION()
+ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -16663,12 +17608,12 @@ ALTER TASK MyTask2 MODIFY AS
               commit;
             END
 ---------- Output ---------
-ALTER TASK MyTask2 AS BEGIN
+ALTER TASK MyTask2 MODIFY AS BEGIN
 BEGIN;
 INSERT INTO t VALUES ('a;');
-DELETE FROM t WHERE (c = ';');
+DELETE FROM t WHERE c = ';';
 VACUUM TABLE t ;
-MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *;
+MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;
 COMMIT;
 END;
 ---------- AST ------------
@@ -16681,9 +17626,9 @@ AlterTask(
                 [
                     "BEGIN",
                     "INSERT INTO t VALUES ('a;')",
-                    "DELETE FROM t WHERE (c = ';')",
+                    "DELETE FROM t WHERE c = ';'",
                     "VACUUM TABLE t ",
-                    "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE *",
+                    "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *",
                     "COMMIT",
                 ],
             ),
@@ -16695,14 +17640,56 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION'
 ---------- Output ---------
-ALTER TASK MyTask1 WHEN (SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')
+ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
         if_exists: false,
         name: "MyTask1",
         options: ModifyWhen(
-            "(SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION')",
+            BinaryOp {
+                span: Some(
+                    80..82,
+                ),
+                op: NotEq,
+                left: FunctionCall {
+                    span: Some(
+                        31..79,
+                    ),
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier {
+                            span: Some(
+                                31..66,
+                            ),
+                            name: "SYSTEM$GET_PREDECESSOR_RETURN_VALUE",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        args: [
+                            Literal {
+                                span: Some(
+                                    67..78,
+                                ),
+                                value: String(
+                                    "task_name",
+                                ),
+                            },
+                        ],
+                        params: [],
+                        window: None,
+                        lambda: None,
+                    },
+                },
+                right: Literal {
+                    span: Some(
+                        83..95,
+                    ),
+                    value: String(
+                        "VALIDATION",
+                    ),
+                },
+            },
         ),
     },
 )
@@ -16760,7 +17747,7 @@ DescribeTask(
 ---------- Input ----------
 CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3'
 ---------- Output ---------
-CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = 's3'
 ---------- AST ------------
 CreateConnection(
     CreateConnectionStmt {
@@ -16782,7 +17769,7 @@ CreateConnection(
 ---------- Input ----------
 CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3' any_arg='any_value'
 ---------- Output ---------
-CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = s3 any_arg = ******lue
+CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = 's3' any_arg = 'any_value'
 ---------- AST ------------
 CreateConnection(
     CreateConnectionStmt {
@@ -16806,7 +17793,7 @@ CreateConnection(
 ---------- Input ----------
 CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE='s3' any_arg='any_value'
 ---------- Output ---------
-CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE = s3 any_arg = ******lue
+CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE = 's3' any_arg = 'any_value'
 ---------- AST ------------
 CreateConnection(
     CreateConnectionStmt {
@@ -16830,7 +17817,7 @@ CreateConnection(
 ---------- Input ----------
 DROP CONNECTION IF EXISTS my_conn;
 ---------- Output ---------
-CREATE CONNECTION IF NOT EXISTS my_conn 
+DROP CONNECTION IF EXISTS my_conn 
 ---------- AST ------------
 DropConnection(
     DropConnectionStmt {
@@ -16850,7 +17837,7 @@ DropConnection(
 ---------- Input ----------
 DESC CONNECTION my_conn;
 ---------- Output ---------
-CREATE CONNECTION my_conn 
+DESCRIBE CONNECTION my_conn 
 ---------- AST ------------
 DescribeConnection(
     DescribeConnectionStmt {
@@ -16892,7 +17879,7 @@ ShowLocks(
 ---------- Input ----------
 CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')
 ---------- Output ---------
-CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM @~/MyStage1 FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CreatePipe(
     CreatePipeStmt {
@@ -16920,8 +17907,12 @@ CreatePipe(
             },
             dst_columns: None,
             hints: None,
-            file_format: {
-                "type": "CSV",
+            file_format: FileFormatOptions {
+                options: {
+                    "type": String(
+                        "CSV",
+                    ),
+                },
             },
             files: None,
             pattern: None,
@@ -16942,7 +17933,7 @@ CreatePipe(
 ---------- Input ----------
 CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv
 ---------- Output ---------
-CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM '@~/mybucket/data.csv' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
 CreatePipe(
     CreatePipeStmt {
@@ -16979,7 +17970,9 @@ CreatePipe(
             },
             dst_columns: None,
             hints: None,
-            file_format: {},
+            file_format: FileFormatOptions {
+                options: {},
+            },
             files: None,
             pattern: None,
             force: false,
@@ -17100,7 +18093,7 @@ DescribePipe(
 ---------- Input ----------
 CREATE NOTIFICATION INTEGRATION IF NOT EXISTS SampleNotification type = webhook enabled = true webhook = (url = 'https://example.com', method = 'GET', authorization_header = 'bearer auth')
 ---------- Output ---------
-CREATE NOTIFICATION INTEGRATION IF NOT EXISTS SampleNotification TYPE = webhook  WEBHOOK = (URL = 'https://example.com' METHOD = 'GET' AUTHORIZATION_HEADER = 'bearer auth' )
+CREATE NOTIFICATION INTEGRATION IF NOT EXISTS SampleNotification TYPE = webhook ENABLED = true WEBHOOK = ( URL = 'https://example.com' METHOD = 'GET' AUTHORIZATION_HEADER = 'bearer auth' )
 ---------- AST ------------
 CreateNotification(
     CreateNotificationStmt {
@@ -17121,7 +18114,7 @@ CreateNotification(
                 ),
             },
         ),
-        comments: "",
+        comments: None,
     },
 )
 
@@ -17129,7 +18122,7 @@ CreateNotification(
 ---------- Input ----------
 CREATE NOTIFICATION INTEGRATION SampleNotification type = webhook enabled = true webhook = (url = 'https://example.com') COMMENT = 'notify'
 ---------- Output ---------
-CREATE NOTIFICATION INTEGRATION SampleNotification TYPE = webhook  WEBHOOK = (URL = 'https://example.com' ) COMMENTS = 'notify'
+CREATE NOTIFICATION INTEGRATION SampleNotification TYPE = webhook ENABLED = true WEBHOOK = ( URL = 'https://example.com' ) COMMENTS = 'notify'
 ---------- AST ------------
 CreateNotification(
     CreateNotificationStmt {
@@ -17146,7 +18139,9 @@ CreateNotification(
                 authorization_header: None,
             },
         ),
-        comments: "notify",
+        comments: Some(
+            "notify",
+        ),
     },
 )
 
@@ -17176,7 +18171,7 @@ AlterNotification(
 ---------- Input ----------
 ALTER NOTIFICATION INTEGRATION SampleNotification SET webhook = (url = 'https://example.com')
 ---------- Output ---------
-ALTER NOTIFICATION INTEGRATION SampleNotification SET   WEBHOOK = (URL = 'https://example.com' )
+ALTER NOTIFICATION INTEGRATION SampleNotification SET  WEBHOOK = ( URL = 'https://example.com' )
 ---------- AST ------------
 AlterNotification(
     AlterNotificationStmt {
@@ -17273,7 +18268,7 @@ Query(
                             span: Some(
                                 63..68,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 34343,
                             ),
                         },
@@ -17321,7 +18316,7 @@ Query(
                             span: Some(
                                 52..57,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 34343,
                             ),
                         },
@@ -17369,7 +18364,7 @@ Query(
                             span: Some(
                                 18..23,
                             ),
-                            lit: UInt64(
+                            value: UInt64(
                                 34343,
                             ),
                         },
@@ -17393,9 +18388,314 @@ Query(
 
 
 ---------- Input ----------
+REMOVE @t;
+---------- Output ---------
+REMOVE @t
+---------- AST ------------
+RemoveStage {
+    location: "t",
+    pattern: "",
+}
+
+
+---------- Input ----------
+SELECT sum(d) OVER (w) FROM e;
+---------- Output ---------
+SELECT sum(d) OVER ( w ) FROM e
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..29,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..29,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                7..22,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        7..10,
+                                    ),
+                                    name: "sum",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            11..12,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        11..12,
+                                                    ),
+                                                    name: "d",
+                                                    quote: None,
+                                                    is_hole: false,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                                params: [],
+                                window: Some(
+                                    WindowSpec(
+                                        WindowSpec {
+                                            existing_window_name: Some(
+                                                Identifier {
+                                                    span: Some(
+                                                        20..21,
+                                                    ),
+                                                    name: "w",
+                                                    quote: None,
+                                                    is_hole: false,
+                                                },
+                                            ),
+                                            partition_by: [],
+                                            order_by: [],
+                                            window_frame: None,
+                                        },
+                                    ),
+                                ),
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            28..29,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                28..29,
+                            ),
+                            name: "e",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        travel_point: None,
+                        since_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);
+---------- Output ---------
+SELECT sum(d) OVER w FROM e WINDOW w AS ( PARTITION BY f ORDER BY g )
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..67,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..67,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                7..20,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        7..10,
+                                    ),
+                                    name: "sum",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            11..12,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        11..12,
+                                                    ),
+                                                    name: "d",
+                                                    quote: None,
+                                                    is_hole: false,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                                params: [],
+                                window: Some(
+                                    WindowReference(
+                                        WindowRef {
+                                            window_name: Identifier {
+                                                span: Some(
+                                                    19..20,
+                                                ),
+                                                name: "w",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
+                                        },
+                                    ),
+                                ),
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            26..27,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                26..27,
+                            ),
+                            name: "e",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        travel_point: None,
+                        since_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: Some(
+                    [
+                        WindowDefinition {
+                            name: Identifier {
+                                span: Some(
+                                    35..36,
+                                ),
+                                name: "w",
+                                quote: None,
+                                is_hole: false,
+                            },
+                            spec: WindowSpec {
+                                existing_window_name: None,
+                                partition_by: [
+                                    ColumnRef {
+                                        span: Some(
+                                            54..55,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        54..55,
+                                                    ),
+                                                    name: "f",
+                                                    quote: None,
+                                                    is_hole: false,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                                order_by: [
+                                    OrderByExpr {
+                                        expr: ColumnRef {
+                                            span: Some(
+                                                65..66,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            65..66,
+                                                        ),
+                                                        name: "g",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                        asc: None,
+                                        nulls_first: None,
+                                    },
+                                ],
+                                window_frame: None,
+                            },
+                        },
+                    ],
+                ),
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON d20_0014.* TO ROLE d20_0015_owner
+GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -17419,7 +18719,7 @@ Grant(
 ---------- Input ----------
 GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON d20_0014.t TO ROLE d20_0015_owner
+GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -17444,7 +18744,7 @@ Grant(
 ---------- Input ----------
 GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON STAGE s1 TO ROLE d20_0015_owner
+GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -17466,7 +18766,7 @@ Grant(
 ---------- Input ----------
 GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON UDF f1 TO ROLE d20_0015_owner
+GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -17486,9 +18786,45 @@ Grant(
 
 
 ---------- Input ----------
+attach table t 's3://a' connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')
+---------- Output ---------
+ATTACH TABLE t 's3://a/' CONNECTION = ( access_key_id = 'x', endpoint_url = 'http://127.0.0.1:9900', secret_access_key = 'y' )
+---------- AST ------------
+AttachTable(
+    AttachTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+            is_hole: false,
+        },
+        uri_location: UriLocation {
+            protocol: "s3",
+            name: "a",
+            path: "/",
+            part_prefix: "",
+            connection: Connection {
+                visited_keys: {},
+                conns: {
+                    "access_key_id": "x",
+                    "endpoint_url": "http://127.0.0.1:9900",
+                    "secret_access_key": "y",
+                },
+            },
+        },
+        read_only: false,
+    },
+)
+
+
+---------- Input ----------
 CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));
 ---------- Output ---------
-CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> (NOT is_null(p))
+CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> NOT is_null(p)
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -17567,7 +18903,7 @@ CreateUDF(
 ---------- Input ----------
 CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION isnotempty_test_replace AS (p) -> (NOT is_null(p)) DESC = 'This is a description'
+CREATE OR REPLACE FUNCTION isnotempty_test_replace AS (p) -> NOT is_null(p) DESC = 'This is a description'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -17648,7 +18984,7 @@ CreateUDF(
 ---------- Input ----------
 CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-CREATE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = binary_reverse ADDRESS = http://0.0.0.0:8815
+CREATE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -17682,7 +19018,7 @@ CreateUDF(
 ---------- Input ----------
 CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = binary_reverse ADDRESS = http://0.0.0.0:8815
+CREATE OR REPLACE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -17714,6 +19050,34 @@ CreateUDF(
 
 
 ---------- Input ----------
+CREATE STAGE s file_format=(record_delimiter='\n' escape='\\');
+---------- Output ---------
+CREATE STAGE s FILE_FORMAT = (escape = '\\', record_delimiter = '\n')
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        create_option: Create,
+        stage_name: "s",
+        location: None,
+        file_format_options: FileFormatOptions {
+            options: {
+                "escape": String(
+                    "\\",
+                ),
+                "record_delimiter": String(
+                    "\n",
+                ),
+            },
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
 create or replace function addone(int)
 returns int
 language python
@@ -17724,7 +19088,7 @@ def addone_py(i):
   return i+1
 $$;
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python runtime_version =  HANDLER = addone_py AS $$
+CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = 'addone_py' AS $$
 def addone_py(i):
   return i+1
 $$

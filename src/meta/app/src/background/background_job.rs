@@ -21,6 +21,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use cron::Schedule;
 
+use crate::background::BackgroundJobIdent;
 use crate::background::BackgroundTaskType;
 use crate::principal::UserIdentity;
 
@@ -182,21 +183,6 @@ impl BackgroundJobStatus {
     }
 }
 
-// Serde is required by `BackgroundTaskInfo.creator`
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BackgroundJobIdent {
-    // The user this job belongs to
-    pub tenant: String,
-
-    pub name: String,
-}
-
-impl Display for BackgroundJobIdent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.tenant, self.name)
-    }
-}
-
 // Info
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundJobInfo {
@@ -243,7 +229,7 @@ impl Display for CreateBackgroundJobReq {
         write!(
             f,
             "create_background_job({}, {}, {:?}, {:?}, {}, {:?})",
-            self.job_name.name,
+            self.job_name.name(),
             self.job_info.task_type,
             self.job_info.job_params,
             self.job_info.job_status,
@@ -265,7 +251,7 @@ pub struct GetBackgroundJobReq {
 
 impl Display for GetBackgroundJobReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get_background_job({})", self.name.name)
+        write!(f, "get_background_job({})", self.name.name())
     }
 }
 
@@ -286,7 +272,8 @@ impl Display for UpdateBackgroundJobStatusReq {
         write!(
             f,
             "update_background_job_status({}, {})",
-            self.job_name.name, self.status
+            self.job_name.name(),
+            self.status
         )
     }
 }
@@ -302,7 +289,8 @@ impl Display for UpdateBackgroundJobParamsReq {
         write!(
             f,
             "update_background_job_params({}, {})",
-            self.job_name.name, self.params
+            self.job_name.name(),
+            self.params
         )
     }
 }
@@ -319,7 +307,7 @@ impl Display for UpdateBackgroundJobReq {
         write!(
             f,
             "update_background_job({}, {}, {:?}, {:?}, {}, {:?})",
-            self.job_name.name,
+            self.job_name.name(),
             self.info.task_type,
             self.info.job_params,
             self.info.job_status,
@@ -341,7 +329,7 @@ pub struct DeleteBackgroundJobReq {
 
 impl Display for DeleteBackgroundJobReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "delete_background_job({})", self.name.name)
+        write!(f, "delete_background_job({})", self.name.name())
     }
 }
 
@@ -361,41 +349,9 @@ impl Display for ListBackgroundJobsReq {
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::background::background_job::BackgroundJobId;
-    use crate::background::background_job::BackgroundJobIdent;
     use crate::background::BackgroundJobInfo;
-    use crate::tenant::Tenant;
-
-    /// <prefix>/<tenant>/<background_job_ident> -> <id>
-    impl kvapi::Key for BackgroundJobIdent {
-        const PREFIX: &'static str = "__fd_background_job";
-
-        type ValueType = BackgroundJobId;
-
-        /// It belongs to a tenant
-        fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
-                .push_str(&self.name)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_str()?;
-            let name = p.next_str()?;
-            p.done()?;
-
-            Ok(BackgroundJobIdent { tenant, name })
-        }
-    }
 
     impl kvapi::Key for BackgroundJobId {
         const PREFIX: &'static str = "__fd_background_job_by_id";
@@ -419,12 +375,6 @@ mod kvapi_key_impl {
             p.done()?;
 
             Ok(BackgroundJobId { id })
-        }
-    }
-
-    impl kvapi::Value for BackgroundJobId {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
         }
     }
 

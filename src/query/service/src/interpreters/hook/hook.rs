@@ -102,6 +102,6 @@ impl HookOperator {
             table: self.table.to_owned(),
         };
 
-        hook_refresh(self.ctx.clone(), pipeline, refresh_desc).await;
+        hook_refresh(self.ctx.clone(), pipeline, refresh_desc, self.need_lock).await;
     }
 }

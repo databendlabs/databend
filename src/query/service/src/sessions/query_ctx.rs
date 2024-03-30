@@ -72,7 +72,7 @@ use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
@@ -163,7 +163,10 @@ impl QueryContext {
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self.shared.catalog_manager.build_catalog(catalog_info)?;
+        let catalog = self
+            .shared
+            .catalog_manager
+            .build_catalog(catalog_info, self.txn_mgr())?;
         match table_args {
             None => {
                 let table = catalog.get_table_by_info(table_info);
@@ -206,7 +209,7 @@ impl QueryContext {
             .get_catalog(self.get_current_catalog().as_str())
             .await?;
         match catalog
-            .get_database(tenant_id.as_str(), &new_database_name)
+            .get_database(tenant_id.name(), &new_database_name)
             .await
         {
             Ok(_) => self.shared.set_current_database(new_database_name),
@@ -518,7 +521,7 @@ impl TableContext for QueryContext {
         self.shared
             .catalog_manager
             .get_catalog(
-                self.get_tenant().as_str(),
+                self.get_tenant().name(),
                 catalog_name.as_ref(),
                 self.txn_mgr(),
             )
@@ -596,7 +599,7 @@ impl TableContext for QueryContext {
         Ok(format)
     }
 
-    fn get_tenant(&self) -> NonEmptyString {
+    fn get_tenant(&self) -> Tenant {
         self.shared.get_tenant()
     }
 
@@ -645,7 +648,7 @@ impl TableContext for QueryContext {
         if !self.query_settings.is_changed() {
             unsafe {
                 self.query_settings
-                    .unchecked_apply_changes(&self.shared.get_settings());
+                    .unchecked_apply_changes(self.shared.get_settings().changes());
             }
         }
 
@@ -819,7 +822,7 @@ impl TableContext for QueryContext {
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
-            .get_table(tenant.as_str(), database_name, table_name)
+            .get_table(tenant.name(), database_name, table_name)
             .await?;
         let table_id = table.get_id();
 
@@ -835,7 +838,7 @@ impl TableContext for QueryContext {
             let req = GetTableCopiedFileReq { table_id, files };
             let start_request = Instant::now();
             let copied_files = catalog
-                .get_table_copied_file_info(tenant.as_str(), database_name, req)
+                .get_table_copied_file_info(tenant.name(), database_name, req)
                 .await?
                 .file_info;
 

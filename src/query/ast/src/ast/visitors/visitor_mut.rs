@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::Span;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::schema::CreateOption;
@@ -27,7 +26,6 @@ use super::walk_mut::walk_select_target_mut;
 use super::walk_mut::walk_set_expr_mut;
 use super::walk_mut::walk_statement_mut;
 use super::walk_mut::walk_table_reference_mut;
-use super::walk_stream_point_mut;
 use super::walk_time_travel_point_mut;
 use super::walk_window_definition_mut;
 use crate::ast::visitors::walk_column_id_mut;
@@ -661,7 +659,7 @@ pub trait VisitorMut: Sized {
         &mut self,
         _create_option: &CreateOption,
         _name: &mut String,
-        _file_format_options: &mut FileFormatOptionsAst,
+        _file_format_options: &mut FileFormatOptions,
     ) {
     }
 
@@ -827,10 +825,6 @@ pub trait VisitorMut: Sized {
 
     fn visit_time_travel_point(&mut self, time: &mut TimeTravelPoint) {
         walk_time_travel_point_mut(self, time);
-    }
-
-    fn visit_stream_point(&mut self, stream: &mut StreamPoint) {
-        walk_stream_point_mut(self, stream);
     }
 
     fn visit_join(&mut self, join: &mut Join) {

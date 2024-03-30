@@ -71,15 +71,15 @@ pub trait SyncSystemTable: Send + Sync {
         match Self::IS_LOCAL {
             true => Ok((
                 PartStatistics::default(),
-                Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
+                Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
                     SystemTablePart,
                 ))]),
             )),
             false => Ok((
                 PartStatistics::default(),
-                Partitions::create_nolazy(PartitionsShuffleKind::Broadcast, vec![Arc::new(
-                    Box::new(SystemTablePart),
-                )]),
+                Partitions::create(PartitionsShuffleKind::Broadcast, vec![Arc::new(Box::new(
+                    SystemTablePart,
+                ))]),
             )),
         }
     }
@@ -215,15 +215,15 @@ pub trait AsyncSystemTable: Send + Sync {
         match Self::IS_LOCAL {
             true => Ok((
                 PartStatistics::default(),
-                Partitions::create_nolazy(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
+                Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
                     SystemTablePart,
                 ))]),
             )),
             false => Ok((
                 PartStatistics::default(),
-                Partitions::create_nolazy(PartitionsShuffleKind::Broadcast, vec![Arc::new(
-                    Box::new(SystemTablePart),
-                )]),
+                Partitions::create(PartitionsShuffleKind::Broadcast, vec![Arc::new(Box::new(
+                    SystemTablePart,
+                ))]),
             )),
         }
     }

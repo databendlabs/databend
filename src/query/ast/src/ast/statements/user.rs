@@ -50,10 +50,8 @@ impl Display for CreateUserStmt {
         write!(f, " {} IDENTIFIED", self.user)?;
         write!(f, " {}", self.auth_option)?;
         if !self.user_options.is_empty() {
-            write!(f, " WITH")?;
-            for user_option in &self.user_options {
-                write!(f, " {user_option}")?;
-            }
+            write!(f, " WITH ")?;
+            write_comma_separated_list(f, &self.user_options)?;
         }
 
         Ok(())
@@ -103,10 +101,8 @@ impl Display for AlterUserStmt {
             write!(f, " IDENTIFIED {}", auth_option)?;
         }
         if !self.user_options.is_empty() {
-            write!(f, " WITH")?;
-            for with_option in &self.user_options {
-                write!(f, " {with_option}")?;
-            }
+            write!(f, " WITH ")?;
+            write_comma_separated_list(f, &self.user_options)?;
         }
 
         Ok(())
@@ -163,50 +159,10 @@ pub enum AccountMgrSource {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub enum AccountMgrLevel {
-    Global,
-    Database(#[drive(skip)] Option<String>),
-    Table(#[drive(skip)] Option<String>, #[drive(skip)] String),
-    UDF(#[drive(skip)] String),
-    Stage(#[drive(skip)] String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub enum SecondaryRolesOption {
-    None,
-    All,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub enum UserOptionItem {
-    TenantSetting(#[drive(skip)] bool),
-    DefaultRole(#[drive(skip)] String),
-    SetNetworkPolicy(#[drive(skip)] String),
-    UnsetNetworkPolicy,
-    SetPasswordPolicy(#[drive(skip)] String),
-    UnsetPasswordPolicy,
-}
-
-impl UserOptionItem {
-    pub fn apply(&self, option: &mut UserOption) {
-        match self {
-            Self::TenantSetting(enabled) => {
-                option.switch_option_flag(UserOptionFlag::TenantSetting, *enabled);
-            }
-            Self::DefaultRole(v) => option.set_default_role(Some(v.clone())),
-            Self::SetNetworkPolicy(v) => option.set_network_policy(Some(v.clone())),
-            Self::UnsetNetworkPolicy => option.set_network_policy(None),
-            Self::SetPasswordPolicy(v) => option.set_password_policy(Some(v.clone())),
-            Self::UnsetPasswordPolicy => option.set_password_policy(None),
-        }
-    }
-}
-
 impl Display for AccountMgrSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AccountMgrSource::Role { role } => write!(f, " ROLE {role}")?,
+            AccountMgrSource::Role { role } => write!(f, " ROLE '{role}'")?,
             AccountMgrSource::Privs { privileges, level } => {
                 write!(f, " ")?;
                 write_comma_separated_list(f, privileges.iter().map(|p| p.to_string()))?;
@@ -256,6 +212,46 @@ impl Display for AccountMgrSource {
             }
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum AccountMgrLevel {
+    Global,
+    Database(#[drive(skip)] Option<String>),
+    Table(#[drive(skip)] Option<String>, #[drive(skip)] String),
+    UDF(#[drive(skip)] String),
+    Stage(#[drive(skip)] String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum SecondaryRolesOption {
+    None,
+    All,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum UserOptionItem {
+    TenantSetting(#[drive(skip)] bool),
+    DefaultRole(#[drive(skip)] String),
+    SetNetworkPolicy(#[drive(skip)] String),
+    UnsetNetworkPolicy,
+    SetPasswordPolicy(#[drive(skip)] String),
+    UnsetPasswordPolicy,
+}
+
+impl UserOptionItem {
+    pub fn apply(&self, option: &mut UserOption) {
+        match self {
+            Self::TenantSetting(enabled) => {
+                option.switch_option_flag(UserOptionFlag::TenantSetting, *enabled);
+            }
+            Self::DefaultRole(v) => option.set_default_role(Some(v.clone())),
+            Self::SetNetworkPolicy(v) => option.set_network_policy(Some(v.clone())),
+            Self::UnsetNetworkPolicy => option.set_network_policy(None),
+            Self::SetPasswordPolicy(v) => option.set_password_policy(Some(v.clone())),
+            Self::UnsetPasswordPolicy => option.set_password_policy(None),
+        }
     }
 }
 

@@ -14,19 +14,19 @@
 
 use nom::combinator::map;
 
-use super::statement::parse_create_option;
 use crate::ast::CreateStreamStmt;
 use crate::ast::DescribeStreamStmt;
 use crate::ast::DropStreamStmt;
 use crate::ast::ShowStreamsStmt;
 use crate::ast::Statement;
-use crate::ast::StreamPoint;
 use crate::parser::common::dot_separated_idents_1_to_2;
 use crate::parser::common::dot_separated_idents_1_to_3;
 use crate::parser::common::map_res;
 use crate::parser::common::IResult;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
+use crate::parser::query::travel_point;
+use crate::parser::statement::parse_create_option;
 use crate::parser::statement::show_limit;
 use crate::parser::token::TokenKind::*;
 use crate::parser::Input;
@@ -34,7 +34,7 @@ use crate::rule;
 
 pub fn stream_table(i: Input) -> IResult<Statement> {
     rule!(
-         #create_stream: "`CREATE [OR REPLACE] STREAM [IF NOT EXISTS] [<database>.]<stream> ON TABLE [<database>.]<table> [<stream_point>] [COMMENT = '<string_literal>']`"
+         #create_stream: "`CREATE [OR REPLACE] STREAM [IF NOT EXISTS] [<database>.]<stream> ON TABLE [<database>.]<table> [<travel_point>] [COMMENT = '<string_literal>']`"
          | #drop_stream: "`DROP STREAM [IF EXISTS] [<database>.]<stream>`"
          | #show_streams: "`SHOW [FULL] STREAMS [FROM <database>] [<show_limit>]`"
          | #describe_stream: "`DESCRIBE STREAM [<database>.]<stream>`"
@@ -47,7 +47,7 @@ fn create_stream(i: Input) -> IResult<Statement> {
             CREATE ~ ( OR ~ ^REPLACE )? ~ STREAM ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ ON ~ TABLE ~ #dot_separated_idents_1_to_2
-            ~ ( #stream_point )?
+            ~ ( AT ~ ^#travel_point )?
             ~ ( APPEND_ONLY ~ "=" ~ #literal_bool )?
             ~ ( COMMENT ~ "=" ~ #literal_string )?
         },
@@ -60,7 +60,7 @@ fn create_stream(i: Input) -> IResult<Statement> {
             _,
             _,
             (table_database, table),
-            stream_point,
+            opt_travel_point,
             opt_append_only,
             opt_comment,
         )| {
@@ -73,7 +73,7 @@ fn create_stream(i: Input) -> IResult<Statement> {
                 stream,
                 table_database,
                 table,
-                stream_point,
+                travel_point: opt_travel_point.map(|p| p.1),
                 append_only: opt_append_only
                     .map(|(_, _, append_only)| append_only)
                     .unwrap_or(true),
@@ -96,16 +96,6 @@ fn drop_stream(i: Input) -> IResult<Statement> {
                 stream,
             })
         },
-    )(i)
-}
-
-fn stream_point(i: Input) -> IResult<StreamPoint> {
-    let mut at_stream = map(
-        rule! { AT ~ "(" ~ STREAM ~ "=>" ~  #dot_separated_idents_1_to_2 ~ ")" },
-        |(_, _, _, _, (database, name), _)| StreamPoint::AtStream { database, name },
-    );
-    rule!(
-        #at_stream
     )(i)
 }
 

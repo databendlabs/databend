@@ -26,7 +26,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 
 use crate::normalize_identifier;
@@ -54,7 +54,7 @@ impl FromStr for BloomIndexColumns {
         let tokens = tokenize_sql(s)?;
         let idents = parse_comma_separated_idents(&tokens, sql_dialect)?;
 
-        let settings = Settings::create(NonEmptyString::new("dummy").unwrap());
+        let settings = Settings::create(Tenant::new_literal("dummy"));
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
         let mut cols = Vec::with_capacity(idents.len());
@@ -80,7 +80,7 @@ impl BloomIndexColumns {
             return Ok(());
         }
 
-        let settings = Settings::create(NonEmptyString::new("dummy").unwrap());
+        let settings = Settings::create(Tenant::new_literal("dummy"));
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
         let sql_dialect = Dialect::default();

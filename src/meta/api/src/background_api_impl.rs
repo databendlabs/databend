@@ -94,7 +94,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
                 } else {
                     Err(KVAppError::AppError(AppError::BackgroundJobAlreadyExists(
                         BackgroundJobAlreadyExists::new(
-                            &name_key.name,
+                            name_key.name(),
                             format!("create background job: {:?}", req.job_name),
                         ),
                     )))
@@ -220,7 +220,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
             let r = get_background_job_by_id(self, &BackgroundJobId { id: job_id.0 }).await?;
             // filter none and get the task info
             if let Some(task_info) = r.1 {
-                res.push((r.0, ident.name, task_info));
+                res.push((r.0, ident.name().to_string(), task_info));
             }
         }
         Ok(res)
@@ -269,7 +269,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
                 )))
             })?;
             let val: BackgroundTaskInfo = deserialize_struct(&v.data)?;
-            res.push((v.seq, ident.task_id, val));
+            res.push((v.seq, ident.name().to_string(), val));
         }
         Ok(res)
     }
@@ -326,7 +326,7 @@ pub fn background_job_has_to_exist(
     if seq == 0 {
         debug!(seq = seq, name_ident :? =(name_ident); "background job does not exist");
         Err(KVAppError::AppError(AppError::UnknownBackgroundJob(
-            UnknownBackgroundJob::new(&name_ident.name, format!("{:?}", name_ident)),
+            UnknownBackgroundJob::new(name_ident.name(), format!("{:?}", name_ident)),
         )))
     } else {
         Ok(())

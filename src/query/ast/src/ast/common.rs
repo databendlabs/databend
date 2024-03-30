@@ -216,7 +216,7 @@ pub(crate) fn write_comma_separated_list(
 }
 
 /// Write input items into `'a', 'b', 'c'`
-pub(crate) fn write_comma_separated_quoted_list(
+pub(crate) fn write_comma_separated_string_list(
     f: &mut Formatter<'_>,
     items: impl IntoIterator<Item = impl Display>,
 ) -> std::fmt::Result {
@@ -237,6 +237,34 @@ pub(crate) fn write_comma_separated_map(
     for (i, (k, v)) in items.into_iter().enumerate() {
         if i > 0 {
             write!(f, ", ")?;
+        }
+        write!(f, "{k} = {v}")?;
+    }
+    Ok(())
+}
+
+/// Write input map items into `field_a='x', field_b='y'`
+pub(crate) fn write_comma_separated_string_map(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = (impl Display, impl Display)>,
+) -> std::fmt::Result {
+    for (i, (k, v)) in items.into_iter().enumerate() {
+        if i > 0 {
+            write!(f, ", ")?;
+        }
+        write!(f, "{k} = '{v}'")?;
+    }
+    Ok(())
+}
+
+/// Write input map items into `field_a='x' field_b='y'`
+pub(crate) fn write_space_separated_string_map(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = (impl Display, impl Display)>,
+) -> std::fmt::Result {
+    for (i, (k, v)) in items.into_iter().enumerate() {
+        if i > 0 {
+            write!(f, " ")?;
         }
         write!(f, "{k} = '{v}'")?;
     }

@@ -18,7 +18,7 @@ use databend_common_expression::types::DataType;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
@@ -26,7 +26,7 @@ use pretty_assertions::assert_eq;
 async fn test_user_lambda_udf() -> Result<()> {
     let conf = RpcClientConf::default();
     let tenant_name = "test";
-    let tenant = NonEmptyString::new(tenant_name).unwrap();
+    let tenant = Tenant::new_literal(tenant_name);
 
     let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let description = "this is a description";
@@ -92,8 +92,7 @@ async fn test_user_lambda_udf() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_udf_server() -> Result<()> {
     let conf = RpcClientConf::default();
-    let tenant_name = "test";
-    let tenant = NonEmptyString::new(tenant_name).unwrap();
+    let tenant = Tenant::new_literal("test");
 
     let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let address = "http://127.0.0.1:8888";

@@ -45,10 +45,11 @@ use sha2::Digest;
 use sha2::Sha256;
 
 use super::collect_incremental_blocks;
-use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::SegmentsIO;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
+use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
@@ -104,8 +105,9 @@ impl FuseTable {
                             snapshot.summary.compressed_byte_size as usize,
                             snapshot.segments.len(),
                             snapshot.segments.len(),
+                            snapshot.index_info_locations.clone(),
                         ),
-                        Partitions::create(PartitionsShuffleKind::Mod, segments, true),
+                        Partitions::create(PartitionsShuffleKind::Mod, segments),
                     ));
                 }
 
@@ -115,6 +117,13 @@ impl FuseTable {
                 let segments_location =
                     create_segment_location_vector(snapshot.segments.clone(), snapshot_loc);
 
+                let inverted_index_pruner = InvertedIndexPruner::try_create(
+                    self.operator.clone(),
+                    &push_downs,
+                    &snapshot.index_info_locations,
+                )
+                .await?;
+
                 self.prune_snapshot_blocks(
                     ctx.clone(),
                     self.operator.clone(),
@@ -122,6 +131,7 @@ impl FuseTable {
                     table_schema,
                     segments_location,
                     summary,
+                    inverted_index_pruner,
                 )
                 .await
             }
@@ -157,7 +167,9 @@ impl FuseTable {
                 table_schema.clone(),
                 &push_downs,
                 self.bloom_index_cols(),
-            )?
+                None,
+            )
+            .await?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
             FusePruner::create_with_pages(
@@ -168,7 +180,9 @@ impl FuseTable {
                 self.cluster_key_meta.clone(),
                 cluster_keys,
                 self.bloom_index_cols(),
-            )?
+                None,
+            )
+            .await?
         };
 
         let block_metas = pruner.read_pruning(segments_location).await?;
@@ -202,6 +216,7 @@ impl FuseTable {
         table_schema: TableSchemaRef,
         segments_location: Vec<SegmentLocation>,
         summary: usize,
+        inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         info!(
@@ -242,7 +257,9 @@ impl FuseTable {
                 table_schema.clone(),
                 &push_downs,
                 self.bloom_index_cols(),
-            )?
+                inverted_index_pruner,
+            )
+            .await?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
 
@@ -254,9 +271,10 @@ impl FuseTable {
                 self.cluster_key_meta.clone(),
                 cluster_keys,
                 self.bloom_index_cols(),
-            )?
+                inverted_index_pruner,
+            )
+            .await?
         };
-
         let block_metas = pruner.read_pruning(segments_location).await?;
         let pruning_stats = pruner.pruning_stats();
 
@@ -412,7 +430,7 @@ impl FuseTable {
         limit: usize,
     ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
-        let mut partitions = Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]);
+        let mut partitions = Partitions::create(PartitionsShuffleKind::Mod, vec![]);
 
         if limit == 0 {
             return (statistics, partitions);
@@ -534,7 +552,7 @@ impl FuseTable {
                 .unwrap_or((default.clone(), default.clone()))
         });
 
-        FusePartInfo::create(
+        FuseBlockPartInfo::create(
             location,
             rows_count,
             columns_meta,
@@ -582,7 +600,7 @@ impl FuseTable {
         // TODO
         // row_count should be a hint value of  LIMIT,
         // not the count the rows in this partition
-        FusePartInfo::create(
+        FuseBlockPartInfo::create(
             location,
             rows_count,
             columns_meta,

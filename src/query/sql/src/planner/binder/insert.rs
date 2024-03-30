@@ -23,7 +23,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_meta_app::principal::FileFormatOptionsAst;
 use databend_common_meta_app::principal::OnErrorMode;
 
 use crate::binder::Binder;
@@ -115,7 +114,7 @@ impl Binder {
                 on_error_mode,
                 start,
             } => {
-                let params = FileFormatOptionsAst { options: settings }.try_into()?;
+                let params = settings.to_meta_ast().try_into()?;
                 Ok(InsertInputSource::StreamingWithFileFormat {
                     format: params,
                     start,
@@ -182,7 +181,7 @@ impl Binder {
                     }
                 }
 
-                let optimized_plan = optimize(opt_ctx, select_plan)?;
+                let optimized_plan = optimize(opt_ctx, select_plan).await?;
                 Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
             }
         };

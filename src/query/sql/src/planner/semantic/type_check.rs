@@ -42,6 +42,9 @@ use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::InternalColumnType;
+use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -69,10 +72,13 @@ use databend_common_expression::FunctionKind;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
+use databend_common_expression::SEARCH_MATCHED_COL_NAME;
+use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
+use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
@@ -94,6 +100,7 @@ use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
+use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
@@ -208,7 +215,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
+    //#[async_backtrace::framed]
     pub async fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
         if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
             if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
@@ -350,7 +357,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         &Expr::Literal {
                             span: *span,
-                            lit: Literal::Boolean(*not),
+                            value: Literal::Boolean(*not),
                         },
                         &Expr::BinaryOp {
                             span: *span,
@@ -360,7 +367,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         &Expr::Literal {
                             span: *span,
-                            lit: Literal::Boolean(!*not),
+                            value: Literal::Boolean(!*not),
                         },
                         &Expr::BinaryOp {
                             span: *span,
@@ -683,7 +690,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 let null_arg = Expr::Literal {
                     span: None,
-                    lit: Literal::Null,
+                    value: Literal::Null,
                 };
 
                 if let Some(expr) = else_result {
@@ -712,7 +719,7 @@ impl<'a> TypeChecker<'a> {
                     .await?
             }
 
-            Expr::Literal { span, lit } => self.resolve_literal(*span, lit)?,
+            Expr::Literal { span, value } => self.resolve_literal(*span, value)?,
 
             Expr::FunctionCall {
                 span,
@@ -741,6 +748,7 @@ impl<'a> TypeChecker<'a> {
                             .chain(AggregateFunctionFactory::instance().registered_names())
                             .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(str::to_string))
+                            .chain(GENERAL_SEARCH_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(
                                 Self::all_sugar_functions()
                                     .iter()
@@ -766,7 +774,7 @@ impl<'a> TypeChecker<'a> {
                                 "no function matches the given name: '{func_name}', do you mean {}?",
                                 possible_funcs.join(", ")
                             ))
-                                .set_span(*span));
+                            .set_span(*span));
                         }
                     }
                 }
@@ -830,7 +838,8 @@ impl<'a> TypeChecker<'a> {
                     if window.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
                             "window function {func_name} can only be used in window clause"
-                        )));
+                        ))
+                        .set_span(*span));
                     }
                     let func = self
                         .resolve_general_window_function(*span, func_name, &args)
@@ -881,10 +890,14 @@ impl<'a> TypeChecker<'a> {
                     if lambda.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
                             "function {func_name} must have a lambda expression",
-                        )));
+                        ))
+                        .set_span(*span));
                     }
                     let lambda = lambda.as_ref().unwrap();
                     self.resolve_lambda_function(*span, func_name, &args, lambda)
+                        .await?
+                } else if GENERAL_SEARCH_FUNCTIONS.contains(&func_name) {
+                    self.resolve_search_function(*span, func_name, &args)
                         .await?
                 } else {
                     // Scalar function
@@ -985,16 +998,16 @@ impl<'a> TypeChecker<'a> {
                     expr = &**inner_expr;
                     let path = match accessor {
                         MapAccessor::Bracket {
-                            key: box Expr::Literal { lit, .. },
+                            key: box Expr::Literal { value, .. },
                         } => {
-                            if !matches!(lit, Literal::UInt64(_) | Literal::String(_)) {
+                            if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
                                 return Err(ErrorCode::SemanticError(format!(
                                     "Unsupported accessor: {:?}",
-                                    lit
+                                    value
                                 ))
                                 .set_span(*span));
                             }
-                            lit.clone()
+                            value.clone()
                         }
                         MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                         MapAccessor::DotNumber { key } => Literal::UInt64(*key),
@@ -1182,8 +1195,8 @@ impl<'a> TypeChecker<'a> {
     // just support integer
     #[inline]
     fn resolve_rows_offset(&self, expr: &Expr) -> Result<Scalar> {
-        if let Expr::Literal { lit, .. } = expr {
-            let box (value, _) = self.resolve_literal_scalar(lit)?;
+        if let Expr::Literal { value, .. } = expr {
+            let box (value, _) = self.resolve_literal_scalar(value)?;
             match value {
                 Scalar::Number(NumberScalar::UInt8(v)) => {
                     return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
@@ -1839,18 +1852,25 @@ impl<'a> TypeChecker<'a> {
         // ARRAY_REDUCE have two params
         if params.len() != 1 && func_name != "array_reduce" {
             return Err(ErrorCode::SemanticError(format!(
-                "incorrect number of parameters in lambda function, {func_name} expects 1 parameter",
-            )));
+                "incorrect number of parameters in lambda function, {} expects 1 parameter, but got {}",
+                func_name, params.len()
+            ))
+            .set_span(span));
         } else if func_name == "array_reduce" && params.len() != 2 {
             return Err(ErrorCode::SemanticError(format!(
-                "incorrect number of parameters in lambda function, {func_name} expects 2 parameter",
-            )));
+                "incorrect number of parameters in lambda function, {} expects 2 parameters, but got {}",
+                func_name, params.len()
+            ))
+            .set_span(span));
         }
 
         if args.len() != 1 {
             return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for lambda function, {func_name} expects 1 argument"
-            )));
+                "invalid arguments for lambda function, {} expects 1 argument, but got {}",
+                func_name,
+                args.len()
+            ))
+            .set_span(span));
         }
         let box (mut arg, arg_type) = self.resolve(args[0]).await?;
 
@@ -1859,9 +1879,10 @@ impl<'a> TypeChecker<'a> {
             DataType::Null | DataType::EmptyArray => DataType::Null,
             _ => {
                 return Err(ErrorCode::SemanticError(
-                    "invalid arguments for lambda function, argument data type must be array"
+                    "invalid arguments for lambda function, argument data type must be an array"
                         .to_string(),
-                ));
+                )
+                .set_span(span));
             }
         };
 
@@ -1887,7 +1908,8 @@ impl<'a> TypeChecker<'a> {
             } else {
                 return Err(ErrorCode::SemanticError(
                     "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
-                ));
+                )
+                .set_span(span));
             }
         } else if func_name == "array_reduce" {
             // transform arg type
@@ -1971,6 +1993,172 @@ impl<'a> TypeChecker<'a> {
         };
 
         Ok(Box::new((lambda_func, data_type)))
+    }
+
+    #[async_backtrace::framed]
+    async fn resolve_search_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if func_name == "score" {
+            if !args.is_empty() {
+                return Err(ErrorCode::SemanticError(format!(
+                    "invalid arguments for search function, {} expects 0 argument, but got {}",
+                    func_name,
+                    args.len()
+                ))
+                .set_span(span));
+            }
+            let internal_column =
+                InternalColumn::new(SEARCH_SCORE_COL_NAME, InternalColumnType::SearchScore);
+
+            let internal_column_binding = InternalColumnBinding {
+                database_name: None,
+                table_name: None,
+                internal_column,
+            };
+            let column = self.bind_context.add_internal_column_binding(
+                &internal_column_binding,
+                self.metadata.clone(),
+                false,
+            )?;
+
+            let scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef { span, column });
+            let data_type = DataType::Number(NumberDataType::Float32);
+            return Ok(Box::new((scalar_expr, data_type)));
+        }
+
+        // match function
+        if !matches!(self.bind_context.expr_context, ExprContext::WhereClause) {
+            return Err(ErrorCode::SemanticError(format!(
+                "search function {} can only be used in where clause",
+                func_name
+            ))
+            .set_span(span));
+        }
+
+        // TODO: support options field
+        if args.len() != 2 {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, {} expects 2 arguments, but got {}",
+                func_name,
+                args.len()
+            ))
+            .set_span(span));
+        }
+
+        let field_arg = args[0];
+        let query_arg = args[1];
+
+        // TODO: support multiple fields
+        let box (field_scalar, _) = self.resolve(field_arg).await?;
+        let Ok(column_ref) = BoundColumnRef::try_from(field_scalar) else {
+            return Err(ErrorCode::SemanticError(
+                "invalid arguments for search function, field must be a column".to_string(),
+            )
+            .set_span(span));
+        };
+        if column_ref.column.table_index.is_none() {
+            return Err(ErrorCode::SemanticError(
+                "invalid arguments for search function, column must in a table".to_string(),
+            )
+            .set_span(span));
+        }
+        let table_index = column_ref.column.table_index.unwrap();
+
+        let table_entry = self.metadata.read().table(table_index).clone();
+        let table = table_entry.table();
+        let table_info = table.get_table_info();
+
+        let table_schema = table_info.schema();
+        let table_indexes = &table_info.meta.indexes;
+
+        let column_name = column_ref.column.column_name;
+        let column_id = table_schema.column_id_of(&column_name)?;
+
+        let box (query_scalar, _) = self.resolve(query_arg).await?;
+        let Ok(query_expr) = ConstantExpr::try_from(query_scalar) else {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, query text must be a constant string, but got {}",
+                query_arg
+            ))
+            .set_span(span));
+        };
+        let Some(query_text) = query_expr.value.as_string() else {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for search function, query text must be a constant string, but got {}",
+                query_arg
+            ))
+            .set_span(span));
+        };
+
+        // find inverted index and check schema
+        let mut index_name = "".to_string();
+        let mut index_schema = None;
+        for table_index in table_indexes.values() {
+            if table_index.column_ids.contains(&column_id) {
+                index_name = table_index.name.clone();
+
+                let mut index_fields = Vec::with_capacity(table_index.column_ids.len());
+                for column_id in &table_index.column_ids {
+                    let table_field = table_schema.field_of_column_id(*column_id)?;
+                    let field = DataField::from(table_field);
+                    index_fields.push(field);
+                }
+                index_schema = Some(DataSchema::new(index_fields));
+                break;
+            }
+        }
+
+        if index_schema.is_none() {
+            return Err(ErrorCode::SemanticError(format!(
+                "column {} don't have inverted index",
+                column_name
+            ))
+            .set_span(span));
+        }
+        let query_columns = vec![column_name.clone()];
+
+        if self
+            .bind_context
+            .inverted_index_map
+            .contains_key(&table_index)
+        {
+            return Err(ErrorCode::SemanticError(format!(
+                "duplicate search function for table {table_index}"
+            ))
+            .set_span(span));
+        }
+        let index_info = InvertedIndexInfo {
+            index_name,
+            index_schema: index_schema.unwrap(),
+            query_columns,
+            query_text: query_text.to_string(),
+        };
+
+        self.bind_context
+            .inverted_index_map
+            .insert(table_index, index_info);
+
+        let internal_column =
+            InternalColumn::new(SEARCH_MATCHED_COL_NAME, InternalColumnType::SearchMatched);
+
+        let internal_column_binding = InternalColumnBinding {
+            database_name: column_ref.column.database_name,
+            table_name: column_ref.column.table_name,
+            internal_column,
+        };
+        let column = self.bind_context.add_internal_column_binding(
+            &internal_column_binding,
+            self.metadata.clone(),
+            false,
+        )?;
+
+        let scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef { span, column });
+        let data_type = DataType::Boolean;
+        Ok(Box::new((scalar_expr, data_type)))
     }
 
     /// Resolve function call.
@@ -2162,7 +2350,7 @@ impl<'a> TypeChecker<'a> {
             BinaryOperator::Like => {
                 // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
                 if let Expr::Literal {
-                    lit: Literal::String(str),
+                    value: Literal::String(str),
                     ..
                 } = right
                 {
@@ -2475,14 +2663,14 @@ impl<'a> TypeChecker<'a> {
             ("database" | "currentdatabase" | "current_database", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    lit: Literal::String(self.ctx.get_current_database()),
+                    value: Literal::String(self.ctx.get_current_database()),
                 })
                 .await,
             ),
             ("version", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    lit: Literal::String(self.ctx.get_fuse_version()),
+                    value: Literal::String(self.ctx.get_fuse_version()),
                 })
                 .await,
             ),
@@ -2490,7 +2678,7 @@ impl<'a> TypeChecker<'a> {
                 Ok(user) => Some(
                     self.resolve(&Expr::Literal {
                         span,
-                        lit: Literal::String(user.identity().to_string()),
+                        value: Literal::String(user.identity().to_string()),
                     })
                     .await,
                 ),
@@ -2499,7 +2687,7 @@ impl<'a> TypeChecker<'a> {
             ("current_role", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    lit: Literal::String(
+                    value: Literal::String(
                         self.ctx
                             .get_current_role()
                             .map(|r| r.name)
@@ -2511,7 +2699,7 @@ impl<'a> TypeChecker<'a> {
             ("connection_id", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    lit: Literal::String(self.ctx.get_connection_id()),
+                    value: Literal::String(self.ctx.get_connection_id()),
                 })
                 .await,
             ),
@@ -2520,7 +2708,7 @@ impl<'a> TypeChecker<'a> {
                 Some(
                     self.resolve(&Expr::Literal {
                         span,
-                        lit: Literal::String(tz),
+                        value: Literal::String(tz),
                     })
                     .await,
                 )
@@ -2537,7 +2725,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         &Expr::Literal {
                             span,
-                            lit: Literal::Null,
+                            value: Literal::Null,
                         },
                         arg_x,
                     ])
@@ -2630,7 +2818,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 new_args.push(Expr::Literal {
                     span,
-                    lit: Literal::Null,
+                    value: Literal::Null,
                 });
 
                 let args_ref: Vec<&Expr> = new_args.iter().collect();
@@ -2645,7 +2833,7 @@ impl<'a> TypeChecker<'a> {
                 for arg in args.iter() {
                     if let Expr::Literal {
                         span: _,
-                        lit: Literal::Null,
+                        value: Literal::Null,
                     } = arg
                     {
                         continue;
@@ -2674,18 +2862,18 @@ impl<'a> TypeChecker<'a> {
                 }
                 new_args.push(Expr::Literal {
                     span,
-                    lit: Literal::Null,
+                    value: Literal::Null,
                 });
 
                 // coalesce(all_null) => null
                 if new_args.len() == 1 {
                     new_args.push(Expr::Literal {
                         span,
-                        lit: Literal::Null,
+                        value: Literal::Null,
                     });
                     new_args.push(Expr::Literal {
                         span,
-                        lit: Literal::Null,
+                        value: Literal::Null,
                     });
                 }
 
@@ -2729,7 +2917,7 @@ impl<'a> TypeChecker<'a> {
                         let query_id = self.ctx.get_last_query_id(index as i32);
                         self.resolve(&Expr::Literal {
                             span,
-                            lit: Literal::String(query_id),
+                            value: Literal::String(query_id),
                         })
                         .await
                     }
@@ -2995,13 +3183,13 @@ impl<'a> TypeChecker<'a> {
             let (new_left, _) = *self
                 .resolve_binary_op(span, &BinaryOperator::Gte, left, &Expr::Literal {
                     span: None,
-                    lit: Literal::String(like_str[..like_str.len() - 1].to_owned()),
+                    value: Literal::String(like_str[..like_str.len() - 1].to_owned()),
                 })
                 .await?;
             let (new_right, _) = *self
                 .resolve_binary_op(span, &BinaryOperator::Lt, left, &Expr::Literal {
                     span: None,
-                    lit: Literal::String(like_str_plus),
+                    value: Literal::String(like_str_plus),
                 })
                 .await?;
             self.resolve_scalar_function_call(span, "and", vec![], vec![new_left, new_right])
@@ -4109,7 +4297,7 @@ fn check_prefix(like_str: &str) -> bool {
 // Note: the method mainly checks if list contains NULL literal, because `contain` can't handle NULL.
 fn satisfy_contain_func(expr: &Expr) -> bool {
     match expr {
-        Expr::Literal { lit, .. } => !matches!(lit, Literal::Null),
+        Expr::Literal { value, .. } => !matches!(value, Literal::Null),
         Expr::Tuple { exprs, .. } => {
             // For each expr in `exprs`, check if it satisfies the conditions
             exprs.iter().all(satisfy_contain_func)

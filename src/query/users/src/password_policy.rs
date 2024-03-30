@@ -26,8 +26,8 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::NonEmptyString;
 use log::info;
 use passwords::analyzer;
 
@@ -65,7 +65,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_password_policy(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         password_policy: PasswordPolicy,
         create_option: &CreateOption,
     ) -> Result<()> {
@@ -81,7 +81,7 @@ impl UserApiProvider {
     #[allow(clippy::too_many_arguments)]
     pub async fn update_password_policy(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         name: &str,
         min_length: Option<u64>,
         max_length: Option<u64>,
@@ -168,7 +168,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn drop_password_policy(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         name: &str,
         if_exists: bool,
     ) -> Result<()> {
@@ -207,11 +207,7 @@ impl UserApiProvider {
 
     // Check whether a password policy is exist.
     #[async_backtrace::framed]
-    pub async fn exists_password_policy(
-        &self,
-        tenant: &NonEmptyString,
-        name: &str,
-    ) -> Result<bool> {
+    pub async fn exists_password_policy(&self, tenant: &Tenant, name: &str) -> Result<bool> {
         match self.get_password_policy(tenant, name).await {
             Ok(_) => Ok(true),
             Err(e) => {
@@ -226,11 +222,7 @@ impl UserApiProvider {
 
     // Get a password_policy by tenant.
     #[async_backtrace::framed]
-    pub async fn get_password_policy(
-        &self,
-        tenant: &NonEmptyString,
-        name: &str,
-    ) -> Result<PasswordPolicy> {
+    pub async fn get_password_policy(&self, tenant: &Tenant, name: &str) -> Result<PasswordPolicy> {
         let client = self.password_policy_api(tenant);
         let password_policy = client.get(name, MatchSeq::GE(0)).await?.data;
         Ok(password_policy)
@@ -238,10 +230,7 @@ impl UserApiProvider {
 
     // Get all password policies by tenant.
     #[async_backtrace::framed]
-    pub async fn get_password_policies(
-        &self,
-        tenant: &NonEmptyString,
-    ) -> Result<Vec<PasswordPolicy>> {
+    pub async fn get_password_policies(&self, tenant: &Tenant) -> Result<Vec<PasswordPolicy>> {
         let client = self.password_policy_api(tenant);
         let password_policies = client.list().await.map_err(|e| {
             let e = ErrorCode::from(e);
@@ -258,7 +247,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn verify_password(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         user_option: &UserOption,
         auth_option: &AuthOption,
         user_info: Option<&UserInfo>,
@@ -378,7 +367,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn check_login_password(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         identity: UserIdentity,
         user_info: &UserInfo,
     ) -> Result<()> {

@@ -63,7 +63,8 @@ async fn apply_block_pruning(
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
-    FusePruner::create(&ctx, op, schema, push_down, bloom_index_cols)?
+    FusePruner::create(&ctx, op, schema, push_down, bloom_index_cols, None)
+        .await?
         .read_pruning(segment_locs)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
@@ -117,7 +118,7 @@ async fn test_block_pruner() -> Result<()> {
     let catalog = ctx.get_catalog("default").await?;
     let table = catalog
         .get_table(
-            fixture.default_tenant().as_str(),
+            fixture.default_tenant().name(),
             fixture.default_db_name().as_str(),
             test_tbl_name,
         )
@@ -150,7 +151,7 @@ async fn test_block_pruner() -> Result<()> {
     // get the latest tbl
     let table = catalog
         .get_table(
-            fixture.default_tenant().as_str(),
+            fixture.default_tenant().name(),
             fixture.default_db_name().as_str(),
             test_tbl_name,
         )

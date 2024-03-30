@@ -26,11 +26,36 @@ use crate::scalars::run_ast;
 fn test_geometry() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("geometry.txt").unwrap();
-
+    test_st_makeline(file);
     test_st_makepoint(file);
     test_to_string(file);
+    test_st_geometryfromwkb(file);
     test_st_geometryfromwkt(file);
     // test_st_transform(file);
+}
+
+fn test_st_makeline(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_makeline(
+                            to_geometry('SRID=4326;POINT(1.0 2.0)'),
+                            to_geometry('SRID=4326;POINT(3.5 4.5)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_makeline(
+                            to_geometry('SRID=3857;POINT(1.0 2.0)'),
+                            to_geometry('SRID=3857;LINESTRING(1.0 2.0, 10.1 5.5)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_makeline(
+                            to_geometry('LINESTRING(1.0 2.0, 10.1 5.5)'),
+                            to_geometry('MULTIPOINT(3.5 4.5, 6.1 7.9)'))",
+        &[],
+    );
 }
 
 fn test_st_makepoint(file: &mut impl Write) {
@@ -47,6 +72,44 @@ fn test_to_string(file: &mut impl Write) {
     run_ast(file, "to_string(st_makegeompoint(a, b))", &[
         ("a", Float64Type::from_data(vec![1.0, 2.0, 3.0])),
         ("b", Float64Type::from_data(vec![1.0, 2.0, 3.0])),
+    ]);
+}
+
+fn test_st_geometryfromwkb(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_geometryfromwkb('0101000020797f000066666666a9cb17411f85ebc19e325641')",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'))",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "st_geometryfromwkb('0101000020797f000066666666a9cb17411f85ebc19e325641', 4326)",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'), 4326)",
+        &[],
+    );
+
+    run_ast(file, "st_geometryfromwkb(a, b)", &[
+        (
+            "a",
+            StringType::from_data(vec![
+                "0101000020797f000066666666a9cb17411f85ebc19e325641",
+                "0101000020797f000066666666a9cb17411f85ebc19e325641",
+                "0101000020797f000066666666a9cb17411f85ebc19e325641",
+            ]),
+        ),
+        ("b", Int32Type::from_data(vec![32633, 4326, 3857])),
     ]);
 }
 
