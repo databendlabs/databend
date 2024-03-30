@@ -37,7 +37,7 @@ fn error_fields(log_type: LogType, err: Option<ErrorCode>) -> (LogType, i32, Str
     match err {
         None => (log_type, 0, "".to_string(), "".to_string()),
         Some(e) => {
-            if e.code() == ErrorCode::AbortedQuery("").code() {
+            if e.code() == ErrorCode::ABORTED_QUERY {
                 (
                     LogType::Aborted,
                     e.code().into(),

@@ -3632,6 +3632,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-script"
+version = "0.1.0"
+dependencies = [
+ "databend-common-ast",
+ "databend-common-exception",
+ "derive-visitor",
+ "goldenfile",
+ "minitrace",
+ "unindent",
+]
+
+[[package]]
 name = "databend-common-settings"
 version = "0.1.0"
 dependencies = [
@@ -4119,6 +4131,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "bstr 1.9.1",
  "csv-core",
  "dashmap",
  "databend-common-base",
@@ -4135,9 +4148,11 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-storages-parquet",
+ "enum-as-inner 0.6.0",
  "log",
  "opendal",
  "serde",
+ "serde_json",
  "typetag",
  "uuid",
 ]
@@ -6159,6 +6174,7 @@ source = "git+https://github.com/georust/geozero?rev=1d78b36#1d78b3604ea6d082980
 dependencies = [
  "geo-types",
  "geojson",
+ "geos",
  "log",
  "scroll",
  "serde_json",
