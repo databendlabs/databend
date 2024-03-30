@@ -173,7 +173,7 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
             ExplainKind::Memo(_) => {
                 if let box Plan::Query { ref s_expr, .. } = plan {
-                    let memo = get_optimized_memo(opt_ctx, *s_expr.clone())?;
+                    let memo = get_optimized_memo(opt_ctx, *s_expr.clone()).await?;
                     Ok(Plan::Explain {
                         config,
                         kind: ExplainKind::Memo(display_memo(&memo)?),
@@ -316,7 +316,8 @@ pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
 }
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`
-fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Memo> {
+#[async_backtrace::framed]
+async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Memo> {
     let enable_distributed_query = opt_ctx.enable_distributed_optimization
         && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
 
@@ -328,6 +329,11 @@ fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Me
             s_expr.clone(),
         )?;
     }
+
+    // Collect statistics for each leaf node in SExpr.
+    s_expr = CollectStatisticsOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+        .run(&s_expr)
+        .await?;
 
     // Run default rewrite rules
     s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, &opt_ctx).run(&s_expr)?;
