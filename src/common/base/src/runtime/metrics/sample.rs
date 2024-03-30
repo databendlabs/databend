@@ -17,6 +17,8 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MetricSample {
     pub name: String,
+    #[serde(skip_serializing_if = "std::collections::HashMap::is_empty")]
+    #[serde(default)]
     pub labels: HashMap<String, String>,
     pub value: MetricValue,
 }

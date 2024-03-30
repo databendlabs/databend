@@ -51,6 +51,7 @@ fn assert_contain_metrics(samples: Vec<MetricSample>, expected: Vec<MetricSample
 fn test_tracking_scoped_counter_metrics() -> Result<()> {
     let uniq_metric_name = GlobalUniqName::unique();
     let counter = register_counter(&uniq_metric_name);
+    let uniq_metric_name = format!("{}_total", uniq_metric_name);
     counter.inc();
 
     let scoped_registry = ScopedRegistry::create(None);
@@ -263,6 +264,7 @@ fn test_tracking_scoped_histogram_in_milliseconds_metrics() -> Result<()> {
 fn test_tracking_scoped_family_counter_metrics() -> Result<()> {
     let uniq_metric_name = GlobalUniqName::unique();
     let counter = register_counter_family::<Vec<(&'static str, u64)>>(&uniq_metric_name);
+    let uniq_metric_name = format!("{}_total", uniq_metric_name);
     counter.get_or_create(&vec![("TEST_LABEL1", 1)]).inc();
     counter.get_or_create(&vec![("TEST_LABEL1", 2)]).inc();
     counter.get_or_create(&vec![("TEST_LABEL2", 1)]).inc();
