@@ -6191,9 +6191,10 @@ impl SchemaApiTestSuite {
     #[minitrace::trace]
     async fn virtual_column_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
-        let tenant = "tenant1";
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_literal(tenant_name);
 
-        let mut util = Util::new(mt, tenant, "db1", "tb1", "eng1");
+        let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;
 
         info!("--- prepare db and table");
@@ -6203,17 +6204,11 @@ impl SchemaApiTestSuite {
             table_id = tid;
         }
 
-        let name_ident = VirtualColumnNameIdent {
-            tenant: tenant.to_string(),
-            table_id,
-        };
+        let name_ident = VirtualColumnNameIdent::new(&tenant, table_id);
 
         {
             info!("--- list virtual columns with no create before");
-            let req = ListVirtualColumnsReq {
-                tenant: tenant.to_string(),
-                table_id: Some(table_id),
-            };
+            let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
 
             let res = mt.list_virtual_columns(req).await?;
             assert!(res.is_empty())
@@ -6242,10 +6237,7 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list virtual columns");
-            let req = ListVirtualColumnsReq {
-                tenant: tenant.to_string(),
-                table_id: Some(table_id),
-            };
+            let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
 
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
@@ -6254,10 +6246,7 @@ impl SchemaApiTestSuite {
                 "variant[1]".to_string(),
             ]);
 
-            let req = ListVirtualColumnsReq {
-                tenant: tenant.to_string(),
-                table_id: Some(u64::MAX),
-            };
+            let req = ListVirtualColumnsReq::new(&tenant, Some(u64::MAX));
 
             let res = mt.list_virtual_columns(req).await?;
             assert!(res.is_empty())
@@ -6276,10 +6265,7 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list virtual columns after update");
-            let req = ListVirtualColumnsReq {
-                tenant: tenant.to_string(),
-                table_id: Some(table_id),
-            };
+            let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
 
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
@@ -6301,10 +6287,7 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list virtual columns after drop");
-            let req = ListVirtualColumnsReq {
-                tenant: tenant.to_string(),
-                table_id: Some(table_id),
-            };
+            let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
 
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(0, res.len());
@@ -6332,10 +6315,7 @@ impl SchemaApiTestSuite {
 
             let _res = mt.create_virtual_column(req.clone()).await?;
 
-            let req = ListVirtualColumnsReq {
-                tenant: tenant.to_string(),
-                table_id: Some(table_id),
-            };
+            let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
 
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
@@ -6352,10 +6332,7 @@ impl SchemaApiTestSuite {
 
             let _res = mt.create_virtual_column(req.clone()).await?;
 
-            let req = ListVirtualColumnsReq {
-                tenant: tenant.to_string(),
-                table_id: Some(table_id),
-            };
+            let req = ListVirtualColumnsReq::new(&tenant, Some(table_id));
 
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
