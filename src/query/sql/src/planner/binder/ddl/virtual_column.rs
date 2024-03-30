@@ -166,12 +166,8 @@ impl Binder {
         let table_info = self.ctx.get_table(&catalog, &database, &table).await?;
 
         let catalog_info = self.ctx.get_catalog(&catalog).await?;
-        let res = catalog_info
-            .list_virtual_columns(ListVirtualColumnsReq {
-                tenant: self.ctx.get_tenant().name().to_string(),
-                table_id: Some(table_info.get_id()),
-            })
-            .await?;
+        let req = ListVirtualColumnsReq::new(self.ctx.get_tenant(), Some(table_info.get_id()));
+        let res = catalog_info.list_virtual_columns(req).await?;
 
         let virtual_columns = if res.is_empty() {
             vec![]

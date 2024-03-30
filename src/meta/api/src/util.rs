@@ -1231,7 +1231,8 @@ pub async fn get_virtual_column_by_id_or_err(
                 name_ident.table_id,
                 format!(
                     "get virtual column with tenant: {} table_id: {}",
-                    name_ident.tenant, name_ident.table_id
+                    name_ident.tenant.name(),
+                    name_ident.table_id
                 ),
             ),
         )));
