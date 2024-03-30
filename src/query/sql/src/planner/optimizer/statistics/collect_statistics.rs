@@ -95,6 +95,7 @@ impl CollectStatisticsOptimizer {
                 Ok(s_expr.replace_plan(Arc::new(RelOperator::Scan(scan))))
             }
             RelOperator::MaterializedCte(materialized_cte) => {
+                // Collect the common table expression statistics first.
                 let left = Box::pin(self.collect(s_expr.child(0)?)).await?;
                 let cte_stat_info = RelExpr::with_s_expr(&left).derive_cardinality_child(0)?;
                 self.cte_statistics
