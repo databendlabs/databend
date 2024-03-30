@@ -94,7 +94,7 @@ impl VirtualColumnRewriter {
 
             let table_id = table.get_id();
             let req = ListVirtualColumnsReq {
-                tenant: self.ctx.get_tenant().to_string(),
+                tenant: self.ctx.get_tenant().name().to_string(),
                 table_id: Some(table_id),
             };
             let catalog = self.ctx.get_catalog(table_entry.catalog()).await?;

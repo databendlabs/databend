@@ -18,8 +18,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -85,6 +83,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_storages_common_txn::TxnManagerRef;
 use databend_storages_common_txn::TxnState;
@@ -129,7 +128,7 @@ impl Catalog for SessionCatalog {
     }
 
     // Get all the databases.
-    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         self.inner.list_databases(tenant).await
     }
 
@@ -382,10 +381,6 @@ impl Catalog for SessionCatalog {
 
     async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<DropTableIndexReply> {
         self.inner.drop_table_index(req).await
-    }
-
-    async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
-        self.inner.count_tables(req).await
     }
 
     async fn get_table_copied_file_info(

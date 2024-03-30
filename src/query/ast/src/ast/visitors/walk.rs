@@ -310,20 +310,20 @@ pub fn walk_time_travel_point<'a, V: Visitor<'a>>(visitor: &mut V, time: &'a Tim
     match time {
         TimeTravelPoint::Snapshot(_) => {}
         TimeTravelPoint::Timestamp(expr) => visitor.visit_expr(expr),
-    }
-}
+        TimeTravelPoint::Stream {
+            catalog,
+            database,
+            name,
+        } => {
+            if let Some(catalog) = catalog {
+                visitor.visit_identifier(catalog);
+            }
 
-pub fn walk_stream_point<'a, V: Visitor<'a>>(visitor: &mut V, point: &'a StreamPoint) {
-    match point {
-        StreamPoint::AtStream { database, name } => {
             if let Some(database) = database {
                 visitor.visit_identifier(database);
             }
 
             visitor.visit_identifier(name);
-        }
-        StreamPoint::AtPoint(point) => {
-            visitor.visit_time_travel_point(point);
         }
     }
 }
@@ -567,5 +567,6 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::Begin => {}
         Statement::Commit => {}
         Statement::Abort => {}
+        Statement::InsertMultiTable(_) => {}
     }
 }

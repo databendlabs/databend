@@ -112,10 +112,10 @@ impl SinkAnalyzeState {
         // always use the latest table
         let tenant = self.ctx.get_tenant();
         let catalog = CatalogManager::instance()
-            .get_catalog(tenant.as_str(), &self.catalog, self.ctx.txn_mgr())
+            .get_catalog(tenant.name(), &self.catalog, self.ctx.txn_mgr())
             .await?;
         let table = catalog
-            .get_table(tenant.as_str(), &self.database, &self.table)
+            .get_table(tenant.name(), &self.database, &self.table)
             .await?;
 
         let table = FuseTable::try_from_table(table.as_ref())?;
@@ -203,7 +203,7 @@ impl AsyncSink for SinkAnalyzeState {
     #[unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
-        let mismatch_code = ErrorCode::TableVersionMismatched("").code();
+        let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
 
         loop {
             if let Err(e) = self.merge_analyze_states(data_block.clone()).await {

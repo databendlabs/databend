@@ -13,5 +13,7 @@
 // limitations under the License.
 
 mod csv;
+mod ndjson;
 
 pub use csv::CsvInputFormat;
+pub use ndjson::NdJsonInputFormat;

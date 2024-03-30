@@ -14,23 +14,18 @@
 
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_meta_app::schema::CreateOption;
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum StreamNavigation {
-    AtStream { database: String, name: String },
-    AtPoint(NavigationPoint),
-}
+use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateStreamPlan {
     pub create_option: CreateOption,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub stream_name: String,
     pub table_database: String,
     pub table_name: String,
-    pub navigation: Option<StreamNavigation>,
+    pub navigation: Option<NavigationPoint>,
     pub append_only: bool,
     pub comment: Option<String>,
 }

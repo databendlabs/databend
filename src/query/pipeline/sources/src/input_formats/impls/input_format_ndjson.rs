@@ -179,10 +179,7 @@ impl InputFormatTextBase for InputFormatNDJson {
         _params: &FileFormatParams,
         options: &FileFormatOptionsExt,
     ) -> Arc<dyn FieldDecoder> {
-        Arc::new(FieldJsonAstDecoder::create(
-            options,
-            options.is_rounding_mode,
-        ))
+        Arc::new(FieldJsonAstDecoder::create(options))
     }
 
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {

@@ -74,7 +74,7 @@ impl Interpreter for AlterVirtualColumnInterpreter {
         let update_virtual_column_req = UpdateVirtualColumnReq {
             if_exists: self.plan.if_exists,
             name_ident: VirtualColumnNameIdent {
-                tenant: tenant.to_string(),
+                tenant: tenant.name().to_string(),
                 table_id,
             },
             virtual_columns: self.plan.virtual_columns.clone(),

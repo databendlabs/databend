@@ -2913,7 +2913,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-app",
- "databend-common-meta-types",
  "databend-common-storage",
  "databend-common-tracing",
  "databend-common-users",
@@ -3038,7 +3037,6 @@ dependencies = [
  "databend-common-expression",
  "databend-common-io",
  "databend-common-meta-app",
- "databend-common-meta-types",
  "databend-common-settings",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
@@ -3272,7 +3270,6 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
- "derive_more",
  "enumflags2",
  "hex",
  "itertools 0.10.5",
@@ -3637,6 +3634,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-script"
+version = "0.1.0"
+dependencies = [
+ "databend-common-ast",
+ "databend-common-exception",
+ "derive-visitor",
+ "goldenfile",
+ "minitrace",
+ "unindent",
+]
+
+[[package]]
 name = "databend-common-settings"
 version = "0.1.0"
 dependencies = [
@@ -3870,6 +3879,7 @@ dependencies = [
  "databend-common-sharing",
  "databend-common-sql",
  "databend-common-storage",
+ "databend-common-storages-share",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
  "databend-storages-common-cache-manager",
@@ -4124,6 +4134,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "bstr 1.9.1",
  "csv-core",
  "dashmap",
  "databend-common-base",
@@ -4140,9 +4151,11 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-storages-parquet",
+ "enum-as-inner 0.6.0",
  "log",
  "opendal",
  "serde",
+ "serde_json",
  "typetag",
  "uuid",
 ]
@@ -4367,10 +4380,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "databend-common-expression",
  "databend-common-meta-app",
- "databend-common-storages-fuse",
- "databend-storages-common-table-meta",
 ]
 
 [[package]]
@@ -6169,6 +6179,7 @@ source = "git+https://github.com/georust/geozero?rev=1d78b36#1d78b3604ea6d082980
 dependencies = [
  "geo-types",
  "geojson",
+ "geos",
  "log",
  "scroll",
  "serde_json",

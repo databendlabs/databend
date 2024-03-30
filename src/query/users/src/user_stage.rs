@@ -16,7 +16,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 
 use crate::UserApiProvider;
 
@@ -26,7 +26,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_stage(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         info: StageInfo,
         create_option: &CreateOption,
     ) -> Result<()> {
@@ -36,13 +36,13 @@ impl UserApiProvider {
 
     // Get one stage from by tenant.
     #[async_backtrace::framed]
-    pub async fn get_stage(&self, tenant: &NonEmptyString, stage_name: &str) -> Result<StageInfo> {
+    pub async fn get_stage(&self, tenant: &Tenant, stage_name: &str) -> Result<StageInfo> {
         let stage_api_provider = self.stage_api(tenant);
         stage_api_provider.get_stage(stage_name).await
     }
 
     #[async_backtrace::framed]
-    pub async fn exists_stage(&self, tenant: &NonEmptyString, stage_name: &str) -> Result<bool> {
+    pub async fn exists_stage(&self, tenant: &Tenant, stage_name: &str) -> Result<bool> {
         match self.get_stage(tenant, stage_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
@@ -57,7 +57,7 @@ impl UserApiProvider {
 
     // Get the tenant all stage list.
     #[async_backtrace::framed]
-    pub async fn get_stages(&self, tenant: &NonEmptyString) -> Result<Vec<StageInfo>> {
+    pub async fn get_stages(&self, tenant: &Tenant) -> Result<Vec<StageInfo>> {
         let stage_api_provider = self.stage_api(tenant);
         let get_stages = stage_api_provider.get_stages();
 
@@ -69,12 +69,7 @@ impl UserApiProvider {
 
     // Drop a stage by name.
     #[async_backtrace::framed]
-    pub async fn drop_stage(
-        &self,
-        tenant: &NonEmptyString,
-        name: &str,
-        if_exists: bool,
-    ) -> Result<()> {
+    pub async fn drop_stage(&self, tenant: &Tenant, name: &str, if_exists: bool) -> Result<()> {
         let stage_api_provider = self.stage_api(tenant);
         let drop_stage = stage_api_provider.drop_stage(name);
         match drop_stage.await {

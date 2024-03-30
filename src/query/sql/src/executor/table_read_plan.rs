@@ -35,7 +35,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::get_license_manager;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
@@ -210,11 +210,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                 start.elapsed())
                             );
                             if let Ok(policy) = handler
-                                .get_data_mask(
-                                    meta_api.clone(),
-                                    tenant.to_string(),
-                                    mask_policy.clone(),
-                                )
+                                .get_data_mask(meta_api.clone(), &tenant, mask_policy.clone())
                                 .await
                             {
                                 let args = &policy.args;
@@ -244,8 +240,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                 let ast_expr =
                                     parse_expr(&tokens, ctx.get_settings().get_sql_dialect()?)?;
                                 let mut bind_context = BindContext::new();
-                                let settings =
-                                    Settings::create(NonEmptyString::new("dummy").unwrap());
+                                let settings = Settings::create(Tenant::new_literal("dummy"));
                                 let name_resolution_ctx =
                                     NameResolutionContext::try_from(settings.as_ref())?;
                                 let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -266,7 +261,11 @@ impl ToReadDataSourcePlan for dyn Table {
                                 let expr = scalar.0.as_expr()?.project_column_ref(|col| col.index);
                                 mask_policy_map.insert(i, expr.as_remote_expr());
                             } else {
-                                info!("cannot find mask policy {}/{}", tenant, mask_policy);
+                                info!(
+                                    "cannot find mask policy {}/{}",
+                                    tenant.display(),
+                                    mask_policy
+                                );
                             }
                         }
                     }

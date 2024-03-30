@@ -50,7 +50,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     fixture.execute_command(statistics_sql).await?;
 
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), "default", "t")
+        .get_table(ctx.get_tenant().name(), "default", "t")
         .await?;
 
     // check count
