@@ -1048,6 +1048,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::Begin => {}
             Plan::Commit => {}
             Plan::Abort => {}
+            Plan::ExecuteImmediate(_) => {}
         }
 
         Ok(())

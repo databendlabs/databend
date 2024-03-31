@@ -84,9 +84,13 @@ impl Compiler {
                     let to_var = self.declare_var(&declare.name)?;
                     output.append(&mut self.compile_expr(&declare.default, to_var)?);
                 }
-                ScriptStatement::LetStatement { span, declare } => {
+                ScriptStatement::LetStatement { declare } => {
                     let to_set = self.declare_set(&declare.name)?;
-                    output.append(&mut self.compile_sql_statement(*span, &declare.stmt, to_set)?);
+                    output.append(&mut self.compile_sql_statement(
+                        declare.span,
+                        &declare.stmt,
+                        to_set,
+                    )?);
                 }
                 ScriptStatement::RunStatement { span, stmt } => {
                     let to_set = self.declare_anonymous_set(*span, "unused_result")?;
@@ -677,7 +681,7 @@ impl Compiler {
         to_set: SetRef,
     ) -> Result<Vec<ScriptIR>> {
         #[derive(VisitorMut)]
-        #[visitor(Expr(enter), Identifier(enter))]
+        #[visitor(Expr(enter), Identifier(enter), Statement(enter))]
         struct QuoteVisitor<'a> {
             compiler: &'a Compiler,
             error: Option<ErrorCode>,
@@ -715,6 +719,33 @@ impl Compiler {
                             self.error = Some(e.set_span(ident.span));
                         }
                     }
+                }
+            }
+
+            // TODO(andylokandy: handle these statement)
+            fn enter_statement(&mut self, stmt: &mut Statement) {
+                match stmt {
+                    Statement::Begin => {
+                        self.error = Some(ErrorCode::Unimplemented(
+                            "BEGIN in script is not supported yet".to_string(),
+                        ));
+                    }
+                    Statement::Commit => {
+                        self.error = Some(ErrorCode::Unimplemented(
+                            "COMMIT in script is not supported yet".to_string(),
+                        ));
+                    }
+                    Statement::Abort => {
+                        self.error = Some(ErrorCode::Unimplemented(
+                            "ABORT in script is not supported yet".to_string(),
+                        ));
+                    }
+                    Statement::Call { .. } => {
+                        self.error = Some(ErrorCode::Unimplemented(
+                            "CALL in script is not supported yet".to_string(),
+                        ));
+                    }
+                    _ => (),
                 }
             }
         }

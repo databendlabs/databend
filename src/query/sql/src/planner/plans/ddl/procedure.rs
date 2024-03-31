@@ -12,22 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod connection;
-mod data_mask;
-mod database;
-mod index;
-mod network_policy;
-mod notification;
-mod password_policy;
-mod procedure;
-mod role;
-mod share;
-mod stage;
-mod stream;
-mod table;
-mod task;
-mod view;
-mod virtual_column;
+use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExecuteImmediatePlan {
+    pub script: String,
+}
+
+impl ExecuteImmediatePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![DataField::new("Result", DataType::String)])
+    }
+}

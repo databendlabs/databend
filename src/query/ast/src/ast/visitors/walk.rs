@@ -568,5 +568,6 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::Commit => {}
         Statement::Abort => {}
         Statement::InsertMultiTable(_) => {}
+        Statement::ExecuteImmediate(_) => {}
     }
 }

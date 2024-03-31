@@ -2233,8 +2233,8 @@ CreateTable(
 
 ---------- Input ----------
 create table if not exists a.b (a int) 's3://testbucket/admin/data/'
-             connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
-             location_prefix = 'db';
+    connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
+    location_prefix = 'db';
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = 'minioadmin', aws_secret_key = 'minioadmin', endpoint_url = 'http://127.0.0.1:9900' ) LOCATION_PREFIX = 'db'
 ---------- AST ------------
@@ -12040,8 +12040,8 @@ Revoke(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM '@~/mybucket/my data.csv'
-                size_limit=10;
+    FROM '@~/mybucket/my data.csv'
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM '@~/mybucket/my data.csv' SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -12086,14 +12086,14 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM @~/mybucket/data.csv
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10;
+    FROM @~/mybucket/data.csv
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -12151,15 +12151,15 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 's3://mybucket/data.csv'
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10
-                max_files=10;
+    FROM 's3://mybucket/data.csv'
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10
+    max_files=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -12226,15 +12226,15 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 's3://mybucket/data.csv'
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10
-                max_files=3000;
+    FROM 's3://mybucket/data.csv'
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10
+    max_files=3000;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -12301,17 +12301,17 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 's3://mybucket/data.csv'
-                CONNECTION = (
-                    ENDPOINT_URL = 'http://127.0.0.1:9900'
-                )
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10;
+    FROM 's3://mybucket/data.csv'
+    CONNECTION = (
+        ENDPOINT_URL = 'http://127.0.0.1:9900'
+    )
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -12380,17 +12380,17 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 's3://mybucket/data.csv'
-                CONNECTION = (
-                    ENDPOINT_URL = 'http://127.0.0.1:9900'
-                )
-                size_limit=10
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                );
+    FROM 's3://mybucket/data.csv'
+    CONNECTION = (
+        ENDPOINT_URL = 'http://127.0.0.1:9900'
+    )
+    size_limit=10
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    );
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -12459,7 +12459,7 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 'https://127.0.0.1:9900';
+    FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
 COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -12513,7 +12513,7 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 'https://127.0.0.1:';
+    FROM 'https://127.0.0.1:';
 ---------- Output ---------
 COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -12567,15 +12567,15 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM @my_stage
-                FILE_FORMAT = (
-                    type = CSV,
-                    field_delimiter = ',',
-                    record_delimiter = '\n',
-                    skip_header = 1,
-                    error_on_column_count_mismatch = FALSE
-                )
-                size_limit=10;
+    FROM @my_stage
+    FILE_FORMAT = (
+        type = CSV,
+        field_delimiter = ',',
+        record_delimiter = '\n',
+        skip_header = 1,
+        error_on_column_count_mismatch = FALSE
+    )
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -12636,13 +12636,13 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO 's3://mybucket/data.csv'
-                FROM mytable
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
+    FROM mytable
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
 ---------- Output ---------
 COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
@@ -12655,7 +12655,7 @@ CopyIntoLocation(
                 database: None,
                 table: Identifier {
                     span: Some(
-                        56..63,
+                        44..51,
                     ),
                     name: "mytable",
                     quote: None,
@@ -12700,7 +12700,7 @@ CopyIntoLocation(
 
 ---------- Input ----------
 COPY INTO '@my_stage/my data'
-                FROM mytable;
+    FROM mytable;
 ---------- Output ---------
 COPY INTO '@my_stage/my data' FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
@@ -12713,7 +12713,7 @@ CopyIntoLocation(
                 database: None,
                 table: Identifier {
                     span: Some(
-                        51..58,
+                        39..46,
                     ),
                     name: "mytable",
                     quote: None,
@@ -12736,13 +12736,13 @@ CopyIntoLocation(
 
 ---------- Input ----------
 COPY INTO @my_stage
-                FROM mytable
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                );
+    FROM mytable
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    );
 ---------- Output ---------
 COPY INTO '@my_stage' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false
 ---------- AST ------------
@@ -12755,7 +12755,7 @@ CopyIntoLocation(
                 database: None,
                 table: Identifier {
                     span: Some(
-                        41..48,
+                        29..36,
                     ),
                     name: "mytable",
                     quote: None,
@@ -12791,18 +12791,18 @@ CopyIntoLocation(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 's3://mybucket/data.csv'
-                CREDENTIALS = (
-                    AWS_KEY_ID = 'access_key'
-                    AWS_SECRET_KEY = 'secret_key'
-                )
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10;
+    FROM 's3://mybucket/data.csv'
+    CREDENTIALS = (
+        AWS_KEY_ID = 'access_key'
+        AWS_SECRET_KEY = 'secret_key'
+    )
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -12872,14 +12872,14 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM @external_stage/path/to/file.csv
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10;
+    FROM @external_stage/path/to/file.csv
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -12937,14 +12937,14 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM @external_stage/path/to/dir/
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10;
+    FROM @external_stage/path/to/dir/
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -13002,14 +13002,14 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM @external_stage/path/to/file.csv
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                force=true;
+    FROM @external_stage/path/to/file.csv
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    force=true;
 ---------- Output ---------
 COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -13067,15 +13067,15 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO mytable
-                FROM 'fs:///path/to/data.csv'
-                FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
-                )
-                size_limit=10
-                disable_variant_check=true;
+    FROM 'fs:///path/to/data.csv'
+    FILE_FORMAT = (
+        type = CSV
+        field_delimiter = ','
+        record_delimiter = '\n'
+        skip_header = 1
+    )
+    size_limit=10
+    disable_variant_check=true;
 ---------- Output ---------
 COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort
 ---------- AST ------------
@@ -13142,13 +13142,13 @@ CopyIntoTable(
 
 ---------- Input ----------
 COPY INTO books FROM 's3://databend/books.csv'
-                CONNECTION = (
-                    ENDPOINT_URL = 'http://localhost:9000/',
-                    ACCESS_KEY_ID = 'ROOTUSER',
-                    SECRET_ACCESS_KEY = 'CHANGEME123',
-                    region = 'us-west-2'
-                )
-                FILE_FORMAT = (type = CSV);
+    CONNECTION = (
+        ENDPOINT_URL = 'http://localhost:9000/',
+        ACCESS_KEY_ID = 'ROOTUSER',
+        SECRET_ACCESS_KEY = 'CHANGEME123',
+        region = 'us-west-2'
+    )
+    FILE_FORMAT = (type = CSV);
 ---------- Output ---------
 COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV) PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
 ---------- AST ------------
@@ -14877,20 +14877,20 @@ Query(
 
 ---------- Input ----------
 SELECT t.c1 FROM @stage1/dir/file
-        ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;
+    ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;
 ---------- Output ---------
 SELECT t.c1 FROM '@stage1/dir/file' ( FILES => ('file1', 'file2'), FILE_FORMAT => 'PARQUET', ) AS t
 ---------- AST ------------
 Query(
     Query {
         span: Some(
-            0..100,
+            0..96,
         ),
         with: None,
         body: Select(
             SelectStmt {
                 span: Some(
-                    0..100,
+                    0..96,
                 ),
                 hints: None,
                 distinct: false,
@@ -14930,7 +14930,7 @@ Query(
                 from: [
                     Location {
                         span: Some(
-                            17..100,
+                            17..96,
                         ),
                         location: Stage(
                             "stage1/dir/file",
@@ -14952,7 +14952,7 @@ Query(
                             TableAlias {
                                 name: Identifier {
                                     span: Some(
-                                        99..100,
+                                        95..96,
                                     ),
                                     name: "t",
                                     quote: None,
@@ -14980,21 +14980,21 @@ Query(
 
 ---------- Input ----------
 select table0.c1, table1.c2 from
-            @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
-            left join table1;
+    @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
+    left join table1;
 ---------- Output ---------
 SELECT table0.c1, table1.c2 FROM '@stage1/dir/file' ( FILES => ('file1', 'file2'), FILE_FORMAT => 'parquet', ) AS table0 LEFT OUTER JOIN table1
 ---------- AST ------------
 Query(
     Query {
         span: Some(
-            0..154,
+            0..138,
         ),
         with: None,
         body: Select(
             SelectStmt {
                 span: Some(
-                    0..154,
+                    0..138,
                 ),
                 hints: None,
                 distinct: false,
@@ -15065,14 +15065,14 @@ Query(
                 from: [
                     Join {
                         span: Some(
-                            138..147,
+                            122..131,
                         ),
                         join: Join {
                             op: LeftOuter,
                             condition: None,
                             left: Location {
                                 span: Some(
-                                    45..125,
+                                    37..117,
                                 ),
                                 location: Stage(
                                     "stage1/dir/file",
@@ -15094,7 +15094,7 @@ Query(
                                     TableAlias {
                                         name: Identifier {
                                             span: Some(
-                                                119..125,
+                                                111..117,
                                             ),
                                             name: "table0",
                                             quote: None,
@@ -15106,13 +15106,13 @@ Query(
                             },
                             right: Table {
                                 span: Some(
-                                    148..154,
+                                    132..138,
                                 ),
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
                                     span: Some(
-                                        148..154,
+                                        132..138,
                                     ),
                                     name: "table1",
                                     quote: None,
@@ -15243,7 +15243,7 @@ Query(
 
 ---------- Input ----------
 CREATE FILE FORMAT my_csv
-            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
+    type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
 ---------- Output ---------
 CREATE FILE FORMAT my_csv field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV
 ---------- AST ------------
@@ -15271,7 +15271,7 @@ CreateFileFormat {
 
 ---------- Input ----------
 CREATE OR REPLACE FILE FORMAT my_csv
-            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
+    type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
 ---------- Output ---------
 CREATE OR REPLACE FILE FORMAT my_csv field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV
 ---------- AST ------------
@@ -17232,15 +17232,15 @@ CreateTask(
 
 
 ---------- Input ----------
-CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  as
-            BEGIN
-              begin;
-              insert into t values('a;');
-              delete from t where c = ';';
-              vacuum table t;
-              merge into t using s on t.id = s.id when matched then update *;
-              commit;
-            END
+CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles' as
+    BEGIN
+    begin;
+    insert into t values('a;');
+    delete from t where c = ';';
+    vacuum table t;
+    merge into t using s on t.id = s.id when matched then update *;
+    commit;
+    END
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS BEGIN
 BEGIN;
@@ -17284,15 +17284,15 @@ CreateTask(
 
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND
-        AS BEGIN
-          MERGE INTO t USING s ON t.c = s.c
-            WHEN MATCHED THEN
-            UPDATE
-                *
-                WHEN NOT MATCHED THEN
-            INSERT
-                *;
-        END
+AS BEGIN
+MERGE INTO t USING s ON t.c = s.c
+    WHEN MATCHED THEN
+    UPDATE
+        *
+        WHEN NOT MATCHED THEN
+    INSERT
+        *;
+END
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND AS BEGIN
 MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *;
@@ -17329,14 +17329,14 @@ CreateTask(
 
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND
-        AS BEGIN
-          MERGE INTO t USING s ON t.c = s.c
-            WHEN MATCHED THEN
-            UPDATE
-                *
-                WHEN NOT MATCHED THEN
-            INSERT values('a;', 1, "str");
-        END
+AS BEGIN
+MERGE INTO t USING s ON t.c = s.c
+    WHEN MATCHED THEN
+    UPDATE
+        *
+        WHEN NOT MATCHED THEN
+    INSERT values('a;', 1, "str");
+END
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND AS BEGIN
 MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, "str");
@@ -17599,14 +17599,14 @@ AlterTask(
 
 ---------- Input ----------
 ALTER TASK MyTask2 MODIFY AS
-            BEGIN
-              begin;
-              insert into t values('a;');
-              delete from t where c = ';';
-              vacuum table t;
-              merge into t using s on t.id = s.id when matched then update *;
-              commit;
-            END
+BEGIN
+  begin;
+  insert into t values('a;');
+  delete from t where c = ';';
+  vacuum table t;
+  merge into t using s on t.id = s.id when matched then update *;
+  commit;
+END
 ---------- Output ---------
 ALTER TASK MyTask2 MODIFY AS BEGIN
 BEGIN;
@@ -18245,20 +18245,20 @@ DescribeNotification(
 
 ---------- Input ----------
 --各环节转各环节转各环节转各环节转各
-  select 34343
+select 34343
 ---------- Output ---------
 SELECT 34343
 ---------- AST ------------
 Query(
     Query {
         span: Some(
-            56..68,
+            54..66,
         ),
         with: None,
         body: Select(
             SelectStmt {
                 span: Some(
-                    56..68,
+                    54..66,
                 ),
                 hints: None,
                 distinct: false,
@@ -18266,7 +18266,7 @@ Query(
                     AliasedExpr {
                         expr: Literal {
                             span: Some(
-                                63..68,
+                                61..66,
                             ),
                             value: UInt64(
                                 34343,
@@ -18341,20 +18341,20 @@ Query(
 
 ---------- Input ----------
 -- xxxxx
-  select 34343;
+select 34343;
 ---------- Output ---------
 SELECT 34343
 ---------- AST ------------
 Query(
     Query {
         span: Some(
-            11..23,
+            9..21,
         ),
         with: None,
         body: Select(
             SelectStmt {
                 span: Some(
-                    11..23,
+                    9..21,
                 ),
                 hints: None,
                 distinct: false,
@@ -18362,7 +18362,7 @@ Query(
                     AliasedExpr {
                         expr: Literal {
                             span: Some(
-                                18..23,
+                                16..21,
                             ),
                             value: UInt64(
                                 34343,
@@ -19085,12 +19085,12 @@ handler = 'addone_py'
 as
 $$
 def addone_py(i):
-  return i+1
+return i+1
 $$;
 ---------- Output ---------
 CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = 'addone_py' AS $$
 def addone_py(i):
-  return i+1
+return i+1
 $$
 ---------- AST ------------
 CreateUDF(
@@ -19114,7 +19114,7 @@ CreateUDF(
             return_type: Nullable(
                 Int32,
             ),
-            code: "\ndef addone_py(i):\n  return i+1\n",
+            code: "\ndef addone_py(i):\nreturn i+1\n",
             handler: "addone_py",
             language: "python",
             runtime_version: "",
@@ -19157,5 +19157,31 @@ DropUDF {
         is_hole: false,
     },
 }
+
+
+---------- Input ----------
+EXECUTE IMMEDIATE 
+$$
+BEGIN
+    LOOP
+        RETURN 1;
+    END LOOP;
+END;
+$$
+---------- Output ---------
+EXECUTE IMMEDIATE
+$$
+BEGIN
+    LOOP
+        RETURN 1;
+    END LOOP;
+END;
+$$
+---------- AST ------------
+ExecuteImmediate(
+    ExecuteImmediateStmt {
+        script: "\nBEGIN\n    LOOP\n        RETURN 1;\n    END LOOP;\nEND;\n",
+    },
+)
 
 

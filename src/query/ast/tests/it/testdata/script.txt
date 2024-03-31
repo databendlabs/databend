@@ -1,13 +1,13 @@
 ---------- Input ----------
-LET cost DECIMAL(38, 2) := 100.0
+LET cost := 100.0
 ---------- Output ---------
-LET cost Decimal(38, 2) := 100.0
+LET cost := 100.0
 ---------- AST ------------
 LetVar {
-    span: Some(
-        0..32,
-    ),
-    declare: VariableDeclare {
+    declare: DeclareVar {
+        span: Some(
+            4..17,
+        ),
         name: Identifier {
             span: Some(
                 4..8,
@@ -16,15 +16,9 @@ LetVar {
             quote: None,
             is_hole: false,
         },
-        data_type: Some(
-            Decimal {
-                precision: 38,
-                scale: 2,
-            },
-        ),
         default: Literal {
             span: Some(
-                27..32,
+                12..17,
             ),
             value: Decimal256 {
                 value: 1000,
@@ -42,10 +36,10 @@ LET t1 RESULTSET := SELECT * FROM numbers(100)
 LET t1 RESULTSET := SELECT * FROM numbers(100)
 ---------- AST ------------
 LetStatement {
-    span: Some(
-        0..46,
-    ),
-    declare: StatementDeclare {
+    declare: DeclareSet {
+        span: Some(
+            4..46,
+        ),
         name: Identifier {
             span: Some(
                 4..6,
@@ -1690,6 +1684,141 @@ RunStatement {
             ignore_result: false,
         },
     ),
+}
+
+
+---------- Input ----------
+BEGIN
+    LOOP
+        CONTINUE;
+    END LOOP;
+END;
+---------- Output ---------
+DECLARE
+BEGIN
+    LOOP
+        CONTINUE;
+    END LOOP;
+END;
+
+---------- AST ------------
+ScriptBlock {
+    declares: [],
+    body: [
+        Loop {
+            span: Some(
+                10..45,
+            ),
+            body: [
+                Continue {
+                    span: Some(
+                        23..31,
+                    ),
+                    label: None,
+                },
+            ],
+            label: None,
+        },
+    ],
+}
+
+
+---------- Input ----------
+DECLARE
+    x := 1;
+BEGIN
+    FOR y in x TO 10 DO
+        CONTINUE;
+    END FOR;
+END;
+---------- Output ---------
+DECLARE
+    x := 1;
+BEGIN
+    FOR y IN x TO 10 DO
+        CONTINUE;
+    END FOR;
+END;
+
+---------- AST ------------
+ScriptBlock {
+    declares: [
+        Var(
+            DeclareVar {
+                span: Some(
+                    12..18,
+                ),
+                name: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "x",
+                    quote: None,
+                    is_hole: false,
+                },
+                default: Literal {
+                    span: Some(
+                        17..18,
+                    ),
+                    value: UInt64(
+                        1,
+                    ),
+                },
+            },
+        ),
+    ],
+    body: [
+        ForLoop {
+            span: Some(
+                30..79,
+            ),
+            variable: Identifier {
+                span: Some(
+                    34..35,
+                ),
+                name: "y",
+                quote: None,
+                is_hole: false,
+            },
+            is_reverse: false,
+            lower_bound: ColumnRef {
+                span: Some(
+                    39..40,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                39..40,
+                            ),
+                            name: "x",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+            upper_bound: Literal {
+                span: Some(
+                    44..46,
+                ),
+                value: UInt64(
+                    10,
+                ),
+            },
+            body: [
+                Continue {
+                    span: Some(
+                        58..66,
+                    ),
+                    label: None,
+                },
+            ],
+            label: None,
+        },
+    ],
 }
 
 

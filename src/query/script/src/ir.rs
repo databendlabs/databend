@@ -194,11 +194,11 @@ impl StatementTemplate {
         StatementTemplate { span, stmt }
     }
 
-    pub fn subst(&self, lookup_var: impl Fn(VarRef) -> Result<Literal>) -> Result<Statement> {
+    pub fn subst(&self, lookup_var: impl Fn(VarRef) -> Result<Expr>) -> Result<Statement> {
         #[derive(VisitorMut)]
         #[visitor(Expr(enter), Identifier(enter))]
         struct SubstVisitor<'a> {
-            lookup_var: &'a dyn Fn(VarRef) -> Result<Literal>,
+            lookup_var: &'a dyn Fn(VarRef) -> Result<Expr>,
             error: Option<ErrorCode>,
         }
 
@@ -209,7 +209,7 @@ impl StatementTemplate {
                     let value = (self.lookup_var)(VarRef::placeholder(index));
                     match value {
                         Ok(value) => {
-                            *expr = Expr::Literal { span: *span, value };
+                            *expr = value;
                         }
                         Err(e) => {
                             self.error = Some(e.set_span(*span));
@@ -223,7 +223,10 @@ impl StatementTemplate {
                     let index = ident.name.parse::<usize>().unwrap();
                     let value = (self.lookup_var)(VarRef::placeholder(index));
                     match value {
-                        Ok(Literal::String(name)) => {
+                        Ok(Expr::Literal {
+                            value: Literal::String(name),
+                            ..
+                        }) => {
                             *ident = Identifier::from_name(ident.span, name);
                         }
                         Ok(value) => {

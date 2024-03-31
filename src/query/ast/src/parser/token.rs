@@ -484,6 +484,8 @@ pub enum TokenKind {
     DECADE,
     #[token("DECIMAL", ignore(ascii_case))]
     DECIMAL,
+    #[token("DECLARE", ignore(ascii_case))]
+    DECLARE,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
     #[token("DEFLATE", ignore(ascii_case))]
@@ -670,6 +672,8 @@ pub enum TokenKind {
     INTO,
     #[token("INVERTED", ignore(ascii_case))]
     INVERTED,
+    #[token("IMMEDIATE", ignore(ascii_case))]
+    IMMEDIATE,
     #[token("IS", ignore(ascii_case))]
     IS,
     #[token("ISODOW", ignore(ascii_case))]

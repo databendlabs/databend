@@ -577,6 +577,10 @@ impl InterpreterFactory {
             Plan::InsertMultiTable(p) => {
                 Ok(InsertMultiTableInterpreter::try_create(ctx, *p.clone())?)
             }
+            Plan::ExecuteImmediate(p) => Ok(Arc::new(ExecuteImmediateInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }

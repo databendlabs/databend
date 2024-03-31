@@ -2022,6 +2022,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let commit = value(Statement::Commit, rule! { COMMIT });
     let abort = value(Statement::Abort, rule! { ABORT | ROLLBACK });
 
+    let execute_immediate = map(
+        rule! {
+            EXECUTE ~ IMMEDIATE ~ #code_string
+        },
+        |(_, _, script)| Statement::ExecuteImmediate(ExecuteImmediateStmt { script }),
+    );
+
     alt((
         // query, explain,show
         rule!(
@@ -2146,24 +2153,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #list_stage: "`LIST @<stage_name> [pattern = '<pattern>']`"
             | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
-        ),
-        rule!(
-            #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
+            | #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
             | #show_file_formats: "`SHOW FILE FORMATS`"
             | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
-        ),
-        rule!( #copy_into ),
-        rule!(
-            #call: "`CALL <procedure_name>(<parameter>, ...)`"
-        ),
-        rule!(
-            #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
+            | #copy_into
+            | #call: "`CALL <procedure_name>(<parameter>, ...)`"
+            | #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
             | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
             | #grant_ownership : "GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>"
-        ),
-        rule!(
-            #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
+            | #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
         ),
         // data mask
         rule!(
@@ -2228,9 +2227,10 @@ AS
         ),
         rule!(
             #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
-        | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
-        | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
-        | #show_connections: "`SHOW CONNECTIONS`"
+            | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
+            | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
+            | #show_connections: "`SHOW CONNECTIONS`"
+            | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"
         ),
     ))(i)
 }
