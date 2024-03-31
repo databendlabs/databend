@@ -1611,15 +1611,23 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             fields_type,
         },
     );
-    let ty_named_tuple = map(
+    let ty_named_tuple = map_res(
         rule! { TUPLE ~ "(" ~ #comma_separated_list1(rule! { #ident ~ #type_name }) ~ ")" },
         |(_, _, fields, _)| {
-            let (fields_name, fields_type) =
+            let (fields_name, fields_type): (Vec<String>, Vec<TypeName>) =
                 fields.into_iter().map(|(name, ty)| (name.name, ty)).unzip();
-            TypeName::Tuple {
+            if fields_name
+                .iter()
+                .any(|field_name| !field_name.chars().all(|c| c.is_ascii_alphanumeric()))
+            {
+                return Err(nom::Err::Error(ErrorKind::Other(
+                    "Invalid tuple field name, only support alphanumeric characters",
+                )));
+            }
+            Ok(TypeName::Tuple {
                 fields_name: Some(fields_name),
                 fields_type,
-            }
+            })
         },
     );
     let ty_date = value(TypeName::Date, rule! { DATE });

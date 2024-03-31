@@ -699,6 +699,7 @@ fn test_statement_error() {
         r#"create table a (c tuple())"#,
         r#"create table a (c decimal)"#,
         r#"create table a (b tuple(c int, uint64));"#,
+        r#"create table a (b tuple("c-1" int, "c-2" uint64));"#,
         r#"CREATE TABLE t(c1 NULLABLE(int) NOT NULL);"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
