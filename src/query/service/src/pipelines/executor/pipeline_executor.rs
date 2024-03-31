@@ -56,7 +56,7 @@ pub enum PipelineExecutor {
 
 impl PipelineExecutor {
     pub fn create(mut pipeline: Pipeline, settings: ExecutorSettings) -> Result<Self> {
-        if !settings.enable_new_executor {
+        if !settings.enable_queries_executor {
             Ok(PipelineExecutor::QueryPipelineExecutor(
                 QueryPipelineExecutor::create(pipeline, settings)?,
             ))
@@ -90,7 +90,7 @@ impl PipelineExecutor {
         mut pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
     ) -> Result<Self> {
-        if !settings.enable_new_executor {
+        if !settings.enable_queries_executor {
             Ok(PipelineExecutor::QueryPipelineExecutor(
                 QueryPipelineExecutor::from_pipelines(pipelines, settings)?,
             ))

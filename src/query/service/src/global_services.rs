@@ -132,10 +132,9 @@ impl GlobalServices {
             CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;
         }
 
-        // if config.query.enable_queries_executor {
-        //     GlobalQueriesExecutor::init()?;
-        // }
-        GlobalQueriesExecutor::init()?;
+        if config.query.enable_queries_executor {
+            GlobalQueriesExecutor::init()?;
+        }
 
         Ok(())
     }

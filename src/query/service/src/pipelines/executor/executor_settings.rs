@@ -22,7 +22,7 @@ use databend_common_exception::Result;
 pub struct ExecutorSettings {
     pub query_id: Arc<String>,
     pub max_threads: u64,
-    pub enable_new_executor: bool,
+    pub enable_queries_executor: bool,
     pub max_execute_time_in_seconds: Duration,
     pub executor_node_id: String,
 }
@@ -35,8 +35,7 @@ impl ExecutorSettings {
         let max_execute_time_in_seconds = settings.get_max_execute_time_in_seconds()?;
 
         Ok(ExecutorSettings {
-            enable_new_executor: true,
-            // enable_new_executor: settings.get_enable_experimental_queries_executor()?,
+            enable_queries_executor: settings.get_enable_experimental_queries_executor()?,
             query_id: Arc::new(query_id),
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
             max_threads,
