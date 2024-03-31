@@ -182,7 +182,7 @@ impl PipelineExecutor {
                 }
 
                 let may_error = query_wrapper.graph.get_error();
-                match may_error {
+                return match may_error {
                     None => {
                         let guard = query_wrapper.on_finished_callback.lock().take();
                         if let Some(on_finished_callback) = guard {
@@ -190,16 +190,17 @@ impl PipelineExecutor {
                                 on_finished_callback(&Ok(query_wrapper.graph.get_proc_profiles()))
                             })??;
                         }
+                        Ok(())
                     }
                     Some(cause) => {
                         let guard = query_wrapper.on_finished_callback.lock().take();
+                        let cause_clone = cause.clone();
                         if let Some(on_finished_callback) = guard {
-                            catch_unwind(move || on_finished_callback(&Err(cause)))??;
+                            catch_unwind(move || on_finished_callback(&Err(cause_clone)))??;
                         }
+                        Err(cause)
                     }
-                }
-
-                Ok(())
+                };
             }
         }
     }
