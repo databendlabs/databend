@@ -204,23 +204,22 @@ impl ShareApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant = "tenant1";
-        let tenant2 = "tenant2";
-        let tenant3 = "tenant3";
+        let tenant_name1 = "tenant1";
+        let tenant_name2 = "tenant2";
+        let tenant_name3 = "tenant3";
         let endpoint1 = "endpoint1";
         let endpoint2 = "endpoint2";
+
+        let tenant1 = Tenant::new_literal(tenant_name1);
 
         info!("--- create share endpoints");
         let create_on = Utc::now();
         {
             let req = CreateShareEndpointReq {
                 create_option: CreateOption::Create,
-                endpoint: ShareEndpointIdent {
-                    tenant: tenant.to_string(),
-                    endpoint: endpoint1.to_string(),
-                },
+                endpoint: ShareEndpointIdent::new(&tenant1, endpoint1),
                 url: "http://127.0.0.1:22222".to_string(),
-                tenant: tenant2.to_string(),
+                tenant: tenant_name2.to_string(),
                 comment: None,
                 create_on,
                 args: BTreeMap::new(),
@@ -232,12 +231,9 @@ impl ShareApiTestSuite {
 
             let req = CreateShareEndpointReq {
                 create_option: CreateOption::Create,
-                endpoint: ShareEndpointIdent {
-                    tenant: tenant.to_string(),
-                    endpoint: endpoint1.to_string(),
-                },
+                endpoint: ShareEndpointIdent::new(&tenant1, endpoint1),
                 url: "http://127.0.0.1:21111".to_string(),
-                tenant: tenant2.to_string(),
+                tenant: tenant_name2.to_string(),
                 comment: None,
                 args: BTreeMap::new(),
                 create_on,
@@ -254,12 +250,9 @@ impl ShareApiTestSuite {
 
             let req = CreateShareEndpointReq {
                 create_option: CreateOption::Create,
-                endpoint: ShareEndpointIdent {
-                    tenant: tenant.to_string(),
-                    endpoint: endpoint2.to_string(),
-                },
+                endpoint: ShareEndpointIdent::new(&tenant1, endpoint2),
                 url: "http://127.0.0.1:21111".to_string(),
-                tenant: tenant3.to_string(),
+                tenant: tenant_name3.to_string(),
                 comment: None,
                 create_on,
                 args: BTreeMap::new(),
@@ -272,14 +265,13 @@ impl ShareApiTestSuite {
 
         info!("--- upsert share endpoints");
         {
-            let upsert_tenant = "upsert_tenant";
+            let upsert_tenant_name = "upsert_tenant";
+            let upsert_tenant = Tenant::new_literal(upsert_tenant_name);
+
             let upsert_req = UpsertShareEndpointReq {
-                endpoint: ShareEndpointIdent {
-                    tenant: upsert_tenant.to_string(),
-                    endpoint: endpoint2.to_string(),
-                },
+                endpoint: ShareEndpointIdent::new(&upsert_tenant, endpoint2),
                 url: "http://127.0.0.1:21111".to_string(),
-                tenant: tenant3.to_string(),
+                tenant: tenant_name3.to_string(),
                 create_on,
                 args: BTreeMap::new(),
             };
@@ -288,7 +280,7 @@ impl ShareApiTestSuite {
             let upsert_share_endpoint_id = res.unwrap().share_endpoint_id;
 
             let req = GetShareEndpointReq {
-                tenant: upsert_tenant.to_string(),
+                tenant: upsert_tenant.clone(),
                 endpoint: None,
                 to_tenant: None,
             };
@@ -305,12 +297,9 @@ impl ShareApiTestSuite {
             assert_eq!(upsert_share_endpoint_id, res.unwrap().share_endpoint_id);
 
             let upsert_req = UpsertShareEndpointReq {
-                endpoint: ShareEndpointIdent {
-                    tenant: upsert_tenant.to_string(),
-                    endpoint: endpoint2.to_string(),
-                },
+                endpoint: ShareEndpointIdent::new(&upsert_tenant, endpoint2),
                 url: "http://127.0.0.1:22222".to_string(),
-                tenant: tenant3.to_string(),
+                tenant: tenant_name3.to_string(),
                 create_on,
                 args: BTreeMap::new(),
             };
@@ -319,7 +308,7 @@ impl ShareApiTestSuite {
             assert_eq!(upsert_share_endpoint_id, res.unwrap().share_endpoint_id);
 
             let req = GetShareEndpointReq {
-                tenant: upsert_tenant.to_string(),
+                tenant: upsert_tenant.clone(),
                 endpoint: None,
                 to_tenant: None,
             };
@@ -334,7 +323,7 @@ impl ShareApiTestSuite {
         info!("--- get share endpoints");
         {
             let req = GetShareEndpointReq {
-                tenant: tenant.to_string(),
+                tenant: tenant1.clone(),
                 endpoint: None,
                 to_tenant: None,
             };
@@ -344,7 +333,7 @@ impl ShareApiTestSuite {
             assert_eq!(res.unwrap().share_endpoint_meta_vec.len(), 2);
 
             let req = GetShareEndpointReq {
-                tenant: tenant.to_string(),
+                tenant: tenant1.clone(),
                 endpoint: Some(endpoint1.to_string()),
                 to_tenant: None,
             };
@@ -358,16 +347,13 @@ impl ShareApiTestSuite {
         {
             let req = DropShareEndpointReq {
                 if_exists: true,
-                endpoint: ShareEndpointIdent {
-                    tenant: tenant.to_string(),
-                    endpoint: endpoint1.to_string(),
-                },
+                endpoint: ShareEndpointIdent::new(&tenant1, endpoint1),
             };
             let res = mt.drop_share_endpoint(req).await;
             assert!(res.is_ok());
 
             let req = GetShareEndpointReq {
-                tenant: tenant.to_string(),
+                tenant: tenant1.clone(),
                 endpoint: None,
                 to_tenant: None,
             };
@@ -377,7 +363,7 @@ impl ShareApiTestSuite {
             assert_eq!(res.unwrap().share_endpoint_meta_vec.len(), 1);
 
             let req = GetShareEndpointReq {
-                tenant: tenant.to_string(),
+                tenant: tenant1.clone(),
                 endpoint: Some(endpoint1.to_string()),
                 to_tenant: None,
             };
@@ -390,16 +376,14 @@ impl ShareApiTestSuite {
         {
             info!("--- create or replace share endpoints");
             let endpoint_name = "replace_endpoint";
-            let endpoint = ShareEndpointIdent {
-                tenant: tenant.to_string(),
-                endpoint: endpoint_name.to_string(),
-            };
+            let endpoint = ShareEndpointIdent::new(&tenant1, endpoint_name);
+
             let url = "http://127.0.0.1:22222".to_string();
             let req = CreateShareEndpointReq {
                 create_option: CreateOption::Create,
                 endpoint: endpoint.clone(),
                 url: url.clone(),
-                tenant: tenant2.to_string(),
+                tenant: tenant_name2.to_string(),
                 comment: None,
                 create_on,
                 args: BTreeMap::new(),
@@ -421,7 +405,7 @@ impl ShareApiTestSuite {
             assert_eq!(name_key, endpoint);
 
             let req = GetShareEndpointReq {
-                tenant: tenant.to_string(),
+                tenant: tenant1.clone(),
                 endpoint: Some(endpoint_name.to_string()),
                 to_tenant: None,
             };
@@ -435,7 +419,7 @@ impl ShareApiTestSuite {
                 create_option: CreateOption::CreateOrReplace,
                 endpoint: endpoint.clone(),
                 url: url.clone(),
-                tenant: tenant2.to_string(),
+                tenant: tenant_name2.to_string(),
                 comment: None,
                 create_on,
                 args: BTreeMap::new(),
@@ -445,7 +429,7 @@ impl ShareApiTestSuite {
             let share_endpoint_id = res.share_endpoint_id;
 
             let req = GetShareEndpointReq {
-                tenant: tenant.to_string(),
+                tenant: tenant1.clone(),
                 endpoint: Some(endpoint_name.to_string()),
                 to_tenant: None,
             };

@@ -26,6 +26,7 @@ use databend_common_meta_app::share::GetShareEndpointReq;
 use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::TableInfoMap;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_storage::ShareTableConfig;
 use databend_common_users::UserApiProvider;
 use http::header::AUTHORIZATION;
@@ -82,8 +83,9 @@ impl ShareEndpointManager {
             }
         }
 
+        let tenant = Tenant::new_or_err(from_tenant, "get_share_endpoint_config")?;
         let req = GetShareEndpointReq {
-            tenant: from_tenant.to_owned(),
+            tenant,
             endpoint: None,
             to_tenant,
         };
