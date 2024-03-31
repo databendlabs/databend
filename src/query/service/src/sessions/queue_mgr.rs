@@ -26,6 +26,7 @@ use std::task::Waker;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use databend_common_ast::ast::ExplainKind;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -36,6 +37,8 @@ use databend_common_metrics::session::incr_session_queue_acquire_error_count;
 use databend_common_metrics::session::incr_session_queue_acquire_timeout_count;
 use databend_common_metrics::session::record_session_queue_acquire_duration_ms;
 use databend_common_metrics::session::set_session_queued_queries;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::PlanExtras;
 use log::info;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
@@ -156,11 +159,11 @@ impl<Data: QueueData> QueueManager<Data> {
 
 pub struct AcquireQueueGuard {
     #[allow(dead_code)]
-    permit: OwnedSemaphorePermit,
+    permit: Option<OwnedSemaphorePermit>,
 }
 
 impl AcquireQueueGuard {
-    pub fn create(permit: OwnedSemaphorePermit) -> Self {
+    pub fn create(permit: Option<OwnedSemaphorePermit>) -> Self {
         AcquireQueueGuard { permit }
     }
 }
@@ -217,7 +220,7 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
                 }
 
                 Poll::Ready(match res {
-                    Ok(Ok(v)) => Ok(AcquireQueueGuard::create(v)),
+                    Ok(Ok(v)) => Ok(AcquireQueueGuard::create(Some(v))),
                     Ok(Err(_)) => Err(ErrorCode::TokioError("acquire queue failure.")),
                     Err(_elapsed) => Err(ErrorCode::Timeout("query queuing timeout")),
                 })
@@ -242,19 +245,26 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
     }
 }
 
-pub struct QueryEntry {
+pub enum QueryEntry {
+    Pass,
+    Enter(QueryEntryInner),
+}
+
+pub struct QueryEntryInner {
     pub query_id: String,
     pub create_time: SystemTime,
+    pub sql: String,
     pub user_info: UserInfo,
     pub timeout: Duration,
 }
 
 impl QueryEntry {
-    pub fn create(ctx: &Arc<QueryContext>) -> Result<QueryEntry> {
+    pub fn create(ctx: &Arc<QueryContext>, plan_extras: &PlanExtras) -> Result<QueryEntryInner> {
         let settings = ctx.get_settings();
-        Ok(QueryEntry {
+        Ok(QueryEntryInner {
             query_id: ctx.get_id(),
             create_time: ctx.get_created_time(),
+            sql: plan_extras.statement.to_mask_sql(),
             user_info: ctx.get_current_user()?,
             timeout: match settings.get_statement_queued_timeout()? {
                 0 => Duration::from_secs(60 * 60 * 24 * 365 * 35),
@@ -262,13 +272,74 @@ impl QueryEntry {
             },
         })
     }
+
+    pub fn create2(
+        ctx: &Arc<QueryContext>,
+        plan: &Plan,
+        plan_extras: &PlanExtras,
+    ) -> Result<QueryEntry> {
+        match plan {
+            Plan::Query { metadata, .. } => {
+                let metadata = metadata.read();
+                for table in metadata.tables() {
+                    if table.database() != "system" && table.database() != "information_schema" {
+                        return Ok(QueryEntry::Enter(Self::create(ctx, plan_extras)?));
+                    }
+                }
+            }
+            Plan::ExplainAnalyze { plan } => {
+                if let Plan::Query { metadata, .. } = plan {
+                    let metadata = metadata.read();
+
+                    for table in metadata.tables() {
+                        if table.database() != "system" && table.database() != "information_schema"
+                        {
+                            return Ok(QueryEntry::Enter(Self::create(ctx, plan_extras)?));
+                        }
+                    }
+                }
+            }
+            Plan::Explain { kind, plan, .. } => match kind {
+                ExplainKind::AnalyzePlan => {
+                    if let Plan::Query { metadata, .. } = plan {
+                        let metadata = metadata.read();
+
+                        for table in metadata.tables() {
+                            if table.database() != "system"
+                                && table.database() != "information_schema"
+                            {
+                                return Ok(QueryEntry::Enter(Self::create(ctx, plan_extras)?));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            },
+
+            Plan::Insert(_)
+            | Plan::InsertMultiTable(_)
+            | Plan::Replace(_)
+            | Plan::Delete(_)
+            | Plan::Update(_)
+            | Plan::MergeInto(_) => {
+                return Ok(QueryEntry::Enter(Self::create(ctx, plan_extras)?));
+            }
+
+            _ => {}
+        }
+
+        Ok(QueryEntry::Pass)
+    }
 }
 
 impl QueueData for QueryEntry {
     type Key = String;
 
     fn get_key(&self) -> Self::Key {
-        self.query_id.clone()
+        match self {
+            QueryEntry::Pass => unreachable!(),
+            QueryEntry::Enter(entry) => entry.query_id.clone(),
+        }
     }
 
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {
@@ -282,7 +353,10 @@ impl QueueData for QueryEntry {
     }
 
     fn timeout(&self) -> Duration {
-        self.timeout
+        match self {
+            QueryEntry::Pass => unreachable!(),
+            QueryEntry::Enter(entry) => entry.timeout,
+        }
     }
 }
 
