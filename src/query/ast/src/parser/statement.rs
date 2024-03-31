@@ -3732,7 +3732,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
     );
     let default_role_option = map(
         rule! {
-            "DEFAULT_ROLE" ~ ^"=" ~ ^#role_name
+            DEFAULT_ROLE ~ ^"=" ~ ^#role_name
         },
         |(_, _, role)| UserOptionItem::DefaultRole(role),
     );

@@ -179,7 +179,7 @@ fn test_statement() {
         r#"CREATE TABLE t(c1 int default 1);"#,
         r#"create table abc as (select * from xyz limit 10)"#,
         r#"ALTER USER u1 IDENTIFIED BY '123456';"#,
-        r#"ALTER USER u1 WITH DEFAULT_ROLE = role1;"#,
+        r#"ALTER USER u1 WITH default_role = role1;"#,
         r#"ALTER USER u1 WITH DEFAULT_ROLE = role1, TENANTSETTING;"#,
         r#"ALTER USER u1 WITH SET NETWORK POLICY = 'policy1';"#,
         r#"ALTER USER u1 WITH UNSET NETWORK POLICY;"#,
