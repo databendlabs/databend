@@ -60,7 +60,7 @@ impl From<CreateShareEndpointPlan> for CreateShareEndpointReq {
 // Create Share endpoint Plan
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowShareEndpointPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
 }
 
 impl ShowShareEndpointPlan {
@@ -90,7 +90,7 @@ impl From<ShowShareEndpointPlan> for GetShareEndpointReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropShareEndpointPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub endpoint: String,
 }
 
@@ -98,10 +98,7 @@ impl From<DropShareEndpointPlan> for DropShareEndpointReq {
     fn from(p: DropShareEndpointPlan) -> Self {
         DropShareEndpointReq {
             if_exists: true,
-            endpoint: ShareEndpointIdent {
-                tenant: p.tenant,
-                endpoint: p.endpoint,
-            },
+            endpoint: ShareEndpointIdent::new(p.tenant, p.endpoint),
         }
     }
 }

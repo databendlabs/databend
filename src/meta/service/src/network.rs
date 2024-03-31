@@ -18,6 +18,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyerror::func_name;
 use anyerror::AnyError;
 use async_trait::async_trait;
 use backon::BackoffBuilder;
@@ -36,6 +37,7 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::AppendEntriesRequest;
 use databend_common_meta_types::AppendEntriesResponse;
+use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::Fatal;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::GrpcHelper;
@@ -191,14 +193,18 @@ pub struct NetworkConnection {
 impl NetworkConnection {
     #[logcall::logcall(err = "debug")]
     #[minitrace::trace]
-    pub async fn make_client(&self) -> Result<RaftClient, Unreachable> {
+    pub async fn make_client(&self) -> Result<(RaftClient, Endpoint), Unreachable> {
         let target = self.target;
 
         let endpoint = self
             .sto
             .get_node_raft_endpoint(&target)
             .await
-            .map_err(|e| Unreachable::new(&e))?;
+            .map_err(|e| {
+                let any_err = AnyError::new(&e)
+                    .add_context(|| format!("{} target: {}", func_name!(), self.target));
+                Unreachable::new(&any_err)
+            })?;
 
         let addr = format!("http://{}", endpoint);
 
@@ -206,14 +212,18 @@ impl NetworkConnection {
 
         match self.conn_pool.get(&addr).await {
             Ok(channel) => {
-                let client = RaftClientApi::new(target, endpoint, channel);
+                let client = RaftClientApi::new(target, endpoint.clone(), channel);
                 debug!("connected: target={}: {}", target, addr);
 
-                Ok(client)
+                Ok((client, endpoint))
             }
             Err(err) => {
                 raft_metrics::network::incr_connect_failure(&target, &endpoint.to_string());
-                Err(Unreachable::new(&err))
+                let any_err = AnyError::new(&err).add_context(|| {
+                    format!("{} target: {}, addr: {}", func_name!(), self.target, addr)
+                });
+
+                Err(Unreachable::new(&any_err))
             }
         }
     }
@@ -287,11 +297,22 @@ impl NetworkConnection {
     }
 
     /// Convert gRPC status to `RPCError`
-    fn status_to_unreachable<E>(&self, status: tonic::Status) -> RPCError<RaftError<E>>
-    where E: std::error::Error {
-        warn!("target={}, gRPC error: {:?}", self.target, status);
+    fn status_to_unreachable<E>(
+        &self,
+        status: tonic::Status,
+        endpoint: Endpoint,
+    ) -> RPCError<RaftError<E>>
+    where
+        E: std::error::Error,
+    {
+        warn!(
+            "target={}, endpoint={} gRPC error: {:?}",
+            self.target, endpoint, status
+        );
 
-        RPCError::Unreachable(Unreachable::new(&status))
+        let any_err = AnyError::new(&status)
+            .add_context(|| format!("gRPC target={}, endpoint={}", self.target, endpoint));
+        RPCError::Unreachable(Unreachable::new(&any_err))
     }
 }
 
@@ -310,7 +331,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
             "send_append_entries",
         );
 
-        let mut client = self.make_client().await?;
+        let (mut client, endpoint) = self.make_client().await?;
 
         let raft_req = self.new_append_entries_raft_req(&rpc)?;
         let req = GrpcHelper::traced_req(raft_req);
@@ -327,7 +348,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
             self.target, grpc_res
         );
 
-        let resp = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+        let resp = grpc_res.map_err(|e| self.status_to_unreachable(e, endpoint))?;
 
         let raft_res = GrpcHelper::parse_raft_reply(resp)
             .map_err(|serde_err| new_net_err(&serde_err, || "parse append_entries reply"))?;
@@ -369,7 +390,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
 
         let _g = snapshot_send_inflight(self.target).counter_guard();
 
-        let mut client = self.make_client().await?;
+        let (mut client, endpoint) = self.make_client().await?;
 
         let bytes = rpc.data.len() as u64;
         raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
@@ -422,7 +443,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
 
         let resp = grpc_res.map_err(|e| {
             self.report_metrics_snapshot(false);
-            self.status_to_unreachable(e)
+            self.status_to_unreachable(e, endpoint)
         })?;
 
         let raft_res = GrpcHelper::parse_raft_reply(resp)
@@ -442,7 +463,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
     ) -> Result<VoteResponse, RPCError<RaftError>> {
         info!(id = self.id, target = self.target, rpc = rpc.summary(); "send_vote");
 
-        let mut client = self.make_client().await?;
+        let (mut client, endpoint) = self.make_client().await?;
 
         let raft_req = GrpcHelper::encode_raft_request(&rpc).map_err(|e| Unreachable::new(&e))?;
 
@@ -454,7 +475,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
         let grpc_res = client.vote(req).await;
         info!("vote: resp from target={} {:?}", self.target, grpc_res);
 
-        let resp = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+        let resp = grpc_res.map_err(|e| self.status_to_unreachable(e, endpoint))?;
 
         let raft_res = GrpcHelper::parse_raft_reply(resp)
             .map_err(|serde_err| new_net_err(&serde_err, || "parse vote reply"))?;

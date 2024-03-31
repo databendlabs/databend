@@ -763,6 +763,8 @@ pub enum TokenKind {
     NOT,
     #[token("NOTENANTSETTING", ignore(ascii_case))]
     NOTENANTSETTING,
+    #[token("DEFAULT_ROLE", ignore(ascii_case))]
+    DEFAULT_ROLE,
     #[token("NULL", ignore(ascii_case))]
     NULL,
     #[token("NULLABLE", ignore(ascii_case))]
