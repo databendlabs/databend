@@ -82,7 +82,7 @@ async fn is_all_share_data_removed(
 
     for account in share_meta.get_accounts() {
         let share_account_key = ShareConsumer {
-            tenant: account.clone(),
+            tenant: Tenant::new_or_err(account, "is_all_share_data_removed")?,
             share_id,
         };
         let res = get_share_account_meta_or_err(kv_api, &share_account_key, "").await;
@@ -581,7 +581,7 @@ impl ShareApiTestSuite {
 
             // get and check share account meta
             let share_account_name = ShareConsumer {
-                tenant: account.to_string(),
+                tenant: Tenant::new_or_err(account, "share_add_remove_account")?,
                 share_id,
             };
             let (_share_account_meta_seq, share_account_meta) =
@@ -707,7 +707,7 @@ impl ShareApiTestSuite {
 
             // check share account meta has been removed
             let share_account_name = ShareConsumer {
-                tenant: account2.to_string(),
+                tenant: Tenant::new_or_err(account2, "share_add_remove_account")?,
                 share_id,
             };
             let res = get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await;
@@ -730,7 +730,7 @@ impl ShareApiTestSuite {
 
             // check share account meta has been removed
             let share_account_name = ShareConsumer {
-                tenant: account.to_string(),
+                tenant: Tenant::new_or_err(account, "share_add_remove_account")?,
                 share_id,
             };
             let res = get_share_account_meta_or_err(mt.as_kv_api(), &share_account_name, "").await;

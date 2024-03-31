@@ -28,13 +28,6 @@ pub struct Tenant {
 }
 
 impl Tenant {
-    // #[deprecated]
-    pub fn new(tenant: impl ToString) -> Self {
-        Self {
-            tenant: tenant.to_string(),
-        }
-    }
-
     pub fn new_or_err(tenant: impl ToString, ctx: impl Display) -> Result<Self, TenantIsEmpty> {
         let non_empty =
             NonEmptyString::new(tenant.to_string()).map_err(|_e| TenantIsEmpty::new(ctx))?;
