@@ -19,8 +19,13 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Partitions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Value;
 use databend_common_settings::ReplaceIntoShuffleStrategy;
 use databend_common_sql::executor::physical_plans::CompactSource;
+use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::DeleteSource;
@@ -163,19 +168,57 @@ impl PlanFragment {
 
         let executors = Fragmenter::get_executors(ctx);
 
-        let mut executor_partitions: HashMap<String, HashMap<u32, DataSourcePlan>> = HashMap::new();
+        let mut executor_partitions: HashMap<String, HashMap<u32, DataSource>> = HashMap::new();
 
         for (plan_id, data_source) in data_sources.iter() {
-            // Redistribute partitions of ReadDataSourcePlan.
-            let partitions = &data_source.parts;
-            let partition_reshuffle = partitions.reshuffle(executors.clone())?;
-            for (executor, parts) in partition_reshuffle {
-                let mut source = data_source.clone();
-                source.parts = parts;
-                executor_partitions
-                    .entry(executor)
-                    .or_default()
-                    .insert(*plan_id, source);
+            match data_source {
+                DataSource::Table(data_source_plan) => {
+                    // Redistribute partitions of ReadDataSourcePlan.
+                    let partitions = &data_source_plan.parts;
+                    let partition_reshuffle = partitions.reshuffle(executors.clone())?;
+                    for (executor, parts) in partition_reshuffle {
+                        let mut source = data_source_plan.clone();
+                        source.parts = parts;
+                        executor_partitions
+                            .entry(executor)
+                            .or_default()
+                            .insert(*plan_id, DataSource::Table(source));
+                    }
+                }
+                DataSource::ConstTable(values) => {
+                    let num_executors = executors.len();
+                    let entries = values
+                        .columns
+                        .iter()
+                        .map(|col| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
+                        .collect::<Vec<BlockEntry>>();
+                    let block = DataBlock::new(entries, values.num_rows);
+                    // Scatter the block
+                    let mut indices = Vec::with_capacity(values.num_rows);
+                    for i in 0..values.num_rows {
+                        indices.push((i % num_executors) as u32);
+                    }
+                    let blocks = block.scatter(&indices, num_executors)?;
+                    for (executor, block) in executors.iter().zip(blocks) {
+                        let columns = block
+                            .columns()
+                            .iter()
+                            .map(|entry| {
+                                entry
+                                    .value
+                                    .convert_to_full_column(&entry.data_type, block.num_rows())
+                            })
+                            .collect::<Vec<Column>>();
+                        let source = DataSource::ConstTable(ConstTableColumn {
+                            columns,
+                            num_rows: block.num_rows(),
+                        });
+                        executor_partitions
+                            .entry(executor.clone())
+                            .or_default()
+                            .insert(*plan_id, source);
+                    }
+                }
             }
         }
 
@@ -417,7 +460,7 @@ impl PlanFragment {
         Ok(executor_part)
     }
 
-    fn collect_data_sources(&self) -> Result<HashMap<u32, DataSourcePlan>> {
+    fn collect_data_sources(&self) -> Result<HashMap<u32, DataSource>> {
         if self.fragment_type != FragmentType::Source {
             return Err(ErrorCode::Internal(
                 "Cannot get read source from a non-source fragment".to_string(),
@@ -428,7 +471,15 @@ impl PlanFragment {
 
         let mut collect_data_source = |plan: &PhysicalPlan| {
             if let PhysicalPlan::TableScan(scan) = plan {
-                data_sources.insert(scan.plan_id, *scan.source.clone());
+                data_sources.insert(scan.plan_id, DataSource::Table(*scan.source.clone()));
+            } else if let PhysicalPlan::ConstantTableScan(scan) = plan {
+                data_sources.insert(
+                    scan.plan_id,
+                    DataSource::ConstTable(ConstTableColumn {
+                        columns: scan.values.clone(),
+                        num_rows: scan.num_rows,
+                    }),
+                );
             }
         };
 
@@ -443,8 +494,45 @@ impl PlanFragment {
     }
 }
 
+struct ConstTableColumn {
+    columns: Vec<Column>,
+    num_rows: usize,
+}
+
+enum DataSource {
+    Table(DataSourcePlan),
+    // It's possible there is zero column, so we also save row number.
+    ConstTable(ConstTableColumn),
+}
+
+impl TryFrom<DataSource> for DataSourcePlan {
+    type Error = ErrorCode;
+
+    fn try_from(value: DataSource) -> Result<Self> {
+        match value {
+            DataSource::Table(plan) => Ok(plan),
+            DataSource::ConstTable(_) => Err(ErrorCode::Internal(
+                "Cannot convert ConstTable to DataSourcePlan".to_string(),
+            )),
+        }
+    }
+}
+
+impl TryFrom<DataSource> for ConstTableColumn {
+    type Error = ErrorCode;
+
+    fn try_from(value: DataSource) -> Result<Self> {
+        match value {
+            DataSource::Table(_) => Err(ErrorCode::Internal(
+                "Cannot convert Table to Vec<Column>".to_string(),
+            )),
+            DataSource::ConstTable(columns) => Ok(columns),
+        }
+    }
+}
+
 struct ReplaceReadSource {
-    sources: HashMap<u32, DataSourcePlan>,
+    sources: HashMap<u32, DataSource>,
 }
 
 impl PhysicalPlanReplacer for ReplaceReadSource {
@@ -456,6 +544,8 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
             ))
         })?;
 
+        let source = DataSourcePlan::try_from(source)?;
+
         Ok(PhysicalPlan::TableScan(TableScan {
             plan_id: plan.plan_id,
             source: Box::new(source),
@@ -463,6 +553,24 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
             table_index: plan.table_index,
             stat_info: plan.stat_info.clone(),
             internal_column: plan.internal_column.clone(),
+        }))
+    }
+
+    fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
+        let source = self.sources.remove(&plan.plan_id).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "Cannot find data source for constant table scan plan {}",
+                plan.plan_id
+            ))
+        })?;
+
+        let const_table_columns = ConstTableColumn::try_from(source)?;
+
+        Ok(PhysicalPlan::ConstantTableScan(ConstantTableScan {
+            plan_id: plan.plan_id,
+            values: const_table_columns.columns,
+            num_rows: const_table_columns.num_rows,
+            output_schema: plan.output_schema.clone(),
         }))
     }
 
