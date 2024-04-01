@@ -24,6 +24,7 @@ use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 use std::time::Duration;
+use std::time::Instant;
 use std::time::SystemTime;
 
 use databend_common_ast::ast::ExplainKind;
@@ -59,11 +60,16 @@ pub trait QueueData: Send + Sync + 'static {
     fn timeout(&self) -> Duration;
 
     fn need_acquire_to_queue(&self) -> bool;
+
+    fn enter_wait_pending(&self) {}
+
+    fn exit_wait_pending(&self, _wait_time: Duration) {}
 }
 
 pub(crate) struct Inner<Data: QueueData> {
     pub data: Arc<Data>,
     pub waker: Waker,
+    pub instant: Instant,
     pub is_abort: Arc<AtomicBool>,
 }
 
@@ -150,18 +156,33 @@ impl<Data: QueueData> QueueManager<Data> {
     }
 
     pub(crate) fn add_entity(&self, inner: Inner<Data>) -> Data::Key {
+        inner.data.enter_wait_pending();
+
         let key = inner.data.get_key();
-        let mut queue = self.queue.lock();
-        queue.insert(key.clone(), inner);
-        set_session_queued_queries(queue.len());
+        let queue_len = {
+            let mut queue = self.queue.lock();
+            queue.insert(key.clone(), inner);
+            queue.len()
+        };
+
+        set_session_queued_queries(queue_len);
         key
     }
 
     pub(crate) fn remove_entity(&self, key: &Data::Key) -> Option<Arc<Data>> {
         let mut queue = self.queue.lock();
-        let data = queue.remove(key).map(|inner| inner.data.clone());
-        set_session_queued_queries(queue.len());
-        data
+        let inner = queue.remove(key).map(|inner| inner);
+        let queue_len = queue.len();
+
+        drop(queue);
+        set_session_queued_queries(queue_len);
+        match inner {
+            None => None,
+            Some(inner) => {
+                inner.data.exit_wait_pending(inner.instant.elapsed());
+                Some(inner.data)
+            }
+        }
     }
 }
 
@@ -243,6 +264,7 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
                     *this.key = Some(this.manager.add_entity(Inner {
                         data,
                         waker,
+                        instant: Instant::now(),
                         is_abort: this.is_abort.clone(),
                     }));
                 }
@@ -254,6 +276,7 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
 }
 
 pub struct QueryEntry {
+    ctx: Arc<QueryContext>,
     pub query_id: String,
     pub create_time: SystemTime,
     pub sql: String,
@@ -270,6 +293,7 @@ impl QueryEntry {
     ) -> Result<QueryEntry> {
         let settings = ctx.get_settings();
         Ok(QueryEntry {
+            ctx: ctx.clone(),
             need_acquire_to_queue,
             query_id: ctx.get_id(),
             create_time: ctx.get_created_time(),
@@ -363,6 +387,15 @@ impl QueueData for QueryEntry {
 
     fn need_acquire_to_queue(&self) -> bool {
         self.need_acquire_to_queue
+    }
+
+    fn enter_wait_pending(&self) {
+        self.ctx.set_status_info("resources scheduling");
+    }
+
+    fn exit_wait_pending(&self, wait_time: Duration) {
+        self.ctx
+            .set_status_info(format!("resource scheduled(elapsed: {:?})", wait_time).as_str());
     }
 }
 
