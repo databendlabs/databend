@@ -82,7 +82,7 @@ INSERT FIRST
 SELECT * from s;
 
 # test alias
-statement error 1006
+statement error 1065
 INSERT FIRST
   WHEN c3 > 4 THEN
     INTO t1 (c1,c2) VALUES(c3,c4)
