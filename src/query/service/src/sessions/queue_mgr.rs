@@ -108,9 +108,12 @@ impl<Data: QueueData> QueueManager<Data> {
     pub fn remove(&self, key: Data::Key) -> bool {
         let mut queue = self.queue.lock();
         if let Some(inner) = queue.remove(&key) {
-            set_session_queued_queries(queue.len());
-            inner.waker.wake();
+            let queue_len = queue.len();
+            drop(queue);
+            set_session_queued_queries(queue_len);
+            inner.data.exit_wait_pending(inner.instant.elapsed());
             inner.is_abort.store(true, Ordering::SeqCst);
+            inner.waker.wake();
             true
         } else {
             set_session_queued_queries(queue.len());
