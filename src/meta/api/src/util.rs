@@ -638,7 +638,7 @@ fn share_account_meta_has_to_exist(
 
         Err(KVAppError::AppError(AppError::UnknownShareAccounts(
             UnknownShareAccounts::new(
-                &[name_key.tenant.clone()],
+                &[name_key.tenant.name().to_string()],
                 name_key.share_id,
                 format!("{}: {}", msg, name_key),
             ),

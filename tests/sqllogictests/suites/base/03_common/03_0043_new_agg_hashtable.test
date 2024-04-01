@@ -1,0 +1,230 @@
+# test new agg hashtable
+statement ok
+set enable_experimental_aggregate_hashtable=1
+
+statement ok
+SELECT number % 5,max(number),min(number),sum(number) FROM numbers_mt(0) GROUP BY number % 5
+
+statement ok
+SELECT max(number) FROM numbers_mt (10) WHERE number > 999999 GROUP BY number % 4
+
+statement ok
+select number, count(DISTINCT number) as a from numbers(5000000) GROUP BY number HAVING (a > 2) LIMIT 10
+
+query III
+SELECT number%5 as c1, number%4 as c2, number%3 as c3 FROM numbers_mt(1000000) where number > 4 group by number%5, number%4, number%3 order by c1,c2,c3 limit 3
+----
+0 0 0
+0 0 1
+0 0 2
+
+query II
+SELECT number%3 as c1, sum(c1) FROM numbers_mt(10) where number > 2 group by number%3 order by c1
+----
+0 0
+1 2
+2 4
+
+query IIII
+SELECT a,b,sum(a),sum(b),count() from (SELECT cast((number%6) AS bigint) as a, cast((number%15) AS bigint) as b from numbers(1000)) group by a,b order by a,b limit 3
+----
+0 0 0 0 34
+0 3 0 99 33
+0 6 0 204 34
+
+statement ok
+DROP TABLE if EXISTS t
+
+statement ok
+CREATE TABLE t(a UInt64 null, b UInt32 null, c UInt32) Engine = Fuse
+
+statement ok
+INSERT INTO t(a,b, c) SELECT if (number % 3 = 2, null, number) as a, number + 5 as b, number + 6 as c FROM numbers(10)
+
+query II
+SELECT a%3 as a1, count(1) as ct from t GROUP BY a1 ORDER BY a1 NULLS FIRST,ct
+----
+NULL 3
+0 4
+1 3
+
+query III
+SELECT a%2 as a1, a%3 as a2, count(0) as ct FROM t GROUP BY a1, a2 ORDER BY a1 NULLS FIRST, a2 NULLS FIRST
+----
+NULL NULL 3
+0 0 2
+0 1 1
+1 0 2
+1 1 2
+
+query III
+SELECT a%2 as a1, to_uint64(c % 3) as c1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1 NULLS FIRST, c1, ct
+----
+NULL 2 3
+0 0 2
+0 1 1
+1 0 2
+1 1 2
+
+query III
+SELECT to_uint64(c % 3) as c1, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1 NULLS FIRST, c1 NULLS FIRST, ct
+----
+2 NULL 3
+0 0 2
+1 0 1
+0 1 2
+1 1 2
+
+statement ok
+DROP table t
+
+statement ok
+drop table if exists t_datetime all
+
+statement ok
+CREATE TABLE t_datetime(created_at Date, created_time DateTime, count Int32)
+
+statement ok
+insert into t_datetime select to_date('2024-04-01') + number % 3, to_datetime('2024-04-01 00:00:00') + number % 3, 1 from numbers(10)
+
+query TI
+select created_at, sum(count) from t_datetime group by created_at order by created_at
+----
+2024-04-01 4
+2024-04-02 3
+2024-04-03 3
+
+query TI
+select created_time, sum(count) from t_datetime group by created_time order by created_time
+----
+2024-04-01 00:00:00.000000 4
+2024-04-01 00:00:00.000001 3
+2024-04-01 00:00:00.000002 3
+
+statement ok
+drop table t_datetime
+
+query II
+SELECT number, count(*) FROM numbers_mt(10) group by number order by number limit 5
+----
+0 1
+1 1
+2 1
+3 1
+4 1
+
+query IIIF
+SELECT number % 3 as a, number%4 as b, sum(a),avg(b) FROM numbers_mt(10000000) group by a,b order by a,b limit 5
+----
+0 0 0 0.0
+0 1 0 1.0
+0 2 0 2.0
+0 3 0 3.0
+1 0 833333 0.0
+
+statement ok
+CREATE TABLE IF NOT EXISTS t_variant(id Int null, var Variant null) Engine = Fuse
+
+statement ok
+INSERT INTO t_variant VALUES(1, parse_json('{"k":"v"}')), (2, parse_json('{"k":"v"}')), (3, parse_json('"abcd"')), (4, parse_json('"abcd"')), (5, parse_json('12')), (6, parse_json('12')), (7, parse_json('[1,2,3]')), (8, parse_json('[1,2,3]'))
+
+query IIT
+SELECT max(id) as n, min(id), var FROM t_variant GROUP BY var ORDER BY n ASC
+----
+2 1 {"k":"v"}
+4 3 "abcd"
+6 5 12
+8 7 [1,2,3]
+
+statement ok
+DROP TABLE t_variant
+
+statement ok
+CREATE TABLE IF NOT EXISTS t_array(id Int null, arr Array(Int32)) Engine = Fuse
+
+statement ok
+INSERT INTO t_array VALUES(1, []), (2, []), (3, [1,2,3]), (4, [1,2,3]), (5, [4,5,6]), (6, [4,5,6])
+
+query I
+select id % 3 as a from t_array where array_sum(arr) > 1 group by a order by a
+----
+0
+1
+2
+
+statement ok
+DROP TABLE t_array
+
+query I
+select count() from numbers(10) group by 'ab'
+----
+10
+
+query I
+select count() from numbers(10) group by to_nullable('ab')
+----
+10
+
+## Decimal
+
+query III
+select (number % 3)::Decimal(19, 2) a ,(number % 4)::Decimal(36, 4) b , count() from numbers(100) group by a,b order by a,b limit 5
+----
+0.00 0.0000 9
+0.00 1.0000 8
+0.00 2.0000 8
+0.00 3.0000 9
+1.00 0.0000 8
+
+query ITI
+select (number % 3)::Decimal(19, 2) c, to_string(number % 3) d, count() from numbers(100) group by c,d order by c, d ;
+----
+0.00 0 34
+1.00 1 33
+2.00 2 33
+
+query TI
+select number::Variant a, count() from numbers(3) group by a order by a
+----
+0 1
+1 1
+2 1
+
+query TI
+select number::Variant a, number as b, count() from numbers(3) group by a, b order by a
+----
+0 0 1
+1 1 1
+2 2 1
+
+query IIII
+select number % 3 a, max(number) - 10, number % 2 b, sum(number) + 10 from numbers(1000000) group by all order by a, b
+----
+0 999986 0 83333166676
+0 999989 1 83333666677
+1 999984 0 83332833344
+1 999987 1 83333333343
+2 999988 0 83333500010
+2 999985 1 83333000010
+
+query TTT rowsort
+SELECT ( null, to_hour(to_timestamp(3501857592331)), number::Date) from numbers(3) group by all
+----
+(NULL,18,'1970-01-01')
+(NULL,18,'1970-01-02')
+(NULL,18,'1970-01-03')
+
+query TT rowsort
+select to_string(to_bitmap(number)), to_string(to_bitmap(number+3)) FROM numbers(3) GROUP BY GROUPING SETS ((to_bitmap(number), to_bitmap(number+3)))
+----
+0 3
+1 4
+2 5
+
+# group by aggregate functions
+
+statement error (?s)1065.*GROUP BY items can't contain aggregate functions or window functions
+select sum(number + 3 ), number % 3 from numbers(10) group by sum(number + 3 ), number % 3
+
+statement error (?s)1065.*GROUP BY items can't contain aggregate functions or window functions
+select sum(number + 3 ), number % 3 from numbers(10) group by 1, 2
