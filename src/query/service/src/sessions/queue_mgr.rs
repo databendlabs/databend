@@ -171,7 +171,7 @@ impl<Data: QueueData> QueueManager<Data> {
 
     pub(crate) fn remove_entity(&self, key: &Data::Key) -> Option<Arc<Data>> {
         let mut queue = self.queue.lock();
-        let inner = queue.remove(key).map(|inner| inner);
+        let inner = queue.remove(key);
         let queue_len = queue.len();
 
         drop(queue);
