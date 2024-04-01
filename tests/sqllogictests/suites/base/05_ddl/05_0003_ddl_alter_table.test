@@ -88,7 +88,11 @@ CREATE TABLE `05_0003_at_t3`(a int not null, b int not null, c int not null) blo
 query TT
 SHOW CREATE TABLE `05_0003_at_t3`
 ----
-05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT NOT NULL,   `b` INT NOT NULL,   `c` INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
+05_0003_at_t3 CREATE TABLE "05_0003_at_t3" (
+  a INT NOT NULL,
+  b INT NOT NULL,
+  c INT NOT NULL
+) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
 
 statement ok
 ALTER TABLE `05_0003_at_t3` drop column c
