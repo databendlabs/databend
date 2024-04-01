@@ -27,10 +27,10 @@ use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_sql::executor::physical_plans::ChunkAppendData;
 use databend_common_sql::executor::physical_plans::ChunkCastSchema;
 use databend_common_sql::executor::physical_plans::ChunkCommitInsert;
+use databend_common_sql::executor::physical_plans::ChunkEvalScalar;
 use databend_common_sql::executor::physical_plans::ChunkFillAndReorder;
 use databend_common_sql::executor::physical_plans::ChunkFilter;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
-use databend_common_sql::executor::physical_plans::ChunkProject;
 use databend_common_sql::executor::physical_plans::Duplicate;
 use databend_common_sql::executor::physical_plans::Shuffle;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
@@ -74,18 +74,19 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub(crate) fn build_chunk_project(&mut self, plan: &ChunkProject) -> Result<()> {
+    pub(crate) fn build_chunk_eval_scalar(&mut self, plan: &ChunkEvalScalar) -> Result<()> {
         self.build_pipeline(&plan.input)?;
-        if plan.projections.iter().all(|x| x.is_none()) {
+        if plan.eval_scalars.iter().all(|x| x.is_none()) {
             return Ok(());
         }
         let num_input_columns = plan.input.output_schema()?.num_fields();
-        let mut f: Vec<DynTransformBuilder> = Vec::with_capacity(plan.projections.len());
-        for projection in plan.projections.iter() {
-            if let Some(projection) = projection {
-                f.push(Box::new(self.project_transform_builder(
-                    projection.clone(),
+        let mut f: Vec<DynTransformBuilder> = Vec::with_capacity(plan.eval_scalars.len());
+        for eval_scalar in plan.eval_scalars.iter() {
+            if let Some(eval_scalar) = eval_scalar {
+                f.push(Box::new(self.map_transform_builder(
                     num_input_columns,
+                    eval_scalar.0.clone(),
+                    Some(eval_scalar.1.clone()),
                 )?));
             } else {
                 f.push(Box::new(self.dummy_transform_builder()?));

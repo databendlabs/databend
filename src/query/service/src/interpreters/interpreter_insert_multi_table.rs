@@ -12,20 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::physical_plans::CastSchema;
 use databend_common_sql::executor::physical_plans::ChunkAppendData;
 use databend_common_sql::executor::physical_plans::ChunkCastSchema;
 use databend_common_sql::executor::physical_plans::ChunkCommitInsert;
+use databend_common_sql::executor::physical_plans::ChunkEvalScalar;
 use databend_common_sql::executor::physical_plans::ChunkFillAndReorder;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
-use databend_common_sql::executor::physical_plans::ChunkProject;
 use databend_common_sql::executor::physical_plans::FillAndReorder;
 use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::physical_plans::SerializableTable;
@@ -87,7 +90,7 @@ impl InsertMultiTableInterpreter {
         let (mut root, metadata) = self.build_source_physical_plan().await?;
         let update_stream_meta = build_update_stream_meta_seq(self.ctx.clone(), &metadata).await?;
         let source_schema = root.output_schema()?;
-        let mut branches = self.build_insert_into_branches().await?;
+        let branches = self.build_insert_into_branches().await?;
         let serializable_tables = branches
             .build_serializable_target_tables(self.ctx.clone())
             .await?;
@@ -95,16 +98,25 @@ impl InsertMultiTableInterpreter {
             .build_deduplicated_serializable_target_tables(self.ctx.clone())
             .await?;
         let predicates = branches.build_predicates(source_schema.as_ref())?;
-        let projections = branches.build_projections();
-        let source_schemas = projections
+        let eval_scalars = branches.build_eval_scalars(source_schema.as_ref())?;
+        println!("{:?}", eval_scalars);
+        let source_schemas = eval_scalars
             .iter()
-            .map(|opt_projection| {
-                opt_projection
+            .map(|opt_exprs| {
+                opt_exprs
                     .as_ref()
-                    .map(|p| Arc::new(source_schema.project(p)))
+                    .map(|(remote_exprs, _)| {
+                        let mut fields = Vec::with_capacity(remote_exprs.len());
+                        for r in remote_exprs {
+                            let data_type = r.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
+                            fields.push(DataField::new("", data_type));
+                        }
+                        Arc::new(DataSchema::new(fields))
+                    })
                     .unwrap_or_else(|| source_schema.clone())
             })
             .collect::<Vec<_>>();
+        println!("{:?}", source_schemas);
         let cast_schemas = branches.build_cast_schema(source_schemas);
         let fill_and_reorders = branches.build_fill_and_reorder(self.ctx.clone()).await?;
         let group_ids = branches.build_group_ids();
@@ -128,10 +140,10 @@ impl InsertMultiTableInterpreter {
             predicates,
         }));
 
-        root = PhysicalPlan::ChunkProject(Box::new(ChunkProject {
+        root = PhysicalPlan::ChunkEvalScalar(Box::new(ChunkEvalScalar {
             plan_id: 0,
             input: Box::new(root),
-            projections,
+            eval_scalars,
         }));
 
         root = PhysicalPlan::ChunkCastSchema(Box::new(ChunkCastSchema {
@@ -249,11 +261,16 @@ impl InsertMultiTableInterpreter {
                 catalog,
                 database,
                 table,
-                projection,
                 casted_schema,
+                source_scalar_exprs,
             } = into;
             let table = self.ctx.get_table(catalog, database, table).await?;
-            branches.push(table, condition, projection.clone(), casted_schema.clone());
+            branches.push(
+                table,
+                condition,
+                source_scalar_exprs.clone(),
+                casted_schema.clone(),
+            );
         }
 
         Ok(branches)
@@ -278,11 +295,18 @@ fn not(expr: ScalarExpr) -> ScalarExpr {
     })
 }
 
+fn scalar_expr_to_remote_expr(expr: &ScalarExpr, block_schema: &DataSchema) -> Result<RemoteExpr> {
+    let expr = expr
+        .as_expr()?
+        .project_column_ref(|col| block_schema.index_of(&col.index.to_string()).unwrap());
+    Ok(expr.as_remote_expr())
+}
+
 #[derive(Default)]
 struct InsertIntoBranches {
     tables: Vec<Arc<dyn Table>>,
     conditions: Vec<Option<ScalarExpr>>,
-    projections: Vec<Option<Vec<usize>>>,
+    source_exprs: Vec<Option<Vec<ScalarExpr>>>,
     casted_schemas: Vec<DataSchemaRef>,
     len: usize,
 }
@@ -292,12 +316,12 @@ impl InsertIntoBranches {
         &mut self,
         table: Arc<dyn Table>,
         condition: Option<ScalarExpr>,
-        projection: Option<Vec<usize>>,
+        source_exprs: Option<Vec<ScalarExpr>>,
         casted_schema: DataSchemaRef,
     ) {
         self.tables.push(table);
         self.conditions.push(condition);
-        self.projections.push(projection);
+        self.source_exprs.push(source_exprs);
         self.casted_schemas.push(casted_schema);
         self.len += 1;
     }
@@ -362,8 +386,26 @@ impl InsertIntoBranches {
         Ok(predicates)
     }
 
-    fn build_projections(&mut self) -> Vec<Option<Vec<usize>>> {
-        std::mem::take(&mut self.projections)
+    fn build_eval_scalars(
+        &self,
+        source_schema: &DataSchema,
+    ) -> Result<Vec<Option<(Vec<RemoteExpr>, HashSet<usize>)>>> {
+        let mut eval_scalars = vec![];
+        for opt_scalar_exprs in self.source_exprs.iter() {
+            if let Some(scalar_exprs) = opt_scalar_exprs {
+                let exprs = scalar_exprs
+                    .iter()
+                    .map(|scalar_expr| scalar_expr_to_remote_expr(scalar_expr, source_schema))
+                    .collect::<Result<Vec<_>>>()?;
+                let source_field_num = source_schema.fields().len();
+                let evaled_num = scalar_exprs.len();
+                let projection = (source_field_num..source_field_num + evaled_num).collect();
+                eval_scalars.push(Some((exprs, projection)));
+            } else {
+                eval_scalars.push(None);
+            }
+        }
+        Ok(eval_scalars)
     }
 
     fn build_cast_schema(&self, source_schemas: Vec<DataSchemaRef>) -> Vec<Option<CastSchema>> {

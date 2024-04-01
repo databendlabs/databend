@@ -414,3 +414,106 @@ select * from t2 order by c1;
 ----
 1 2
 3 4
+
+
+statement ok 
+create or replace table t1(c1 int,c2 int);
+
+statement ok
+create or replace table t2(c1 int,c2 int);
+
+statement ok
+create or replace table s(c3 int,c4 int);
+
+statement ok
+insert into s values(1,2),(3,4),(5,6);
+
+statement ok
+INSERT FIRST
+    WHEN c3 = 5 THEN
+      INTO t1 values(123,c3)
+    WHEN c3 > 0 THEN
+      INTO t2 values(c4,456)
+SELECT * from s;
+
+query II
+select * from t1 order by c1;
+----
+123 5
+
+query II
+select * from t2 order by c1;
+----
+2 456
+4 456
+
+
+statement ok 
+create or replace table t1(c1 int,c2 int);
+
+statement ok
+create or replace table t2(c1 int,c2 int);
+
+statement ok
+create or replace table s(c3 int,c4 int);
+
+statement ok
+insert into s values(1,2),(3,4),(5,6);
+
+statement ok
+INSERT FIRST
+    WHEN c3 = 5 THEN
+      INTO t1 values(123,DEFAULT)
+    WHEN c3 > 0 THEN
+      INTO t2 values(c4 + 1,456)
+SELECT * from s;
+
+query II
+select * from t1 order by c1;
+----
+123 NULL
+
+query II
+select * from t2 order by c1;
+----
+3 456
+5 456
+
+statement ok
+CREATE OR REPLACE TABLE orders_placed (order_id INT, customer_id INT, order_amount FLOAT, order_date DATE);
+
+statement ok
+CREATE OR REPLACE TABLE processing_updates (order_id INT, update_note VARCHAR);
+
+statement ok
+INSERT INTO orders_placed (order_id, customer_id, order_amount, order_date)
+VALUES    (101, 1, 250.00, '2023-01-01'),
+          (102, 2, 450.00, '2023-01-02'),
+          (103, 1, 1250.00, '2023-01-03'),
+          (104, 3, 750.00, '2023-01-04'),
+          (105, 2, 50.00, '2023-01-05');
+
+statement ok
+INSERT FIRST
+WHEN order_amount > 1000 THEN INTO processing_updates VALUES (order_id, 'PriorityHandling')
+WHEN order_amount > 500 THEN INTO processing_updates VALUES (order_id, 'ExpressHandling') 
+WHEN order_amount > 100 THEN INTO processing_updates VALUES (order_id, 'StandardHandling')
+ELSE INTO processing_updates VALUES (order_id, 'ReviewNeeded')
+SELECT    order_id,
+          order_amount
+FROM      orders_placed;
+
+query IT
+select * from processing_updates order by order_id;
+----
+101 StandardHandling
+102 StandardHandling
+103 PriorityHandling
+104 ExpressHandling
+105 ReviewNeeded
+
+# althogh target table is inserted in multi branches, the number of segment should be 1
+query I
+select count() from fuse_segment('default', 'processing_updates');
+----
+1

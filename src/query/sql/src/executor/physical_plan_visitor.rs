@@ -21,10 +21,10 @@ use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::ChunkAppendData;
 use crate::executor::physical_plans::ChunkCastSchema;
 use crate::executor::physical_plans::ChunkCommitInsert;
+use crate::executor::physical_plans::ChunkEvalScalar;
 use crate::executor::physical_plans::ChunkFillAndReorder;
 use crate::executor::physical_plans::ChunkFilter;
 use crate::executor::physical_plans::ChunkMerge;
-use crate::executor::physical_plans::ChunkProject;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
@@ -110,7 +110,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::Duplicate(plan) => self.replace_duplicate(plan),
             PhysicalPlan::Shuffle(plan) => self.replace_shuffle(plan),
             PhysicalPlan::ChunkFilter(plan) => self.replace_chunk_filter(plan),
-            PhysicalPlan::ChunkProject(plan) => self.replace_chunk_project(plan),
+            PhysicalPlan::ChunkEvalScalar(plan) => self.replace_chunk_eval_scalar(plan),
             PhysicalPlan::ChunkCastSchema(plan) => self.replace_chunk_cast_schema(plan),
             PhysicalPlan::ChunkFillAndReorder(plan) => self.replace_chunk_fill_and_reorder(plan),
             PhysicalPlan::ChunkAppendData(plan) => self.replace_chunk_append_data(plan),
@@ -553,11 +553,10 @@ pub trait PhysicalPlanReplacer {
         })))
     }
 
-    fn replace_chunk_project(&mut self, plan: &ChunkProject) -> Result<PhysicalPlan> {
+    fn replace_chunk_eval_scalar(&mut self, plan: &ChunkEvalScalar) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::ChunkProject(Box::new(ChunkProject {
+        Ok(PhysicalPlan::ChunkEvalScalar(Box::new(ChunkEvalScalar {
             input: Box::new(input),
-            projections: plan.projections.clone(),
             ..plan.clone()
         })))
     }
@@ -735,7 +734,7 @@ impl PhysicalPlan {
                 PhysicalPlan::ChunkFilter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::ChunkProject(plan) => {
+                PhysicalPlan::ChunkEvalScalar(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::ChunkCastSchema(plan) => {

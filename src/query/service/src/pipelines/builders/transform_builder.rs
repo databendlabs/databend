@@ -31,6 +31,7 @@ use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::ColumnSet;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -154,20 +155,26 @@ impl PipelineBuilder {
         })
     }
 
-    pub(crate) fn project_transform_builder(
+    pub(crate) fn map_transform_builder(
         &self,
-        projection: Vec<usize>,
         num_input_columns: usize,
+        remote_exprs: Vec<RemoteExpr>,
+        projections: Option<ColumnSet>,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         let func_ctx = self.func_ctx.clone();
+        let exprs = remote_exprs
+            .iter()
+            .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS))
+            .collect::<Vec<_>>();
         Ok(move |input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
                 num_input_columns,
                 func_ctx.clone(),
-                vec![BlockOperator::Project {
-                    projection: projection.clone(),
+                vec![BlockOperator::Map {
+                    exprs: exprs.clone(),
+                    projections: projections.clone(),
                 }],
             )))
         })
