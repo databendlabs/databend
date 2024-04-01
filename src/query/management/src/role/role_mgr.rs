@@ -247,6 +247,43 @@ impl RoleApi for RoleMgr {
         Ok(Some(seq))
     }
 
+    /// Only drop role will call transfer.
+    ///
+    /// If a role is dropped, but the owner object is exists,
+    ///
+    /// The owner role need to update to account_admin.
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    async fn transfer_ownership_to_admin(
+        &self,
+        object: &OwnershipObject,
+    ) -> databend_common_exception::Result<()> {
+        // Ensure accurate matching of a key
+        let match_seq = MatchSeq::GE(1);
+        let key = self.ownership_object_key(object);
+
+        let value = serialize_struct(
+            &OwnershipInfo {
+                object: object.clone(),
+                role: "account_admin".to_string(),
+            },
+            ErrorCode::IllegalUserInfoFormat,
+            || "",
+        )?;
+
+        let kv_api = self.kv_api.clone();
+        kv_api
+            .upsert_kv(UpsertKVReq::new(
+                &key,
+                match_seq,
+                Operation::Update(value),
+                None,
+            ))
+            .await?;
+
+        Ok(())
+    }
+
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn grant_ownership(

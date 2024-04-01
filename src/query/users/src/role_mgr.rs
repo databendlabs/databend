@@ -268,9 +268,19 @@ impl UserApiProvider {
     }
 
     // Drop a role by name
+    // If the dropped role owns objects, transfer objects owner to account_admin role.
     #[async_backtrace::framed]
     pub async fn drop_role(&self, tenant: &Tenant, role: String, if_exists: bool) -> Result<()> {
         let client = self.role_api(tenant);
+        // get_ownerships use prefix_list_kv that will generate once meta call
+        let ownerships = self.get_ownerships(tenant).await?;
+        for (k, v) in ownerships {
+            if v == role {
+                // If role own n objects, will generate n meta call.
+                client.transfer_ownership_to_admin(&k).await?;
+            }
+        }
+
         let drop_role = client.drop_role(role, MatchSeq::GE(1));
         match drop_role.await {
             Ok(res) => Ok(res),
