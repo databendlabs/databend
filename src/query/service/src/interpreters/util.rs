@@ -17,7 +17,7 @@ use databend_common_ast::parser::Dialect;
 
 pub fn format_name(name: &str, quoted_ident_case_sensitive: bool, dialect: Dialect) -> String {
     // Db-s -> "Db-s" ; dbs -> dbs
-    if name.chars().find(|c| c.is_ascii_uppercase()).is_some() && quoted_ident_case_sensitive {
+    if name.chars().any(|c| c.is_ascii_uppercase()) && quoted_ident_case_sensitive {
         quote_ident(name, dialect.default_ident_quote(), true)
     } else {
         quote_ident(name, dialect.default_ident_quote(), false)
