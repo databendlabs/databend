@@ -517,3 +517,25 @@ query I
 select count() from fuse_segment('default', 'processing_updates');
 ----
 1
+
+# test default ambiguity
+statement ok 
+create or replace table t1(c1 int,c2 int);
+
+statement ok
+create or replace table t2(c1 int,c2 int);
+
+statement ok
+create or replace table s(c3 int,default int);
+
+statement ok
+insert into s values(1,2),(3,4),(5,6);
+
+# The column name in source of multi-table insert cant be default
+statement error 1006
+INSERT FIRST
+    WHEN c3 = 5 THEN
+      INTO t1
+    WHEN c3 > 0 THEN
+      INTO t2 values(c3, default)
+SELECT * from s;

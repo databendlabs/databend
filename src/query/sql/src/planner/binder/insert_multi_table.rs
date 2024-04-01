@@ -81,6 +81,15 @@ impl Binder {
         };
 
         let source_schema = input_source.schema();
+        for field in source_schema.fields.iter() {
+            if field.name().to_lowercase() == "default" {
+                return Err(ErrorCode::BadArguments(
+                    "The column name in source of multi-table insert can't be 'default'"
+                        .to_string(),
+                ));
+            }
+        }
+
         let mut source_bind_context = bind_context.clone();
         let mut whens = vec![];
         for when_clause in when_clauses {
