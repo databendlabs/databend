@@ -293,7 +293,7 @@ impl QueryEntry {
                 for table in metadata.tables() {
                     // table function database is also system
                     if (table.database() != "system" && table.database() != "information_schema")
-                        || (table.name() != "one" && table.name() != "numbers")
+                        || (table.name() == "one" || table.name() == "numbers")
                     {
                         return false;
                     }
