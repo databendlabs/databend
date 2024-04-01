@@ -2346,8 +2346,8 @@ fn when_clause(i: Input) -> IResult<WhenClause> {
 
 fn into_clause(i: Input) -> IResult<IntoClause> {
     let source_expr = alt((
-        map(rule! { #expr }, SourceExpr::Expr),
         map(rule! {DEFAULT}, |_| SourceExpr::Default),
+        map(rule! { #expr }, SourceExpr::Expr),
     ));
     map(
         rule! {
