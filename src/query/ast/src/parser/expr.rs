@@ -1480,21 +1480,17 @@ pub fn literal_string(i: Input) -> IResult<String> {
             QuotedString
         },
         |token| {
-            if token
-                .text()
-                .chars()
-                .next()
-                .filter(|c| i.dialect.is_string_quote(*c))
-                .is_some()
-            {
-                let str = &token.text()[1..token.text().len() - 1];
-                let unescaped = unescape_string(str, '\'').ok_or(nom::Err::Failure(
-                    ErrorKind::Other("invalid escape or unicode"),
-                ))?;
-                Ok(unescaped)
-            } else {
-                Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))
+            if let Some(quote) = token.text().chars().next() {
+                if i.dialect.is_string_quote(quote) {
+                    let str = &token.text()[1..token.text().len() - 1];
+                    let unescaped = unescape_string(str, quote).ok_or(nom::Err::Failure(
+                        ErrorKind::Other("invalid escape or unicode"),
+                    ))?;
+                    return Ok(unescaped);
+                }
             }
+
+            Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))
         },
     )(i)
 }
@@ -1615,15 +1611,23 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             fields_type,
         },
     );
-    let ty_named_tuple = map(
+    let ty_named_tuple = map_res(
         rule! { TUPLE ~ "(" ~ #comma_separated_list1(rule! { #ident ~ #type_name }) ~ ")" },
         |(_, _, fields, _)| {
-            let (fields_name, fields_type) =
+            let (fields_name, fields_type): (Vec<String>, Vec<TypeName>) =
                 fields.into_iter().map(|(name, ty)| (name.name, ty)).unzip();
-            TypeName::Tuple {
+            if fields_name
+                .iter()
+                .any(|field_name| !field_name.chars().all(|c| c.is_ascii_alphanumeric()))
+            {
+                return Err(nom::Err::Error(ErrorKind::Other(
+                    "Invalid tuple field name, only support alphanumeric characters",
+                )));
+            }
+            Ok(TypeName::Tuple {
                 fields_name: Some(fields_name),
                 fields_type,
-            }
+            })
         },
     );
     let ty_date = value(TypeName::Date, rule! { DATE });

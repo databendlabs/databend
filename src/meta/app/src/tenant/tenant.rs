@@ -28,13 +28,6 @@ pub struct Tenant {
 }
 
 impl Tenant {
-    // #[deprecated]
-    pub fn new(tenant: impl ToString) -> Self {
-        Self {
-            tenant: tenant.to_string(),
-        }
-    }
-
     pub fn new_or_err(tenant: impl ToString, ctx: impl Display) -> Result<Self, TenantIsEmpty> {
         let non_empty =
             NonEmptyString::new(tenant.to_string()).map_err(|_e| TenantIsEmpty::new(ctx))?;
@@ -70,6 +63,22 @@ impl Tenant {
 
     pub fn display(&self) -> impl Display {
         format!("Tenant{}", self.tenant)
+    }
+}
+
+pub trait ToTenant {
+    fn to_tenant(self) -> Tenant;
+}
+
+impl ToTenant for Tenant {
+    fn to_tenant(self) -> Tenant {
+        self
+    }
+}
+
+impl ToTenant for &Tenant {
+    fn to_tenant(self) -> Tenant {
+        self.clone()
     }
 }
 

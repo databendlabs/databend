@@ -169,11 +169,30 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    // date need has timezone info.
-                    if let Ok(res) = DateTime::parse_from_str(timestamp, format) {
-                        output.push(res.with_timezone(&ctx.func_ctx.tz.tz).timestamp_micros());
+                    //%Z	ACST	Local time zone name. Skips all non-whitespace characters during parsing. Identical to %:z when formatting. 6
+                    // %z	+0930	Offset from the local time to UTC (with UTC being +0000).
+                    // %:z	+09:30	Same as %z but with a colon.
+                    // %::z	+09:30:00	Offset from the local time to UTC with seconds.
+                    // %:::z	+09	Offset from the local time to UTC without minutes.
+                    // %#z	+09	Parsing only: Same as %z but allows minutes to be missing or present.
+                    let timezone_strftime = ["%Z", "%z", "%:z", "%::z", "%:::z", "%#z"];
+                    if timezone_strftime
+                        .iter()
+                        .any(|&pattern| format.contains(pattern))
+                    {
+                        if let Ok(res) = DateTime::parse_from_str(timestamp, format) {
+                            // date need has timezone info.
+                            output.push(res.with_timezone(&ctx.func_ctx.tz.tz).timestamp_micros());
+                        } else {
+                            output.push_null();
+                        }
                     } else {
-                        output.push_null();
+                        // Parse as unix timestamp
+                        if let Ok(res) = NaiveDateTime::parse_from_str(timestamp, format) {
+                            output.push(res.timestamp_micros());
+                        } else {
+                            output.push_null();
+                        }
                     }
                 }
             },

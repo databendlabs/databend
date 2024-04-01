@@ -293,30 +293,3 @@ impl FromToProto for mt::ShareEndpointMeta {
         })
     }
 }
-
-impl FromToProto for mt::ShareEndpointIdent {
-    type PB = pb::ShareEndpointIdent;
-
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-
-    fn from_pb(p: pb::ShareEndpointIdent) -> Result<Self, Incompatible>
-    where Self: Sized {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
-        Ok(mt::ShareEndpointIdent {
-            tenant: p.tenant.clone(),
-            endpoint: p.endpoint,
-        })
-    }
-
-    fn to_pb(&self) -> Result<pb::ShareEndpointIdent, Incompatible> {
-        Ok(pb::ShareEndpointIdent {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            tenant: self.tenant.clone(),
-            endpoint: self.endpoint.clone(),
-        })
-    }
-}
