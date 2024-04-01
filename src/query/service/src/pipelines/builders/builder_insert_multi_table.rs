@@ -85,8 +85,8 @@ impl PipelineBuilder {
             if let Some(eval_scalar) = eval_scalar {
                 f.push(Box::new(self.map_transform_builder(
                     num_input_columns,
-                    eval_scalar.0.clone(),
-                    Some(eval_scalar.1.clone()),
+                    eval_scalar.remote_exprs.clone(),
+                    Some(eval_scalar.projection.clone()),
                 )?));
             } else {
                 f.push(Box::new(self.dummy_transform_builder()?));

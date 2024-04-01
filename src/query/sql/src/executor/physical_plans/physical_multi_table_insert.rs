@@ -75,7 +75,13 @@ pub struct ChunkFilter {
 pub struct ChunkEvalScalar {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    pub eval_scalars: Vec<Option<(Vec<RemoteExpr>, HashSet<usize>)>>,
+    pub eval_scalars: Vec<Option<MultiInsertEvalScalar>>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct MultiInsertEvalScalar {
+    pub remote_exprs: Vec<RemoteExpr>,
+    pub projection: HashSet<usize>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

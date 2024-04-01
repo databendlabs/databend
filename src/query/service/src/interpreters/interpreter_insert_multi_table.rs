@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -30,6 +29,7 @@ use databend_common_sql::executor::physical_plans::ChunkEvalScalar;
 use databend_common_sql::executor::physical_plans::ChunkFillAndReorder;
 use databend_common_sql::executor::physical_plans::ChunkMerge;
 use databend_common_sql::executor::physical_plans::FillAndReorder;
+use databend_common_sql::executor::physical_plans::MultiInsertEvalScalar;
 use databend_common_sql::executor::physical_plans::Project;
 use databend_common_sql::executor::physical_plans::SerializableTable;
 use databend_common_sql::executor::physical_plans::ShuffleStrategy;
@@ -99,24 +99,27 @@ impl InsertMultiTableInterpreter {
             .await?;
         let predicates = branches.build_predicates(source_schema.as_ref())?;
         let eval_scalars = branches.build_eval_scalars(source_schema.as_ref())?;
-        println!("{:?}", eval_scalars);
         let source_schemas = eval_scalars
             .iter()
             .map(|opt_exprs| {
                 opt_exprs
                     .as_ref()
-                    .map(|(remote_exprs, _)| {
-                        let mut fields = Vec::with_capacity(remote_exprs.len());
-                        for r in remote_exprs {
-                            let data_type = r.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
-                            fields.push(DataField::new("", data_type));
-                        }
-                        Arc::new(DataSchema::new(fields))
-                    })
+                    .map(
+                        |MultiInsertEvalScalar {
+                             remote_exprs,
+                             projection: _,
+                         }| {
+                            let mut fields = Vec::with_capacity(remote_exprs.len());
+                            for r in remote_exprs {
+                                let data_type = r.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
+                                fields.push(DataField::new("", data_type));
+                            }
+                            Arc::new(DataSchema::new(fields))
+                        },
+                    )
                     .unwrap_or_else(|| source_schema.clone())
             })
             .collect::<Vec<_>>();
-        println!("{:?}", source_schemas);
         let cast_schemas = branches.build_cast_schema(source_schemas);
         let fill_and_reorders = branches.build_fill_and_reorder(self.ctx.clone()).await?;
         let group_ids = branches.build_group_ids();
@@ -389,7 +392,7 @@ impl InsertIntoBranches {
     fn build_eval_scalars(
         &self,
         source_schema: &DataSchema,
-    ) -> Result<Vec<Option<(Vec<RemoteExpr>, HashSet<usize>)>>> {
+    ) -> Result<Vec<Option<MultiInsertEvalScalar>>> {
         let mut eval_scalars = vec![];
         for opt_scalar_exprs in self.source_exprs.iter() {
             if let Some(scalar_exprs) = opt_scalar_exprs {
@@ -400,7 +403,10 @@ impl InsertIntoBranches {
                 let source_field_num = source_schema.fields().len();
                 let evaled_num = scalar_exprs.len();
                 let projection = (source_field_num..source_field_num + evaled_num).collect();
-                eval_scalars.push(Some((exprs, projection)));
+                eval_scalars.push(Some(MultiInsertEvalScalar {
+                    remote_exprs: exprs,
+                    projection,
+                }));
             } else {
                 eval_scalars.push(None);
             }
