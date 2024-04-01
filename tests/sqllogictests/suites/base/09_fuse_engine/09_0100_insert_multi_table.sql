@@ -70,7 +70,7 @@ INSERT FIRST
 SELECT * from s;
 
 # The source column in into clause must be a column ref of the source table
-statement error 1006
+statement error 1065
 INSERT FIRST
   WHEN c3 > 4 THEN
     INTO t1 (c1,c2) VALUES(c1,c4)
@@ -539,3 +539,23 @@ INSERT FIRST
     WHEN c3 > 0 THEN
       INTO t2 values(c3, default)
 SELECT * from s;
+
+
+statement ok
+INSERT FIRST
+    WHEN c3 = 5 THEN
+      INTO t1
+    WHEN c3 > 0 THEN
+      INTO t2 values(c3, c4)
+SELECT c3,default as c4 from s;
+
+query II
+select * from t1 order by c1;
+----
+5 6
+
+query II
+select * from t2 order by c1;
+----
+1 2
+3 4
