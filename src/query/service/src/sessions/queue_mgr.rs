@@ -57,6 +57,8 @@ pub trait QueueData: Send + Sync + 'static {
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode;
 
     fn timeout(&self) -> Duration;
+
+    fn need_acquire_to_queue(&self) -> bool;
 }
 
 pub(crate) struct Inner<Data: QueueData> {
@@ -111,34 +113,40 @@ impl<Data: QueueData> QueueManager<Data> {
     }
 
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
-        let timeout = data.timeout();
-        let future = AcquireQueueFuture::create(
-            Arc::new(data),
-            tokio::time::timeout(timeout, self.semaphore.clone().acquire_owned()),
-            self.clone(),
-        );
-        let start_time = SystemTime::now();
+        if data.need_acquire_to_queue() {
+            let timeout = data.timeout();
+            let future = AcquireQueueFuture::create(
+                Arc::new(data),
+                tokio::time::timeout(timeout, self.semaphore.clone().acquire_owned()),
+                self.clone(),
+            );
+            let start_time = SystemTime::now();
 
-        match future.await {
-            Ok(v) => {
-                record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
-                Ok(v)
-            }
-            Err(e) => {
-                match e.code() {
-                    ErrorCode::ABORTED_QUERY => {
-                        incr_session_queue_abort_count();
-                    }
-                    ErrorCode::TIMEOUT => {
-                        incr_session_queue_acquire_timeout_count();
-                    }
-                    _ => {
-                        incr_session_queue_acquire_error_count();
-                    }
+            return match future.await {
+                Ok(v) => {
+                    record_session_queue_acquire_duration_ms(
+                        start_time.elapsed().unwrap_or_default(),
+                    );
+                    Ok(v)
                 }
-                Err(e)
-            }
+                Err(e) => {
+                    match e.code() {
+                        ErrorCode::ABORTED_QUERY => {
+                            incr_session_queue_abort_count();
+                        }
+                        ErrorCode::TIMEOUT => {
+                            incr_session_queue_acquire_timeout_count();
+                        }
+                        _ => {
+                            incr_session_queue_acquire_error_count();
+                        }
+                    }
+                    Err(e)
+                }
+            };
         }
+
+        Ok(AcquireQueueGuard::create(None))
     }
 
     pub(crate) fn add_entity(&self, inner: Inner<Data>) -> Data::Key {
@@ -245,23 +253,24 @@ where T: Future<Output = Result<Result<OwnedSemaphorePermit, AcquireError>, Elap
     }
 }
 
-pub enum QueryEntry {
-    Pass,
-    Enter(QueryEntryInner),
-}
-
-pub struct QueryEntryInner {
+pub struct QueryEntry {
     pub query_id: String,
     pub create_time: SystemTime,
     pub sql: String,
     pub user_info: UserInfo,
     pub timeout: Duration,
+    pub need_acquire_to_queue: bool,
 }
 
 impl QueryEntry {
-    pub fn create(ctx: &Arc<QueryContext>, plan_extras: &PlanExtras) -> Result<QueryEntryInner> {
+    fn create_entry(
+        ctx: &Arc<QueryContext>,
+        plan_extras: &PlanExtras,
+        need_acquire_to_queue: bool,
+    ) -> Result<QueryEntry> {
         let settings = ctx.get_settings();
-        Ok(QueryEntryInner {
+        Ok(QueryEntry {
+            need_acquire_to_queue,
             query_id: ctx.get_id(),
             create_time: ctx.get_created_time(),
             sql: plan_extras.statement.to_mask_sql(),
@@ -273,48 +282,47 @@ impl QueryEntry {
         })
     }
 
-    pub fn create2(
+    pub fn create(
         ctx: &Arc<QueryContext>,
         plan: &Plan,
         plan_extras: &PlanExtras,
     ) -> Result<QueryEntry> {
-        match plan {
-            Plan::Query { metadata, .. } => {
+        fn is_passed_query(plan: &Plan) -> bool {
+            if let Plan::Query { metadata, .. } = plan {
                 let metadata = metadata.read();
                 for table in metadata.tables() {
-                    if table.database() != "system" && table.database() != "information_schema" {
-                        return Ok(QueryEntry::Enter(Self::create(ctx, plan_extras)?));
+                    // table function database is also system
+                    if (table.database() != "system" && table.database() != "information_schema")
+                        || (table.name() != "one" && table.name() != "numbers")
+                    {
+                        return false;
                     }
+                }
+            }
+
+            true
+        }
+
+        match plan {
+            Plan::Query { .. } => {
+                if !is_passed_query(plan) {
+                    return Self::create_entry(ctx, plan_extras, true);
                 }
             }
             Plan::ExplainAnalyze { plan } => {
-                if let Plan::Query { metadata, .. } = plan {
-                    let metadata = metadata.read();
-
-                    for table in metadata.tables() {
-                        if table.database() != "system" && table.database() != "information_schema"
-                        {
-                            return Ok(QueryEntry::Enter(Self::create(ctx, plan_extras)?));
-                        }
-                    }
+                if !is_passed_query(plan) {
+                    return Self::create_entry(ctx, plan_extras, true);
                 }
             }
-            Plan::Explain { kind, plan, .. } => match kind {
-                ExplainKind::AnalyzePlan => {
-                    if let Plan::Query { metadata, .. } = plan {
-                        let metadata = metadata.read();
-
-                        for table in metadata.tables() {
-                            if table.database() != "system"
-                                && table.database() != "information_schema"
-                            {
-                                return Ok(QueryEntry::Enter(Self::create(ctx, plan_extras)?));
-                            }
-                        }
-                    }
+            Plan::Explain {
+                kind: ExplainKind::AnalyzePlan,
+                plan,
+                ..
+            } => {
+                if !is_passed_query(plan) {
+                    return Self::create_entry(ctx, plan_extras, true);
                 }
-                _ => {}
-            },
+            }
 
             Plan::Insert(_)
             | Plan::InsertMultiTable(_)
@@ -322,13 +330,13 @@ impl QueryEntry {
             | Plan::Delete(_)
             | Plan::Update(_)
             | Plan::MergeInto(_) => {
-                return Ok(QueryEntry::Enter(Self::create(ctx, plan_extras)?));
+                return Self::create_entry(ctx, plan_extras, true);
             }
 
             _ => {}
         }
 
-        Ok(QueryEntry::Pass)
+        QueryEntry::create_entry(ctx, plan_extras, false)
     }
 }
 
@@ -336,10 +344,7 @@ impl QueueData for QueryEntry {
     type Key = String;
 
     fn get_key(&self) -> Self::Key {
-        match self {
-            QueryEntry::Pass => unreachable!(),
-            QueryEntry::Enter(entry) => entry.query_id.clone(),
-        }
+        self.query_id.clone()
     }
 
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {
@@ -353,10 +358,11 @@ impl QueueData for QueryEntry {
     }
 
     fn timeout(&self) -> Duration {
-        match self {
-            QueryEntry::Pass => unreachable!(),
-            QueryEntry::Enter(entry) => entry.timeout,
-        }
+        self.timeout
+    }
+
+    fn need_acquire_to_queue(&self) -> bool {
+        self.need_acquire_to_queue
     }
 }
 

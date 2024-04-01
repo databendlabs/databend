@@ -304,7 +304,7 @@ impl ExecuteState {
             .await
             .map_err(|err| err.display_with_sql(&sql))?;
 
-        let entry = QueryEntry::create2(&ctx, &plan, &extras)?;
+        let entry = QueryEntry::create(&ctx, &plan, &extras)?;
         let queue_guard = QueriesQueueManager::instance().acquire(entry).await?;
 
         {

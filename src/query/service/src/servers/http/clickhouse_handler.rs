@@ -268,7 +268,7 @@ pub async fn clickhouse_handler_get(
             .map_err(|err| err.display_with_sql(&sql))
             .map_err(BadRequest)?;
 
-        let query_entry = QueryEntry::create2(&context, &plan, &extras).map_err(BadRequest)?;
+        let query_entry = QueryEntry::create(&context, &plan, &extras).map_err(BadRequest)?;
         let _guard = QueriesQueueManager::instance()
             .acquire(query_entry)
             .await
@@ -350,7 +350,7 @@ pub async fn clickhouse_handler_post(
             .map_err(|err| err.display_with_sql(&sql))
             .map_err(BadRequest)?;
 
-        let entry = QueryEntry::create2(&ctx, &plan, &extras).map_err(BadRequest)?;
+        let entry = QueryEntry::create(&ctx, &plan, &extras).map_err(BadRequest)?;
         let _guard = QueriesQueueManager::instance()
             .acquire(entry)
             .await

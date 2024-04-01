@@ -40,6 +40,10 @@ impl QueueData for TestData {
     fn timeout(&self) -> Duration {
         Duration::from_secs(1000)
     }
+
+    fn need_acquire_to_queue(&self) -> bool {
+        true
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
