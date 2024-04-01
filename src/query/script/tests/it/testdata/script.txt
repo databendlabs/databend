@@ -1,26 +1,28 @@
 ---------- Input ----------
-CREATE TABLE t1 (a INT, b INT, c INT);
+CREATE OR REPLACE TABLE t1 (a INT, b INT, c INT);
 INSERT INTO t1 VALUES (1, 2, 3);
-DROP TABLE t1;
+RETURN TABLE(SELECT a FROM t1);
 ---------- IR -------------
-QUERY CREATE TABLE t1 (a Int32, b Int32, c Int32), __unused_result0(0)
+QUERY CREATE OR REPLACE TABLE t1 (a Int32, b Int32, c Int32), __unused_result0(0)
 QUERY INSERT INTO t1 VALUES (1, 2, 3), __unused_result1(1)
-QUERY DROP TABLE t1, __unused_result2(2)
+QUERY SELECT a FROM t1, __return_set2(2)
+RETURN __return_set2(2)
 ---------- QUERY ---------
-QUERY: CREATE TABLE t1 (a Int32, b Int32, c Int32)
+QUERY: CREATE OR REPLACE TABLE t1 (a Int32, b Int32, c Int32)
 BLOCK: (): 
 QUERY: INSERT INTO t1 VALUES (1, 2, 3)
 BLOCK: (): 
-QUERY: DROP TABLE t1
-BLOCK: (): 
+QUERY: SELECT a FROM t1
+BLOCK: (a): (1)
 ---------- Output ---------
-None
+Some(Set(MockSet { column_names: ["a"], data: [[UInt64(1)]] }))
 
 
 ---------- Input ----------
 LET x := 1;
 LET y := x + 1;
 LET z RESULTSET := SELECT :y + 1;
+RETURN TABLE(z);
 ---------- IR -------------
 QUERY SELECT 1, __expr_result1(1)
 ITER __expr_result1(1), __expr_result_iter2(2)
@@ -29,6 +31,7 @@ QUERY SELECT :0 + 1, __expr_result4(4)
 ITER __expr_result4(4), __expr_result_iter5(5)
 READ __expr_result_iter5(5), $0, y(3)
 QUERY SELECT :3 + 1, z(6)
+RETURN z(6)
 ---------- QUERY ---------
 QUERY: SELECT 1
 BLOCK: ($0): (1)
@@ -37,7 +40,25 @@ BLOCK: ($0): (2)
 QUERY: SELECT 2 + 1
 BLOCK: ($0): (3)
 ---------- Output ---------
-None
+Some(Set(MockSet { column_names: ["$0"], data: [[UInt64(3)]] }))
+
+
+---------- Input ----------
+LET x := 1;
+RETURN TABLE(SELECT :x + 1);
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+QUERY SELECT :0 + 1, __return_set3(3)
+RETURN __return_set3(3)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1 + 1
+BLOCK: ($0): (2)
+---------- Output ---------
+Some(Set(MockSet { column_names: ["$0"], data: [[UInt64(2)]] }))
 
 
 ---------- Input ----------

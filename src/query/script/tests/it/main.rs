@@ -53,7 +53,7 @@ fn run_script(file: &mut dyn Write, src: &str) {
         let ir = compile(&ast)?;
         let client = mock_client();
         let query_log = client.query_log.clone();
-        let mut executor = Executor::load(client, ir.clone());
+        let mut executor = Executor::load(None, client, ir.clone());
         let rt = Runtime::new().unwrap();
         let result = rt.block_on(executor.run(1000))?;
 
@@ -96,9 +96,9 @@ fn test_script() {
     run_script(
         file,
         r#"
-            CREATE TABLE t1 (a INT, b INT, c INT);
+            CREATE OR REPLACE TABLE t1 (a INT, b INT, c INT);
             INSERT INTO t1 VALUES (1, 2, 3);
-            DROP TABLE t1;
+            RETURN TABLE(SELECT a FROM t1);
         "#,
     );
     run_script(
@@ -107,6 +107,14 @@ fn test_script() {
             LET x := 1;
             LET y := x + 1;
             LET z RESULTSET := SELECT :y + 1;
+            RETURN TABLE(z);
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET x := 1;
+            RETURN TABLE(SELECT :x + 1);
         "#,
     );
     run_script(
@@ -299,6 +307,19 @@ fn test_script_error() {
     run_script(
         file,
         r#"
+            RETURN TABLE(x);
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET x := 1;
+            RETURN TABLE(x);
+        "#,
+    );
+    run_script(
+        file,
+        r#"
             LET x := 1;
             LET y := x.a;
         "#,
@@ -375,11 +396,14 @@ fn mock_client() -> MockClient {
             ]),
         )
         .response_when(
-            "CREATE TABLE t1 (a Int32, b Int32, c Int32)",
+            "CREATE OR REPLACE TABLE t1 (a Int32, b Int32, c Int32)",
             MockSet::empty(),
         )
         .response_when("INSERT INTO t1 VALUES (1, 2, 3)", MockSet::empty())
-        .response_when("DROP TABLE t1", MockSet::empty())
+        .response_when(
+            "SELECT a FROM t1",
+            MockSet::named(vec!["a"], vec![vec![Literal::UInt64(1)]]),
+        )
         .response_when(
             "SELECT * FROM generate_series(1, 1 + 2, 1)",
             MockSet::unnamed(vec![

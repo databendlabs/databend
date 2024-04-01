@@ -1126,8 +1126,10 @@ fn test_script() {
         r#"LET cost := 100.0"#,
         r#"LET t1 RESULTSET := SELECT * FROM numbers(100)"#,
         r#"profit := revenue - cost"#,
-        r#"RETURN profit"#,
         r#"RETURN"#,
+        r#"RETURN profit"#,
+        r#"RETURN TABLE(t1)"#,
+        r#"RETURN TABLE(select count(*) from t1)"#,
         r#"
             FOR i IN REVERSE 1 TO maximum_count DO
                 counter := counter + 1;

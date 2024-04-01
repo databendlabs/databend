@@ -26,6 +26,7 @@ use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Query;
+use databend_common_ast::ast::ReturnItem;
 use databend_common_ast::ast::ScriptStatement;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
@@ -104,12 +105,27 @@ impl Compiler {
                     output.push(ScriptIR::Return);
                 }
                 ScriptStatement::Return {
-                    value: Some(value), ..
+                    value: Some(ReturnItem::Var(expr)),
+                    ..
                 } => {
-                    // TODO(andylokandy): support returning table
-                    let to_var = self.declare_anonymous_var(value.span(), "return_val")?;
-                    output.append(&mut self.compile_expr(value, to_var.clone())?);
+                    let to_var = self.declare_anonymous_var(expr.span(), "return_val")?;
+                    output.append(&mut self.compile_expr(expr, to_var.clone())?);
                     output.push(ScriptIR::ReturnVar { var: to_var });
+                }
+                ScriptStatement::Return {
+                    value: Some(ReturnItem::Set(name)),
+                    ..
+                } => {
+                    let set = self.lookup_set(name)?;
+                    output.push(ScriptIR::ReturnSet { set });
+                }
+                ScriptStatement::Return {
+                    span,
+                    value: Some(ReturnItem::Statement(stmt)),
+                } => {
+                    let to_set = self.declare_anonymous_set(*span, "return_set")?;
+                    output.append(&mut self.compile_sql_statement(*span, stmt, to_set.clone())?);
+                    output.push(ScriptIR::ReturnSet { set: to_set });
                 }
                 ScriptStatement::ForLoop {
                     span,

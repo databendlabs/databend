@@ -19114,7 +19114,7 @@ CreateUDF(
             return_type: Nullable(
                 Int32,
             ),
-            code: "\ndef addone_py(i):\nreturn i+1\n",
+            code: "def addone_py(i):\nreturn i+1",
             handler: "addone_py",
             language: "python",
             runtime_version: "",
@@ -19169,8 +19169,7 @@ BEGIN
 END;
 $$
 ---------- Output ---------
-EXECUTE IMMEDIATE
-$$
+EXECUTE IMMEDIATE $$
 BEGIN
     LOOP
         RETURN 1;
@@ -19180,7 +19179,7 @@ $$
 ---------- AST ------------
 ExecuteImmediate(
     ExecuteImmediateStmt {
-        script: "\nBEGIN\n    LOOP\n        RETURN 1;\n    END LOOP;\nEND;\n",
+        script: "BEGIN\n    LOOP\n        RETURN 1;\n    END LOOP;\nEND;",
     },
 )
 

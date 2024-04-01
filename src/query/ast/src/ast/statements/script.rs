@@ -98,6 +98,23 @@ impl Display for DeclareSet {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum ReturnItem {
+    Var(Expr),
+    Set(Identifier),
+    Statement(Statement),
+}
+
+impl Display for ReturnItem {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReturnItem::Var(expr) => write!(f, "{expr}"),
+            ReturnItem::Set(name) => write!(f, "TABLE({name})"),
+            ReturnItem::Statement(stmt) => write!(f, "TABLE({stmt})"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum ScriptStatement {
     LetVar {
         declare: DeclareVar,
@@ -116,7 +133,7 @@ pub enum ScriptStatement {
     },
     Return {
         span: Span,
-        value: Option<Expr>,
+        value: Option<ReturnItem>,
     },
     ForLoop {
         span: Span,

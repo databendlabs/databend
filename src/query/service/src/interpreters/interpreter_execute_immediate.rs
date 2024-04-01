@@ -28,12 +28,14 @@ use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::ParseMode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::block_debug::box_render;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_script::compile;
@@ -43,6 +45,7 @@ use databend_common_script::Executor;
 use databend_common_script::ReturnValue;
 use databend_common_sql::plans::ExecuteImmediatePlan;
 use databend_common_sql::Planner;
+use databend_common_storages_fuse::TableContext;
 use futures_util::StreamExt;
 use itertools::Itertools;
 use serde_json::Value as JsonValue;
@@ -78,15 +81,9 @@ impl Interpreter for ExecuteImmediateInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let res: Result<_> = try {
+            let dialect = self.ctx.get_settings().get_sql_dialect()?;
             let tokens = tokenize_sql(&self.plan.script).unwrap();
-            let mut ast = run_parser(
-                &tokens,
-                // TODO(andylokandy)
-                Dialect::PostgreSQL,
-                ParseMode::Template,
-                false,
-                script_block,
-            )?;
+            let mut ast = run_parser(&tokens, dialect, ParseMode::Template, false, script_block)?;
 
             let mut src = vec![];
             for declare in ast.declares {
@@ -112,12 +109,16 @@ impl Interpreter for ExecuteImmediateInterpreter {
                         StringType::from_data(vec![scalar.to_string()]),
                     ])])?
                 }
-                Some(ReturnValue::Set(_set)) => {
-                    // TODO(andylokandy)
-                    Err(ErrorCode::Unimplemented(
-                        "returning a set from script is not supported yet".to_string(),
-                    ))?
-                }
+                Some(ReturnValue::Set(set)) => PipelineBuildResult::from_blocks(vec![
+                    DataBlock::new_from_columns(vec![StringType::from_data(vec![box_render(
+                        &set.schema,
+                        &[set.block.clone()],
+                        usize::MAX,
+                        usize::MAX,
+                        usize::MAX,
+                        true,
+                    )?])]),
+                ])?,
                 None => PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
                     StringType::from_data(Vec::<String>::new()),
                 ])])?,
@@ -130,7 +131,7 @@ impl Interpreter for ExecuteImmediateInterpreter {
 
 #[derive(Debug, Clone)]
 struct QueryResult {
-    names: Vec<String>,
+    schema: DataSchemaRef,
     block: DataBlock,
 }
 
@@ -143,20 +144,19 @@ impl Client for ScriptClient {
     type Set = QueryResult;
 
     async fn query(&self, query: &str) -> Result<Self::Set> {
-        let mut planner = Planner::new(self.ctx.clone());
+        let ctx = self
+            .ctx
+            .get_current_session()
+            .create_query_context()
+            .await?;
+
+        let mut planner = Planner::new(ctx.clone());
         let (plan, _) = planner.plan_sql(query).await.unwrap();
-        let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan)
-            .await
-            .unwrap();
-        let stream = interpreter.execute(self.ctx.clone()).await.unwrap();
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await.unwrap();
+        let stream = interpreter.execute(ctx.clone()).await.unwrap();
         let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
         let schema = plan.schema();
 
-        let names = schema
-            .fields()
-            .iter()
-            .map(|f| f.name().to_string())
-            .collect();
         let blocks = blocks.into_iter().collect::<Result<Vec<_>>>()?;
         let block = match blocks.len() {
             0 => DataBlock::empty(),
@@ -164,7 +164,7 @@ impl Client for ScriptClient {
             _ => DataBlock::concat(&blocks)?,
         };
 
-        Ok(QueryResult { names, block })
+        Ok(QueryResult { schema, block })
     }
 
     fn var_to_ast(&self, scalar: &Self::Var) -> Result<Expr> {
@@ -369,15 +369,22 @@ impl Client for ScriptClient {
         let offset = match col {
             ColumnAccess::Position(offset) => *offset,
             // TODO(andylokandy): name resolution
-            ColumnAccess::Name(name) => {
-                set.names.iter().position(|n| n == name).ok_or_else(|| {
-                    ErrorCode::ScriptExecutionError(format!(
-                        "cannot find column with name {} in block, available columns: {}",
-                        name,
-                        set.names.iter().map(|name| format!("'{name}'")).join(", ")
-                    ))
-                })?
-            }
+            ColumnAccess::Name(name) => set
+                .schema
+                .fields()
+                .iter()
+                .position(|f| f.name() == name)
+                .ok_or_else(|| {
+                ErrorCode::ScriptExecutionError(format!(
+                    "cannot find column with name {} in block, available columns: {}",
+                    name,
+                    set.schema
+                        .fields()
+                        .iter()
+                        .map(|f| format!("'{}'", f.name()))
+                        .join(", ")
+                ))
+            })?,
         };
         let col = set.block.columns().get(offset).ok_or_else(|| {
             ErrorCode::ScriptExecutionError(format!(

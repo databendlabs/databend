@@ -45,6 +45,28 @@ error:
 
 
 ---------- Input ----------
+RETURN TABLE(x);
+---------- Output ----------
+error: 
+  --> SQL:1:14
+  |
+1 | RETURN TABLE(x);
+  |              ^ `x` is not defined
+
+
+---------- Input ----------
+LET x := 1;
+RETURN TABLE(x);
+---------- Output ----------
+error: 
+  --> SQL:2:14
+  |
+1 | LET x := 1;
+2 | RETURN TABLE(x);
+  |              ^ `x` is not a set
+
+
+---------- Input ----------
 LET x := 1;
 LET y := x.a;
 ---------- Output ----------

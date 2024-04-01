@@ -115,13 +115,40 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             value,
         },
     );
+    let return_var_stmt = map(
+        consumed(rule! {
+            RETURN ~ #expr
+        }),
+        |(span, (_, expr))| ScriptStatement::Return {
+            span: transform_span(span.tokens),
+            value: Some(ReturnItem::Var(expr)),
+        },
+    );
+    let return_set_stmt = map(
+        consumed(rule! {
+            RETURN ~ TABLE ~ ^"(" ~ #ident ~ ^")"
+        }),
+        |(span, (_, _, _, name, _))| ScriptStatement::Return {
+            span: transform_span(span.tokens),
+            value: Some(ReturnItem::Set(name)),
+        },
+    );
+    let return_stmt_stmt = map(
+        consumed(rule! {
+            RETURN ~ TABLE ~ ^"(" ~ #statement_body ~ ^")"
+        }),
+        |(span, (_, _, _, stmt, _))| ScriptStatement::Return {
+            span: transform_span(span.tokens),
+            value: Some(ReturnItem::Statement(stmt)),
+        },
+    );
     let return_stmt = map(
         consumed(rule! {
-            RETURN ~ #expr?
+            RETURN
         }),
-        |(span, (_, value))| ScriptStatement::Return {
+        |(span, _)| ScriptStatement::Return {
             span: transform_span(span.tokens),
-            value,
+            value: None,
         },
     );
     let for_loop_stmt = map(
@@ -263,6 +290,9 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
         | #let_var_stmt
         | #run_stmt
         | #assign_stmt
+        | #return_var_stmt
+        | #return_set_stmt
+        | #return_stmt_stmt
         | #return_stmt
         | #for_loop_stmt
         | #for_in_stmt

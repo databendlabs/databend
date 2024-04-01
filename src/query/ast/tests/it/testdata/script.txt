@@ -183,39 +183,6 @@ Assign {
 
 
 ---------- Input ----------
-RETURN profit
----------- Output ---------
-RETURN profit
----------- AST ------------
-Return {
-    span: Some(
-        0..13,
-    ),
-    value: Some(
-        ColumnRef {
-            span: Some(
-                7..13,
-            ),
-            column: ColumnRef {
-                database: None,
-                table: None,
-                column: Name(
-                    Identifier {
-                        span: Some(
-                            7..13,
-                        ),
-                        name: "profit",
-                        quote: None,
-                        is_hole: false,
-                    },
-                ),
-            },
-        },
-    ),
-}
-
-
----------- Input ----------
 RETURN
 ---------- Output ---------
 RETURN
@@ -225,6 +192,140 @@ Return {
         0..6,
     ),
     value: None,
+}
+
+
+---------- Input ----------
+RETURN profit
+---------- Output ---------
+RETURN profit
+---------- AST ------------
+Return {
+    span: Some(
+        0..13,
+    ),
+    value: Some(
+        Var(
+            ColumnRef {
+                span: Some(
+                    7..13,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                7..13,
+                            ),
+                            name: "profit",
+                            quote: None,
+                            is_hole: false,
+                        },
+                    ),
+                },
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+RETURN TABLE(t1)
+---------- Output ---------
+RETURN TABLE(t1)
+---------- AST ------------
+Return {
+    span: Some(
+        0..16,
+    ),
+    value: Some(
+        Set(
+            Identifier {
+                span: Some(
+                    13..15,
+                ),
+                name: "t1",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+    ),
+}
+
+
+---------- Input ----------
+RETURN TABLE(select count(*) from t1)
+---------- Output ---------
+RETURN TABLE(SELECT COUNT(*) FROM t1)
+---------- AST ------------
+Return {
+    span: Some(
+        0..37,
+    ),
+    value: Some(
+        Statement(
+            Query(
+                Query {
+                    span: Some(
+                        13..36,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                13..36,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            select_list: [
+                                AliasedExpr {
+                                    expr: CountAll {
+                                        span: Some(
+                                            20..28,
+                                        ),
+                                        window: None,
+                                    },
+                                    alias: None,
+                                },
+                            ],
+                            from: [
+                                Table {
+                                    span: Some(
+                                        34..36,
+                                    ),
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            34..36,
+                                        ),
+                                        name: "t1",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    alias: None,
+                                    travel_point: None,
+                                    since_point: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                },
+                            ],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+        ),
+    ),
 }
 
 
@@ -1703,6 +1804,9 @@ END;
 
 ---------- AST ------------
 ScriptBlock {
+    span: Some(
+        0..51,
+    ),
     declares: [],
     body: [
         Loop {
@@ -1742,6 +1846,9 @@ END;
 
 ---------- AST ------------
 ScriptBlock {
+    span: Some(
+        0..85,
+    ),
     declares: [
         Var(
             DeclareVar {

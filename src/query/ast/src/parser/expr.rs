@@ -1517,8 +1517,8 @@ pub fn at_string(i: Input) -> IResult<String> {
 pub fn code_string(i: Input) -> IResult<String> {
     map_res(rule! { CodeString }, |token| {
         let content = &token.text()[2..token.text().len() - 2];
-        let trimed = unindent::unindent(content).trim().to_string();
-        Ok(trimed)
+        let trimmed = unindent::unindent(content).trim().to_string();
+        Ok(trimmed)
     })(i)
 }
 

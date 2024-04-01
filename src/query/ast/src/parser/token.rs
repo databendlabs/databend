@@ -1512,7 +1512,7 @@ impl TokenKind {
             // | TokenKind::DEFERRABLE
             | TokenKind::DESC
             | TokenKind::DISTINCT
-            // | TokenKind::DO
+            | TokenKind::DO
             | TokenKind::ELSE
             | TokenKind::END
             | TokenKind::FALSE
@@ -1538,7 +1538,7 @@ impl TokenKind {
             | TokenKind::NULL
             // | TokenKind::ONLY
             | TokenKind::OR
-            // | TokenKind::OUTER
+            | TokenKind::OUTER
             // | TokenKind::PLACING
             // | TokenKind::PRIMARY
             // | TokenKind::REFERENCES
@@ -1551,7 +1551,7 @@ impl TokenKind {
             | TokenKind::SOME
             | TokenKind::SEMI
             // | TokenKind::SYMMETRIC
-            // | TokenKind::TABLE
+            | TokenKind::TABLE
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
             | TokenKind::TRAILING
@@ -1571,7 +1571,7 @@ impl TokenKind {
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
             | TokenKind::FROM
-            // | TokenKind::GRANT
+            | TokenKind::GRANT
             | TokenKind::GROUP
             | TokenKind::HAVING
             | TokenKind::INTERSECT
