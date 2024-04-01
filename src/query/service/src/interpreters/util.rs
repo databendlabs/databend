@@ -12,21 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::parser::quote::quote_ident;
 use databend_common_ast::parser::Dialect;
 
 pub fn format_name(name: &str, quoted_ident_case_sensitive: bool, dialect: Dialect) -> String {
     // Db-s -> "Db-s" ; dbs -> dbs
-    if name
-        .chars()
-        .find(|c| !(c.is_lowercase() || c.is_numeric() || *c == '_'))
-        .is_some()
-        && quoted_ident_case_sensitive
-    {
-        match dialect {
-            Dialect::MySQL => format!("`{name}`"),
-            _ => format!("\"{name}\""),
-        }
+    if name.chars().find(|c| c.is_ascii_uppercase()).is_some() && quoted_ident_case_sensitive {
+        quote_ident(name, dialect.default_ident_quote(), true)
     } else {
-        name.to_lowercase()
+        quote_ident(name, dialect.default_ident_quote(), false)
     }
 }

@@ -4,8 +4,8 @@
 tc	CREATE TABLE tc (
   id INT NULL,
   id1_ INT NULL,
-  id2) INT NULL,
-  id4 INT NULL
+  "id2)" INT NULL,
+  ID4 INT NULL
 ) ENGINE=FUSE
 >>>> set quoted_ident_case_sensitive=1;show create table default.tc
 tc	CREATE TABLE tc (
