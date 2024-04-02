@@ -3224,14 +3224,33 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 }
             }
 
+            let mut other_column_ids = HashSet::new();
+            for (name, index) in indexes.iter() {
+                if *name == req.name {
+                    continue;
+                }
+                for column_id in &index.column_ids {
+                    other_column_ids.insert(column_id);
+                }
+            }
+            // column_id can not be duplicated
+            for column_id in &req.column_ids {
+                if other_column_ids.contains(column_id) {
+                    return Err(KVAppError::AppError(AppError::IndexAlreadyExists(
+                        IndexAlreadyExists::new(
+                            &req.name,
+                            format!("column {} already exist in other indexes", column_id),
+                        ),
+                    )));
+                }
+            }
+
             // If the column ids and options do not change,
             // use the old index version, otherwise create a new index version.
             let mut old_version = None;
-            let mut refreshed_on = None;
             if let Some(old_index) = indexes.get(&req.name) {
                 if old_index.column_ids == req.column_ids && old_index.options == req.options {
                     old_version = Some(old_index.version.clone());
-                    refreshed_on = old_index.refreshed_on;
                 }
             }
             let version = old_version.unwrap_or(Uuid::new_v4().simple().to_string());
@@ -3242,7 +3261,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 sync_creation: req.sync_creation,
                 version,
                 options: req.options.clone(),
-                refreshed_on,
             };
             indexes.insert(req.name.clone(), index);
 

@@ -140,9 +140,6 @@ message TableIndex {
 
   // index options specify the index configs, like tokenizer.
   map<string, string> options = 5;
-
-  // The time index refreshed.
-  optional string refreshed_on = 6;
 }
 
 // Save table name id list history.

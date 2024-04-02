@@ -97,7 +97,6 @@ fn test_decode_v82_table_meta() -> anyhow::Result<()> {
             sync_creation: false,
             version: "".to_string(),
             options: btreemap! {},
-            refreshed_on: None,
         }},
     };
     common::test_pb_from_to(func_name!(), want())?;

@@ -348,10 +348,6 @@ impl FromToProto for mt::TableIndex {
             sync_creation: p.sync_creation,
             version: p.version.clone(),
             options: p.options.clone(),
-            refreshed_on: match p.refreshed_on {
-                Some(refreshed_on) => Some(DateTime::<Utc>::from_pb(refreshed_on)?),
-                None => None,
-            },
         };
         Ok(v)
     }
@@ -365,10 +361,6 @@ impl FromToProto for mt::TableIndex {
             sync_creation: self.sync_creation,
             version: self.version.clone(),
             options: self.options.clone(),
-            refreshed_on: match self.refreshed_on {
-                Some(refreshed_on) => Some(refreshed_on.to_pb()?),
-                None => None,
-            },
         };
         Ok(p)
     }

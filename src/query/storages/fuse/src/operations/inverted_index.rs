@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
-use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
@@ -384,12 +383,6 @@ impl AsyncSink for InvertedIndexSink {
                 OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
                 new_snapshot_loc.clone(),
             );
-
-            // generate new `refreshed_on` time for the index
-            let indexes = &mut new_table_meta.indexes;
-            if let Some(index) = indexes.get_mut(&self.index_name) {
-                index.refreshed_on = Some(Utc::now());
-            }
 
             let table_info = self.table.get_table_info();
             let table_id = table_info.ident.table_id;

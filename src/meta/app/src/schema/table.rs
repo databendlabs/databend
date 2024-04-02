@@ -287,8 +287,6 @@ pub struct TableIndex {
     pub version: String,
     // index options specify the index configs, like tokenizer.
     pub options: BTreeMap<String, String>,
-    // refresh time, the most recently refreshed index will be used first.
-    pub refreshed_on: Option<DateTime<Utc>>,
 }
 
 impl TableMeta {
