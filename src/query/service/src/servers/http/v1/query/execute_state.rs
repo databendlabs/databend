@@ -29,9 +29,9 @@ use databend_common_io::prelude::FormatSettings;
 use databend_common_settings::Settings;
 use databend_storages_common_txn::TxnManagerRef;
 use futures::StreamExt;
+use log::debug;
 use log::error;
 use log::info;
-use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
 use ExecuteState::*;
@@ -223,10 +223,18 @@ impl Executor {
     pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
         {
             let guard = this.read().await;
-            warn!(
-                "{}: http query change state to Stopped, reason {:?}",
-                &guard.query_id, reason
-            );
+            if let Stopped(s) = &guard.state {
+                debug!(
+                    "{}: http query already stopped, reason {:?}, new reason {:?}",
+                    &guard.query_id, s.reason, reason
+                );
+                return;
+            } else {
+                info!(
+                    "{}: http query change state to Stopped, reason {:?}",
+                    &guard.query_id, reason
+                );
+            }
         }
 
         let mut guard = this.write().await;
@@ -279,12 +287,7 @@ impl Executor {
                     affect: r.ctx.get_affect(),
                 }))
             }
-            Stopped(s) => {
-                warn!(
-                    "{}: http query already stopped, reason {:?}, new reason {:?}",
-                    &guard.query_id, s.reason, reason
-                );
-            }
+            Stopped(_) => {}
         }
     }
 }
