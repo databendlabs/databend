@@ -255,11 +255,11 @@ pub fn register_counter(name: &str) -> Counter {
 pub fn register_histogram(name: &str, buckets: impl Iterator<Item = f64>) -> Histogram {
     let buckets = buckets.collect::<Vec<_>>();
 
-    for bound in buckets {
-        if bound <= MIN_HISTOGRAM_BOUND {
+    for bound in &buckets {
+        if *bound <= MIN_HISTOGRAM_BOUND {
             panic!("Histogram bucket bound must > {}", MIN_HISTOGRAM_BOUND);
         }
-        if bound >= MAX_HISTOGRAM_BOUND {
+        if *bound >= MAX_HISTOGRAM_BOUND {
             panic!("Histogram bucket bound must < {}", MAX_HISTOGRAM_BOUND);
         }
     }
@@ -289,11 +289,11 @@ pub fn register_histogram_family<T: FamilyLabels>(
 ) -> FamilyHistogram<T> {
     let buckets = buckets.collect::<Vec<_>>();
 
-    for bound in buckets {
-        if bound <= MIN_HISTOGRAM_BOUND {
+    for bound in &buckets {
+        if *bound <= MIN_HISTOGRAM_BOUND {
             panic!("Histogram bucket bound must > {}", MIN_HISTOGRAM_BOUND);
         }
-        if bound >= MAX_HISTOGRAM_BOUND {
+        if *bound >= MAX_HISTOGRAM_BOUND {
             panic!("Histogram bucket bound must < {}", MAX_HISTOGRAM_BOUND);
         }
     }
