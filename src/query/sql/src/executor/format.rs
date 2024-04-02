@@ -254,7 +254,7 @@ fn to_format_tree(
         PhysicalPlan::Duplicate(_) => Ok(FormatTreeNode::new("Duplicate".to_string())),
         PhysicalPlan::Shuffle(_) => Ok(FormatTreeNode::new("Shuffle".to_string())),
         PhysicalPlan::ChunkFilter(_) => Ok(FormatTreeNode::new("ChunkFilter".to_string())),
-        PhysicalPlan::ChunkProject(_) => Ok(FormatTreeNode::new("ChunkProject".to_string())),
+        PhysicalPlan::ChunkEvalScalar(_) => Ok(FormatTreeNode::new("ChunkEvalScalar".to_string())),
         PhysicalPlan::ChunkCastSchema(_) => Ok(FormatTreeNode::new("ChunkCastSchema".to_string())),
         PhysicalPlan::ChunkFillAndReorder(_) => {
             Ok(FormatTreeNode::new("ChunkFillAndReorder".to_string()))

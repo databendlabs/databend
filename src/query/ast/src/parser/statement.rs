@@ -2345,12 +2345,16 @@ fn when_clause(i: Input) -> IResult<WhenClause> {
 }
 
 fn into_clause(i: Input) -> IResult<IntoClause> {
+    let source_expr = alt((
+        map(rule! {DEFAULT}, |_| SourceExpr::Default),
+        map(rule! { #expr }, SourceExpr::Expr),
+    ));
     map(
         rule! {
             INTO
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ (VALUES ~ "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ (VALUES ~ "(" ~ #comma_separated_list1(source_expr) ~ ")" )?
         },
         |(_, (catalog, database, table), opt_target_columns, opt_source_columns)| IntoClause {
             catalog,
