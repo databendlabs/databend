@@ -378,9 +378,12 @@ impl InvertedIndexWriter {
         offset += managed_length as u32;
         offsets.push(offset);
 
+        // the number of offsets, used for multi index segments in one file
+        let nums = offsets.len() as u32;
         for offset in offsets {
             writer.write_all(&offset.to_le_bytes())?;
         }
+        writer.write_all(&nums.to_le_bytes())?;
 
         writer.flush()?;
 

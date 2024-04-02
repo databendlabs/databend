@@ -135,17 +135,20 @@ pub struct InvertedIndexDirectory {
 
 impl InvertedIndexDirectory {
     pub fn try_create(data: Vec<u8>) -> Result<Self> {
-        if data.len() < 32 {
+        if data.len() < 36 {
             return Err(OpenReadError::IoError {
-                io_error: std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid data")
-                    .into(),
+                io_error: std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "invalid index data",
+                )
+                .into(),
                 filepath: PathBuf::from("InvertedIndexDirectory"),
             }
             .into());
         }
 
         let mut reader = Cursor::new(data.clone());
-        reader.seek(SeekFrom::End(-32))?;
+        reader.seek(SeekFrom::End(-36))?;
 
         let mut buf = vec![0u8; 4];
         let fast_fields_offset = read_u32(&mut reader, buf.as_mut_slice())? as usize;

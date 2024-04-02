@@ -432,8 +432,7 @@ async fn test_block_pruner() -> Result<()> {
 
     let index_info_loc = snapshot.indexes.as_ref().and_then(|i| i.get(&index_name));
     assert!(index_info_loc.is_some());
-    let index_info =
-        load_inverted_index_info(new_fuse_table.get_operator(), index_info_loc).await?;
+    let index_info = load_inverted_index_info(fuse_table.get_operator(), index_info_loc).await?;
     assert!(index_info.is_some());
     let index_info = index_info.unwrap();
     let index_version = index_info.index_version.clone();
