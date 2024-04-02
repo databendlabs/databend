@@ -28,6 +28,8 @@ io-uring = [
     # "databend-common-meta-raft-store/io-uring",
 ]
 
+enable_queries_executor = []
+
 [dependencies]
 # Workspace dependencies
 databend-common-arrow = { path = "../../common/arrow" }

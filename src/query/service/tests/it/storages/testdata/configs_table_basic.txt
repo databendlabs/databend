@@ -81,7 +81,6 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'default_compression'                      | 'auto'                                                         | ''       |
 | 'query'   | 'default_storage_format'                   | 'auto'                                                         | ''       |
 | 'query'   | 'disable_system_table_load'                | 'false'                                                        | ''       |
-| 'query'   | 'enable_queries_executor'                  | 'false'                                                        | ''       |
 | 'query'   | 'enable_udf_server'                        | 'false'                                                        | ''       |
 | 'query'   | 'flight_api_address'                       | '127.0.0.1:9090'                                               | ''       |
 | 'query'   | 'flight_sql_handler_host'                  | '127.0.0.1'                                                    | ''       |

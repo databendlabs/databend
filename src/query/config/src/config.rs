@@ -1656,9 +1656,6 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub cloud_control_grpc_timeout: u64,
 
-    #[clap(long)]
-    pub enable_queries_executor: bool,
-
     #[clap(skip)]
     pub settings: HashMap<String, SettingValue>,
 }
@@ -1742,7 +1739,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             udf_server_allow_list: self.udf_server_allow_list,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: self.cloud_control_grpc_timeout,
-            enable_queries_executor: self.enable_queries_executor,
             settings: self
                 .settings
                 .into_iter()
@@ -1840,7 +1836,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             udf_server_allow_list: inner.udf_server_allow_list,
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
-            enable_queries_executor: inner.enable_queries_executor,
             settings: HashMap::new(),
         }
     }
