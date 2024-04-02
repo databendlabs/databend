@@ -207,6 +207,17 @@ impl QueryResponse {
     }
 }
 
+/// final is not ACKed by client, so client should not depend on the final response,
+///
+/// for server:
+/// 1. when response with `next_uri` =  `.../final`, all states should already be delivered to the client the latest in this response.
+/// 2. `/final` SHOULD response with nothing but `next_uri` = `null`, BUT to tolerant old clients, we still keep some fields.
+///
+/// for clients:
+/// 1. check `next_uri` before refer to other fields of the response.
+///
+/// the client in sql logic tests should follow this.
+
 #[poem::handler]
 async fn query_final_handler(
     ctx: &HttpQueryContext,
@@ -227,6 +238,9 @@ async fn query_final_handler(
         {
             Ok(query) => {
                 let mut response = query.get_response_state_only().await;
+                // it is safe to set these 2 fields to None, because client now check for null/None first.
+                response.session = None;
+                response.state.affect = None;
                 if response.state.state == ExecuteStateKind::Running {
                     return Err(PoemError::from_string(
                         format!("query {} is still running, can not final it", query_id),
