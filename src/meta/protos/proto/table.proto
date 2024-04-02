@@ -134,7 +134,7 @@ message TableIndex {
   bool sync_creation = 3;
 
   // if the index columns or options change,
-  // the index data needs to be regenerated, 
+  // the index data needs to be regenerated,
   // version is used to identify each change.
   string version = 4;
 

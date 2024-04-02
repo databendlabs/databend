@@ -487,8 +487,10 @@ impl FusePruner {
         let blocks_bloom_pruning_before = stats.get_blocks_bloom_pruning_before() as usize;
         let blocks_bloom_pruning_after = stats.get_blocks_bloom_pruning_after() as usize;
 
-        let blocks_inverted_index_pruning_before = stats.get_blocks_inverted_index_pruning_before() as usize;
-        let blocks_inverted_index_pruning_after = stats.get_blocks_inverted_index_pruning_after() as usize;
+        let blocks_inverted_index_pruning_before =
+            stats.get_blocks_inverted_index_pruning_before() as usize;
+        let blocks_inverted_index_pruning_after =
+            stats.get_blocks_inverted_index_pruning_after() as usize;
 
         databend_common_catalog::plan::PruningStatistics {
             segments_range_pruning_before,

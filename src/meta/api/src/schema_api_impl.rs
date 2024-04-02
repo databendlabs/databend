@@ -3224,7 +3224,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 }
             }
 
-            // If the column ids and options do not change, 
+            // If the column ids and options do not change,
             // use the old index version, otherwise create a new index version.
             let mut old_version = None;
             let mut refreshed_on = None;

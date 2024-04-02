@@ -282,7 +282,7 @@ pub struct TableIndex {
     // no need execute refresh index manually.
     pub sync_creation: bool,
     // if the index columns or options change,
-    // the index data needs to be regenerated, 
+    // the index data needs to be regenerated,
     // version is used to identify each change.
     pub version: String,
     // index options specify the index configs, like tokenizer.
