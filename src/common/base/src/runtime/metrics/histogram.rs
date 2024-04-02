@@ -24,6 +24,7 @@ use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 
 use crate::runtime::metrics::registry::DatabendMetric;
+use crate::runtime::metrics::registry::MAX_HISTOGRAM_BOUND;
 use crate::runtime::metrics::sample::HistogramCount;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::metrics::sample::MetricValue;
@@ -72,7 +73,7 @@ impl Histogram {
                 count: Default::default(),
                 buckets: buckets
                     .into_iter()
-                    .chain(once(f64::MAX))
+                    .chain(once(MAX_HISTOGRAM_BOUND))
                     .map(|upper_bound| (upper_bound, 0))
                     .collect(),
             })),
