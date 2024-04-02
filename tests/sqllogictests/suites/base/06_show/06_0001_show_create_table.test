@@ -205,3 +205,42 @@ drop table default.t1;
 
 statement ok
 drop database db1;
+
+statement ok
+drop table if exists default.tc
+
+statement ok
+set hide_options_in_show_create_table=1
+
+statement ok
+create table default.tc(id int, Id1_ int, "id2)" int, "ID4" int, "ID""5" int);
+
+statement ok
+set quoted_ident_case_sensitive=0;
+
+query TT
+show create table default.tc
+----
+tc CREATE TABLE tc ( id INT NULL, id1_ INT NULL, "id2)" INT NULL, ID4 INT NULL, "ID""5" INT NULL ) ENGINE=FUSE
+
+statement ok
+set quoted_ident_case_sensitive=1;
+
+query TT
+show create table default.tc
+----
+tc CREATE TABLE tc ( id INT NULL, id1_ INT NULL, "id2)" INT NULL, "ID4" INT NULL, "ID""5" INT NULL ) ENGINE=FUSE
+
+statement ok
+set quoted_ident_case_sensitive=1;
+
+statement ok
+set sql_dialect='MySQL';
+
+query TT
+show create table default.tc
+----
+tc CREATE TABLE tc ( id INT NULL, id1_ INT NULL, `id2)` INT NULL, `ID4` INT NULL, `ID"5` INT NULL ) ENGINE=FUSE
+
+statement ok
+drop table default.tc;

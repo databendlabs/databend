@@ -184,6 +184,9 @@ insert into `05_0028_at_t0_3` values(1)
 statement ok
 ALTER TABLE `05_0028_at_t0_3` ADD COLUMN a float not null default 0.1 COMMENT 'first' FIRST
 
+statement ok
+set sql_dialect = 'PostgreSQL'
+
 query TT
 SHOW CREATE TABLE `05_0028_at_t0_3`
 ----
