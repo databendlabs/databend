@@ -40,6 +40,8 @@ pub use registry::FamilyGauge;
 pub use registry::FamilyHistogram;
 pub use registry::ScopedRegistry;
 pub use registry::GLOBAL_METRICS_REGISTRY;
+pub use registry::MAX_HISTOGRAM_BOUND;
+pub use registry::MIN_HISTOGRAM_BOUND;
 pub use sample::HistogramCount;
 pub use sample::MetricSample;
 pub use sample::MetricValue;

@@ -4080,13 +4080,13 @@ LIMIT 100;
 ----
 HashJoin: INNER
 ├── Build
-│   └── HashJoin: INNER
-│       ├── Build
-│       │   └── Scan: default.tpcds.item (#0) (read rows: 180)
-│       └── Probe
-│           └── Scan: default.tpcds.item (#1) (read rows: 180)
+│   └── Scan: default.tpcds.item (#0) (read rows: 180)
 └── Probe
-    └── Scan: default.tpcds.item (#0) (read rows: 180)
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.tpcds.item (#1) (read rows: 180)
+        └── Probe
+            └── Scan: default.tpcds.item (#0) (read rows: 180)
 
 # Q42
 query I
