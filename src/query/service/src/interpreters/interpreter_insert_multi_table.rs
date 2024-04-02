@@ -99,6 +99,9 @@ impl InsertMultiTableInterpreter {
             .await?;
         let predicates = branches.build_predicates(source_schema.as_ref())?;
         let eval_scalars = branches.build_eval_scalars(source_schema.as_ref())?;
+
+        // Source schemas for each branch to be casted to the target schema
+        // It may be output of eval scalar(if exists) or just the source subquery's schema
         let source_schemas = eval_scalars
             .iter()
             .map(|opt_exprs| {
@@ -109,12 +112,15 @@ impl InsertMultiTableInterpreter {
                              remote_exprs,
                              projection: _,
                          }| {
-                            let mut fields = Vec::with_capacity(remote_exprs.len());
-                            for r in remote_exprs {
-                                let data_type = r.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
-                                fields.push(DataField::new("", data_type));
+                            let mut evaled_fields = Vec::with_capacity(remote_exprs.len());
+                            for eval_scalar_expr in remote_exprs {
+                                let data_type = eval_scalar_expr
+                                    .as_expr(&BUILTIN_FUNCTIONS)
+                                    .data_type()
+                                    .clone();
+                                evaled_fields.push(DataField::new("", data_type));
                             }
-                            Arc::new(DataSchema::new(fields))
+                            Arc::new(DataSchema::new(evaled_fields))
                         },
                     )
                     .unwrap_or_else(|| source_schema.clone())
