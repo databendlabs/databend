@@ -167,8 +167,8 @@ Exchange
     │       ├── aggregate functions: [sum(number)]
     │       ├── estimated rows: 1.00
     │       └── Exchange
-    │           ├── output columns: [sum(number) (#2), #_group_by_key]
-    │           ├── exchange type: Hash(_group_by_key)
+    │           ├── output columns: [sum(number) (#2), numbers.number (#0)]
+    │           ├── exchange type: Hash(0)
     │           └── AggregatePartial
     │               ├── group by: [number]
     │               ├── aggregate functions: [sum(number)]
