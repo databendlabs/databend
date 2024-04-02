@@ -80,11 +80,11 @@ impl BlockReader {
     ) -> Result<DataBlock> {
         match storage_format {
             FuseStorageFormat::Parquet => self.deserialize_parquet_chunks(
-                block_path,
                 num_rows,
-                compression,
                 column_metas,
                 column_chunks,
+                compression,
+                block_path,
             ),
             FuseStorageFormat::Native => self.deserialize_native_chunks(
                 block_path,
@@ -124,13 +124,12 @@ impl BlockReader {
         let num_rows = meta.row_count as usize;
 
         match storage_format {
-            FuseStorageFormat::Parquet => self.deserialize_parquet_chunks_with_buffer(
-                &meta.location.0,
+            FuseStorageFormat::Parquet => self.deserialize_parquet_chunks(
                 num_rows,
-                &meta.compression,
                 &meta.col_metas,
                 column_chunks,
-                None,
+                &meta.compression,
+                &meta.location.0,
             ),
             FuseStorageFormat::Native => self.deserialize_native_chunks_with_buffer(
                 &meta.location.0,

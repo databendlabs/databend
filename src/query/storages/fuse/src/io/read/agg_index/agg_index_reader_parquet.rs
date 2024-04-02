@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_arrow::arrow::io::parquet::read as pread;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
@@ -23,7 +21,6 @@ use log::debug;
 use super::AggIndexReader;
 use crate::io::read::utils::build_columns_meta;
 use crate::io::ReadSettings;
-use crate::io::UncompressedBuffer;
 use crate::FuseBlockPartInfo;
 use crate::MergeIOReadResult;
 
@@ -120,17 +117,15 @@ impl AggIndexReader {
         &self,
         part: PartInfoPtr,
         data: MergeIOReadResult,
-        buffer: Arc<UncompressedBuffer>,
     ) -> Result<DataBlock> {
         let columns_chunks = data.columns_chunks()?;
         let part = FuseBlockPartInfo::from_part(&part)?;
-        let block = self.reader.deserialize_parquet_chunks_with_buffer(
-            &part.location,
+        let block = self.reader.deserialize_parquet_chunks(
             part.nums_rows,
-            &part.compression,
             &part.columns_meta,
             columns_chunks,
-            Some(buffer),
+            &part.compression,
+            &part.location,
         )?;
 
         self.apply_agg_info(block)

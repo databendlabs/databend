@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_arrow::arrow::datatypes::Field;
 use databend_common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
@@ -27,9 +25,7 @@ use databend_common_arrow::parquet::read::PageMetaData;
 use databend_common_arrow::parquet::read::PageReader;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_metrics::storage::*;
 use databend_common_storage::ColumnNode;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
@@ -42,72 +38,10 @@ use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
 
 impl BlockReader {
-    /// Deserialize column chunks data from parquet format to DataBlock.
-    pub(super) fn deserialize_parquet_chunks(
-        &self,
-        block_path: &str,
-        num_rows: usize,
-        compression: &Compression,
-        column_metas: &HashMap<ColumnId, ColumnMeta>,
-        column_chunks: HashMap<ColumnId, DataItem>,
-    ) -> Result<DataBlock> {
-        if column_chunks.is_empty() {
-            return self.build_default_values_block(num_rows);
-        }
-
-        let start = Instant::now();
-
-        let deserialized_res = self.deserialize_parquet_chunks_with_buffer(
-            block_path,
-            num_rows,
-            compression,
-            column_metas,
-            column_chunks,
-            None,
-        );
-
-        // Perf.
-        {
-            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
-        }
-
-        deserialized_res
-    }
-
     pub fn build_default_values_block(&self, num_rows: usize) -> Result<DataBlock> {
         let data_schema = self.data_schema();
         let default_vals = self.default_vals.clone();
         DataBlock::create_with_default_value(&data_schema, &default_vals, num_rows)
-    }
-
-    /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
-    pub(crate) fn deserialize_parquet_chunks_with_buffer(
-        &self,
-        block_path: &str,
-        num_rows: usize,
-        compression: &Compression,
-        column_metas: &HashMap<ColumnId, ColumnMeta>,
-        column_chunks: HashMap<ColumnId, DataItem>,
-        uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
-    ) -> Result<DataBlock> {
-        let use_parquet2 = self.ctx.get_settings().get_fuse_read_use_parquet2()?;
-        match use_parquet2 {
-            true => self.column_chunks_to_data_block_2(
-                block_path,
-                num_rows,
-                compression,
-                column_metas,
-                column_chunks,
-                uncompressed_buffer,
-            ),
-            false => self.column_chunks_to_data_block_1(
-                num_rows,
-                column_metas,
-                column_chunks,
-                compression,
-                block_path,
-            ),
-        }
     }
 
     #[allow(clippy::too_many_arguments)]

@@ -37,7 +37,6 @@ use crate::io::BlockReader;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
-use crate::io::UncompressedBuffer;
 use crate::FuseBlockPartInfo;
 use crate::FuseTable;
 use crate::MergeIOReadResult;
@@ -51,9 +50,6 @@ pub(super) struct ParquetRowsFetcher<const BLOCKING_IO: bool> {
 
     settings: ReadSettings,
     reader: Arc<BlockReader>,
-    // [`UncompressedBuffer`] cannot be shared between multiple threads at the same time.
-    // So we create a [`UncompressedBuffer`] for each thread.
-    uncompressed_buffers: Vec<Arc<UncompressedBuffer>>,
     part_map: HashMap<u64, PartInfoPtr>,
 
     // To control the parallelism of fetching blocks.
@@ -111,7 +107,6 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
             tasks.push(Self::fetch_blocks(
                 self.reader.clone(),
                 parts,
-                self.uncompressed_buffers[i].clone(),
                 self.settings,
             ))
         }
@@ -152,13 +147,8 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
         projection: Projection,
         reader: Arc<BlockReader>,
         settings: ReadSettings,
-        buffer_size: usize,
         max_threads: usize,
     ) -> Self {
-        let mut uncompressed_buffers = Vec::with_capacity(max_threads);
-        for _ in 0..max_threads {
-            uncompressed_buffers.push(UncompressedBuffer::new(buffer_size));
-        }
         let schema = table.schema();
         let segment_reader =
             MetaReaders::segment_info_reader(table.operator.clone(), schema.clone());
@@ -170,7 +160,6 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
             schema,
             reader,
             settings,
-            uncompressed_buffers,
             part_map: HashMap::new(),
             max_threads,
         }
@@ -222,7 +211,6 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
     async fn fetch_blocks(
         reader: Arc<BlockReader>,
         parts: Vec<PartInfoPtr>,
-        uncompressed_buffer: Arc<UncompressedBuffer>,
         settings: ReadSettings,
     ) -> Result<Vec<DataBlock>> {
         let mut chunks = Vec::with_capacity(parts.len());
@@ -248,9 +236,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
         let fetched_blocks = chunks
             .into_iter()
             .zip(parts.iter())
-            .map(|(chunk, part)| {
-                Self::build_block(&reader, part, chunk, uncompressed_buffer.clone())
-            })
+            .map(|(chunk, part)| Self::build_block(&reader, part, chunk))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(fetched_blocks)
@@ -260,17 +246,15 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
         reader: &BlockReader,
         part: &PartInfoPtr,
         chunk: MergeIOReadResult,
-        uncompressed_buffer: Arc<UncompressedBuffer>,
     ) -> Result<DataBlock> {
         let columns_chunks = chunk.columns_chunks()?;
         let part = FuseBlockPartInfo::from_part(part)?;
-        reader.deserialize_parquet_chunks_with_buffer(
-            &part.location,
+        reader.deserialize_parquet_chunks(
             part.nums_rows,
-            &part.compression,
             &part.columns_meta,
             columns_chunks,
-            Some(uncompressed_buffer),
+            &part.compression,
+            &part.location,
         )
     }
 }

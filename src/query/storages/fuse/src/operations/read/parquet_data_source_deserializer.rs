@@ -240,11 +240,7 @@ impl Processor for DeserializeDataTransform {
             match read_res {
                 ParquetDataSource::AggIndex((actual_part, data)) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                    let block = agg_index_reader.deserialize_parquet_data(
-                        actual_part,
-                        data,
-                        self.uncompressed_buffer.clone(),
-                    )?;
+                    let block = agg_index_reader.deserialize_parquet_data(actual_part, data)?;
 
                     let progress_values = ProgressValues {
                         rows: block.num_rows(),
@@ -263,13 +259,12 @@ impl Processor for DeserializeDataTransform {
                     let columns_chunks = data.columns_chunks()?;
                     let part = FuseBlockPartInfo::from_part(&part)?;
 
-                    let mut data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
-                        &part.location,
+                    let mut data_block = self.block_reader.deserialize_parquet_chunks(
                         part.nums_rows,
-                        &part.compression,
                         &part.columns_meta,
                         columns_chunks,
-                        Some(self.uncompressed_buffer.clone()),
+                        &part.compression,
+                        &part.location,
                     )?;
 
                     let origin_num_rows = data_block.num_rows();
