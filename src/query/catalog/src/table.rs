@@ -37,7 +37,6 @@ use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
-use databend_storages_common_table_meta::table::StreamMode;
 
 use crate::lock::Lock;
 use crate::plan::DataSourceInfo;
@@ -129,14 +128,6 @@ pub trait Table: Sync + Send {
             fields,
             ..self.schema().as_ref().clone()
         })
-    }
-
-    async fn get_stream_mode(&self, ctx: Arc<dyn TableContext>) -> Result<StreamMode> {
-        let _ = ctx;
-        Err(ErrorCode::UnsupportedEngineParams(format!(
-            "Stream mode is not supported for the '{}' engine.",
-            self.engine()
-        )))
     }
 
     /// Whether the table engine supports prewhere optimization.
@@ -295,16 +286,27 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn navigate_since_to(
-        &self,
-        since_point: &Option<NavigationPoint>,
-        to_point: &Option<NavigationPoint>,
-    ) -> Result<Arc<dyn Table>> {
-        let _ = since_point;
-        let _ = to_point;
+    async fn navigate_to(&self, navigation_desc: &NavigationDesc) -> Result<Arc<dyn Table>> {
+        let _ = navigation_desc;
 
         Err(ErrorCode::Unimplemented(format!(
             "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+
+    #[async_backtrace::framed]
+    async fn generage_changes_query(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<String> {
+        let (_, _, _) = (ctx, database_name, table_name);
+
+        Err(ErrorCode::Unimplemented(format!(
+            "Change tracking operation is not supported for the table '{}', which uses the '{}' engine.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -428,6 +430,17 @@ pub trait TableExt: Table {
     }
 }
 impl<T: ?Sized> TableExt for T where T: Table {}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum NavigationDesc {
+    TimeTravel(NavigationPoint),
+    Changes {
+        append_only: bool,
+        desc: String,
+        at: NavigationPoint,
+        end: Option<NavigationPoint>,
+    },
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NavigationPoint {

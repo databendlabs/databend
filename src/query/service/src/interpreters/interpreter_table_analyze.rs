@@ -88,7 +88,7 @@ impl Interpreter for AnalyzeTableInterpreter {
 
             let since_str = if let Some(table_statistics) = &table_statistics {
                 let is_full = table
-                    .navigate_to(&NavigationPoint::SnapshotID(
+                    .navigate_time_travel(&NavigationPoint::SnapshotID(
                         table_statistics.snapshot_id.simple().to_string(),
                     ))
                     .await

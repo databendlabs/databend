@@ -15,6 +15,7 @@
 mod agg_index_sink;
 mod analyze;
 mod append;
+mod changes;
 mod commit;
 mod common;
 mod compact;
@@ -37,6 +38,7 @@ mod update;
 mod util;
 
 pub use agg_index_sink::AggIndexSink;
+pub use changes::ChangesDesc;
 pub use common::*;
 pub use compact::CompactOptions;
 pub use delete::MutationBlockPruningContext;
@@ -46,7 +48,6 @@ pub use read::build_row_fetcher_pipeline;
 pub use read::need_reserve_block_info;
 pub use replace_into::*;
 pub use util::acquire_task_permit;
-pub use util::collect_incremental_blocks;
 pub use util::column_parquet_metas;
 pub use util::read_block;
 pub use util::set_backoff;

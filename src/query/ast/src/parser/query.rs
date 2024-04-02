@@ -522,12 +522,12 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
     )(i)
 }
 
-pub fn temporal_action(i: Input) -> IResult<TemporalAction> {
+pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
     let time_travel = map(
         rule! {
             AT ~ ^#travel_point
         },
-        |(_, travel_point)| TemporalAction::TimeTravel(travel_point),
+        |(_, travel_point)| TemporalClause::TimeTravel(travel_point),
     );
 
     let changes = map(
@@ -540,11 +540,11 @@ pub fn temporal_action(i: Input) -> IResult<TemporalAction> {
                 APPEND_ONLY => ChangesType::AppendOnly,
                 _ => unreachable!(),
             };
-            TemporalAction::Changes {
+            TemporalClause::Changes(ChangesClause {
                 typ,
                 at_point,
                 end_point: opt_end_point.map(|p| p.1),
-            }
+            })
         },
     );
 
@@ -665,7 +665,7 @@ pub enum TableReferenceElement {
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
-        temporal: Option<TemporalAction>,
+        temporal: Option<TemporalClause>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },
@@ -724,7 +724,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ #temporal_action? ~ #table_alias? ~ #pivot? ~ #unpivot?
+            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
         |((catalog, database, table), temporal, alias, pivot, unpivot)| {
             TableReferenceElement::Table {

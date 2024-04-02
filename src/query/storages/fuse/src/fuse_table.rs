@@ -27,6 +27,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::NavigationDesc;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -85,6 +86,7 @@ use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
+use crate::operations::ChangesDesc;
 use crate::operations::TruncateMode;
 use crate::table_functions::unwrap_tuple;
 use crate::FuseStorageFormat;
@@ -116,7 +118,7 @@ pub struct FuseTable {
     table_type: FuseTableType,
 
     // If this is set, reading from fuse_table should only returns the increment blocks
-    pub(crate) since_table: Option<Arc<FuseTable>>,
+    pub(crate) changes_desc: Option<ChangesDesc>,
 }
 
 impl FuseTable {
@@ -231,7 +233,7 @@ impl FuseTable {
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
-            since_table: None,
+            changes_desc: None,
         }))
     }
 
@@ -733,8 +735,15 @@ impl Table for FuseTable {
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
-        _change_type: Option<ChangeType>,
+        change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
+        if let Some(desc) = &self.changes_desc {
+            assert!(change_type.is_some());
+            return self
+                .changes_table_statistics(ctx, &desc.location, change_type.unwrap())
+                .await;
+        }
+
         let stats = match self.table_type {
             FuseTableType::AttachedReadOnly => {
                 let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
@@ -755,22 +764,14 @@ impl Table for FuseTable {
             }
             _ => {
                 let s = &self.table_info.meta.statistics;
-                let mut res = TableStatistics {
+                TableStatistics {
                     num_rows: Some(s.number_of_rows),
                     data_size: Some(s.data_bytes),
                     data_size_compressed: Some(s.compressed_data_bytes),
                     index_size: Some(s.index_data_bytes),
                     number_of_blocks: s.number_of_blocks,
                     number_of_segments: s.number_of_segments,
-                };
-
-                if let Some(since) = &self.since_table {
-                    if let Some(since_stats) = since.table_statistics(ctx, None).await? {
-                        res = res.increment_since_from(&since_stats);
-                    }
                 }
-
-                res
             }
         };
         Ok(Some(stats))
@@ -803,23 +804,50 @@ impl Table for FuseTable {
         Ok(Box::new(provider))
     }
 
-    #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn navigate_since_to(
-        &self,
-        since_point: &Option<NavigationPoint>,
-        to_point: &Option<NavigationPoint>,
-    ) -> Result<Arc<dyn Table>> {
-        let mut to_point = if let Some(to_point) = to_point {
-            self.navigate_to(to_point).await?.as_ref().clone()
-        } else {
-            self.clone()
-        };
-
-        if let Some(since_point) = since_point {
-            to_point.since_table = Some(self.navigate_to(since_point).await?);
+    async fn navigate_to(&self, navigation_desc: &NavigationDesc) -> Result<Arc<dyn Table>> {
+        match navigation_desc {
+            NavigationDesc::TimeTravel(point) => Ok(self.navigate_time_travel(point).await?),
+            NavigationDesc::Changes {
+                append_only,
+                at,
+                end,
+                desc,
+            } => {
+                let mut end_point = if let Some(end) = end {
+                    self.navigate_time_travel(end).await?.as_ref().clone()
+                } else {
+                    self.clone()
+                };
+                let changes_desc = self
+                    .get_change_descriptor(*append_only, desc.clone(), Some(at))
+                    .await?;
+                end_point.changes_desc = Some(changes_desc);
+                Ok(Arc::new(end_point))
+            }
         }
-        Ok(Arc::new(to_point))
+    }
+
+    #[async_backtrace::framed]
+    async fn generage_changes_query(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<String> {
+        let Some(ChangesDesc {
+            seq,
+            desc,
+            mode,
+            location,
+        }) = self.changes_desc.as_ref()
+        else {
+            return Err(ErrorCode::Internal("cnnot"));
+        };
+        let mode = self.optimize_stream_mode(mode, location).await?;
+        let table_desc = format!("{}.{} {}", database_name, table_name, desc);
+        let query = self.get_changes_query(mode, table_desc, *seq);
+        Ok(query)
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {

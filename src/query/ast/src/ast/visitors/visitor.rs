@@ -17,16 +17,6 @@ use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::schema::CreateOption;
 
-use super::walk::walk_cte;
-use super::walk::walk_expr;
-use super::walk::walk_identifier;
-use super::walk::walk_join_condition;
-use super::walk::walk_query;
-use super::walk::walk_select_target;
-use super::walk::walk_set_expr;
-use super::walk::walk_statement;
-use super::walk::walk_table_reference;
-use super::walk_time_travel_point;
 use crate::ast::visitors::walk_window_definition;
 use crate::ast::*;
 
@@ -806,6 +796,10 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_table_reference(&mut self, table: &'ast TableReference) {
         walk_table_reference(self, table);
+    }
+
+    fn visit_temporal_action(&mut self, clause: &'ast TemporalClause) {
+        walk_temporal_action(self, clause);
     }
 
     fn visit_time_travel_point(&mut self, time: &'ast TimeTravelPoint) {

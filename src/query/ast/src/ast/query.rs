@@ -573,39 +573,45 @@ pub enum ChangesType {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub enum TemporalAction {
-    TimeTravel(TimeTravelPoint),
-    Changes {
-        typ: ChangesType,
-        at_point: TimeTravelPoint,
-        end_point: Option<TimeTravelPoint>,
-    },
+pub struct ChangesClause {
+    pub typ: ChangesType,
+    pub at_point: TimeTravelPoint,
+    pub end_point: Option<TimeTravelPoint>,
 }
 
-impl Display for TemporalAction {
+impl Display for ChangesClause {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CHANGES (INFORMATION => ")?;
+        match self.typ {
+            ChangesType::Default => {
+                write!(f, "DEFAULT")?;
+            }
+            ChangesType::AppendOnly => {
+                write!(f, "APPEND_ONLY")?;
+            }
+        }
+        write!(f, ") AT {}", self.at_point)?;
+        if let Some(end_point) = &self.end_point {
+            write!(f, " END {}", end_point)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum TemporalClause {
+    TimeTravel(TimeTravelPoint),
+    Changes(ChangesClause),
+}
+
+impl Display for TemporalClause {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TemporalAction::TimeTravel(point) => {
+            TemporalClause::TimeTravel(point) => {
                 write!(f, "AT {}", point)?;
             }
-            TemporalAction::Changes {
-                typ,
-                at_point,
-                end_point,
-            } => {
-                write!(f, "CHANGES (INFORMATION => ")?;
-                match typ {
-                    ChangesType::Default => {
-                        write!(f, "DEFAULT")?;
-                    }
-                    ChangesType::AppendOnly => {
-                        write!(f, "APPEND_ONLY")?;
-                    }
-                }
-                write!(f, ") AT {}", at_point)?;
-                if let Some(end_point) = end_point {
-                    write!(f, " END {}", end_point)?;
-                }
+            TemporalClause::Changes(changes) => {
+                write!(f, "{}", changes)?;
             }
         }
         Ok(())
@@ -623,7 +629,7 @@ pub enum TableReference {
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
-        temporal: Option<TemporalAction>,
+        temporal: Option<TemporalClause>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
     },

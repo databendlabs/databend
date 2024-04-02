@@ -22,6 +22,7 @@ use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
 use dashmap::DashMap;
+use databend_common_ast::ast::ChangesType;
 use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
@@ -37,6 +38,7 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::TimeTravelPoint;
 use databend_common_ast::ast::UriLocation;
 use databend_common_ast::parser::parse_sql;
@@ -44,6 +46,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::table::NavigationDesc;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
@@ -81,8 +84,6 @@ use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::get_change_type;
 use databend_storages_common_table_meta::table::ChangeType;
-use databend_storages_common_table_meta::table::StreamMode;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use log::info;
 use parking_lot::RwLock;
 
@@ -173,8 +174,7 @@ impl Binder {
         database: &Option<Identifier>,
         table: &Identifier,
         alias: &Option<TableAlias>,
-        travel_point: &Option<TimeTravelPoint>,
-        since_point: &Option<TimeTravelPoint>,
+        temporal: &Option<TemporalClause>,
     ) -> Result<(SExpr, BindContext)> {
         let (catalog, database, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);
@@ -207,15 +207,7 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
 
-        let navigation_point = match travel_point {
-            Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp).await?),
-            None => None,
-        };
-
-        let since_point = match since_point {
-            Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp).await?),
-            None => None,
-        };
+        let navigation = self.resolve_temporal_clause(bind_context, temporal).await?;
 
         // Resolve table with catalog
         let table_meta = match self
@@ -224,8 +216,7 @@ impl Binder {
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),
-                &navigation_point,
-                &since_point,
+                navigation.as_ref(),
             )
             .await
         {
@@ -265,6 +256,30 @@ impl Binder {
                 return Err(e);
             }
         };
+
+        let is_changes = navigation.is_some_and(|n| matches!(n, NavigationDesc::Changes { .. }))
+            || table_meta.engine() == "STREAM";
+
+        let change_type = get_change_type(&table_alias_name);
+        if change_type.is_some() {
+            let table_index = self.metadata.write().add_table(
+                catalog,
+                database.clone(),
+                table_meta,
+                table_alias_name,
+                bind_context.view_info.is_some(),
+                bind_context.planning_agg_index,
+                false,
+            );
+            let (s_expr, mut bind_context) = self
+                .bind_base_table(bind_context, database.as_str(), table_index, change_type)
+                .await?;
+
+            if let Some(alias) = alias {
+                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            }
+            return Ok((s_expr, bind_context));
+        }
 
         match table_meta.engine() {
             "VIEW" => {
@@ -312,9 +327,47 @@ impl Binder {
                     )
                 }
             }
-            "STREAM" => {
-                let change_type = get_change_type(&table_alias_name);
-                if change_type.is_some() {
+            _ => {
+                if is_changes {
+                    let query = table_meta
+                        .generage_changes_query(
+                            self.ctx.clone(),
+                            database.as_str(),
+                            table_name.as_str(),
+                        )
+                        .await?;
+
+                    let mut new_bind_context =
+                        BindContext::with_parent(Box::new(bind_context.clone()));
+                    let tokens = tokenize_sql(query.as_str())?;
+                    let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+                    if let Statement::Query(query) = &stmt {
+                        let (s_expr, mut new_bind_context) =
+                            self.bind_query(&mut new_bind_context, query).await?;
+
+                        let cols = table_meta
+                            .schema()
+                            .fields()
+                            .iter()
+                            .map(|f| f.name().clone())
+                            .collect::<Vec<_>>();
+                        for (index, column_name) in cols.iter().enumerate() {
+                            new_bind_context.columns[index].column_name = column_name.clone();
+                        }
+                        if let Some(alias) = alias {
+                            new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                        } else {
+                            for column in new_bind_context.columns.iter_mut() {
+                                column.database_name = None;
+                                column.table_name = Some(table_name.clone());
+                            }
+                        }
+                        new_bind_context.parent = Some(Box::new(bind_context.clone()));
+                        Ok((s_expr, new_bind_context))
+                    } else {
+                        unreachable!()
+                    }
+                } else {
                     let table_index = self.metadata.write().add_table(
                         catalog,
                         database.clone(),
@@ -324,145 +377,15 @@ impl Binder {
                         bind_context.planning_agg_index,
                         false,
                     );
-                    let (s_expr, mut bind_context) = self
-                        .bind_base_table(bind_context, database.as_str(), table_index, change_type)
-                        .await?;
 
+                    let (s_expr, mut bind_context) = self
+                        .bind_base_table(bind_context, database.as_str(), table_index, None)
+                        .await?;
                     if let Some(alias) = alias {
                         bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                     }
-                    return Ok((s_expr, bind_context));
+                    Ok((s_expr, bind_context))
                 }
-
-                let mode = table_meta.get_stream_mode(self.ctx.clone()).await?;
-                let table_version = table_meta
-                    .options()
-                    .get(OPT_KEY_TABLE_VER)
-                    .ok_or_else(|| ErrorCode::Internal("table version must be set in stream"))?
-                    .parse::<u64>()?;
-
-                let cols = table_meta
-                    .schema()
-                    .fields()
-                    .iter()
-                    .map(|f| f.name().clone())
-                    .collect::<Vec<_>>();
-
-                let suffix = format!("{:08x}", Utc::now().timestamp());
-                let query = match mode {
-                    StreamMode::AppendOnly => {
-                        let append_alias = format!("_change_append${}", suffix);
-                        format!(
-                            "select *, \
-                                    'INSERT' as change$action, \
-                                    false as change$is_update, \
-                                    if(is_not_null(_origin_block_id), \
-                                       concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
-                                       {append_alias}._base_row_id \
-                                    ) as change$row_id \
-                             from {database}.{table_name} as {append_alias} \
-                             where not(is_not_null(_origin_version) and \
-                                       (_origin_version < {table_version} or \
-                                        contains({append_alias}._base_block_ids, _origin_block_id)))",
-                        )
-                    }
-                    StreamMode::Standard => {
-                        let a_table_alias = format!("_change_insert${}", suffix);
-                        let a_cols = cols.join(", ");
-
-                        let d_table_alias = format!("_change_delete${}", suffix);
-                        let d_cols = cols
-                            .iter()
-                            .map(|s| format!("d_{}", s))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-
-                        format!(
-                            "with _change({a_cols}, change$action, change$row_id, \
-                                          {d_cols}, d_change$action, d_change$row_id) as materialized \
-                            ( \
-                                select * \
-                                from ( \
-                                    select *, \
-                                           _row_version, \
-                                           'INSERT' as change$action, \
-                                           if(is_not_null(_origin_block_id), \
-                                              concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
-                                              {a_table_alias}._base_row_id \
-                                           ) as change$row_id \
-                                    from {database}.{table_name} as {a_table_alias} \
-                                ) as A \
-                                FULL OUTER JOIN ( \
-                                    select *, \
-                                           _row_version, \
-                                           'DELETE' as change$action, \
-                                           if(is_not_null(_origin_block_id), \
-                                              concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
-                                              {d_table_alias}._base_row_id \
-                                           ) as change$row_id \
-                                    from {database}.{table_name} as {d_table_alias} \
-                                ) as D \
-                                on A.change$row_id = D.change$row_id \
-                                where A.change$row_id is null or D.change$row_id is null or A._row_version > D._row_version \
-                            ) \
-                            select {a_cols}, \
-                                   change$action, \
-                                   change$row_id, \
-                                   d_change$action is not null as change$is_update \
-                            from _change \
-                            where change$action is not null \
-                            union all \
-                            select {d_cols}, \
-                                   d_change$action, \
-                                   d_change$row_id, \
-                                   change$action is not null as change$is_update \
-                            from _change \
-                            where d_change$action is not null",
-                        )
-                    }
-                };
-                let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-                let tokens = tokenize_sql(query.as_str())?;
-                let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-                if let Statement::Query(query) = &stmt {
-                    let (s_expr, mut new_bind_context) =
-                        self.bind_query(&mut new_bind_context, query).await?;
-
-                    for (index, column_name) in cols.iter().enumerate() {
-                        new_bind_context.columns[index].column_name = column_name.clone();
-                    }
-                    if let Some(alias) = alias {
-                        new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                    } else {
-                        for column in new_bind_context.columns.iter_mut() {
-                            column.database_name = None;
-                            column.table_name = Some(table_name.clone());
-                        }
-                    }
-                    new_bind_context.parent = Some(Box::new(bind_context.clone()));
-                    Ok((s_expr, new_bind_context))
-                } else {
-                    unreachable!()
-                }
-            }
-            _ => {
-                let table_index = self.metadata.write().add_table(
-                    catalog,
-                    database.clone(),
-                    table_meta,
-                    table_alias_name,
-                    bind_context.view_info.is_some(),
-                    bind_context.planning_agg_index,
-                    false,
-                );
-
-                let (s_expr, mut bind_context) = self
-                    .bind_base_table(bind_context, database.as_str(), table_index, None)
-                    .await?;
-                if let Some(alias) = alias {
-                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                }
-                Ok((s_expr, bind_context))
             }
         }
     }
@@ -910,8 +833,7 @@ impl Binder {
                 database,
                 table,
                 alias,
-                travel_point,
-                since_point,
+                temporal,
                 pivot: _,
                 unpivot: _,
             } => {
@@ -922,8 +844,7 @@ impl Binder {
                     database,
                     table,
                     alias,
-                    travel_point,
-                    since_point,
+                    temporal,
                 )
                 .await
             }
@@ -1402,8 +1323,7 @@ impl Binder {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        travel_point: &Option<NavigationPoint>,
-        since_point: &Option<NavigationPoint>,
+        navigation: Option<&NavigationDesc>,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with ctx
         // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
@@ -1414,12 +1334,41 @@ impl Binder {
             .get_table(catalog_name, database_name, table_name)
             .await?;
 
-        if travel_point.is_some() || since_point.is_some() {
-            table_meta = table_meta
-                .navigate_since_to(since_point, travel_point)
-                .await?;
+        if let Some(desc) = navigation {
+            table_meta = table_meta.navigate_to(desc).await?;
         }
         Ok(table_meta)
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn resolve_temporal_clause(
+        &self,
+        bind_context: &mut BindContext,
+        temporal: &Option<TemporalClause>,
+    ) -> Result<Option<NavigationDesc>> {
+        match temporal {
+            Some(TemporalClause::TimeTravel(point)) => {
+                let point = self.resolve_data_travel_point(bind_context, point).await?;
+                Ok(Some(NavigationDesc::TimeTravel(point)))
+            }
+            Some(TemporalClause::Changes(clause)) => {
+                let end = match &clause.end_point {
+                    Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp).await?),
+                    None => None,
+                };
+                let at = self
+                    .resolve_data_travel_point(bind_context, &clause.at_point)
+                    .await?;
+                let append_only = matches!(clause.typ, ChangesType::AppendOnly);
+                Ok(Some(NavigationDesc::Changes {
+                    append_only,
+                    at,
+                    end,
+                    desc: format!("{clause}"),
+                }))
+            }
+            None => Ok(None),
+        }
     }
 
     #[async_backtrace::framed]
