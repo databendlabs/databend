@@ -304,10 +304,3 @@ impl TryFrom<SegmentInfo> for CompactSegmentInfo {
         })
     }
 }
-
-#[cfg(feature = "dev")]
-impl SegmentInfo {
-    pub fn bench_to_bytes_with_encoding(&self, encoding: MetaEncoding) -> Result<Vec<u8>> {
-        self.to_bytes_with_encoding(encoding)
-    }
-}

@@ -1058,7 +1058,7 @@ select date_format('2022-02-04T03:58:59', '%Y年%m月%d日，%H时%M分%S秒');
 query T
 select str_to_timestamp('2022年02月04日，03时58分59秒', '%Y年%m月%d日，%H时%M分%S秒');
 ----
-NULL
+2022-02-04 03:58:59.000000
 
 query T
 select str_to_timestamp('2022年02月04日，8时58分59秒,时区：+0000', '%Y年%m月%d日，%H时%M分%S秒,时区：%z');
@@ -1069,6 +1069,21 @@ query T
 select to_timestamp('2022年02月04日，8时58分59秒,时区：+0800', '%Y年%m月%d日，%H时%M分%S秒,时区：%z');
 ----
 2022-02-04 00:58:59.000000
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H时%M分%S秒');
+----
+2022-02-04 08:58:59.000000
+
+query T
+select to_timestamp('2022年02月04日，8时58分59秒', '');
+----
+NULL
+
+query T
+select to_timestamp('10000-09-09 01:46:39', '%Y-%m-%d %H:%M:%S');
+----
+NULL
 
 query I
 select week('2017-01-01');
