@@ -4794,13 +4794,10 @@ dependencies = [
 name = "databend-storages-common-blocks"
 version = "0.1.0"
 dependencies = [
- "databend-common-arrow",
- "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",
  "parquet",
- "parquet-format-safe",
 ]
 
 [[package]]
