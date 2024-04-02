@@ -42,6 +42,9 @@ use crate::runtime::metrics::histogram::BUCKET_SECONDS;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::ThreadTracker;
 
+pub const MIN_HISTOGRAM_BOUND: f64 = i64::MIN as f64;
+pub const MAX_HISTOGRAM_BOUND: f64 = i64::MAX as f64;
+
 pub static GLOBAL_METRICS_REGISTRY: LazyLock<GlobalRegistry> =
     LazyLock::new(GlobalRegistry::create);
 
@@ -251,6 +254,16 @@ pub fn register_counter(name: &str) -> Counter {
 
 pub fn register_histogram(name: &str, buckets: impl Iterator<Item = f64>) -> Histogram {
     let buckets = buckets.collect::<Vec<_>>();
+
+    for bound in buckets {
+        if bound <= MIN_HISTOGRAM_BOUND {
+            panic!("Histogram bucket bound must > {}", MIN_HISTOGRAM_BOUND);
+        }
+        if bound >= MAX_HISTOGRAM_BOUND {
+            panic!("Histogram bucket bound must < {}", MAX_HISTOGRAM_BOUND);
+        }
+    }
+
     GLOBAL_METRICS_REGISTRY.register(name, "", HistogramCreator(buckets))
 }
 
@@ -275,6 +288,16 @@ pub fn register_histogram_family<T: FamilyLabels>(
     buckets: impl Iterator<Item = f64>,
 ) -> FamilyHistogram<T> {
     let buckets = buckets.collect::<Vec<_>>();
+
+    for bound in buckets {
+        if bound <= MIN_HISTOGRAM_BOUND {
+            panic!("Histogram bucket bound must > {}", MIN_HISTOGRAM_BOUND);
+        }
+        if bound >= MAX_HISTOGRAM_BOUND {
+            panic!("Histogram bucket bound must < {}", MAX_HISTOGRAM_BOUND);
+        }
+    }
+
     GLOBAL_METRICS_REGISTRY.register(name, "", FamilyHistogramCreator(buckets))
 }
 
