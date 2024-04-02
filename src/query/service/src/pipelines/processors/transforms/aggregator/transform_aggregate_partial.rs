@@ -136,12 +136,23 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             }
         } else {
             let arena = Arc::new(Bump::new());
-            HashTable::AggregateHashTable(AggregateHashTable::new(
-                params.group_data_types.clone(),
-                params.aggregate_functions.clone(),
-                config,
-                arena,
-            ))
+            match !params.has_distinct_combinator() {
+                true => HashTable::AggregateHashTable(AggregateHashTable::new(
+                    params.group_data_types.clone(),
+                    params.aggregate_functions.clone(),
+                    config,
+                    arena,
+                )),
+                false => {
+                    let max_radix_bits = config.max_radix_bits;
+                    HashTable::AggregateHashTable(AggregateHashTable::new(
+                        params.group_data_types.clone(),
+                        params.aggregate_functions.clone(),
+                        config.with_initial_radix_bits(max_radix_bits),
+                        arena,
+                    ))
+                }
+            }
         };
 
         Ok(AccumulatingTransformer::create(

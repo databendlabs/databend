@@ -149,7 +149,9 @@ impl TestHttpQueryRequest {
                 .do_request(Method::GET, self.next_uri.as_ref().unwrap())
                 .await?;
             self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
-            resps.push((status, resp.clone().unwrap()));
+            if self.next_uri.is_some() {
+                resps.push((status, resp.clone().unwrap()));
+            }
         }
 
         Ok(TestHttpQueryFetchReply { resps })
@@ -1540,15 +1542,15 @@ async fn test_affect() -> Result<()> {
             .last();
         assert_eq!(result.0, StatusCode::OK, "{} {:?}", json, result.1.error);
         assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
-        assert_eq!(result.1.state, ExecuteStateKind::Succeeded);
-        assert_eq!(result.1.affect, affect);
+        assert_eq!(result.1.state, ExecuteStateKind::Succeeded, "{}", json);
+        assert_eq!(result.1.affect, affect, "{}", json);
         let session = result.1.session.map(|s| HttpSessionConf {
             last_server_info: None,
             last_query_ids: vec![],
             ..s
         });
 
-        assert_eq!(session, session_conf);
+        assert_eq!(session, session_conf, "{}", json);
     }
 
     Ok(())
