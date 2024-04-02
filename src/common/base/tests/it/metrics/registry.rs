@@ -27,6 +27,7 @@ use databend_common_base::runtime::metrics::ScopedRegistry;
 use databend_common_base::runtime::metrics::BUCKET_MILLISECONDS;
 use databend_common_base::runtime::metrics::BUCKET_SECONDS;
 use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
+use databend_common_base::runtime::metrics::MAX_HISTOGRAM_BOUND;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::Result;
 
@@ -154,7 +155,7 @@ fn test_tracking_scoped_histogram_in_seconds_metrics() -> Result<()> {
                 count: 0.0,
             })
             .chain(std::iter::once(HistogramCount {
-                less_than: f64::MAX,
+                less_than: MAX_HISTOGRAM_BOUND,
                 count: v,
             }))
             .collect::<Vec<_>>()
@@ -214,7 +215,7 @@ fn test_tracking_scoped_histogram_in_milliseconds_metrics() -> Result<()> {
                 count: 0.0,
             })
             .chain(std::iter::once(HistogramCount {
-                less_than: f64::MAX,
+                less_than: MAX_HISTOGRAM_BOUND,
                 count: v,
             }))
             .collect::<Vec<_>>()
