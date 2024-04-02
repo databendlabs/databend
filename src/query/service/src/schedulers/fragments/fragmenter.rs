@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::CompactSource;
+use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::executor::physical_plans::DeleteSource;
@@ -151,6 +152,12 @@ impl PhysicalPlanReplacer for Fragmenter {
         self.state = State::SelectLeaf;
 
         Ok(PhysicalPlan::TableScan(plan.clone()))
+    }
+
+    fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
+        self.state = State::SelectLeaf;
+
+        Ok(PhysicalPlan::ConstantTableScan(plan.clone()))
     }
 
     fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {

@@ -181,6 +181,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
                 // handle the case where the last input changes the max partition
                 if index == self.inputs.len() - 1
+                    && before_max_partition_count > 0
                     && before_max_partition_count != self.max_partition_count
                 {
                     self.initialized_all_inputs = false;
