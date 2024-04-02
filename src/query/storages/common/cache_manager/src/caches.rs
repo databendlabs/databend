@@ -30,6 +30,7 @@ use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexDirectory;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::IndexInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -52,6 +53,7 @@ pub type BloomIndexFilterCache =
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 
+pub type InvertedIndexInfoCache = NamedCache<InMemoryItemCacheHolder<IndexInfo>>;
 pub type InvertedIndexFilterCache = NamedCache<
     InMemoryItemCacheHolder<InvertedIndexDirectory, DefaultHashBuilder, InvertedIndexFilterMeter>,
 >;

@@ -28,13 +28,39 @@ use databend_storages_common_cache::Loader;
 use databend_storages_common_cache_manager::CachedObject;
 use databend_storages_common_cache_manager::InvertedIndexFilterMeter;
 use databend_storages_common_index::InvertedIndexDirectory;
+use databend_storages_common_table_meta::meta::IndexInfo;
+use databend_storages_common_table_meta::meta::Location;
 use opendal::Operator;
+
+use crate::io::MetaReaders;
 
 type CachedReader = InMemoryCacheReader<
     InvertedIndexDirectory,
     InvertedIndexFilterLoader,
     InvertedIndexFilterMeter,
 >;
+
+/// Loads inverted index info data
+/// read data from cache, or populate cache items if possible
+#[minitrace::trace]
+pub async fn load_inverted_index_info(
+    dal: Operator,
+    index_info_loc: Option<&Location>,
+) -> Result<Option<Arc<IndexInfo>>> {
+    match index_info_loc {
+        Some((index_info_loc, ver)) => {
+            let reader = MetaReaders::inverted_index_info_reader(dal);
+            let params = LoadParams {
+                location: index_info_loc.clone(),
+                len_hint: None,
+                ver: *ver,
+                put_cache: true,
+            };
+            Ok(Some(reader.read(&params).await?))
+        }
+        None => Ok(None),
+    }
+}
 
 /// Loads data of invereted index filter
 #[minitrace::trace]

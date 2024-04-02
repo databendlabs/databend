@@ -17,6 +17,7 @@ use std::marker::PhantomData;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_storages_common_index::InvertedIndexDirectory;
+use databend_storages_common_table_meta::meta::IndexInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
@@ -31,6 +32,7 @@ use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::index::filters::BlockFilter;
 use crate::FUSE_TBL_AGG_INDEX_PREFIX;
+use crate::FUSE_TBL_INVERTED_INDEX_INFO_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
@@ -164,6 +166,17 @@ impl TableMetaLocationGenerator {
         let prefix = splits[..len - 2].join("/");
         let block_name = splits[len - 1];
         format!("{prefix}/{FUSE_TBL_AGG_INDEX_PREFIX}/{index_id}/{block_name}")
+    }
+
+    pub fn gen_inverted_index_info_location(&self) -> String {
+        let uuid = Uuid::new_v4().simple().to_string();
+        format!(
+            "{}/{}/{}_v{}.mpk",
+            &self.prefix,
+            FUSE_TBL_INVERTED_INDEX_INFO_PREFIX,
+            uuid,
+            IndexInfo::VERSION,
+        )
     }
 
     pub fn gen_inverted_index_location_from_block_location(

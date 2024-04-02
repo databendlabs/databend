@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -44,12 +45,15 @@ use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_common_storages_share::save_share_table_info;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::IndexInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
 
+use crate::io::read::load_inverted_index_info;
+use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::InvertedIndexWriter;
 use crate::io::MetaReaders;
@@ -108,13 +112,16 @@ impl FuseTable {
         let segment_reader =
             MetaReaders::segment_info_reader(self.get_operator(), table_schema.clone());
 
-        let mut generated_segment_locs = vec![];
+        let mut indexed_segments = BTreeSet::new();
         if let Some(indexes) = &snapshot.indexes {
-            if let Some((ver, segment_locs)) = indexes.get(&index_name) {
+            let index_info_loc = indexes.get(&index_name);
+            if let Some(old_index_info) =
+                load_inverted_index_info(self.get_operator(), index_info_loc).await?
+            {
                 // Every time the index info changed, a new index version is generated
                 // and the index data needs to be regenerated.
-                if ver == &index_version {
-                    generated_segment_locs = segment_locs.clone();
+                if old_index_info.index_version == index_version {
+                    indexed_segments = old_index_info.indexed_segments.clone();
                 }
             }
         }
@@ -129,7 +136,7 @@ impl FuseTable {
         // Filter segments whose indexes already generated
         let segment_locs: Vec<_> = segment_locs
             .into_iter()
-            .filter(|l| !generated_segment_locs.contains(l))
+            .filter(|l| !indexed_segments.contains(l))
             .collect();
 
         if segment_locs.is_empty() {
@@ -203,6 +210,7 @@ impl FuseTable {
                 index_name.clone(),
                 index_version.clone(),
                 segment_locs.clone(),
+                indexed_segments.clone(),
                 block_nums,
             )
         })?;
@@ -336,11 +344,13 @@ pub struct InvertedIndexSink {
     index_name: String,
     index_version: String,
     segment_locs: Vec<Location>,
+    indexed_segments: BTreeSet<Location>,
     block_nums: AtomicUsize,
     new_snapshot_loc: Option<String>,
 }
 
 impl InvertedIndexSink {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input: Arc<InputPort>,
         ctx: Arc<dyn TableContext>,
@@ -351,6 +361,7 @@ impl InvertedIndexSink {
         index_name: String,
         index_version: String,
         segment_locs: Vec<Location>,
+        indexed_segments: BTreeSet<Location>,
         block_nums: usize,
     ) -> Result<ProcessorPtr> {
         let sinker = AsyncSinker::create(input, ctx.clone(), InvertedIndexSink {
@@ -362,6 +373,7 @@ impl InvertedIndexSink {
             index_name,
             index_version,
             segment_locs,
+            indexed_segments,
             block_nums: AtomicUsize::new(block_nums),
             new_snapshot_loc: None,
         });
@@ -427,16 +439,35 @@ impl AsyncSink for InvertedIndexSink {
             Some(self.fuse_table.get_table_info().ident.seq),
         );
 
-        let mut indexes = new_snapshot.indexes.clone().unwrap_or_default();
-        let mut segment_locs = self.segment_locs.clone();
-        if let Some((ver, mut old_segment_locs)) = indexes.remove(&self.index_name) {
-            if ver == self.index_version {
-                segment_locs.append(&mut old_segment_locs);
+        let mut indexed_segments = BTreeSet::new();
+        // only keep valid segments, remove not existed ones.
+        for indexed_segment in &self.indexed_segments {
+            if new_snapshot.segments.contains(indexed_segment) {
+                indexed_segments.insert(indexed_segment.clone());
             }
         }
+        // add new indexed segments
+        for segment_loc in &self.segment_locs {
+            indexed_segments.insert(segment_loc.clone());
+        }
+
+        let new_index_info = IndexInfo::new(self.index_version.clone(), indexed_segments);
+        let index_bytes = new_index_info.to_bytes()?;
+        let new_index_info_loc = self
+            .fuse_table
+            .meta_location_generator()
+            .gen_inverted_index_info_location();
+        write_data(
+            index_bytes,
+            self.fuse_table.get_operator_ref(),
+            &new_index_info_loc,
+        )
+        .await?;
+
+        let mut indexes = new_snapshot.indexes.clone().unwrap_or_default();
         indexes.insert(
             self.index_name.clone(),
-            (self.index_version.clone(), segment_locs),
+            (new_index_info_loc, IndexInfo::VERSION),
         );
         new_snapshot.indexes = Some(indexes);
 

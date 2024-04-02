@@ -88,10 +88,9 @@ pub struct TableSnapshot {
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
 
-    // The inverted index information, key is index name,
-    // value is the version and segments that have been indexed,
-    // those segments do not need to be indexed again when refreshing the index.
-    pub indexes: Option<BTreeMap<String, (String, Vec<Location>)>>,
+    /// The index infors, key is the index name,
+    /// value is the index info location.
+    pub indexes: Option<BTreeMap<String, Location>>,
 }
 
 impl TableSnapshot {
@@ -105,7 +104,7 @@ impl TableSnapshot {
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
-        indexes: Option<BTreeMap<String, (String, Vec<Location>)>>,
+        indexes: Option<BTreeMap<String, Location>>,
     ) -> Self {
         let now = Utc::now();
         // make snapshot timestamp monotonically increased
