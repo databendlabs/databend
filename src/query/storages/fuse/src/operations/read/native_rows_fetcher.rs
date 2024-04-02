@@ -200,7 +200,10 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             }
 
             let (segment, block) = split_prefix(prefix);
-            if !self.segment_blocks_cache.contains_key(&segment) {
+
+            if let std::collections::hash_map::Entry::Vacant(e) =
+                self.segment_blocks_cache.entry(segment)
+            {
                 let (location, ver) = snapshot.segments[segment as usize].clone();
                 let compact_segment_info = self
                     .segment_reader
@@ -213,7 +216,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
                     .await?;
 
                 let blocks = compact_segment_info.block_metas()?;
-                self.segment_blocks_cache.insert(segment, blocks);
+                e.insert(blocks);
             }
 
             let blocks = self.segment_blocks_cache.get(&segment).unwrap();
