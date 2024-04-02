@@ -26,15 +26,18 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_io::parse_to_ewkb;
 use geo::MultiPoint;
 use geo::Point;
+use geohash::decode_bbox;
 use geos::geo_types;
 use geos::geo_types::Coord;
 use geos::geo_types::LineString;
 use geos::Geom;
 use geos::Geometry;
+use geozero::geojson::GeoJson;
 use geozero::wkb::Ewkb;
 use geozero::CoordDimensions;
 use geozero::GeozeroGeometry;
 use geozero::ToGeos;
+use geozero::ToJson;
 use geozero::ToWkb;
 use geozero::ToWkt;
 
@@ -60,6 +63,44 @@ pub fn register(registry: &mut FunctionRegistry) {
     ]);
 
     // functions
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+        "st_geomfromgeohash",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<StringType, GeometryType>(|geohash, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+            if geohash.len() > 12 {
+                ctx.set_error(builder.len(), "");
+                builder.put_str("Currently the precision only implement within 12 digits!");
+                return;
+            }
+
+            let geo: geo_types::Geometry = match decode_bbox(geohash) {
+                Ok(rect) => rect.into(),
+                Err(e) => {
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError(e.to_string()).to_string(),
+                    );
+                    builder.put_str("");
+                    return;
+                }
+            };
+            match geo.to_json() {
+                Ok(json) => builder.put_slice(json.as_bytes()),
+                Err(e) => ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(e.to_string()).to_string(),
+                ),
+            };
+            builder.commit_row();
+        }),
+    );
+
     registry.register_passthrough_nullable_2_arg::<NumberType<F64>, NumberType<F64>, GeometryType, _, _>(
         "st_makegeompoint",
         |_,_, _| FunctionDomain::Full,
@@ -345,14 +386,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match Ewkb(b.to_vec()).to_ewkt(None) {
-                Ok(data) => {
-                    builder.put_str(&data);
-                }
-                Err(e) => {
-                    ctx.set_error(builder.len(), e.to_string());
-                }
-            }
+            let ewkb = Ewkb(b.to_vec());
+            // waiting for https://github.com/georust/geozero/pull/203 release.
+            let data = match Ewkb(b.to_vec()).to_ewkt(ewkb.srid()) {
+                Ok(ewkt) => ewkt,
+                Err(ewkt_error) => match GeoJson(std::str::from_utf8(b).unwrap()).to_json() {
+                    Ok(json) => json,
+                    Err(json_error) => {
+                        let error = format!(
+                            "Ewkt convert error: {ewkt_error} Json convert error: {json_error}"
+                        );
+                        ctx.set_error(builder.len(), ErrorCode::GeometryError(error).to_string());
+                        builder.put_str("");
+                        return;
+                    }
+                },
+            };
+            builder.put_str(&data);
             builder.commit_row();
         }),
     );
