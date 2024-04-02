@@ -302,13 +302,13 @@ impl ExecuteState {
         block_sender: SizedChannelSender<DataBlock>,
         format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>>,
     ) -> Result<()> {
-        let entry = QueryEntry::create(&ctx)?;
-        let queue_guard = QueriesQueueManager::instance().acquire(entry).await?;
-
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
-        let (plan, _) = interpreter_plan_sql(ctx.clone(), &sql)
+        let (plan, extras) = interpreter_plan_sql(ctx.clone(), &sql)
             .await
             .map_err(|err| err.display_with_sql(&sql))?;
+
+        let entry = QueryEntry::create(&ctx, &plan, &extras)?;
+        let queue_guard = QueriesQueueManager::instance().acquire(entry).await?;
 
         {
             // set_var may change settings

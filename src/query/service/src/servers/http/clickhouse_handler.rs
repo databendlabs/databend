@@ -260,17 +260,18 @@ pub async fn clickhouse_handler_get(
             ));
         }
 
-        let query_entry = QueryEntry::create(&context).map_err(BadRequest)?;
-        let _guard = QueriesQueueManager::instance()
-            .acquire(query_entry)
-            .await
-            .map_err(BadRequest)?;
         let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
         let sql = params.query();
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
         let (plan, extras) = interpreter_plan_sql(context.clone(), &sql)
             .await
             .map_err(|err| err.display_with_sql(&sql))
+            .map_err(BadRequest)?;
+
+        let query_entry = QueryEntry::create(&context, &plan, &extras).map_err(BadRequest)?;
+        let _guard = QueriesQueueManager::instance()
+            .acquire(query_entry)
+            .await
             .map_err(BadRequest)?;
         let format = get_format_with_default(extras.format, default_format)?;
         let interpreter = InterpreterFactory::get(context.clone(), &plan)
@@ -342,18 +343,19 @@ pub async fn clickhouse_handler_post(
         };
         info!("receive clickhouse http post, (query + body) = {}", &msg);
 
-        let entry = QueryEntry::create(&ctx).map_err(BadRequest)?;
-        let _guard = QueriesQueueManager::instance()
-            .acquire(entry)
-            .await
-            .map_err(BadRequest)?;
-
         let mut planner = Planner::new(ctx.clone());
         let (mut plan, extras) = planner
             .plan_sql(&sql)
             .await
             .map_err(|err| err.display_with_sql(&sql))
             .map_err(BadRequest)?;
+
+        let entry = QueryEntry::create(&ctx, &plan, &extras).map_err(BadRequest)?;
+        let _guard = QueriesQueueManager::instance()
+            .acquire(entry)
+            .await
+            .map_err(BadRequest)?;
+
         let schema = plan.schema();
         let mut handle = None;
         if let Plan::Insert(insert) = &mut plan {
