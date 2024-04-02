@@ -120,7 +120,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::Duplicate(_) => "Duplicate".fmt(f)?,
             PhysicalPlan::Shuffle(_) => "Shuffle".fmt(f)?,
             PhysicalPlan::ChunkFilter(_) => "ChunkFilter".fmt(f)?,
-            PhysicalPlan::ChunkEvalScalar(_) => "ChunkProject".fmt(f)?,
+            PhysicalPlan::ChunkEvalScalar(_) => "ChunkEvalScalar".fmt(f)?,
             PhysicalPlan::ChunkCastSchema(_) => "ChunkCastSchema".fmt(f)?,
             PhysicalPlan::ChunkFillAndReorder(_) => "ChunkFillAndReorder".fmt(f)?,
             PhysicalPlan::ChunkAppendData(_) => "ChunkAppendData".fmt(f)?,
