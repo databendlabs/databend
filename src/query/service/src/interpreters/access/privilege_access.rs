@@ -964,7 +964,7 @@ impl AccessChecker for PrivilegeAccess {
                        }}
                        PrincipalIdentity::Role(role) => {
                            let roles=current_user.grants.roles();
-                           if roles.contains(&role) || role.to_lowercase() == "public" {
+                           if roles.contains(role) || role.to_lowercase() == "public" {
                                return Ok(());
                            } else {
                                self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant)
