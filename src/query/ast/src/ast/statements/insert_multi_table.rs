@@ -27,7 +27,22 @@ pub struct IntoClause {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub target_columns: Vec<Identifier>,
-    pub source_columns: Vec<Identifier>,
+    pub source_columns: Vec<SourceExpr>,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum SourceExpr {
+    Expr(Expr),
+    Default,
+}
+
+impl Display for SourceExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            SourceExpr::Expr(expr) => expr.fmt(f),
+            SourceExpr::Default => write!(f, "DEFAULT"),
+        }
+    }
 }
 
 impl Display for IntoClause {

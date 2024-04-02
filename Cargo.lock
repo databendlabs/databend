@@ -4652,6 +4652,7 @@ dependencies = [
  "mysql_async",
  "naive-cityhash",
  "num",
+ "num_cpus",
  "once_cell",
  "opendal",
  "opensrv-mysql",

@@ -63,19 +63,19 @@ target_table: default.default.t1
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0)]
 ├── unmatched insert: [condition: None,insert into (a) values(CAST(a (#0) AS Int32 NULL))]
-└── Join(Right)
+└── Join(Left)
     ├── build keys: []
     ├── probe keys: []
     ├── other filters: [lt(t1.a (#1), t2.a (#0))]
     ├── Exchange(Merge)
     │   └── Scan
-    │       ├── table: default.t1
+    │       ├── table: default.t2
     │       ├── filters: []
     │       ├── order by: []
     │       └── limit: NONE
     └── Exchange(Merge)
         └── Scan
-            ├── table: default.t2
+            ├── table: default.t1
             ├── filters: []
             ├── order by: []
             └── limit: NONE
@@ -137,32 +137,32 @@ explain merge into t1 using (select $1 as a from @ss) as t2 on t1.a = t2.a when 
 ----
 MergeInto:
 target_table: default.default.t1
-├── distributed: false
+├── distributed: true
 ├── target_build_optimization: false
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0)]
 ├── unmatched insert: [condition: None,insert into (a) values(CAST(a (#0) AS Int32 NULL))]
 └── Exchange(Merge)
-    └── Join(Right)
-        ├── build keys: [t2.a (#0)]
-        ├── probe keys: [t1.a (#1)]
+    └── Join(Left)
+        ├── build keys: [t1.a (#1)]
+        ├── probe keys: [t2.a (#0)]
         ├── other filters: []
         ├── Exchange(Hash)
-        │   ├── Exchange(Hash): keys: [t1.a (#1)]
-        │   └── Scan
-        │       ├── table: default.t1
-        │       ├── filters: []
-        │       ├── order by: []
-        │       └── limit: NONE
+        │   ├── Exchange(Hash): keys: [t2.a (#0)]
+        │   └── EvalScalar
+        │       ├── scalars: [stage._$1 (#0) AS (#0)]
+        │       └── Scan
+        │           ├── table: system.stage
+        │           ├── filters: []
+        │           ├── order by: []
+        │           └── limit: NONE
         └── Exchange(Hash)
-            ├── Exchange(Hash): keys: [t2.a (#0)]
-            └── EvalScalar
-                ├── scalars: [stage._$1 (#0) AS (#0)]
-                └── Scan
-                    ├── table: system.stage
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
+            ├── Exchange(Hash): keys: [t1.a (#1)]
+            └── Scan
+                ├── table: default.t1
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
 
 query TT
 merge into t1 using (select $1 as a from @ss) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;

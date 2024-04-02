@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -31,8 +30,6 @@ use minitrace::full_name;
 use minitrace::prelude::*;
 use parking_lot::Mutex;
 
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::QueriesExecutorTasksQueue;
 use crate::pipelines::executor::RunningGraph;
@@ -51,9 +48,7 @@ pub struct QueriesPipelineExecutor {
 }
 
 impl QueriesPipelineExecutor {
-    pub fn create(settings: ExecutorSettings) -> Result<Arc<QueriesPipelineExecutor>> {
-        let threads_num = settings.max_threads as usize;
-
+    pub fn create(threads_num: usize) -> Result<Arc<QueriesPipelineExecutor>> {
         let workers_condvar = WorkersCondvar::create(threads_num);
         let global_tasks_queue = QueriesExecutorTasksQueue::create(threads_num);
 
@@ -97,22 +92,13 @@ impl QueriesPipelineExecutor {
         unsafe {
             let mut init_schedule_queue = graph.init_schedule_queue(self.threads_num)?;
 
-            let mut wakeup_worker_id = 0;
-            while let Some(proc) = init_schedule_queue.async_queue.pop_front() {
-                let mut tasks = VecDeque::with_capacity(1);
-                tasks.push_back(ExecutorTask::Async(proc));
-                self.global_tasks_queue
-                    .push_tasks(wakeup_worker_id, None, tasks);
-
-                wakeup_worker_id += 1;
-                if wakeup_worker_id == self.threads_num {
-                    wakeup_worker_id = 0;
-                }
-            }
+            let async_queue = std::mem::take(&mut init_schedule_queue.async_queue);
+            self.global_tasks_queue
+                .init_async_tasks(async_queue, self.workers_condvar.clone());
 
             let sync_queue = std::mem::take(&mut init_schedule_queue.sync_queue);
-            self.global_tasks_queue.init_sync_tasks(sync_queue);
-            self.execute()?;
+            self.global_tasks_queue
+                .init_sync_tasks(sync_queue, self.workers_condvar.clone());
             Ok(())
         }
     }
@@ -203,10 +189,6 @@ impl QueriesPipelineExecutor {
                                 }
                             }
                         }
-                        if graph.is_should_finish() {
-                            // TODO: temporary finish method, will remove after change executor to a global service
-                            self.finish(None);
-                        }
                         if graph.is_all_nodes_finished() {
                             graph.should_finish(Ok(()))?;
                         }
@@ -217,7 +199,6 @@ impl QueriesPipelineExecutor {
                         if let Some(graph) = graph {
                             graph.should_finish(Err(cause.clone()))?;
                         }
-                        self.finish(Some(cause));
                     }
                 }
             }
