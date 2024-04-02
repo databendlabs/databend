@@ -956,12 +956,14 @@ impl AccessChecker for PrivilegeAccess {
                 let current_user = self.ctx.get_current_user()?;
                 if let Some(principal) = &plan.principal {
                    match principal {
-                       PrincipalIdentity::User(user) => {if current_user.identity() == *user {
-                           return Ok(());
-                       } else {
-                           self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant)
-                               .await?;
-                       }}
+                       PrincipalIdentity::User(user) => {
+                           if current_user.identity() == *user {
+                               return Ok(());
+                           } else {
+                               self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant)
+                                   .await?;
+                           }
+                       }
                        PrincipalIdentity::Role(role) => {
                            let roles=current_user.grants.roles();
                            if roles.contains(role) || role.to_lowercase() == "public" {
