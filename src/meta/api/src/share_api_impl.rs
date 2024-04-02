@@ -327,7 +327,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             for account in req.accounts.iter() {
                 if !share_meta.has_account(account) {
                     add_share_account_keys.push(ShareConsumer {
-                        tenant: account.clone(),
+                        tenant: Tenant::new_or_err(account, "add_share_tenants")?,
                         share_id,
                     });
                 }
@@ -358,7 +358,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     condition.push(txn_cond_seq(share_account_key, Eq, 0));
 
                     let share_account_meta = ShareAccountMeta::new(
-                        share_account_key.tenant.clone(),
+                        share_account_key.tenant.name().to_string(),
                         share_id,
                         req.share_on,
                     );
@@ -368,7 +368,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         serialize_struct(&share_account_meta)?,
                     )); /* (account, share_id) -> share_account_meta */
 
-                    share_meta.add_account(share_account_key.tenant.clone());
+                    share_meta.add_account(share_account_key.tenant.name().to_string());
                 }
                 if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
 
@@ -438,7 +438,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
                 if share_meta.has_account(account) {
                     let share_account_key = ShareConsumer {
-                        tenant: account.clone(),
+                        tenant: Tenant::new_or_err(account, "remove_share_tenants")?,
                         share_id,
                     };
 
@@ -485,7 +485,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
                     if_then.push(txn_op_del(&share_account_key_and_seq.0)); // del (account, share_id)
 
-                    share_meta.del_account(&share_account_key_and_seq.0.tenant);
+                    share_meta.del_account(share_account_key_and_seq.0.tenant.name());
                 }
                 if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
 
@@ -988,10 +988,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 match req.create_option {
                     CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::ShareEndpointAlreadyExists(
-                            ShareEndpointAlreadyExists::new(
-                                &name_key.endpoint,
-                                format!("create share endpoint: tenant: {}", name_key.tenant),
-                            ),
+                            ShareEndpointAlreadyExists::new(name_key.name(), func_name!()),
                         )));
                     }
                     CreateOption::CreateIfNotExists => {
@@ -1176,10 +1173,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     ) -> Result<GetShareEndpointReply, KVAppError> {
         let mut share_endpoint_meta_vec = vec![];
 
-        let tenant_share_endpoint_name_key = ShareEndpointIdent {
-            tenant: req.tenant.clone(),
-            endpoint: req.endpoint.clone().unwrap_or("".to_string()),
-        };
+        let tenant_share_endpoint_name_key =
+            ShareEndpointIdent::new(&req.tenant, req.endpoint.clone().unwrap_or("".to_string()));
+
         let share_endpoints = list_keys(self, &tenant_share_endpoint_name_key).await?;
         for share_endpoint in share_endpoints {
             let (_seq, share_endpoint_id) = get_u64_value(self, &share_endpoint).await?;
@@ -1271,7 +1267,7 @@ async fn construct_drop_share_endpoint_txn_operations(
         name_key,
         format!(
             "construct_drop_share_endpoint_txn_operations: {}",
-            &name_key
+            name_key.display()
         ),
     )
     .await;
@@ -1294,7 +1290,7 @@ async fn construct_drop_share_endpoint_txn_operations(
         share_endpoint_id,
         format!(
             "construct_drop_share_endpoint_txn_operations: {}",
-            &name_key
+            name_key.display()
         ),
     )
     .await?;
@@ -1362,7 +1358,7 @@ async fn get_outbound_share_tenants_by_name(
     let mut accounts = vec![];
     for account in share_meta.get_accounts() {
         let share_account_key = ShareConsumer {
-            tenant: account.clone(),
+            tenant: Tenant::new_or_err(&account, "get_outbound_share_tenants_by_name")?,
             share_id,
         };
 
@@ -1656,7 +1652,7 @@ async fn drop_accounts_granted_from_share(
     // get all accounts seq from share_meta
     for account in share_meta.get_accounts() {
         let share_account_key = ShareConsumer {
-            tenant: account.clone(),
+            tenant: Tenant::new_or_err(&account, "drop_accounts_granted_from_share")?,
             share_id,
         };
         let ret = get_share_account_meta_or_err(

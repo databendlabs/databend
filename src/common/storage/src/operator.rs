@@ -41,16 +41,13 @@ use databend_common_meta_app::storage::StorageOssConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
-use databend_common_metrics::load_global_prometheus_registry;
 use databend_enterprise_storage_encryption::get_storage_encryption_handler;
 use log::warn;
-use once_cell::sync::OnceCell;
 use opendal::layers::AsyncBacktraceLayer;
 use opendal::layers::ConcurrentLimitLayer;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
-use opendal::layers::PrometheusClientLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
@@ -59,10 +56,9 @@ use opendal::Builder;
 use opendal::Operator;
 use reqwest_hickory_resolver::HickoryResolver;
 
+use crate::metrics_layer::METRICS_LAYER;
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
-
-static PROMETHEUS_CLIENT_LAYER_INSTANCE: OnceCell<PrometheusClientLayer> = OnceCell::new();
 
 /// The global dns resolver for opendal.
 static GLOBAL_HICKORY_RESOLVER: LazyLock<Arc<HickoryResolver>> =
@@ -144,7 +140,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add tracing
         .layer(MinitraceLayer)
         // Add PrometheusClientLayer
-        .layer(load_prometheus_client_layer());
+        .layer(METRICS_LAYER.clone());
 
     if let Ok(permits) = env::var("_DATABEND_INTERNAL_MAX_CONCURRENT_IO_REQUEST") {
         if let Ok(permits) = permits.parse::<usize>() {
@@ -153,15 +149,6 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
     }
 
     Ok(op.finish())
-}
-
-/// build_operator() can be called multiple times, it would be dangerous to register the opendal metrics
-/// multiple times. PrometheusClientLayer is not a singleton itself, but the metrics in it are singletons
-/// behind Arc, so we can safely clone it.
-fn load_prometheus_client_layer() -> PrometheusClientLayer {
-    PROMETHEUS_CLIENT_LAYER_INSTANCE
-        .get_or_init(|| PrometheusClientLayer::new(load_global_prometheus_registry().inner_mut()))
-        .clone()
 }
 
 /// init_azblob_operator will init an opendal azblob operator.

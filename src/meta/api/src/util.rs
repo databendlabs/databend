@@ -513,7 +513,7 @@ fn share_endpoint_has_to_exist(
         debug!(seq = seq, name_key :? =(name_key); "share endpoint does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownShareEndpoint(
-            UnknownShareEndpoint::new(&name_key.endpoint, format!("{}: {}", msg, name_key)),
+            UnknownShareEndpoint::new(name_key.name(), format!("{}", msg)),
         )))
     } else {
         Ok(())
@@ -638,7 +638,7 @@ fn share_account_meta_has_to_exist(
 
         Err(KVAppError::AppError(AppError::UnknownShareAccounts(
             UnknownShareAccounts::new(
-                &[name_key.tenant.clone()],
+                &[name_key.tenant.name().to_string()],
                 name_key.share_id,
                 format!("{}: {}", msg, name_key),
             ),

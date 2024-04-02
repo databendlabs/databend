@@ -555,10 +555,10 @@ pub struct ShareEndpointAlreadyExists {
 }
 
 impl ShareEndpointAlreadyExists {
-    pub fn new(endpoint: impl Into<String>, context: impl Into<String>) -> Self {
+    pub fn new(endpoint: impl ToString, context: impl ToString) -> Self {
         Self {
-            endpoint: endpoint.into(),
-            context: context.into(),
+            endpoint: endpoint.to_string(),
+            context: context.to_string(),
         }
     }
 }
