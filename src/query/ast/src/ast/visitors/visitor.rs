@@ -798,8 +798,8 @@ pub trait Visitor<'ast>: Sized {
         walk_table_reference(self, table);
     }
 
-    fn visit_temporal_action(&mut self, clause: &'ast TemporalClause) {
-        walk_temporal_action(self, clause);
+    fn visit_temporal_clause(&mut self, clause: &'ast TemporalClause) {
+        walk_temporal_clause(self, clause);
     }
 
     fn visit_time_travel_point(&mut self, time: &'ast TimeTravelPoint) {

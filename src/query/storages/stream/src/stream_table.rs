@@ -290,14 +290,13 @@ impl Table for StreamTable {
     ) -> Result<String> {
         let table = self.source_table(ctx).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-        let mode = fuse_table
-            .optimize_stream_mode(&self.mode, &self.snapshot_location)
-            .await?;
-        let table_version = self.offset();
-        let table_desc = format!("{}.{}", database_name, table_name);
-
-        let query = fuse_table.get_changes_query(mode, table_desc, table_version);
-        Ok(query)
+        fuse_table
+            .get_changes_query(
+                &self.mode,
+                &self.snapshot_location,
+                format!("{}.{}", database_name, table_name),
+                self.offset(),
+            )
+            .await
     }
 }

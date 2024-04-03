@@ -22,7 +22,6 @@ use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
 use dashmap::DashMap;
-use databend_common_ast::ast::ChangesType;
 use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
@@ -1359,9 +1358,8 @@ impl Binder {
                 let at = self
                     .resolve_data_travel_point(bind_context, &clause.at_point)
                     .await?;
-                let append_only = matches!(clause.typ, ChangesType::AppendOnly);
                 Ok(Some(NavigationDesc::Changes {
-                    append_only,
+                    append_only: clause.append_only,
                     at,
                     end,
                     desc: format!("{clause}"),

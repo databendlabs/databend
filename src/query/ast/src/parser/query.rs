@@ -535,13 +535,9 @@ pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
             CHANGES ~ "(" ~ INFORMATION ~ "=>" ~ ( DEFAULT | APPEND_ONLY ) ~ ")" ~ AT ~ ^#travel_point ~ (END ~ ^#travel_point)?
         },
         |(_, _, _, _, changes_type, _, _, at_point, opt_end_point)| {
-            let typ = match changes_type.kind {
-                DEFAULT => ChangesType::Default,
-                APPEND_ONLY => ChangesType::AppendOnly,
-                _ => unreachable!(),
-            };
+            let append_only = matches!(changes_type.kind, APPEND_ONLY);
             TemporalClause::Changes(ChangesClause {
-                typ,
+                append_only,
                 at_point,
                 end_point: opt_end_point.map(|p| p.1),
             })

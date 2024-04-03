@@ -566,15 +566,10 @@ impl Display for Unpivot {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub enum ChangesType {
-    Default,
-    AppendOnly,
-}
-
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ChangesClause {
-    pub typ: ChangesType,
+    #[drive(skip)]
+    pub append_only: bool,
     pub at_point: TimeTravelPoint,
     pub end_point: Option<TimeTravelPoint>,
 }
@@ -582,13 +577,10 @@ pub struct ChangesClause {
 impl Display for ChangesClause {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "CHANGES (INFORMATION => ")?;
-        match self.typ {
-            ChangesType::Default => {
-                write!(f, "DEFAULT")?;
-            }
-            ChangesType::AppendOnly => {
-                write!(f, "APPEND_ONLY")?;
-            }
+        if self.append_only {
+            write!(f, "APPEND_ONLY")?;
+        } else {
+            write!(f, "DEFAULT")?;
         }
         write!(f, ") AT {}", self.at_point)?;
         if let Some(end_point) = &self.end_point {

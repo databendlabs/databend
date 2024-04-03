@@ -1,0 +1,25 @@
+latest snapshot should contain 2 rows
+2
+changes default snapshot at the first insertion
+1	1	DELETE	false
+2	1	DELETE	true
+2	2	INSERT	true
+3	3	INSERT	false
+changes default snapshot at the first insertion end the deletion
+1	1	DELETE	false
+2	1	DELETE	true
+2	2	INSERT	true
+changes append_only snapshot at the first insertion
+3	3	INSERT	false
+not find end point
+Error: APIError: ResponseError with 2013: No historical data found at given point
+changes default timestamp at the first insertion end the deletion
+1	1	DELETE	false
+2	1	DELETE	true
+2	2	INSERT	true
+changes append_only timestamp at the first insertion
+3	3	INSERT	false
+change tracking is disabled
+Error: APIError: ResponseError with 2733: Change tracking is not enabled on table 'default.t12_0005'
+change tracking has been missing for the time range requested
+Error: APIError: ResponseError with 2733: Change tracking has been missing for the time range requested on table 'default.t12_0005'

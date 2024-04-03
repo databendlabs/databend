@@ -3149,7 +3149,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let mut children = Vec::new();
 
                 if let Some(temporal) = temporal {
-                    self.visit_temporal_action(temporal);
+                    self.visit_temporal_clause(temporal);
                     children.push(self.children.pop().unwrap());
                 }
 
@@ -3266,7 +3266,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         }
     }
 
-    fn visit_temporal_action(&mut self, clause: &'ast TemporalClause) {
+    fn visit_temporal_clause(&mut self, clause: &'ast TemporalClause) {
         match clause {
             TemporalClause::TimeTravel(point) => {
                 self.visit_time_travel_point(point);

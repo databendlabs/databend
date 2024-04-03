@@ -298,7 +298,7 @@ pub fn walk_table_reference_mut<V: VisitorMut>(visitor: &mut V, table_ref: &mut 
             }
 
             if let Some(temporal) = temporal {
-                visitor.visit_temporal_action(temporal);
+                visitor.visit_temporal_clause(temporal);
             }
         }
         TableReference::Subquery {
@@ -352,7 +352,7 @@ pub fn walk_time_travel_point_mut<V: VisitorMut>(visitor: &mut V, time: &mut Tim
     }
 }
 
-pub fn walk_temporal_action_mut<V: VisitorMut>(visitor: &mut V, clause: &mut TemporalClause) {
+pub fn walk_temporal_clause_mut<V: VisitorMut>(visitor: &mut V, clause: &mut TemporalClause) {
     match clause {
         TemporalClause::TimeTravel(point) => visitor.visit_time_travel_point(point),
         TemporalClause::Changes(ChangesClause {

@@ -112,42 +112,13 @@ impl FuseTable {
         })
     }
 
-    pub async fn optimize_stream_mode(
+    pub async fn get_changes_query(
         &self,
         mode: &StreamMode,
         base_location: &Option<String>,
-    ) -> Result<StreamMode> {
-        match mode {
-            StreamMode::AppendOnly => Ok(StreamMode::AppendOnly),
-            StreamMode::Standard => {
-                if let Some(base_location) = base_location {
-                    if let Some(latest_snapshot) = self.read_table_snapshot().await? {
-                        let latest_segments: HashSet<&Location> =
-                            HashSet::from_iter(&latest_snapshot.segments);
-
-                        let (base_snapshot, _) =
-                            SnapshotsIO::read_snapshot(base_location.clone(), self.get_operator())
-                                .await?;
-                        let base_segments = HashSet::from_iter(&base_snapshot.segments);
-
-                        // If the base segments are a subset of the latest segments,
-                        // then the stream is treated as append only.
-                        if base_segments.is_subset(&latest_segments) {
-                            Ok(StreamMode::AppendOnly)
-                        } else {
-                            Ok(StreamMode::Standard)
-                        }
-                    } else {
-                        Ok(StreamMode::Standard)
-                    }
-                } else {
-                    Ok(StreamMode::AppendOnly)
-                }
-            }
-        }
-    }
-
-    pub fn get_changes_query(&self, mode: StreamMode, table_desc: String, seq: u64) -> String {
+        table_desc: String,
+        seq: u64,
+    ) -> Result<String> {
         let cols = self
             .schema()
             .fields()
@@ -156,7 +127,9 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         let suffix = format!("{:08x}", Utc::now().timestamp());
-        match mode {
+
+        let optimized_mode = self.optimize_stream_mode(mode, base_location).await?;
+        let query = match optimized_mode {
             StreamMode::AppendOnly => {
                 let append_alias = format!("_change_append${}", suffix);
                 format!(
@@ -226,6 +199,42 @@ impl FuseTable {
                     from _change \
                     where d_change$action is not null",
                 )
+            }
+        };
+        Ok(query)
+    }
+
+    async fn optimize_stream_mode(
+        &self,
+        mode: &StreamMode,
+        base_location: &Option<String>,
+    ) -> Result<StreamMode> {
+        match mode {
+            StreamMode::AppendOnly => Ok(StreamMode::AppendOnly),
+            StreamMode::Standard => {
+                if let Some(base_location) = base_location {
+                    if let Some(latest_snapshot) = self.read_table_snapshot().await? {
+                        let latest_segments: HashSet<&Location> =
+                            HashSet::from_iter(&latest_snapshot.segments);
+
+                        let (base_snapshot, _) =
+                            SnapshotsIO::read_snapshot(base_location.clone(), self.get_operator())
+                                .await?;
+                        let base_segments = HashSet::from_iter(&base_snapshot.segments);
+
+                        // If the base segments are a subset of the latest segments,
+                        // then the stream is treated as append only.
+                        if base_segments.is_subset(&latest_segments) {
+                            Ok(StreamMode::AppendOnly)
+                        } else {
+                            Ok(StreamMode::Standard)
+                        }
+                    } else {
+                        Ok(StreamMode::Standard)
+                    }
+                } else {
+                    Ok(StreamMode::AppendOnly)
+                }
             }
         }
     }

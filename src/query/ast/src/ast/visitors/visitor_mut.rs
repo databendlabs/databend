@@ -812,8 +812,8 @@ pub trait VisitorMut: Sized {
         walk_table_reference_mut(self, table);
     }
 
-    fn visit_temporal_action(&mut self, clause: &mut TemporalClause) {
-        walk_temporal_action_mut(self, clause);
+    fn visit_temporal_clause(&mut self, clause: &mut TemporalClause) {
+        walk_temporal_clause_mut(self, clause);
     }
 
     fn visit_time_travel_point(&mut self, time: &mut TimeTravelPoint) {

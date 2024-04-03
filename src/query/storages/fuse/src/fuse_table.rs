@@ -804,6 +804,7 @@ impl Table for FuseTable {
         Ok(Box::new(provider))
     }
 
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn navigate_to(&self, navigation_desc: &NavigationDesc) -> Result<Arc<dyn Table>> {
         match navigation_desc {
@@ -819,7 +820,7 @@ impl Table for FuseTable {
                 } else {
                     self.clone()
                 };
-                let changes_desc = self
+                let changes_desc = end_point
                     .get_change_descriptor(*append_only, desc.clone(), Some(at))
                     .await?;
                 end_point.changes_desc = Some(changes_desc);
@@ -849,10 +850,13 @@ impl Table for FuseTable {
         };
 
         self.check_changes_valid(database_name, table_name, *seq)?;
-        let mode = self.optimize_stream_mode(mode, location).await?;
-        let table_desc = format!("{}.{} {}", database_name, table_name, desc);
-        let query = self.get_changes_query(mode, table_desc, *seq);
-        Ok(query)
+        self.get_changes_query(
+            mode,
+            location,
+            format!("{}.{} {}", database_name, table_name, desc),
+            *seq,
+        )
+        .await
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {

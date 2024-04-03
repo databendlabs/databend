@@ -61,6 +61,7 @@ impl FuseTable {
     ) -> Result<(PartStatistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
         if let Some(changes_desc) = &self.changes_desc {
+            // For "ANALYZE TABLE" statement, we need set the default change type to "Insert".
             let change_type = push_downs.as_ref().map_or(ChangeType::Insert, |v| {
                 v.change_type.clone().unwrap_or(ChangeType::Insert)
             });
