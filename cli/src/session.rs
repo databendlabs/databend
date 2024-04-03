@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use anyhow::Result;
+use async_recursion::async_recursion;
 use chrono::NaiveDateTime;
 use databend_driver::ServerStats;
 use databend_driver::{Client, Connection};
@@ -319,7 +320,7 @@ impl Session {
         }
 
         if self.query.is_empty()
-            && (line.starts_with('.')
+            && (line.starts_with('!')
                 || line == "exit"
                 || line == "quit"
                 || line.to_uppercase().starts_with("PUT"))
@@ -388,28 +389,16 @@ impl Session {
         queries
     }
 
+    #[async_recursion]
     pub async fn handle_query(
         &mut self,
         is_repl: bool,
         query: &str,
     ) -> Result<Option<ServerStats>> {
         let query = query.trim_end_matches(';').trim();
-        if is_repl && (query == "exit" || query == "quit") {
-            return Ok(None);
-        }
 
-        if is_repl && query.starts_with('.') {
-            let query = query
-                .trim_start_matches('.')
-                .split_whitespace()
-                .collect::<Vec<_>>();
-            if query.len() != 2 {
-                return Err(anyhow!(
-                    "Control command error, must be syntax of `.cmd_name cmd_value`."
-                ));
-            }
-            self.settings.inject_ctrl_cmd(query[0], query[1])?;
-            return Ok(Some(ServerStats::default()));
+        if is_repl && query.starts_with('!') {
+            return self.handle_commands(query).await;
         }
 
         let start = Instant::now();
@@ -464,6 +453,45 @@ impl Session {
                 Ok(Some(stats))
             }
         }
+    }
+
+    #[async_recursion]
+    pub async fn handle_commands(&mut self, query: &str) -> Result<Option<ServerStats>> {
+        if query == "!exit" || query == "!quit" {
+            return Ok(None);
+        }
+
+        match query {
+            "!exit" | "!quit" => {
+                return Ok(None);
+            }
+            "!configs" => {
+                println!("{:#?}", self.settings);
+            }
+            other => {
+                if other.starts_with("!set") {
+                    let query = query[4..].split_whitespace().collect::<Vec<_>>();
+                    if query.len() != 2 {
+                        return Err(anyhow!(
+                            "Control command error, must be syntax of `.cmd_name cmd_value`."
+                        ));
+                    }
+                    self.settings.inject_ctrl_cmd(query[0], query[1])?;
+                } else if other.starts_with("!source") {
+                    let query = query[7..].trim();
+                    let path = Path::new(query);
+                    if !path.exists() {
+                        return Err(anyhow!("File not found: {}", query));
+                    }
+                    let file = std::fs::File::open(path)?;
+                    let reader = std::io::BufReader::new(file);
+                    self.handle_reader(reader).await?;
+                } else {
+                    return Err(anyhow!("Unknown commands: {}", other));
+                }
+            }
+        }
+        Ok(Some(ServerStats::default()))
     }
 
     pub async fn stream_load_stdin(

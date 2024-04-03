@@ -42,6 +42,7 @@ toml = "0.8"
 tracing-appender = "0.2"
 unicode-segmentation = "1.10"
 url = { version = "2.5", default-features = false }
+async-recursion = "1.1.0"
 
 [build-dependencies]
 vergen = { version = "8.2", features = ["build", "git", "gix"] }

@@ -144,15 +144,25 @@ prompt = ":) "
 | `replace_newline` | whether replace '\n' with '\\\n'. |
 
 
-## Control commands in REPL
+## Commands in REPL
 
-We can use `.CMD_NAME VAL` to update the `Settings` above in runtime, example:
+| Commands | Description |
+|---|---|
+| `!exit` | Exit bendsql |
+| `!quit` | Exit bendsql |
+| `!configs` | Show current settings |
+| `!set` | Set settings |
+| `!source file` | Source file and execute |
+
+## Setting commands in REPL
+
+We can use `!set CMD_NAME VAL` to update the `Settings` above in runtime, example:
 ```
 ❯ bendsql
 
-:) .display_pretty_sql false
-:) .max_display_rows 10
-:) .expand auto
+:) !set display_pretty_sql false
+:) !set max_display_rows 10
+:) !set expand auto
 ```
 
 ## DSN
