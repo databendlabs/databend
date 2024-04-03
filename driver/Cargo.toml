@@ -30,6 +30,7 @@ databend-client = { workspace = true }
 databend-driver-macros = { workspace = true }
 databend-sql = { workspace = true }
 
+async-compression = { version = "0.4", features = ["tokio", "zstd"] }
 async-trait = "0.1"
 chrono = { version = "0.4.35", default-features = false, features = ["clock"] }
 csv = "1.3"
