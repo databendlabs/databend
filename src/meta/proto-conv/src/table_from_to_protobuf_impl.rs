@@ -346,6 +346,8 @@ impl FromToProto for mt::TableIndex {
             name: p.name,
             column_ids: p.column_ids,
             sync_creation: p.sync_creation,
+            version: p.version.clone(),
+            options: p.options.clone(),
         };
         Ok(v)
     }
@@ -357,6 +359,8 @@ impl FromToProto for mt::TableIndex {
             name: self.name.clone(),
             column_ids: self.column_ids.clone(),
             sync_creation: self.sync_creation,
+            version: self.version.clone(),
+            options: self.options.clone(),
         };
         Ok(p)
     }

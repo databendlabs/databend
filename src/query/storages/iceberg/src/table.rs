@@ -312,14 +312,7 @@ impl IcebergTable {
         // TODO: more precise pruning.
 
         Ok((
-            PartStatistics::new_estimated(
-                None,
-                read_rows,
-                read_bytes,
-                parts.len(),
-                total_files,
-                None,
-            ),
+            PartStatistics::new_estimated(None, read_rows, read_bytes, parts.len(), total_files),
             Partitions::create(PartitionsShuffleKind::Mod, parts),
         ))
     }

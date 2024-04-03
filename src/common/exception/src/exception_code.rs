@@ -193,6 +193,7 @@ build_exceptions! {
     // Index related errors.
     UnsupportedIndex(1601),
     RefreshIndexError(1602),
+    IndexOptionInvalid(1603),
 
     // Cloud control error codes
     CloudControlConnectError(1701),

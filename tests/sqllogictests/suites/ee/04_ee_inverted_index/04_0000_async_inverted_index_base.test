@@ -38,7 +38,7 @@ INSERT INTO t VALUES
 (10, 'An apple a day keeps the doctor away')
 
 statement ok
-CREATE INVERTED INDEX IF NOT EXISTS idx1 ON t(content)
+CREATE INVERTED INDEX IF NOT EXISTS idx1 ON t(content) tokenizer = 'chinese'
 
 statement ok
 REFRESH INVERTED INDEX idx1 ON t

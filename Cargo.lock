@@ -3235,6 +3235,7 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "chrono",
+ "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-meta-app",

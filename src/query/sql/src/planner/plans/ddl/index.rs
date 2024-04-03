@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use databend_common_ast::ast::TableIndexType;
 use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::CreateOption;
@@ -60,6 +62,7 @@ pub struct CreateTableIndexPlan {
     pub column_ids: Vec<ColumnId>,
     pub table_id: MetaId,
     pub sync_creation: bool,
+    pub index_options: BTreeMap<String, String>,
 }
 
 /// Drop.

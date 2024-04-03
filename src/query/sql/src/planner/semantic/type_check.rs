@@ -2094,10 +2094,12 @@ impl<'a> TypeChecker<'a> {
 
         // find inverted index and check schema
         let mut index_name = "".to_string();
+        let mut index_version = "".to_string();
         let mut index_schema = None;
         for table_index in table_indexes.values() {
             if table_index.column_ids.contains(&column_id) {
                 index_name = table_index.name.clone();
+                index_version = table_index.version.clone();
 
                 let mut index_fields = Vec::with_capacity(table_index.column_ids.len());
                 for column_id in &table_index.column_ids {
@@ -2131,6 +2133,7 @@ impl<'a> TypeChecker<'a> {
         }
         let index_info = InvertedIndexInfo {
             index_name,
+            index_version,
             index_schema: index_schema.unwrap(),
             query_columns,
             query_text: query_text.to_string(),
