@@ -5738,6 +5738,7 @@ impl SchemaApiTestSuite {
             Arc::new(TableSchema::new(vec![
                 TableField::new("title", TableDataType::String),
                 TableField::new("content", TableDataType::String),
+                TableField::new("author", TableDataType::String),
             ]))
         };
 
@@ -5781,12 +5782,12 @@ impl SchemaApiTestSuite {
         let index_name_1 = "idx1".to_string();
         let index_column_ids_1 = vec![0, 1];
         let index_name_2 = "idx2".to_string();
-        let index_column_ids_2 = vec![0];
+        let index_column_ids_2 = vec![2];
         let index_name_3 = "idx2".to_string();
-        let index_column_ids_3 = vec![2];
+        let index_column_ids_3 = vec![3];
 
         {
-            info!("--- create table index");
+            info!("--- create table index 1");
             let req = CreateTableIndexReq {
                 create_option: CreateOption::Create,
                 table_id,
@@ -5798,6 +5799,19 @@ impl SchemaApiTestSuite {
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
 
+            info!("--- create table index 2 with duplicate column id");
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::Create,
+                table_id,
+                name: index_name_2.clone(),
+                column_ids: index_column_ids_1.clone(),
+                sync_creation: true,
+                options: BTreeMap::new(),
+            };
+            let res = mt.create_table_index(req).await;
+            assert!(res.is_err());
+
+            info!("--- create table index 2");
             let req = CreateTableIndexReq {
                 create_option: CreateOption::Create,
                 table_id,
