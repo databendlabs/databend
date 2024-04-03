@@ -34,13 +34,11 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
-use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
 use minitrace::func_name;
@@ -258,7 +256,7 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn transfer_ownership_to_admin(
         &self,
-        objects: &Vec<OwnershipObject>,
+        objects: &[OwnershipObject],
     ) -> databend_common_exception::Result<()> {
         // Ensure accurate matching of a key
         let mut if_then = vec![];
