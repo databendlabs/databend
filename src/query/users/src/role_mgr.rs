@@ -274,11 +274,15 @@ impl UserApiProvider {
         let client = self.role_api(tenant);
         // get_ownerships use prefix_list_kv that will generate once meta call
         let ownerships = self.get_ownerships(tenant).await?;
+        let mut objects = vec![];
         for (k, v) in ownerships {
             if v == role {
-                // If role own n objects, will generate n meta call.
-                client.transfer_ownership_to_admin(&k).await?;
+                objects.push(k);
             }
+        }
+        if !objects.is_empty() {
+            // According to Txn reduce meta call. If role own n objects, will generate once meta call.
+            client.transfer_ownership_to_admin(&objects).await?;
         }
 
         let drop_role = client.drop_role(role, MatchSeq::GE(1));

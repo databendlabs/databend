@@ -34,11 +34,13 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
+use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
 use minitrace::func_name;
@@ -256,32 +258,43 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn transfer_ownership_to_admin(
         &self,
-        object: &OwnershipObject,
+        objects: &Vec<OwnershipObject>,
     ) -> databend_common_exception::Result<()> {
         // Ensure accurate matching of a key
-        let match_seq = MatchSeq::GE(1);
-        let key = self.ownership_object_key(object);
+        let mut if_then = vec![];
+        for object in objects {
+            let owner_key = self.ownership_object_key(object);
+            let owner_value = serialize_struct(
+                &OwnershipInfo {
+                    object: object.clone(),
+                    role: "account_admin".to_string(),
+                },
+                ErrorCode::IllegalUserInfoFormat,
+                || "",
+            )?;
+            if_then.push(txn_op_put(&owner_key, owner_value))
+        }
 
-        let value = serialize_struct(
-            &OwnershipInfo {
-                object: object.clone(),
-                role: "account_admin".to_string(),
-            },
-            ErrorCode::IllegalUserInfoFormat,
-            || "",
-        )?;
+        let mut retry = 0;
 
-        let kv_api = self.kv_api.clone();
-        kv_api
-            .upsert_kv(UpsertKVReq::new(
-                &key,
-                match_seq,
-                Operation::Update(value),
-                None,
-            ))
-            .await?;
+        let txn_req = TxnRequest {
+            condition: vec![],
+            if_then: if_then.clone(),
+            else_then: vec![],
+        };
 
-        Ok(())
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+            let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
+            let (succ, _) = txn_reply_to_api_result(tx_reply)?;
+            if succ {
+                return Ok(());
+            }
+        }
+
+        Err(ErrorCode::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("transfer_ownership_to_admin", TXN_MAX_RETRY_TIMES).to_string(),
+        ))
     }
 
     #[async_backtrace::framed]

@@ -29,17 +29,18 @@ echo "ALTER USER '${TEST_USER_NAME}' WITH DEFAULT_ROLE='d20_0014_owner'" | $BEND
 
 ## owner should have all privileges on the table
 echo "create table d20_0014.table1(i int);" | $TEST_USER_CONNECT
+echo "create table d20_0014.table2(i int);" | $TEST_USER_CONNECT
 echo "insert into d20_0014.table1 values(1),(2),(3);" | $TEST_USER_CONNECT
 echo "select * from d20_0014.table1;" | $TEST_USER_CONNECT
 
 echo "=== test drop role ==="
-echo "select name, owner from system.tables where name='table1' and database='d20_0014'" | $BENDSQL_CLIENT_CONNECT
+echo "select name, owner from system.tables where name in ('table1', 'table2') and database='d20_0014' order by name" | $BENDSQL_CLIENT_CONNECT
 echo "select name, owner from system.databases where name='d20_0014'" | $BENDSQL_CLIENT_CONNECT
 echo "drop role 'd20_0014_owner'" | $BENDSQL_CLIENT_CONNECT
-echo "select name, owner from system.tables where name='table1' and database='d20_0014'" | $BENDSQL_CLIENT_CONNECT
+echo "select name, owner from system.tables where name in ('table1', 'table2') and database='d20_0014' order by name" | $BENDSQL_CLIENT_CONNECT
 echo "select name, owner from system.databases where name='d20_0014'" | $BENDSQL_CLIENT_CONNECT
 echo "create role 'd20_0014_owner'" | $BENDSQL_CLIENT_CONNECT
-echo "select name, owner from system.tables where name='table1' and database='d20_0014'" | $BENDSQL_CLIENT_CONNECT
+echo "select name, owner from system.tables where name in ('table1', 'table2') and database='d20_0014' order by name" | $BENDSQL_CLIENT_CONNECT
 echo "select name, owner from system.databases where name='d20_0014'" | $BENDSQL_CLIENT_CONNECT
 
 ## cleanup

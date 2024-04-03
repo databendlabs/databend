@@ -44,7 +44,7 @@ pub trait RoleApi: Sync + Send {
     /// If a role is dropped, but the owner object is exists,
     ///
     /// The owner role need to update to account_admin.
-    async fn transfer_ownership_to_admin(&self, object: &OwnershipObject) -> Result<()>;
+    async fn transfer_ownership_to_admin(&self, object: &Vec<OwnershipObject>) -> Result<()>;
 
     /// Grant ownership would transfer ownership of a object from one role to another role
     ///
