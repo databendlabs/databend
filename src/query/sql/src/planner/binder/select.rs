@@ -847,14 +847,25 @@ impl Binder {
         {
             let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::WindowFunction(_));
             let mut finder = Finder::new(&f);
+            let mut non_lazy_cols = HashSet::new();
 
             for s in select_list.items.iter() {
-                finder.reset_finder();
-                finder.visit(&s.scalar)?;
+                // The TableScan's schema uses name_mapping to prune columns,
+                // all lazy columns will be skipped to add to name_mapping in TableScan.
+                // When build physical window plan, if window's order by or partition by provided,
+                // we need create a `EvalScalar` for physical window inputs, so we should keep the window
+                // used cols not be pruned.
+                if let ScalarExpr::WindowFunction(_) = &s.scalar {
+                    non_lazy_cols.extend(s.scalar.used_columns())
+                } else {
+                    // If there are window functions inside the scalar, we can't use lazy materialization.
+                    finder.reset_finder();
+                    finder.visit(&s.scalar)?;
 
-                if !finder.scalars().is_empty() {
-                    // Disable lazy materialization if there are window functions.
-                    return Ok(());
+                    if !finder.scalars().is_empty() {
+                        // Disable lazy materialization if there are window functions.
+                        return Ok(());
+                    }
                 }
             }
         }
