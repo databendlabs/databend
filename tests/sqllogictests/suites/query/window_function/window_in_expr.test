@@ -90,7 +90,8 @@ CREATE OR REPLACE TABLE sales (
 
 statement ok
 SELECT  net_paid,
-      truncate( SUM(net_paid) OVER (PARTITION BY sale_id ORDER BY sale_date), 4)   AS running_avg
+      truncate(SUM(net_paid) OVER (PARTITION BY sale_id ORDER BY sale_date), 4)   AS running_sum,
+      truncate(AVG(net_paid) OVER (PARTITION BY sale_id ORDER BY sale_date), 4)   AS running_avg
 FROM sales
 order by net_paid
     LIMIT 10
