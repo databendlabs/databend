@@ -65,7 +65,12 @@ impl HttpClient {
             HeaderValue::from_str("application/json").unwrap(),
         );
         header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
-        let client = ClientBuilder::new().default_headers(header).build()?;
+        let client = ClientBuilder::new()
+            .default_headers(header)
+            // https://github.com/hyperium/hyper/issues/2136#issuecomment-589488526
+            .http2_keep_alive_timeout(Duration::from_secs(15))
+            .pool_max_idle_per_host(0)
+            .build()?;
         Ok(Self {
             client,
             session: None,
