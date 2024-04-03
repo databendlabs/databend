@@ -102,7 +102,7 @@ impl SnapshotGenerator for MutationGenerator {
                         new_segments,
                         cluster_key_meta,
                         previous.table_statistics_location.clone(),
-                        previous.indexes.clone(),
+                        previous.inverted_indexes.clone(),
                     );
                     Ok(new_snapshot)
                 } else {

@@ -91,10 +91,10 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let new_snapshot = new_fuse_table.read_table_snapshot().await?;
     assert!(new_snapshot.is_some());
     let new_snapshot = new_snapshot.unwrap();
-    assert!(new_snapshot.indexes.is_some());
+    assert!(new_snapshot.inverted_indexes.is_some());
 
     let index_info_loc = new_snapshot
-        .indexes
+        .inverted_indexes
         .as_ref()
         .and_then(|i| i.get(&index_name));
     assert!(index_info_loc.is_some());

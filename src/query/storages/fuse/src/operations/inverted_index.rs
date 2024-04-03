@@ -113,8 +113,8 @@ impl FuseTable {
             MetaReaders::segment_info_reader(self.get_operator(), table_schema.clone());
 
         let mut indexed_segments = BTreeSet::new();
-        if let Some(indexes) = &snapshot.indexes {
-            let index_info_loc = indexes.get(&index_name);
+        if let Some(inverted_indexes) = &snapshot.inverted_indexes {
+            let index_info_loc = inverted_indexes.get(&index_name);
             if let Some(old_index_info) =
                 load_inverted_index_info(self.get_operator(), index_info_loc).await?
             {
@@ -464,12 +464,12 @@ impl AsyncSink for InvertedIndexSink {
         )
         .await?;
 
-        let mut indexes = new_snapshot.indexes.clone().unwrap_or_default();
-        indexes.insert(
+        let mut inverted_indexes = new_snapshot.inverted_indexes.clone().unwrap_or_default();
+        inverted_indexes.insert(
             self.index_name.clone(),
             (new_index_info_loc, IndexInfo::VERSION),
         );
-        new_snapshot.indexes = Some(indexes);
+        new_snapshot.inverted_indexes = Some(inverted_indexes);
 
         // Write new snapshot file
         let new_snapshot_loc = self
