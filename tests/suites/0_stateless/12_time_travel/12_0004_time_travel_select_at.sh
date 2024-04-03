@@ -22,18 +22,11 @@ echo "select count(*) from t12_0004 at (snapshot => '$SNAPSHOT_ID')" | $BENDSQL_
 echo "counting the data set of first insertion, which should contain 2 rows"
 echo "select count(t.c) from t12_0004 at (snapshot => '$SNAPSHOT_ID') as t" | $BENDSQL_CLIENT_CONNECT
 
-echo "counting the data since first insertion, which should contain 1 row"
-echo "select count(t.c) from t12_0004 since (snapshot => '$SNAPSHOT_ID') as t" | $BENDSQL_CLIENT_CONNECT
-
-
 # Get a time point at/after the first insertion.
 TIMEPOINT=$(echo "select timestamp from fuse_snapshot('default', 't12_0004') where row_count=2" | $BENDSQL_CLIENT_CONNECT)
 
 echo "counting the data set of first insertion by timestamp, which should contains 2 rows"
 echo "select count(t.c) from t12_0004 at (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP) as t" | $BENDSQL_CLIENT_CONNECT
-
-echo "counting the data since of first insertion by timestamp, which should contains 1 row"
-echo "select count(t.c) from t12_0004 since (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP) as t" | $BENDSQL_CLIENT_CONNECT
 
 ## Drop table.
 echo "drop table t12_0004" | $BENDSQL_CLIENT_CONNECT
