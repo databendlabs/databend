@@ -265,9 +265,7 @@ impl StreamTable {
             cluster_key_meta,
             cluster_keys,
             bloom_index_cols,
-            None,
-        )
-        .await?;
+        )?;
 
         let block_metas = pruner.stream_pruning(blocks).await?;
         let pruning_stats = pruner.pruning_stats();

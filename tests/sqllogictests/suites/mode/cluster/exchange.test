@@ -167,8 +167,8 @@ Exchange
     │       ├── aggregate functions: [sum(number)]
     │       ├── estimated rows: 1.00
     │       └── Exchange
-    │           ├── output columns: [sum(number) (#2), #_group_by_key]
-    │           ├── exchange type: Hash(_group_by_key)
+    │           ├── output columns: [sum(number) (#2), numbers.number (#0)]
+    │           ├── exchange type: Hash(0)
     │           └── AggregatePartial
     │               ├── group by: [number]
     │               ├── aggregate functions: [sum(number)]
@@ -198,7 +198,7 @@ explain fragments select * from (select sum(number) as number from numbers(1) gr
 Fragment 0:
   DataExchange: Shuffle
     ExchangeSink
-    ├── output columns: [sum(number) (#2), #_group_by_key]
+    ├── output columns: [sum(number) (#2), numbers.number (#0)]
     ├── destination fragment: [1]
     └── AggregatePartial
         ├── group by: [number]
@@ -226,7 +226,7 @@ Fragment 1:
         ├── aggregate functions: [sum(number)]
         ├── estimated rows: 1.00
         └── ExchangeSource
-            ├── output columns: [sum(number) (#2), #_group_by_key]
+            ├── output columns: [sum(number) (#2), numbers.number (#0)]
             └── source fragment: [0]
 (empty)
 (empty)

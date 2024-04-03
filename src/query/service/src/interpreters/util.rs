@@ -12,20 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use v0::ColumnMeta as SingleColumnMeta;
-pub use v2::BlockMeta;
-pub use v2::ClusterStatistics;
-pub use v2::ColumnMeta;
-pub use v2::ColumnStatistics;
-pub use v2::MetaHLL;
-pub use v2::Statistics;
-pub use v2::TableSnapshotStatistics;
-pub use v4::CompactSegmentInfo;
-pub use v4::IndexInfo;
-pub use v4::SegmentInfo;
-pub use v4::TableSnapshot;
-pub use v4::TableSnapshotLite;
+use databend_common_ast::parser::quote::quote_ident;
+use databend_common_ast::parser::Dialect;
 
-use super::v0;
-use super::v2;
-use super::v4;
+pub fn format_name(name: &str, quoted_ident_case_sensitive: bool, dialect: Dialect) -> String {
+    // Db-s -> "Db-s" ; dbs -> dbs
+    if name.chars().any(|c| c.is_ascii_uppercase()) && quoted_ident_case_sensitive {
+        quote_ident(name, dialect.default_ident_quote(), true)
+    } else {
+        quote_ident(name, dialect.default_ident_quote(), false)
+    }
+}

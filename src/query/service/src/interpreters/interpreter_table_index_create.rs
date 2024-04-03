@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
@@ -25,6 +29,18 @@ use databend_enterprise_inverted_index::get_inverted_index_handler;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+
+// valid values for inverted index option tokenizer
+static INDEX_TOKENIZER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert("english");
+    r.insert("chinese");
+    r
+});
+
+fn is_valid_tokenizer_values<S: AsRef<str>>(opt_val: S) -> bool {
+    INDEX_TOKENIZER_VALUES.contains(opt_val.as_ref().to_lowercase().as_str())
+}
 
 pub struct CreateTableIndexInterpreter {
     ctx: Arc<QueryContext>,
@@ -60,12 +76,31 @@ impl Interpreter for CreateTableIndexInterpreter {
         let table_id = self.plan.table_id;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
+        let mut options = BTreeMap::new();
+        for (opt, val) in self.plan.index_options.iter() {
+            let key = opt.to_lowercase();
+            if key == "tokenizer" {
+                let value = val.to_lowercase();
+                if !is_valid_tokenizer_values(&value) {
+                    return Err(ErrorCode::IndexOptionInvalid(format!(
+                        "value {value} is invalid invalid tokenizer option value",
+                    )));
+                }
+                options.insert("tokenizer".to_string(), value.to_string());
+            } else {
+                return Err(ErrorCode::IndexOptionInvalid(format!(
+                    "index option {key} is invalid for create inverted index statement",
+                )));
+            }
+        }
+
         let create_index_req = CreateTableIndexReq {
             create_option: self.plan.create_option,
             table_id,
             name: index_name,
             column_ids,
             sync_creation,
+            options,
         };
 
         let handler = get_inverted_index_handler();

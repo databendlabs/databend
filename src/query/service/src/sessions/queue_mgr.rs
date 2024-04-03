@@ -100,6 +100,12 @@ impl<Data: QueueData> QueueManager<Data> {
         })
     }
 
+    /// The length of the queue.
+    pub fn length(&self) -> usize {
+        let queue = self.queue.lock();
+        queue.values().len()
+    }
+
     pub fn list(&self) -> Vec<Arc<Data>> {
         let queue = self.queue.lock();
         queue.values().map(|x| x.data.clone()).collect::<Vec<_>>()
@@ -314,56 +320,68 @@ impl QueryEntry {
         plan: &Plan,
         plan_extras: &PlanExtras,
     ) -> Result<QueryEntry> {
-        fn is_passed_query(plan: &Plan) -> bool {
-            if let Plan::Query { metadata, .. } = plan {
-                let metadata = metadata.read();
-                for table in metadata.tables() {
-                    // table function database is also system
-                    if (table.database() != "system" && table.database() != "information_schema")
-                        || (table.name() == "one" || table.name() == "numbers")
-                    {
-                        return false;
-                    }
-                }
-            }
+        let need_add_to_queue = Self::is_heavy_action(plan);
+        QueryEntry::create_entry(ctx, plan_extras, need_add_to_queue)
+    }
 
-            true
+    /// Check a plan is heavy action or not.
+    /// If a plan is heavy action, it should add to the queue.
+    /// If a plan is light action, it will skip to the queue.
+    fn is_heavy_action(plan: &Plan) -> bool {
+        // Check the query can be passed.
+        fn query_need_passed(plan: &Plan) -> bool {
+            match plan {
+                Plan::Query { metadata, .. } => {
+                    let metadata = metadata.read();
+                    if let Some(table) = metadata.tables().iter().next() {
+                        let db = table.database();
+                        return db == "system" || db == "information_schema";
+                    }
+                    true
+                }
+                _ => true,
+            }
         }
 
         match plan {
+            // Query: Heavy actions.
             Plan::Query { .. } => {
-                if !is_passed_query(plan) {
-                    return Self::create_entry(ctx, plan_extras, true);
+                if !query_need_passed(plan) {
+                    return true;
                 }
             }
-            Plan::ExplainAnalyze { plan } => {
-                if !is_passed_query(plan) {
-                    return Self::create_entry(ctx, plan_extras, true);
-                }
-            }
-            Plan::Explain {
+
+            Plan::ExplainAnalyze { plan }
+            | Plan::Explain {
                 kind: ExplainKind::AnalyzePlan,
                 plan,
                 ..
             } => {
-                if !is_passed_query(plan) {
-                    return Self::create_entry(ctx, plan_extras, true);
+                if !query_need_passed(plan) {
+                    return true;
                 }
             }
 
+            // Write: Heavy actions.
             Plan::Insert(_)
             | Plan::InsertMultiTable(_)
             | Plan::Replace(_)
             | Plan::Delete(_)
             | Plan::Update(_)
-            | Plan::MergeInto(_) => {
-                return Self::create_entry(ctx, plan_extras, true);
+            | Plan::MergeInto(_)
+            | Plan::CopyIntoTable(_)
+            | Plan::CopyIntoLocation(_) => {
+                return true;
             }
 
-            _ => {}
+            // Light actions.
+            _ => {
+                return false;
+            }
         }
 
-        QueryEntry::create_entry(ctx, plan_extras, false)
+        // Light actions.
+        false
     }
 }
 
