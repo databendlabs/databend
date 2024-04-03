@@ -68,6 +68,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -842,8 +843,33 @@ impl Table for FuseTable {
             location,
         }) = self.changes_desc.as_ref()
         else {
-            return Err(ErrorCode::Internal("cnnot"));
+            return Err(ErrorCode::Internal(format!(
+                "No changes descriptor found in table {} {}",
+                database_name, table_name
+            )));
         };
+
+        if !self.change_tracking_enabled() {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Change tracking is not enabled on table '{}.{}'",
+                database_name, table_name
+            )));
+        }
+
+        if let Some(value) = self
+            .table_info
+            .options()
+            .get(OPT_KEY_CHANGE_TRACKING_BEGIN_VER)
+        {
+            let begin_version = value.parse::<u64>()?;
+            if begin_version > *seq {
+                return Err(ErrorCode::IllegalStream(format!(
+                    "Change tracking has been missing for the time range requested on table '{}.{}'",
+                    database_name, table_name
+                )));
+            }
+        }
+
         let mode = self.optimize_stream_mode(mode, location).await?;
         let table_desc = format!("{}.{} {}", database_name, table_name, desc);
         let query = self.get_changes_query(mode, table_desc, *seq);

@@ -40,7 +40,6 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
-use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use log::info;
 
@@ -64,14 +63,7 @@ impl FuseTable {
         desc: String,
         navigation: Option<&NavigationPoint>,
     ) -> Result<ChangesDesc> {
-        let table_desc = self.table_info.desc.clone();
-        if !self.change_tracking_enabled() {
-            return Err(ErrorCode::IllegalStream(format!(
-                "Change tracking is not enabled on table {}",
-                table_desc
-            )));
-        }
-
+        // To support analyze table, we move the change tracking check out of the function.
         let source = if let Some(point) = navigation {
             self.navigate_time_travel(point).await?.as_ref().clone()
         } else {
@@ -105,20 +97,6 @@ impl FuseTable {
             }
             None => source.table_info.ident.seq,
         };
-
-        if let Some(value) = source
-            .table_info
-            .options()
-            .get(OPT_KEY_CHANGE_TRACKING_BEGIN_VER)
-        {
-            let begin_version = value.parse::<u64>()?;
-            if begin_version > seq {
-                return Err(ErrorCode::IllegalStream(format!(
-                    "Change tracking has been missing for the time range requested on table {}",
-                    table_desc
-                )));
-            }
-        }
 
         let mode = if append_only {
             StreamMode::AppendOnly

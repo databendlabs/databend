@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use chrono::Utc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_sql::executor::PhysicalPlanBuilder;
@@ -95,15 +96,17 @@ impl Interpreter for AnalyzeTableInterpreter {
                     .is_err();
 
                 if is_full {
-                    "".to_string()
+                    format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple(),)
                 } else {
+                    let table_alias = format!("_change_insert${:08x}", Utc::now().timestamp());
                     format!(
-                        "SINCE (snapshot => '{}')",
+                        "CHANGES(INFORMATION => DEFAULT) AT (snapshot => '{}') END (snapshot => '{}') AS {table_alias}",
                         table_statistics.snapshot_id.simple(),
+                        snapshot.snapshot_id.simple(),
                     )
                 }
             } else {
-                "".to_string()
+                format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple(),)
             };
 
             let index_cols: Vec<(u32, String)> = schema
@@ -127,11 +130,10 @@ impl Interpreter for AnalyzeTableInterpreter {
                 .join(", ");
 
             let sql = format!(
-                "SELECT {select_expr}, {} as is_full from {}.{} AT (snapshot => '{}') {since_str} ",
+                "SELECT {select_expr}, {} as is_full from {}.{} {since_str}",
                 since_str.is_empty(),
                 plan.database,
                 plan.table,
-                snapshot.snapshot_id.simple(),
             );
 
             log::info!("Analyze via sql {:?}", sql);

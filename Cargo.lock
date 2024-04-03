@@ -4164,8 +4164,6 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
- "chrono",
- "chrono-tz",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4176,7 +4174,6 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
- "log",
  "minitrace",
 ]
 

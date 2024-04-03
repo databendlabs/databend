@@ -95,10 +95,20 @@ impl StreamHandler for RealStreamHandler {
             table = table.refresh(ctx.as_ref()).await?;
         }
 
+        let table_info = table.get_table_info();
         let table = FuseTable::try_from_table(table.as_ref())?;
         let change_desc = table
             .get_change_descriptor(plan.append_only, "".to_string(), plan.navigation.as_ref())
             .await?;
+        if let Some(value) = table_info.options().get(OPT_KEY_CHANGE_TRACKING_BEGIN_VER) {
+            let begin_version = value.parse::<u64>()?;
+            if begin_version > change_desc.seq {
+                return Err(ErrorCode::IllegalStream(format!(
+                    "Change tracking has been missing for the time range requested on table {}",
+                    table_info.desc
+                )));
+            }
+        }
 
         let mut options = BTreeMap::new();
         options.insert(OPT_KEY_MODE.to_string(), change_desc.mode.to_string());
