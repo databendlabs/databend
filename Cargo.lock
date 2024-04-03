@@ -4088,6 +4088,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "bytes",
  "databend-common-arrow",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4103,6 +4104,7 @@ dependencies = [
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "opendal",
+ "parquet",
  "serde",
  "serde_json",
  "sha2",
