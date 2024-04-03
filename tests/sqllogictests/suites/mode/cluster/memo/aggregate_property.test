@@ -97,7 +97,7 @@ group by t_10.a, t_100.a
 ----
 Memo
 ├── root group: #8
-├── estimated memory: 23664 bytes
+├── estimated memory: 24480 bytes
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 1000.000, children: []
