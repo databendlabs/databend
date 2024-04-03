@@ -40,6 +40,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use log::info;
 
@@ -384,6 +385,33 @@ impl FuseTable {
 
         let del_blocks = base_blocks.into_values().collect::<Vec<_>>();
         Ok((del_blocks, add_blocks))
+    }
+
+    pub fn check_changes_valid(
+        &self,
+        database_name: &str,
+        table_name: &str,
+        seq: u64,
+    ) -> Result<()> {
+        if !self.change_tracking_enabled() {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Change tracking is not enabled on table '{database_name}.{table_name}'",
+            )));
+        }
+
+        if let Some(value) = self
+            .table_info
+            .options()
+            .get(OPT_KEY_CHANGE_TRACKING_BEGIN_VER)
+        {
+            let begin_version = value.parse::<u64>()?;
+            if begin_version > seq {
+                return Err(ErrorCode::IllegalStream(format!(
+                    "Change tracking has been missing for the time range requested on table '{database_name}.{table_name}'",
+                )));
+            }
+        }
+        Ok(())
     }
 
     pub async fn changes_table_statistics(
