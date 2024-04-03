@@ -47,6 +47,34 @@ echo "create database c_r" | $BENDSQL_CLIENT_CONNECT
 echo "create database c_r2" | $BENDSQL_CLIENT_CONNECT
 echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
 
+echo "=== show grants test ==="
+echo "drop user if exists u1" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role1" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role2" | $BENDSQL_CLIENT_CONNECT
+echo "create user u1 identified by '123' with DEFAULT_ROLE='role1'" | $BENDSQL_CLIENT_CONNECT
+echo "create role role1" | $BENDSQL_CLIENT_CONNECT
+echo "create role role2" | $BENDSQL_CLIENT_CONNECT
+echo "grant select on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
+echo "grant insert on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
+echo "grant role role1 to u1" | $BENDSQL_CLIENT_CONNECT
+echo "grant role role2 to u1" | $BENDSQL_CLIENT_CONNECT
+
+export USER_U1_CONNECT="bendsql --user=u1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+
+echo "show grants for role role1" | $USER_U1_CONNECT
+echo "show grants for role role2" | $USER_U1_CONNECT
+echo "show grants for user u1" | $USER_U1_CONNECT
+echo "show grants" | $USER_U1_CONNECT
+echo "Need Err:"
+echo "show grants for user root" | $USER_U1_CONNECT
+echo "show grants for role account_admin" | $USER_U1_CONNECT
+echo "show grants for role c_r2" | $USER_U1_CONNECT
+
+echo "=== clean up ==="
+echo "drop user if exists u1" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role1" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role2" | $BENDSQL_CLIENT_CONNECT
+
 echo "drop role if exists role3;" | $BENDSQL_CLIENT_CONNECT
 echo "drop database if exists c_r;" | $BENDSQL_CLIENT_CONNECT
 echo "drop database if exists c_r1;" | $BENDSQL_CLIENT_CONNECT
