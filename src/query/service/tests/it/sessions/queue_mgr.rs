@@ -80,6 +80,7 @@ async fn test_passed_acquire() -> Result<()> {
     }
 
     assert!(instant.elapsed() < Duration::from_secs(test_count as u64));
+    assert_eq!(queue.length(), 0);
 
     Ok(())
 }
@@ -118,6 +119,7 @@ async fn test_serial_acquire() -> Result<()> {
     }
 
     assert!(instant.elapsed() >= Duration::from_secs(test_count as u64));
+    assert_eq!(queue.length(), 0);
 
     Ok(())
 }
@@ -159,6 +161,8 @@ async fn test_concurrent_acquire() -> Result<()> {
     assert!(instant.elapsed() >= Duration::from_secs((test_count / 2) as u64));
     assert!(instant.elapsed() < Duration::from_secs((test_count) as u64));
 
+    assert_eq!(queue.length(), 0);
+
     Ok(())
 }
 
@@ -192,7 +196,7 @@ async fn test_list_acquire() -> Result<()> {
     }
 
     tokio::time::sleep(Duration::from_secs(5)).await;
-    assert_eq!(queue.list().len(), test_count - 1);
+    assert_eq!(queue.length(), test_count - 1);
 
     Ok(())
 }
