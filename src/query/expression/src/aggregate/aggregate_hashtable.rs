@@ -220,9 +220,11 @@ impl AggregateHashTable {
             }
         }
 
-        if self.config.partial_agg && self.capacity >= self.config.max_partial_capacity {
+        if self.config.partial_agg {
             // check size
-            if self.count + BATCH_ADD_SIZE > self.resize_threshold() {
+            if self.count + BATCH_ADD_SIZE > self.resize_threshold()
+                && self.capacity >= self.config.max_partial_capacity
+            {
                 self.clear_ht();
                 self.reset_count();
             }
