@@ -21,7 +21,10 @@ use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
+use geozero::geojson::GeoJson;
 use geozero::wkb::Ewkb;
+use geozero::GeozeroGeometry;
+use geozero::ToJson;
 use geozero::ToWkt;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
@@ -165,8 +168,12 @@ impl<'a> Debug for ScalarRef<'a> {
                 Ok(())
             }
             ScalarRef::Geometry(s) => {
-                let geom = Ewkb(s.to_vec()).to_ewkt(None).unwrap();
-                write!(f, "{geom:?}")
+                let ewkb = Ewkb(s.to_vec());
+                let value = match ewkb.to_ewkt(ewkb.srid()) {
+                    Ok(ewkt) => ewkt,
+                    Err(_) => GeoJson(std::str::from_utf8(s).unwrap()).to_json().unwrap(),
+                };
+                write!(f, "'{value:?}'")
             }
         }
     }
@@ -254,8 +261,12 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "'{value}'")
             }
             ScalarRef::Geometry(s) => {
-                let geom = Ewkb(s.to_vec()).to_ewkt(None).unwrap();
-                write!(f, "'{geom}'")
+                let ewkb = Ewkb(s.to_vec());
+                let value = match ewkb.to_ewkt(ewkb.srid()) {
+                    Ok(ewkt) => ewkt,
+                    Err(_) => GeoJson(std::str::from_utf8(s).unwrap()).to_json().unwrap(),
+                };
+                write!(f, "'{value}'")
             }
         }
     }
