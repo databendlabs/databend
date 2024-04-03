@@ -855,19 +855,13 @@ impl Binder {
                 // When build physical window plan, if window's order by or partition by provided,
                 // we need create a `EvalScalar` for physical window inputs, so we should keep the window
                 // used cols not be pruned.
-                if let ScalarExpr::WindowFunction(_) = &s.scalar {
-                    non_lazy_cols.extend(s.scalar.used_columns())
-                } else {
-                    // If there are window functions inside the scalar, we can't use lazy materialization.
-                    finder.reset_finder();
-                    finder.visit(&s.scalar)?;
-
-                    if !finder.scalars().is_empty() {
-                        // Disable lazy materialization if there are window functions.
-                        return Ok(());
-                    }
+                finder.reset_finder();
+                finder.visit(&s.scalar)?;
+                for scalar in finder.scalars() {
+                    non_lazy_cols.extend(scalar.used_columns())
                 }
             }
+            metadata.add_non_lazy_columns(non_lazy_cols);
         }
 
         let limit_threadhold = self.ctx.get_settings().get_lazy_read_threshold()? as usize;
