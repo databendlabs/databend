@@ -29,6 +29,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use itertools::Itertools;
 
@@ -55,6 +56,7 @@ pub(super) struct ParquetRowsFetcher<const BLOCKING_IO: bool> {
     // So we create a [`UncompressedBuffer`] for each thread.
     uncompressed_buffers: Vec<Arc<UncompressedBuffer>>,
     part_map: HashMap<u64, PartInfoPtr>,
+    segment_blocks_cache: HashMap<u64, Vec<Arc<BlockMeta>>>,
 
     // To control the parallelism of fetching blocks.
     max_threads: usize,
@@ -172,6 +174,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
             settings,
             uncompressed_buffers,
             part_map: HashMap::new(),
+            segment_blocks_cache: HashMap::new(),
             max_threads,
         }
     }
@@ -190,18 +193,25 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
             }
 
             let (segment, block) = split_prefix(prefix);
-            let (location, ver) = snapshot.segments[segment as usize].clone();
-            let compact_segment_info = self
-                .segment_reader
-                .read(&LoadParams {
-                    ver,
-                    location,
-                    len_hint: None,
-                    put_cache: true,
-                })
-                .await?;
+            if let std::collections::hash_map::Entry::Vacant(e) =
+                self.segment_blocks_cache.entry(segment)
+            {
+                let (location, ver) = snapshot.segments[segment as usize].clone();
+                let compact_segment_info = self
+                    .segment_reader
+                    .read(&LoadParams {
+                        ver,
+                        location,
+                        len_hint: None,
+                        put_cache: true,
+                    })
+                    .await?;
 
-            let blocks = compact_segment_info.block_metas()?;
+                let blocks = compact_segment_info.block_metas()?;
+                e.insert(blocks);
+            }
+
+            let blocks = self.segment_blocks_cache.get(&segment).unwrap();
             let block_idx = block_idx_in_segment(blocks.len(), block as usize);
             let block_meta = &blocks[block_idx];
             let part_info = FuseTable::projection_part(

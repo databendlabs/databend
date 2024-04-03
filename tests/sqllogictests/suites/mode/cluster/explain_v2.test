@@ -410,8 +410,8 @@ Exchange
     │       ├── aggregate functions: []
     │       ├── estimated rows: 2.00
     │       └── Exchange
-    │           ├── output columns: [#_group_by_key]
-    │           ├── exchange type: Hash(_group_by_key)
+    │           ├── output columns: [col0 (#2)]
+    │           ├── exchange type: Hash(0)
     │           └── AggregatePartial
     │               ├── group by: [col0]
     │               ├── aggregate functions: []
