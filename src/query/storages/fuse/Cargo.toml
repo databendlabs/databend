@@ -58,7 +58,6 @@ log = { workspace = true }
 metrics = "0.20.1"
 minitrace = { workspace = true }
 opendal = { workspace = true }
-parquet-format-safe = "0.2"
 parquet_rs = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
