@@ -3849,6 +3849,7 @@ name = "databend-common-storages-fuse"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.10",
+ "arrow 50.0.0",
  "arrow-array 50.0.0",
  "async-backtrace",
  "async-trait-fn",

@@ -42,6 +42,7 @@ databend-storages-common-pruner = { path = "../common/pruner" }
 databend-storages-common-table-meta = { path = "../common/table_meta" }
 
 ahash = "0.8.3"
+arrow = { workspace = true }
 arrow-array = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
