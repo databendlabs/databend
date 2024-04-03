@@ -100,6 +100,12 @@ impl<Data: QueueData> QueueManager<Data> {
         })
     }
 
+    /// The length of the queue.
+    pub fn length(&self) -> usize {
+        let queue = self.queue.lock();
+        queue.values().len()
+    }
+
     pub fn list(&self) -> Vec<Arc<Data>> {
         let queue = self.queue.lock();
         queue.values().map(|x| x.data.clone()).collect::<Vec<_>>()
@@ -314,6 +320,9 @@ impl QueryEntry {
         plan: &Plan,
         plan_extras: &PlanExtras,
     ) -> Result<QueryEntry> {
+        // Passed query:
+        // skip query from system database and system tables.
+        // skip query from table functions.
         fn is_passed_query(plan: &Plan) -> bool {
             if let Plan::Query { metadata, .. } = plan {
                 let metadata = metadata.read();
@@ -330,7 +339,10 @@ impl QueryEntry {
             true
         }
 
+        // Add heavy actions to the queue.
         match plan {
+            // Query actions.
+            // Heavy actions, add to the queue.
             Plan::Query { .. } => {
                 if !is_passed_query(plan) {
                     return Self::create_entry(ctx, plan_extras, true);
@@ -351,15 +363,20 @@ impl QueryEntry {
                 }
             }
 
+            // Mutable actions.
+            // Heavy actions, add to the queue.
             Plan::Insert(_)
             | Plan::InsertMultiTable(_)
             | Plan::Replace(_)
             | Plan::Delete(_)
             | Plan::Update(_)
-            | Plan::MergeInto(_) => {
+            | Plan::MergeInto(_)
+            | Plan::CopyIntoTable(_)
+            | Plan::CopyIntoLocation(_) => {
                 return Self::create_entry(ctx, plan_extras, true);
             }
 
+            // Light actions.
             _ => {}
         }
 
