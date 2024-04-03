@@ -845,18 +845,18 @@ impl Binder {
         // so if the inner query not match the lazy materialized but outer query matched, we can prevent
         // the cols that inner query required not be pruned when analyze outer query.
         {
-            let mut non_lazy_cols = HashSet::new();
+            let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::WindowFunction(_));
+            let mut finder = Finder::new(&f);
+
             for s in select_list.items.iter() {
-                // The TableScan's schema uses name_mapping to prune columns,
-                // all lazy columns will be skipped to add to name_mapping in TableScan.
-                // When build physical window plan, if window's order by or partition by provided,
-                // we need create a `EvalScalar` for physical window inputs, so we should keep the window
-                // used cols not be pruned.
-                if let ScalarExpr::WindowFunction(_) = &s.scalar {
-                    non_lazy_cols.extend(s.scalar.used_columns())
+                finder.reset_finder();
+                finder.visit(&s.scalar)?;
+
+                if !finder.scalars().is_empty() {
+                    // Disable lazy materialization if there are window functions.
+                    return Ok(());
                 }
             }
-            metadata.add_non_lazy_columns(non_lazy_cols);
         }
 
         let limit_threadhold = self.ctx.get_settings().get_lazy_read_threshold()? as usize;
