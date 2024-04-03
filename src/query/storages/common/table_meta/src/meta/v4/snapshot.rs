@@ -88,7 +88,7 @@ pub struct TableSnapshot {
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
 
-    /// The index infors, key is the index name,
+    /// The index infos, key is the index name,
     /// value is the index info location.
     pub indexes: Option<BTreeMap<String, Location>>,
 }

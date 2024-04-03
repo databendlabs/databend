@@ -16,14 +16,13 @@ use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use databend_common_exception::Result;
+use databend_common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::format::compress;
-use crate::meta::format::decode_index_header;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
-use crate::meta::format::IndexHeader;
 use crate::meta::format::MetaCompression;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
@@ -51,55 +50,36 @@ impl IndexInfo {
     }
 
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        self.to_bytes_with_encoding(MetaEncoding::MessagePack)
-    }
-
-    fn to_bytes_with_encoding(&self, encoding: MetaEncoding) -> Result<Vec<u8>> {
+        let encoding = MetaEncoding::MessagePack;
         let compression = MetaCompression::default();
 
-        let index_version = encode(&encoding, &self.index_version)?;
-        let index_version_compress = compress(&compression, index_version)?;
-        let indexed_segments = encode(&encoding, &self.indexed_segments)?;
-        let indexed_segments_compress = compress(&compression, indexed_segments)?;
+        let data = encode(&encoding, &self)?;
+        let data_compress = compress(&compression, data)?;
 
         let data_size = self.format_version.to_le_bytes().len()
             + 2
-            + index_version_compress.len().to_le_bytes().len()
-            + index_version_compress.len()
-            + indexed_segments_compress.len().to_le_bytes().len()
-            + indexed_segments_compress.len();
+            + data_compress.len().to_le_bytes().len()
+            + data_compress.len();
         let mut buf = Vec::with_capacity(data_size);
 
         buf.extend_from_slice(&self.format_version.to_le_bytes());
         buf.push(encoding as u8);
         buf.push(compression as u8);
-        buf.extend_from_slice(&index_version_compress.len().to_le_bytes());
-        buf.extend_from_slice(&indexed_segments_compress.len().to_le_bytes());
+        buf.extend_from_slice(&data_compress.len().to_le_bytes());
 
-        buf.extend(index_version_compress);
-        buf.extend(indexed_segments_compress);
+        buf.extend(data_compress);
 
         Ok(buf)
     }
 
-    pub fn from_slice(bytes: &[u8]) -> Result<Self> {
-        let mut cursor = Cursor::new(bytes);
-        let IndexHeader {
-            version,
-            encoding,
-            compression,
-            index_version_size,
-            indexed_segments_size,
-        } = decode_index_header(&mut cursor)?;
+    pub fn from_slice(buffer: &[u8]) -> Result<IndexInfo> {
+        let mut cursor = Cursor::new(buffer);
+        let version = cursor.read_scalar::<u64>()?;
+        assert_eq!(version, IndexInfo::VERSION);
+        let encoding = MetaEncoding::try_from(cursor.read_scalar::<u8>()?)?;
+        let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
+        let index_info_size: u64 = cursor.read_scalar::<u64>()?;
 
-        let index_version: String =
-            read_and_deserialize(&mut cursor, index_version_size, &encoding, &compression)?;
-        let indexed_segments: BTreeSet<Location> =
-            read_and_deserialize(&mut cursor, indexed_segments_size, &encoding, &compression)?;
-
-        let mut index_info = Self::new(index_version, indexed_segments);
-
-        index_info.format_version = version;
-        Ok(index_info)
+        read_and_deserialize(&mut cursor, index_info_size, &encoding, &compression)
     }
 }
