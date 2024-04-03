@@ -14,7 +14,6 @@
 
 use std::io::SeekFrom;
 
-use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
 use databend_common_cache::DefaultHashBuilder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -39,6 +38,8 @@ use futures_util::AsyncReadExt;
 use futures_util::AsyncSeekExt;
 use opendal::Operator;
 use opendal::Reader;
+use parquet_rs::format::FileMetaData;
+use parquet_rs::thrift::TSerializable;
 
 use self::thrift_file_meta_read::read_thrift_file_metadata;
 
@@ -168,13 +169,9 @@ async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Resul
 
 mod thrift_file_meta_read {
     use databend_common_arrow::parquet::error::Error;
-    use parquet_format_safe::thrift::protocol::TCompactInputProtocol;
+    use thrift::protocol::TCompactInputProtocol;
 
     use super::*;
-
-    // the following code is copied from crate `parquet2`, with slight modification:
-    // return a ThriftFileMetaData instead of FileMetaData while reading parquet metadata,
-    // to avoid unnecessary conversions.
 
     const HEADER_SIZE: u64 = PARQUET_MAGIC.len() as u64;
     const FOOTER_SIZE: u64 = 8;
@@ -208,7 +205,7 @@ mod thrift_file_meta_read {
         op: Operator,
         path: &str,
         len_hint: Option<u64>,
-    ) -> databend_common_arrow::parquet::error::Result<ThriftFileMetaData> {
+    ) -> Result<FileMetaData> {
         let file_size = if let Some(len) = len_hint {
             len
         } else {
@@ -220,8 +217,8 @@ mod thrift_file_meta_read {
         };
 
         if file_size < HEADER_SIZE + FOOTER_SIZE {
-            return Err(Error::OutOfSpec(
-                "A parquet file must contain a header and footer with at least 12 bytes".into(),
+            return Err(ErrorCode::ParquetFileInvalid(
+                "A parquet file must contain a header and footer with at least 12 bytes",
             ));
         }
 
@@ -237,8 +234,8 @@ mod thrift_file_meta_read {
 
         // check this is indeed a parquet file
         if buffer[default_end_len - 4..] != PARQUET_MAGIC {
-            return Err(Error::OutOfSpec(
-                "Invalid Parquet file. Corrupt footer".into(),
+            return Err(ErrorCode::ParquetFileInvalid(
+                "Invalid Parquet file. Corrupt footer",
             ));
         }
 
@@ -247,8 +244,8 @@ mod thrift_file_meta_read {
 
         let footer_len = FOOTER_SIZE + metadata_len;
         if footer_len > file_size {
-            return Err(Error::OutOfSpec(
-                "The footer size must be smaller or equal to the file's size".into(),
+            return Err(ErrorCode::ParquetFileInvalid(
+                "The footer size must be smaller or equal to the file's size",
             ));
         }
 
@@ -262,20 +259,20 @@ mod thrift_file_meta_read {
                 .reader_with(path)
                 .range(file_size - footer_len..file_size)
                 .await
-                .map_err(|err| Error::OutOfSpec(err.to_string()))?;
+                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
 
             buffer.clear();
-            buffer.try_reserve(footer_len as usize)?;
+            buffer
+                .try_reserve(footer_len as usize)
+                .map_err(|_| ErrorCode::Internal("Failed to reserve buffer for metadata"))?;
             reader.take(footer_len).read_to_end(&mut buffer).await?;
 
             &buffer
         };
 
-        // a highly nested but sparse struct could result in many allocations
-        let max_size = reader.len() * 2 + 1024;
-
-        let mut prot = TCompactInputProtocol::new(reader, max_size);
-        let meta = ThriftFileMetaData::read_from_in_protocol(&mut prot)?;
+        let mut prot = TCompactInputProtocol::new(reader);
+        let meta = FileMetaData::read_from_in_protocol(&mut prot)
+            .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
         Ok(meta)
     }
 }
