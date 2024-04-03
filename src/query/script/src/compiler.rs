@@ -43,7 +43,7 @@ use derive_visitor::VisitorMut;
 use crate::ir::ColumnAccess;
 use crate::ir::IterRef;
 use crate::ir::LabelRef;
-use crate::ir::RefAllocator;
+use crate::ir::Ref;
 use crate::ir::ScriptIR;
 use crate::ir::SetRef;
 use crate::ir::StatementTemplate;
@@ -82,19 +82,21 @@ impl Compiler {
         for line in code {
             match line {
                 ScriptStatement::LetVar { declare, .. } => {
-                    let to_var = self.declare_var(&declare.name)?;
-                    output.append(&mut self.compile_expr(&declare.default, to_var)?);
+                    let to_var = VarRef::new(declare.name.span, &declare.name.name, &mut self.ref_allocator);
+                    output.append(&mut self.compile_expr(&declare.default, to_var.clone())?);
+                    self.declare_ref(&declare.name, RefItem::Var(to_var))?;
                 }
                 ScriptStatement::LetStatement { declare } => {
-                    let to_set = self.declare_set(&declare.name)?;
+                    let to_set = SetRef::new(declare.name.span, &declare.name.name, &mut self.ref_allocator);
                     output.append(&mut self.compile_sql_statement(
                         declare.span,
                         &declare.stmt,
-                        to_set,
+                        to_set.clone(),
                     )?);
+                    self.declare_ref(&declare.name, RefItem::Set(to_set))?;
                 }
                 ScriptStatement::RunStatement { span, stmt } => {
-                    let to_set = self.declare_anonymous_set(*span, "unused_result")?;
+                    let to_set = SetRef::new_internal(*span, "unused_result", &mut self.ref_allocator);
                     output.append(&mut self.compile_sql_statement(*span, stmt, to_set)?);
                 }
                 ScriptStatement::Assign { name, value, .. } => {
@@ -108,7 +110,7 @@ impl Compiler {
                     value: Some(ReturnItem::Var(expr)),
                     ..
                 } => {
-                    let to_var = self.declare_anonymous_var(expr.span(), "return_val")?;
+                    let to_var = VarRef::new_internal(expr.span(), "return_val", &mut self.ref_allocator);
                     output.append(&mut self.compile_expr(expr, to_var.clone())?);
                     output.push(ScriptIR::ReturnVar { var: to_var });
                 }
@@ -123,7 +125,7 @@ impl Compiler {
                     span,
                     value: Some(ReturnItem::Statement(stmt)),
                 } => {
-                    let to_set = self.declare_anonymous_set(*span, "return_set")?;
+                    let to_set = SetRef::new_internal(*span, "return_set", &mut self.ref_allocator);
                     output.append(&mut self.compile_sql_statement(*span, stmt, to_set.clone())?);
                     output.push(ScriptIR::ReturnSet { set: to_set });
                 }
@@ -183,29 +185,29 @@ impl Compiler {
                 ScriptStatement::Break {
                     label: Some(label), ..
                 } => {
-                    let (_, break_label) = self.lookup_loop(label)?;
+                    let loop_item = self.lookup_loop(label)?;
                     output.push(ScriptIR::Goto {
-                        to_label: break_label,
+                        to_label: loop_item.break_label,
                     });
                 }
                 ScriptStatement::Break { span, label: None } => {
-                    let (_, break_label) = self.current_loop(*span)?;
+                    let loop_item = self.current_loop(*span)?;
                     output.push(ScriptIR::Goto {
-                        to_label: break_label,
+                        to_label: loop_item.break_label,
                     });
                 }
                 ScriptStatement::Continue {
                     label: Some(label), ..
                 } => {
-                    let (continue_label, _) = self.lookup_loop(label)?;
+                    let loop_item = self.lookup_loop(label)?;
                     output.push(ScriptIR::Goto {
-                        to_label: continue_label,
+                        to_label: loop_item.continue_label,
                     });
                 }
                 ScriptStatement::Continue { span, label: None } => {
-                    let (continue_label, _) = self.current_loop(*span)?;
+                    let loop_item = self.current_loop(*span)?;
                     output.push(ScriptIR::Goto {
-                        to_label: continue_label,
+                        to_label: loop_item.continue_label,
                     });
                 }
                 ScriptStatement::If {
@@ -277,14 +279,14 @@ impl Compiler {
             ignore_result: false,
         }));
         let stmt = StatementTemplate::new(expr.span(), select_stmt);
-        let set_ref = self.declare_anonymous_set(expr.span(), "expr_result")?;
+        let set_ref = SetRef::new_internal(expr.span(), "expr_result", &mut self.ref_allocator);
         output.push(ScriptIR::Query {
             stmt,
             to_set: set_ref.clone(),
         });
 
         // ITER expr_result, expr_result_iter
-        let iter_ref = self.declare_anonymous_iter(expr.span(), "expr_result_iter")?;
+        let iter_ref = IterRef::new_internal(expr.span(), "expr_result_iter", &mut self.ref_allocator);
         output.push(ScriptIR::Iter {
             set: set_ref,
             to_iter: iter_ref.clone(),
@@ -314,7 +316,7 @@ impl Compiler {
 
         self.push_scope();
 
-        let (continue_label, break_label) = match label {
+        let loop_item = match label {
             Some(label) => self.declare_loop(label)?,
             None => self.declare_anonymous_loop(span)?,
         };
@@ -367,14 +369,14 @@ impl Compiler {
             ignore_result: false,
         }));
         let stmt = StatementTemplate::new(variable.span, select_stmt);
-        let to_set = self.declare_anonymous_set(variable.span, "for_index_set")?;
+        let to_set =  SetRef::new_internal(variable.span, "for_index_set", &mut self.ref_allocator);
         output.push(ScriptIR::Query {
             stmt,
             to_set: to_set.clone(),
         });
 
         // ITER for_index_set, for_index_iter
-        let iter = self.declare_anonymous_iter(variable.span, "for_index_iter")?;
+        let iter = IterRef::new_internal(variable.span, "for_index_iter", &mut self.ref_allocator);
         output.push(ScriptIR::Iter {
             set: to_set,
             to_iter: iter.clone(),
@@ -382,21 +384,22 @@ impl Compiler {
 
         // Label LOOP
         output.push(ScriptIR::Label {
-            label: continue_label.clone(),
+            label: loop_item.continue_label.clone(),
         });
 
         // JUMP_IF_ENDED for_index_iter, LOOP_END
         output.push(ScriptIR::JumpIfEnded {
             iter: iter.clone(),
-            to_label: break_label.clone(),
+            to_label: loop_item.break_label.clone(),
         });
 
-        // READ for_index_iter, $0, variable
-        let variable = self.declare_var(variable)?;
+        // READ for_index_iter, $0, to_var
+        let to_var = VarRef::new(variable.span, &variable.name, &mut self.ref_allocator);
+        self.declare_ref(variable, RefItem::Var(to_var.clone()))?;
         output.push(ScriptIR::Read {
             iter: iter.clone(),
             column: ColumnAccess::Position(0),
-            to_var: variable.clone(),
+            to_var,
         });
 
         // <body>
@@ -407,11 +410,11 @@ impl Compiler {
 
         // GOTO LOOP
         output.push(ScriptIR::Goto {
-            to_label: continue_label.clone(),
+            to_label: loop_item.continue_label.clone(),
         });
 
         // Label LOOP_END
-        output.push(ScriptIR::Label { label: break_label });
+        output.push(ScriptIR::Label { label: loop_item.break_label });
 
         self.pop_scope();
 
@@ -430,14 +433,15 @@ impl Compiler {
 
         self.push_scope();
 
-        let (continue_label, break_label) = match label {
+        let loop_item = match label {
             Some(label) => self.declare_loop(label)?,
             None => self.declare_anonymous_loop(span)?,
         };
 
-        // ITER resultset, for_iter
+        // ITER resultset, iter
         let set = self.lookup_set(resultset)?;
-        let iter = self.declare_iter(variable.span, variable)?;
+        let iter = IterRef::new(variable.span, &variable.name, &mut self.ref_allocator);
+        self.declare_ref(variable, RefItem::Iter(iter.clone()))?;
         output.push(ScriptIR::Iter {
             set,
             to_iter: iter.clone(),
@@ -445,28 +449,28 @@ impl Compiler {
 
         // Label LOOP
         output.push(ScriptIR::Label {
-            label: continue_label.clone(),
+            label: loop_item.continue_label.clone(),
         });
 
-        // JUMP_IF_ENDED for_iter, LOOP_END
+        // JUMP_IF_ENDED iter, LOOP_END
         output.push(ScriptIR::JumpIfEnded {
             iter: iter.clone(),
-            to_label: break_label.clone(),
+            to_label: loop_item.break_label.clone(),
         });
 
         // <body>
         output.append(&mut self.compile(body)?);
 
-        // NEXT for_iter
+        // NEXT iter
         output.push(ScriptIR::Next { iter: iter.clone() });
 
         // GOTO LOOP
         output.push(ScriptIR::Goto {
-            to_label: continue_label.clone(),
+            to_label: loop_item.continue_label.clone(),
         });
 
         // Label LOOP_END
-        output.push(ScriptIR::Label { label: break_label });
+        output.push(ScriptIR::Label { label: loop_item.break_label });
 
         self.pop_scope();
 
@@ -484,25 +488,24 @@ impl Compiler {
 
         self.push_scope();
 
-        let (continue_label, break_label) = match label {
+        let loop_item = match label {
             Some(label) => self.declare_loop(label)?,
             None => self.declare_anonymous_loop(span)?,
         };
 
         // Label LOOP
         output.push(ScriptIR::Label {
-            label: continue_label.clone(),
+            label: loop_item.continue_label.clone(),
         });
 
         // <let break_condition := NOT is_true(<condition>)>
         // JUMP_IF_TRUE break_condition, LOOP_END
         let break_condition = wrap_not(wrap_is_true(condition.clone()));
-        let break_condition_var =
-            self.declare_anonymous_var(break_condition.span(), "break_condition")?;
+        let break_condition_var = VarRef::new_internal(break_condition.span(), "break_condition", &mut self.ref_allocator);
         output.append(&mut self.compile_expr(&break_condition, break_condition_var.clone())?);
         output.push(ScriptIR::JumpIfTrue {
             condition: break_condition_var,
-            to_label: break_label.clone(),
+            to_label: loop_item.break_label.clone(),
         });
 
         // <body>
@@ -510,11 +513,11 @@ impl Compiler {
 
         // GOTO LOOP
         output.push(ScriptIR::Goto {
-            to_label: continue_label.clone(),
+            to_label: loop_item.continue_label.clone(),
         });
 
         // Label LOOP_END
-        output.push(ScriptIR::Label { label: break_label });
+        output.push(ScriptIR::Label { label: loop_item.break_label });
 
         self.pop_scope();
 
@@ -532,14 +535,14 @@ impl Compiler {
 
         self.push_scope();
 
-        let (continue_label, break_label) = match label {
+        let loop_item = match label {
             Some(label) => self.declare_loop(label)?,
             None => self.declare_anonymous_loop(span)?,
         };
 
         // Label LOOP
         output.push(ScriptIR::Label {
-            label: continue_label.clone(),
+            label: loop_item.continue_label.clone(),
         });
 
         // <body>
@@ -548,21 +551,20 @@ impl Compiler {
         // <let break_condition := is_true(until_condition)>
         // JUMP_IF_TRUE break_condition, LOOP_END
         let break_condition = wrap_is_true(until_condition.clone());
-        let break_condition_var =
-            self.declare_anonymous_var(break_condition.span(), "break_condition")?;
+        let break_condition_var = VarRef::new_internal(break_condition.span(), "break_condition", &mut self.ref_allocator);
         output.append(&mut self.compile_expr(&break_condition, break_condition_var.clone())?);
         output.push(ScriptIR::JumpIfTrue {
             condition: break_condition_var,
-            to_label: break_label.clone(),
+            to_label: loop_item.break_label.clone(),
         });
 
         // GOTO LOOP
         output.push(ScriptIR::Goto {
-            to_label: continue_label.clone(),
+            to_label: loop_item.continue_label.clone(),
         });
 
         // Label LOOP_END
-        output.push(ScriptIR::Label { label: break_label });
+        output.push(ScriptIR::Label { label: loop_item.break_label });
 
         self.pop_scope();
 
@@ -579,14 +581,14 @@ impl Compiler {
 
         self.push_scope();
 
-        let (continue_label, break_label) = match label {
+        let loop_item = match label {
             Some(label) => self.declare_loop(label)?,
             None => self.declare_anonymous_loop(span)?,
         };
 
         // Label LOOP
         output.push(ScriptIR::Label {
-            label: continue_label.clone(),
+            label: loop_item.continue_label.clone(),
         });
 
         // <body>
@@ -594,11 +596,11 @@ impl Compiler {
 
         // GOTO LOOP
         output.push(ScriptIR::Goto {
-            to_label: continue_label.clone(),
+            to_label: loop_item.continue_label.clone(),
         });
 
         // Label LOOP_END
-        output.push(ScriptIR::Label { label: break_label });
+        output.push(ScriptIR::Label { label: loop_item.break_label });
 
         self.pop_scope();
 
@@ -628,7 +630,7 @@ impl Compiler {
             // <let condition := is_true(condition)>
             // JUMP_IF_TRUE condition, IF_THEN
             let condition = wrap_is_true(condition.clone());
-            let condition_var = self.declare_anonymous_var(condition.span(), "condition")?;
+        let condition_var = VarRef::new_internal(condition.span(), "condition", &mut self.ref_allocator);
             output.append(&mut self.compile_expr(&condition, condition_var.clone())?);
             output.push(ScriptIR::JumpIfTrue {
                 condition: condition_var,
@@ -799,66 +801,11 @@ impl Compiler {
 
     fn declare_ref(&mut self, ident: &Identifier, item: RefItem) -> Result<()> {
         let name = self.normalize_ident(ident);
-        for scope in self.scopes.iter().rev() {
-            if let Some(shadowed) = scope.items.get(&name) {
-                if !shadowed.is_same_kind(&item) {
-                    return Err(ErrorCode::ScriptSemanticError(format!(
-                        "`{name}` is already defined as a different kind of variable"
-                    ))
-                    .set_span(ident.span));
-                }
-                break;
-            }
-        }
         self.scopes.last_mut().unwrap().items.insert(name, item);
         Ok(())
     }
 
-    fn declare_anonymous_ref(&mut self, item: RefItem) -> Result<()> {
-        self.scopes.last_mut().unwrap().anonymous_items.push(item);
-        Ok(())
-    }
-
-    fn declare_var(&mut self, ident: &Identifier) -> Result<VarRef> {
-        let name = self.normalize_ident(ident);
-        let var = VarRef::new(ident.span, &name.0, &mut self.ref_allocator);
-        self.declare_ref(ident, RefItem::Var(var.clone()))?;
-        Ok(var)
-    }
-
-    fn declare_anonymous_var(&mut self, span: Span, hint: &str) -> Result<VarRef> {
-        let var = VarRef::new_internal(span, hint, &mut self.ref_allocator);
-        self.declare_anonymous_ref(RefItem::Var(var.clone()))?;
-        Ok(var)
-    }
-
-    fn declare_set(&mut self, ident: &Identifier) -> Result<SetRef> {
-        let name = self.normalize_ident(ident);
-        let set = SetRef::new(ident.span, &name.0, &mut self.ref_allocator);
-        self.declare_ref(ident, RefItem::Set(set.clone()))?;
-        Ok(set)
-    }
-
-    fn declare_anonymous_set(&mut self, span: Span, hint: &str) -> Result<SetRef> {
-        let set = SetRef::new_internal(span, hint, &mut self.ref_allocator);
-        self.declare_anonymous_ref(RefItem::Set(set.clone()))?;
-        Ok(set)
-    }
-
-    fn declare_iter(&mut self, span: Span, ident: &Identifier) -> Result<IterRef> {
-        let name = self.normalize_ident(ident);
-        let iter = IterRef::new(span, &name.0, &mut self.ref_allocator);
-        self.declare_ref(ident, RefItem::Iter(iter.clone()))?;
-        Ok(iter)
-    }
-
-    fn declare_anonymous_iter(&mut self, span: Span, hint: &str) -> Result<IterRef> {
-        let iter = IterRef::new_internal(span, hint, &mut self.ref_allocator);
-        self.declare_anonymous_ref(RefItem::Iter(iter.clone()))?;
-        Ok(iter)
-    }
-
-    fn declare_loop(&mut self, ident: &Identifier) -> Result<(LabelRef, LabelRef)> {
+    fn declare_loop(&mut self, ident: &Identifier) -> Result<LoopItem> {
         let name = self.normalize_ident(ident);
         let continue_label = LabelRef::new(
             ident.span,
@@ -870,21 +817,25 @@ impl Compiler {
             &format!("{}_LOOP_END", &name.0),
             &mut self.ref_allocator,
         );
-        self.declare_ref(ident, RefItem::Loop {
+        let loop_item = LoopItem {
+            name: Some(name.clone()),
             continue_label: continue_label.clone(),
             break_label: break_label.clone(),
-        })?;
-        Ok((continue_label, break_label))
+        };
+        self.scopes.last_mut().unwrap().loop_item = Some(loop_item.clone());
+        Ok(loop_item)
     }
 
-    fn declare_anonymous_loop(&mut self, span: Span) -> Result<(LabelRef, LabelRef)> {
+    fn declare_anonymous_loop(&mut self, span: Span) -> Result<LoopItem> {
         let continue_label = LabelRef::new_internal(span, "LOOP", &mut self.ref_allocator);
         let break_label = LabelRef::new_internal(span, "LOOP_END", &mut self.ref_allocator);
-        self.declare_anonymous_ref(RefItem::Loop {
+        let loop_item = LoopItem {
+            name: None,
             continue_label: continue_label.clone(),
             break_label: break_label.clone(),
-        })?;
-        Ok((continue_label, break_label))
+        };
+        self.scopes.last_mut().unwrap().loop_item = Some(loop_item.clone());
+        Ok(loop_item)
     }
 
     fn lookup_ref(&self, ident: &Identifier) -> Result<RefItem> {
@@ -930,31 +881,20 @@ impl Compiler {
         Ok(iter)
     }
 
-    fn lookup_loop(&self, ident: &Identifier) -> Result<(LabelRef, LabelRef)> {
-        let RefItem::Loop {
-            continue_label,
-            break_label,
-        } = self.lookup_ref(ident)?
-        else {
-            let name = self.normalize_ident(ident);
-            return Err(
-                ErrorCode::ScriptSemanticError(format!("`{name}` is not a loop"))
-                    .set_span(ident.span),
-            );
-        };
-        Ok((continue_label, break_label))
+    fn lookup_loop(&self, ident: &Identifier) -> Result<LoopItem> {
+        let name = self.normalize_ident(ident);
+        for scope in self.scopes.iter().rev() {
+            if let Some(item) = &scope.loop_item && item.name.as_ref() == Some(&name){
+                return Ok(item.clone());
+            }
+        }
+        Err(ErrorCode::ScriptSemanticError(format!("`{name}` is not defined")).set_span(ident.span))
     }
 
-    fn current_loop(&self, span: Span) -> Result<(LabelRef, LabelRef)> {
+    fn current_loop(&self, span: Span) -> Result<LoopItem> {
         for scope in self.scopes.iter().rev() {
-            for item in scope.anonymous_items.iter().chain(scope.items.values()) {
-                if let RefItem::Loop {
-                    continue_label,
-                    break_label,
-                } = item
-                {
-                    return Ok((continue_label.clone(), break_label.clone()));
-                }
+            if let Some(loop_item) = &scope.loop_item {
+                return Ok(loop_item.clone());
             }
         }
         Err(ErrorCode::ScriptSemanticError("not in a loop".to_string()).set_span(span))
@@ -972,6 +912,7 @@ impl Compiler {
         impl QuoteVisitor<'_> {
             fn enter_expr(&mut self, expr: &mut Expr) {
                 match expr {
+                    // Transform `variable` to `:index`.
                     Expr::ColumnRef {
                         span,
                         column:
@@ -994,6 +935,8 @@ impl Compiler {
                             }
                         }
                     }
+                    // Transform `iter.column` to `READ <iter>, <column>, to_var`, and replace the
+                    // expression with `:to_var_index`.
                     Expr::ColumnRef {
                         span,
                         column:
@@ -1005,9 +948,8 @@ impl Compiler {
                     } => {
                         let res = try {
                             // READ <iter>, <column>, to_var
-                            let to_var = self
-                                .compiler
-                                .declare_anonymous_var(column.span, &format!("{iter}.{column}"))?;
+                            let to_var = VarRef::new_internal(column.span, &format!("{iter}.{column}"), &mut self
+                                .compiler.ref_allocator);
                             let iter = self.compiler.lookup_iter(iter)?;
                             let column =
                                 ColumnAccess::Name(self.compiler.normalize_ident(column).0);
@@ -1072,7 +1014,7 @@ impl Compiler {
 #[derive(Debug, Default)]
 struct Scope {
     items: HashMap<RefName, RefItem>,
-    anonymous_items: Vec<RefItem>,
+    loop_item: Option<LoopItem>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1089,21 +1031,46 @@ enum RefItem {
     Var(VarRef),
     Set(SetRef),
     Iter(IterRef),
-    Loop {
-        continue_label: LabelRef,
-        break_label: LabelRef,
-    },
 }
 
-impl RefItem {
-    pub fn is_same_kind(&self, other: &RefItem) -> bool {
-        #[allow(clippy::match_like_matches_macro)]
-        match (self, other) {
-            (RefItem::Var(_), RefItem::Var(_)) => true,
-            (RefItem::Set(_), RefItem::Set(_)) => true,
-            (RefItem::Iter(_), RefItem::Iter(_)) => true,
-            (RefItem::Loop { .. }, RefItem::Loop { .. }) => true,
-            _ => false,
+#[derive(Debug, Clone)]
+struct LoopItem {
+    name: Option<RefName>,
+    continue_label: LabelRef,
+    break_label: LabelRef,
+}
+
+#[derive(Default)]
+pub struct RefAllocator {
+    next_index: usize,
+}
+
+impl<const REFKIND: usize> Ref<REFKIND> {
+    pub fn new(span: Span, name: &str, allocator: &mut RefAllocator) -> Self {
+        let index = allocator.next_index;
+        allocator.next_index += 1;
+        Ref {
+            span,
+            index,
+            display_name: name.to_string(),
+        }
+    }
+
+    pub fn new_internal(span: Span, hint: &str, allocator: &mut RefAllocator) -> Self {
+        let index = allocator.next_index;
+        allocator.next_index += 1;
+        Ref {
+            span,
+            index,
+            display_name: format!("__{hint}{index}"),
+        }
+    }
+
+    pub fn placeholder(index: usize) -> Self {
+        Ref {
+            span: None,
+            index,
+            display_name: format!(":{}", index),
         }
     }
 }

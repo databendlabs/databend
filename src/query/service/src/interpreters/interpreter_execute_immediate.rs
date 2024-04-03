@@ -24,7 +24,6 @@ use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::run_parser;
 use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::ParseMode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -82,7 +81,7 @@ impl Interpreter for ExecuteImmediateInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let res: Result<_> = try {
             let dialect = self.ctx.get_settings().get_sql_dialect()?;
-            let tokens = tokenize_sql(&self.plan.script).unwrap();
+            let tokens = tokenize_sql(&self.plan.script)?;
             let mut ast = run_parser(&tokens, dialect, ParseMode::Template, false, script_block)?;
 
             let mut src = vec![];
@@ -125,7 +124,10 @@ impl Interpreter for ExecuteImmediateInterpreter {
             }
         };
 
-        res.map_err(|err| err.display_with_sql(&self.plan.script))
+        res.map_err(|err| {
+            panic!("{}", err.to_string());
+            err.display_with_sql(&self.plan.script)
+        })
     }
 }
 
@@ -151,13 +153,16 @@ impl Client for ScriptClient {
             .await?;
 
         let mut planner = Planner::new(ctx.clone());
-        let (plan, _) = planner.plan_sql(query).await.unwrap();
-        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await.unwrap();
-        let stream = interpreter.execute(ctx.clone()).await.unwrap();
-        let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
+        let (plan, _) = planner.plan_sql(query).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let stream = interpreter.execute(ctx.clone()).await?;
+        let blocks = stream
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>>>()?;
         let schema = plan.schema();
 
-        let blocks = blocks.into_iter().collect::<Result<Vec<_>>>()?;
         let block = match blocks.len() {
             0 => DataBlock::empty(),
             1 => blocks[0].clone(),

@@ -58,41 +58,6 @@ impl<const REFKIND: usize> Display for Ref<REFKIND> {
     }
 }
 
-#[derive(Default)]
-pub struct RefAllocator {
-    next_index: usize,
-}
-
-impl<const REFKIND: usize> Ref<REFKIND> {
-    pub fn new(span: Span, name: &str, allocator: &mut RefAllocator) -> Self {
-        let index = allocator.next_index;
-        allocator.next_index += 1;
-        Ref {
-            span,
-            index,
-            display_name: name.to_string(),
-        }
-    }
-
-    pub fn new_internal(span: Span, hint: &str, allocator: &mut RefAllocator) -> Self {
-        let index = allocator.next_index;
-        allocator.next_index += 1;
-        Ref {
-            span,
-            index,
-            display_name: format!("__{hint}{index}"),
-        }
-    }
-
-    pub fn placeholder(index: usize) -> Self {
-        Ref {
-            span: None,
-            index,
-            display_name: format!(":{}", index),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum ScriptIR {
     /// Executes a SQL query and stores the result in a named result set.

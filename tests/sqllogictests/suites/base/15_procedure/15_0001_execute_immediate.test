@@ -1,0 +1,95 @@
+statement ok
+create or replace database test_procedure;
+
+statement ok
+use test_procedure;
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    SELECT 0 / 0;
+END;
+$$;
+----
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    RETURN;
+END;
+$$;
+----
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET x := -1;
+    LET sum := 0;
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+----
+2
+
+query error start must be less than or equal to end when step is positive
+EXECUTE IMMEDIATE $$
+BEGIN
+    FOR x IN 1 TO -1 DO
+        RETURN x;
+    END FOR;
+END;
+$$;
+
+query I
+EXECUTE immediate $$
+BEGIN
+    CREATE OR REPLACE TABLE t1 (a INT, b FLOAT, c STRING);
+    INSERT INTO t1 VALUES (1, 2.0, '3');
+    RETURN TABLE(select * from t1);
+END;
+$$;
+----
+┌─────────────────────────────────────────┐
+│      a     │       b      │      c      │
+│ Int32 NULL │ Float32 NULL │ String NULL │
+├────────────┼──────────────┼─────────────┤
+│ 1          │ 2            │ '3'         │
+└─────────────────────────────────────────┘
+
+query I
+EXECUTE immediate $$
+BEGIN
+    LET x := 1;
+    LET y := x + 1;
+    LET z RESULTSET := SELECT :y + 1;
+    RETURN TABLE(z);
+END;
+$$;
+----
+┌───────┐
+│ 2 + 1 │
+│ UInt8 │
+├───────┤
+│     3 │
+└───────┘
+
+query I
+EXECUTE immediate $$
+BEGIN
+    LET x := 1;
+    RETURN TABLE(SELECT :x + 1);
+END;
+$$;
+----
+┌───────┐
+│ 1 + 1 │
+│ UInt8 │
+├───────┤
+│     2 │
+└───────┘
+
+statement ok
+drop database test_procedure;

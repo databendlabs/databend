@@ -105,9 +105,9 @@ fn test_script() {
         file,
         r#"
             LET x := 1;
-            LET y := x + 1;
-            LET z RESULTSET := SELECT :y + 1;
-            RETURN TABLE(z);
+            LET x := x + 1;
+            LET x RESULTSET := SELECT :x + 1;
+            RETURN TABLE(x);
         "#,
     );
     run_script(
@@ -115,6 +115,14 @@ fn test_script() {
         r#"
             LET x := 1;
             RETURN TABLE(SELECT :x + 1);
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET x RESULTSET := SELECT 1;
+            LET x := 1;
+            RETURN x;
         "#,
     );
     run_script(
@@ -152,6 +160,18 @@ fn test_script() {
             FOR row IN x DO
                 sum := sum + row.number;
             END FOR;
+            RETURN sum;
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET x RESULTSET := SELECT * FROM numbers(3);
+            LET sum := 0;
+            FOR x IN x DO
+                LET x := x.number;
+                sum := sum + x;
+            END FOR x;
             RETURN sum;
         "#,
     );
@@ -286,20 +306,6 @@ fn test_script_error() {
     run_script(
         file,
         r#"
-            LET x := 1;
-            LET x RESULTSET := SELECT 1;
-        "#,
-    );
-    run_script(
-        file,
-        r#"
-            LET x RESULTSET := SELECT 1;
-            LET x := 1;
-        "#,
-    );
-    run_script(
-        file,
-        r#"
             LET x RESULTSET := SELECT 1;
             LET y := x;
         "#,
@@ -315,6 +321,14 @@ fn test_script_error() {
         r#"
             LET x := 1;
             RETURN TABLE(x);
+        "#,
+    );
+    run_script(
+        file,
+        r#"
+            LET x := 1;
+            LET x RESULTSET := SELECT 1;
+            RETURN x;
         "#,
     );
     run_script(
