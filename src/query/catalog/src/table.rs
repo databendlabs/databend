@@ -286,8 +286,8 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn navigate_to(&self, navigation_desc: &NavigationDesc) -> Result<Arc<dyn Table>> {
-        let _ = navigation_desc;
+    async fn navigate_to(&self, navigation: &TimeNavigation) -> Result<Arc<dyn Table>> {
+        let _ = navigation;
 
         Err(ErrorCode::Unimplemented(format!(
             "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",
@@ -432,7 +432,7 @@ pub trait TableExt: Table {
 impl<T: ?Sized> TableExt for T where T: Table {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum NavigationDesc {
+pub enum TimeNavigation {
     TimeTravel(NavigationPoint),
     Changes {
         append_only: bool,

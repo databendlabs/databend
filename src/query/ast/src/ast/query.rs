@@ -567,14 +567,14 @@ impl Display for Unpivot {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct ChangesClause {
+pub struct ChangesInterval {
     #[drive(skip)]
     pub append_only: bool,
     pub at_point: TimeTravelPoint,
     pub end_point: Option<TimeTravelPoint>,
 }
 
-impl Display for ChangesClause {
+impl Display for ChangesInterval {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "CHANGES (INFORMATION => ")?;
         if self.append_only {
@@ -593,7 +593,7 @@ impl Display for ChangesClause {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TemporalClause {
     TimeTravel(TimeTravelPoint),
-    Changes(ChangesClause),
+    Changes(ChangesInterval),
 }
 
 impl Display for TemporalClause {

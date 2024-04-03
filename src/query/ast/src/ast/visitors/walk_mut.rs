@@ -355,7 +355,7 @@ pub fn walk_time_travel_point_mut<V: VisitorMut>(visitor: &mut V, time: &mut Tim
 pub fn walk_temporal_clause_mut<V: VisitorMut>(visitor: &mut V, clause: &mut TemporalClause) {
     match clause {
         TemporalClause::TimeTravel(point) => visitor.visit_time_travel_point(point),
-        TemporalClause::Changes(ChangesClause {
+        TemporalClause::Changes(ChangesInterval {
             at_point,
             end_point,
             ..

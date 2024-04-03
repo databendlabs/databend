@@ -3276,7 +3276,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let node = FormatTreeNode::with_children(format_ctx, vec![child]);
                 self.children.push(node);
             }
-            TemporalClause::Changes(ChangesClause {
+            TemporalClause::Changes(ChangesInterval {
                 at_point,
                 end_point,
                 ..

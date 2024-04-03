@@ -536,7 +536,7 @@ pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
         },
         |(_, _, _, _, changes_type, _, _, at_point, opt_end_point)| {
             let append_only = matches!(changes_type.kind, APPEND_ONLY);
-            TemporalClause::Changes(ChangesClause {
+            TemporalClause::Changes(ChangesInterval {
                 append_only,
                 at_point,
                 end_point: opt_end_point.map(|p| p.1),

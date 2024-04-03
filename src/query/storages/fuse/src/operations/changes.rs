@@ -66,7 +66,7 @@ impl FuseTable {
     ) -> Result<ChangesDesc> {
         // To support analyze table, we move the change tracking check out of the function.
         let source = if let Some(point) = navigation {
-            self.navigate_time_travel(point).await?.as_ref().clone()
+            self.navigate_to_point(point).await?.as_ref().clone()
         } else {
             self.clone()
         };

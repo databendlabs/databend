@@ -309,7 +309,7 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(visitor: &mut V, table_ref: &'a 
 pub fn walk_temporal_clause<'a, V: Visitor<'a>>(visitor: &mut V, clause: &'a TemporalClause) {
     match clause {
         TemporalClause::TimeTravel(point) => visitor.visit_time_travel_point(point),
-        TemporalClause::Changes(ChangesClause {
+        TemporalClause::Changes(ChangesInterval {
             at_point,
             end_point,
             ..

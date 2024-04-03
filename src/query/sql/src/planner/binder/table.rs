@@ -45,9 +45,9 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::StageTableInfo;
-use databend_common_catalog::table::NavigationDesc;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
@@ -256,28 +256,64 @@ impl Binder {
             }
         };
 
-        let is_changes = navigation.is_some_and(|n| matches!(n, NavigationDesc::Changes { .. }))
-            || table_meta.engine() == "STREAM";
+        if navigation.is_some_and(|n| matches!(n, TimeNavigation::Changes { .. }))
+            || table_meta.engine() == "STREAM"
+        {
+            let change_type = get_change_type(&table_alias_name);
+            if change_type.is_some() {
+                let table_index = self.metadata.write().add_table(
+                    catalog,
+                    database.clone(),
+                    table_meta,
+                    table_alias_name,
+                    bind_context.view_info.is_some(),
+                    bind_context.planning_agg_index,
+                    false,
+                );
+                let (s_expr, mut bind_context) = self
+                    .bind_base_table(bind_context, database.as_str(), table_index, change_type)
+                    .await?;
 
-        let change_type = get_change_type(&table_alias_name);
-        if change_type.is_some() {
-            let table_index = self.metadata.write().add_table(
-                catalog,
-                database.clone(),
-                table_meta,
-                table_alias_name,
-                bind_context.view_info.is_some(),
-                bind_context.planning_agg_index,
-                false,
-            );
-            let (s_expr, mut bind_context) = self
-                .bind_base_table(bind_context, database.as_str(), table_index, change_type)
+                if let Some(alias) = alias {
+                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                }
+                return Ok((s_expr, bind_context));
+            }
+
+            let query = table_meta
+                .generage_changes_query(self.ctx.clone(), database.as_str(), table_name.as_str())
                 .await?;
 
-            if let Some(alias) = alias {
-                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+            let tokens = tokenize_sql(query.as_str())?;
+            let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+            let Statement::Query(query) = &stmt else {
+                unreachable!()
+            };
+            let (s_expr, mut new_bind_context) =
+                self.bind_query(&mut new_bind_context, query).await?;
+
+            let cols = table_meta
+                .schema()
+                .fields()
+                .iter()
+                .map(|f| f.name().clone())
+                .collect::<Vec<_>>();
+            for (index, column_name) in cols.iter().enumerate() {
+                new_bind_context.columns[index].column_name = column_name.clone();
             }
-            return Ok((s_expr, bind_context));
+
+            if let Some(alias) = alias {
+                new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            } else {
+                for column in new_bind_context.columns.iter_mut() {
+                    column.database_name = None;
+                    column.table_name = Some(table_name.clone());
+                }
+            }
+
+            new_bind_context.parent = Some(Box::new(bind_context.clone()));
+            return Ok((s_expr, new_bind_context));
         }
 
         match table_meta.engine() {
@@ -327,64 +363,23 @@ impl Binder {
                 }
             }
             _ => {
-                if is_changes {
-                    let query = table_meta
-                        .generage_changes_query(
-                            self.ctx.clone(),
-                            database.as_str(),
-                            table_name.as_str(),
-                        )
-                        .await?;
+                let table_index = self.metadata.write().add_table(
+                    catalog,
+                    database.clone(),
+                    table_meta,
+                    table_alias_name,
+                    bind_context.view_info.is_some(),
+                    bind_context.planning_agg_index,
+                    false,
+                );
 
-                    let mut new_bind_context =
-                        BindContext::with_parent(Box::new(bind_context.clone()));
-                    let tokens = tokenize_sql(query.as_str())?;
-                    let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-                    if let Statement::Query(query) = &stmt {
-                        let (s_expr, mut new_bind_context) =
-                            self.bind_query(&mut new_bind_context, query).await?;
-
-                        let cols = table_meta
-                            .schema()
-                            .fields()
-                            .iter()
-                            .map(|f| f.name().clone())
-                            .collect::<Vec<_>>();
-                        for (index, column_name) in cols.iter().enumerate() {
-                            new_bind_context.columns[index].column_name = column_name.clone();
-                        }
-                        if let Some(alias) = alias {
-                            new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                        } else {
-                            for column in new_bind_context.columns.iter_mut() {
-                                column.database_name = None;
-                                column.table_name = Some(table_name.clone());
-                            }
-                        }
-                        new_bind_context.parent = Some(Box::new(bind_context.clone()));
-                        Ok((s_expr, new_bind_context))
-                    } else {
-                        unreachable!()
-                    }
-                } else {
-                    let table_index = self.metadata.write().add_table(
-                        catalog,
-                        database.clone(),
-                        table_meta,
-                        table_alias_name,
-                        bind_context.view_info.is_some(),
-                        bind_context.planning_agg_index,
-                        false,
-                    );
-
-                    let (s_expr, mut bind_context) = self
-                        .bind_base_table(bind_context, database.as_str(), table_index, None)
-                        .await?;
-                    if let Some(alias) = alias {
-                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                    }
-                    Ok((s_expr, bind_context))
+                let (s_expr, mut bind_context) = self
+                    .bind_base_table(bind_context, database.as_str(), table_index, None)
+                    .await?;
+                if let Some(alias) = alias {
+                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
+                Ok((s_expr, bind_context))
             }
         }
     }
@@ -1322,7 +1317,7 @@ impl Binder {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        navigation: Option<&NavigationDesc>,
+        navigation: Option<&TimeNavigation>,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with ctx
         // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
@@ -1344,25 +1339,25 @@ impl Binder {
         &self,
         bind_context: &mut BindContext,
         temporal: &Option<TemporalClause>,
-    ) -> Result<Option<NavigationDesc>> {
+    ) -> Result<Option<TimeNavigation>> {
         match temporal {
             Some(TemporalClause::TimeTravel(point)) => {
                 let point = self.resolve_data_travel_point(bind_context, point).await?;
-                Ok(Some(NavigationDesc::TimeTravel(point)))
+                Ok(Some(TimeNavigation::TimeTravel(point)))
             }
-            Some(TemporalClause::Changes(clause)) => {
-                let end = match &clause.end_point {
+            Some(TemporalClause::Changes(interval)) => {
+                let end = match &interval.end_point {
                     Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp).await?),
                     None => None,
                 };
                 let at = self
-                    .resolve_data_travel_point(bind_context, &clause.at_point)
+                    .resolve_data_travel_point(bind_context, &interval.at_point)
                     .await?;
-                Ok(Some(NavigationDesc::Changes {
-                    append_only: clause.append_only,
+                Ok(Some(TimeNavigation::Changes {
+                    append_only: interval.append_only,
                     at,
                     end,
-                    desc: format!("{clause}"),
+                    desc: format!("{interval}"),
                 }))
             }
             None => Ok(None),

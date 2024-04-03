@@ -27,8 +27,8 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::ColumnStatisticsProvider;
-use databend_common_catalog::table::NavigationDesc;
 use databend_common_catalog::table::NavigationDescriptor;
+use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -806,17 +806,17 @@ impl Table for FuseTable {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn navigate_to(&self, navigation_desc: &NavigationDesc) -> Result<Arc<dyn Table>> {
-        match navigation_desc {
-            NavigationDesc::TimeTravel(point) => Ok(self.navigate_time_travel(point).await?),
-            NavigationDesc::Changes {
+    async fn navigate_to(&self, navigation: &TimeNavigation) -> Result<Arc<dyn Table>> {
+        match navigation {
+            TimeNavigation::TimeTravel(point) => Ok(self.navigate_to_point(point).await?),
+            TimeNavigation::Changes {
                 append_only,
                 at,
                 end,
                 desc,
             } => {
                 let mut end_point = if let Some(end) = end {
-                    self.navigate_time_travel(end).await?.as_ref().clone()
+                    self.navigate_to_point(end).await?.as_ref().clone()
                 } else {
                     self.clone()
                 };

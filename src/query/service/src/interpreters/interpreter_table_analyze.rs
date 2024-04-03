@@ -87,9 +87,9 @@ impl Interpreter for AnalyzeTableInterpreter {
                 .read_table_snapshot_statistics(Some(&snapshot))
                 .await?;
 
-            let since_str = if let Some(table_statistics) = &table_statistics {
+            let temporal_str = if let Some(table_statistics) = &table_statistics {
                 let is_full = table
-                    .navigate_time_travel(&NavigationPoint::SnapshotID(
+                    .navigate_to_point(&NavigationPoint::SnapshotID(
                         table_statistics.snapshot_id.simple().to_string(),
                     ))
                     .await
@@ -98,6 +98,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                 if is_full {
                     format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple(),)
                 } else {
+                    // analyze only need to collect the added blocks.
                     let table_alias = format!("_change_insert${:08x}", Utc::now().timestamp());
                     format!(
                         "CHANGES(INFORMATION => DEFAULT) AT (snapshot => '{}') END (snapshot => '{}') AS {table_alias}",
@@ -130,8 +131,8 @@ impl Interpreter for AnalyzeTableInterpreter {
                 .join(", ");
 
             let sql = format!(
-                "SELECT {select_expr}, {} as is_full from {}.{} {since_str}",
-                since_str.is_empty(),
+                "SELECT {select_expr}, {} as is_full from {}.{} {temporal_str}",
+                temporal_str.is_empty(),
                 plan.database,
                 plan.table,
             );
