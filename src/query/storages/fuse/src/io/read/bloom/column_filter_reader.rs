@@ -16,16 +16,22 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
+use databend_common_metrics::storage::metrics_inc_block_index_read_bytes;
 use databend_storages_common_cache::CacheKey;
 use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
 use databend_storages_common_cache_manager::BloomIndexFilterMeter;
 use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use opendal::Operator;
+use parquet_rs::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet_rs::arrow::parquet_to_arrow_field_levels;
+use parquet_rs::arrow::ProjectionMask;
 use parquet_rs::basic::Compression as ParquetCompression;
 use parquet_rs::schema::types::SchemaDescPtr;
 
@@ -114,7 +120,33 @@ impl Loader<Xor8Filter> for Xor8FilterLoader {
             ParquetCompression::UNCOMPRESSED,
         );
         builder.add_column_chunk(self.column_id as usize, Bytes::from(bytes));
-        todo!()
+        let row_group = Box::new(builder.build());
+        let field_levels = parquet_to_arrow_field_levels(
+            self.schema_desc.as_ref(),
+            ProjectionMask::leaves(&self.schema_desc, vec![self.column_id as usize]),
+            None,
+        )?;
+        let mut record_reader = ParquetRecordBatchReader::try_new_with_row_groups(
+            &field_levels,
+            row_group.as_ref(),
+            self.num_values as usize,
+            None,
+        )?;
+        let record = record_reader.next().unwrap()?;
+        assert!(record_reader.next().is_none());
+        let bloom_filter_binary = record.column(0).clone();
+        let col = Column::from_arrow_rs(
+            bloom_filter_binary,
+            &databend_common_expression::types::DataType::Binary,
+        )?;
+        let filter_bytes = col
+            .as_binary()
+            .expect("load bloom filter raw data as binary failed")
+            .index(0)
+            .unwrap();
+        metrics_inc_block_index_read_bytes(filter_bytes.len() as u64);
+        let (filter, _size) = Xor8Filter::from_bytes(filter_bytes)?;
+        Ok(filter)
     }
 
     fn cache_key(&self, _params: &LoadParams) -> CacheKey {
