@@ -72,6 +72,7 @@ pub struct PrewhereInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InvertedIndexInfo {
     pub index_name: String,
+    pub index_version: String,
     pub index_schema: DataSchema,
     pub query_columns: Vec<String>,
     pub query_text: String,

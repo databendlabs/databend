@@ -1482,23 +1482,23 @@ FROM numbers(500);
 query T
 explain join SELECT customer_name, segment, (SELECT SUM(net_paid) FROM sales WHERE customer_id IN (SELECT customer_id FROM customers WHERE segment = c.segment AND active = true)) FROM customers c WHERE c.customer_id IN (SELECT customer_id FROM sales WHERE net_paid > 100) LIMIT 10;
 ----
-HashJoin: LEFT OUTER
+HashJoin: RIGHT OUTER
 ├── Build
-│   └── HashJoin: RIGHT SEMI
+│   └── HashJoin: LEFT SEMI
 │       ├── Build
-│       │   └── HashJoin: CROSS
-│       │       ├── Build
-│       │       │   └── Scan: default.default.customers (#0) (read rows: 100)
-│       │       └── Probe
-│       │           └── Scan: default.default.sales (#1) (read rows: 500)
+│       │   └── Scan: default.default.sales (#3) (read rows: 0)
 │       └── Probe
-│           └── Scan: default.default.customers (#2) (read rows: 100)
+│           └── Scan: default.default.customers (#0) (read rows: 100)
 └── Probe
     └── HashJoin: LEFT SEMI
         ├── Build
-        │   └── Scan: default.default.sales (#3) (read rows: 0)
+        │   └── Scan: default.default.customers (#2) (read rows: 100)
         └── Probe
-            └── Scan: default.default.customers (#0) (read rows: 100)
+            └── HashJoin: CROSS
+                ├── Build
+                │   └── Scan: default.default.customers (#0) (read rows: 100)
+                └── Probe
+                    └── Scan: default.default.sales (#1) (read rows: 500)
 
 
 query T
@@ -1506,19 +1506,19 @@ explain join SELECT c.customer_name FROM customers c WHERE NOT EXISTS ( SELECT c
 ----
 HashJoin: RIGHT MARK
 ├── Build
-│   └── HashJoin: LEFT MARK
+│   └── HashJoin: RIGHT MARK
 │       ├── Build
-│       │   └── HashJoin: CROSS
+│       │   └── HashJoin: INNER
 │       │       ├── Build
-│       │       │   └── Scan: default.default.customers (#0) (read rows: 100)
+│       │       │   └── Scan: default.default.products (#3) (read rows: 10)
 │       │       └── Probe
-│       │           └── Scan: default.default.products (#1) (read rows: 10)
+│       │           └── Scan: default.default.sales (#2) (read rows: 500)
 │       └── Probe
-│           └── HashJoin: INNER
+│           └── HashJoin: CROSS
 │               ├── Build
-│               │   └── Scan: default.default.products (#3) (read rows: 10)
+│               │   └── Scan: default.default.products (#1) (read rows: 10)
 │               └── Probe
-│                   └── Scan: default.default.sales (#2) (read rows: 500)
+│                   └── Scan: default.default.customers (#0) (read rows: 100)
 └── Probe
     └── Scan: default.default.customers (#0) (read rows: 100)
 

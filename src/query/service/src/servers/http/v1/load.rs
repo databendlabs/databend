@@ -128,17 +128,17 @@ pub async fn streaming_load(
         }
     }
 
-    let entry = QueryEntry::create(&context).map_err(InternalServerError)?;
-    let _guard = QueriesQueueManager::instance()
-        .acquire(entry)
-        .await
-        .map_err(InternalServerError)?;
-
     let mut planner = Planner::new(context.clone());
-    let (mut plan, _) = planner
+    let (mut plan, extras) = planner
         .plan_sql(insert_sql)
         .await
         .map_err(|err| err.display_with_sql(insert_sql))
+        .map_err(InternalServerError)?;
+
+    let entry = QueryEntry::create(&context, &plan, &extras).map_err(InternalServerError)?;
+    let _guard = QueriesQueueManager::instance()
+        .acquire(entry)
+        .await
         .map_err(InternalServerError)?;
 
     let schema = plan.schema();

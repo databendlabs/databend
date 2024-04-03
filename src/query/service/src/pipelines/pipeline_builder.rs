@@ -196,7 +196,9 @@ impl PipelineBuilder {
             PhysicalPlan::Duplicate(duplicate) => self.build_duplicate(duplicate),
             PhysicalPlan::Shuffle(shuffle) => self.build_shuffle(shuffle),
             PhysicalPlan::ChunkFilter(chunk_filter) => self.build_chunk_filter(chunk_filter),
-            PhysicalPlan::ChunkProject(chunk_project) => self.build_chunk_project(chunk_project),
+            PhysicalPlan::ChunkEvalScalar(chunk_project) => {
+                self.build_chunk_eval_scalar(chunk_project)
+            }
             PhysicalPlan::ChunkCastSchema(chunk_cast_schema) => {
                 self.build_chunk_cast_schema(chunk_cast_schema)
             }

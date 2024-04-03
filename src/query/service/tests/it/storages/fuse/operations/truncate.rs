@@ -188,7 +188,8 @@ async fn truncate_table(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result
     table.truncate(ctx.clone(), &mut pipeline).await?;
     if !pipeline.is_empty() {
         pipeline.set_max_threads(1);
-        let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
+        let mut executor_settings = ExecutorSettings::try_create(ctx.clone())?;
+        executor_settings.enable_queries_executor = false;
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(executor.get_inner())?;
         executor.execute()?;

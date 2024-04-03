@@ -1008,6 +1008,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #ident
             ~ ON ~ #dot_separated_idents_1_to_3
             ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
+            ~ ( #table_option )?
         },
         |(
             _,
@@ -1022,6 +1023,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             _,
             columns,
             _,
+            opt_index_options,
         )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
@@ -1033,6 +1035,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 table,
                 columns,
                 sync_creation: opt_async.is_none(),
+                index_options: opt_index_options.unwrap_or_default(),
             }))
         },
     );
@@ -2345,12 +2348,16 @@ fn when_clause(i: Input) -> IResult<WhenClause> {
 }
 
 fn into_clause(i: Input) -> IResult<IntoClause> {
+    let source_expr = alt((
+        map(rule! {DEFAULT}, |_| SourceExpr::Default),
+        map(rule! { #expr }, SourceExpr::Expr),
+    ));
     map(
         rule! {
             INTO
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ (VALUES ~ "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ (VALUES ~ "(" ~ #comma_separated_list1(source_expr) ~ ")" )?
         },
         |(_, (catalog, database, table), opt_target_columns, opt_source_columns)| IntoClause {
             catalog,

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use databend_common_base::base::tokio;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -22,6 +24,8 @@ use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::io::read::load_inverted_index_info;
 use databend_common_storages_fuse::io::read::InvertedIndexReader;
+use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_enterprise_inverted_index::get_inverted_index_handler;
@@ -30,6 +34,7 @@ use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::test_kits::append_string_sample_data;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::LoadParams;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
@@ -53,12 +58,15 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
     let table_id = table.get_id();
     let index_name = "idx1".to_string();
+    let mut options = BTreeMap::new();
+    options.insert("tokenizer".to_string(), "english".to_string());
     let req = CreateTableIndexReq {
         create_option: CreateOption::Create,
         table_id,
         name: index_name.clone(),
         column_ids: vec![0, 1],
         sync_creation: true,
+        options,
     };
 
     let res = handler.do_create_table_index(catalog.clone(), req).await;
@@ -83,58 +91,75 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let new_snapshot = new_fuse_table.read_table_snapshot().await?;
     assert!(new_snapshot.is_some());
     let new_snapshot = new_snapshot.unwrap();
-    assert!(new_snapshot.index_info_locations.is_some());
-    let index_info_locations = new_snapshot.index_info_locations.clone().unwrap();
-    let index_info_loc = index_info_locations.get(&index_name);
+    assert!(new_snapshot.inverted_indexes.is_some());
+
+    let index_info_loc = new_snapshot
+        .inverted_indexes
+        .as_ref()
+        .and_then(|i| i.get(&index_name));
     assert!(index_info_loc.is_some());
     let index_info =
         load_inverted_index_info(new_fuse_table.get_operator(), index_info_loc).await?;
     assert!(index_info.is_some());
     let index_info = index_info.unwrap();
-    assert_eq!(index_info.indexes.len(), 1);
+    let index_version = index_info.index_version.clone();
+
+    let segment_reader =
+        MetaReaders::segment_info_reader(new_fuse_table.get_operator(), table_schema.clone());
+
+    let mut block_metas = vec![];
+    for (segment_loc, ver) in &new_snapshot.segments {
+        let segment_info = segment_reader
+            .read(&LoadParams {
+                location: segment_loc.to_string(),
+                len_hint: None,
+                ver: *ver,
+                put_cache: false,
+            })
+            .await?;
+        for block_meta in segment_info.block_metas()? {
+            block_metas.push(block_meta);
+        }
+    }
+    assert_eq!(block_metas.len(), 1);
+    let block_meta = &block_metas[0];
 
     let dal = new_fuse_table.get_operator_ref();
     let schema = DataSchema::from(table_schema);
     let query_columns = vec!["title".to_string(), "content".to_string()];
+
+    let index_loc = TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
+        &block_meta.location.0,
+        &index_name,
+        &index_version,
+    );
+
     let index_reader =
-        InvertedIndexReader::try_create(dal.clone(), &schema, &query_columns, &index_info.indexes)
-            .await?;
+        InvertedIndexReader::try_create(dal.clone(), &schema, &query_columns, &index_loc).await?;
 
     let query = "rust";
-    let segment_map = index_reader.do_filter(query)?;
-    assert_eq!(segment_map.len(), 1);
-    let segment_row_id_scores: Vec<_> = segment_map.into_values().collect();
-    assert_eq!(segment_row_id_scores.len(), 1);
-    let row_id_scores = &segment_row_id_scores[0];
-    assert!(row_id_scores.is_some());
-    let row_id_scores = row_id_scores.as_ref().unwrap();
-    assert_eq!(row_id_scores.len(), 2);
-    assert_eq!(row_id_scores[0].0, 0);
-    assert_eq!(row_id_scores[1].0, 1);
+    let matched_rows = index_reader.do_filter(query, block_meta.row_count)?;
+    assert!(matched_rows.is_some());
+    let matched_rows = matched_rows.unwrap();
+    assert_eq!(matched_rows.len(), 2);
+    assert_eq!(matched_rows[0].0, 0);
+    assert_eq!(matched_rows[1].0, 1);
 
     let query = "java";
-    let segment_map = index_reader.do_filter(query)?;
-    assert_eq!(segment_map.len(), 1);
-    let segment_row_id_scores: Vec<_> = segment_map.into_values().collect();
-    assert_eq!(segment_row_id_scores.len(), 1);
-    let row_id_scores = &segment_row_id_scores[0];
-    assert!(row_id_scores.is_some());
-    let row_id_scores = row_id_scores.as_ref().unwrap();
-    assert_eq!(row_id_scores.len(), 1);
-    assert_eq!(row_id_scores[0].0, 2);
+    let matched_rows = index_reader.do_filter(query, block_meta.row_count)?;
+    assert!(matched_rows.is_some());
+    let matched_rows = matched_rows.unwrap();
+    assert_eq!(matched_rows.len(), 1);
+    assert_eq!(matched_rows[0].0, 2);
 
     let query = "data";
-    let segment_map = index_reader.do_filter(query)?;
-    assert_eq!(segment_map.len(), 1);
-    let segment_row_id_scores: Vec<_> = segment_map.into_values().collect();
-    assert_eq!(segment_row_id_scores.len(), 1);
-    let row_id_scores = &segment_row_id_scores[0];
-    assert!(row_id_scores.is_some());
-    let row_id_scores = row_id_scores.as_ref().unwrap();
-    assert_eq!(row_id_scores.len(), 3);
-    assert_eq!(row_id_scores[0].0, 1);
-    assert_eq!(row_id_scores[1].0, 4);
-    assert_eq!(row_id_scores[2].0, 5);
+    let matched_rows = index_reader.do_filter(query, block_meta.row_count)?;
+    assert!(matched_rows.is_some());
+    let matched_rows = matched_rows.unwrap();
+    assert_eq!(matched_rows.len(), 3);
+    assert_eq!(matched_rows[0].0, 4);
+    assert_eq!(matched_rows[1].0, 1);
+    assert_eq!(matched_rows[2].0, 5);
 
     Ok(())
 }

@@ -28,10 +28,10 @@ use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::ChunkAppendData;
 use crate::executor::physical_plans::ChunkCastSchema;
 use crate::executor::physical_plans::ChunkCommitInsert;
+use crate::executor::physical_plans::ChunkEvalScalar;
 use crate::executor::physical_plans::ChunkFillAndReorder;
 use crate::executor::physical_plans::ChunkFilter;
 use crate::executor::physical_plans::ChunkMerge;
-use crate::executor::physical_plans::ChunkProject;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
@@ -137,7 +137,7 @@ pub enum PhysicalPlan {
     Duplicate(Box<Duplicate>),
     Shuffle(Box<Shuffle>),
     ChunkFilter(Box<ChunkFilter>),
-    ChunkProject(Box<ChunkProject>),
+    ChunkEvalScalar(Box<ChunkEvalScalar>),
     ChunkCastSchema(Box<ChunkCastSchema>),
     ChunkFillAndReorder(Box<ChunkFillAndReorder>),
     ChunkAppendData(Box<ChunkAppendData>),
@@ -351,7 +351,7 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
-            PhysicalPlan::ChunkProject(plan) => {
+            PhysicalPlan::ChunkEvalScalar(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
@@ -428,7 +428,7 @@ impl PhysicalPlan {
             PhysicalPlan::Duplicate(v) => v.plan_id,
             PhysicalPlan::Shuffle(v) => v.plan_id,
             PhysicalPlan::ChunkFilter(v) => v.plan_id,
-            PhysicalPlan::ChunkProject(v) => v.plan_id,
+            PhysicalPlan::ChunkEvalScalar(v) => v.plan_id,
             PhysicalPlan::ChunkCastSchema(v) => v.plan_id,
             PhysicalPlan::ChunkFillAndReorder(v) => v.plan_id,
             PhysicalPlan::ChunkAppendData(v) => v.plan_id,
@@ -480,7 +480,7 @@ impl PhysicalPlan {
             PhysicalPlan::Duplicate(plan) => plan.input.output_schema(),
             PhysicalPlan::Shuffle(plan) => plan.input.output_schema(),
             PhysicalPlan::ChunkFilter(plan) => plan.input.output_schema(),
-            PhysicalPlan::ChunkProject(_) => todo!(),
+            PhysicalPlan::ChunkEvalScalar(_) => todo!(),
             PhysicalPlan::ChunkCastSchema(_) => todo!(),
             PhysicalPlan::ChunkFillAndReorder(_) => todo!(),
             PhysicalPlan::ChunkAppendData(_) => todo!(),
@@ -537,7 +537,7 @@ impl PhysicalPlan {
             PhysicalPlan::Duplicate(_) => "Duplicate".to_string(),
             PhysicalPlan::Shuffle(_) => "Shuffle".to_string(),
             PhysicalPlan::ChunkFilter(_) => "ChunkFilter".to_string(),
-            PhysicalPlan::ChunkProject(_) => "ChunkProject".to_string(),
+            PhysicalPlan::ChunkEvalScalar(_) => "ChunkProject".to_string(),
             PhysicalPlan::ChunkCastSchema(_) => "ChunkCastSchema".to_string(),
             PhysicalPlan::ChunkFillAndReorder(_) => "ChunkFillAndReorder".to_string(),
             PhysicalPlan::ChunkAppendData(_) => "ChunkAppendData".to_string(),
@@ -605,7 +605,7 @@ impl PhysicalPlan {
             PhysicalPlan::Duplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Shuffle(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkFilter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::ChunkProject(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ChunkEvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkCastSchema(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkFillAndReorder(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
@@ -660,7 +660,7 @@ impl PhysicalPlan {
             | PhysicalPlan::Duplicate(_)
             | PhysicalPlan::Shuffle(_)
             | PhysicalPlan::ChunkFilter(_)
-            | PhysicalPlan::ChunkProject(_)
+            | PhysicalPlan::ChunkEvalScalar(_)
             | PhysicalPlan::ChunkCastSchema(_)
             | PhysicalPlan::ChunkFillAndReorder(_)
             | PhysicalPlan::ChunkAppendData(_)

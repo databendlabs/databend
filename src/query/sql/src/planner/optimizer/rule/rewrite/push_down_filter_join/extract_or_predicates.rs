@@ -61,7 +61,7 @@ fn extract_or_predicate(
         let mut sub_scalars = Vec::new();
         match or_arg {
             ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
-                let and_args = flatten_ands(&func.arguments);
+                let and_args = flatten_and(&func.arguments);
                 for and_arg in and_args.iter() {
                     match and_arg {
                         ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
@@ -118,17 +118,17 @@ fn flatten_ors(or_args: &[ScalarExpr]) -> Vec<ScalarExpr> {
 
 // Flatten nested ORs, such as `a=1 and b=1 and c=1`
 // It'll be flatten to [a=1, b=1, c=1]
-fn flatten_ands(and_args: &[ScalarExpr]) -> Vec<ScalarExpr> {
-    let mut flattened_ands = Vec::new();
+fn flatten_and(and_args: &[ScalarExpr]) -> Vec<ScalarExpr> {
+    let mut flattened_and = Vec::new();
     for and_arg in and_args.iter() {
         match and_arg {
             ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
-                flattened_ands.extend(flatten_ands(&func.arguments));
+                flattened_and.extend(flatten_and(&func.arguments));
             }
-            _ => flattened_ands.push(and_arg.clone()),
+            _ => flattened_and.push(and_arg.clone()),
         }
     }
-    flattened_ands
+    flattened_and
 }
 
 // Merge predicates to AND scalar

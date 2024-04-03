@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::plan::InvertedIndexMeta;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -88,7 +87,13 @@ impl Interpreter for RefreshTableIndexInterpreter {
                 index_name
             )));
         }
+        let index_version = index.version.clone();
         let index_schema = TableSchemaRefExt::create(index_fields);
+        let tokenizer_name = index
+            .options
+            .get("tokenizer")
+            .cloned()
+            .unwrap_or("english".to_string());
 
         // Add table lock if need.
         let lock_guard = if self.plan.need_lock {
@@ -108,18 +113,17 @@ impl Interpreter for RefreshTableIndexInterpreter {
         if let Some(lock_guard) = lock_guard {
             build_res.main_pipeline.add_lock_guard(lock_guard);
         }
-        let meta = InvertedIndexMeta {
-            index_name: index_name.clone(),
-            index_schema: index_schema.clone(),
-            segment_locs: segment_locs.clone(),
-        };
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         fuse_table
             .do_refresh_inverted_index(
                 self.ctx.clone(),
-                meta,
                 catalog.clone(),
                 table.clone(),
+                index_name,
+                index_version,
+                tokenizer_name.to_string(),
+                index_schema,
+                segment_locs,
                 &mut build_res.main_pipeline,
             )
             .await?;
