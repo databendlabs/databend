@@ -56,8 +56,8 @@ impl SelectOp {
     #[inline]
     pub fn not(&self) -> Self {
         match &self {
-            SelectOp::Equal => SelectOp::Equal,
-            SelectOp::NotEqual => SelectOp::NotEqual,
+            SelectOp::Equal => SelectOp::NotEqual,
+            SelectOp::NotEqual => SelectOp::Equal,
             SelectOp::Gt => SelectOp::Lte,
             SelectOp::Lt => SelectOp::Gte,
             SelectOp::Gte => SelectOp::Lt,
