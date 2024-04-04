@@ -39,7 +39,7 @@ mod deserialize;
 pub use adapter::RowGroupImplBuilder;
 
 use crate::io::read::block::block_reader_merge_io::DataItem;
-use crate::io::read::block::parquet::deserialize::deserialize_column_chunks;
+use crate::io::read::block::parquet::deserialize::column_chunks_to_record_batch;
 use crate::io::BlockReader;
 
 impl BlockReader {
@@ -54,7 +54,7 @@ impl BlockReader {
         if column_chunks.is_empty() {
             return self.build_default_values_block(num_rows);
         }
-        let record_batch = deserialize_column_chunks(
+        let record_batch = column_chunks_to_record_batch(
             &self.original_schema,
             num_rows,
             &column_chunks,
