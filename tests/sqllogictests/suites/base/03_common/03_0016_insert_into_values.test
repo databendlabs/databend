@@ -52,7 +52,7 @@ a"b\"c\'d
 statement ok
 create table if not exists st1(a string)
 
-statement error (?s)1303.*Table columns count is not match, expect 1, input: 2, expr: \[Literal \{ span: Some\(1\.\.4\), lit: String\("a"\) \}, Literal \{ span: Some\(6\.\.9\), lit: String\("b"\) \}\]
+statement error (?s)1303.*Table columns count is not match, expect 1, input: 2, expr: \[Literal \{ span: Some\(1\.\.4\), value: String\("a"\) \}, Literal \{ span: Some\(6\.\.9\), value: String\("b"\) \}\]
 insert into st1 values ('a', 'b')
 
 statement ok

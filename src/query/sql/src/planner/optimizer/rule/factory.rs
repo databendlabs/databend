@@ -54,18 +54,12 @@ pub struct RuleFactory;
 pub const MAX_PUSH_DOWN_LIMIT: usize = 10000;
 
 impl RuleFactory {
-    pub fn create_rule(
-        id: RuleID,
-        metadata: MetadataRef,
-        after_join_reorder: bool,
-    ) -> Result<RulePtr> {
+    pub fn create_rule(id: RuleID, metadata: MetadataRef) -> Result<RulePtr> {
         match id {
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
-            RuleID::PushDownFilterJoin => {
-                Ok(Box::new(RulePushDownFilterJoin::new(after_join_reorder)))
-            }
+            RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new())),
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new(metadata))),
             RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
             RuleID::PushDownFilterProjectSet => Ok(Box::new(RulePushDownFilterProjectSet::new())),

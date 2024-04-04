@@ -29,44 +29,44 @@ use crate::schema::CreateOption;
 use crate::schema::DatabaseMeta;
 use crate::schema::TableInfo;
 use crate::schema::TableMeta;
+use crate::share::ShareEndpointIdent;
+use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
 
 // serde is required by `DatabaseType`
 /// A share that is created by `tenant` and is named with `share_name`.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ShareNameIdent {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub share_name: String,
 }
 
 impl Display for ShareNameIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant, self.share_name)
+        write!(f, "'{}'/'{}'", self.tenant.name(), self.share_name)
     }
 }
 
 /// The share consuming key describes that the `tenant`, who is a consumer of a shared object,
 /// which is created by another tenant and is identified by `share_id`.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ShareConsumer {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub share_id: u64,
+}
+
+impl ShareConsumer {
+    pub fn new(tenant: impl ToTenant, share_id: u64) -> Self {
+        Self {
+            tenant: tenant.to_tenant(),
+            share_id,
+        }
+    }
 }
 
 impl Display for ShareConsumer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant, self.share_id)
-    }
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct ShareEndpointIdent {
-    pub tenant: String,
-    pub endpoint: String,
-}
-
-impl Display for ShareEndpointIdent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant, self.endpoint)
+        write!(f, "'{}'/'{}'", self.tenant.name(), self.share_id)
     }
 }
 
@@ -302,7 +302,7 @@ pub struct UpsertShareEndpointReply {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetShareEndpointReq {
-    pub tenant: String,
+    pub tenant: Tenant,
     // If `endpoint` is not None, return the specified endpoint,
     // else return all share endpoints meta of tenant
     pub endpoint: Option<String>,
@@ -618,7 +618,7 @@ impl ShareMeta {
         self.accounts.insert(account);
     }
 
-    pub fn del_account(&mut self, account: &String) {
+    pub fn del_account(&mut self, account: &str) {
         self.accounts.remove(account);
     }
 
@@ -717,7 +717,7 @@ pub struct ShareIdent {
     pub seq: u64,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ShareInfo {
     pub ident: ShareIdent,
     pub name_ident: ShareNameIdent,
@@ -838,12 +838,12 @@ mod kvapi_key_impl {
 
         /// It belongs to a tenant
         fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
+            Some(self.tenant.to_string_key())
         }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
+                .push_str(self.tenant.name())
                 .push_str(&self.share_name)
                 .done()
         }
@@ -851,9 +851,11 @@ mod kvapi_key_impl {
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let tenant = p.next_str()?;
+            let tenant = p.next_nonempty()?;
             let share_name = p.next_str()?;
             p.done()?;
+
+            let tenant = Tenant::new_nonempty(tenant);
 
             Ok(ShareNameIdent { tenant, share_name })
         }
@@ -893,18 +895,18 @@ mod kvapi_key_impl {
 
         /// It belongs to a tenant
         fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
+            Some(kvapi::Key::to_string_key(&self.tenant))
         }
 
         fn to_string_key(&self) -> String {
             if self.share_id != 0 {
                 kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                    .push_str(&self.tenant)
+                    .push_str(self.tenant.name())
                     .push_u64(self.share_id)
                     .done()
             } else {
                 kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                    .push_str(&self.tenant)
+                    .push_str(self.tenant.name())
                     .done()
             }
         }
@@ -912,14 +914,13 @@ mod kvapi_key_impl {
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let account = p.next_str()?;
+            let tenant = p.next_nonempty()?;
             let share_id = p.next_u64()?;
             p.done()?;
 
-            Ok(ShareConsumer {
-                tenant: account,
-                share_id,
-            })
+            let tenant = Tenant::new_nonempty(tenant);
+
+            Ok(ShareConsumer { tenant, share_id })
         }
     }
 
@@ -946,35 +947,6 @@ mod kvapi_key_impl {
             p.done()?;
 
             Ok(ShareIdToName { share_id })
-        }
-    }
-
-    /// __fd_share/<tenant>/<share_endpoint_name> -> ShareEndpointId
-    impl kvapi::Key for ShareEndpointIdent {
-        const PREFIX: &'static str = "__fd_share_endpoint";
-
-        type ValueType = ShareEndpointId;
-
-        /// It belongs to a tenant
-        fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
-        }
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
-                .push_str(&self.endpoint)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_str()?;
-            let endpoint = p.next_str()?;
-            p.done()?;
-
-            Ok(ShareEndpointIdent { tenant, endpoint })
         }
     }
 
@@ -1058,13 +1030,6 @@ mod kvapi_key_impl {
     impl kvapi::Value for ShareNameIdent {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
-        }
-    }
-
-    impl kvapi::Value for ShareEndpointId {
-        /// ShareEndpointId is id of the two level `name->id,id->value` mapping
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
         }
     }
 

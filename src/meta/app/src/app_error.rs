@@ -27,6 +27,26 @@ pub trait AppErrorMessage: Display {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("Tenant is empty when: `{context}`")]
+pub struct TenantIsEmpty {
+    context: String,
+}
+
+impl TenantIsEmpty {
+    pub fn new(context: impl ToString) -> Self {
+        Self {
+            context: context.to_string(),
+        }
+    }
+}
+
+impl From<TenantIsEmpty> for ErrorCode {
+    fn from(err: TenantIsEmpty) -> Self {
+        ErrorCode::TenantIsEmpty(err.to_string())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("DatabaseAlreadyExists: `{db_name}` while `{context}`")]
 pub struct DatabaseAlreadyExists {
     db_name: String,
@@ -535,10 +555,10 @@ pub struct ShareEndpointAlreadyExists {
 }
 
 impl ShareEndpointAlreadyExists {
-    pub fn new(endpoint: impl Into<String>, context: impl Into<String>) -> Self {
+    pub fn new(endpoint: impl ToString, context: impl ToString) -> Self {
         Self {
-            endpoint: endpoint.into(),
-            context: context.into(),
+            endpoint: endpoint.to_string(),
+            context: context.to_string(),
         }
     }
 }
@@ -891,6 +911,9 @@ impl VirtualColumnNotFound {
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum AppError {
     #[error(transparent)]
+    TenantIsEmpty(#[from] TenantIsEmpty),
+
+    #[error(transparent)]
     TableVersionMismatched(#[from] TableVersionMismatched),
 
     #[error(transparent)]
@@ -1049,6 +1072,12 @@ pub enum AppError {
 
     #[error(transparent)]
     MultiStatementTxnCommitFailed(#[from] MultiStmtTxnCommitFailed),
+}
+
+impl AppErrorMessage for TenantIsEmpty {
+    fn message(&self) -> String {
+        self.to_string()
+    }
 }
 
 impl AppErrorMessage for UnknownBackgroundJob {
@@ -1380,6 +1409,7 @@ impl AppErrorMessage for VirtualColumnAlreadyExists {
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
+            AppError::TenantIsEmpty(err) => ErrorCode::TenantIsEmpty(err.message()),
             AppError::UnknownDatabase(err) => ErrorCode::UnknownDatabase(err.message()),
             AppError::UnknownDatabaseId(err) => ErrorCode::UnknownDatabaseId(err.message()),
             AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.message()),

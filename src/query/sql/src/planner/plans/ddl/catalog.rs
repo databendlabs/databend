@@ -17,11 +17,12 @@ use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::DropCatalogReq;
+use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateCatalogPlan {
     pub if_not_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub meta: CatalogMeta,
 }
@@ -30,10 +31,7 @@ impl From<CreateCatalogPlan> for CreateCatalogReq {
     fn from(p: CreateCatalogPlan) -> Self {
         CreateCatalogReq {
             if_not_exists: p.if_not_exists,
-            name_ident: CatalogNameIdent {
-                tenant: p.tenant,
-                catalog_name: p.catalog,
-            },
+            name_ident: CatalogNameIdent::new(p.tenant, p.catalog),
             meta: p.meta,
         }
     }
@@ -43,10 +41,7 @@ impl From<&CreateCatalogPlan> for CreateCatalogReq {
     fn from(p: &CreateCatalogPlan) -> Self {
         CreateCatalogReq {
             if_not_exists: p.if_not_exists,
-            name_ident: CatalogNameIdent {
-                tenant: p.tenant.clone(),
-                catalog_name: p.catalog.clone(),
-            },
+            name_ident: CatalogNameIdent::new(p.tenant.clone(), p.catalog.clone()),
             meta: p.meta.clone(),
         }
     }
@@ -55,7 +50,7 @@ impl From<&CreateCatalogPlan> for CreateCatalogReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropCatalogPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
 }
 
@@ -63,10 +58,7 @@ impl From<DropCatalogPlan> for DropCatalogReq {
     fn from(value: DropCatalogPlan) -> DropCatalogReq {
         DropCatalogReq {
             if_exists: value.if_exists,
-            name_ident: CatalogNameIdent {
-                tenant: value.tenant,
-                catalog_name: value.catalog,
-            },
+            name_ident: CatalogNameIdent::new(value.tenant, value.catalog),
         }
     }
 }
@@ -75,10 +67,7 @@ impl From<&DropCatalogPlan> for DropCatalogReq {
     fn from(value: &DropCatalogPlan) -> DropCatalogReq {
         DropCatalogReq {
             if_exists: value.if_exists,
-            name_ident: CatalogNameIdent {
-                tenant: value.tenant.clone(),
-                catalog_name: value.catalog.clone(),
-            },
+            name_ident: CatalogNameIdent::new(value.tenant.clone(), value.catalog.clone()),
         }
     }
 }

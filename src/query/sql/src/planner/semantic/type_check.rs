@@ -215,7 +215,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
+    //#[async_backtrace::framed]
     pub async fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
         if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
             if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
@@ -357,7 +357,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         &Expr::Literal {
                             span: *span,
-                            lit: Literal::Boolean(*not),
+                            value: Literal::Boolean(*not),
                         },
                         &Expr::BinaryOp {
                             span: *span,
@@ -367,7 +367,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         &Expr::Literal {
                             span: *span,
-                            lit: Literal::Boolean(!*not),
+                            value: Literal::Boolean(!*not),
                         },
                         &Expr::BinaryOp {
                             span: *span,
@@ -387,9 +387,7 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                if self.ctx.get_cluster().is_empty()
-                    && list.len() >= self.ctx.get_settings().get_inlist_to_join_threshold()?
-                {
+                if list.len() >= self.ctx.get_settings().get_inlist_to_join_threshold()? {
                     if *not {
                         return self
                             .resolve_unary_op(*span, &UnaryOperator::Not, &Expr::InList {
@@ -690,7 +688,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 let null_arg = Expr::Literal {
                     span: None,
-                    lit: Literal::Null,
+                    value: Literal::Null,
                 };
 
                 if let Some(expr) = else_result {
@@ -719,7 +717,7 @@ impl<'a> TypeChecker<'a> {
                     .await?
             }
 
-            Expr::Literal { span, lit } => self.resolve_literal(*span, lit)?,
+            Expr::Literal { span, value } => self.resolve_literal(*span, value)?,
 
             Expr::FunctionCall {
                 span,
@@ -998,16 +996,16 @@ impl<'a> TypeChecker<'a> {
                     expr = &**inner_expr;
                     let path = match accessor {
                         MapAccessor::Bracket {
-                            key: box Expr::Literal { lit, .. },
+                            key: box Expr::Literal { value, .. },
                         } => {
-                            if !matches!(lit, Literal::UInt64(_) | Literal::String(_)) {
+                            if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
                                 return Err(ErrorCode::SemanticError(format!(
                                     "Unsupported accessor: {:?}",
-                                    lit
+                                    value
                                 ))
                                 .set_span(*span));
                             }
-                            lit.clone()
+                            value.clone()
                         }
                         MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                         MapAccessor::DotNumber { key } => Literal::UInt64(*key),
@@ -1195,8 +1193,8 @@ impl<'a> TypeChecker<'a> {
     // just support integer
     #[inline]
     fn resolve_rows_offset(&self, expr: &Expr) -> Result<Scalar> {
-        if let Expr::Literal { lit, .. } = expr {
-            let box (value, _) = self.resolve_literal_scalar(lit)?;
+        if let Expr::Literal { value, .. } = expr {
+            let box (value, _) = self.resolve_literal_scalar(value)?;
             match value {
                 Scalar::Number(NumberScalar::UInt8(v)) => {
                     return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
@@ -2096,10 +2094,12 @@ impl<'a> TypeChecker<'a> {
 
         // find inverted index and check schema
         let mut index_name = "".to_string();
+        let mut index_version = "".to_string();
         let mut index_schema = None;
         for table_index in table_indexes.values() {
             if table_index.column_ids.contains(&column_id) {
                 index_name = table_index.name.clone();
+                index_version = table_index.version.clone();
 
                 let mut index_fields = Vec::with_capacity(table_index.column_ids.len());
                 for column_id in &table_index.column_ids {
@@ -2133,6 +2133,7 @@ impl<'a> TypeChecker<'a> {
         }
         let index_info = InvertedIndexInfo {
             index_name,
+            index_version,
             index_schema: index_schema.unwrap(),
             query_columns,
             query_text: query_text.to_string(),
@@ -2350,7 +2351,7 @@ impl<'a> TypeChecker<'a> {
             BinaryOperator::Like => {
                 // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
                 if let Expr::Literal {
-                    lit: Literal::String(str),
+                    value: Literal::String(str),
                     ..
                 } = right
                 {
@@ -2663,14 +2664,14 @@ impl<'a> TypeChecker<'a> {
             ("database" | "currentdatabase" | "current_database", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    lit: Literal::String(self.ctx.get_current_database()),
+                    value: Literal::String(self.ctx.get_current_database()),
                 })
                 .await,
             ),
             ("version", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    lit: Literal::String(self.ctx.get_fuse_version()),
+                    value: Literal::String(self.ctx.get_fuse_version()),
                 })
                 .await,
             ),
@@ -2678,7 +2679,7 @@ impl<'a> TypeChecker<'a> {
                 Ok(user) => Some(
                     self.resolve(&Expr::Literal {
                         span,
-                        lit: Literal::String(user.identity().to_string()),
+                        value: Literal::String(user.identity().to_string()),
                     })
                     .await,
                 ),
@@ -2687,7 +2688,7 @@ impl<'a> TypeChecker<'a> {
             ("current_role", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    lit: Literal::String(
+                    value: Literal::String(
                         self.ctx
                             .get_current_role()
                             .map(|r| r.name)
@@ -2699,7 +2700,7 @@ impl<'a> TypeChecker<'a> {
             ("connection_id", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    lit: Literal::String(self.ctx.get_connection_id()),
+                    value: Literal::String(self.ctx.get_connection_id()),
                 })
                 .await,
             ),
@@ -2708,7 +2709,7 @@ impl<'a> TypeChecker<'a> {
                 Some(
                     self.resolve(&Expr::Literal {
                         span,
-                        lit: Literal::String(tz),
+                        value: Literal::String(tz),
                     })
                     .await,
                 )
@@ -2725,7 +2726,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         &Expr::Literal {
                             span,
-                            lit: Literal::Null,
+                            value: Literal::Null,
                         },
                         arg_x,
                     ])
@@ -2818,7 +2819,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 new_args.push(Expr::Literal {
                     span,
-                    lit: Literal::Null,
+                    value: Literal::Null,
                 });
 
                 let args_ref: Vec<&Expr> = new_args.iter().collect();
@@ -2833,7 +2834,7 @@ impl<'a> TypeChecker<'a> {
                 for arg in args.iter() {
                     if let Expr::Literal {
                         span: _,
-                        lit: Literal::Null,
+                        value: Literal::Null,
                     } = arg
                     {
                         continue;
@@ -2862,18 +2863,18 @@ impl<'a> TypeChecker<'a> {
                 }
                 new_args.push(Expr::Literal {
                     span,
-                    lit: Literal::Null,
+                    value: Literal::Null,
                 });
 
                 // coalesce(all_null) => null
                 if new_args.len() == 1 {
                     new_args.push(Expr::Literal {
                         span,
-                        lit: Literal::Null,
+                        value: Literal::Null,
                     });
                     new_args.push(Expr::Literal {
                         span,
-                        lit: Literal::Null,
+                        value: Literal::Null,
                     });
                 }
 
@@ -2917,7 +2918,7 @@ impl<'a> TypeChecker<'a> {
                         let query_id = self.ctx.get_last_query_id(index as i32);
                         self.resolve(&Expr::Literal {
                             span,
-                            lit: Literal::String(query_id),
+                            value: Literal::String(query_id),
                         })
                         .await
                     }
@@ -3183,13 +3184,13 @@ impl<'a> TypeChecker<'a> {
             let (new_left, _) = *self
                 .resolve_binary_op(span, &BinaryOperator::Gte, left, &Expr::Literal {
                     span: None,
-                    lit: Literal::String(like_str[..like_str.len() - 1].to_owned()),
+                    value: Literal::String(like_str[..like_str.len() - 1].to_owned()),
                 })
                 .await?;
             let (new_right, _) = *self
                 .resolve_binary_op(span, &BinaryOperator::Lt, left, &Expr::Literal {
                     span: None,
-                    lit: Literal::String(like_str_plus),
+                    value: Literal::String(like_str_plus),
                 })
                 .await?;
             self.resolve_scalar_function_call(span, "and", vec![], vec![new_left, new_right])
@@ -4297,7 +4298,7 @@ fn check_prefix(like_str: &str) -> bool {
 // Note: the method mainly checks if list contains NULL literal, because `contain` can't handle NULL.
 fn satisfy_contain_func(expr: &Expr) -> bool {
     match expr {
-        Expr::Literal { lit, .. } => !matches!(lit, Literal::Null),
+        Expr::Literal { value, .. } => !matches!(value, Literal::Null),
         Expr::Tuple { exprs, .. } => {
             // For each expr in `exprs`, check if it satisfies the conditions
             exprs.iter().all(satisfy_contain_func)

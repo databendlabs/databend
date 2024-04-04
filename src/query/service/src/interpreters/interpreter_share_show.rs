@@ -62,7 +62,7 @@ impl Interpreter for ShowSharesInterpreter {
 
         // query all share endpoint for other tenant inbound shares
         let share_specs = ShareEndpointManager::instance()
-            .get_inbound_shares(tenant.as_str(), None, None)
+            .get_inbound_shares(tenant.name(), None, None)
             .await?;
         for (from_tenant, share_spec) in share_specs {
             names.push(share_spec.name.clone());
@@ -70,12 +70,12 @@ impl Interpreter for ShowSharesInterpreter {
             created_owns.push(share_spec.share_on.unwrap_or_default().to_string());
             database_names.push(share_spec.database.unwrap_or_default().name);
             from.push(from_tenant);
-            to.push(tenant.to_string());
+            to.push(tenant.name().to_string());
             comments.push(share_spec.comment.unwrap_or_default());
         }
 
         let req = ShowSharesReq {
-            tenant: tenant.to_string(),
+            tenant: tenant.name().to_string(),
         };
         let resp = meta_api.show_shares(req).await?;
 
@@ -84,7 +84,7 @@ impl Interpreter for ShowSharesInterpreter {
             kinds.push("OUTBOUND".to_string());
             created_owns.push(entry.create_on.to_string());
             database_names.push(entry.database_name.unwrap_or_default());
-            from.push(entry.share_name.tenant.clone());
+            from.push(entry.share_name.tenant.name().to_string());
             to.push(
                 entry
                     .accounts

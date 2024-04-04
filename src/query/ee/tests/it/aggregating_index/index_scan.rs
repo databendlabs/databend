@@ -17,6 +17,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio;
+use databend_common_base::runtime::Runtime;
 use databend_common_exception::Result;
 use databend_common_expression::block_debug::pretty_format_blocks;
 use databend_common_expression::DataBlock;
@@ -62,16 +63,24 @@ async fn test_index_scan_agg_args_are_expression() -> Result<()> {
     test_index_scan_agg_args_are_expression_impl("native").await
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_fuzz() -> Result<()> {
-    test_fuzz_impl("parquet", false).await?;
-    test_fuzz_impl("native", false).await
+#[test]
+fn test_fuzz() -> Result<()> {
+    let runtime = Runtime::with_worker_threads(2, None)?;
+    runtime.block_on(async {
+        test_fuzz_impl("parquet", false).await?;
+        test_fuzz_impl("native", false).await
+    })?;
+    Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_fuzz_with_spill() -> Result<()> {
-    test_fuzz_impl("parquet", true).await?;
-    test_fuzz_impl("native", true).await
+#[test]
+fn test_fuzz_with_spill() -> Result<()> {
+    let runtime = Runtime::with_worker_threads(2, None)?;
+    runtime.block_on(async {
+        test_fuzz_impl("parquet", true).await?;
+        test_fuzz_impl("native", true).await
+    })?;
+    Ok(())
 }
 
 async fn plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<Plan> {

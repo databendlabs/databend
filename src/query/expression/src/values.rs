@@ -770,6 +770,10 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             (ScalarRef::Geometry(g1), ScalarRef::Geometry(g2)) => compare_geometry(g1, g2),
+
+            // By default, null is biggest in pgsql
+            (ScalarRef::Null, _) => Some(Ordering::Greater),
+            (_, ScalarRef::Null) => Some(Ordering::Less),
             _ => None,
         }
     }

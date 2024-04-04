@@ -250,7 +250,7 @@ impl DefaultSettings {
                 }),
                 ("sql_dialect", DefaultSettingValue {
                     value: UserSettingValue::String("PostgreSQL".to_owned()),
-                    desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\",  \"Experimental\", and \"Hive\".",
+                    desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\",  \"Experimental\", \"Prql\", and \"Hive\".",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::String(vec!["PostgreSQL".into(), "MySQL".into(), "Experimental".into(), "Hive".into(), "Prql".into()])),
                 }),
@@ -377,6 +377,12 @@ impl DefaultSettings {
                 ("query_result_cache_max_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1048576), // 1MB
                     desc: "Sets the maximum byte size of cache for a single query result.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("query_result_cache_min_execute_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "For a query to be cached, it must take at least this many seconds to fetch the first block. It helps to avoid caching queries that are too fast to execute or queries with streaming scan.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
@@ -637,7 +643,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables experimental aggregate hashtable",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

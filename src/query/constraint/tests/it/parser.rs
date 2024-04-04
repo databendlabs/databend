@@ -44,8 +44,8 @@ pub fn pretty_mir_expr(expr: &MirExpr) -> String {
 
 fn sql_ast_to_mir(ast: ASTExpr, variables: &HashMap<String, MirDataType>) -> Option<MirExpr> {
     match ast {
-        ASTExpr::Literal { lit, .. } => {
-            let constant = match lit {
+        ASTExpr::Literal { value, .. } => {
+            let constant = match value {
                 Literal::Boolean(x) => MirConstant::Bool(x),
                 Literal::UInt64(x) => MirConstant::Int(x as i64),
                 Literal::Null => MirConstant::Null,
@@ -141,7 +141,7 @@ fn sql_ast_to_mir(ast: ASTExpr, variables: &HashMap<String, MirDataType>) -> Opt
 fn mir_to_sql_ast(expr: &MirExpr) -> ASTExpr {
     match expr {
         MirExpr::Constant(constant) => {
-            let lit = match constant {
+            let value = match constant {
                 MirConstant::Bool(x) => Literal::Boolean(*x),
                 MirConstant::Int(x) if *x >= 0 => Literal::UInt64(*x as u64),
                 MirConstant::Int(x) => {
@@ -150,13 +150,13 @@ fn mir_to_sql_ast(expr: &MirExpr) -> ASTExpr {
                         op: ASTUnaryOperator::Minus,
                         expr: Box::new(ASTExpr::Literal {
                             span: None,
-                            lit: Literal::UInt64(x.wrapping_neg() as u64),
+                            value: Literal::UInt64(x.wrapping_neg() as u64),
                         }),
                     };
                 }
                 MirConstant::Null => Literal::Null,
             };
-            ASTExpr::Literal { span: None, lit }
+            ASTExpr::Literal { span: None, value }
         }
         MirExpr::Variable { name, .. } => ASTExpr::ColumnRef {
             span: None,

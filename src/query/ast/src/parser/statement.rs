@@ -24,6 +24,8 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::tenant::Tenant;
+use minitrace::func_name;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -1006,6 +1008,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #ident
             ~ ON ~ #dot_separated_idents_1_to_3
             ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
+            ~ ( #table_option )?
         },
         |(
             _,
@@ -1020,6 +1023,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             _,
             columns,
             _,
+            opt_index_options,
         )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
@@ -1031,6 +1035,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 table,
                 columns,
                 sync_creation: opt_async.is_none(),
+                index_options: opt_index_options.unwrap_or_default(),
             }))
         },
     );
@@ -1143,7 +1148,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let show_virtual_columns = map(
         rule! {
-            SHOW ~ VIRTUAL ~ COLUMNS ~ (( FROM | IN ) ~ #ident)? ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)? ~ #show_limit?
+            SHOW ~ VIRTUAL ~ COLUMNS ~ ( ( FROM | IN ) ~ #ident )? ~ ( ( FROM | IN ) ~ ^#dot_separated_idents_1_to_2 )? ~ #show_limit?
         },
         |(_, _, _, opt_table, opt_db, limit)| {
             let table = opt_table.map(|(_, table)| table);
@@ -2061,7 +2066,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"
         ),
         rule!(
-            #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            #conditional_multi_table_insert() : "`INSERT [OVERWRITE] {FIRST|ALL} { WHEN <condition> THEN intoClause [ ... ] } [ ... ] [ ELSE intoClause ] <subquery>`"
+            | #unconditional_multi_table_insert() : "`INSERT [OVERWRITE] ALL intoClause [ ... ] <subquery>`"
+            | #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
@@ -2286,6 +2293,93 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
             },
         )(i)
     }
+}
+
+pub fn conditional_multi_table_insert() -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        map(
+            rule! {
+                INSERT ~ OVERWRITE? ~ (FIRST | ALL) ~ (#when_clause)+ ~ (#else_clause)? ~ #query
+            },
+            |(_, overwrite, kind, when_clauses, opt_else, source)| {
+                Statement::InsertMultiTable(InsertMultiTableStmt {
+                    overwrite: overwrite.is_some(),
+                    is_first: matches!(kind.kind, FIRST),
+                    when_clauses,
+                    else_clause: opt_else,
+                    into_clauses: vec![],
+                    source,
+                })
+            },
+        )(i)
+    }
+}
+
+pub fn unconditional_multi_table_insert() -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        map(
+            rule! {
+                INSERT ~ OVERWRITE? ~ ALL ~ (#into_clause)+ ~ #query
+            },
+            |(_, overwrite, _, into_clauses, source)| {
+                Statement::InsertMultiTable(InsertMultiTableStmt {
+                    overwrite: overwrite.is_some(),
+                    is_first: false,
+                    when_clauses: vec![],
+                    else_clause: None,
+                    into_clauses,
+                    source,
+                })
+            },
+        )(i)
+    }
+}
+
+fn when_clause(i: Input) -> IResult<WhenClause> {
+    map(
+        rule! {
+            WHEN ~ ^#expr ~ THEN ~ (#into_clause)+
+        },
+        |(_, expr, _, into_clauses)| WhenClause {
+            condition: expr,
+            into_clauses,
+        },
+    )(i)
+}
+
+fn into_clause(i: Input) -> IResult<IntoClause> {
+    let source_expr = alt((
+        map(rule! {DEFAULT}, |_| SourceExpr::Default),
+        map(rule! { #expr }, SourceExpr::Expr),
+    ));
+    map(
+        rule! {
+            INTO
+            ~ #dot_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ (VALUES ~ "(" ~ #comma_separated_list1(source_expr) ~ ")" )?
+        },
+        |(_, (catalog, database, table), opt_target_columns, opt_source_columns)| IntoClause {
+            catalog,
+            database,
+            table,
+            target_columns: opt_target_columns
+                .map(|(_, columns, _)| columns)
+                .unwrap_or_default(),
+            source_columns: opt_source_columns
+                .map(|(_, _, columns, _)| columns)
+                .unwrap_or_default(),
+        },
+    )(i)
+}
+
+fn else_clause(i: Input) -> IResult<ElseClause> {
+    map(
+        rule! {
+            ELSE ~ (#into_clause)+
+        },
+        |(_, into_clauses)| ElseClause { into_clauses },
+    )(i)
 }
 
 pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
@@ -3121,7 +3215,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         rule! {
             FLASHBACK ~ TO ~ #travel_point
         },
-        |(_, _, point)| AlterTableAction::RevertTo { point },
+        |(_, _, point)| AlterTableAction::FlashbackTo { point },
     );
 
     let set_table_options = map(
@@ -3607,15 +3701,19 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
     );
 
-    let share_from = map(
+    let share_from = map_res(
         rule! {
             FROM ~ SHARE ~ #ident ~ "." ~ #ident
         },
         |(_, _, tenant, _, share_name)| {
-            CreateDatabaseOption::FromShare(ShareNameIdent {
-                tenant: tenant.to_string(),
-                share_name: share_name.to_string(),
-            })
+            Tenant::new_or_err(tenant.to_string(), func_name!())
+                .map_err(|_e| nom::Err::Error(ErrorKind::Other("tenant can not be empty string")))
+                .map(|tenant| {
+                    CreateDatabaseOption::FromShare(ShareNameIdent {
+                        tenant,
+                        share_name: share_name.to_string(),
+                    })
+                })
         },
     );
 
@@ -3641,7 +3739,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
     );
     let default_role_option = map(
         rule! {
-            "DEFAULT_ROLE" ~ ^"=" ~ ^#role_name
+            DEFAULT_ROLE ~ ^"=" ~ ^#role_name
         },
         |(_, _, role)| UserOptionItem::DefaultRole(role),
     );

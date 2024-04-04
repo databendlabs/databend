@@ -121,7 +121,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     test_segment_locations.push(segment_location);
     test_block_locations.push(block_location);
     // unused snapshot.
-    let snapshot = TableSnapshot::new_empty_snapshot(schema.as_ref().clone());
+    let snapshot = TableSnapshot::new_empty_snapshot(schema.as_ref().clone(), None);
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = create_segment_location_vector(test_segment_locations, None);
@@ -218,6 +218,7 @@ async fn test_safety_for_recluster() -> Result<()> {
         let id = Uuid::new_v4();
         let snapshot = Arc::new(TableSnapshot::new(
             id,
+            None,
             &None,
             None,
             schema.as_ref().clone(),

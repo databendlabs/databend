@@ -58,6 +58,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::debug;
 
 use crate::interpreters::common::create_push_down_filters;
+use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
@@ -105,7 +106,7 @@ impl Interpreter for DeleteInterpreter {
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
         let tbl = catalog
-            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .get_table(self.ctx.get_tenant().name(), db_name, tbl_name)
             .await?;
 
         // Add table lock.
@@ -238,7 +239,7 @@ impl Interpreter for DeleteInterpreter {
             )
             .await?;
 
-        let physical_plan = self.build_physical_plan(
+        let physical_plan = Self::build_physical_plan(
             filters,
             partitions,
             fuse_table.get_table_info().clone(),
@@ -251,7 +252,73 @@ impl Interpreter for DeleteInterpreter {
 
         build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        {
+            let hook_operator = HookOperator::create(
+                self.ctx.clone(),
+                catalog_name.to_string(),
+                db_name.to_string(),
+                tbl_name.to_string(),
+                "delete".to_string(),
+                // table lock has been added, no need to check.
+                false,
+            );
+            hook_operator
+                .execute_refresh(&mut build_res.main_pipeline)
+                .await;
+        }
+
         Ok(build_res)
+    }
+}
+
+impl DeleteInterpreter {
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_physical_plan(
+        filters: Filters,
+        partitions: Partitions,
+        table_info: TableInfo,
+        col_indices: Vec<usize>,
+        snapshot: Arc<TableSnapshot>,
+        catalog_info: CatalogInfo,
+        is_distributed: bool,
+        query_row_id_col: bool,
+    ) -> Result<PhysicalPlan> {
+        let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
+        let mut root = PhysicalPlan::DeleteSource(Box::new(DeleteSource {
+            parts: partitions,
+            filters,
+            table_info: table_info.clone(),
+            catalog_info: catalog_info.clone(),
+            col_indices,
+            query_row_id_col,
+            snapshot: snapshot.clone(),
+            plan_id: u32::MAX,
+        }));
+
+        if is_distributed {
+            root = PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(root),
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            });
+        }
+        let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+            input: Box::new(root),
+            snapshot,
+            table_info,
+            catalog_info,
+            mutation_kind: MutationKind::Delete,
+            update_stream_meta: vec![],
+            merge_meta,
+            need_lock: false,
+            deduplicated_label: None,
+            plan_id: u32::MAX,
+        }));
+        plan.adjust_plan_id(&mut 0);
+        Ok(plan)
     }
 }
 
@@ -274,7 +341,7 @@ pub async fn modify_by_subquery(
         .with_enable_distributed_optimization(false)
         .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
         .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
-    let input_expr = optimize_query(opt_ctx, input_expr.clone())?;
+    let input_expr = optimize_query(opt_ctx, input_expr.clone()).await?;
 
     // first: build filter executor
     let filter_executor = build_filter_executor(
@@ -372,59 +439,6 @@ pub async fn modify_by_subquery(
     })?;
 
     Ok(build_res)
-}
-
-impl DeleteInterpreter {
-    #[allow(clippy::too_many_arguments)]
-    pub fn build_physical_plan(
-        &self,
-        filters: Filters,
-        partitions: Partitions,
-        table_info: TableInfo,
-        col_indices: Vec<usize>,
-        snapshot: Arc<TableSnapshot>,
-        catalog_info: CatalogInfo,
-        is_distributed: bool,
-        query_row_id_col: bool,
-    ) -> Result<PhysicalPlan> {
-        debug_assert!(self.plan.subquery_desc.is_none());
-        let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
-        let mut root = PhysicalPlan::DeleteSource(Box::new(DeleteSource {
-            parts: partitions,
-            filters,
-            table_info: table_info.clone(),
-            catalog_info: catalog_info.clone(),
-            col_indices,
-            query_row_id_col,
-            snapshot: snapshot.clone(),
-            plan_id: u32::MAX,
-        }));
-
-        if is_distributed {
-            root = PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
-                input: Box::new(root),
-                kind: FragmentKind::Merge,
-                keys: vec![],
-                allow_adjust_parallelism: true,
-                ignore_exchange: false,
-            });
-        }
-        let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
-            input: Box::new(root),
-            snapshot,
-            table_info,
-            catalog_info,
-            mutation_kind: MutationKind::Delete,
-            update_stream_meta: vec![],
-            merge_meta,
-            need_lock: false,
-            deduplicated_label: None,
-            plan_id: u32::MAX,
-        }));
-        plan.adjust_plan_id(&mut 0);
-        Ok(plan)
-    }
 }
 
 async fn build_filter_executor(

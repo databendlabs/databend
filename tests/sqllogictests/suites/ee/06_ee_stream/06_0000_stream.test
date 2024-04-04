@@ -140,7 +140,7 @@ set hide_options_in_show_create_table=0
 query TT
 show create table t2
 ----
-t2 CREATE TABLE `t2` (   `a` INT NULL ) ENGINE=FUSE CHANGE_TRACKING='true' COMPRESSION='zstd' STORAGE_FORMAT='parquet'
+t2 CREATE TABLE t2 ( a INT NULL ) ENGINE=FUSE CHANGE_TRACKING='true' COMPRESSION='zstd' STORAGE_FORMAT='parquet'
 
 statement ok
 insert into t2 values(3),(4)

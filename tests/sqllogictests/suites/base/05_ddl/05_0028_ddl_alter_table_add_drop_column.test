@@ -184,10 +184,13 @@ insert into `05_0028_at_t0_3` values(1)
 statement ok
 ALTER TABLE `05_0028_at_t0_3` ADD COLUMN a float not null default 0.1 COMMENT 'first' FIRST
 
+statement ok
+set sql_dialect = 'PostgreSQL'
+
 query TT
 SHOW CREATE TABLE `05_0028_at_t0_3`
 ----
-05_0028_at_t0_3 CREATE TABLE `05_0028_at_t0_3` (   `a` FLOAT NOT NULL DEFAULT 0.1 COMMENT 'first',   `c` INT NOT NULL ) ENGINE=FUSE
+05_0028_at_t0_3 CREATE TABLE "05_0028_at_t0_3" ( a FLOAT NOT NULL DEFAULT 0.1 COMMENT 'first', c INT NOT NULL ) ENGINE=FUSE
 
 statement ok
 insert into `05_0028_at_t0_3` values(0.2, 2)
@@ -198,7 +201,7 @@ ALTER TABLE `05_0028_at_t0_3` ADD COLUMN b string not null default 'b' COMMENT '
 query TT
 SHOW CREATE TABLE `05_0028_at_t0_3`
 ----
-05_0028_at_t0_3 CREATE TABLE `05_0028_at_t0_3` (   `a` FLOAT NOT NULL DEFAULT 0.1 COMMENT 'first',   `b` VARCHAR NOT NULL DEFAULT 'b' COMMENT 'second',   `c` INT NOT NULL ) ENGINE=FUSE
+05_0028_at_t0_3 CREATE TABLE "05_0028_at_t0_3" ( a FLOAT NOT NULL DEFAULT 0.1 COMMENT 'first', b VARCHAR NOT NULL DEFAULT 'b' COMMENT 'second', c INT NOT NULL ) ENGINE=FUSE
 
 statement ok
 insert into `05_0028_at_t0_3` values(0.3, 'a', 3)
@@ -216,7 +219,7 @@ ALTER TABLE `05_0028_at_t0_3` DROP COLUMN b
 query TT
 SHOW CREATE TABLE `05_0028_at_t0_3`
 ----
-05_0028_at_t0_3 CREATE TABLE `05_0028_at_t0_3` (   `a` FLOAT NOT NULL DEFAULT 0.1 COMMENT 'first',   `c` INT NOT NULL ) ENGINE=FUSE
+05_0028_at_t0_3 CREATE TABLE "05_0028_at_t0_3" ( a FLOAT NOT NULL DEFAULT 0.1 COMMENT 'first', c INT NOT NULL ) ENGINE=FUSE
 
 statement ok
 insert into `05_0028_at_t0_3` values(0.4, 4)
@@ -244,7 +247,7 @@ ALTER TABLE `05_0028_at_t0_4` MODIFY COLUMN d uint64 COMMENT 'middle'
 query TT
 SHOW CREATE TABLE `05_0028_at_t0_4`
 ----
-05_0028_at_t0_4 CREATE TABLE `05_0028_at_t0_4` (   `a` FLOAT NOT NULL,   `d` BIGINT UNSIGNED NULL COMMENT 'middle',   `e` INT NULL COMMENT 'end' ) ENGINE=FUSE
+05_0028_at_t0_4 CREATE TABLE "05_0028_at_t0_4" ( a FLOAT NOT NULL, d BIGINT UNSIGNED NULL COMMENT 'middle', e INT NULL COMMENT 'end' ) ENGINE=FUSE
 
 query IIT
 SELECT * FROM `05_0028_at_t0_4` order by a

@@ -866,7 +866,7 @@ Limit
                     ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
                     └── estimated rows: 5.00
 
-query
+query 
 explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
 ----
 HashJoin
@@ -901,7 +901,7 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 5.00
 
-query
+query 
 explain select count(distinct a) from t1;
 ----
 AggregateFinal
@@ -933,7 +933,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query
+query 
 explain select count_distinct(a) from t1;
 ----
 AggregateFinal
@@ -965,7 +965,7 @@ AggregateFinal
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
 
-query
+query 
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)
 ----
 ConstantTableScan
@@ -979,28 +979,28 @@ drop table t1
 statement ok
 drop table t2
 
-query
+query 
 explain syntax select * from read_parquet('p1', 'p2', 'p3');
 ----
 SELECT *
 FROM
     read_parquet('p1', 'p2', 'p3')
 
-query
+query 
 explain syntax select * from read_parquet(prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT *
 FROM
     read_parquet(prune_page=>TRUE, refresh_meta_cache=>TRUE)
 
-query
+query 
 explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT *
 FROM
     read_parquet('p1', 'p2', 'p3', prune_page=>TRUE, refresh_meta_cache=>TRUE)
 
-query
+query 
 explain ast select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 Query (children 1)
@@ -1022,7 +1022,7 @@ drop table if exists t4
 statement ok
 create table t4(a int, b string);
 
-query
+query 
 explain select * from t4 where a = 1 and try_cast(get(try_parse_json(b),'bb') as varchar) = 'xx';
 ----
 Filter
@@ -1045,7 +1045,7 @@ drop view if exists v4
 statement ok
 create view v4 as select a as a, try_cast(get(try_parse_json(b), 'bb') as varchar) as b from t4;
 
-query
+query 
 explain select * from v4 where b = 'xx';
 ----
 EvalScalar
@@ -1173,8 +1173,8 @@ Sort
 └── HashJoin
     ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
     ├── join type: INNER
-    ├── build keys: [b.number (#2), b.register_at (#3)]
-    ├── probe keys: [a.number (#0), a.pt (#1)]
+    ├── build keys: [b.register_at (#3), b.number (#2)]
+    ├── probe keys: [a.pt (#1), a.number (#0)]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)
@@ -1482,23 +1482,23 @@ FROM numbers(500);
 query T
 explain join SELECT customer_name, segment, (SELECT SUM(net_paid) FROM sales WHERE customer_id IN (SELECT customer_id FROM customers WHERE segment = c.segment AND active = true)) FROM customers c WHERE c.customer_id IN (SELECT customer_id FROM sales WHERE net_paid > 100) LIMIT 10;
 ----
-HashJoin: LEFT OUTER
+HashJoin: RIGHT OUTER
 ├── Build
-│   └── HashJoin: RIGHT SEMI
+│   └── HashJoin: LEFT SEMI
 │       ├── Build
-│       │   └── HashJoin: CROSS
-│       │       ├── Build
-│       │       │   └── Scan: default.default.customers (#0) (read rows: 100)
-│       │       └── Probe
-│       │           └── Scan: default.default.sales (#1) (read rows: 500)
+│       │   └── Scan: default.default.sales (#3) (read rows: 0)
 │       └── Probe
-│           └── Scan: default.default.customers (#2) (read rows: 100)
+│           └── Scan: default.default.customers (#0) (read rows: 100)
 └── Probe
     └── HashJoin: LEFT SEMI
         ├── Build
-        │   └── Scan: default.default.sales (#3) (read rows: 0)
+        │   └── Scan: default.default.customers (#2) (read rows: 100)
         └── Probe
-            └── Scan: default.default.customers (#0) (read rows: 100)
+            └── HashJoin: CROSS
+                ├── Build
+                │   └── Scan: default.default.customers (#0) (read rows: 100)
+                └── Probe
+                    └── Scan: default.default.sales (#1) (read rows: 500)
 
 
 query T
@@ -1506,19 +1506,19 @@ explain join SELECT c.customer_name FROM customers c WHERE NOT EXISTS ( SELECT c
 ----
 HashJoin: RIGHT MARK
 ├── Build
-│   └── HashJoin: LEFT MARK
+│   └── HashJoin: RIGHT MARK
 │       ├── Build
-│       │   └── HashJoin: CROSS
+│       │   └── HashJoin: INNER
 │       │       ├── Build
-│       │       │   └── Scan: default.default.customers (#0) (read rows: 100)
+│       │       │   └── Scan: default.default.products (#3) (read rows: 10)
 │       │       └── Probe
-│       │           └── Scan: default.default.products (#1) (read rows: 10)
+│       │           └── Scan: default.default.sales (#2) (read rows: 500)
 │       └── Probe
-│           └── HashJoin: INNER
+│           └── HashJoin: CROSS
 │               ├── Build
-│               │   └── Scan: default.default.products (#3) (read rows: 10)
+│               │   └── Scan: default.default.products (#1) (read rows: 10)
 │               └── Probe
-│                   └── Scan: default.default.sales (#2) (read rows: 500)
+│                   └── Scan: default.default.customers (#0) (read rows: 100)
 └── Probe
     └── Scan: default.default.customers (#0) (read rows: 100)
 

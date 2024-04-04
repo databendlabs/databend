@@ -50,6 +50,7 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::schema::VirtualColumnNameIdent;
 use databend_common_meta_app::share::*;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
@@ -512,7 +513,7 @@ fn share_endpoint_has_to_exist(
         debug!(seq = seq, name_key :? =(name_key); "share endpoint does not exist");
 
         Err(KVAppError::AppError(AppError::UnknownShareEndpoint(
-            UnknownShareEndpoint::new(&name_key.endpoint, format!("{}: {}", msg, name_key)),
+            UnknownShareEndpoint::new(name_key.name(), format!("{}", msg)),
         )))
     } else {
         Ok(())
@@ -637,7 +638,7 @@ fn share_account_meta_has_to_exist(
 
         Err(KVAppError::AppError(AppError::UnknownShareAccounts(
             UnknownShareAccounts::new(
-                &[name_key.tenant.clone()],
+                &[name_key.tenant.name().to_string()],
                 name_key.share_id,
                 format!("{}: {}", msg, name_key),
             ),
@@ -680,7 +681,7 @@ pub fn get_share_database_id_and_privilege(
     }
 
     Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-        ShareHasNoGrantedDatabase::new(&name_key.tenant, &name_key.share_name),
+        ShareHasNoGrantedDatabase::new(name_key.tenant.name(), &name_key.share_name),
     )))
 }
 
@@ -842,7 +843,7 @@ pub async fn get_tableinfos_by_ids(
                 desc: format!("'{}'.'{}'", tenant_dbname.db_name, tbl_names[i]),
                 meta: tbl_meta,
                 name: tbl_names[i].clone(),
-                tenant: tenant_dbname.tenant.clone(),
+                tenant: tenant_dbname.tenant.name().to_string(),
                 db_type: db_type.clone(),
             };
             tbl_infos.push(Arc::new(tb_info));
@@ -1016,7 +1017,7 @@ pub async fn remove_db_from_share(
         }
         None => {
             return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-                ShareHasNoGrantedDatabase::new(&db_name.tenant, &share_name.share_name),
+                ShareHasNoGrantedDatabase::new(db_name.tenant.name(), &share_name.share_name),
             )));
         }
     }
@@ -1035,7 +1036,7 @@ pub async fn remove_table_from_share(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_id: u64,
     table_id: u64,
-    tenant: String,
+    tenant: &Tenant,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(String, ShareMeta, Option<TableInfoMap>), KVAppError> {
@@ -1070,7 +1071,9 @@ pub async fn remove_table_from_share(
         None => {
             warn!(
                 "remove_table_from_share: table-id {} not found of share {} in tenant {}",
-                table_id, &share_name.share_name, &tenant
+                table_id,
+                &share_name.share_name,
+                tenant.name()
             );
         }
     }
@@ -1090,7 +1093,7 @@ pub async fn remove_table_from_share(
             shared_db_id = db_id;
         } else {
             return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-                ShareHasNoGrantedDatabase::new(&tenant, &share_name.share_name),
+                ShareHasNoGrantedDatabase::new(tenant.name(), &share_name.share_name),
             )));
         }
     }
@@ -1126,7 +1129,7 @@ pub async fn remove_table_from_share(
         }
         None => {
             return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-                ShareHasNoGrantedDatabase::new(&tenant, &share_name.share_name),
+                ShareHasNoGrantedDatabase::new(tenant.name(), &share_name.share_name),
             )));
         }
     };
@@ -1228,7 +1231,8 @@ pub async fn get_virtual_column_by_id_or_err(
                 name_ident.table_id,
                 format!(
                     "get virtual column with tenant: {} table_id: {}",
-                    name_ident.tenant, name_ident.table_id
+                    name_ident.tenant.name(),
+                    name_ident.table_id
                 ),
             ),
         )));

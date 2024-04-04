@@ -96,7 +96,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             expr,
             trim_where,
         } => visitor.visit_trim(*span, expr, trim_where),
-        Expr::Literal { span, lit } => visitor.visit_literal(*span, lit),
+        Expr::Literal { span, value } => visitor.visit_literal(*span, value),
         Expr::CountAll { span, window } => visitor.visit_count_all(*span, window),
         Expr::Tuple { span, exprs } => visitor.visit_tuple(*span, exprs),
         Expr::FunctionCall {
@@ -334,12 +334,15 @@ pub fn walk_time_travel_point_mut<V: VisitorMut>(visitor: &mut V, time: &mut Tim
     match time {
         TimeTravelPoint::Snapshot(_) => {}
         TimeTravelPoint::Timestamp(expr) => visitor.visit_expr(expr),
-    }
-}
+        TimeTravelPoint::Stream {
+            catalog,
+            database,
+            name,
+        } => {
+            if let Some(catalog) = catalog {
+                visitor.visit_identifier(catalog);
+            }
 
-pub fn walk_stream_point_mut<V: VisitorMut>(visitor: &mut V, stream: &mut StreamPoint) {
-    match stream {
-        StreamPoint::AtStream { database, name } => {
             if let Some(database) = database {
                 visitor.visit_identifier(database);
             }
@@ -562,5 +565,6 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::AlterNotification(stmt) => visitor.visit_alter_notification(stmt),
         Statement::DropNotification(stmt) => visitor.visit_drop_notification(stmt),
         Statement::DescribeNotification(stmt) => visitor.visit_describe_notification(stmt),
+        Statement::InsertMultiTable(_) => {}
     }
 }

@@ -1,3 +1,5 @@
+control sortmode rowsort
+
 statement ok
 drop table if exists tbl_1;
 

@@ -9,6 +9,12 @@ export RM_UUID="sed -E ""s/[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0
 
 echo "set global enable_experimental_rbac_check=1" | $BENDSQL_CLIENT_CONNECT
 
+stmt "drop database if exists db01;"
+stmt "create database db01;"
+stmt "drop database if exists dbnotexists;"
+stmt "GRANT SELECT ON db01.tbnotexists TO 'test-user'"
+stmt "GRANT SELECT ON dbnotexists.* TO 'test-user'"
+
 echo "drop user if exists 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "drop role if exists 'test-role1'" | $BENDSQL_CLIENT_CONNECT
 echo "drop role if exists 'test-role2'" | $BENDSQL_CLIENT_CONNECT
@@ -64,7 +70,9 @@ echo "select count(*) = 0 from t20_0012 where c=2" | $TEST_USER_CONNECT
 
 ## insert overwrite
 echo "select 'test -- insert overwrite'" | $TEST_USER_CONNECT
-echo "GRANT DELETE ON * TO role 'test-role1'" | $BENDSQL_CLIENT_CONNECT
+# now, user test-user has delete on default.t20_0012, role test-role1 has insert on default
+# insert overwrite should pass privilege check.
+echo "GRANT DELETE ON default.t20_0012 TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "insert overwrite t20_0012 values(2)" | $TEST_USER_CONNECT
 ## verify
 echo "select * from t20_0012 order by c" | $TEST_USER_CONNECT
@@ -157,7 +165,7 @@ echo "grant select on default.* to a" | $BENDSQL_CLIENT_CONNECT
 echo "grant select on grant_db.t to a" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists default.test_t" | $BENDSQL_CLIENT_CONNECT
 echo "create table default.test_t(id int not null)" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for a" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for a" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
 echo "show databases" | $USER_A_CONNECT
 echo "select 'test -- show tables from system'" | $BENDSQL_CLIENT_CONNECT
 echo "show tables from system" | $USER_A_CONNECT
@@ -231,17 +239,17 @@ echo "drop database if exists d;" | $BENDSQL_CLIENT_CONNECT
 echo "create database c;" | $BENDSQL_CLIENT_CONNECT
 echo "create table c.t (id int);" | $BENDSQL_CLIENT_CONNECT
 echo "grant insert, select on c.t to b" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for b" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for b" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
 echo "insert into c.t values(1)" | $USER_B_CONNECT
 echo "select * from c.t" | $USER_B_CONNECT
 
 echo "alter table c.t rename to t1" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for b" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for b" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
 echo "insert into c.t1 values(2)" | $USER_B_CONNECT
 echo "select * from c.t1 order by id" | $USER_B_CONNECT
 
 echo "alter database c rename to d" | $BENDSQL_CLIENT_CONNECT
-echo "show grants for b" | $BENDSQL_CLIENT_CONNECT
+echo "show grants for b" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
 echo "insert into d.t1 values(3)" | $USER_B_CONNECT
 echo "select * from d.t1 order by id" | $USER_B_CONNECT
 
@@ -266,5 +274,6 @@ echo "drop database if exists unknown_db" | $USER_C_CONNECT
 echo "drop table if exists t1" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t2" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage if exists s3;" | $BENDSQL_CLIENT_CONNECT
+echo "drop database if exists db01" | $BENDSQL_CLIENT_CONNECT
 
 echo "unset enable_experimental_rbac_check" | $BENDSQL_CLIENT_CONNECT

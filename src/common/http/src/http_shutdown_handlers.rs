@@ -83,7 +83,7 @@ impl HttpShutdownHandler {
         let join_handle = databend_common_base::runtime::spawn(
             poem::Server::new_with_acceptor(acceptor)
                 .name(self.service_name.clone())
-                .idle_timeout(Duration::from_secs(5))
+                .idle_timeout(Duration::from_secs(20))
                 .run_with_graceful_shutdown(ep, rx.map(|_| ()), graceful_shutdown_timeout),
         );
         self.join_handle = Some(join_handle);

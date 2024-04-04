@@ -21,7 +21,7 @@ use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::role_util::find_all_related_roles;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -31,7 +31,8 @@ pub const CATALOG_DEFAULT: &str = "default";
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_cache_mgr() -> Result<()> {
     let conf = RpcClientConf::default();
-    let tenant = NonEmptyString::new("tenant1").unwrap();
+    let tenant = Tenant::new_literal("tenant1");
+
     let user_manager = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let role_cache_manager = RoleCacheManager::try_create(user_manager.clone())?;
 

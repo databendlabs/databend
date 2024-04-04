@@ -117,6 +117,7 @@ impl SnapshotGenerator for AppendGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
+        prev_table_seq: Option<u64>,
     ) -> Result<TableSnapshot> {
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
         if is_column_type_modified(&schema, expected_schema) {
@@ -128,7 +129,7 @@ impl SnapshotGenerator for AppendGenerator {
         let mut prev_timestamp = None;
         let mut prev_snapshot_id = None;
         let mut table_statistics_location = None;
-        let mut index_info_locations = None;
+        let mut inverted_indexes = None;
         let mut new_segments = snapshot_merged.merged_segments.clone();
         let mut new_summary = snapshot_merged.merged_statistics.clone();
 
@@ -136,7 +137,7 @@ impl SnapshotGenerator for AppendGenerator {
             prev_timestamp = snapshot.timestamp;
             prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version));
             table_statistics_location = snapshot.table_statistics_location.clone();
-            index_info_locations = snapshot.index_info_locations.clone();
+            inverted_indexes = snapshot.inverted_indexes.clone();
 
             if !self.overwrite {
                 let mut summary = snapshot.summary.clone();
@@ -213,6 +214,7 @@ impl SnapshotGenerator for AppendGenerator {
 
         Ok(TableSnapshot::new(
             Uuid::new_v4(),
+            prev_table_seq,
             &prev_timestamp,
             prev_snapshot_id,
             schema,
@@ -220,7 +222,7 @@ impl SnapshotGenerator for AppendGenerator {
             new_segments,
             cluster_key_meta,
             table_statistics_location,
-            index_info_locations,
+            inverted_indexes,
         ))
     }
 }

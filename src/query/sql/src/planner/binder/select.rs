@@ -383,7 +383,6 @@ impl Binder {
                     materialized: cte.materialized,
                     cte_idx: idx,
                     used_count: 0,
-                    stat_info: None,
                     columns: vec![],
                 };
                 self.ctes_map.insert(table_name.clone(), cte_info.clone());
@@ -845,15 +844,20 @@ impl Binder {
         // so if the inner query not match the lazy materialized but outer query matched, we can prevent
         // the cols that inner query required not be pruned when analyze outer query.
         {
+            let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::WindowFunction(_));
+            let mut finder = Finder::new(&f);
             let mut non_lazy_cols = HashSet::new();
+
             for s in select_list.items.iter() {
                 // The TableScan's schema uses name_mapping to prune columns,
                 // all lazy columns will be skipped to add to name_mapping in TableScan.
                 // When build physical window plan, if window's order by or partition by provided,
                 // we need create a `EvalScalar` for physical window inputs, so we should keep the window
                 // used cols not be pruned.
-                if let ScalarExpr::WindowFunction(_) = &s.scalar {
-                    non_lazy_cols.extend(s.scalar.used_columns())
+                finder.reset_finder();
+                finder.visit(&s.scalar)?;
+                for scalar in finder.scalars() {
+                    non_lazy_cols.extend(scalar.used_columns())
                 }
             }
             metadata.add_non_lazy_columns(non_lazy_cols);
@@ -1028,7 +1032,7 @@ impl<'a> SelectRewriter<'a> {
                 .into_iter()
                 .map(|expr| Expr::Literal {
                     span: None,
-                    lit: Literal::String(expr.name),
+                    value: Literal::String(expr.name),
                 })
                 .collect(),
         }
@@ -1054,7 +1058,7 @@ impl<'a> SelectRewriter<'a> {
     // For Expr::Literal, expr.to_string() is quoted, sometimes we need the raw string.
     fn raw_string_from_literal_expr(expr: &Expr) -> Option<String> {
         match expr {
-            Expr::Literal { lit, .. } => match lit {
+            Expr::Literal { value, .. } => match value {
                 Literal::String(v) => Some(v.clone()),
                 _ => Some(expr.to_string()),
             },
@@ -1109,7 +1113,7 @@ impl<'a> SelectRewriter<'a> {
                     })
                     .map(|col| Expr::Literal {
                         span: Span::default(),
-                        lit: Literal::UInt64(col.index as u64 + 1),
+                        value: Literal::UInt64(col.index as u64 + 1),
                     })
                     .collect(),
             )

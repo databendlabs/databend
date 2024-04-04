@@ -34,15 +34,6 @@ impl UserIdentity {
         }
     }
 
-    /// Format into form `'username'@'hostname'`.
-    pub fn format(&self) -> String {
-        format!(
-            "'{}'@'{}'",
-            kvapi::KeyBuilder::escape_specified(&self.username, &Self::ESCAPE_CHARS),
-            kvapi::KeyBuilder::escape_specified(&self.hostname, &Self::ESCAPE_CHARS),
-        )
-    }
-
     pub fn parse(s: &str) -> Result<Self, kvapi::KeyError> {
         let parts = s.splitn(2, '@').collect::<Vec<&str>>();
         if parts.len() != 2 {
@@ -64,7 +55,12 @@ impl UserIdentity {
 
 impl fmt::Display for UserIdentity {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
-        write!(f, "'{}'@'{}'", self.username, self.hostname)
+        write!(
+            f,
+            "'{}'@'{}'",
+            kvapi::KeyBuilder::escape_specified(&self.username, &Self::ESCAPE_CHARS),
+            kvapi::KeyBuilder::escape_specified(&self.hostname, &Self::ESCAPE_CHARS),
+        )
     }
 }
 
@@ -109,7 +105,7 @@ mod kvapi_key_impl {
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_str(self.tenant_name())
-                .push_str(&self.user.format())
+                .push_str(&self.user.to_string())
                 .done()
         }
 

@@ -16,8 +16,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedFileFormat;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::NonEmptyString;
 
 use crate::UserApiProvider;
 
@@ -27,7 +27,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_file_format(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         file_format_options: UserDefinedFileFormat,
         create_option: &CreateOption,
     ) -> Result<()> {
@@ -42,7 +42,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_file_format(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         file_format_name: &str,
     ) -> Result<UserDefinedFileFormat> {
         let file_format_api_provider = self.file_format_api(tenant);
@@ -52,10 +52,7 @@ impl UserApiProvider {
 
     // Get the tenant all file_format list.
     #[async_backtrace::framed]
-    pub async fn get_file_formats(
-        &self,
-        tenant: &NonEmptyString,
-    ) -> Result<Vec<UserDefinedFileFormat>> {
+    pub async fn get_file_formats(&self, tenant: &Tenant) -> Result<Vec<UserDefinedFileFormat>> {
         let file_format_api_provider = self.file_format_api(tenant);
         let get_file_formats = file_format_api_provider.list();
 
@@ -69,7 +66,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn drop_file_format(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         name: &str,
         if_exists: bool,
     ) -> Result<()> {

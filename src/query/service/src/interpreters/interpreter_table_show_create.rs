@@ -34,6 +34,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use log::debug;
 
+use crate::interpreters::util::format_name;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -66,7 +67,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
 
         let table = catalog
-            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+            .get_table(tenant.name(), &self.plan.database, &self.plan.table)
             .await?;
 
         match table.engine() {
@@ -87,10 +88,20 @@ impl ShowCreateTableInterpreter {
         let schema = table.schema();
         let field_comments = table.field_comments();
         let n_fields = schema.fields().len();
+        let settings = self.ctx.get_settings();
 
-        let mut table_create_sql = format!("CREATE TABLE `{}` (\n", name);
+        let quoted_ident_case_sensitive = settings.get_quoted_ident_case_sensitive()?;
+        let sql_dialect = settings.get_sql_dialect()?;
+
+        let mut table_create_sql = format!(
+            "CREATE TABLE {} (\n",
+            format_name(name, quoted_ident_case_sensitive, sql_dialect)
+        );
         if table.options().contains_key("TRANSIENT") {
-            table_create_sql = format!("CREATE TRANSIENT TABLE `{}` (\n", name)
+            table_create_sql = format!(
+                "CREATE TRANSIENT TABLE {} (\n",
+                format_name(name, quoted_ident_case_sensitive, sql_dialect)
+            )
         }
 
         // Append columns.
@@ -130,8 +141,8 @@ impl ShowCreateTableInterpreter {
                     "".to_string()
                 };
                 let column = format!(
-                    "  `{}` {}{}{}{}{}",
-                    field.name(),
+                    "  {} {}{}{}{}{}",
+                    format_name(field.name(), quoted_ident_case_sensitive, sql_dialect),
                     field.data_type().remove_recursive_nullable().sql_name(),
                     nullable,
                     default_expr,

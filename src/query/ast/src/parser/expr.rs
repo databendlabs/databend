@@ -54,23 +54,19 @@ pub fn values_with_placeholder(i: Input) -> IResult<Vec<Option<Expr>>> {
 
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
-        let higher_prec_expr_element =
-            |i| {
-                expr_element(i).and_then(|(rest, elem)| {
-                    match PrattParser::<std::iter::Once<_>>::query(&mut ExprParser, &elem).unwrap()
-                    {
-                        Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
-                            if prec <= Precedence(min_precedence) =>
-                        {
-                            Err(nom::Err::Error(Error::from_error_kind(
-                                i,
-                                ErrorKind::Other("expected more tokens for expression"),
-                            )))
-                        }
-                        _ => Ok((rest, elem)),
-                    }
-                })
-            };
+        let higher_prec_expr_element = |i| {
+            expr_element(i).and_then(|(rest, elem)| match elem.elem.affix() {
+                Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
+                    if prec <= Precedence(min_precedence) =>
+                {
+                    Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other("expected more tokens for expression"),
+                    )))
+                }
+                _ => Ok((rest, elem)),
+            })
+        };
 
         let (rest, mut expr_elements) = rule! { #higher_prec_expr_element+ }(i)?;
 
@@ -78,11 +74,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             // If it's following a prefix or infix element or it's the first element, ...
             if prev == -1
                 || matches!(
-                    PrattParser::<std::iter::Once<_>>::query(
-                        &mut ExprParser,
-                        &expr_elements[prev as usize]
-                    )
-                    .unwrap(),
+                    expr_elements[prev as usize].elem.affix(),
                     Affix::Prefix(_) | Affix::Infix(_, _)
                 )
             {
@@ -127,7 +119,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                         accessor: MapAccessor::DotNumber { .. },
                     } => {
                         *elem = ExprElement::Literal {
-                            lit: literal(span)?.1,
+                            value: literal(span)?.1,
                         };
                     }
                     _ => {}
@@ -239,7 +231,7 @@ pub enum ExprElement {
     },
     /// A literal value, such as string, number, date or NULL
     Literal {
-        lit: Literal,
+        value: Literal,
     },
     /// `Count(*)` expression
     CountAll {
@@ -320,15 +312,9 @@ pub enum ExprElement {
     },
 }
 
-struct ExprParser;
-
-impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprParser {
-    type Error = &'static str;
-    type Input = WithSpan<'a, ExprElement>;
-    type Output = Expr;
-
-    fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
-        let affix = match &elem.elem {
+impl ExprElement {
+    pub fn affix(&self) -> Affix {
+        match &self {
             ExprElement::ChainFunctionCall { .. } => Affix::Postfix(Precedence(61)),
             ExprElement::DotAccess { .. } => Affix::Postfix(Precedence(60)),
             ExprElement::MapAccess { .. } => Affix::Postfix(Precedence(60)),
@@ -397,8 +383,124 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             ExprElement::JsonOp { .. } => Affix::Infix(Precedence(40), Associativity::Left),
             ExprElement::PgCast { .. } => Affix::Postfix(Precedence(60)),
             _ => Affix::Nilfix,
-        };
-        Ok(affix)
+        }
+    }
+}
+
+impl From<Expr> for ExprElement {
+    fn from(expr: Expr) -> Self {
+        match expr {
+            Expr::ColumnRef { column, .. } => ExprElement::ColumnRef { column },
+            Expr::IsNull { not, .. } => ExprElement::IsNull { not },
+            Expr::IsDistinctFrom { not, .. } => ExprElement::IsDistinctFrom { not },
+            Expr::InList { list, not, .. } => ExprElement::InList { list, not },
+            Expr::InSubquery { subquery, not, .. } => ExprElement::InSubquery { subquery, not },
+            Expr::Between { low, high, not, .. } => ExprElement::Between { low, high, not },
+            Expr::BinaryOp { op, .. } => ExprElement::BinaryOp { op },
+            Expr::JsonOp { op, .. } => ExprElement::JsonOp { op },
+            Expr::UnaryOp { op, .. } => ExprElement::UnaryOp { op },
+            Expr::Cast {
+                target_type,
+                pg_style: true,
+                ..
+            } => ExprElement::PgCast { target_type },
+            Expr::Cast {
+                expr,
+                target_type,
+                pg_style: false,
+                ..
+            } => ExprElement::Cast { expr, target_type },
+            Expr::TryCast {
+                expr, target_type, ..
+            } => ExprElement::TryCast { expr, target_type },
+            Expr::Extract { kind, expr, .. } => ExprElement::Extract { field: kind, expr },
+            Expr::DatePart { kind, expr, .. } => ExprElement::DatePart { field: kind, expr },
+            Expr::Position {
+                substr_expr,
+                str_expr,
+                ..
+            } => ExprElement::Position {
+                substr_expr,
+                str_expr,
+            },
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+                ..
+            } => ExprElement::SubString {
+                expr,
+                substring_from,
+                substring_for,
+            },
+            Expr::Trim {
+                expr, trim_where, ..
+            } => ExprElement::Trim { expr, trim_where },
+            Expr::Literal { value, .. } => ExprElement::Literal { value },
+            Expr::CountAll { window, .. } => ExprElement::CountAll { window },
+            Expr::Tuple { exprs, .. } => ExprElement::Tuple { exprs },
+            Expr::FunctionCall { func, .. } => ExprElement::FunctionCall { func },
+            Expr::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+                ..
+            } => ExprElement::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+            },
+            Expr::Exists { subquery, not, .. } => ExprElement::Exists {
+                subquery: *subquery,
+                not,
+            },
+            Expr::Subquery {
+                modifier, subquery, ..
+            } => ExprElement::Subquery {
+                modifier,
+                subquery: *subquery,
+            },
+            Expr::MapAccess { accessor, .. } => ExprElement::MapAccess { accessor },
+            Expr::Array { exprs, .. } => ExprElement::Array { exprs },
+            Expr::Map { kvs, .. } => ExprElement::Map { kvs },
+            Expr::Interval { expr, unit, .. } => ExprElement::Interval { expr: *expr, unit },
+            Expr::DateAdd {
+                unit,
+                interval,
+                date,
+                ..
+            } => ExprElement::DateAdd {
+                unit,
+                interval: *interval,
+                date: *date,
+            },
+            Expr::DateSub {
+                unit,
+                interval,
+                date,
+                ..
+            } => ExprElement::DateSub {
+                unit,
+                interval: *interval,
+                date: *date,
+            },
+            Expr::DateTrunc { unit, date, .. } => ExprElement::DateTrunc { unit, date: *date },
+            Expr::Hole { name, .. } => ExprElement::Hole { name },
+        }
+    }
+}
+
+struct ExprParser;
+
+impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprParser {
+    type Error = &'static str;
+    type Input = WithSpan<'a, ExprElement>;
+    type Output = Expr;
+
+    fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
+        Ok(elem.elem.affix())
     }
 
     fn primary(&mut self, elem: WithSpan<'a, ExprElement>) -> Result<Expr, &'static str> {
@@ -451,9 +553,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 expr,
                 trim_where,
             },
-            ExprElement::Literal { lit } => Expr::Literal {
+            ExprElement::Literal { value } => Expr::Literal {
                 span: transform_span(elem.span.tokens),
-                lit,
+                value,
             },
             ExprElement::CountAll { window } => Expr::CountAll {
                 span: transform_span(elem.span.tokens),
@@ -866,15 +968,16 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let count_all_with_window = map(
         rule! {
-        COUNT ~ "(" ~ "*" ~ ")" ~ (OVER ~ #window_spec_ident)?
+            COUNT ~ "(" ~ "*" ~ ")" ~ ( OVER ~ #window_spec_ident )?
         },
         |(_, _, _, _, window)| ExprElement::CountAll {
             window: window.map(|w| w.1),
         },
     );
+
     let tuple = map(
         rule! {
-            "(" ~ #comma_separated_list0_ignore_trailing(subexpr(0)) ~ ","? ~ ^")"
+            "(" ~ #comma_separated_list1_ignore_trailing(subexpr(0)) ~ ","? ~ ^")"
         },
         |(_, mut exprs, opt_trail, _)| {
             if exprs.len() == 1 && opt_trail.is_none() {
@@ -882,6 +985,20 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             } else {
                 ExprElement::Tuple { exprs }
             }
+        },
+    );
+    let subquery = map(
+        rule! {
+            ( ANY | SOME | ALL )? ~ "(" ~ #query ~ ^")"
+        },
+        |(modifier, _, subquery, _)| {
+            let modifier = modifier.map(|m| match m.kind {
+                TokenKind::ALL => SubqueryModifier::All,
+                TokenKind::ANY => SubqueryModifier::Any,
+                TokenKind::SOME => SubqueryModifier::Some,
+                _ => unreachable!(),
+            });
+            ExprElement::Subquery { modifier, subquery }
         },
     );
 
@@ -976,27 +1093,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
     let exists = map(
-        rule! { NOT? ~ EXISTS ~ "(" ~ ^#query ~ ^")" },
+        rule! {
+            NOT? ~ EXISTS ~ "(" ~ ^#query ~ ^")"
+        },
         |(opt_not, _, _, subquery, _)| ExprElement::Exists {
             subquery,
             not: opt_not.is_some(),
-        },
-    );
-    let subquery = map(
-        rule! {
-            (ANY | SOME | ALL)? ~
-            "("
-            ~ #query
-            ~ ^")"
-        },
-        |(modifier, _, subquery, _)| {
-            let modifier = modifier.map(|m| match m.kind {
-                TokenKind::ALL => SubqueryModifier::All,
-                TokenKind::ANY => SubqueryModifier::Any,
-                TokenKind::SOME => SubqueryModifier::Some,
-                _ => unreachable!(),
-            });
-            ExprElement::Subquery { modifier, subquery }
         },
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
@@ -1066,7 +1168,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     // Floating point literal with leading dot will be parsed as a period map access,
     // and then will be converted back to a floating point literal if the map access
     // is not following a primary element nor a postfix element.
-    let literal = map(literal, |lit| ExprElement::Literal { lit });
+    let literal = map(literal, |value| ExprElement::Literal { value });
     let array = map(
         // Array that contains a single literal item will be parsed as a bracket map access,
         // and then will be converted back to an array if the map access is not following
@@ -1128,7 +1230,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, (span, date))| ExprElement::Cast {
             expr: Box::new(Expr::Literal {
                 span: transform_span(span.tokens),
-                lit: Literal::String(date),
+                value: Literal::String(date),
             }),
             target_type: TypeName::Date,
         },
@@ -1141,7 +1243,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, (span, date))| ExprElement::Cast {
             expr: Box::new(Expr::Literal {
                 span: transform_span(span.tokens),
-                lit: Literal::String(date),
+                value: Literal::String(date),
             }),
             target_type: TypeName::Timestamp,
         },
@@ -1203,8 +1305,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #function_call_with_params : "`function(...)(...)`"
             | #function_call : "`function(...)`"
             | #case : "`CASE ... END`"
-            | #subquery : "`(SELECT ...)`"
             | #tuple : "`(<expr> [, ...])`"
+            | #subquery : "`(SELECT ...)`"
             | #column_ref : "<column>"
             | #dot_access : "<dot_access>"
             | #map_access : "[<key>] | .<key> | :<key>"
@@ -1378,21 +1480,17 @@ pub fn literal_string(i: Input) -> IResult<String> {
             QuotedString
         },
         |token| {
-            if token
-                .text()
-                .chars()
-                .next()
-                .filter(|c| i.dialect.is_string_quote(*c))
-                .is_some()
-            {
-                let str = &token.text()[1..token.text().len() - 1];
-                let unescaped = unescape_string(str, '\'').ok_or(nom::Err::Failure(
-                    ErrorKind::Other("invalid escape or unicode"),
-                ))?;
-                Ok(unescaped)
-            } else {
-                Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))
+            if let Some(quote) = token.text().chars().next() {
+                if i.dialect.is_string_quote(quote) {
+                    let str = &token.text()[1..token.text().len() - 1];
+                    let unescaped = unescape_string(str, quote).ok_or(nom::Err::Failure(
+                        ErrorKind::Other("invalid escape or unicode"),
+                    ))?;
+                    return Ok(unescaped);
+                }
             }
+
+            Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))
         },
     )(i)
 }
@@ -1513,15 +1611,23 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             fields_type,
         },
     );
-    let ty_named_tuple = map(
+    let ty_named_tuple = map_res(
         rule! { TUPLE ~ "(" ~ #comma_separated_list1(rule! { #ident ~ #type_name }) ~ ")" },
         |(_, _, fields, _)| {
-            let (fields_name, fields_type) =
+            let (fields_name, fields_type): (Vec<String>, Vec<TypeName>) =
                 fields.into_iter().map(|(name, ty)| (name.name, ty)).unzip();
-            TypeName::Tuple {
+            if fields_name
+                .iter()
+                .any(|field_name| !field_name.chars().all(|c| c.is_ascii_alphanumeric()))
+            {
+                return Err(nom::Err::Error(ErrorKind::Other(
+                    "Invalid tuple field name, only support alphanumeric characters",
+                )));
+            }
+            Ok(TypeName::Tuple {
                 fields_name: Some(fields_name),
                 fields_type,
-            }
+            })
         },
     );
     let ty_date = value(TypeName::Date, rule! { DATE });

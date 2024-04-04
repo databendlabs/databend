@@ -26,6 +26,7 @@ use databend_common_meta_app::share::GetShareEndpointReq;
 use databend_common_meta_app::share::ShareNameIdent;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::TableInfoMap;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_storage::ShareTableConfig;
 use databend_common_users::UserApiProvider;
 use http::header::AUTHORIZATION;
@@ -82,8 +83,9 @@ impl ShareEndpointManager {
             }
         }
 
+        let tenant = Tenant::new_or_err(from_tenant, "get_share_endpoint_config")?;
         let req = GetShareEndpointReq {
-            tenant: from_tenant.to_owned(),
+            tenant,
             endpoint: None,
             to_tenant,
         };
@@ -111,7 +113,7 @@ impl ShareEndpointManager {
         let share_name = &db_info.meta.from_share.as_ref().unwrap().share_name;
 
         let endpoint_meta_config_vec = self
-            .get_share_endpoint_config(from_tenant, Some(to_tenant.clone()))
+            .get_share_endpoint_config(from_tenant, Some(to_tenant.name().to_string()))
             .await?;
         let endpoint_config = match endpoint_meta_config_vec.first() {
             Some(endpoint_meta_config) => endpoint_meta_config,
@@ -125,7 +127,9 @@ impl ShareEndpointManager {
 
         let url = format!(
             "{}tenant/{}/{}/meta",
-            endpoint_config.url, to_tenant, share_name
+            endpoint_config.url,
+            to_tenant.name(),
+            share_name
         );
         let bs = Bytes::from(serde_json::to_vec(&tables)?);
         let auth = endpoint_config.token.to_header().await?;
@@ -133,6 +137,7 @@ impl ShareEndpointManager {
             .as_ref()
             .query
             .tenant_id
+            .name()
             .to_string();
         let req = Request::builder()
             .method(Method::POST)
@@ -198,6 +203,7 @@ impl ShareEndpointManager {
                 .as_ref()
                 .query
                 .tenant_id
+                .name()
                 .to_string();
             let req = Request::builder()
                 .method(Method::POST)
@@ -214,7 +220,7 @@ impl ShareEndpointManager {
                     for share_spec in ret {
                         if let Some(ref share_name) = share_name {
                             if share_spec.name == share_name.share_name
-                                && endpoint_config.tenant == share_name.tenant
+                                && endpoint_config.tenant == share_name.tenant.name()
                             {
                                 share_spec_vec.push((endpoint_config.tenant.clone(), share_spec));
                                 return Ok(share_spec_vec);

@@ -30,6 +30,7 @@ use databend_common_meta_app::share::ShareEndpointIdent;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 
 // Create Share endpoint Plan
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -59,7 +60,7 @@ impl From<CreateShareEndpointPlan> for CreateShareEndpointReq {
 // Create Share endpoint Plan
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowShareEndpointPlan {
-    pub tenant: String,
+    pub tenant: Tenant,
 }
 
 impl ShowShareEndpointPlan {
@@ -89,7 +90,7 @@ impl From<ShowShareEndpointPlan> for GetShareEndpointReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropShareEndpointPlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub endpoint: String,
 }
 
@@ -97,10 +98,7 @@ impl From<DropShareEndpointPlan> for DropShareEndpointReq {
     fn from(p: DropShareEndpointPlan) -> Self {
         DropShareEndpointReq {
             if_exists: true,
-            endpoint: ShareEndpointIdent {
-                tenant: p.tenant,
-                endpoint: p.endpoint,
-            },
+            endpoint: ShareEndpointIdent::new(p.tenant, p.endpoint),
         }
     }
 }
@@ -109,7 +107,7 @@ impl From<DropShareEndpointPlan> for DropShareEndpointReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateSharePlan {
     pub if_not_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub share: String,
     pub comment: Option<String>,
 }
@@ -131,7 +129,7 @@ impl From<CreateSharePlan> for CreateShareReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropSharePlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub share: String,
 }
 

@@ -22,6 +22,7 @@ mod filter;
 mod format;
 mod group;
 mod hyper_dp;
+mod join;
 mod m_expr;
 mod memo;
 #[allow(clippy::module_inception)]
@@ -29,6 +30,7 @@ mod optimizer;
 mod property;
 mod rule;
 pub mod s_expr;
+mod statistics;
 mod util;
 
 pub use cascades::CascadesOptimizer;

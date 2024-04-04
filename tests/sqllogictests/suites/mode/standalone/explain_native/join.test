@@ -75,8 +75,8 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10.00
+    ├── push downs: [filters: [t1.number (#1) = t1.number (#1) + 1], limit: NONE]
+    └── estimated rows: 2.00
 
 query T
 explain select t.number from t, t1 where t.number > 1 and 1 < t1.number
@@ -347,32 +347,32 @@ query T
 explain select * from onecolumn as a right join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
 ----
 HashJoin
-├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
-├── join type: RIGHT OUTER
-├── build keys: [b.x (#1)]
-├── probe keys: [a.x (#0)]
+├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
+├── join type: LEFT OUTER
+├── build keys: [a.x (#0)]
+├── probe keys: [b.x (#1)]
 ├── filters: []
 ├── estimated rows: 3.20
 ├── TableScan(Build)
-│   ├── table: default.default.twocolumn
-│   ├── output columns: [x (#1), y (#2)]
+│   ├── table: default.default.onecolumn
+│   ├── output columns: [x (#0)]
 │   ├── read rows: 4
-│   ├── read bytes: 62
+│   ├── read bytes: 29
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│   ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45)], limit: NONE]
-│   └── estimated rows: 3.20
+│   ├── push downs: [filters: [and_filters(onecolumn.x (#0) > 42, onecolumn.x (#0) < 45)], limit: NONE]
+│   └── estimated rows: 3.00
 └── TableScan(Probe)
-    ├── table: default.default.onecolumn
-    ├── output columns: [x (#0)]
+    ├── table: default.default.twocolumn
+    ├── output columns: [x (#1), y (#2)]
     ├── read rows: 4
-    ├── read bytes: 29
+    ├── read bytes: 62
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 4.00
+    ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45)], limit: NONE]
+    └── estimated rows: 3.20
 
 statement ok
 drop table t

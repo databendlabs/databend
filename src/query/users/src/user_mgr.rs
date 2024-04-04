@@ -27,8 +27,8 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::NonEmptyString;
 
 use crate::role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;
@@ -36,7 +36,7 @@ use crate::UserApiProvider;
 impl UserApiProvider {
     // Get one user from by tenant.
     #[async_backtrace::framed]
-    pub async fn get_user(&self, tenant: &NonEmptyString, user: UserIdentity) -> Result<UserInfo> {
+    pub async fn get_user(&self, tenant: &Tenant, user: UserIdentity) -> Result<UserInfo> {
         if let Some(auth_info) = self.get_configured_user(&user.username) {
             let mut user_info = UserInfo::new(&user.username, "%", auth_info.clone());
             user_info.grants.grant_privileges(
@@ -63,7 +63,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_user_with_client_ip(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         user: UserIdentity,
         client_ip: Option<&str>,
     ) -> Result<UserInfo> {
@@ -107,7 +107,7 @@ impl UserApiProvider {
 
     // Get the tenant all users list.
     #[async_backtrace::framed]
-    pub async fn get_users(&self, tenant: &NonEmptyString) -> Result<Vec<UserInfo>> {
+    pub async fn get_users(&self, tenant: &Tenant) -> Result<Vec<UserInfo>> {
         let client = self.user_api(tenant);
         let get_users = client.get_users();
 
@@ -128,7 +128,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn add_user(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         user_info: UserInfo,
         create_option: &CreateOption,
     ) -> Result<()> {
@@ -161,7 +161,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn grant_privileges_to_user(
         &self,
-        tenant: NonEmptyString,
+        tenant: &Tenant,
         user: UserIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
@@ -172,7 +172,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.user_api(&tenant);
+        let client = self.user_api(tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.grants.grant_privileges(&object, privileges)
@@ -184,7 +184,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn revoke_privileges_from_user(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         user: UserIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
@@ -207,7 +207,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn grant_role_to_user(
         &self,
-        tenant: NonEmptyString,
+        tenant: Tenant,
         user: UserIdentity,
         grant_role: String,
     ) -> Result<Option<u64>> {
@@ -229,7 +229,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn revoke_role_from_user(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         user: UserIdentity,
         revoke_role: String,
     ) -> Result<Option<u64>> {
@@ -252,7 +252,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn drop_user(
         &self,
-        tenant: NonEmptyString,
+        tenant: &Tenant,
         user: UserIdentity,
         if_exists: bool,
     ) -> Result<()> {
@@ -262,7 +262,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.user_api(&tenant);
+        let client = self.user_api(tenant);
         let drop_user = client.drop_user(user, MatchSeq::GE(1));
         match drop_user.await {
             Ok(res) => Ok(res),
@@ -280,7 +280,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn update_user(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         user: UserIdentity,
         auth_info: Option<AuthInfo>,
         user_option: Option<UserOption>,
@@ -327,7 +327,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn update_user_default_role(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         user: UserIdentity,
         default_role: Option<String>,
     ) -> Result<Option<u64>> {
@@ -340,7 +340,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn update_user_login_result(
         &self,
-        tenant: NonEmptyString,
+        tenant: Tenant,
         user: UserIdentity,
         authed: bool,
     ) -> Result<()> {
@@ -367,7 +367,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn update_user_lockout_time(
         &self,
-        tenant: &NonEmptyString,
+        tenant: &Tenant,
         user: UserIdentity,
         lockout_time: DateTime<Utc>,
     ) -> Result<()> {

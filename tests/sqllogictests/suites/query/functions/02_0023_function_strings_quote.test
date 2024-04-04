@@ -1,0 +1,48 @@
+onlyif mysql
+query T
+select quote('a\0b')
+----
+a\0b
+
+onlyif mysql
+query T
+select quote('a\'b')
+----
+a\'b
+
+onlyif mysql
+query T
+select quote('a\"b')
+----
+a\"b
+
+onlyif mysql
+query T
+select quote('a\bb')
+----
+a\bb
+
+onlyif mysql
+query T
+select quote('a\nb')
+----
+a\nb
+
+onlyif mysql
+query T
+select quote('a\rb')
+----
+a\rb
+
+onlyif mysql
+query T
+select quote('a\tb')
+----
+a\tb
+
+onlyif mysql
+query T
+select quote('a\\b')
+----
+a\\b
+

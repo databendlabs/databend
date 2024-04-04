@@ -20,6 +20,7 @@ mod common;
 mod compact;
 mod delete;
 mod gc;
+mod inverted_index;
 mod merge;
 mod merge_into;
 mod mutation;

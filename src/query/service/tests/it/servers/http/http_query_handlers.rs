@@ -149,7 +149,9 @@ impl TestHttpQueryRequest {
                 .do_request(Method::GET, self.next_uri.as_ref().unwrap())
                 .await?;
             self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
-            resps.push((status, resp.clone().unwrap()));
+            if self.next_uri.is_some() {
+                resps.push((status, resp.clone().unwrap()));
+            }
         }
 
         Ok(TestHttpQueryFetchReply { resps })
@@ -278,7 +280,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 19, "{:?}", result);
+    assert_eq!(result.schema.len(), 20, "{:?}", result);
 
     // get state
     let uri = make_state_uri(query_id);
@@ -802,7 +804,7 @@ async fn test_query_log() -> Result<()> {
     );
     assert_eq!(
         result.data[0][1].as_str().unwrap(),
-        ErrorCode::TableAlreadyExists("").code().to_string(),
+        ErrorCode::TABLE_ALREADY_EXISTS.to_string(),
         "{:?}",
         result
     );
@@ -858,7 +860,7 @@ async fn test_query_log_killed() -> Result<()> {
     );
     assert_eq!(
         result.data[0][1].as_str().unwrap(),
-        ErrorCode::AbortedQuery("").code().to_string(),
+        ErrorCode::ABORTED_QUERY.to_string(),
         "{:?}",
         result
     );
@@ -1540,15 +1542,15 @@ async fn test_affect() -> Result<()> {
             .last();
         assert_eq!(result.0, StatusCode::OK, "{} {:?}", json, result.1.error);
         assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
-        assert_eq!(result.1.state, ExecuteStateKind::Succeeded);
-        assert_eq!(result.1.affect, affect);
+        assert_eq!(result.1.state, ExecuteStateKind::Succeeded, "{}", json);
+        assert_eq!(result.1.affect, affect, "{}", json);
         let session = result.1.session.map(|s| HttpSessionConf {
             last_server_info: None,
             last_query_ids: vec![],
             ..s
         });
 
-        assert_eq!(session, session_conf);
+        assert_eq!(session, session_conf, "{}", json);
     }
 
     Ok(())

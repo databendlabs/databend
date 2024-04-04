@@ -80,7 +80,7 @@ impl Interpreter for OptimizeTableInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let tenant = self.ctx.get_tenant();
         let table = catalog
-            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+            .get_table(tenant.name(), &self.plan.database, &self.plan.table)
             .await?;
         // check mutability
         table.check_mutable()?;
@@ -210,8 +210,7 @@ impl OptimizeTableInterpreter {
             if !compact_pipeline.is_empty() {
                 compact_pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
-                let query_id = self.ctx.get_id();
-                let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
+                let executor_settings = ExecutorSettings::try_create(self.ctx.clone())?;
                 let executor =
                     PipelineCompleteExecutor::try_create(compact_pipeline, executor_settings)?;
 
@@ -222,7 +221,7 @@ impl OptimizeTableInterpreter {
 
                 // refresh table.
                 table = catalog
-                    .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+                    .get_table(tenant.name(), &self.plan.database, &self.plan.table)
                     .await?;
             }
 
@@ -297,7 +296,7 @@ async fn purge(
     // currently, context caches the table, we have to "refresh"
     // the table by using the catalog API directly
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), &plan.database, &plan.table)
+        .get_table(ctx.get_tenant().name(), &plan.database, &plan.table)
         .await?;
 
     let keep_latest = true;

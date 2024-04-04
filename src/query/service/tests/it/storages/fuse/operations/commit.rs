@@ -50,8 +50,6 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CountTablesReply;
-use databend_common_meta_app::schema::CountTablesReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -112,8 +110,8 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
@@ -261,6 +259,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
             let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION)];
             let new_snapshot = TableSnapshot::new(
                 Uuid::new_v4(),
+                None,
                 &None,
                 None,
                 table.schema().as_ref().clone(),
@@ -548,7 +547,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_tenant(&self) -> NonEmptyString {
+    fn get_tenant(&self) -> Tenant {
         self.ctx.get_tenant()
     }
 
@@ -565,7 +564,7 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
-        Settings::create(NonEmptyString::new("fake_settings").unwrap())
+        Settings::create(Tenant::new_literal("fake_settings"))
     }
 
     fn get_shared_settings(&self) -> Arc<Settings> {
@@ -779,7 +778,7 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         todo!()
     }
 
@@ -898,10 +897,6 @@ impl Catalog for FakedCatalog {
     #[async_backtrace::framed]
     async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
         unimplemented!()
-    }
-
-    async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
-        todo!()
     }
 
     async fn get_table_copied_file_info(
