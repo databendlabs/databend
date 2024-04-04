@@ -38,16 +38,22 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
+use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_SEED;
 
 use crate::RandomPartInfo;
 
 pub struct RandomTable {
     table_info: TableInfo,
+    seed: Option<u64>,
 }
 
 impl RandomTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        Ok(Box::new(Self { table_info }))
+        let seed = match table_info.meta.options.get(OPT_KEY_RANDOM_SEED) {
+            None => None,
+            Some(seed_str) => Some(seed_str.parse::<u64>()?),
+        };
+        Ok(Box::new(Self { table_info, seed }))
     }
 
     pub fn description() -> StorageDescription {
@@ -125,10 +131,11 @@ impl Table for RandomTable {
             .iter()
             .map(|f| {
                 let data_type: DataType = f.data_type().into();
-                BlockEntry::new(
-                    data_type.clone(),
-                    Value::Column(Column::random(&data_type, 1)),
-                )
+                let column = match self.seed {
+                    None => Column::random(&data_type, 1),
+                    Some(seed) => Column::random_with_seed(&data_type, 1, seed),
+                };
+                BlockEntry::new(data_type.clone(), Value::Column(column))
             })
             .collect::<Vec<_>>();
         let block = DataBlock::new(columns, 1);
@@ -179,7 +186,13 @@ impl Table for RandomTable {
             let parts = RandomPartInfo::from_part(&plan.parts.partitions[index])?;
             builder.add_source(
                 output.clone(),
-                RandomSource::create(ctx.clone(), output, output_schema.clone(), parts.rows)?,
+                RandomSource::create(
+                    ctx.clone(),
+                    output,
+                    output_schema.clone(),
+                    parts.rows,
+                    self.seed.clone(),
+                )?,
             );
         }
 
@@ -187,7 +200,7 @@ impl Table for RandomTable {
             let output = OutputPort::create();
             builder.add_source(
                 output.clone(),
-                RandomSource::create(ctx.clone(), output, output_schema, 0)?,
+                RandomSource::create(ctx.clone(), output, output_schema, 0, self.seed.clone())?,
             );
         }
 
@@ -200,6 +213,7 @@ struct RandomSource {
     schema: TableSchemaRef,
     /// how many rows are needed to generate
     rows: usize,
+    seed: Option<u64>,
 }
 
 impl RandomSource {
@@ -208,8 +222,9 @@ impl RandomSource {
         output: Arc<OutputPort>,
         schema: TableSchemaRef,
         rows: usize,
+        seed: Option<u64>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, RandomSource { schema, rows })
+        SyncSourcer::create(ctx, output, RandomSource { schema, rows, seed })
     }
 }
 
@@ -228,7 +243,12 @@ impl SyncSource for RandomSource {
             .iter()
             .map(|f| {
                 let data_type = f.data_type().into();
-                let value = Value::Column(Column::random(&data_type, self.rows));
+                let value = match self.seed {
+                    None => Value::Column(Column::random(&data_type, self.rows)),
+                    Some(seed) => {
+                        Value::Column(Column::random_with_seed(&data_type, self.rows, seed))
+                    }
+                };
                 BlockEntry::new(data_type, value)
             })
             .collect();

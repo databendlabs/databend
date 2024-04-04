@@ -4077,6 +4077,7 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
+ "databend-storages-common-table-meta",
  "serde",
  "typetag",
 ]
