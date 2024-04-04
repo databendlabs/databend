@@ -37,9 +37,9 @@ mod adapter;
 mod deserialize;
 
 pub use adapter::RowGroupImplBuilder;
+pub use deserialize::column_chunks_to_record_batch;
 
 use crate::io::read::block::block_reader_merge_io::DataItem;
-use crate::io::read::block::parquet::deserialize::column_chunks_to_record_batch;
 use crate::io::BlockReader;
 
 impl BlockReader {
